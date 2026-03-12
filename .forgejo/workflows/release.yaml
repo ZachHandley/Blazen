@@ -87,18 +87,18 @@ jobs:
       - name: Publish crates in dependency order
         if: steps.check.outputs.completed != 'true'
         run: |
-          # Publish in dependency order, allowing time for index updates
-          cargo publish -p zagents-events --registry forgejo
+          # Publish in dependency order with --no-verify (workspace deps are local/forgejo, not crates.io)
+          cargo publish -p zagents-events --registry forgejo --no-verify
           sleep 10
-          cargo publish -p zagents-macros --registry forgejo
+          cargo publish -p zagents-macros --registry forgejo --no-verify
           sleep 10
-          cargo publish -p zagents-core --registry forgejo
+          cargo publish -p zagents-core --registry forgejo --no-verify
           sleep 10
-          cargo publish -p zagents-llm --registry forgejo --all-features
+          cargo publish -p zagents-llm --registry forgejo --all-features --no-verify
           sleep 10
-          cargo publish -p zagents-persist --registry forgejo
+          cargo publish -p zagents-persist --registry forgejo --no-verify
           sleep 10
-          cargo publish -p zagents --registry forgejo --all-features
+          cargo publish -p zagents --registry forgejo --all-features --no-verify
 
       - name: Save cargo cache
         if: always() && steps.check.outputs.completed != 'true'
@@ -176,7 +176,7 @@ jobs:
           twine upload \
             --repository-url https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/pypi \
             -u zachhandley \
-            -p ${{ secrets.FORGEJO_TOKEN }} \
+            -p ${{ secrets.FORGEJO_ACTIONS_TOKEN }} \
             target/wheels/*.whl
 
       - name: Mark step complete
