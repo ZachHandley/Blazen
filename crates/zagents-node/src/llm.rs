@@ -263,7 +263,10 @@ impl JsCompletionModel {
         let mut request = CompletionRequest::new(chat_messages);
 
         // Apply options.
-        if let Some(temp) = options.get("temperature").and_then(serde_json::Value::as_f64) {
+        if let Some(temp) = options
+            .get("temperature")
+            .and_then(serde_json::Value::as_f64)
+        {
             request.temperature = Some(temp as f32);
         }
         if let Some(max) = options.get("maxTokens").and_then(serde_json::Value::as_u64) {
