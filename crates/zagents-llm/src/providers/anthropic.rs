@@ -90,10 +90,7 @@ impl AnthropicProvider {
     /// - System messages are extracted into the top-level `system` field.
     /// - `max_tokens` is always present (required by the API).
     fn build_body(&self, request: &CompletionRequest, stream: bool) -> serde_json::Value {
-        let model = request
-            .model
-            .as_deref()
-            .unwrap_or(&self.default_model);
+        let model = request.model.as_deref().unwrap_or(&self.default_model);
 
         // Separate system messages from the conversation messages.
         let mut system_parts: Vec<String> = Vec::new();
@@ -161,10 +158,7 @@ impl AnthropicProvider {
     }
 
     /// Send a request to the Messages endpoint, handling common HTTP errors.
-    async fn send_request(
-        &self,
-        body: &serde_json::Value,
-    ) -> Result<reqwest::Response, LlmError> {
+    async fn send_request(&self, body: &serde_json::Value) -> Result<reqwest::Response, LlmError> {
         let url = format!("{}/messages", self.base_url);
 
         let response = self
@@ -709,7 +703,8 @@ mod tests {
             "event: message_stop\n",
             "data: {\"type\":\"message_stop\"}\n",
             "\n",
-        ).to_owned();
+        )
+        .to_owned();
         let mut tool_blocks = Vec::new();
 
         let result = parse_anthropic_event(&mut buf, &mut tool_blocks)

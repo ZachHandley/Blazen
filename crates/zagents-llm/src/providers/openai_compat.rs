@@ -375,10 +375,7 @@ impl OpenAiCompatProvider {
     }
 
     /// Apply authentication to a request builder.
-    fn apply_auth(
-        &self,
-        mut builder: reqwest::RequestBuilder,
-    ) -> reqwest::RequestBuilder {
+    fn apply_auth(&self, mut builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         match &self.config.auth_method {
             AuthMethod::Bearer => {
                 builder = builder.bearer_auth(&self.config.api_key);
@@ -403,10 +400,7 @@ impl OpenAiCompatProvider {
     }
 
     /// Apply query parameters to a request builder.
-    fn apply_query_params(
-        &self,
-        mut builder: reqwest::RequestBuilder,
-    ) -> reqwest::RequestBuilder {
+    fn apply_query_params(&self, mut builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         for (key, value) in &self.config.query_params {
             builder = builder.query(&[(key.as_str(), value.as_str())]);
         }
@@ -414,10 +408,7 @@ impl OpenAiCompatProvider {
     }
 
     /// Send a request and return the raw response, handling common HTTP errors.
-    async fn send_request(
-        &self,
-        body: &serde_json::Value,
-    ) -> Result<reqwest::Response, LlmError> {
+    async fn send_request(&self, body: &serde_json::Value) -> Result<reqwest::Response, LlmError> {
         let url = format!("{}/chat/completions", self.config.base_url);
 
         let builder = self.client.post(&url);

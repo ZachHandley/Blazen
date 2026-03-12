@@ -96,7 +96,10 @@ async fn retrieve(event: QueryEvent, ctx: Context) -> Result<RetrievalEvent, Wor
 /// Simulate LLM generation (in a real app, this would call an LLM provider).
 #[step]
 async fn generate(event: RetrievalEvent, ctx: Context) -> Result<StopEvent, WorkflowError> {
-    println!("[generate] Generating answer from {} documents...", event.documents.len());
+    println!(
+        "[generate] Generating answer from {} documents...",
+        event.documents.len()
+    );
 
     // Build a mock "prompt" from the retrieved documents.
     let _context_str = event
@@ -119,7 +122,10 @@ async fn generate(event: RetrievalEvent, ctx: Context) -> Result<StopEvent, Work
     let answer = format!(
         "Based on the retrieved documents, here is the answer to \"{}\": {}",
         event.query,
-        event.documents.first().unwrap_or(&"No information available.".to_string())
+        event
+            .documents
+            .first()
+            .unwrap_or(&"No information available.".to_string())
     );
 
     let retrieved_count: usize = ctx.get("retrieved_count").await.unwrap_or(0);
@@ -160,10 +166,7 @@ async fn main() -> anyhow::Result<()> {
 
     if let Some(stop) = result.downcast_ref::<StopEvent>() {
         println!("\n=== Result ===");
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&stop.result)?
-        );
+        println!("{}", serde_json::to_string_pretty(&stop.result)?);
     }
 
     Ok(())

@@ -30,10 +30,7 @@ struct GreetEvent {
 /// Parse the raw JSON input into a typed `GreetEvent`.
 #[step]
 async fn parse_input(event: StartEvent, _ctx: Context) -> Result<GreetEvent, WorkflowError> {
-    let name = event.data["name"]
-        .as_str()
-        .unwrap_or("World")
-        .to_string();
+    let name = event.data["name"].as_str().unwrap_or("World").to_string();
     println!("[parse_input] Extracted name: {name}");
     Ok(GreetEvent { name })
 }
@@ -61,9 +58,7 @@ async fn main() -> anyhow::Result<()> {
         .build()?;
 
     // Run the workflow with a JSON payload.
-    let handler = workflow
-        .run(serde_json::json!({ "name": "Zach" }))
-        .await?;
+    let handler = workflow.run(serde_json::json!({ "name": "Zach" })).await?;
 
     // Await the final result.
     let result = handler.result().await?;

@@ -6,11 +6,10 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
+    DeriveInput, FnArg, GenericArgument, ItemFn, PathArguments, ReturnType, Token, Type, TypePath,
     parse::{Parse, ParseStream},
     parse_macro_input,
     punctuated::Punctuated,
-    DeriveInput, FnArg, GenericArgument, ItemFn, PathArguments, ReturnType, Token, Type,
-    TypePath,
 };
 
 /// Derive macro that generates a `zagents_events::Event` trait implementation.
@@ -90,7 +89,8 @@ impl Parse for BracketedTypes {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let content;
         syn::bracketed!(content in input);
-        let types: Punctuated<Type, Token![,]> = content.parse_terminated(Type::parse, Token![,])?;
+        let types: Punctuated<Type, Token![,]> =
+            content.parse_terminated(Type::parse, Token![,])?;
         Ok(BracketedTypes {
             types: types.into_iter().collect(),
         })

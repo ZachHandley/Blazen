@@ -15,7 +15,7 @@ use crate::context::PyContext;
 use crate::error::ZAgentsPyError;
 use zagents_events::intern_event_type;
 
-use crate::event::{any_event_to_py_event, py_event_to_any_event, PyEvent};
+use crate::event::{PyEvent, any_event_to_py_event, py_event_to_any_event};
 
 /// Internal wrapper created by the `@step` decorator.
 ///
@@ -77,118 +77,116 @@ impl PyStepWrapper {
     /// Convert this wrapper into a [`StepRegistration`](zagents_core::StepRegistration)
     /// that can be added to a [`WorkflowBuilder`](zagents_core::WorkflowBuilder).
     pub fn to_registration(&self) -> PyResult<zagents_core::StepRegistration> {
-        let accepts: Vec<&'static str> = self
-            .accepts
-            .iter()
-            .map(|s| intern_event_type(s))
-            .collect();
+        let accepts: Vec<&'static str> =
+            self.accepts.iter().map(|s| intern_event_type(s)).collect();
 
-        let emits: Vec<&'static str> = self
-            .emits
-            .iter()
-            .map(|s| intern_event_type(s))
-            .collect();
+        let emits: Vec<&'static str> = self.emits.iter().map(|s| intern_event_type(s)).collect();
 
         // Clone the function handle while we have the GIL
         let func = Python::attach(|py| self.clone_func(py));
         let step_name = self.name.clone();
 
-        let handler: zagents_core::StepFn = Arc::new(move |event: Box<dyn AnyEvent>,
-                                                          ctx: zagents_core::Context|
-              -> std::pin::Pin<
-            Box<
-                dyn std::future::Future<
-                        Output = std::result::Result<
-                            zagents_core::StepOutput,
-                            zagents_core::WorkflowError,
-                        >,
-                    > + Send,
-            >,
-        > {
-            let func = Python::attach(|py| func.clone_ref(py));
-            let step_name = step_name.clone();
+        let handler: zagents_core::StepFn = Arc::new(
+            move |event: Box<dyn AnyEvent>,
+                  ctx: zagents_core::Context|
+                  -> std::pin::Pin<
+                Box<
+                    dyn std::future::Future<
+                            Output = std::result::Result<
+                                zagents_core::StepOutput,
+                                zagents_core::WorkflowError,
+                            >,
+                        > + Send,
+                >,
+            > {
+                let func = Python::attach(|py| func.clone_ref(py));
+                let step_name = step_name.clone();
 
-            Box::pin(async move {
-                // Convert Rust event to PyEvent
-                let py_event = any_event_to_py_event(&*event);
-                let py_ctx = PyContext::new(ctx);
+                Box::pin(async move {
+                    // Convert Rust event to PyEvent
+                    let py_event = any_event_to_py_event(&*event);
+                    let py_ctx = PyContext::new(ctx);
 
-                // Call the Python async function to get a coroutine
-                let coroutine: Py<PyAny> = Python::attach(|py| -> PyResult<Py<PyAny>> {
-                    let py_event_obj = Py::new(py, py_event)?;
-                    let py_ctx_obj = Py::new(py, py_ctx)?;
-                    func.call1(py, (py_ctx_obj, py_event_obj))
-                })
-                .map_err(|e: PyErr| zagents_core::WorkflowError::StepFailed {
-                    step_name: step_name.clone(),
-                    source: Box::new(ZAgentsPyError::Workflow(e.to_string())),
-                })?;
-
-                // Convert the Python coroutine to a Rust future and await it
-                let future = Python::attach(|py| {
-                    pyo3_async_runtimes::tokio::into_future(coroutine.into_bound(py))
-                })
-                .map_err(|e: PyErr| zagents_core::WorkflowError::StepFailed {
-                    step_name: step_name.clone(),
-                    source: Box::new(ZAgentsPyError::Workflow(e.to_string())),
-                })?;
-
-                let py_result: Py<PyAny> =
-                    future
-                        .await
-                        .map_err(|e: PyErr| zagents_core::WorkflowError::StepFailed {
+                    // Call the Python async function to get a coroutine
+                    let coroutine: Py<PyAny> = Python::attach(|py| -> PyResult<Py<PyAny>> {
+                        let py_event_obj = Py::new(py, py_event)?;
+                        let py_ctx_obj = Py::new(py, py_ctx)?;
+                        func.call1(py, (py_ctx_obj, py_event_obj))
+                    })
+                    .map_err(|e: PyErr| {
+                        zagents_core::WorkflowError::StepFailed {
                             step_name: step_name.clone(),
                             source: Box::new(ZAgentsPyError::Workflow(e.to_string())),
-                        })?;
-
-                // Convert the Python return value back to a Rust event
-                Python::attach(|py| -> std::result::Result<
-                    zagents_core::StepOutput,
-                    zagents_core::WorkflowError,
-                > {
-                    let bound = py_result.bind(py);
-
-                    // If the return is None, no output
-                    if bound.is_none() {
-                        return Ok(zagents_core::StepOutput::None);
-                    }
-
-                    // If it's a list, multiple events
-                    if let Ok(list) = bound.cast::<pyo3::types::PyList>() {
-                        let mut events: Vec<Box<dyn AnyEvent>> =
-                            Vec::with_capacity(list.len());
-                        for item in list.iter() {
-                            let ev: Bound<'_, PyEvent> =
-                                item.cast::<PyEvent>().map_err(|e| {
-                                    zagents_core::WorkflowError::StepFailed {
-                                        step_name: step_name.clone(),
-                                        source: Box::new(ZAgentsPyError::Workflow(
-                                            e.to_string(),
-                                        )),
-                                    }
-                                })?.clone();
-                            events.push(py_event_to_any_event(&ev.borrow()));
                         }
-                        return Ok(zagents_core::StepOutput::Multiple(events));
-                    }
+                    })?;
 
-                    // Single event
-                    let ev_bound: Bound<'_, PyEvent> =
-                        bound.cast::<PyEvent>().map_err(|e| {
-                            zagents_core::WorkflowError::StepFailed {
-                                step_name: step_name.clone(),
-                                source: Box::new(ZAgentsPyError::Workflow(format!(
-                                    "step must return an Event, list of Events, or None: {e}"
-                                ))),
+                    // Convert the Python coroutine to a Rust future and await it
+                    let future = Python::attach(|py| {
+                        pyo3_async_runtimes::tokio::into_future(coroutine.into_bound(py))
+                    })
+                    .map_err(|e: PyErr| {
+                        zagents_core::WorkflowError::StepFailed {
+                            step_name: step_name.clone(),
+                            source: Box::new(ZAgentsPyError::Workflow(e.to_string())),
+                        }
+                    })?;
+
+                    let py_result: Py<PyAny> = future.await.map_err(|e: PyErr| {
+                        zagents_core::WorkflowError::StepFailed {
+                            step_name: step_name.clone(),
+                            source: Box::new(ZAgentsPyError::Workflow(e.to_string())),
+                        }
+                    })?;
+
+                    // Convert the Python return value back to a Rust event
+                    Python::attach(
+                        |py| -> std::result::Result<
+                            zagents_core::StepOutput,
+                            zagents_core::WorkflowError,
+                        > {
+                            let bound = py_result.bind(py);
+
+                            // If the return is None, no output
+                            if bound.is_none() {
+                                return Ok(zagents_core::StepOutput::None);
                             }
-                        })?.clone();
-                    let ev = ev_bound.borrow();
-                    Ok(zagents_core::StepOutput::Single(py_event_to_any_event(
-                        &ev,
-                    )))
+
+                            // If it's a list, multiple events
+                            if let Ok(list) = bound.cast::<pyo3::types::PyList>() {
+                                let mut events: Vec<Box<dyn AnyEvent>> =
+                                    Vec::with_capacity(list.len());
+                                for item in list.iter() {
+                                    let ev: Bound<'_, PyEvent> = item
+                                        .cast::<PyEvent>()
+                                        .map_err(|e| zagents_core::WorkflowError::StepFailed {
+                                            step_name: step_name.clone(),
+                                            source: Box::new(ZAgentsPyError::Workflow(
+                                                e.to_string(),
+                                            )),
+                                        })?
+                                        .clone();
+                                    events.push(py_event_to_any_event(&ev.borrow()));
+                                }
+                                return Ok(zagents_core::StepOutput::Multiple(events));
+                            }
+
+                            // Single event
+                            let ev_bound: Bound<'_, PyEvent> = bound
+                                .cast::<PyEvent>()
+                                .map_err(|e| zagents_core::WorkflowError::StepFailed {
+                                    step_name: step_name.clone(),
+                                    source: Box::new(ZAgentsPyError::Workflow(format!(
+                                        "step must return an Event, list of Events, or None: {e}"
+                                    ))),
+                                })?
+                                .clone();
+                            let ev = ev_bound.borrow();
+                            Ok(zagents_core::StepOutput::Single(py_event_to_any_event(&ev)))
+                        },
+                    )
                 })
-            })
-        });
+            },
+        );
 
         Ok(zagents_core::StepRegistration {
             name: self.name.clone(),

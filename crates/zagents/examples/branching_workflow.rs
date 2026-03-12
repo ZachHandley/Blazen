@@ -72,10 +72,7 @@ async fn route(event: AnalyzeEvent, _ctx: Context) -> Result<StepOutput, Workflo
 
 /// Handle the positive branch.
 #[step]
-async fn handle_positive(
-    event: PositiveEvent,
-    _ctx: Context,
-) -> Result<StopEvent, WorkflowError> {
+async fn handle_positive(event: PositiveEvent, _ctx: Context) -> Result<StopEvent, WorkflowError> {
     let response = format!("Glad you feel positive about: {}", event.text);
     println!("[handle_positive] {response}");
     Ok(StopEvent {
@@ -85,10 +82,7 @@ async fn handle_positive(
 
 /// Handle the negative branch.
 #[step]
-async fn handle_negative(
-    event: NegativeEvent,
-    _ctx: Context,
-) -> Result<StopEvent, WorkflowError> {
+async fn handle_negative(event: NegativeEvent, _ctx: Context) -> Result<StopEvent, WorkflowError> {
     let response = format!("Sorry to hear about: {}", event.text);
     println!("[handle_negative] {response}");
     Ok(StopEvent {

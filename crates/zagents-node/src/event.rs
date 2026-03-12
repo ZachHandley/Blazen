@@ -58,10 +58,7 @@ pub fn any_event_to_js_value(event: &dyn AnyEvent) -> serde_json::Value {
 
     // StartEvent: { type: "zagents::StartEvent", ...data }
     if event_type == "zagents::StartEvent" {
-        let data = json
-            .get("data")
-            .cloned()
-            .unwrap_or(serde_json::Value::Null);
+        let data = json.get("data").cloned().unwrap_or(serde_json::Value::Null);
         return merge_type_into_data(&event_type, &data);
     }
 

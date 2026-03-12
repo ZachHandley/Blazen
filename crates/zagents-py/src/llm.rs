@@ -7,9 +7,7 @@ use std::sync::Arc;
 
 use pyo3::prelude::*;
 
-use zagents_llm::{
-    ChatMessage, CompletionModel, CompletionRequest, MessageContent, Role,
-};
+use zagents_llm::{ChatMessage, CompletionModel, CompletionRequest, MessageContent, Role};
 
 use crate::error::ZAgentsPyError;
 
@@ -47,7 +45,7 @@ impl PyChatMessage {
                 return Err(ZAgentsPyError::InvalidArgument(format!(
                     "unknown role: '{other}' (expected system, user, assistant, or tool)"
                 ))
-                .into())
+                .into());
             }
         };
         Ok(Self {
@@ -170,8 +168,7 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, model=None))]
     fn anthropic(api_key: &str, model: Option<&str>) -> Self {
-        let mut provider =
-            zagents_llm::providers::anthropic::AnthropicProvider::new(api_key);
+        let mut provider = zagents_llm::providers::anthropic::AnthropicProvider::new(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -456,10 +453,7 @@ impl PyCompletionModel {
         max_tokens: Option<u32>,
         model: Option<String>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_messages: Vec<ChatMessage> = messages
-            .iter()
-            .map(|m| m.inner.clone())
-            .collect();
+        let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
 
         let mut request = CompletionRequest::new(rust_messages);
         if let Some(t) = temperature {
@@ -474,17 +468,19 @@ impl PyCompletionModel {
 
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let response = inner.complete(request).await.map_err(ZAgentsPyError::from)?;
+            let response = inner
+                .complete(request)
+                .await
+                .map_err(ZAgentsPyError::from)?;
 
             // Serialize the response to a JSON value that can be converted to
             // a Python dict when the GIL is reacquired by the pyo3 runtime.
             let mut result_map = serde_json::Map::new();
             result_map.insert(
                 "content".to_owned(),
-                response.content.map_or(
-                    serde_json::Value::Null,
-                    serde_json::Value::String,
-                ),
+                response
+                    .content
+                    .map_or(serde_json::Value::Null, serde_json::Value::String),
             );
             result_map.insert(
                 "model".to_owned(),
@@ -492,10 +488,9 @@ impl PyCompletionModel {
             );
             result_map.insert(
                 "finish_reason".to_owned(),
-                response.finish_reason.map_or(
-                    serde_json::Value::Null,
-                    serde_json::Value::String,
-                ),
+                response
+                    .finish_reason
+                    .map_or(serde_json::Value::Null, serde_json::Value::String),
             );
 
             // Tool calls

@@ -78,8 +78,7 @@ pub trait CheckpointStore: Send + Sync {
 // ---------------------------------------------------------------------------
 
 /// Table definition: `run_id` bytes (16) -> JSON bytes.
-const CHECKPOINTS: redb::TableDefinition<&[u8], &[u8]> =
-    redb::TableDefinition::new("checkpoints");
+const CHECKPOINTS: redb::TableDefinition<&[u8], &[u8]> = redb::TableDefinition::new("checkpoints");
 
 /// Redb-backed checkpoint store.
 ///
@@ -283,8 +282,7 @@ mod tests {
 
         store.save(&cp).await.unwrap();
 
-        cp.state
-            .insert("counter".to_owned(), serde_json::json!(99));
+        cp.state.insert("counter".to_owned(), serde_json::json!(99));
         store.save(&cp).await.unwrap();
 
         let loaded = store.load(&run_id).await.unwrap().unwrap();

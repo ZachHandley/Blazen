@@ -17,16 +17,14 @@ use std::pin::Pin;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use futures_util::stream;
 use futures_util::Stream;
+use futures_util::stream;
 use reqwest::Client;
 use serde::Deserialize;
 use tracing::debug;
 
 use crate::error::LlmError;
-use crate::types::{
-    CompletionRequest, CompletionResponse, MessageContent, StreamChunk,
-};
+use crate::types::{CompletionRequest, CompletionResponse, MessageContent, StreamChunk};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -130,10 +128,7 @@ impl FalProvider {
 
     /// Build the JSON request body for the `fal-ai/any-llm` endpoint.
     fn build_body(&self, request: &CompletionRequest) -> serde_json::Value {
-        let llm_model = request
-            .model
-            .as_deref()
-            .unwrap_or(&self.llm_model);
+        let llm_model = request.model.as_deref().unwrap_or(&self.llm_model);
 
         // Concatenate all messages into a prompt string.
         // fal-ai/any-llm expects `prompt` and optionally `system_prompt`.
@@ -181,10 +176,7 @@ impl FalProvider {
     }
 
     /// Execute synchronously: POST to fal.run and wait for the response.
-    async fn execute_sync(
-        &self,
-        body: &serde_json::Value,
-    ) -> Result<serde_json::Value, LlmError> {
+    async fn execute_sync(&self, body: &serde_json::Value) -> Result<serde_json::Value, LlmError> {
         let model = self.resolve_fal_model();
         let url = format!("{FAL_SYNC_URL}/{model}");
 
@@ -257,12 +249,8 @@ impl FalProvider {
         debug!(request_id = %request_id, "fal.ai job submitted to queue");
 
         // Poll for completion.
-        let status_url = format!(
-            "{FAL_QUEUE_URL}/{model}/requests/{request_id}/status"
-        );
-        let result_url = format!(
-            "{FAL_QUEUE_URL}/{model}/requests/{request_id}"
-        );
+        let status_url = format!("{FAL_QUEUE_URL}/{model}/requests/{request_id}/status");
+        let result_url = format!("{FAL_QUEUE_URL}/{model}/requests/{request_id}");
 
         for _ in 0..MAX_POLL_ITERATIONS {
             tokio::time::sleep(poll_interval).await;
@@ -396,14 +384,12 @@ impl crate::traits::CompletionModel for FalProvider {
             FalExecutionMode::Queue { poll_interval } => {
                 self.execute_queue(&body, *poll_interval).await?
             }
-            FalExecutionMode::Webhook { url } => {
-                self.execute_webhook(&body, url).await?
-            }
+            FalExecutionMode::Webhook { url } => self.execute_webhook(&body, url).await?,
         };
 
         // Parse the fal.ai response.
-        let fal_response: FalLlmResponse = serde_json::from_value(result)
-            .map_err(|e| LlmError::InvalidResponse(e.to_string()))?;
+        let fal_response: FalLlmResponse =
+            serde_json::from_value(result).map_err(|e| LlmError::InvalidResponse(e.to_string()))?;
 
         if let Some(error) = fal_response.error {
             return Err(LlmError::RequestFailed(format!(
@@ -467,15 +453,13 @@ mod tests {
 
     #[test]
     fn with_llm_model_override() {
-        let provider =
-            FalProvider::new("fal-test").with_llm_model("openai/gpt-4o");
+        let provider = FalProvider::new("fal-test").with_llm_model("openai/gpt-4o");
         assert_eq!(provider.llm_model, "openai/gpt-4o");
     }
 
     #[test]
     fn with_sync_execution() {
-        let provider =
-            FalProvider::new("fal-test").with_execution_mode(FalExecutionMode::Sync);
+        let provider = FalProvider::new("fal-test").with_execution_mode(FalExecutionMode::Sync);
         assert!(matches!(provider.execution_mode, FalExecutionMode::Sync));
     }
 

@@ -32,7 +32,5 @@
 pub mod checkpoint;
 pub mod error;
 
-pub use checkpoint::{
-    CheckpointStore, RedbCheckpointStore, SerializedEvent, WorkflowCheckpoint,
-};
+pub use checkpoint::{CheckpointStore, RedbCheckpointStore, SerializedEvent, WorkflowCheckpoint};
 pub use error::PersistError;

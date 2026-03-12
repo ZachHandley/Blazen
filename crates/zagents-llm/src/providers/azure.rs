@@ -157,10 +157,7 @@ impl AzureOpenAiProvider {
     }
 
     /// Send a request and return the raw response, handling common errors.
-    async fn send_request(
-        &self,
-        body: &serde_json::Value,
-    ) -> Result<reqwest::Response, LlmError> {
+    async fn send_request(&self, body: &serde_json::Value) -> Result<reqwest::Response, LlmError> {
         let url = self.completions_url();
 
         let response = self
@@ -286,8 +283,7 @@ mod tests {
     #[test]
     fn completions_url_custom_version() {
         let provider =
-            AzureOpenAiProvider::new("key", "my-resource", "gpt-4o")
-                .with_api_version("2025-01-01");
+            AzureOpenAiProvider::new("key", "my-resource", "gpt-4o").with_api_version("2025-01-01");
         let url = provider.completions_url();
         assert!(url.contains("api-version=2025-01-01"));
     }

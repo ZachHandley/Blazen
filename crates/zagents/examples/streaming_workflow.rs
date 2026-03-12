@@ -7,8 +7,8 @@
 //!
 //! Run with: `cargo run -p zagents --example streaming_workflow`
 
-use zagents::prelude::*;
 use tokio_stream::StreamExt;
+use zagents::prelude::*;
 
 // ---------------------------------------------------------------------------
 // Events

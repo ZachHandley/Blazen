@@ -132,7 +132,10 @@ impl GeminiProvider {
             gen_config.insert("topP".into(), serde_json::json!(top_p));
         }
         if let Some(ref fmt) = request.response_format {
-            gen_config.insert("responseMimeType".into(), serde_json::json!("application/json"));
+            gen_config.insert(
+                "responseMimeType".into(),
+                serde_json::json!("application/json"),
+            );
             gen_config.insert("responseSchema".into(), fmt.clone());
         }
         if !gen_config.is_empty() {
@@ -344,10 +347,7 @@ impl crate::traits::CompletionModel for GeminiProvider {
 
     async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, LlmError> {
         let model = self.resolve_model(&request);
-        let url = format!(
-            "{}/models/{}:generateContent",
-            self.base_url, model
-        );
+        let url = format!("{}/models/{}:generateContent", self.base_url, model);
         let body = self.build_body(&request);
         debug!(model, "Gemini completion request");
 
@@ -573,9 +573,7 @@ fn parse_gemini_sse_event(buffer: &mut String) -> Option<Result<StreamChunk, Llm
                                     tool_calls.push(ToolCall {
                                         id: format!("gemini_call_{i}"),
                                         name: fc.name,
-                                        arguments: fc
-                                            .args
-                                            .unwrap_or(serde_json::Value::Null),
+                                        arguments: fc.args.unwrap_or(serde_json::Value::Null),
                                     });
                                 }
                             }
@@ -778,12 +776,11 @@ mod tests {
         let models = response.models.unwrap();
         assert_eq!(models.len(), 1);
         assert_eq!(models[0].name, "models/gemini-2.5-flash");
-        assert_eq!(
-            models[0].display_name.as_deref(),
-            Some("Gemini 2.5 Flash")
+        assert_eq!(models[0].display_name.as_deref(), Some("Gemini 2.5 Flash"));
+        assert!(
+            models[0]
+                .supported_generation_methods
+                .contains(&"generateContent".to_owned())
         );
-        assert!(models[0]
-            .supported_generation_methods
-            .contains(&"generateContent".to_owned()));
     }
 }

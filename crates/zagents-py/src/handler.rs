@@ -57,10 +57,7 @@ impl PyWorkflowHandler {
                 })?
             };
 
-            let result = handler
-                .result()
-                .await
-                .map_err(ZAgentsPyError::from)?;
+            let result = handler.result().await.map_err(ZAgentsPyError::from)?;
 
             let py_event = any_event_to_py_event(&*result);
             Ok(py_event)
@@ -88,9 +85,9 @@ impl PyWorkflowHandler {
             .try_lock()
             .map_err(|_| ZAgentsPyError::Workflow("Handler is locked".to_owned()))?;
 
-        let handler = guard.as_ref().ok_or_else(|| {
-            ZAgentsPyError::Workflow("Handler already consumed".to_owned())
-        })?;
+        let handler = guard
+            .as_ref()
+            .ok_or_else(|| ZAgentsPyError::Workflow("Handler already consumed".to_owned()))?;
 
         let stream = handler.stream_events();
         Ok(PyEventStream {

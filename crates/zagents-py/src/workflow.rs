@@ -7,7 +7,7 @@ use std::time::Duration;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use crate::error::{to_py_result, ZAgentsPyError};
+use crate::error::{ZAgentsPyError, to_py_result};
 use crate::event::dict_to_json;
 use crate::handler::PyWorkflowHandler;
 use crate::step::PyStepWrapper;
@@ -40,7 +40,11 @@ impl PyWorkflow {
     ///     timeout: Optional timeout in seconds (default: 300).
     #[new]
     #[pyo3(signature = (name, steps, timeout=None))]
-    fn new(name: &str, steps: Vec<PyRef<'_, PyStepWrapper>>, timeout: Option<f64>) -> PyResult<Self> {
+    fn new(
+        name: &str,
+        steps: Vec<PyRef<'_, PyStepWrapper>>,
+        timeout: Option<f64>,
+    ) -> PyResult<Self> {
         let mut builder = zagents_core::WorkflowBuilder::new(name);
 
         for step in &steps {
@@ -52,9 +56,7 @@ impl PyWorkflow {
             builder = builder.timeout(Duration::from_secs_f64(t));
         }
 
-        let workflow = builder
-            .build()
-            .map_err(ZAgentsPyError::from)?;
+        let workflow = builder.build().map_err(ZAgentsPyError::from)?;
 
         Ok(Self {
             inner: Arc::new(workflow),
@@ -89,10 +91,7 @@ impl PyWorkflow {
 
         let workflow = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let handler = workflow
-                .run(data)
-                .await
-                .map_err(ZAgentsPyError::from)?;
+            let handler = workflow.run(data).await.map_err(ZAgentsPyError::from)?;
             to_py_result(Ok(PyWorkflowHandler::new(handler)))
         })
     }

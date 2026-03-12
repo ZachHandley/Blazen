@@ -208,8 +208,8 @@ pub(crate) fn parse_next_event(buffer: &mut String) -> Option<Result<StreamChunk
                             let func = tc.function?;
                             let name = func.name?;
                             let args_str = func.arguments.unwrap_or_default();
-                            let args = serde_json::from_str(&args_str)
-                                .unwrap_or(serde_json::Value::Null);
+                            let args =
+                                serde_json::from_str(&args_str).unwrap_or(serde_json::Value::Null);
                             Some(ToolCall {
                                 id: tc.id.unwrap_or_default(),
                                 name,

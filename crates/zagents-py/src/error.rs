@@ -47,9 +47,7 @@ impl From<ZAgentsPyError> for PyErr {
 impl From<zagents_core::WorkflowError> for ZAgentsPyError {
     fn from(err: zagents_core::WorkflowError) -> Self {
         match &err {
-            zagents_core::WorkflowError::Timeout { .. } => {
-                ZAgentsPyError::Timeout(err.to_string())
-            }
+            zagents_core::WorkflowError::Timeout { .. } => ZAgentsPyError::Timeout(err.to_string()),
             zagents_core::WorkflowError::ValidationFailed(msg) => {
                 ZAgentsPyError::InvalidArgument(msg.clone())
             }

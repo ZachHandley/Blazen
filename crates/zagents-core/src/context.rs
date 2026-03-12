@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde::Serialize;
-use tokio::sync::{broadcast, mpsc, RwLock};
+use tokio::sync::{RwLock, broadcast, mpsc};
 use uuid::Uuid;
 use zagents_events::{AnyEvent, Event, EventEnvelope};
 

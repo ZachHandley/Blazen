@@ -9,9 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use zagents_core::{
-    Context, StepFn, StepOutput, StepRegistration, WorkflowBuilder, WorkflowError,
-};
+use zagents_core::{Context, StepFn, StepOutput, StepRegistration, WorkflowBuilder, WorkflowError};
 use zagents_events::{AnyEvent, Event, StartEvent, StopEvent};
 
 // ===========================================================================
@@ -213,11 +211,14 @@ impl Event for ProgressEvent {
 
 fn make_step<I, O>(
     name: &str,
-    handler: impl Fn(I, Context) -> std::pin::Pin<
+    handler: impl Fn(
+        I,
+        Context,
+    ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<O, WorkflowError>> + Send>,
     > + Send
-        + Sync
-        + 'static,
+    + Sync
+    + 'static,
 ) -> StepRegistration
 where
     I: Event + for<'de> Deserialize<'de> + 'static,
@@ -256,10 +257,7 @@ async fn test_basic_sequential_workflow() {
     // StartEvent -> analyze -> AnalyzeEvent -> finalize -> StopEvent
     let analyze_step = make_step("analyze", |event: StartEvent, _ctx: Context| {
         Box::pin(async move {
-            let text = event.data["text"]
-                .as_str()
-                .unwrap_or_default()
-                .to_string();
+            let text = event.data["text"].as_str().unwrap_or_default().to_string();
             let word_count = text.split_whitespace().count();
             Ok(AnalyzeEvent { text, word_count })
         })
@@ -316,10 +314,7 @@ async fn test_branching_workflow() {
                     .clone();
 
                 let action = start.data["action"].as_str().unwrap_or("buy");
-                let ticker = start.data["ticker"]
-                    .as_str()
-                    .unwrap_or("AAPL")
-                    .to_string();
+                let ticker = start.data["ticker"].as_str().unwrap_or("AAPL").to_string();
                 let amount = start.data["amount"].as_f64().unwrap_or(100.0);
 
                 if action == "buy" {
@@ -423,7 +418,11 @@ async fn test_multi_step_chain() {
     });
 
     let step_b = make_step("step_b", |event: StepAEvent, _ctx: Context| {
-        Box::pin(async move { Ok(StepBEvent { value: event.value * 2 }) })
+        Box::pin(async move {
+            Ok(StepBEvent {
+                value: event.value * 2,
+            })
+        })
     });
 
     let step_c = make_step("step_c", |event: StepBEvent, _ctx: Context| {
@@ -460,10 +459,7 @@ async fn test_multi_step_chain() {
         .unwrap();
 
     // value=5 -> +1=6 -> *2=12 -> +10=22 -> *3=66
-    let handler = workflow
-        .run(serde_json::json!({"value": 5}))
-        .await
-        .unwrap();
+    let handler = workflow.run(serde_json::json!({"value": 5})).await.unwrap();
     let result = handler.result().await.unwrap();
     let stop = result.downcast_ref::<StopEvent>().unwrap();
     assert_eq!(stop.result["final_value"], 66);
@@ -493,10 +489,7 @@ async fn test_fan_out() {
                     })?
                     .clone();
 
-                let ticker = start.data["ticker"]
-                    .as_str()
-                    .unwrap_or("AAPL")
-                    .to_string();
+                let ticker = start.data["ticker"].as_str().unwrap_or("AAPL").to_string();
 
                 Ok(StepOutput::Multiple(vec![
                     Box::new(BuyEvent {
@@ -696,10 +689,7 @@ async fn test_context_state_sharing() {
                     .clone();
 
                 // Write shared state.
-                let text = start.data["text"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_string();
+                let text = start.data["text"].as_str().unwrap_or_default().to_string();
                 ctx.set("shared_text", text.clone()).await;
                 ctx.set("shared_count", text.len() as u64).await;
 
@@ -720,10 +710,7 @@ async fn test_context_state_sharing() {
         let handler: StepFn = Arc::new(|_event: Box<dyn AnyEvent>, ctx: Context| {
             Box::pin(async move {
                 // Read shared state written by step_a.
-                let text = ctx
-                    .get::<String>("shared_text")
-                    .await
-                    .unwrap_or_default();
+                let text = ctx.get::<String>("shared_text").await.unwrap_or_default();
                 let count = ctx.get::<u64>("shared_count").await.unwrap_or(0);
 
                 Ok(StepOutput::Single(Box::new(StopEvent {
@@ -880,10 +867,7 @@ struct MacroTestEvent {
 
 // Use the #[step] attribute macro.
 #[zagents_macros::step]
-async fn macro_step_one(
-    event: StartEvent,
-    _ctx: Context,
-) -> Result<MacroTestEvent, WorkflowError> {
+async fn macro_step_one(event: StartEvent, _ctx: Context) -> Result<MacroTestEvent, WorkflowError> {
     let text = event.data["text"]
         .as_str()
         .unwrap_or_default()
@@ -892,10 +876,7 @@ async fn macro_step_one(
 }
 
 #[zagents_macros::step]
-async fn macro_step_two(
-    event: MacroTestEvent,
-    _ctx: Context,
-) -> Result<StopEvent, WorkflowError> {
+async fn macro_step_two(event: MacroTestEvent, _ctx: Context) -> Result<StopEvent, WorkflowError> {
     Ok(StopEvent {
         result: serde_json::json!({ "processed": event.value }),
     })
@@ -947,10 +928,7 @@ struct LowValueEvent {
 }
 
 #[zagents_macros::step(emits = [HighValueEvent, LowValueEvent])]
-async fn branching_step(
-    event: StartEvent,
-    _ctx: Context,
-) -> Result<StepOutput, WorkflowError> {
+async fn branching_step(event: StartEvent, _ctx: Context) -> Result<StepOutput, WorkflowError> {
     let amount = event.data["amount"].as_f64().unwrap_or(0.0);
     if amount > 1000.0 {
         Ok(StepOutput::Single(Box::new(HighValueEvent { amount })))
@@ -960,20 +938,14 @@ async fn branching_step(
 }
 
 #[zagents_macros::step]
-async fn handle_high(
-    event: HighValueEvent,
-    _ctx: Context,
-) -> Result<StopEvent, WorkflowError> {
+async fn handle_high(event: HighValueEvent, _ctx: Context) -> Result<StopEvent, WorkflowError> {
     Ok(StopEvent {
         result: serde_json::json!({ "tier": "high", "amount": event.amount }),
     })
 }
 
 #[zagents_macros::step]
-async fn handle_low(
-    event: LowValueEvent,
-    _ctx: Context,
-) -> Result<StopEvent, WorkflowError> {
+async fn handle_low(event: LowValueEvent, _ctx: Context) -> Result<StopEvent, WorkflowError> {
     Ok(StopEvent {
         result: serde_json::json!({ "tier": "low", "amount": event.amount }),
     })
@@ -1035,10 +1007,7 @@ async fn ctx_writer_step(
     event: StartEvent,
     ctx: Context,
 ) -> Result<IntermediateEvent, WorkflowError> {
-    let input = event.data["input"]
-        .as_str()
-        .unwrap_or_default()
-        .to_string();
+    let input = event.data["input"].as_str().unwrap_or_default().to_string();
     ctx.set("saved_input", input.clone()).await;
     Ok(IntermediateEvent { data: input })
 }
@@ -1048,10 +1017,7 @@ async fn ctx_reader_step(
     event: IntermediateEvent,
     ctx: Context,
 ) -> Result<StopEvent, WorkflowError> {
-    let saved: String = ctx
-        .get::<String>("saved_input")
-        .await
-        .unwrap_or_default();
+    let saved: String = ctx.get::<String>("saved_input").await.unwrap_or_default();
 
     Ok(StopEvent {
         result: serde_json::json!({

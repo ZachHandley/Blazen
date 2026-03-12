@@ -10,7 +10,7 @@ use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
 use tokio_stream::StreamExt;
-use zagents_events::{intern_event_type, AnyEvent};
+use zagents_events::{AnyEvent, intern_event_type};
 
 use crate::context::JsContext;
 use crate::error::workflow_error_to_napi;
@@ -134,10 +134,7 @@ impl JsWorkflow {
     pub async fn run(&self, input: serde_json::Value) -> Result<JsWorkflowResult> {
         let workflow = self.build_workflow()?;
 
-        let handler = workflow
-            .run(input)
-            .await
-            .map_err(workflow_error_to_napi)?;
+        let handler = workflow.run(input).await.map_err(workflow_error_to_napi)?;
 
         let result = handler.result().await.map_err(workflow_error_to_napi)?;
 
@@ -158,10 +155,7 @@ impl JsWorkflow {
     ) -> Result<JsWorkflowResult> {
         let workflow = self.build_workflow()?;
 
-        let handler = workflow
-            .run(input)
-            .await
-            .map_err(workflow_error_to_napi)?;
+        let handler = workflow.run(input).await.map_err(workflow_error_to_napi)?;
 
         // Subscribe to the stream before awaiting the result.
         let mut stream = handler.stream_events();
@@ -176,10 +170,7 @@ impl JsWorkflow {
             while let Some(event) = stream.next().await {
                 let js_event = any_event_to_js_value(&*event);
                 // Fire-and-forget: call the JS callback without awaiting.
-                let _ = on_event_clone.call(
-                    Ok(js_event),
-                    ThreadsafeFunctionCallMode::NonBlocking,
-                );
+                let _ = on_event_clone.call(Ok(js_event), ThreadsafeFunctionCallMode::NonBlocking);
             }
         });
 
@@ -213,9 +204,7 @@ impl JsWorkflow {
 }
 
 /// Create a [`StepRegistration`](zagents_core::StepRegistration) from a JS step.
-fn make_step_registration(
-    step: &JsStepRegistration,
-) -> Result<zagents_core::StepRegistration> {
+fn make_step_registration(step: &JsStepRegistration) -> Result<zagents_core::StepRegistration> {
     let accepts: Vec<&'static str> = step
         .event_types
         .iter()
@@ -225,54 +214,53 @@ fn make_step_registration(
     // Arc clone is cheap -- the ThreadsafeFunction itself is shared.
     let handler_tsfn = Arc::clone(&step.handler);
 
-    let handler: zagents_core::StepFn = Arc::new(move |event: Box<dyn AnyEvent>,
-                                                        ctx: zagents_core::Context|
-          -> std::pin::Pin<
-        Box<
-            dyn std::future::Future<
-                    Output = std::result::Result<
-                        zagents_core::StepOutput,
-                        zagents_core::WorkflowError,
-                    >,
-                > + Send,
-        >,
-    > {
-        let tsfn = Arc::clone(&handler_tsfn);
+    let handler: zagents_core::StepFn =
+        Arc::new(
+            move |event: Box<dyn AnyEvent>,
+                  ctx: zagents_core::Context|
+                  -> std::pin::Pin<
+                Box<
+                    dyn std::future::Future<
+                            Output = std::result::Result<
+                                zagents_core::StepOutput,
+                                zagents_core::WorkflowError,
+                            >,
+                        > + Send,
+                >,
+            > {
+                let tsfn = Arc::clone(&handler_tsfn);
 
-        Box::pin(async move {
-            // Convert the Rust event to a JS-friendly JSON value.
-            let js_event = any_event_to_js_value(&*event);
-            let js_ctx = JsContext::new(ctx);
+                Box::pin(async move {
+                    // Convert the Rust event to a JS-friendly JSON value.
+                    let js_event = any_event_to_js_value(&*event);
+                    let js_ctx = JsContext::new(ctx);
 
-            // Call the JavaScript handler function.
-            // ThreadsafeFunction::call_async returns a Future that resolves
-            // to the JS function's return value (serde_json::Value).
-            let result_value: serde_json::Value = tsfn
-                .call_async(Ok((js_event, js_ctx)))
-                .await
-                .map_err(|e: napi::Error| {
-                    zagents_core::WorkflowError::Context(e.to_string())
-                })?;
+                    // Call the JavaScript handler function.
+                    // ThreadsafeFunction::call_async returns a Future that resolves
+                    // to the JS function's return value (serde_json::Value).
+                    let result_value: serde_json::Value =
+                        tsfn.call_async(Ok((js_event, js_ctx))).await.map_err(
+                            |e: napi::Error| zagents_core::WorkflowError::Context(e.to_string()),
+                        )?;
 
-            // Convert the JS return value back to a Rust event.
-            if result_value.is_null() {
-                return Ok(zagents_core::StepOutput::None);
-            }
+                    // Convert the JS return value back to a Rust event.
+                    if result_value.is_null() {
+                        return Ok(zagents_core::StepOutput::None);
+                    }
 
-            // Check if it's an array (multiple events).
-            if let serde_json::Value::Array(arr) = &result_value {
-                let events: Vec<Box<dyn AnyEvent>> = arr
-                    .iter()
-                    .map(js_value_to_any_event)
-                    .collect();
-                return Ok(zagents_core::StepOutput::Multiple(events));
-            }
+                    // Check if it's an array (multiple events).
+                    if let serde_json::Value::Array(arr) = &result_value {
+                        let events: Vec<Box<dyn AnyEvent>> =
+                            arr.iter().map(js_value_to_any_event).collect();
+                        return Ok(zagents_core::StepOutput::Multiple(events));
+                    }
 
-            // Single event.
-            let event = js_value_to_any_event(&result_value);
-            Ok(zagents_core::StepOutput::Single(event))
-        })
-    });
+                    // Single event.
+                    let event = js_value_to_any_event(&result_value);
+                    Ok(zagents_core::StepOutput::Single(event))
+                })
+            },
+        );
 
     Ok(zagents_core::StepRegistration {
         name: step.name.clone(),

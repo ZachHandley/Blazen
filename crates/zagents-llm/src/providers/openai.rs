@@ -68,10 +68,7 @@ impl OpenAiProvider {
 
     /// Build the JSON request body for the OpenAI chat completions endpoint.
     fn build_body(&self, request: &CompletionRequest, stream: bool) -> serde_json::Value {
-        let model = request
-            .model
-            .as_deref()
-            .unwrap_or(&self.default_model);
+        let model = request.model.as_deref().unwrap_or(&self.default_model);
 
         let messages: Vec<serde_json::Value> = request
             .messages
@@ -138,10 +135,7 @@ impl OpenAiProvider {
     }
 
     /// Send a request and return the raw response, handling common errors.
-    async fn send_request(
-        &self,
-        body: &serde_json::Value,
-    ) -> Result<reqwest::Response, LlmError> {
+    async fn send_request(&self, body: &serde_json::Value) -> Result<reqwest::Response, LlmError> {
         let url = format!("{}/chat/completions", self.base_url);
 
         let response = self

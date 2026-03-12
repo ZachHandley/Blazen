@@ -8,8 +8,8 @@ use std::sync::Arc;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
-use zagents_llm::types::{ChatMessage, CompletionRequest, MessageContent, Role};
 use zagents_llm::CompletionModel;
+use zagents_llm::types::{ChatMessage, CompletionRequest, MessageContent, Role};
 
 use crate::error::llm_error_to_napi;
 
@@ -38,9 +38,7 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn openai(api_key: String) -> Self {
         Self {
-            inner: Arc::new(
-                zagents_llm::providers::openai::OpenAiProvider::new(api_key),
-            ),
+            inner: Arc::new(zagents_llm::providers::openai::OpenAiProvider::new(api_key)),
         }
     }
 
@@ -48,9 +46,9 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn anthropic(api_key: String) -> Self {
         Self {
-            inner: Arc::new(
-                zagents_llm::providers::anthropic::AnthropicProvider::new(api_key),
-            ),
+            inner: Arc::new(zagents_llm::providers::anthropic::AnthropicProvider::new(
+                api_key,
+            )),
         }
     }
 
@@ -58,9 +56,7 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn gemini(api_key: String) -> Self {
         Self {
-            inner: Arc::new(
-                zagents_llm::providers::gemini::GeminiProvider::new(api_key),
-            ),
+            inner: Arc::new(zagents_llm::providers::gemini::GeminiProvider::new(api_key)),
         }
     }
 
@@ -68,13 +64,11 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn azure(api_key: String, resource_name: String, deployment_name: String) -> Self {
         Self {
-            inner: Arc::new(
-                zagents_llm::providers::azure::AzureOpenAiProvider::new(
-                    api_key,
-                    resource_name,
-                    deployment_name,
-                ),
-            ),
+            inner: Arc::new(zagents_llm::providers::azure::AzureOpenAiProvider::new(
+                api_key,
+                resource_name,
+                deployment_name,
+            )),
         }
     }
 
@@ -82,9 +76,7 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn fal(api_key: String) -> Self {
         Self {
-            inner: Arc::new(
-                zagents_llm::providers::fal::FalProvider::new(api_key),
-            ),
+            inner: Arc::new(zagents_llm::providers::fal::FalProvider::new(api_key)),
         }
     }
 
@@ -211,10 +203,7 @@ impl JsCompletionModel {
     /// Returns the response as a JSON object with `content`, `toolCalls`,
     /// `usage`, `model`, and `finishReason` fields.
     #[napi]
-    pub async fn complete(
-        &self,
-        messages: Vec<serde_json::Value>,
-    ) -> Result<serde_json::Value> {
+    pub async fn complete(&self, messages: Vec<serde_json::Value>) -> Result<serde_json::Value> {
         let chat_messages = parse_messages(&messages)?;
         let request = CompletionRequest::new(chat_messages);
 
@@ -326,10 +315,7 @@ fn parse_messages(messages: &[serde_json::Value]) -> Result<Vec<ChatMessage>> {
     messages
         .iter()
         .map(|msg| {
-            let role_str = msg
-                .get("role")
-                .and_then(|v| v.as_str())
-                .unwrap_or("user");
+            let role_str = msg.get("role").and_then(|v| v.as_str()).unwrap_or("user");
 
             let content = msg
                 .get("content")

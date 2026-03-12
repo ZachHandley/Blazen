@@ -119,10 +119,7 @@ impl Workflow {
     /// # Errors
     ///
     /// Returns an error if the initial event cannot be enqueued.
-    pub async fn run(
-        &self,
-        input: serde_json::Value,
-    ) -> crate::error::Result<WorkflowHandler> {
+    pub async fn run(&self, input: serde_json::Value) -> crate::error::Result<WorkflowHandler> {
         let start_event = StartEvent { data: input };
         self.run_with_event(start_event).await
     }
@@ -150,11 +147,8 @@ impl Workflow {
 
         // Set metadata.
         let run_id = Uuid::new_v4();
-        ctx.set_metadata(
-            "run_id",
-            serde_json::Value::String(run_id.to_string()),
-        )
-        .await;
+        ctx.set_metadata("run_id", serde_json::Value::String(run_id.to_string()))
+            .await;
         ctx.set_metadata(
             "workflow_name",
             serde_json::Value::String(self.name.clone()),
@@ -170,7 +164,9 @@ impl Workflow {
         // Spawn the event loop.
         let registry = self.step_registry.clone();
         let timeout = self.timeout;
-        tokio::spawn(event_loop(event_rx, event_tx, registry, ctx, result_tx, timeout));
+        tokio::spawn(event_loop(
+            event_rx, event_tx, registry, ctx, result_tx, timeout,
+        ));
 
         Ok(WorkflowHandler::new(result_rx, stream_tx))
     }
@@ -306,14 +302,12 @@ fn dispatch_to_handlers(
         tokio::spawn(async move {
             match handler(event_clone, ctx_clone).await {
                 Ok(StepOutput::Single(output_event)) => {
-                    let envelope =
-                        EventEnvelope::new(output_event, Some(step_name));
+                    let envelope = EventEnvelope::new(output_event, Some(step_name));
                     let _ = event_tx_clone.send(envelope);
                 }
                 Ok(StepOutput::Multiple(events)) => {
                     for e in events {
-                        let envelope =
-                            EventEnvelope::new(e, Some(step_name.clone()));
+                        let envelope = EventEnvelope::new(e, Some(step_name.clone()));
                         let _ = event_tx_clone.send(envelope);
                     }
                 }
@@ -379,7 +373,10 @@ mod tests {
             .build()
             .unwrap();
 
-        let handler = workflow.run(serde_json::json!({"hello": "world"})).await.unwrap();
+        let handler = workflow
+            .run(serde_json::json!({"hello": "world"}))
+            .await
+            .unwrap();
         let result = handler.result().await.unwrap();
         assert_eq!(result.event_type_id(), StopEvent::event_type());
 
@@ -423,18 +420,13 @@ mod tests {
         let wf_handler = workflow.run(serde_json::json!(null)).await.unwrap();
         let result = wf_handler.result().await;
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            WorkflowError::Timeout { .. }
-        ));
+        assert!(matches!(result.unwrap_err(), WorkflowError::Timeout { .. }));
     }
 
     #[tokio::test]
     async fn step_error_propagates() {
         let handler: StepFn = Arc::new(|_event, _ctx| {
-            Box::pin(async move {
-                Err(WorkflowError::Context("test error".into()))
-            })
+            Box::pin(async move { Err(WorkflowError::Context("test error".into())) })
         });
 
         let step = StepRegistration {

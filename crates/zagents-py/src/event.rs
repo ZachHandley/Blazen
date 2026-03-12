@@ -146,10 +146,7 @@ pub fn any_event_to_py_event(event: &dyn AnyEvent) -> PyEvent {
 
     // If the event is a StartEvent, extract the "data" field.
     if event_type == "zagents::StartEvent" {
-        let data = json
-            .get("data")
-            .cloned()
-            .unwrap_or(serde_json::Value::Null);
+        let data = json.get("data").cloned().unwrap_or(serde_json::Value::Null);
         return PyEvent { event_type, data };
     }
 
@@ -242,10 +239,8 @@ pub fn py_to_json(_py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<serde_jso
 
     // Float
     if let Ok(f) = obj.extract::<f64>() {
-        return Ok(serde_json::Number::from_f64(f).map_or(
-            serde_json::Value::Null,
-            serde_json::Value::Number,
-        ));
+        return Ok(serde_json::Number::from_f64(f)
+            .map_or(serde_json::Value::Null, serde_json::Value::Number));
     }
 
     // String
@@ -329,7 +324,7 @@ impl<'py> IntoPyObject<'py> for JsonValue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zagents_events::{intern_event_type, Event};
+    use zagents_events::{Event, intern_event_type};
 
     #[test]
     fn intern_event_type_returns_same_pointer() {
