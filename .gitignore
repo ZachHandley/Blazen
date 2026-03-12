@@ -1,0 +1,7 @@
+/target
+*.pyc
+__pycache__/
+*.egg-info/
+dist/
+node_modules/
+*.node

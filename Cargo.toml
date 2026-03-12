@@ -1,0 +1,104 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/zagents-events",
+    "crates/zagents-macros",
+    "crates/zagents-core",
+    "crates/zagents-llm",
+    "crates/zagents-persist",
+    "crates/zagents",
+    "crates/zagents-py",
+    "crates/zagents-node",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["Zach Handley <zachhandley@gmail.com>"]
+repository = "https://github.com/zachhandley/ZAgents"
+rust-version = "1.85"
+
+[workspace.dependencies]
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures-util = "0.3"
+async-trait = "0.1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"] }
+
+# Schema generation (for structured LLM output)
+schemars = "1"
+
+# HTTP client (for LLM providers)
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
+
+# Concurrent collections
+dashmap = "6"
+
+# UUID
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Bytes
+bytes = "1"
+
+# Python bindings
+pyo3 = { version = "0.28", features = ["extension-module"] }
+pyo3-async-runtimes = { version = "0.28", features = ["tokio-runtime"] }
+
+# Node.js bindings
+napi = { version = "3", features = ["async", "serde-json", "tokio_rt"] }
+napi-derive = "3"
+
+# Proc macro deps
+syn = { version = "2", features = ["full", "extra-traits"] }
+quote = "1"
+proc-macro2 = "1"
+darling = "0.23"
+
+# Persistence
+redb = "3"
+
+# Internal crates
+zagents-events = { version = "0.1.0", path = "crates/zagents-events" }
+zagents-macros = { version = "0.1.0", path = "crates/zagents-macros" }
+zagents-core = { version = "0.1.0", path = "crates/zagents-core" }
+zagents-llm = { version = "0.1.0", path = "crates/zagents-llm" }
+zagents-persist = { version = "0.1.0", path = "crates/zagents-persist" }
+zagents = { version = "0.1.0", path = "crates/zagents" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+opt-level = 3
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[workspace.lints.rust]
+unsafe_code = "warn"
+dead_code = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
