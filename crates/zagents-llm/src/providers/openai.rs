@@ -1,7 +1,7 @@
-//! OpenAI chat completion provider.
+//! `OpenAI` chat completion provider.
 //!
 //! This module provides the original [`OpenAiProvider`] for direct use with the
-//! OpenAI API. For connecting to other OpenAI-compatible services (OpenRouter,
+//! `OpenAI` API. For connecting to other `OpenAI`-compatible services (`OpenRouter`,
 //! Groq, Together AI, etc.), see [`super::openai_compat::OpenAiCompatProvider`].
 
 use std::pin::Pin;
@@ -21,7 +21,7 @@ use crate::types::{
 // Provider
 // ---------------------------------------------------------------------------
 
-/// An OpenAI chat completion provider.
+/// An `OpenAI` chat completion provider.
 ///
 /// # Examples
 ///
@@ -41,7 +41,7 @@ pub struct OpenAiProvider {
 
 impl OpenAiProvider {
     /// Create a new provider with the given API key, targeting the official
-    /// OpenAI endpoint.
+    /// `OpenAI` endpoint.
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
@@ -66,7 +66,7 @@ impl OpenAiProvider {
         self
     }
 
-    /// Build the JSON request body for the OpenAI chat completions endpoint.
+    /// Build the JSON request body for the `OpenAI` chat completions endpoint.
     fn build_body(&self, request: &CompletionRequest, stream: bool) -> serde_json::Value {
         let model = request.model.as_deref().unwrap_or(&self.default_model);
 

@@ -101,13 +101,12 @@ fn extract_data(value: &serde_json::Value) -> serde_json::Value {
 
 /// Merge a `"type"` field into a data value, returning a flat object.
 fn merge_type_into_data(event_type: &str, data: &serde_json::Value) -> serde_json::Value {
-    let mut obj = match data {
-        serde_json::Value::Object(map) => map.clone(),
-        _ => {
-            let mut m = serde_json::Map::new();
-            m.insert("data".to_owned(), data.clone());
-            m
-        }
+    let mut obj = if let serde_json::Value::Object(map) = data {
+        map.clone()
+    } else {
+        let mut m = serde_json::Map::new();
+        m.insert("data".to_owned(), data.clone());
+        m
     };
     obj.insert(
         "type".to_owned(),

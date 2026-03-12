@@ -6,8 +6,8 @@
 //! ## OpenAI-compatible providers
 //!
 //! The [`openai_compat`] module provides a single [`OpenAiCompatProvider`]
-//! that works with any OpenAI-compatible endpoint. This covers OpenAI,
-//! OpenRouter, Groq, Together AI, Mistral, DeepSeek, Fireworks, Perplexity,
+//! that works with any `OpenAI`-compatible endpoint. This covers `OpenAI`,
+//! `OpenRouter`, Groq, Together AI, Mistral, `DeepSeek`, Fireworks, Perplexity,
 //! xAI, Cohere, and AWS Bedrock (Mantle).
 //!
 //! The original [`openai`] module is retained for backwards compatibility but

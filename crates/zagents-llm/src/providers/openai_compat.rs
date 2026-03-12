@@ -1,6 +1,6 @@
 //! Generic OpenAI-compatible chat completion provider.
 //!
-//! Most hosted LLM APIs follow the OpenAI chat completions wire format. This
+//! Most hosted LLM APIs follow the `OpenAI` chat completions wire format. This
 //! module provides [`OpenAiCompatProvider`] -- a single implementation of
 //! [`CompletionModel`] that works with any OpenAI-compatible endpoint by
 //! configuring the base URL, auth method, and extra headers.
@@ -43,11 +43,11 @@ use crate::types::{
 /// How to authenticate with the provider API.
 #[derive(Debug, Clone)]
 pub enum AuthMethod {
-    /// `Authorization: Bearer <key>` (OpenAI, OpenRouter, Groq, etc.)
+    /// `Authorization: Bearer <key>` (`OpenAI`, `OpenRouter`, Groq, etc.)
     Bearer,
     /// A custom header name for the API key (e.g. `x-api-key`).
     ApiKeyHeader(String),
-    /// `api-key: <key>` (Azure OpenAI).
+    /// `api-key: <key>` (Azure `OpenAI`).
     AzureApiKey,
     /// `Authorization: Key <key>` (fal.ai).
     KeyPrefix,
@@ -106,7 +106,7 @@ impl OpenAiCompatProvider {
     // Convenience constructors
     // -----------------------------------------------------------------------
 
-    /// OpenAI (`https://api.openai.com/v1`, default model `gpt-4o`).
+    /// `OpenAI` (`https://api.openai.com/v1`, default model `gpt-4o`).
     #[must_use]
     pub fn openai(api_key: impl Into<String>) -> Self {
         Self::new(OpenAiCompatConfig {
@@ -121,7 +121,7 @@ impl OpenAiCompatProvider {
         })
     }
 
-    /// OpenRouter (`https://openrouter.ai/api/v1`, default model `openai/gpt-4o`).
+    /// `OpenRouter` (`https://openrouter.ai/api/v1`, default model `openai/gpt-4o`).
     #[must_use]
     pub fn openrouter(api_key: impl Into<String>) -> Self {
         Self::new(OpenAiCompatConfig {
@@ -181,7 +181,7 @@ impl OpenAiCompatProvider {
         })
     }
 
-    /// DeepSeek (`https://api.deepseek.com`, default model `deepseek-chat`).
+    /// `DeepSeek` (`https://api.deepseek.com`, default model `deepseek-chat`).
     #[must_use]
     pub fn deepseek(api_key: impl Into<String>) -> Self {
         Self::new(OpenAiCompatConfig {

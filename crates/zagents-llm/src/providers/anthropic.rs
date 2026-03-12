@@ -1,7 +1,7 @@
 //! Anthropic Messages API provider.
 //!
 //! This module implements [`CompletionModel`] for the Anthropic Messages API.
-//! The Anthropic API differs from OpenAI in several important ways:
+//! The Anthropic API differs from `OpenAI` in several important ways:
 //!
 //! - Authentication uses the `x-api-key` header (not Bearer auth).
 //! - A `anthropic-version` header is required.
@@ -86,7 +86,7 @@ impl AnthropicProvider {
 
     /// Build the JSON request body for the Anthropic Messages endpoint.
     ///
-    /// Key differences from OpenAI:
+    /// Key differences from `OpenAI`:
     /// - System messages are extracted into the top-level `system` field.
     /// - `max_tokens` is always present (required by the API).
     fn build_body(&self, request: &CompletionRequest, stream: bool) -> serde_json::Value {
@@ -97,25 +97,22 @@ impl AnthropicProvider {
         let mut messages: Vec<serde_json::Value> = Vec::new();
 
         for msg in &request.messages {
-            match msg.role {
-                Role::System => {
-                    let MessageContent::Text(t) = &msg.content;
-                    system_parts.push(t.clone());
-                }
-                _ => {
-                    let role = match msg.role {
-                        Role::User | Role::Tool => "user",
-                        Role::Assistant => "assistant",
-                        Role::System => unreachable!(),
-                    };
-                    let content = match &msg.content {
-                        MessageContent::Text(t) => t.clone(),
-                    };
-                    messages.push(serde_json::json!({
-                        "role": role,
-                        "content": content,
-                    }));
-                }
+            if msg.role == Role::System {
+                let MessageContent::Text(t) = &msg.content;
+                system_parts.push(t.clone());
+            } else {
+                let role = match msg.role {
+                    Role::User | Role::Tool => "user",
+                    Role::Assistant => "assistant",
+                    Role::System => unreachable!(),
+                };
+                let content = match &msg.content {
+                    MessageContent::Text(t) => t.clone(),
+                };
+                messages.push(serde_json::json!({
+                    "role": role,
+                    "content": content,
+                }));
             }
         }
 
@@ -402,7 +399,7 @@ struct AnthropicSseParser<S> {
     tool_blocks: Vec<ToolBlockState>,
 }
 
-/// State for a tool_use content block being streamed.
+/// State for a `tool_use` content block being streamed.
 #[derive(Debug, Clone)]
 struct ToolBlockState {
     id: String,
@@ -447,12 +444,11 @@ where
                     return std::task::Poll::Ready(Some(Err(LlmError::Stream(e.to_string()))));
                 }
                 std::task::Poll::Ready(None) => {
-                    if !this.buffer.is_empty() {
-                        if let Some(result) =
+                    if !this.buffer.is_empty()
+                        && let Some(result) =
                             parse_anthropic_event(&mut this.buffer, &mut this.tool_blocks)
-                        {
-                            return std::task::Poll::Ready(Some(result));
-                        }
+                    {
+                        return std::task::Poll::Ready(Some(result));
                     }
                     return std::task::Poll::Ready(None);
                 }
@@ -474,6 +470,7 @@ where
 /// ```
 ///
 /// We need both the `event:` and `data:` lines to form a complete frame.
+#[allow(clippy::too_many_lines)]
 fn parse_anthropic_event(
     buffer: &mut String,
     tool_blocks: &mut Vec<ToolBlockState>,
@@ -550,7 +547,6 @@ fn parse_anthropic_event(
                         block.json_buf.push_str(&partial_json);
                     }
                     // Don't emit a chunk yet; wait for content_block_stop.
-                    continue;
                 }
             },
             StreamEvent::ContentBlockStart {
@@ -560,7 +556,6 @@ fn parse_anthropic_event(
                 match content_block {
                     ContentBlockStartPayload::Text { .. } => {
                         // Text block start — nothing to emit yet.
-                        continue;
                     }
                     ContentBlockStartPayload::ToolUse { id, name } => {
                         tool_blocks.push(ToolBlockState {
@@ -568,7 +563,6 @@ fn parse_anthropic_event(
                             name,
                             json_buf: String::new(),
                         });
-                        continue;
                     }
                 }
             }
@@ -587,7 +581,6 @@ fn parse_anthropic_event(
                         finish_reason: None,
                     }));
                 }
-                continue;
             }
             StreamEvent::MessageDelta { delta, .. } => {
                 if delta.stop_reason.is_some() {
@@ -597,7 +590,6 @@ fn parse_anthropic_event(
                         finish_reason: delta.stop_reason,
                     }));
                 }
-                continue;
             }
             StreamEvent::MessageStop => {
                 return Some(Ok(StreamChunk {
@@ -610,7 +602,7 @@ fn parse_anthropic_event(
                 return Some(Err(LlmError::Stream(error.message)));
             }
             // Ping, MessageStart — skip.
-            _ => continue,
+            _ => {}
         }
     }
 }

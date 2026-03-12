@@ -1,12 +1,12 @@
-//! Azure OpenAI chat completion provider.
+//! Azure `OpenAI` chat completion provider.
 //!
-//! Azure OpenAI uses the same wire format as OpenAI but with different URL
+//! Azure `OpenAI` uses the same wire format as `OpenAI` but with different URL
 //! structure and authentication:
 //!
 //! - URL: `https://{resource}.openai.azure.com/openai/deployments/{deployment}/chat/completions?api-version={version}`
 //! - Auth: `api-key: <key>` header (not Bearer)
 //!
-//! The SSE streaming and request/response formats are identical to OpenAI.
+//! The SSE streaming and request/response formats are identical to `OpenAI`.
 
 use std::pin::Pin;
 
@@ -25,14 +25,14 @@ use crate::types::{
 // Constants
 // ---------------------------------------------------------------------------
 
-/// Default Azure OpenAI API version.
+/// Default Azure `OpenAI` API version.
 const DEFAULT_API_VERSION: &str = "2024-10-21";
 
 // ---------------------------------------------------------------------------
 // Provider
 // ---------------------------------------------------------------------------
 
-/// An Azure OpenAI chat completion provider.
+/// An Azure `OpenAI` chat completion provider.
 ///
 /// # Examples
 ///
@@ -55,10 +55,10 @@ pub struct AzureOpenAiProvider {
 }
 
 impl AzureOpenAiProvider {
-    /// Create a new Azure OpenAI provider.
+    /// Create a new Azure `OpenAI` provider.
     ///
     /// - `api_key`: The Azure API key.
-    /// - `resource_name`: The Azure OpenAI resource name (the subdomain).
+    /// - `resource_name`: The Azure `OpenAI` resource name (the subdomain).
     /// - `deployment_name`: The model deployment name.
     #[must_use]
     pub fn new(
@@ -90,8 +90,9 @@ impl AzureOpenAiProvider {
         )
     }
 
-    /// Build the JSON request body (same format as OpenAI, but without the
+    /// Build the JSON request body (same format as `OpenAI`, but without the
     /// `model` field since the deployment determines the model).
+    #[allow(clippy::unused_self)]
     fn build_body(&self, request: &CompletionRequest, stream: bool) -> serde_json::Value {
         let messages: Vec<serde_json::Value> = request
             .messages

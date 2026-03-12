@@ -1,7 +1,7 @@
 //! # `ZAgents` LLM
 //!
 //! Provides traits and implementations for large language model providers
-//! (OpenAI, Anthropic, Gemini, Azure, fal.ai, and many OpenAI-compatible
+//! (`OpenAI`, Anthropic, Gemini, Azure, fal.ai, and many `OpenAI`-compatible
 //! services) with streaming support, tool calling, and structured output
 //! via JSON Schema.
 //!
@@ -9,7 +9,7 @@
 //!
 //! | Feature | Description |
 //! |---------|-------------|
-//! | `openai` | Enables [`providers::openai::OpenAiProvider`] and [`providers::openai_compat::OpenAiCompatProvider`] (covers OpenRouter, Groq, Together, Mistral, DeepSeek, Fireworks, Perplexity, xAI, Cohere, Bedrock) |
+//! | `openai` | Enables [`providers::openai::OpenAiProvider`] and [`providers::openai_compat::OpenAiCompatProvider`] (covers `OpenRouter`, Groq, Together, Mistral, `DeepSeek`, Fireworks, Perplexity, xAI, Cohere, Bedrock) |
 //! | `anthropic` | Enables [`providers::anthropic::AnthropicProvider`] |
 //! | `gemini` | Enables [`providers::gemini::GeminiProvider`] |
 //! | `fal` | Enables [`providers::fal::FalProvider`] |

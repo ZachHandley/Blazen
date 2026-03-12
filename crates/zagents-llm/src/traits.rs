@@ -154,6 +154,7 @@ pub struct ModelPricing {
 
 /// Capabilities that a model may support.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ModelCapabilities {
     /// Supports chat completions.
     pub chat: bool,

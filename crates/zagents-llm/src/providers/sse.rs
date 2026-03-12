@@ -1,7 +1,7 @@
 //! Shared SSE (Server-Sent Events) parser for OpenAI-compatible streaming
 //! responses.
 //!
-//! The OpenAI SSE protocol sends lines of the form `data: <json>` separated
+//! The `OpenAI` SSE protocol sends lines of the form `data: <json>` separated
 //! by blank lines. The special value `data: [DONE]` signals the end of the
 //! stream. This parser is reused by the OpenAI-compatible provider, the Azure
 //! provider, and as a building block for the Gemini provider.
@@ -54,6 +54,7 @@ pub(crate) struct OaiFunction {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(clippy::struct_field_names)]
 pub(crate) struct OaiUsage {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
@@ -148,10 +149,10 @@ where
                 }
                 Poll::Ready(None) => {
                     // Stream ended. If there's leftover data, try one more parse.
-                    if !this.buffer.is_empty() {
-                        if let Some(chunk) = parse_next_event(&mut this.buffer) {
-                            return Poll::Ready(Some(chunk));
-                        }
+                    if !this.buffer.is_empty()
+                        && let Some(chunk) = parse_next_event(&mut this.buffer)
+                    {
+                        return Poll::Ready(Some(chunk));
                     }
                     return Poll::Ready(None);
                 }
@@ -195,9 +196,8 @@ pub(crate) fn parse_next_event(buffer: &mut String) -> Option<Result<StreamChunk
 
             match serde_json::from_str::<OaiStreamChunk>(data) {
                 Ok(chunk) => {
-                    let choice = match chunk.choices.into_iter().next() {
-                        Some(c) => c,
-                        None => continue, // No choice in this chunk, skip.
+                    let Some(choice) = chunk.choices.into_iter().next() else {
+                        continue; // No choice in this chunk, skip.
                     };
 
                     let tool_calls: Vec<ToolCall> = choice

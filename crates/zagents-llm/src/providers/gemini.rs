@@ -1,6 +1,6 @@
 //! Google Gemini API provider.
 //!
-//! The Gemini API has a completely different wire format from OpenAI:
+//! The Gemini API has a completely different wire format from `OpenAI`:
 //!
 //! - Auth: `x-goog-api-key` header
 //! - Generate: `POST /v1beta/models/{model}:generateContent`
@@ -81,31 +81,29 @@ impl GeminiProvider {
     }
 
     /// Build the JSON request body for the Gemini `generateContent` endpoint.
+    #[allow(clippy::unused_self)]
     fn build_body(&self, request: &CompletionRequest) -> serde_json::Value {
         // Separate system instructions from conversation messages.
         let mut system_parts: Vec<String> = Vec::new();
         let mut contents: Vec<serde_json::Value> = Vec::new();
 
         for msg in &request.messages {
-            match msg.role {
-                Role::System => {
-                    let MessageContent::Text(t) = &msg.content;
-                    system_parts.push(t.clone());
-                }
-                _ => {
-                    let role = match msg.role {
-                        Role::User | Role::Tool => "user",
-                        Role::Assistant => "model",
-                        Role::System => unreachable!(),
-                    };
-                    let text = match &msg.content {
-                        MessageContent::Text(t) => t.clone(),
-                    };
-                    contents.push(serde_json::json!({
-                        "role": role,
-                        "parts": [{ "text": text }],
-                    }));
-                }
+            if msg.role == Role::System {
+                let MessageContent::Text(t) = &msg.content;
+                system_parts.push(t.clone());
+            } else {
+                let role = match msg.role {
+                    Role::User | Role::Tool => "user",
+                    Role::Assistant => "model",
+                    Role::System => unreachable!(),
+                };
+                let text = match &msg.content {
+                    MessageContent::Text(t) => t.clone(),
+                };
+                contents.push(serde_json::json!({
+                    "role": role,
+                    "parts": [{ "text": text }],
+                }));
             }
         }
 
@@ -249,6 +247,7 @@ struct GeminiFunctionCall {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_field_names)]
 struct GeminiUsageMetadata {
     prompt_token_count: Option<u32>,
     candidates_token_count: Option<u32>,
@@ -293,19 +292,19 @@ fn parse_gemini_response(response: GeminiResponse) -> Result<CompletionResponse,
     let mut text_parts: Vec<String> = Vec::new();
     let mut tool_calls: Vec<ToolCall> = Vec::new();
 
-    if let Some(content) = candidate.content {
-        if let Some(parts) = content.parts {
-            for (i, part) in parts.into_iter().enumerate() {
-                if let Some(text) = part.text {
-                    text_parts.push(text);
-                }
-                if let Some(fc) = part.function_call {
-                    tool_calls.push(ToolCall {
-                        id: format!("gemini_call_{i}"),
-                        name: fc.name,
-                        arguments: fc.args.unwrap_or(serde_json::Value::Null),
-                    });
-                }
+    if let Some(content) = candidate.content
+        && let Some(parts) = content.parts
+    {
+        for (i, part) in parts.into_iter().enumerate() {
+            if let Some(text) = part.text {
+                text_parts.push(text);
+            }
+            if let Some(fc) = part.function_call {
+                tool_calls.push(ToolCall {
+                    id: format!("gemini_call_{i}"),
+                    name: fc.name,
+                    arguments: fc.args.unwrap_or(serde_json::Value::Null),
+                });
             }
         }
     }
@@ -469,8 +468,8 @@ impl ModelRegistry for GeminiProvider {
 /// Parses an SSE byte stream from the Gemini `streamGenerateContent` endpoint
 /// into [`StreamChunk`]s.
 ///
-/// Gemini SSE uses `data: <json>` lines like OpenAI, but the JSON payload is
-/// a full `GeminiResponse` per chunk (not the OpenAI delta format).
+/// Gemini SSE uses `data: <json>` lines like `OpenAI`, but the JSON payload is
+/// a full `GeminiResponse` per chunk (not the `OpenAI` delta format).
 struct GeminiSseParser<S> {
     inner: S,
     buffer: String,
@@ -508,10 +507,10 @@ where
                     return Poll::Ready(Some(Err(LlmError::Stream(e.to_string()))));
                 }
                 Poll::Ready(None) => {
-                    if !this.buffer.is_empty() {
-                        if let Some(chunk) = parse_gemini_sse_event(&mut this.buffer) {
-                            return Poll::Ready(Some(chunk));
-                        }
+                    if !this.buffer.is_empty()
+                        && let Some(chunk) = parse_gemini_sse_event(&mut this.buffer)
+                    {
+                        return Poll::Ready(Some(chunk));
                     }
                     return Poll::Ready(None);
                 }
@@ -550,32 +549,30 @@ fn parse_gemini_sse_event(buffer: &mut String) -> Option<Result<StreamChunk, Llm
 
             match serde_json::from_str::<GeminiResponse>(data) {
                 Ok(response) => {
-                    let candidates = match response.candidates {
-                        Some(c) => c,
-                        None => continue,
+                    let Some(candidates) = response.candidates else {
+                        continue;
                     };
 
-                    let candidate = match candidates.into_iter().next() {
-                        Some(c) => c,
-                        None => continue,
+                    let Some(candidate) = candidates.into_iter().next() else {
+                        continue;
                     };
 
                     let mut text_delta: Option<String> = None;
                     let mut tool_calls: Vec<ToolCall> = Vec::new();
 
-                    if let Some(content) = candidate.content {
-                        if let Some(parts) = content.parts {
-                            for (i, part) in parts.into_iter().enumerate() {
-                                if let Some(text) = part.text {
-                                    text_delta = Some(text);
-                                }
-                                if let Some(fc) = part.function_call {
-                                    tool_calls.push(ToolCall {
-                                        id: format!("gemini_call_{i}"),
-                                        name: fc.name,
-                                        arguments: fc.args.unwrap_or(serde_json::Value::Null),
-                                    });
-                                }
+                    if let Some(content) = candidate.content
+                        && let Some(parts) = content.parts
+                    {
+                        for (i, part) in parts.into_iter().enumerate() {
+                            if let Some(text) = part.text {
+                                text_delta = Some(text);
+                            }
+                            if let Some(fc) = part.function_call {
+                                tool_calls.push(ToolCall {
+                                    id: format!("gemini_call_{i}"),
+                                    name: fc.name,
+                                    arguments: fc.args.unwrap_or(serde_json::Value::Null),
+                                });
                             }
                         }
                     }

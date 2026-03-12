@@ -20,10 +20,10 @@ use crate::event::{any_event_to_js_value, js_value_to_any_event};
 // Type aliases for ThreadsafeFunction variants
 // ---------------------------------------------------------------------------
 
-/// Step handler: takes (event, ctx) and returns a serde_json::Value.
+/// Step handler: takes (event, ctx) and returns a `serde_json::Value`.
 type StepHandlerTsfn = ThreadsafeFunction<(serde_json::Value, JsContext), serde_json::Value>;
 
-/// Stream callback: takes a serde_json::Value, returns nothing meaningful.
+/// Stream callback: takes a `serde_json::Value`, returns nothing meaningful.
 /// We use the default Unknown return type and fire-and-forget via `call`.
 type StreamCallbackTsfn = ThreadsafeFunction<serde_json::Value>;
 
@@ -49,7 +49,7 @@ struct JsStepRegistration {
 /// The result of a workflow run.
 #[napi(object)]
 pub struct JsWorkflowResult {
-    /// The event type of the final result (typically "zagents::StopEvent").
+    /// The event type of the final result (typically "`zagents::StopEvent`").
     #[napi(js_name = "type")]
     pub event_type: String,
     /// The result data as a JSON object.
@@ -82,6 +82,7 @@ pub struct JsWorkflow {
 }
 
 #[napi]
+#[allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 impl JsWorkflow {
     /// Create a new workflow with the given name.
     #[napi(constructor)]
@@ -195,7 +196,7 @@ impl JsWorkflow {
         }
 
         for step in &self.steps {
-            let registration = make_step_registration(step)?;
+            let registration = make_step_registration(step);
             builder = builder.step(registration);
         }
 
@@ -204,7 +205,7 @@ impl JsWorkflow {
 }
 
 /// Create a [`StepRegistration`](zagents_core::StepRegistration) from a JS step.
-fn make_step_registration(step: &JsStepRegistration) -> Result<zagents_core::StepRegistration> {
+fn make_step_registration(step: &JsStepRegistration) -> zagents_core::StepRegistration {
     let accepts: Vec<&'static str> = step
         .event_types
         .iter()
@@ -262,13 +263,13 @@ fn make_step_registration(step: &JsStepRegistration) -> Result<zagents_core::Ste
             },
         );
 
-    Ok(zagents_core::StepRegistration {
+    zagents_core::StepRegistration {
         name: step.name.clone(),
         accepts,
         emits: vec![], // JS steps don't declare emits statically.
         handler,
         max_concurrency: 0,
-    })
+    }
 }
 
 /// Convert a result event to a [`JsWorkflowResult`].

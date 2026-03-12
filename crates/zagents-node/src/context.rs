@@ -18,6 +18,7 @@ pub struct JsContext {
 }
 
 #[napi]
+#[allow(clippy::missing_errors_doc)]
 impl JsContext {
     /// Store a value under the given key.
     ///

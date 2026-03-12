@@ -1,6 +1,6 @@
-//! ZAgents Node.js bindings.
+//! `ZAgents` Node.js bindings.
 //!
-//! Exposes the ZAgents framework to Node.js / TypeScript via napi-rs.
+//! Exposes the `ZAgents` framework to Node.js / TypeScript via napi-rs.
 //!
 //! # Modules
 //!
@@ -22,6 +22,7 @@ use napi_derive::napi;
 
 /// Returns the version of the zagents library.
 #[napi]
+#[must_use]
 pub fn version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }

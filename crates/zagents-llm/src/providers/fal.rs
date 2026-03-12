@@ -11,7 +11,7 @@
 //! - Sync mode: submit and wait (timeout risk for long jobs)
 //! - Webhook mode: submit with callback URL
 //!
-//! For LLM specifically, fal.ai proxies through OpenRouter via `fal-ai/any-llm`.
+//! For LLM specifically, fal.ai proxies through `OpenRouter` via `fal-ai/any-llm`.
 
 use std::pin::Pin;
 use std::time::Duration;
@@ -67,7 +67,7 @@ pub enum FalExecutionMode {
 /// A fal.ai compute platform provider.
 ///
 /// For LLM usage, this provider uses the `fal-ai/any-llm` model which
-/// proxies through OpenRouter and accepts a simple prompt-based format.
+/// proxies through `OpenRouter` and accepts a simple prompt-based format.
 ///
 /// # Examples
 ///
@@ -293,7 +293,7 @@ impl FalProvider {
                     )));
                 }
                 // IN_QUEUE, IN_PROGRESS -- keep polling.
-                _ => continue,
+                _ => {}
             }
         }
 

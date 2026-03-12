@@ -242,7 +242,7 @@ pub struct CompletionResponse {
     pub usage: Option<TokenUsage>,
     /// The model that produced this response.
     pub model: String,
-    /// The reason the model stopped generating (e.g. "stop", "tool_use").
+    /// The reason the model stopped generating (e.g. "stop", "`tool_use`").
     pub finish_reason: Option<String>,
 }
 

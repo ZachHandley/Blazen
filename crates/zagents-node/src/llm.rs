@@ -1,7 +1,7 @@
 //! JavaScript wrappers for LLM completion models.
 //!
 //! Provides [`JsCompletionModel`] with factory constructors for each
-//! supported provider (OpenAI, Anthropic, Gemini, etc.).
+//! supported provider (`OpenAI`, Anthropic, Gemini, etc.).
 
 use std::sync::Arc;
 
@@ -29,12 +29,13 @@ pub struct JsCompletionModel {
 }
 
 #[napi]
+#[allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 impl JsCompletionModel {
     // -----------------------------------------------------------------
     // Provider factory methods
     // -----------------------------------------------------------------
 
-    /// Create an OpenAI completion model.
+    /// Create an `OpenAI` completion model.
     #[napi(factory)]
     pub fn openai(api_key: String) -> Self {
         Self {
@@ -60,7 +61,7 @@ impl JsCompletionModel {
         }
     }
 
-    /// Create an Azure OpenAI completion model.
+    /// Create an Azure `OpenAI` completion model.
     #[napi(factory)]
     pub fn azure(api_key: String, resource_name: String, deployment_name: String) -> Self {
         Self {
@@ -80,7 +81,7 @@ impl JsCompletionModel {
         }
     }
 
-    /// Create an OpenRouter completion model.
+    /// Create an `OpenRouter` completion model.
     #[napi(factory)]
     pub fn openrouter(api_key: String) -> Self {
         Self {
@@ -120,7 +121,7 @@ impl JsCompletionModel {
         }
     }
 
-    /// Create a DeepSeek completion model.
+    /// Create a `DeepSeek` completion model.
     #[napi(factory)]
     pub fn deepseek(api_key: String) -> Self {
         Self {
@@ -252,6 +253,7 @@ impl JsCompletionModel {
     /// - `model` (string): Override the default model
     /// - `tools` (array): Tool definitions for function calling
     #[napi(js_name = "completeWithOptions")]
+    #[allow(clippy::cast_possible_truncation)]
     pub async fn complete_with_options(
         &self,
         messages: Vec<serde_json::Value>,
@@ -261,13 +263,13 @@ impl JsCompletionModel {
         let mut request = CompletionRequest::new(chat_messages);
 
         // Apply options.
-        if let Some(temp) = options.get("temperature").and_then(|v| v.as_f64()) {
+        if let Some(temp) = options.get("temperature").and_then(serde_json::Value::as_f64) {
             request.temperature = Some(temp as f32);
         }
-        if let Some(max) = options.get("maxTokens").and_then(|v| v.as_u64()) {
+        if let Some(max) = options.get("maxTokens").and_then(serde_json::Value::as_u64) {
             request.max_tokens = Some(max as u32);
         }
-        if let Some(top_p) = options.get("topP").and_then(|v| v.as_f64()) {
+        if let Some(top_p) = options.get("topP").and_then(serde_json::Value::as_f64) {
             request.top_p = Some(top_p as f32);
         }
         if let Some(model) = options.get("model").and_then(|v| v.as_str()) {

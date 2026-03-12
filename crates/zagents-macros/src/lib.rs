@@ -1,6 +1,6 @@
-//! ZAgents procedural macros.
+//! `ZAgents` procedural macros.
 //!
-//! Provides derive macros and attribute macros for the ZAgents framework,
+//! Provides derive macros and attribute macros for the `ZAgents` framework,
 //! including `#[derive(Event)]` and `#[step]` attribute macros.
 
 use proc_macro::TokenStream;
@@ -127,36 +127,34 @@ impl Parse for StepAttr {
 
 /// Returns true if the type path's last segment is `Context`.
 fn is_context_type(ty: &Type) -> bool {
-    if let Type::Path(TypePath { path, .. }) = ty {
-        if let Some(seg) = path.segments.last() {
-            return seg.ident == "Context";
-        }
+    if let Type::Path(TypePath { path, .. }) = ty
+        && let Some(seg) = path.segments.last()
+    {
+        return seg.ident == "Context";
     }
     false
 }
 
 /// Returns true if the type path's last segment is `StepOutput`.
 fn is_step_output_type(ty: &Type) -> bool {
-    if let Type::Path(TypePath { path, .. }) = ty {
-        if let Some(seg) = path.segments.last() {
-            return seg.ident == "StepOutput";
-        }
+    if let Type::Path(TypePath { path, .. }) = ty
+        && let Some(seg) = path.segments.last()
+    {
+        return seg.ident == "StepOutput";
     }
     false
 }
 
 /// Extract the first generic argument from `Result<T, E>` -- returns T.
 fn extract_result_ok_type(ty: &Type) -> Option<&Type> {
-    if let Type::Path(TypePath { path, .. }) = ty {
-        if let Some(seg) = path.segments.last() {
-            if seg.ident == "Result" {
-                if let PathArguments::AngleBracketed(ref args) = seg.arguments {
-                    for arg in &args.args {
-                        if let GenericArgument::Type(inner_ty) = arg {
-                            return Some(inner_ty);
-                        }
-                    }
-                }
+    if let Type::Path(TypePath { path, .. }) = ty
+        && let Some(seg) = path.segments.last()
+        && seg.ident == "Result"
+        && let PathArguments::AngleBracketed(ref args) = seg.arguments
+    {
+        for arg in &args.args {
+            if let GenericArgument::Type(inner_ty) = arg {
+                return Some(inner_ty);
             }
         }
     }
@@ -194,13 +192,13 @@ pub fn step(attr: TokenStream, item: TokenStream) -> TokenStream {
     let step_attr = parse_macro_input!(attr as StepAttr);
     let input_fn = parse_macro_input!(item as ItemFn);
 
-    match step_impl(step_attr, input_fn) {
+    match step_impl(&step_attr, &input_fn) {
         Ok(ts) => ts,
         Err(err) => err.to_compile_error().into(),
     }
 }
 
-fn step_impl(step_attr: StepAttr, input_fn: ItemFn) -> syn::Result<TokenStream> {
+fn step_impl(step_attr: &StepAttr, input_fn: &ItemFn) -> syn::Result<TokenStream> {
     let fn_name = &input_fn.sig.ident;
     let fn_name_str = fn_name.to_string();
     let registration_fn_name = format_ident!("{}_registration", fn_name);
