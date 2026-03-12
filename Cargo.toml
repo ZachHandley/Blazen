@@ -74,12 +74,12 @@ darling = "0.23"
 redb = "3"
 
 # Internal crates
-zagents-events = { version = "0.1.0", path = "crates/zagents-events" }
-zagents-macros = { version = "0.1.0", path = "crates/zagents-macros" }
-zagents-core = { version = "0.1.0", path = "crates/zagents-core" }
-zagents-llm = { version = "0.1.0", path = "crates/zagents-llm" }
-zagents-persist = { version = "0.1.0", path = "crates/zagents-persist" }
-zagents = { version = "0.1.0", path = "crates/zagents" }
+zagents-events = { version = "0.1.0", path = "crates/zagents-events", registry = "forgejo" }
+zagents-macros = { version = "0.1.0", path = "crates/zagents-macros", registry = "forgejo" }
+zagents-core = { version = "0.1.0", path = "crates/zagents-core", registry = "forgejo" }
+zagents-llm = { version = "0.1.0", path = "crates/zagents-llm", registry = "forgejo" }
+zagents-persist = { version = "0.1.0", path = "crates/zagents-persist", registry = "forgejo" }
+zagents = { version = "0.1.0", path = "crates/zagents", registry = "forgejo" }
 
 [profile.release]
 lto = "thin"
