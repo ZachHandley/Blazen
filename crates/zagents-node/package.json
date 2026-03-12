@@ -18,7 +18,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/zachhandley/ZAgents"
+    "url": "https://forge.blackleafdigital.com/BlackLeafDigital/ZAgents"
   },
   "keywords": [
     "agents",
@@ -42,6 +42,6 @@
   "scripts": {
     "build": "napi build --release",
     "build:debug": "napi build",
-    "prepublishOnly": "napi prepublish -t npm"
+    "prepublishOnly": "echo 'skipping napi prepublish for Forgejo'"
   }
 }

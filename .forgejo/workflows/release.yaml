@@ -88,17 +88,17 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         run: |
           # Publish in dependency order with --no-verify (workspace deps are local/forgejo, not crates.io)
-          cargo publish -p zagents-events --registry forgejo --no-verify
+          cargo publish -p zagents-events --registry forgejo --no-verify --allow-dirty
           sleep 10
-          cargo publish -p zagents-macros --registry forgejo --no-verify
+          cargo publish -p zagents-macros --registry forgejo --no-verify --allow-dirty
           sleep 10
-          cargo publish -p zagents-core --registry forgejo --no-verify
+          cargo publish -p zagents-core --registry forgejo --no-verify --allow-dirty
           sleep 10
-          cargo publish -p zagents-llm --registry forgejo --all-features --no-verify
+          cargo publish -p zagents-llm --registry forgejo --all-features --no-verify --allow-dirty
           sleep 10
-          cargo publish -p zagents-persist --registry forgejo --no-verify
+          cargo publish -p zagents-persist --registry forgejo --no-verify --allow-dirty
           sleep 10
-          cargo publish -p zagents --registry forgejo --all-features --no-verify
+          cargo publish -p zagents --registry forgejo --all-features --no-verify --allow-dirty
 
       - name: Save cargo cache
         if: always() && steps.check.outputs.completed != 'true'
@@ -246,7 +246,7 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         run: |
           cd crates/zagents-node
-          echo "//forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/:_authToken=${{ secrets.FORGEJO_TOKEN }}" > .npmrc
+          echo "//forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/:_authToken=${{ secrets.FORGEJO_ACTIONS_TOKEN }}" > .npmrc
           npm publish --registry https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/
 
       - name: Mark step complete
