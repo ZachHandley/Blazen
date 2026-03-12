@@ -1,0 +1,2 @@
+[registries.forgejo]
+index = "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/"

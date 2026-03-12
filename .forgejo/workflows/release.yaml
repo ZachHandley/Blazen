@@ -1,0 +1,352 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  version:
+    name: Resolve Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: version
+        uses: https://forge.blackleafdigital.com/Public/actions/resolve-version@main
+        with:
+          tag-prefix: v
+          bump: patch
+
+  publish-rust:
+    name: Publish Rust Crates
+    runs-on: ubuntu-latest
+    needs: version
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ needs.version.outputs.version }}
+          step: publish-rust
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Restore cargo cache
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/s3-cache@main
+        with:
+          mode: restore
+          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git
+          bucket: ${{ secrets.S3_BUCKET }}
+          endpoint: https://${{ secrets.S3_ENDPOINT }}
+          region: ${{ secrets.S3_REGION }}
+          access-key: ${{ secrets.S3_ACCESS_KEY }}
+          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
+
+      - name: Stamp versions
+        if: steps.check.outputs.completed != 'true'
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          echo "Stamping all crate versions with $VERSION"
+          # Update workspace version
+          sed -i "s/^version = \"0.1.0\"/version = \"$VERSION\"/" Cargo.toml
+          # Update internal dependency versions
+          sed -i "s/zagents-events = { version = \"0.1.0\"/zagents-events = { version = \"$VERSION\"/" Cargo.toml
+          sed -i "s/zagents-macros = { version = \"0.1.0\"/zagents-macros = { version = \"$VERSION\"/" Cargo.toml
+          sed -i "s/zagents-core = { version = \"0.1.0\"/zagents-core = { version = \"$VERSION\"/" Cargo.toml
+          sed -i "s/zagents-llm = { version = \"0.1.0\"/zagents-llm = { version = \"$VERSION\"/" Cargo.toml
+          sed -i "s/zagents-persist = { version = \"0.1.0\"/zagents-persist = { version = \"$VERSION\"/" Cargo.toml
+          sed -i "s/zagents = { version = \"0.1.0\"/zagents = { version = \"$VERSION\"/" Cargo.toml
+
+      - name: Publish crates in dependency order
+        if: steps.check.outputs.completed != 'true'
+        run: |
+          # Publish in dependency order, allowing time for index updates
+          cargo publish -p zagents-events --registry forgejo
+          sleep 10
+          cargo publish -p zagents-macros --registry forgejo
+          sleep 10
+          cargo publish -p zagents-core --registry forgejo
+          sleep 10
+          cargo publish -p zagents-llm --registry forgejo --all-features
+          sleep 10
+          cargo publish -p zagents-persist --registry forgejo
+          sleep 10
+          cargo publish -p zagents --registry forgejo --all-features
+
+      - name: Save cargo cache
+        if: always() && steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/s3-cache@main
+        with:
+          mode: save
+          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git
+          bucket: ${{ secrets.S3_BUCKET }}
+          endpoint: https://${{ secrets.S3_ENDPOINT }}
+          region: ${{ secrets.S3_REGION }}
+          access-key: ${{ secrets.S3_ACCESS_KEY }}
+          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ needs.version.outputs.version }}
+          step: publish-rust
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+  publish-python:
+    name: Publish Python Package
+    runs-on: ubuntu-latest
+    needs: version
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ needs.version.outputs.version }}
+          step: publish-python
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Setup Python
+        if: steps.check.outputs.completed != 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install maturin and twine
+        if: steps.check.outputs.completed != 'true'
+        run: pip install maturin twine
+
+      - name: Stamp version
+        if: steps.check.outputs.completed != 'true'
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          # Update workspace version so maturin picks it up
+          sed -i "s/^version = \"0.1.0\"/version = \"$VERSION\"/" Cargo.toml
+
+      - name: Build wheel with maturin
+        if: steps.check.outputs.completed != 'true'
+        run: maturin build --release -m crates/zagents-py/Cargo.toml
+
+      - name: Publish to Forgejo PyPI
+        if: steps.check.outputs.completed != 'true'
+        run: |
+          twine upload \
+            --repository-url https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/pypi \
+            -u zachhandley \
+            -p ${{ secrets.FORGEJO_TOKEN }} \
+            target/wheels/*.whl
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ needs.version.outputs.version }}
+          step: publish-python
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+  publish-node:
+    name: Publish Node Package
+    runs-on: ubuntu-latest
+    needs: version
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ needs.version.outputs.version }}
+          step: publish-node
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Setup Node
+        if: steps.check.outputs.completed != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Stamp version
+        if: steps.check.outputs.completed != 'true'
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          # Update workspace version
+          sed -i "s/^version = \"0.1.0\"/version = \"$VERSION\"/" Cargo.toml
+          # Update package.json version
+          sed -i "s/\"version\": \"0.1.0\"/\"version\": \"$VERSION\"/" crates/zagents-node/package.json
+
+      - name: Install dependencies
+        if: steps.check.outputs.completed != 'true'
+        run: |
+          cd crates/zagents-node
+          npm install
+
+      - name: Build with napi
+        if: steps.check.outputs.completed != 'true'
+        run: |
+          cd crates/zagents-node
+          npm run build
+
+      - name: Publish to Forgejo npm
+        if: steps.check.outputs.completed != 'true'
+        run: |
+          cd crates/zagents-node
+          echo "//forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/:_authToken=${{ secrets.FORGEJO_TOKEN }}" > .npmrc
+          npm publish --registry https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ needs.version.outputs.version }}
+          step: publish-node
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [version, publish-rust, publish-python, publish-node]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ needs.version.outputs.version }}
+          step: create-release
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Install git-cliff
+        if: steps.check.outputs.completed != 'true'
+        run: |
+          GC_VERSION="2.7.0"
+          curl -fsSL "https://github.com/orhun/git-cliff/releases/download/v${GC_VERSION}/git-cliff-${GC_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar xz
+          sudo mv "git-cliff-${GC_VERSION}/git-cliff" /usr/local/bin/
+          git-cliff --version
+
+      - name: Generate changelog
+        id: changelog
+        if: steps.check.outputs.completed != 'true'
+        run: |
+          VERSION="v${{ needs.version.outputs.version }}"
+
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$LAST_TAG" ]; then
+            git-cliff "${LAST_TAG}..${VERSION}" --tag "${VERSION}" -o CHANGELOG_RELEASE.md
+          else
+            git-cliff --tag "${VERSION}" -o CHANGELOG_RELEASE.md
+          fi
+
+          cat > RELEASE_NOTES.md << NOTES_EOF
+          $(cat CHANGELOG_RELEASE.md)
+
+          ## Installation
+
+          **Rust:**
+          \`\`\`bash
+          cargo add zagents --registry forgejo
+          \`\`\`
+
+          **Python:**
+          \`\`\`bash
+          pip install zagents --index-url https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/pypi/simple/
+          \`\`\`
+
+          **Node.js:**
+          \`\`\`bash
+          npm install zagents --registry https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/
+          \`\`\`
+          NOTES_EOF
+
+      - name: Create Forgejo release
+        if: steps.check.outputs.completed != 'true'
+        run: |
+          VERSION="v${{ needs.version.outputs.version }}"
+
+          curl -s -X POST \
+            -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/releases" \
+            -d "{
+              \"tag_name\": \"${VERSION}\",
+              \"name\": \"ZAgents ${VERSION}\",
+              \"body\": $(jq -Rs . < RELEASE_NOTES.md),
+              \"draft\": false,
+              \"prerelease\": false
+            }"
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ needs.version.outputs.version }}
+          step: create-release
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}

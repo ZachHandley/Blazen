@@ -1,0 +1,212 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  CARGO_BUILD_JOBS: "4"
+  RUST_BACKTRACE: 1
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          components: rustfmt, clippy
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Restore cargo cache
+        uses: https://forge.blackleafdigital.com/Public/actions/s3-cache@main
+        with:
+          mode: restore
+          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git
+          bucket: ${{ secrets.S3_BUCKET }}
+          endpoint: https://${{ secrets.S3_ENDPOINT }}
+          region: ${{ secrets.S3_REGION }}
+          access-key: ${{ secrets.S3_ACCESS_KEY }}
+          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-features -- -D warnings
+
+      - name: Save cargo cache
+        if: always()
+        uses: https://forge.blackleafdigital.com/Public/actions/s3-cache@main
+        with:
+          mode: save
+          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git
+          bucket: ${{ secrets.S3_BUCKET }}
+          endpoint: https://${{ secrets.S3_ENDPOINT }}
+          region: ${{ secrets.S3_REGION }}
+          access-key: ${{ secrets.S3_ACCESS_KEY }}
+          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          nextest: true
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Restore cargo cache
+        uses: https://forge.blackleafdigital.com/Public/actions/s3-cache@main
+        with:
+          mode: restore
+          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git
+          bucket: ${{ secrets.S3_BUCKET }}
+          endpoint: https://${{ secrets.S3_ENDPOINT }}
+          region: ${{ secrets.S3_REGION }}
+          access-key: ${{ secrets.S3_ACCESS_KEY }}
+          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
+
+      - name: Workspace tests (unit + integration)
+        run: cargo nextest run --workspace --all-features
+
+      - name: Workspace tests (doc tests)
+        run: cargo test --workspace --doc --all-features
+
+      - name: Save cargo cache
+        if: always()
+        uses: https://forge.blackleafdigital.com/Public/actions/s3-cache@main
+        with:
+          mode: save
+          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git
+          bucket: ${{ secrets.S3_BUCKET }}
+          endpoint: https://${{ secrets.S3_ENDPOINT }}
+          region: ${{ secrets.S3_REGION }}
+          access-key: ${{ secrets.S3_ACCESS_KEY }}
+          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
+
+  build:
+    name: Build (x86_64-unknown-linux-gnu)
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ github.sha }}
+          step: ci-build-x86_64-unknown-linux-gnu
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          targets: x86_64-unknown-linux-gnu
+          sccache: true
+          sccache-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-region: ${{ secrets.S3_REGION }}
+          sccache-access-key: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/zagents-x86_64-unknown-linux-gnu
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Restore cargo cache
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/s3-cache@main
+        with:
+          mode: restore
+          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git
+          bucket: ${{ secrets.S3_BUCKET }}
+          endpoint: https://${{ secrets.S3_ENDPOINT }}
+          region: ${{ secrets.S3_REGION }}
+          access-key: ${{ secrets.S3_ACCESS_KEY }}
+          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
+
+      - name: Build release
+        if: steps.check.outputs.completed != 'true'
+        run: cargo build --workspace --release --all-features --target x86_64-unknown-linux-gnu
+
+      - name: Save cargo cache
+        if: always() && steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/s3-cache@main
+        with:
+          mode: save
+          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git
+          bucket: ${{ secrets.S3_BUCKET }}
+          endpoint: https://${{ secrets.S3_ENDPOINT }}
+          region: ${{ secrets.S3_REGION }}
+          access-key: ${{ secrets.S3_ACCESS_KEY }}
+          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ github.sha }}
+          step: ci-build-x86_64-unknown-linux-gnu
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+  auto-tag:
+    name: Auto Tag
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve next version
+        id: version
+        uses: https://forge.blackleafdigital.com/Public/actions/resolve-version@main
+        with:
+          tag-prefix: v
+          bump: patch
+
+      - name: Create and push tag
+        if: steps.version.outputs.is-new == 'true'
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          git config user.name "Zach Handley"
+          git config user.email "zachhandley@gmail.com"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+        env:
+          GITHUB_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
