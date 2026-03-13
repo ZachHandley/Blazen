@@ -4,9 +4,9 @@
 //! type bridges them into the Rust [`Event`](blazen_events::Event) trait so
 //! the workflow engine can route them.
 
+use blazen_events::{AnyEvent, DynamicEvent};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use blazen_events::{AnyEvent, DynamicEvent};
 
 // ---------------------------------------------------------------------------
 // PyEvent -- Python side

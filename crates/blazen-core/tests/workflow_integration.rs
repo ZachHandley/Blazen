@@ -8,12 +8,12 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Duration;
 
-use serde::{Deserialize, Serialize};
 use blazen_core::{
     Context, StepFn, StepOutput, StepRegistration, Workflow, WorkflowBuilder, WorkflowError,
     WorkflowSnapshot,
 };
 use blazen_events::{AnyEvent, Event, StartEvent, StopEvent};
+use serde::{Deserialize, Serialize};
 
 // ===========================================================================
 // Custom event types (manual impls for simplicity)

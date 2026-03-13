@@ -5,8 +5,8 @@
 
 use std::any::Any;
 
-use serde::{Deserialize, Serialize};
 use blazen_events::{AnyEvent, Event};
+use serde::{Deserialize, Serialize};
 
 use crate::types::TokenUsage;
 

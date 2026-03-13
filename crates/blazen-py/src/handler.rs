@@ -53,9 +53,9 @@ impl PyWorkflowHandler {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let handler = {
                 let mut guard = inner.lock().await;
-                guard.take().ok_or_else(|| {
-                    BlazenPyError::Workflow("Handler already consumed".to_owned())
-                })?
+                guard
+                    .take()
+                    .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?
             };
 
             let result = handler.result().await.map_err(BlazenPyError::from)?;
@@ -117,9 +117,9 @@ impl PyWorkflowHandler {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let handler = {
                 let mut guard = inner.lock().await;
-                guard.take().ok_or_else(|| {
-                    BlazenPyError::Workflow("Handler already consumed".to_owned())
-                })?
+                guard
+                    .take()
+                    .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?
             };
 
             let snapshot = handler.pause().await.map_err(BlazenPyError::from)?;

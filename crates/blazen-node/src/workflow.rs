@@ -6,11 +6,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use blazen_events::{AnyEvent, intern_event_type};
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
 use tokio_stream::StreamExt;
-use blazen_events::{AnyEvent, intern_event_type};
 
 use crate::context::JsContext;
 use crate::error::workflow_error_to_napi;
@@ -270,53 +270,52 @@ fn make_step_registration(step: &JsStepRegistration) -> blazen_core::StepRegistr
     // Arc clone is cheap -- the ThreadsafeFunction itself is shared.
     let handler_tsfn = Arc::clone(&step.handler);
 
-    let handler: blazen_core::StepFn =
-        Arc::new(
-            move |event: Box<dyn AnyEvent>,
-                  ctx: blazen_core::Context|
-                  -> std::pin::Pin<
-                Box<
-                    dyn std::future::Future<
-                            Output = std::result::Result<
-                                blazen_core::StepOutput,
-                                blazen_core::WorkflowError,
-                            >,
-                        > + Send,
-                >,
-            > {
-                let tsfn = Arc::clone(&handler_tsfn);
+    let handler: blazen_core::StepFn = Arc::new(
+        move |event: Box<dyn AnyEvent>,
+              ctx: blazen_core::Context|
+              -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<
+                        Output = std::result::Result<
+                            blazen_core::StepOutput,
+                            blazen_core::WorkflowError,
+                        >,
+                    > + Send,
+            >,
+        > {
+            let tsfn = Arc::clone(&handler_tsfn);
 
-                Box::pin(async move {
-                    // Convert the Rust event to a JS-friendly JSON value.
-                    let js_event = any_event_to_js_value(&*event);
-                    let js_ctx = JsContext::new(ctx);
+            Box::pin(async move {
+                // Convert the Rust event to a JS-friendly JSON value.
+                let js_event = any_event_to_js_value(&*event);
+                let js_ctx = JsContext::new(ctx);
 
-                    // Call the JavaScript handler function.
-                    // ThreadsafeFunction::call_async returns a Future that resolves
-                    // to the JS function's return value (serde_json::Value).
-                    let result_value: serde_json::Value =
-                        tsfn.call_async(Ok((js_event, js_ctx))).await.map_err(
-                            |e: napi::Error| blazen_core::WorkflowError::Context(e.to_string()),
-                        )?;
+                // Call the JavaScript handler function.
+                // ThreadsafeFunction::call_async returns a Future that resolves
+                // to the JS function's return value (serde_json::Value).
+                let result_value: serde_json::Value = tsfn
+                    .call_async(Ok((js_event, js_ctx)))
+                    .await
+                    .map_err(|e: napi::Error| blazen_core::WorkflowError::Context(e.to_string()))?;
 
-                    // Convert the JS return value back to a Rust event.
-                    if result_value.is_null() {
-                        return Ok(blazen_core::StepOutput::None);
-                    }
+                // Convert the JS return value back to a Rust event.
+                if result_value.is_null() {
+                    return Ok(blazen_core::StepOutput::None);
+                }
 
-                    // Check if it's an array (multiple events).
-                    if let serde_json::Value::Array(arr) = &result_value {
-                        let events: Vec<Box<dyn AnyEvent>> =
-                            arr.iter().map(js_value_to_any_event).collect();
-                        return Ok(blazen_core::StepOutput::Multiple(events));
-                    }
+                // Check if it's an array (multiple events).
+                if let serde_json::Value::Array(arr) = &result_value {
+                    let events: Vec<Box<dyn AnyEvent>> =
+                        arr.iter().map(js_value_to_any_event).collect();
+                    return Ok(blazen_core::StepOutput::Multiple(events));
+                }
 
-                    // Single event.
-                    let event = js_value_to_any_event(&result_value);
-                    Ok(blazen_core::StepOutput::Single(event))
-                })
-            },
-        );
+                // Single event.
+                let event = js_value_to_any_event(&result_value);
+                Ok(blazen_core::StepOutput::Single(event))
+            })
+        },
+    );
 
     blazen_core::StepRegistration {
         name: step.name.clone(),

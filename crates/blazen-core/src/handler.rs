@@ -17,10 +17,10 @@ use std::future::{Future, IntoFuture};
 use std::pin::Pin;
 use std::task::{self, Poll};
 
+use blazen_events::AnyEvent;
 use tokio::sync::{broadcast, oneshot};
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
-use blazen_events::AnyEvent;
 
 use crate::error::WorkflowError;
 use crate::snapshot::WorkflowSnapshot;

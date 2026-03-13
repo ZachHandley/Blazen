@@ -13,11 +13,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use blazen_events::{AnyEvent, Event, EventEnvelope};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tokio::sync::{RwLock, broadcast, mpsc};
 use uuid::Uuid;
-use blazen_events::{AnyEvent, Event, EventEnvelope};
 
 /// Type alias for the JSON-backed state map.
 type StateMap = HashMap<String, serde_json::Value>;

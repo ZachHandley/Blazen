@@ -22,12 +22,12 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+use blazen_events::{AnyEvent, DynamicEvent, Event, EventEnvelope, StartEvent, StopEvent};
 use chrono::Utc;
 use serde::Serialize;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinSet;
 use uuid::Uuid;
-use blazen_events::{AnyEvent, DynamicEvent, Event, EventEnvelope, StartEvent, StopEvent};
 
 use crate::context::Context;
 use crate::error::WorkflowError;
@@ -754,8 +754,8 @@ fn dispatch_to_handlers(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
     use blazen_events::{StartEvent, StopEvent};
+    use std::sync::Arc;
 
     use crate::step::{StepFn, StepOutput, StepRegistration};
 

@@ -124,8 +124,7 @@ impl PyWorkflow {
         steps: Vec<PyRef<'_, PyStepWrapper>>,
         timeout: Option<f64>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let snapshot = WorkflowSnapshot::from_json(snapshot_json)
-            .map_err(BlazenPyError::from)?;
+        let snapshot = WorkflowSnapshot::from_json(snapshot_json).map_err(BlazenPyError::from)?;
 
         let mut registrations = Vec::with_capacity(steps.len());
         for step in &steps {

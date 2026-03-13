@@ -7,8 +7,8 @@
 //!
 //! Run with: `cargo run -p blazen --example streaming_workflow`
 
-use tokio_stream::StreamExt;
 use blazen::prelude::*;
+use tokio_stream::StreamExt;
 
 // ---------------------------------------------------------------------------
 // Events

@@ -346,8 +346,7 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, model=None))]
     fn xai(api_key: &str, model: Option<&str>) -> Self {
-        let mut provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatProvider::xai(api_key);
+        let mut provider = blazen_llm::providers::openai_compat::OpenAiCompatProvider::xai(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -468,10 +467,7 @@ impl PyCompletionModel {
 
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let response = inner
-                .complete(request)
-                .await
-                .map_err(BlazenPyError::from)?;
+            let response = inner.complete(request).await.map_err(BlazenPyError::from)?;
 
             // Serialize the response to a JSON value that can be converted to
             // a Python dict when the GIL is reacquired by the pyo3 runtime.
