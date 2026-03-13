@@ -92,11 +92,11 @@ jobs:
           sleep 10
           cargo publish -p blazen-macros --registry forgejo --no-verify --allow-dirty
           sleep 10
+          cargo publish -p blazen-persist --registry forgejo --no-verify --allow-dirty
+          sleep 10
           cargo publish -p blazen-core --registry forgejo --no-verify --allow-dirty
           sleep 10
           cargo publish -p blazen-llm --registry forgejo --all-features --no-verify --allow-dirty
-          sleep 10
-          cargo publish -p blazen-persist --registry forgejo --no-verify --allow-dirty
           sleep 10
           cargo publish -p blazen --registry forgejo --all-features --no-verify --allow-dirty
           sleep 10
