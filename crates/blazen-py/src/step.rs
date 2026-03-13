@@ -1,0 +1,271 @@
+//! Python `@step` decorator and step registration.
+//!
+//! The `@step` decorator wraps a Python async function so it can be registered
+//! with a [`Workflow`](crate::workflow::PyWorkflow). The wrapper inspects the
+//! function name and optional metadata attributes to determine routing.
+
+use std::sync::Arc;
+
+use pyo3::prelude::*;
+use pyo3::types::{PyCFunction, PyDict, PyTuple};
+
+use blazen_events::AnyEvent;
+
+use crate::context::PyContext;
+use crate::error::BlazenPyError;
+use blazen_events::intern_event_type;
+
+use crate::event::{PyEvent, any_event_to_py_event, py_event_to_any_event};
+
+/// Internal wrapper created by the `@step` decorator.
+///
+/// Holds the Python async function and metadata for registration with
+/// the workflow engine.
+///
+/// Example:
+///     >>> @step
+///     ... async def analyze(ctx: Context, ev: Event) -> Event:
+///     ...     return Event("ResultEvent", answer=42)
+#[pyclass(name = "_StepWrapper")]
+pub struct PyStepWrapper {
+    /// The wrapped Python async function.
+    pub(crate) func: Py<PyAny>,
+    /// The step name (derived from the function name).
+    #[pyo3(get)]
+    pub(crate) name: String,
+    /// Event type identifiers this step accepts.
+    #[pyo3(get, set)]
+    pub(crate) accepts: Vec<String>,
+    /// Event type identifiers this step may emit.
+    #[pyo3(get, set)]
+    pub(crate) emits: Vec<String>,
+    /// Maximum concurrency (0 = unlimited).
+    #[pyo3(get, set)]
+    pub(crate) max_concurrency: usize,
+}
+
+impl PyStepWrapper {
+    /// Clone the inner `Py<PyAny>` function handle while holding the GIL.
+    fn clone_func(&self, py: Python<'_>) -> Py<PyAny> {
+        self.func.clone_ref(py)
+    }
+}
+
+#[pymethods]
+impl PyStepWrapper {
+    /// Call the underlying function (makes the wrapper callable like the
+    /// original function for testing convenience).
+    #[pyo3(signature = (ctx, event))]
+    fn __call__<'py>(
+        &self,
+        py: Python<'py>,
+        ctx: &Bound<'py, PyAny>,
+        event: &Bound<'py, PyAny>,
+    ) -> PyResult<Py<PyAny>> {
+        self.func.call1(py, (ctx, event))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "_StepWrapper(name='{}', accepts={:?}, emits={:?})",
+            self.name, self.accepts, self.emits
+        )
+    }
+}
+
+impl PyStepWrapper {
+    /// Convert this wrapper into a [`StepRegistration`](blazen_core::StepRegistration)
+    /// that can be added to a [`WorkflowBuilder`](blazen_core::WorkflowBuilder).
+    pub fn to_registration(&self) -> PyResult<blazen_core::StepRegistration> {
+        let accepts: Vec<&'static str> =
+            self.accepts.iter().map(|s| intern_event_type(s)).collect();
+
+        let emits: Vec<&'static str> = self.emits.iter().map(|s| intern_event_type(s)).collect();
+
+        // Clone the function handle while we have the GIL
+        let func = Python::attach(|py| self.clone_func(py));
+        let step_name = self.name.clone();
+
+        let handler: blazen_core::StepFn = Arc::new(
+            move |event: Box<dyn AnyEvent>,
+                  ctx: blazen_core::Context|
+                  -> std::pin::Pin<
+                Box<
+                    dyn std::future::Future<
+                            Output = std::result::Result<
+                                blazen_core::StepOutput,
+                                blazen_core::WorkflowError,
+                            >,
+                        > + Send,
+                >,
+            > {
+                let func = Python::attach(|py| func.clone_ref(py));
+                let step_name = step_name.clone();
+
+                Box::pin(async move {
+                    // Convert Rust event to PyEvent
+                    let py_event = any_event_to_py_event(&*event);
+                    let py_ctx = PyContext::new(ctx);
+
+                    // Call the Python async function to get a coroutine
+                    let coroutine: Py<PyAny> = Python::attach(|py| -> PyResult<Py<PyAny>> {
+                        let py_event_obj = Py::new(py, py_event)?;
+                        let py_ctx_obj = Py::new(py, py_ctx)?;
+                        func.call1(py, (py_ctx_obj, py_event_obj))
+                    })
+                    .map_err(|e: PyErr| {
+                        blazen_core::WorkflowError::StepFailed {
+                            step_name: step_name.clone(),
+                            source: Box::new(BlazenPyError::Workflow(e.to_string())),
+                        }
+                    })?;
+
+                    // Convert the Python coroutine to a Rust future and await it
+                    let future = Python::attach(|py| {
+                        pyo3_async_runtimes::tokio::into_future(coroutine.into_bound(py))
+                    })
+                    .map_err(|e: PyErr| {
+                        blazen_core::WorkflowError::StepFailed {
+                            step_name: step_name.clone(),
+                            source: Box::new(BlazenPyError::Workflow(e.to_string())),
+                        }
+                    })?;
+
+                    let py_result: Py<PyAny> = future.await.map_err(|e: PyErr| {
+                        blazen_core::WorkflowError::StepFailed {
+                            step_name: step_name.clone(),
+                            source: Box::new(BlazenPyError::Workflow(e.to_string())),
+                        }
+                    })?;
+
+                    // Convert the Python return value back to a Rust event
+                    Python::attach(
+                        |py| -> std::result::Result<
+                            blazen_core::StepOutput,
+                            blazen_core::WorkflowError,
+                        > {
+                            let bound = py_result.bind(py);
+
+                            // If the return is None, no output
+                            if bound.is_none() {
+                                return Ok(blazen_core::StepOutput::None);
+                            }
+
+                            // If it's a list, multiple events
+                            if let Ok(list) = bound.cast::<pyo3::types::PyList>() {
+                                let mut events: Vec<Box<dyn AnyEvent>> =
+                                    Vec::with_capacity(list.len());
+                                for item in list.iter() {
+                                    let ev: Bound<'_, PyEvent> = item
+                                        .cast::<PyEvent>()
+                                        .map_err(|e| blazen_core::WorkflowError::StepFailed {
+                                            step_name: step_name.clone(),
+                                            source: Box::new(BlazenPyError::Workflow(
+                                                e.to_string(),
+                                            )),
+                                        })?
+                                        .clone();
+                                    events.push(py_event_to_any_event(&ev.borrow()));
+                                }
+                                return Ok(blazen_core::StepOutput::Multiple(events));
+                            }
+
+                            // Single event
+                            let ev_bound: Bound<'_, PyEvent> = bound
+                                .cast::<PyEvent>()
+                                .map_err(|e| blazen_core::WorkflowError::StepFailed {
+                                    step_name: step_name.clone(),
+                                    source: Box::new(BlazenPyError::Workflow(format!(
+                                        "step must return an Event, list of Events, or None: {e}"
+                                    ))),
+                                })?
+                                .clone();
+                            let ev = ev_bound.borrow();
+                            Ok(blazen_core::StepOutput::Single(py_event_to_any_event(&ev)))
+                        },
+                    )
+                })
+            },
+        );
+
+        Ok(blazen_core::StepRegistration {
+            name: self.name.clone(),
+            accepts,
+            emits,
+            handler,
+            max_concurrency: self.max_concurrency,
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// @step decorator function
+// ---------------------------------------------------------------------------
+
+/// Decorator that wraps a Python async function as a workflow step.
+///
+/// The decorated function should have the signature:
+///
+///     async def my_step(ctx: Context, ev: Event) -> Event | list[Event] | None
+///
+/// By default the step accepts `StartEvent` and emits any event type.
+/// Override with `.accepts` and `.emits` attributes on the returned wrapper.
+///
+/// Example:
+///     >>> @step
+///     ... async def analyze(ctx: Context, ev: Event) -> Event:
+///     ...     return StopEvent(result={"done": True})
+///
+///     # Customize accepted event types:
+///     >>> analyze.accepts = ["AnalyzeEvent"]
+///     >>> analyze.emits = ["StopEvent"]
+#[pyfunction]
+#[pyo3(signature = (func=None, *, accepts=None, emits=None, max_concurrency=0))]
+pub fn step(
+    py: Python<'_>,
+    func: Option<Py<PyAny>>,
+    accepts: Option<Vec<String>>,
+    emits: Option<Vec<String>>,
+    max_concurrency: usize,
+) -> PyResult<Py<PyAny>> {
+    let accepts = accepts.unwrap_or_else(|| vec!["blazen::StartEvent".to_owned()]);
+    let emits = emits.unwrap_or_default();
+
+    if let Some(func) = func {
+        // Used as @step (without arguments)
+        let name: String = func.getattr(py, "__name__")?.extract(py)?;
+
+        let wrapper = PyStepWrapper {
+            func,
+            name,
+            accepts,
+            emits,
+            max_concurrency,
+        };
+        Ok(Py::new(py, wrapper)?.into_any())
+    } else {
+        // Used as @step(accepts=..., emits=...) -- return a decorator
+        let decorator = PyCFunction::new_closure(
+            py,
+            None,
+            None,
+            move |args: &Bound<'_, PyTuple>,
+                  _kwargs: Option<&Bound<'_, PyDict>>|
+                  -> PyResult<Py<PyAny>> {
+                let py = args.py();
+                let func: Py<PyAny> = args.get_item(0)?.extract()?;
+                let name: String = func.getattr(py, "__name__")?.extract(py)?;
+
+                let wrapper = PyStepWrapper {
+                    func,
+                    name,
+                    accepts: accepts.clone(),
+                    emits: emits.clone(),
+                    max_concurrency,
+                };
+                Ok(Py::new(py, wrapper)?.into_any())
+            },
+        )?;
+        Ok(decorator.unbind().into())
+    }
+}

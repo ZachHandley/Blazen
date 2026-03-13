@@ -1,0 +1,31 @@
+[package]
+name = "blazen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[features]
+default = ["llm"]
+llm = ["blazen-llm"]
+persist = ["blazen-persist", "blazen-core/persist"]
+openai = ["llm", "blazen-llm/openai"]
+anthropic = ["llm", "blazen-llm/anthropic"]
+all = ["openai", "anthropic", "persist"]
+
+[dependencies]
+blazen-events.workspace = true
+blazen-macros.workspace = true
+blazen-core.workspace = true
+blazen-llm = { workspace = true, optional = true }
+blazen-persist = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+tokio-stream.workspace = true
+anyhow.workspace = true
+
+[lints]
+workspace = true

@@ -1,4 +1,4 @@
-# ZAgents
+# Blazen
 
 Event-driven AI workflow engine with first-class LLM integration, written in Rust.
 
@@ -14,7 +14,7 @@ Event-driven AI workflow engine with first-class LLM integration, written in Rus
 ## Quick Example
 
 ```rust
-use zagents::prelude::*;
+use blazen::prelude::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Event)]
 struct GreetEvent {
@@ -56,31 +56,31 @@ async fn main() -> anyhow::Result<()> {
 
 **Rust:**
 ```bash
-cargo add zagents --registry forgejo
+cargo add blazen --registry forgejo
 ```
 
 **Python:**
 ```bash
-pip install zagents --index-url https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/pypi/simple/
+pip install blazen --index-url https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/pypi/simple/
 ```
 
 **Node.js / TypeScript:**
 ```bash
-npm install zagents --registry https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/
+npm install blazen --registry https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/
 ```
 
 ## Crate Structure
 
 | Crate | Description |
 |-------|-------------|
-| `zagents-events` | Core event traits and derive macro support |
-| `zagents-macros` | `#[derive(Event)]` and `#[step]` proc macros |
-| `zagents-core` | Workflow engine, context, and step registry |
-| `zagents-llm` | LLM provider integrations and structured output |
-| `zagents-persist` | Optional persistence layer (redb) |
-| `zagents` | Umbrella crate re-exporting everything |
-| `zagents-py` | Python bindings via PyO3/maturin |
-| `zagents-node` | Node.js bindings via napi-rs |
+| `blazen-events` | Core event traits and derive macro support |
+| `blazen-macros` | `#[derive(Event)]` and `#[step]` proc macros |
+| `blazen-core` | Workflow engine, context, and step registry |
+| `blazen-llm` | LLM provider integrations and structured output |
+| `blazen-persist` | Optional persistence layer (redb) |
+| `blazen` | Umbrella crate re-exporting everything |
+| `blazen-py` | Python bindings via PyO3/maturin |
+| `blazen-node` | Node.js bindings via napi-rs |
 
 ## License
 

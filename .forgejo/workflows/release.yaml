@@ -77,28 +77,30 @@ jobs:
           # Update workspace version
           sed -i "s/^version = \"0.1.0\"/version = \"$VERSION\"/" Cargo.toml
           # Update internal dependency versions
-          sed -i "s/zagents-events = { version = \"0.1.0\"/zagents-events = { version = \"$VERSION\"/" Cargo.toml
-          sed -i "s/zagents-macros = { version = \"0.1.0\"/zagents-macros = { version = \"$VERSION\"/" Cargo.toml
-          sed -i "s/zagents-core = { version = \"0.1.0\"/zagents-core = { version = \"$VERSION\"/" Cargo.toml
-          sed -i "s/zagents-llm = { version = \"0.1.0\"/zagents-llm = { version = \"$VERSION\"/" Cargo.toml
-          sed -i "s/zagents-persist = { version = \"0.1.0\"/zagents-persist = { version = \"$VERSION\"/" Cargo.toml
-          sed -i "s/zagents = { version = \"0.1.0\"/zagents = { version = \"$VERSION\"/" Cargo.toml
+          sed -i "s/blazen-events = { version = \"0.1.0\"/blazen-events = { version = \"$VERSION\"/" Cargo.toml
+          sed -i "s/blazen-macros = { version = \"0.1.0\"/blazen-macros = { version = \"$VERSION\"/" Cargo.toml
+          sed -i "s/blazen-core = { version = \"0.1.0\"/blazen-core = { version = \"$VERSION\"/" Cargo.toml
+          sed -i "s/blazen-llm = { version = \"0.1.0\"/blazen-llm = { version = \"$VERSION\"/" Cargo.toml
+          sed -i "s/blazen-persist = { version = \"0.1.0\"/blazen-persist = { version = \"$VERSION\"/" Cargo.toml
+          sed -i "s/blazen = { version = \"0.1.0\"/blazen = { version = \"$VERSION\"/" Cargo.toml
 
       - name: Publish crates in dependency order
         if: steps.check.outputs.completed != 'true'
         run: |
           # Publish in dependency order with --no-verify (workspace deps are local/forgejo, not crates.io)
-          cargo publish -p zagents-events --registry forgejo --no-verify --allow-dirty
+          cargo publish -p blazen-events --registry forgejo --no-verify --allow-dirty
           sleep 10
-          cargo publish -p zagents-macros --registry forgejo --no-verify --allow-dirty
+          cargo publish -p blazen-macros --registry forgejo --no-verify --allow-dirty
           sleep 10
-          cargo publish -p zagents-core --registry forgejo --no-verify --allow-dirty
+          cargo publish -p blazen-core --registry forgejo --no-verify --allow-dirty
           sleep 10
-          cargo publish -p zagents-llm --registry forgejo --all-features --no-verify --allow-dirty
+          cargo publish -p blazen-llm --registry forgejo --all-features --no-verify --allow-dirty
           sleep 10
-          cargo publish -p zagents-persist --registry forgejo --no-verify --allow-dirty
+          cargo publish -p blazen-persist --registry forgejo --no-verify --allow-dirty
           sleep 10
-          cargo publish -p zagents --registry forgejo --all-features --no-verify --allow-dirty
+          cargo publish -p blazen --registry forgejo --all-features --no-verify --allow-dirty
+          sleep 10
+          cargo publish -p blazen-cli --registry forgejo --no-verify --allow-dirty
 
       - name: Save cargo cache
         if: always() && steps.check.outputs.completed != 'true'
@@ -168,7 +170,7 @@ jobs:
 
       - name: Build wheel with maturin
         if: steps.check.outputs.completed != 'true'
-        run: maturin build --release -m crates/zagents-py/Cargo.toml
+        run: maturin build --release -m crates/blazen-py/Cargo.toml
 
       - name: Publish to Forgejo PyPI
         if: steps.check.outputs.completed != 'true'
@@ -228,24 +230,24 @@ jobs:
           # Update workspace version
           sed -i "s/^version = \"0.1.0\"/version = \"$VERSION\"/" Cargo.toml
           # Update package.json version
-          sed -i "s/\"version\": \"0.1.0\"/\"version\": \"$VERSION\"/" crates/zagents-node/package.json
+          sed -i "s/\"version\": \"0.1.0\"/\"version\": \"$VERSION\"/" crates/blazen-node/package.json
 
       - name: Install dependencies
         if: steps.check.outputs.completed != 'true'
         run: |
-          cd crates/zagents-node
+          cd crates/blazen-node
           npm install
 
       - name: Build with napi
         if: steps.check.outputs.completed != 'true'
         run: |
-          cd crates/zagents-node
+          cd crates/blazen-node
           npm run build
 
       - name: Publish to Forgejo npm
         if: steps.check.outputs.completed != 'true'
         run: |
-          cd crates/zagents-node
+          cd crates/blazen-node
           echo "//forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/:_authToken=${{ secrets.FORGEJO_ACTIONS_TOKEN }}" > .npmrc
           npm publish --registry https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/
 
@@ -309,17 +311,17 @@ jobs:
 
           **Rust:**
           \`\`\`bash
-          cargo add zagents --registry forgejo
+          cargo add blazen --registry forgejo
           \`\`\`
 
           **Python:**
           \`\`\`bash
-          pip install zagents --index-url https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/pypi/simple/
+          pip install blazen --index-url https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/pypi/simple/
           \`\`\`
 
           **Node.js:**
           \`\`\`bash
-          npm install zagents --registry https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/
+          npm install blazen --registry https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/
           \`\`\`
           NOTES_EOF
 
@@ -334,7 +336,7 @@ jobs:
             "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/releases" \
             -d "{
               \"tag_name\": \"${VERSION}\",
-              \"name\": \"ZAgents ${VERSION}\",
+              \"name\": \"Blazen ${VERSION}\",
               \"body\": $(jq -Rs . < RELEASE_NOTES.md),
               \"draft\": false,
               \"prerelease\": false

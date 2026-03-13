@@ -1,0 +1,169 @@
+//! JavaScript wrapper for [`WorkflowHandler`](blazen_core::WorkflowHandler).
+//!
+//! Exposes the handler as a napi class so TypeScript users can control a
+//! running workflow: await the final result, stream intermediate events,
+//! or pause the workflow to obtain a serializable snapshot.
+
+use std::sync::Arc;
+
+use napi::bindgen_prelude::*;
+use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
+use napi_derive::napi;
+use tokio::sync::Mutex;
+use tokio_stream::StreamExt;
+
+use crate::error::workflow_error_to_napi;
+use crate::event::any_event_to_js_value;
+use crate::workflow::JsWorkflowResult;
+
+/// Stream callback: takes a `serde_json::Value`, returns nothing meaningful.
+type StreamCallbackTsfn = ThreadsafeFunction<serde_json::Value>;
+
+/// A handle to a running workflow.
+///
+/// Returned by `Workflow.runWithHandler()`. Provides methods to:
+///
+/// - **`result()`** -- await the final workflow result.
+/// - **`pause()`** -- pause the workflow and get a snapshot JSON string.
+/// - **`streamEvents(callback)`** -- subscribe to intermediate events
+///   published via `ctx.writeEventToStream()`.
+///
+/// **Important:** `result()` and `pause()` each consume the handler
+/// internally. You can only call one of them, and only once.
+///
+/// ```javascript
+/// const handler = await workflow.runWithHandler({ message: "hello" });
+///
+/// // Option A: just get the result
+/// const result = await handler.result();
+///
+/// // Option B: pause and get a snapshot
+/// const snapshot = await handler.pause();
+/// fs.writeFileSync("snapshot.json", snapshot);
+///
+/// // Option C: stream events, then get the result
+/// handler.streamEvents((event) => console.log(event));
+/// const result = await handler.result();
+/// ```
+#[napi(js_name = "WorkflowHandler")]
+pub struct JsWorkflowHandler {
+    /// The inner handler is wrapped in `Arc<Mutex<Option<...>>>` because:
+    ///
+    /// - `Arc` makes it `Clone` + `Send` + `Sync` for napi.
+    /// - `Mutex` provides interior mutability for `&self` methods.
+    /// - `Option` allows `take()` since `result()` and `pause()` consume
+    ///   the Rust handler.
+    inner: Arc<Mutex<Option<blazen_core::WorkflowHandler>>>,
+}
+
+#[napi]
+#[allow(clippy::missing_errors_doc)]
+impl JsWorkflowHandler {
+    /// Await the final workflow result.
+    ///
+    /// Returns the result when the workflow completes via a `StopEvent`.
+    ///
+    /// This method consumes the handler internally -- it can only be called
+    /// once, and cannot be called after `pause()`.
+    #[napi]
+    pub async fn result(&self) -> Result<JsWorkflowResult> {
+        let handler = {
+            let mut guard = self.inner.lock().await;
+            guard.take().ok_or_else(|| {
+                napi::Error::new(
+                    napi::Status::GenericFailure,
+                    "WorkflowHandler already consumed (result() or pause() was already called)"
+                        .to_string(),
+                )
+            })?
+        };
+
+        let result = handler.result().await.map_err(workflow_error_to_napi)?;
+        Ok(make_result(&*result))
+    }
+
+    /// Pause the running workflow and return a snapshot as a JSON string.
+    ///
+    /// The snapshot contains all workflow state and can be saved to a file
+    /// or database. Use `Workflow.resume(snapshotJson)` to resume later.
+    ///
+    /// This method consumes the handler internally -- it can only be called
+    /// once, and cannot be called after `result()`.
+    #[napi]
+    pub async fn pause(&self) -> Result<String> {
+        let handler = {
+            let mut guard = self.inner.lock().await;
+            guard.take().ok_or_else(|| {
+                napi::Error::new(
+                    napi::Status::GenericFailure,
+                    "WorkflowHandler already consumed (result() or pause() was already called)"
+                        .to_string(),
+                )
+            })?
+        };
+
+        let snapshot = handler.pause().await.map_err(workflow_error_to_napi)?;
+        snapshot.to_json().map_err(workflow_error_to_napi)
+    }
+
+    /// Subscribe to intermediate events published by steps via
+    /// `ctx.writeEventToStream()`.
+    ///
+    /// The `onEvent` callback receives each event as a plain object.
+    /// This must be called **before** `result()` or `pause()`.
+    ///
+    /// Events published before this call are not replayed.
+    #[napi(js_name = "streamEvents")]
+    pub async fn stream_events(&self, on_event: StreamCallbackTsfn) -> Result<()> {
+        let guard = self.inner.lock().await;
+        let handler = guard.as_ref().ok_or_else(|| {
+            napi::Error::new(
+                napi::Status::GenericFailure,
+                "WorkflowHandler already consumed -- streamEvents() must be called before result() or pause()"
+                    .to_string(),
+            )
+        })?;
+
+        let mut stream = handler.stream_events();
+        let on_event = Arc::new(on_event);
+
+        // Spawn a forwarding task. The stream will end when the workflow
+        // completes or is paused.
+        tokio::spawn(async move {
+            while let Some(event) = stream.next().await {
+                let js_event = any_event_to_js_value(&*event);
+                let _ = on_event.call(Ok(js_event), ThreadsafeFunctionCallMode::NonBlocking);
+            }
+        });
+
+        Ok(())
+    }
+}
+
+impl JsWorkflowHandler {
+    /// Create a new `JsWorkflowHandler` wrapping a Rust `WorkflowHandler`.
+    pub(crate) fn new(handler: blazen_core::WorkflowHandler) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(Some(handler))),
+        }
+    }
+}
+
+/// Convert a result event to a [`JsWorkflowResult`].
+///
+/// This is a copy of the helper in `workflow.rs` -- kept here to avoid
+/// circular dependencies. Both produce the same output format.
+fn make_result(event: &dyn blazen_events::AnyEvent) -> JsWorkflowResult {
+    let event_type = event.event_type_id().to_owned();
+    let json = event.to_json();
+
+    let data = if event_type == "blazen::StopEvent" {
+        json.get("result")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null)
+    } else {
+        json
+    };
+
+    JsWorkflowResult { event_type, data }
+}
