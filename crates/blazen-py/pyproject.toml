@@ -22,6 +22,9 @@ description = "Python bindings for the Blazen workflow engine"
 authors = [{ name = "Zach Handley", email = "zachhandley@gmail.com" }]
 dynamic = ["version"]
 
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+
 [tool.maturin]
 features = ["pyo3/extension-module"]
 module-name = "blazen._blazen"

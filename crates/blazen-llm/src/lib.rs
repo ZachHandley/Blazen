@@ -71,6 +71,6 @@ pub use traits::{
     StructuredOutput, Tool,
 };
 pub use types::{
-    ChatMessage, CompletionRequest, CompletionResponse, MessageContent, Role, StreamChunk,
-    TokenUsage, ToolCall, ToolDefinition,
+    ChatMessage, CompletionRequest, CompletionResponse, ContentPart, FileContent, ImageContent,
+    ImageSource, MessageContent, Role, StreamChunk, TokenUsage, ToolCall, ToolDefinition,
 };

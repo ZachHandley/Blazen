@@ -6,6 +6,8 @@ members = [
     "crates/blazen-core",
     "crates/blazen-llm",
     "crates/blazen-persist",
+    "crates/blazen-pipeline",
+    "crates/blazen-prompts",
     "crates/blazen",
     "crates/blazen-py",
     "crates/blazen-node",
@@ -81,7 +83,14 @@ blazen-macros = { version = "0.1.0", path = "crates/blazen-macros", registry = "
 blazen-core = { version = "0.1.0", path = "crates/blazen-core", registry = "forgejo" }
 blazen-llm = { version = "0.1.0", path = "crates/blazen-llm", registry = "forgejo" }
 blazen-persist = { version = "0.1.0", path = "crates/blazen-persist", registry = "forgejo" }
+blazen-pipeline = { version = "0.1.0", path = "crates/blazen-pipeline", registry = "forgejo" }
+blazen-prompts = { version = "0.1.0", path = "crates/blazen-prompts", registry = "forgejo" }
 blazen = { version = "0.1.0", path = "crates/blazen", registry = "forgejo" }
+
+# Prompt/template support
+serde_yaml = "0.9"
+regex = "1"
+indexmap = { version = "2", features = ["serde"] }
 
 [profile.release]
 lto = "thin"

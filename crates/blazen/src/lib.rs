@@ -84,6 +84,18 @@ pub mod persist {
 #[cfg(feature = "persist")]
 pub use blazen_persist::{CheckpointStore, WorkflowCheckpoint};
 
+/// Multi-workflow pipeline orchestration (requires `pipeline` feature).
+#[cfg(feature = "pipeline")]
+pub mod pipeline {
+    pub use blazen_pipeline::*;
+}
+
+/// Prompt template management (requires `prompts` feature).
+#[cfg(feature = "prompts")]
+pub mod prompts {
+    pub use blazen_prompts::*;
+}
+
 // ---------------------------------------------------------------------------
 // Prelude
 // ---------------------------------------------------------------------------

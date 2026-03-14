@@ -23,13 +23,58 @@ pub enum Role {
     Tool,
 }
 
+/// How an image or file is provided.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ImageSource {
+    /// An image provided via URL.
+    Url { url: String },
+    /// An image provided as base64-encoded data.
+    Base64 { data: String },
+}
+
+/// Image content for multimodal messages.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImageContent {
+    /// The source of the image data.
+    pub source: ImageSource,
+    /// The MIME type of the image (e.g. `"image/jpeg"`, `"image/png"`).
+    pub media_type: Option<String>,
+}
+
+/// File/document content (PDF, video, audio, etc.).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileContent {
+    /// The source of the file data.
+    pub source: ImageSource,
+    /// The MIME type of the file (e.g. `"application/pdf"`, `"video/mp4"`).
+    pub media_type: String,
+    /// An optional filename for display purposes.
+    pub filename: Option<String>,
+}
+
+/// A single part in a multi-part message.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ContentPart {
+    /// A text segment.
+    Text { text: String },
+    /// An image segment.
+    Image(ImageContent),
+    /// A file/document segment.
+    File(FileContent),
+}
+
 /// The content payload of a [`ChatMessage`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum MessageContent {
     /// Plain text content.
     Text(String),
-    // Future variants: Image, ToolResult, MultiPart, etc.
+    /// A single image.
+    Image(ImageContent),
+    /// A multi-part message containing text, images, and/or files.
+    Parts(Vec<ContentPart>),
 }
 
 impl From<&str> for MessageContent {
@@ -50,6 +95,42 @@ impl MessageContent {
     pub fn as_text(&self) -> Option<&str> {
         match self {
             Self::Text(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// Convert any variant into a `Vec<ContentPart>`.
+    #[must_use]
+    pub fn as_parts(&self) -> Vec<ContentPart> {
+        match self {
+            Self::Text(s) => vec![ContentPart::Text { text: s.clone() }],
+            Self::Image(img) => vec![ContentPart::Image(img.clone())],
+            Self::Parts(parts) => parts.clone(),
+        }
+    }
+
+    /// Extract only text content, concatenating all text parts.
+    ///
+    /// Returns `None` if there is no text content at all.
+    #[must_use]
+    pub fn text_content(&self) -> Option<String> {
+        match self {
+            Self::Text(s) => Some(s.clone()),
+            Self::Image(_) => None,
+            Self::Parts(parts) => {
+                let texts: Vec<&str> = parts
+                    .iter()
+                    .filter_map(|p| match p {
+                        ContentPart::Text { text } => Some(text.as_str()),
+                        _ => None,
+                    })
+                    .collect();
+                if texts.is_empty() {
+                    None
+                } else {
+                    Some(texts.join("\n"))
+                }
+            }
         }
     }
 }
@@ -101,6 +182,53 @@ impl ChatMessage {
         Self {
             role: Role::Tool,
             content: MessageContent::Text(content.into()),
+        }
+    }
+
+    /// Create a user message containing text and an image from a URL.
+    #[must_use]
+    pub fn user_image_url(
+        text: impl Into<String>,
+        url: impl Into<String>,
+        media_type: Option<&str>,
+    ) -> Self {
+        Self {
+            role: Role::User,
+            content: MessageContent::Parts(vec![
+                ContentPart::Text { text: text.into() },
+                ContentPart::Image(ImageContent {
+                    source: ImageSource::Url { url: url.into() },
+                    media_type: media_type.map(String::from),
+                }),
+            ]),
+        }
+    }
+
+    /// Create a user message containing text and a base64-encoded image.
+    #[must_use]
+    pub fn user_image_base64(
+        text: impl Into<String>,
+        data: impl Into<String>,
+        media_type: impl Into<String>,
+    ) -> Self {
+        Self {
+            role: Role::User,
+            content: MessageContent::Parts(vec![
+                ContentPart::Text { text: text.into() },
+                ContentPart::Image(ImageContent {
+                    source: ImageSource::Base64 { data: data.into() },
+                    media_type: Some(media_type.into()),
+                }),
+            ]),
+        }
+    }
+
+    /// Create a user message from an explicit list of content parts.
+    #[must_use]
+    pub fn user_parts(parts: Vec<ContentPart>) -> Self {
+        Self {
+            role: Role::User,
+            content: MessageContent::Parts(parts),
         }
     }
 }
@@ -259,4 +387,224 @@ pub struct StreamChunk {
     pub tool_calls: Vec<ToolCall>,
     /// Present in the final chunk to indicate why generation stopped.
     pub finish_reason: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -----------------------------------------------------------------------
+    // MessageContent serialization roundtrips
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn text_serialization_roundtrip() {
+        let content = MessageContent::Text("hello".into());
+        let json = serde_json::to_string(&content).unwrap();
+        // Text should serialize as a plain JSON string.
+        assert_eq!(json, "\"hello\"");
+
+        let deserialized: MessageContent = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, content);
+    }
+
+    #[test]
+    fn parts_serialization_roundtrip() {
+        let content = MessageContent::Parts(vec![
+            ContentPart::Text {
+                text: "hello".into(),
+            },
+            ContentPart::Image(ImageContent {
+                source: ImageSource::Url {
+                    url: "https://example.com/img.png".into(),
+                },
+                media_type: Some("image/png".into()),
+            }),
+        ]);
+        let json = serde_json::to_string(&content).unwrap();
+        let deserialized: MessageContent = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, content);
+    }
+
+    #[test]
+    fn image_source_url_serde() {
+        let source = ImageSource::Url {
+            url: "https://example.com/img.jpg".into(),
+        };
+        let json = serde_json::to_string(&source).unwrap();
+        assert!(json.contains("\"type\":\"url\""));
+        let deserialized: ImageSource = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, source);
+    }
+
+    #[test]
+    fn image_source_base64_serde() {
+        let source = ImageSource::Base64 {
+            data: "abc123".into(),
+        };
+        let json = serde_json::to_string(&source).unwrap();
+        assert!(json.contains("\"type\":\"base64\""));
+        let deserialized: ImageSource = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, source);
+    }
+
+    // -----------------------------------------------------------------------
+    // as_parts() conversion
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn as_parts_from_text() {
+        let content = MessageContent::Text("hello".into());
+        let parts = content.as_parts();
+        assert_eq!(parts.len(), 1);
+        assert!(matches!(&parts[0], ContentPart::Text { text } if text == "hello"));
+    }
+
+    #[test]
+    fn as_parts_from_image() {
+        let content = MessageContent::Image(ImageContent {
+            source: ImageSource::Url {
+                url: "https://example.com/img.png".into(),
+            },
+            media_type: None,
+        });
+        let parts = content.as_parts();
+        assert_eq!(parts.len(), 1);
+        assert!(matches!(&parts[0], ContentPart::Image(_)));
+    }
+
+    #[test]
+    fn as_parts_from_parts() {
+        let original = vec![
+            ContentPart::Text { text: "a".into() },
+            ContentPart::Text { text: "b".into() },
+        ];
+        let content = MessageContent::Parts(original.clone());
+        let parts = content.as_parts();
+        assert_eq!(parts, original);
+    }
+
+    // -----------------------------------------------------------------------
+    // text_content() extraction
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn text_content_from_text() {
+        let content = MessageContent::Text("hello".into());
+        assert_eq!(content.text_content(), Some("hello".into()));
+    }
+
+    #[test]
+    fn text_content_from_image() {
+        let content = MessageContent::Image(ImageContent {
+            source: ImageSource::Url {
+                url: "https://example.com/img.png".into(),
+            },
+            media_type: None,
+        });
+        assert_eq!(content.text_content(), None);
+    }
+
+    #[test]
+    fn text_content_from_parts_mixed() {
+        let content = MessageContent::Parts(vec![
+            ContentPart::Text {
+                text: "first".into(),
+            },
+            ContentPart::Image(ImageContent {
+                source: ImageSource::Url {
+                    url: "https://example.com/img.png".into(),
+                },
+                media_type: None,
+            }),
+            ContentPart::Text {
+                text: "second".into(),
+            },
+        ]);
+        assert_eq!(content.text_content(), Some("first\nsecond".into()));
+    }
+
+    #[test]
+    fn text_content_from_parts_no_text() {
+        let content = MessageContent::Parts(vec![ContentPart::Image(ImageContent {
+            source: ImageSource::Url {
+                url: "https://example.com/img.png".into(),
+            },
+            media_type: None,
+        })]);
+        assert_eq!(content.text_content(), None);
+    }
+
+    // -----------------------------------------------------------------------
+    // ChatMessage convenience constructors
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn user_image_url_constructor() {
+        let msg =
+            ChatMessage::user_image_url("Describe", "https://img.com/a.png", Some("image/png"));
+        assert_eq!(msg.role, Role::User);
+        let parts = msg.content.as_parts();
+        assert_eq!(parts.len(), 2);
+        assert!(matches!(&parts[0], ContentPart::Text { text } if text == "Describe"));
+        assert!(
+            matches!(&parts[1], ContentPart::Image(img) if matches!(&img.source, ImageSource::Url { url } if url == "https://img.com/a.png"))
+        );
+    }
+
+    #[test]
+    fn user_image_base64_constructor() {
+        let msg = ChatMessage::user_image_base64("What", "base64data", "image/jpeg");
+        assert_eq!(msg.role, Role::User);
+        let parts = msg.content.as_parts();
+        assert_eq!(parts.len(), 2);
+        assert!(
+            matches!(&parts[1], ContentPart::Image(img) if img.media_type == Some("image/jpeg".into()))
+        );
+    }
+
+    #[test]
+    fn user_parts_constructor() {
+        let msg = ChatMessage::user_parts(vec![ContentPart::Text { text: "hi".into() }]);
+        assert_eq!(msg.role, Role::User);
+        assert!(matches!(msg.content, MessageContent::Parts(ref p) if p.len() == 1));
+    }
+
+    // -----------------------------------------------------------------------
+    // Backward compatibility
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn as_text_still_works_for_text() {
+        let content = MessageContent::Text("hello".into());
+        assert_eq!(content.as_text(), Some("hello"));
+    }
+
+    #[test]
+    fn as_text_none_for_non_text() {
+        let content = MessageContent::Image(ImageContent {
+            source: ImageSource::Url { url: "u".into() },
+            media_type: None,
+        });
+        assert_eq!(content.as_text(), None);
+
+        let content2 = MessageContent::Parts(vec![]);
+        assert_eq!(content2.as_text(), None);
+    }
+
+    #[test]
+    fn from_str_still_works() {
+        let content: MessageContent = "hello".into();
+        assert_eq!(content.as_text(), Some("hello"));
+    }
+
+    #[test]
+    fn from_string_still_works() {
+        let content: MessageContent = String::from("hello").into();
+        assert_eq!(content.as_text(), Some("hello"));
+    }
 }

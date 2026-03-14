@@ -22,7 +22,8 @@ use tracing::{debug, warn};
 
 use crate::error::LlmError;
 use crate::types::{
-    CompletionRequest, CompletionResponse, MessageContent, Role, StreamChunk, TokenUsage, ToolCall,
+    CompletionRequest, CompletionResponse, ContentPart, ImageContent, ImageSource, MessageContent,
+    Role, StreamChunk, TokenUsage, ToolCall,
 };
 
 // ---------------------------------------------------------------------------
@@ -34,6 +35,88 @@ const ANTHROPIC_VERSION: &str = "2023-06-01";
 
 /// Default max tokens when the caller does not specify one.
 const DEFAULT_MAX_TOKENS: u32 = 4096;
+
+// ---------------------------------------------------------------------------
+// Multimodal helpers
+// ---------------------------------------------------------------------------
+
+/// Convert an [`ImageContent`] to the Anthropic `image` content block format.
+fn image_content_to_anthropic(img: &ImageContent) -> serde_json::Value {
+    match &img.source {
+        ImageSource::Base64 { data } => {
+            let media_type = img.media_type.as_deref().unwrap_or("image/png");
+            serde_json::json!({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": media_type,
+                    "data": data,
+                }
+            })
+        }
+        ImageSource::Url { url } => {
+            serde_json::json!({
+                "type": "image",
+                "source": {
+                    "type": "url",
+                    "url": url,
+                }
+            })
+        }
+    }
+}
+
+/// Convert a single [`ContentPart`] to an Anthropic content block.
+fn content_part_to_anthropic(part: &ContentPart) -> serde_json::Value {
+    match part {
+        ContentPart::Text { text } => {
+            serde_json::json!({ "type": "text", "text": text })
+        }
+        ContentPart::Image(img) => image_content_to_anthropic(img),
+        ContentPart::File(file) => {
+            // Anthropic supports document types via the `document` block type.
+            match &file.source {
+                ImageSource::Base64 { data } => {
+                    serde_json::json!({
+                        "type": "document",
+                        "source": {
+                            "type": "base64",
+                            "media_type": file.media_type,
+                            "data": data,
+                        }
+                    })
+                }
+                ImageSource::Url { url } => {
+                    serde_json::json!({
+                        "type": "document",
+                        "source": {
+                            "type": "url",
+                            "url": url,
+                        }
+                    })
+                }
+            }
+        }
+    }
+}
+
+/// Convert [`MessageContent`] to a `serde_json::Value` suitable for the
+/// Anthropic `content` field.
+///
+/// - `Text` -> a plain JSON string (backward-compatible).
+/// - `Image` / `Parts` -> a JSON array of content blocks.
+fn content_to_anthropic_value(content: &MessageContent) -> serde_json::Value {
+    match content {
+        MessageContent::Text(t) => serde_json::Value::String(t.clone()),
+        MessageContent::Image(img) => {
+            serde_json::json!([image_content_to_anthropic(img)])
+        }
+        MessageContent::Parts(parts) => {
+            let arr: Vec<serde_json::Value> = parts.iter().map(content_part_to_anthropic).collect();
+            serde_json::json!(arr)
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Provider
@@ -98,17 +181,16 @@ impl AnthropicProvider {
 
         for msg in &request.messages {
             if msg.role == Role::System {
-                let MessageContent::Text(t) = &msg.content;
-                system_parts.push(t.clone());
+                if let Some(text) = msg.content.text_content() {
+                    system_parts.push(text);
+                }
             } else {
                 let role = match msg.role {
                     Role::User | Role::Tool => "user",
                     Role::Assistant => "assistant",
                     Role::System => unreachable!(),
                 };
-                let content = match &msg.content {
-                    MessageContent::Text(t) => t.clone(),
-                };
+                let content = content_to_anthropic_value(&msg.content);
                 messages.push(serde_json::json!({
                     "role": role,
                     "content": content,
@@ -671,6 +753,81 @@ mod tests {
         // Anthropic uses "input_schema" not "parameters".
         assert!(tools[0].get("input_schema").is_some());
         assert_eq!(tools[0]["name"], "search");
+    }
+
+    #[test]
+    fn test_text_backward_compat() {
+        let provider = AnthropicProvider::new("test-key");
+        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]);
+
+        let body = provider.build_body(&request, false);
+        // Text messages should produce a plain string, not an array.
+        assert_eq!(body["messages"][0]["content"], "Hello");
+    }
+
+    #[test]
+    fn test_build_body_image_url() {
+        let provider = AnthropicProvider::new("test-key");
+        let request = CompletionRequest::new(vec![ChatMessage::user_image_url(
+            "What is this?",
+            "https://example.com/cat.jpg",
+            Some("image/jpeg"),
+        )]);
+
+        let body = provider.build_body(&request, false);
+        let content = body["messages"][0]["content"].as_array().unwrap();
+        assert_eq!(content.len(), 2);
+        assert_eq!(content[0]["type"], "text");
+        assert_eq!(content[0]["text"], "What is this?");
+        assert_eq!(content[1]["type"], "image");
+        assert_eq!(content[1]["source"]["type"], "url");
+        assert_eq!(content[1]["source"]["url"], "https://example.com/cat.jpg");
+    }
+
+    #[test]
+    fn test_build_body_base64_image() {
+        let provider = AnthropicProvider::new("test-key");
+        let request = CompletionRequest::new(vec![ChatMessage::user_image_base64(
+            "Describe this",
+            "abc123base64data",
+            "image/png",
+        )]);
+
+        let body = provider.build_body(&request, false);
+        let content = body["messages"][0]["content"].as_array().unwrap();
+        assert_eq!(content.len(), 2);
+        assert_eq!(content[1]["type"], "image");
+        assert_eq!(content[1]["source"]["type"], "base64");
+        assert_eq!(content[1]["source"]["media_type"], "image/png");
+        assert_eq!(content[1]["source"]["data"], "abc123base64data");
+    }
+
+    #[test]
+    fn test_build_body_multipart() {
+        use crate::types::{ContentPart, ImageContent, ImageSource};
+
+        let provider = AnthropicProvider::new("test-key");
+        let request = CompletionRequest::new(vec![ChatMessage::user_parts(vec![
+            ContentPart::Text {
+                text: "First".into(),
+            },
+            ContentPart::Image(ImageContent {
+                source: ImageSource::Url {
+                    url: "https://example.com/a.png".into(),
+                },
+                media_type: None,
+            }),
+            ContentPart::Text {
+                text: "Second".into(),
+            },
+        ])]);
+
+        let body = provider.build_body(&request, false);
+        let content = body["messages"][0]["content"].as_array().unwrap();
+        assert_eq!(content.len(), 3);
+        assert_eq!(content[0]["text"], "First");
+        assert_eq!(content[1]["type"], "image");
+        assert_eq!(content[2]["text"], "Second");
     }
 
     #[test]

@@ -23,7 +23,8 @@ use tracing::{debug, warn};
 use crate::error::LlmError;
 use crate::traits::{ModelCapabilities, ModelInfo, ModelRegistry};
 use crate::types::{
-    CompletionRequest, CompletionResponse, MessageContent, Role, StreamChunk, TokenUsage, ToolCall,
+    CompletionRequest, CompletionResponse, ContentPart, ImageContent, ImageSource, MessageContent,
+    Role, StreamChunk, TokenUsage, ToolCall,
 };
 
 // ---------------------------------------------------------------------------
@@ -31,6 +32,69 @@ use crate::types::{
 // ---------------------------------------------------------------------------
 
 const GEMINI_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta";
+
+// ---------------------------------------------------------------------------
+// Multimodal helpers
+// ---------------------------------------------------------------------------
+
+/// Convert an [`ImageContent`] to a Gemini `parts` element.
+fn image_content_to_gemini(img: &ImageContent) -> serde_json::Value {
+    match &img.source {
+        ImageSource::Base64 { data } => {
+            let mime_type = img.media_type.as_deref().unwrap_or("image/png");
+            serde_json::json!({
+                "inlineData": {
+                    "mimeType": mime_type,
+                    "data": data,
+                }
+            })
+        }
+        ImageSource::Url { url } => {
+            let mime_type = img.media_type.as_deref().unwrap_or("image/png");
+            serde_json::json!({
+                "fileData": {
+                    "mimeType": mime_type,
+                    "fileUri": url,
+                }
+            })
+        }
+    }
+}
+
+/// Convert a single [`ContentPart`] to a Gemini parts element.
+fn content_part_to_gemini(part: &ContentPart) -> serde_json::Value {
+    match part {
+        ContentPart::Text { text } => serde_json::json!({ "text": text }),
+        ContentPart::Image(img) => image_content_to_gemini(img),
+        ContentPart::File(file) => match &file.source {
+            ImageSource::Base64 { data } => {
+                serde_json::json!({
+                    "inlineData": {
+                        "mimeType": file.media_type,
+                        "data": data,
+                    }
+                })
+            }
+            ImageSource::Url { url } => {
+                serde_json::json!({
+                    "fileData": {
+                        "mimeType": file.media_type,
+                        "fileUri": url,
+                    }
+                })
+            }
+        },
+    }
+}
+
+/// Convert [`MessageContent`] to a Gemini `parts` array.
+fn content_to_gemini_parts(content: &MessageContent) -> Vec<serde_json::Value> {
+    match content {
+        MessageContent::Text(t) => vec![serde_json::json!({ "text": t })],
+        MessageContent::Image(img) => vec![image_content_to_gemini(img)],
+        MessageContent::Parts(parts) => parts.iter().map(content_part_to_gemini).collect(),
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Provider
@@ -89,20 +153,19 @@ impl GeminiProvider {
 
         for msg in &request.messages {
             if msg.role == Role::System {
-                let MessageContent::Text(t) = &msg.content;
-                system_parts.push(t.clone());
+                if let Some(text) = msg.content.text_content() {
+                    system_parts.push(text);
+                }
             } else {
                 let role = match msg.role {
                     Role::User | Role::Tool => "user",
                     Role::Assistant => "model",
                     Role::System => unreachable!(),
                 };
-                let text = match &msg.content {
-                    MessageContent::Text(t) => t.clone(),
-                };
+                let parts = content_to_gemini_parts(&msg.content);
                 contents.push(serde_json::json!({
                     "role": role,
-                    "parts": [{ "text": text }],
+                    "parts": parts,
                 }));
             }
         }
@@ -685,6 +748,82 @@ mod tests {
         let decls = tools[0]["functionDeclarations"].as_array().unwrap();
         assert_eq!(decls.len(), 1);
         assert_eq!(decls[0]["name"], "search");
+    }
+
+    #[test]
+    fn test_text_backward_compat() {
+        let provider = GeminiProvider::new("test-key");
+        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]);
+
+        let body = provider.build_body(&request);
+        let contents = body["contents"].as_array().unwrap();
+        let parts = contents[0]["parts"].as_array().unwrap();
+        assert_eq!(parts.len(), 1);
+        assert_eq!(parts[0]["text"], "Hello");
+    }
+
+    #[test]
+    fn test_build_body_image_url() {
+        let provider = GeminiProvider::new("test-key");
+        let request = CompletionRequest::new(vec![ChatMessage::user_image_url(
+            "What is this?",
+            "https://example.com/cat.jpg",
+            Some("image/jpeg"),
+        )]);
+
+        let body = provider.build_body(&request);
+        let parts = body["contents"][0]["parts"].as_array().unwrap();
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0]["text"], "What is this?");
+        assert_eq!(parts[1]["fileData"]["mimeType"], "image/jpeg");
+        assert_eq!(
+            parts[1]["fileData"]["fileUri"],
+            "https://example.com/cat.jpg"
+        );
+    }
+
+    #[test]
+    fn test_build_body_base64_image() {
+        let provider = GeminiProvider::new("test-key");
+        let request = CompletionRequest::new(vec![ChatMessage::user_image_base64(
+            "Describe this",
+            "abc123base64data",
+            "image/png",
+        )]);
+
+        let body = provider.build_body(&request);
+        let parts = body["contents"][0]["parts"].as_array().unwrap();
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[1]["inlineData"]["mimeType"], "image/png");
+        assert_eq!(parts[1]["inlineData"]["data"], "abc123base64data");
+    }
+
+    #[test]
+    fn test_build_body_multipart() {
+        use crate::types::{ContentPart, ImageContent, ImageSource};
+
+        let provider = GeminiProvider::new("test-key");
+        let request = CompletionRequest::new(vec![ChatMessage::user_parts(vec![
+            ContentPart::Text {
+                text: "First".into(),
+            },
+            ContentPart::Image(ImageContent {
+                source: ImageSource::Url {
+                    url: "https://example.com/a.png".into(),
+                },
+                media_type: Some("image/png".into()),
+            }),
+            ContentPart::Text {
+                text: "Second".into(),
+            },
+        ])]);
+
+        let body = provider.build_body(&request);
+        let parts = body["contents"][0]["parts"].as_array().unwrap();
+        assert_eq!(parts.len(), 3);
+        assert_eq!(parts[0]["text"], "First");
+        assert!(parts[1].get("fileData").is_some());
+        assert_eq!(parts[2]["text"], "Second");
     }
 
     #[test]

@@ -33,8 +33,65 @@ use super::sse::{OaiResponse, SseParser};
 use crate::error::LlmError;
 use crate::traits::{ModelCapabilities, ModelInfo, ModelPricing, ModelRegistry};
 use crate::types::{
-    CompletionRequest, CompletionResponse, MessageContent, Role, StreamChunk, TokenUsage, ToolCall,
+    CompletionRequest, CompletionResponse, ContentPart, ImageContent, ImageSource, MessageContent,
+    Role, StreamChunk, TokenUsage, ToolCall,
 };
+
+// ---------------------------------------------------------------------------
+// Multimodal helpers (OpenAI-compatible format)
+// ---------------------------------------------------------------------------
+
+/// Convert an [`ImageContent`] to the OpenAI `image_url` content-part format.
+fn image_content_to_openai(img: &ImageContent) -> serde_json::Value {
+    let url = match &img.source {
+        ImageSource::Url { url } => url.clone(),
+        ImageSource::Base64 { data } => {
+            let media_type = img.media_type.as_deref().unwrap_or("image/png");
+            format!("data:{media_type};base64,{data}")
+        }
+    };
+    serde_json::json!({
+        "type": "image_url",
+        "image_url": { "url": url }
+    })
+}
+
+/// Convert a single [`ContentPart`] to an OpenAI content-array element.
+fn content_part_to_openai(part: &ContentPart) -> serde_json::Value {
+    match part {
+        ContentPart::Text { text } => {
+            serde_json::json!({ "type": "text", "text": text })
+        }
+        ContentPart::Image(img) => image_content_to_openai(img),
+        ContentPart::File(file) => {
+            let url = match &file.source {
+                ImageSource::Url { url } => url.clone(),
+                ImageSource::Base64 { data } => {
+                    format!("data:{};base64,{data}", file.media_type)
+                }
+            };
+            serde_json::json!({
+                "type": "image_url",
+                "image_url": { "url": url }
+            })
+        }
+    }
+}
+
+/// Convert [`MessageContent`] to a `serde_json::Value` for the OpenAI
+/// `content` field.
+fn content_to_openai_value(content: &MessageContent) -> serde_json::Value {
+    match content {
+        MessageContent::Text(t) => serde_json::Value::String(t.clone()),
+        MessageContent::Image(img) => {
+            serde_json::json!([image_content_to_openai(img)])
+        }
+        MessageContent::Parts(parts) => {
+            let arr: Vec<serde_json::Value> = parts.iter().map(content_part_to_openai).collect();
+            serde_json::json!(arr)
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Auth method
@@ -320,9 +377,7 @@ impl OpenAiCompatProvider {
                     Role::Assistant => "assistant",
                     Role::Tool => "tool",
                 };
-                let content = match &m.content {
-                    MessageContent::Text(t) => serde_json::Value::String(t.clone()),
-                };
+                let content = content_to_openai_value(&m.content);
                 serde_json::json!({ "role": role, "content": content })
             })
             .collect();
@@ -869,6 +924,85 @@ mod tests {
         let tools = body["tools"].as_array().unwrap();
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0]["function"]["name"], "get_weather");
+    }
+
+    #[test]
+    fn test_text_backward_compat() {
+        let provider = OpenAiCompatProvider::openai("test-key");
+        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]);
+
+        let body = provider.build_body(&request, false);
+        assert_eq!(body["messages"][0]["content"], "Hello");
+    }
+
+    #[test]
+    fn test_build_body_image_url() {
+        let provider = OpenAiCompatProvider::openai("test-key");
+        let request = CompletionRequest::new(vec![ChatMessage::user_image_url(
+            "What is this?",
+            "https://example.com/cat.jpg",
+            Some("image/jpeg"),
+        )]);
+
+        let body = provider.build_body(&request, false);
+        let content = body["messages"][0]["content"].as_array().unwrap();
+        assert_eq!(content.len(), 2);
+        assert_eq!(content[0]["type"], "text");
+        assert_eq!(content[0]["text"], "What is this?");
+        assert_eq!(content[1]["type"], "image_url");
+        assert_eq!(
+            content[1]["image_url"]["url"],
+            "https://example.com/cat.jpg"
+        );
+    }
+
+    #[test]
+    fn test_build_body_base64_image() {
+        let provider = OpenAiCompatProvider::openai("test-key");
+        let request = CompletionRequest::new(vec![ChatMessage::user_image_base64(
+            "Describe this",
+            "abc123base64data",
+            "image/png",
+        )]);
+
+        let body = provider.build_body(&request, false);
+        let content = body["messages"][0]["content"].as_array().unwrap();
+        assert_eq!(content.len(), 2);
+        assert_eq!(content[1]["type"], "image_url");
+        assert!(
+            content[1]["image_url"]["url"]
+                .as_str()
+                .unwrap()
+                .starts_with("data:image/png;base64,")
+        );
+    }
+
+    #[test]
+    fn test_build_body_multipart() {
+        use crate::types::{ContentPart, ImageContent, ImageSource};
+
+        let provider = OpenAiCompatProvider::openrouter("test-key");
+        let request = CompletionRequest::new(vec![ChatMessage::user_parts(vec![
+            ContentPart::Text {
+                text: "First".into(),
+            },
+            ContentPart::Image(ImageContent {
+                source: ImageSource::Url {
+                    url: "https://example.com/a.png".into(),
+                },
+                media_type: None,
+            }),
+            ContentPart::Text {
+                text: "Second".into(),
+            },
+        ])]);
+
+        let body = provider.build_body(&request, false);
+        let content = body["messages"][0]["content"].as_array().unwrap();
+        assert_eq!(content.len(), 3);
+        assert_eq!(content[0]["text"], "First");
+        assert_eq!(content[1]["type"], "image_url");
+        assert_eq!(content[2]["text"], "Second");
     }
 
     #[test]

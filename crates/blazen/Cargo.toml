@@ -9,9 +9,14 @@ authors.workspace = true
 default = ["llm"]
 llm = ["blazen-llm"]
 persist = ["blazen-persist", "blazen-core/persist"]
+pipeline = ["blazen-pipeline"]
+prompts = ["blazen-prompts"]
 openai = ["llm", "blazen-llm/openai"]
 anthropic = ["llm", "blazen-llm/anthropic"]
-all = ["openai", "anthropic", "persist"]
+fal = ["llm", "blazen-llm/fal"]
+gemini = ["llm", "blazen-llm/gemini"]
+azure = ["llm", "blazen-llm/azure"]
+all = ["openai", "anthropic", "fal", "gemini", "azure", "persist", "pipeline", "prompts"]
 
 [dependencies]
 blazen-events.workspace = true
@@ -19,6 +24,8 @@ blazen-macros.workspace = true
 blazen-core.workspace = true
 blazen-llm = { workspace = true, optional = true }
 blazen-persist = { workspace = true, optional = true }
+blazen-pipeline = { workspace = true, optional = true }
+blazen-prompts = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 
@@ -26,6 +33,7 @@ serde_json.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
 tokio-stream.workspace = true
 anyhow.workspace = true
+dotenvy = "0.15"
 
 [lints]
 workspace = true

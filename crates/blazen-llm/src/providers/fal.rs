@@ -21,7 +21,7 @@ use futures_util::Stream;
 use futures_util::stream;
 use reqwest::Client;
 use serde::Deserialize;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::error::LlmError;
 use crate::types::{CompletionRequest, CompletionResponse, MessageContent, StreamChunk};
@@ -127,6 +127,9 @@ impl FalProvider {
     }
 
     /// Build the JSON request body for the `fal-ai/any-llm` endpoint.
+    ///
+    /// fal-ai/any-llm is text-only. Non-text content (images, files) is
+    /// dropped with a warning.
     fn build_body(&self, request: &CompletionRequest) -> serde_json::Value {
         let llm_model = request.model.as_deref().unwrap_or(&self.llm_model);
 
@@ -136,10 +139,21 @@ impl FalProvider {
         let mut conversation_parts: Vec<String> = Vec::new();
 
         for msg in &request.messages {
-            let MessageContent::Text(text) = &msg.content;
+            let text = match &msg.content {
+                MessageContent::Text(t) => t.clone(),
+                other => {
+                    // fal-ai/any-llm is text-only; extract what text we can.
+                    if !matches!(other, MessageContent::Text(_)) {
+                        warn!(
+                            "fal.ai provider is text-only; non-text content parts will be dropped"
+                        );
+                    }
+                    other.text_content().unwrap_or_default()
+                }
+            };
             match msg.role {
                 crate::types::Role::System => {
-                    system_parts.push(text.clone());
+                    system_parts.push(text);
                 }
                 crate::types::Role::User => {
                     conversation_parts.push(format!("User: {text}"));
@@ -494,6 +508,73 @@ mod tests {
 
         let body = provider.build_body(&request);
         assert_eq!(body["model"], "openai/gpt-4o");
+    }
+
+    #[test]
+    fn test_text_backward_compat() {
+        let provider = FalProvider::new("fal-test");
+        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]);
+
+        let body = provider.build_body(&request);
+        assert!(body["prompt"].as_str().unwrap().contains("Hello"));
+    }
+
+    #[test]
+    fn test_build_body_image_url_drops_image() {
+        let provider = FalProvider::new("fal-test");
+        let request = CompletionRequest::new(vec![ChatMessage::user_image_url(
+            "Describe this",
+            "https://example.com/cat.jpg",
+            None,
+        )]);
+
+        let body = provider.build_body(&request);
+        // Only the text part should be preserved.
+        let prompt = body["prompt"].as_str().unwrap();
+        assert!(prompt.contains("Describe this"));
+        assert!(!prompt.contains("cat.jpg"));
+    }
+
+    #[test]
+    fn test_build_body_base64_image_drops_image() {
+        let provider = FalProvider::new("fal-test");
+        let request = CompletionRequest::new(vec![ChatMessage::user_image_base64(
+            "What is this",
+            "abc123",
+            "image/png",
+        )]);
+
+        let body = provider.build_body(&request);
+        let prompt = body["prompt"].as_str().unwrap();
+        assert!(prompt.contains("What is this"));
+        assert!(!prompt.contains("abc123"));
+    }
+
+    #[test]
+    fn test_build_body_multipart_text_only() {
+        use crate::types::{ContentPart, ImageContent, ImageSource};
+
+        let provider = FalProvider::new("fal-test");
+        let request = CompletionRequest::new(vec![ChatMessage::user_parts(vec![
+            ContentPart::Text {
+                text: "First".into(),
+            },
+            ContentPart::Image(ImageContent {
+                source: ImageSource::Url {
+                    url: "https://example.com/a.png".into(),
+                },
+                media_type: None,
+            }),
+            ContentPart::Text {
+                text: "Second".into(),
+            },
+        ])]);
+
+        let body = provider.build_body(&request);
+        let prompt = body["prompt"].as_str().unwrap();
+        // Both text parts should be concatenated.
+        assert!(prompt.contains("First"));
+        assert!(prompt.contains("Second"));
     }
 
     #[test]

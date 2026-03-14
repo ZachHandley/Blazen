@@ -66,16 +66,22 @@ jobs:
           access-key: ${{ secrets.S3_ACCESS_KEY }}
           secret-key: ${{ secrets.S3_ACCESS_SECRET }}
 
+      - name: Install uv
+        run: pip install uv
+
       - name: Build Python bindings
         run: |
-          pip install maturin pytest pytest-asyncio
+          uv pip install --system maturin pytest pytest-asyncio
           maturin develop -m crates/blazen-py/Cargo.toml --release
+
+      - name: Setup pnpm
+        run: corepack enable && corepack prepare pnpm@latest --activate
 
       - name: Build Node bindings
         run: |
           cd crates/blazen-node
-          npm install
-          npm run build
+          pnpm install
+          pnpm run build
 
       - name: Run Python LLM smoke tests
         env:
@@ -151,6 +157,8 @@ jobs:
           sed -i "s/blazen-core = { version = \"0.1.0\"/blazen-core = { version = \"$VERSION\"/" Cargo.toml
           sed -i "s/blazen-llm = { version = \"0.1.0\"/blazen-llm = { version = \"$VERSION\"/" Cargo.toml
           sed -i "s/blazen-persist = { version = \"0.1.0\"/blazen-persist = { version = \"$VERSION\"/" Cargo.toml
+          sed -i "s/blazen-pipeline = { version = \"0.1.0\"/blazen-pipeline = { version = \"$VERSION\"/" Cargo.toml
+          sed -i "s/blazen-prompts = { version = \"0.1.0\"/blazen-prompts = { version = \"$VERSION\"/" Cargo.toml
           sed -i "s/blazen = { version = \"0.1.0\"/blazen = { version = \"$VERSION\"/" Cargo.toml
 
       - name: Publish crates in dependency order
@@ -166,6 +174,10 @@ jobs:
           cargo publish -p blazen-core --registry forgejo --no-verify --allow-dirty
           sleep 10
           cargo publish -p blazen-llm --registry forgejo --all-features --no-verify --allow-dirty
+          sleep 10
+          cargo publish -p blazen-prompts --registry forgejo --no-verify --allow-dirty
+          sleep 10
+          cargo publish -p blazen-pipeline --registry forgejo --no-verify --allow-dirty
           sleep 10
           cargo publish -p blazen --registry forgejo --all-features --no-verify --allow-dirty
           sleep 10
@@ -226,9 +238,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install maturin and twine
+      - name: Install uv
         if: steps.check.outputs.completed != 'true'
-        run: pip install maturin twine
+        run: pip install uv
+
+      - name: Install build tools
+        if: steps.check.outputs.completed != 'true'
+        run: uv pip install --system maturin twine
 
       - name: Stamp version
         if: steps.check.outputs.completed != 'true'
@@ -301,24 +317,28 @@ jobs:
           # Update package.json version
           sed -i "s/\"version\": \"0.1.0\"/\"version\": \"$VERSION\"/" crates/blazen-node/package.json
 
+      - name: Setup pnpm
+        if: steps.check.outputs.completed != 'true'
+        run: corepack enable && corepack prepare pnpm@latest --activate
+
       - name: Install dependencies
         if: steps.check.outputs.completed != 'true'
         run: |
           cd crates/blazen-node
-          npm install
+          pnpm install
 
       - name: Build with napi
         if: steps.check.outputs.completed != 'true'
         run: |
           cd crates/blazen-node
-          npm run build
+          pnpm run build
 
       - name: Publish to Forgejo npm
         if: steps.check.outputs.completed != 'true'
         run: |
           cd crates/blazen-node
           echo "//forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/:_authToken=${{ secrets.FORGEJO_ACTIONS_TOKEN }}" > .npmrc
-          npm publish --registry https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/
+          pnpm publish --registry https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/ --no-git-checks
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
@@ -385,12 +405,12 @@ jobs:
 
           **Python:**
           \`\`\`bash
-          pip install blazen --index-url https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/pypi/simple/
+          uv pip install blazen --index-url https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/pypi/simple/
           \`\`\`
 
           **Node.js:**
           \`\`\`bash
-          npm install blazen --registry https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/
+          pnpm add blazen --registry https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/
           \`\`\`
           NOTES_EOF
 
