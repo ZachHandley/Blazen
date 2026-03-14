@@ -5,10 +5,12 @@ Event-driven AI workflow engine with first-class LLM integration, written in Rus
 ## Features
 
 - **Event-driven architecture** - Type-safe events connect workflow steps with zero boilerplate via derive macros
-- **LLM providers** - OpenAI, Anthropic, Gemini, Azure, FAL with structured output and streaming
+- **Multi-workflow pipelines** - Orchestrate sequential and parallel stages with pause/resume, callback-based persistence, and per-workflow streaming
+- **LLM providers** - OpenAI, Anthropic, Gemini, Azure, fal.ai with structured output, streaming, and multimodal support (images, files, multi-part messages)
+- **Prompt management** - Versioned prompt templates with `{{variable}}` interpolation, YAML/JSON registries, and multimodal attachments
 - **Proc macro DSL** - `#[derive(Event)]` and `#[step]` macros for declarative workflow definitions
 - **Branching and streaming** - Conditional branching, parallel fan-out, and real-time streaming workflows
-- **Persistence** - Optional embedded persistence layer via redb
+- **Persistence** - Optional embedded persistence layer via redb, or bring-your-own via callbacks
 - **Language bindings** - Native Python (via maturin/PyO3) and Node.js/TypeScript (via napi-rs) packages
 
 ## Quick Example
@@ -52,6 +54,38 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
+## Pipeline Example
+
+```rust
+use blazen::pipeline::*;
+
+let pipeline = PipelineBuilder::new("analyze-and-summarize")
+    .stage(Stage {
+        name: "analyze".into(),
+        workflow: analyze_workflow,
+        input_mapper: None,  // uses pipeline input
+        condition: None,
+    })
+    .stage(Stage {
+        name: "summarize".into(),
+        workflow: summarize_workflow,
+        input_mapper: Some(Arc::new(|state| {
+            // feed previous stage's output as this stage's input
+            state.last_result().cloned().unwrap_or_default()
+        })),
+        condition: None,
+    })
+    .on_persist_json(Arc::new(|json| Box::pin(async move {
+        tokio::fs::write("pipeline_state.json", json).await.map_err(|e| {
+            PipelineError::PersistFailed(e.to_string())
+        })
+    })))
+    .build()?;
+
+let handler = pipeline.start(serde_json::json!({ "url": "https://..." })).await?;
+let result = handler.result().await?;
+```
+
 ## Installation
 
 **Rust:**
@@ -61,12 +95,20 @@ cargo add blazen --registry forgejo
 
 **Python:**
 ```bash
-pip install blazen --index-url https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/pypi/simple/
+uv pip install blazen --index-url https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/pypi/simple/
 ```
 
 **Node.js / TypeScript:**
 ```bash
-npm install blazen --registry https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/
+pnpm add blazen --registry https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/
+```
+
+**CLI (scaffold new projects):**
+```bash
+cargo install blazen-cli --registry forgejo
+blazen init workflow --lang rust
+blazen init pipeline --lang typescript
+blazen init prompts
 ```
 
 ## Crate Structure
@@ -76,11 +118,14 @@ npm install blazen --registry https://forge.blackleafdigital.com/api/packages/Bl
 | `blazen-events` | Core event traits and derive macro support |
 | `blazen-macros` | `#[derive(Event)]` and `#[step]` proc macros |
 | `blazen-core` | Workflow engine, context, and step registry |
-| `blazen-llm` | LLM provider integrations and structured output |
-| `blazen-persist` | Optional persistence layer (redb) |
+| `blazen-llm` | LLM provider integrations, multimodal messages, and structured output |
+| `blazen-pipeline` | Multi-workflow pipeline orchestrator with sequential/parallel stages |
+| `blazen-prompts` | Prompt template management with versioning and YAML/JSON registries |
+| `blazen-persist` | Optional persistence layer (redb/ValKey) |
 | `blazen` | Umbrella crate re-exporting everything |
 | `blazen-py` | Python bindings via PyO3/maturin |
 | `blazen-node` | Node.js bindings via napi-rs |
+| `blazen-cli` | CLI tool for scaffolding projects (`blazen init`) |
 
 ## License
 
