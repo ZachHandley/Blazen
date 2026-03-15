@@ -9,8 +9,7 @@
 //! `Blazen` Python bindings.
 //!
 //! Exposes the `Blazen` workflow engine and LLM integration layer to Python
-//! via PyO3. The native module is named `_blazen` (with underscore prefix,
-//! following Python convention for native extension modules).
+//! via PyO3. The native module is named `blazen`.
 //!
 //! # Quick start (Python)
 //!
@@ -41,7 +40,7 @@ use pyo3::prelude::*;
 
 /// The top-level Python module for `Blazen`.
 #[pymodule]
-fn _blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Version
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 

@@ -140,13 +140,10 @@ jobs:
           secret-key: ${{ secrets.S3_ACCESS_SECRET }}
 
       - name: Install deps and build wheel
-        run: |
-          uv venv
-          uv pip install maturin pytest pytest-asyncio
-          uv run maturin develop -m crates/blazen-py/Cargo.toml --release
+        run: uv sync --directory crates/blazen-py --extra dev
 
       - name: Run Python E2E tests
-        run: uv run pytest tests/python/test_workflow.py -v
+        run: uv run --directory crates/blazen-py pytest ../../tests/python/test_workflow.py -v
 
       - name: Save cargo cache
         if: always()
