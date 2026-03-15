@@ -40,8 +40,8 @@
     "node": ">= 18"
   },
   "scripts": {
-    "build": "napi build --release",
-    "build:debug": "napi build",
+    "build": "napi build --release --platform --js index.js",
+    "build:debug": "napi build --platform --js index.js",
     "prepublishOnly": "echo 'skipping napi prepublish for Forgejo'"
   }
 }

@@ -143,7 +143,7 @@ jobs:
         run: uv sync --directory crates/blazen-py --extra dev
 
       - name: Run Python E2E tests
-        run: uv run --directory crates/blazen-py pytest ../../tests/python/test_workflow.py -v
+        run: uv run --directory crates/blazen-py pytest -v
 
       - name: Save cargo cache
         if: always()
@@ -191,8 +191,8 @@ jobs:
       - name: Build Node bindings
         run: |
           cd crates/blazen-node
-          npm install
-          npm run build
+          pnpm install
+          pnpm run build
 
       - name: Run Node.js E2E tests
         run: node --test tests/node/test_workflow.mjs

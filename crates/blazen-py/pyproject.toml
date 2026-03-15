@@ -25,6 +25,10 @@ dynamic = ["version"]
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio"]
 
+[tool.pytest.ini_options]
+testpaths = ["../../tests/python"]
+asyncio_mode = "auto"
+
 [tool.maturin]
 features = ["pyo3/extension-module"]
 module-name = "blazen"
