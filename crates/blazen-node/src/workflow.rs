@@ -9,6 +9,7 @@ use std::time::Duration;
 use blazen_events::{AnyEvent, intern_event_type};
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
+use napi::Status;
 use napi_derive::napi;
 use tokio_stream::StreamExt;
 
@@ -22,11 +23,33 @@ use crate::handler::JsWorkflowHandler;
 // ---------------------------------------------------------------------------
 
 /// Step handler: takes (event, ctx) and returns a `serde_json::Value`.
-type StepHandlerTsfn = ThreadsafeFunction<(serde_json::Value, JsContext), serde_json::Value>;
+///
+/// The last const generic (`false`) sets `CalleeHandled = false`, which disables
+/// the error-first callback convention. Without this, napi-rs prepends a `null`
+/// first argument to the JS handler, shifting all parameters by one.
+///
+/// We use `FnArgs<(A, B)>` instead of a bare tuple `(A, B)` because bare tuples
+/// implement `ToNapiValue` (serialised as a JS Array), which means the blanket
+/// `JsValuesTupleIntoVec` impl converts them into a **single** Array argument.
+/// `FnArgs` has a dedicated `JsValuesTupleIntoVec` impl that **spreads** the
+/// elements into separate JS function arguments.
+///
+/// The `Return` type is `Promise<serde_json::Value>` because JS handlers are
+/// `async` functions that return a `Promise`. Using bare `serde_json::Value`
+/// would try to serialise the Promise object itself (yielding `{}`).
+type StepHandlerTsfn = ThreadsafeFunction<
+    FnArgs<(serde_json::Value, JsContext)>,
+    Promise<serde_json::Value>,
+    FnArgs<(serde_json::Value, JsContext)>,
+    Status,
+    false,
+>;
 
 /// Stream callback: takes a `serde_json::Value`, returns nothing meaningful.
 /// We use the default Unknown return type and fire-and-forget via `call`.
-type StreamCallbackTsfn = ThreadsafeFunction<serde_json::Value>;
+/// `CalleeHandled = false` to avoid the error-first callback convention.
+type StreamCallbackTsfn =
+    ThreadsafeFunction<serde_json::Value, Unknown<'static>, serde_json::Value, Status, false>;
 
 // ---------------------------------------------------------------------------
 // Step registration data
@@ -157,7 +180,9 @@ impl JsWorkflow {
     ) -> Result<JsWorkflowResult> {
         let workflow = self.build_workflow()?;
 
+        eprintln!("[DEBUG run_streaming] workflow built, starting run");
         let handler = workflow.run(input).await.map_err(workflow_error_to_napi)?;
+        eprintln!("[DEBUG run_streaming] handler obtained, subscribing to stream");
 
         // Subscribe to the stream before awaiting the result.
         let mut stream = handler.stream_events();
@@ -172,14 +197,18 @@ impl JsWorkflow {
             while let Some(event) = stream.next().await {
                 let js_event = any_event_to_js_value(&*event);
                 // Fire-and-forget: call the JS callback without awaiting.
-                let _ = on_event_clone.call(Ok(js_event), ThreadsafeFunctionCallMode::NonBlocking);
+                let _ = on_event_clone.call(js_event, ThreadsafeFunctionCallMode::NonBlocking);
             }
+            eprintln!("[DEBUG run_streaming] stream forwarding done");
         });
 
+        eprintln!("[DEBUG run_streaming] awaiting handler.result()");
         let result = handler.result().await.map_err(workflow_error_to_napi)?;
+        eprintln!("[DEBUG run_streaming] got result, waiting for stream_handle");
 
         // Wait for the stream consumer to finish.
         let _ = stream_handle.await;
+        eprintln!("[DEBUG run_streaming] all done");
 
         Ok(make_result(&*result))
     }
@@ -294,7 +323,9 @@ fn make_step_registration(step: &JsStepRegistration) -> blazen_core::StepRegistr
                 // ThreadsafeFunction::call_async returns a Future that resolves
                 // to the JS function's return value (serde_json::Value).
                 let result_value: serde_json::Value = tsfn
-                    .call_async(Ok((js_event, js_ctx)))
+                    .call_async(FnArgs::from((js_event, js_ctx)))
+                    .await
+                    .map_err(|e: napi::Error| blazen_core::WorkflowError::Context(e.to_string()))?
                     .await
                     .map_err(|e: napi::Error| blazen_core::WorkflowError::Context(e.to_string()))?;
 

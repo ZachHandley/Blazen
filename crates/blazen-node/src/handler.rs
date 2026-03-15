@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
+use napi::Status;
 use napi_derive::napi;
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
@@ -17,7 +18,9 @@ use crate::event::any_event_to_js_value;
 use crate::workflow::JsWorkflowResult;
 
 /// Stream callback: takes a `serde_json::Value`, returns nothing meaningful.
-type StreamCallbackTsfn = ThreadsafeFunction<serde_json::Value>;
+/// `CalleeHandled = false` to avoid the error-first callback convention.
+type StreamCallbackTsfn =
+    ThreadsafeFunction<serde_json::Value, Unknown<'static>, serde_json::Value, Status, false>;
 
 /// A handle to a running workflow.
 ///
@@ -132,7 +135,7 @@ impl JsWorkflowHandler {
         tokio::spawn(async move {
             while let Some(event) = stream.next().await {
                 let js_event = any_event_to_js_value(&*event);
-                let _ = on_event.call(Ok(js_event), ThreadsafeFunctionCallMode::NonBlocking);
+                let _ = on_event.call(js_event, ThreadsafeFunctionCallMode::NonBlocking);
             }
         });
 

@@ -56,25 +56,29 @@ class Context:
 
     Provides typed key/value storage, event emission, and stream
     publishing.  All values must be JSON-serializable.
+
+    All context methods are synchronous (they block on in-memory
+    operations), so they can be called from both sync and async steps
+    without ``await``.
     """
 
-    async def set(self, key: str, value: Any) -> None:
+    def set(self, key: str, value: Any) -> None:
         """Store a JSON-serializable value under *key*."""
         ...
 
-    async def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Optional[Any]:
         """Retrieve a value previously stored under *key*."""
         ...
 
-    async def send_event(self, event: Event) -> None:
+    def send_event(self, event: Event) -> None:
         """Emit an event into the internal routing queue."""
         ...
 
-    async def write_event_to_stream(self, event: Event) -> None:
+    def write_event_to_stream(self, event: Event) -> None:
         """Publish an event to the external broadcast stream."""
         ...
 
-    async def run_id(self) -> str:
+    def run_id(self) -> str:
         """Get the workflow run ID as a UUID string."""
         ...
 
@@ -100,10 +104,12 @@ def step(
     emits: Optional[list[str]] = None,
     max_concurrency: int = 0,
 ) -> Any:
-    """Decorator that wraps a Python async function as a workflow step.
+    """Decorator that wraps a Python function as a workflow step.
 
-    The decorated function must have the signature::
+    The decorated function can be either sync or async and must have
+    the signature::
 
+        def my_step(ctx: Context, ev: Event) -> Event | list[Event] | None
         async def my_step(ctx: Context, ev: Event) -> Event | list[Event] | None
 
     By default the step accepts ``StartEvent``.
@@ -111,7 +117,7 @@ def step(
     Can be used with or without arguments::
 
         @step
-        async def my_step(ctx, ev): ...
+        def my_step(ctx, ev): ...
 
         @step(accepts=["MyEvent"], emits=["ResultEvent"])
         async def my_step(ctx, ev): ...

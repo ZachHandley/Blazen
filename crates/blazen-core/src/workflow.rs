@@ -446,8 +446,47 @@ async fn save_checkpoint(
 /// matching step handlers, and injects step outputs back into the channel.
 /// Terminates when a [`StopEvent`] arrives, the timeout elapses, or a pause
 /// signal is received.
+///
+/// This wrapper ensures that a `"blazen::StreamEnd"` sentinel is always sent
+/// through the broadcast stream when the event loop exits, regardless of the
+/// exit path. This allows stream consumers to detect completion.
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 async fn event_loop(
+    event_rx: mpsc::UnboundedReceiver<EventEnvelope>,
+    event_tx: mpsc::UnboundedSender<EventEnvelope>,
+    registry: HashMap<String, Vec<StepRegistration>>,
+    ctx: Context,
+    result_tx: oneshot::Sender<Result<Box<dyn AnyEvent>, WorkflowError>>,
+    timeout: Option<Duration>,
+    pause_rx: oneshot::Receiver<()>,
+    snapshot_tx: oneshot::Sender<WorkflowSnapshot>,
+    workflow_name: String,
+    run_id: Uuid,
+    #[cfg(feature = "persist")] checkpoint_config: CheckpointConfig,
+) {
+    let stream_ctx = ctx.clone();
+    event_loop_inner(
+        event_rx,
+        event_tx,
+        registry,
+        ctx,
+        result_tx,
+        timeout,
+        pause_rx,
+        snapshot_tx,
+        workflow_name,
+        run_id,
+        #[cfg(feature = "persist")]
+        checkpoint_config,
+    )
+    .await;
+    stream_ctx.signal_stream_end().await;
+}
+
+/// Inner event loop implementation. See [`event_loop`] for the public wrapper
+/// that guarantees stream-end signaling.
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+async fn event_loop_inner(
     mut event_rx: mpsc::UnboundedReceiver<EventEnvelope>,
     event_tx: mpsc::UnboundedSender<EventEnvelope>,
     registry: HashMap<String, Vec<StepRegistration>>,

@@ -57,7 +57,7 @@ def test_event_attribute_error():
 
 
 # =========================================================================
-# Single step echo
+# Single step echo (async)
 # =========================================================================
 
 
@@ -68,6 +68,25 @@ async def test_single_step_echo():
         return StopEvent(result=ev.to_dict())
 
     wf = Workflow("echo", [echo])
+    handler = await wf.run(message="hello")
+    result = await handler.result()
+
+    assert result.event_type == "blazen::StopEvent"
+    assert result.result["message"] == "hello"
+
+
+# =========================================================================
+# Single step echo (sync)
+# =========================================================================
+
+
+@pytest.mark.asyncio
+async def test_single_step_echo_sync():
+    @step
+    def echo(ctx: Context, ev: Event):
+        return StopEvent(result=ev.to_dict())
+
+    wf = Workflow("echo-sync", [echo])
     handler = await wf.run(message="hello")
     result = await handler.result()
 
@@ -107,12 +126,12 @@ async def test_multi_step_pipeline():
 async def test_context_set_get():
     @step
     async def setter(ctx: Context, ev: Event):
-        await ctx.set("counter", 42)
+        ctx.set("counter", 42)
         return Event("NextEvent")
 
     @step(accepts=["NextEvent"])
     async def getter(ctx: Context, ev: Event):
-        val = await ctx.get("counter")
+        val = ctx.get("counter")
         return StopEvent(result={"counter": val})
 
     wf = Workflow("ctx-test", [setter, getter])
@@ -133,7 +152,7 @@ async def test_context_run_id():
 
     @step
     async def capture_id(ctx: Context, ev: Event):
-        rid = await ctx.run_id()
+        rid = ctx.run_id()
         run_id_holder["id"] = rid
         return StopEvent(result={"run_id": rid})
 
@@ -158,7 +177,7 @@ async def test_streaming():
     @step
     async def producer(ctx: Context, ev: Event):
         for i in range(3):
-            await ctx.write_event_to_stream(
+            ctx.write_event_to_stream(
                 Event("Progress", step=i)
             )
         return StopEvent(result={"done": True})
@@ -217,13 +236,13 @@ async def test_step_returns_list():
 async def test_step_returns_none():
     @step
     async def side_effect(ctx: Context, ev: Event):
-        await ctx.set("processed", True)
-        await ctx.send_event(Event("Continue"))
+        ctx.set("processed", True)
+        ctx.send_event(Event("Continue"))
         return None
 
     @step(accepts=["Continue"])
     async def finisher(ctx: Context, ev: Event):
-        processed = await ctx.get("processed")
+        processed = ctx.get("processed")
         return StopEvent(result={"processed": processed})
 
     wf = Workflow("none-test", [side_effect, finisher])
