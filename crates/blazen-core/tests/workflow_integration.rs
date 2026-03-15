@@ -415,6 +415,7 @@ async fn test_multi_step_chain() {
 
     let step_a = make_step("step_a", |event: StartEvent, _ctx: Context| {
         Box::pin(async move {
+            #[allow(clippy::cast_possible_truncation)]
             let value = event.data["value"].as_i64().unwrap_or(0) as i32;
             Ok(StepAEvent { value: value + 1 })
         })
@@ -869,6 +870,7 @@ struct MacroTestEvent {
 }
 
 // Use the #[step] attribute macro.
+#[allow(clippy::unused_async)]
 #[blazen_macros::step]
 async fn macro_step_one(event: StartEvent, _ctx: Context) -> Result<MacroTestEvent, WorkflowError> {
     let text = event.data["text"]
@@ -878,6 +880,7 @@ async fn macro_step_one(event: StartEvent, _ctx: Context) -> Result<MacroTestEve
     Ok(MacroTestEvent { value: text })
 }
 
+#[allow(clippy::unused_async)]
 #[blazen_macros::step]
 async fn macro_step_two(event: MacroTestEvent, _ctx: Context) -> Result<StopEvent, WorkflowError> {
     Ok(StopEvent {
@@ -930,6 +933,7 @@ struct LowValueEvent {
     amount: f64,
 }
 
+#[allow(clippy::unused_async)]
 #[blazen_macros::step(emits = [HighValueEvent, LowValueEvent])]
 async fn branching_step(event: StartEvent, _ctx: Context) -> Result<StepOutput, WorkflowError> {
     let amount = event.data["amount"].as_f64().unwrap_or(0.0);
@@ -940,6 +944,7 @@ async fn branching_step(event: StartEvent, _ctx: Context) -> Result<StepOutput, 
     }
 }
 
+#[allow(clippy::unused_async)]
 #[blazen_macros::step]
 async fn handle_high(event: HighValueEvent, _ctx: Context) -> Result<StopEvent, WorkflowError> {
     Ok(StopEvent {
@@ -947,6 +952,7 @@ async fn handle_high(event: HighValueEvent, _ctx: Context) -> Result<StopEvent, 
     })
 }
 
+#[allow(clippy::unused_async)]
 #[blazen_macros::step]
 async fn handle_low(event: LowValueEvent, _ctx: Context) -> Result<StopEvent, WorkflowError> {
     Ok(StopEvent {
@@ -1140,6 +1146,7 @@ async fn test_pause_captures_snapshot() {
 // 12. Pause and resume: full round-trip
 // ===========================================================================
 
+#[allow(clippy::too_many_lines)]
 #[tokio::test]
 async fn test_pause_and_resume() {
     // Two-step workflow:
@@ -1322,6 +1329,7 @@ async fn test_pause_and_resume() {
 // 13. Pause and resume via JSON serialization round-trip
 // ===========================================================================
 
+#[allow(clippy::similar_names)]
 #[tokio::test]
 async fn test_pause_resume_via_json() {
     // Single-step workflow that sets state, then emits StopEvent with a delay.

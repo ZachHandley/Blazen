@@ -14,7 +14,7 @@ use tokio_stream::StreamExt;
 // Test helpers
 // ---------------------------------------------------------------------------
 
-/// Build a workflow that echoes the StartEvent data as-is into a StopEvent.
+/// Build a workflow that echoes the `StartEvent` data as-is into a `StopEvent`.
 fn echo_workflow() -> blazen_core::Workflow {
     let handler: StepFn = Arc::new(|event, _ctx| {
         Box::pin(async move {

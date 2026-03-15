@@ -133,7 +133,11 @@ impl Pipeline {
 /// Runs in a spawned task. Iterates through stages sequentially, running
 /// each stage's workflow and collecting results. Checks for pause signals
 /// between stages.
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[allow(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    clippy::similar_names
+)]
 async fn execute_pipeline(
     pipeline_name: String,
     stages: Vec<StageKind>,
@@ -157,7 +161,7 @@ async fn execute_pipeline(
         state.record_stage_result(&sr.name, sr.output.clone());
     }
 
-    for stage_idx in start_index..stages.len() {
+    for (stage_idx, stage) in stages.iter().enumerate().skip(start_index) {
         // Check for pause signal between stages (non-blocking).
         if let Ok(()) | Err(oneshot::error::TryRecvError::Closed) = pause_rx.try_recv() {
             let snapshot = build_snapshot(
@@ -172,8 +176,6 @@ async fn execute_pipeline(
             let _ = result_tx.send(Err(PipelineError::Paused));
             return;
         }
-
-        let stage = &stages[stage_idx];
 
         tracing::info!(
             pipeline = %pipeline_name,
@@ -218,6 +220,7 @@ async fn execute_pipeline(
             result = stage_future => result,
         };
 
+        #[allow(clippy::cast_possible_truncation)]
         let duration_ms = stage_start.elapsed().as_millis() as u64;
 
         match result {
@@ -248,8 +251,8 @@ async fn execute_pipeline(
 
         // Call persist callbacks after each stage.
         if let Err(e) = call_persist_callbacks(
-            &persist_fn,
-            &persist_json_fn,
+            persist_fn.as_ref(),
+            persist_json_fn.as_ref(),
             &pipeline_name,
             run_id,
             stage_idx + 1,
@@ -290,6 +293,7 @@ enum StageOutcome {
 }
 
 /// Run a single sequential stage.
+#[allow(clippy::similar_names)]
 async fn run_sequential_stage(
     stage: &Stage,
     state: &PipelineState,
@@ -297,11 +301,11 @@ async fn run_sequential_stage(
     timeout: Option<Duration>,
 ) -> Result<serde_json::Value, StageOutcome> {
     // Check condition.
-    if let Some(condition) = &stage.condition {
-        if !condition(state) {
-            tracing::info!(stage = %stage.name, "stage skipped (condition false)");
-            return Err(StageOutcome::Skipped);
-        }
+    if let Some(condition) = &stage.condition
+        && !condition(state)
+    {
+        tracing::info!(stage = %stage.name, "stage skipped (condition false)");
+        return Err(StageOutcome::Skipped);
     }
 
     // Determine input.
@@ -340,6 +344,7 @@ async fn run_sequential_stage(
     });
 
     // Await the workflow result, optionally with a timeout.
+    #[allow(clippy::single_match_else)]
     let wf_result = if let Some(timeout_dur) = timeout {
         match tokio::time::timeout(timeout_dur, handler.result()).await {
             Ok(r) => r,
@@ -397,10 +402,10 @@ async fn run_parallel_wait_all(
     let mut set = JoinSet::new();
 
     for branch in &parallel.branches {
-        if let Some(condition) = &branch.condition {
-            if !condition(state) {
-                continue;
-            }
+        if let Some(condition) = &branch.condition
+            && !condition(state)
+        {
+            continue;
         }
 
         let workflow_input = if let Some(mapper) = &branch.input_mapper {
@@ -488,10 +493,10 @@ async fn run_parallel_first_completes(
     let mut set = JoinSet::new();
 
     for branch in &parallel.branches {
-        if let Some(condition) = &branch.condition {
-            if !condition(state) {
-                continue;
-            }
+        if let Some(condition) = &branch.condition
+            && !condition(state)
+        {
+            continue;
         }
 
         let workflow_input = if let Some(mapper) = &branch.input_mapper {
@@ -607,8 +612,8 @@ fn build_snapshot(
 /// Call persist callbacks if configured.
 #[allow(clippy::too_many_arguments)]
 async fn call_persist_callbacks(
-    persist_fn: &Option<PersistFn>,
-    persist_json_fn: &Option<PersistJsonFn>,
+    persist_fn: Option<&PersistFn>,
+    persist_json_fn: Option<&PersistJsonFn>,
     pipeline_name: &str,
     run_id: Uuid,
     next_stage_index: usize,

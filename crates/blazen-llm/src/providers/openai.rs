@@ -22,7 +22,7 @@ use crate::types::{
 // Multimodal helpers
 // ---------------------------------------------------------------------------
 
-/// Convert an [`ImageContent`] to the OpenAI `image_url` content-part format.
+/// Convert an [`ImageContent`] to the `OpenAI` `image_url` content-part format.
 fn image_content_to_openai(img: &ImageContent) -> serde_json::Value {
     let url = match &img.source {
         ImageSource::Url { url } => url.clone(),
@@ -37,7 +37,7 @@ fn image_content_to_openai(img: &ImageContent) -> serde_json::Value {
     })
 }
 
-/// Convert a single [`ContentPart`] to an OpenAI content-array element.
+/// Convert a single [`ContentPart`] to an `OpenAI` content-array element.
 fn content_part_to_openai(part: &ContentPart) -> serde_json::Value {
     match part {
         ContentPart::Text { text } => {
@@ -62,7 +62,7 @@ fn content_part_to_openai(part: &ContentPart) -> serde_json::Value {
 }
 
 /// Convert [`MessageContent`] to a `serde_json::Value` suitable for the
-/// OpenAI `content` field.
+/// `OpenAI` `content` field.
 ///
 /// - `Text` -> a plain JSON string (backward-compatible).
 /// - `Image` / `Parts` -> a JSON array of content parts.

@@ -151,7 +151,7 @@ impl PromptRegistry {
     #[must_use]
     pub fn list(&self) -> Vec<&str> {
         let mut names: Vec<&str> = self.prompts.keys().map(String::as_str).collect();
-        names.sort();
+        names.sort_unstable();
         names
     }
 

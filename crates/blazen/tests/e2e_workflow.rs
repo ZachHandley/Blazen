@@ -602,6 +602,7 @@ struct E2eCustomEvent {
 }
 
 #[step]
+#[allow(clippy::unused_async)]
 async fn e2e_macro_step_one(
     event: StartEvent,
     _ctx: Context,
@@ -617,6 +618,7 @@ async fn e2e_macro_step_one(
 }
 
 #[step]
+#[allow(clippy::unused_async)]
 async fn e2e_macro_step_two(
     event: E2eCustomEvent,
     _ctx: Context,
