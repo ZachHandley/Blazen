@@ -27,13 +27,23 @@ use crate::event::any_event_to_py_event;
 pub struct PyWorkflowHandler {
     /// The inner handler is wrapped in `Option` because `result()` consumes it.
     inner: Arc<Mutex<Option<blazen_core::WorkflowHandler>>>,
+    /// Pre-subscribed stream created at handler construction time so that
+    /// events published before `stream_events()` is called are not lost.
+    pre_stream: Arc<Mutex<PinnedEventStream>>,
 }
 
 impl PyWorkflowHandler {
     /// Create a new handler wrapping a Rust `WorkflowHandler`.
+    ///
+    /// Immediately subscribes to the broadcast stream so that events
+    /// published by steps are captured from the very start.
     pub fn new(handler: blazen_core::WorkflowHandler) -> Self {
+        // Subscribe immediately -- the returned stream is fully owned
+        // (independent of &handler) thanks to `use<>` on the core method.
+        let stream = handler.stream_events();
         Self {
             inner: Arc::new(Mutex::new(Some(handler))),
+            pre_stream: Arc::new(Mutex::new(Box::pin(stream))),
         }
     }
 }
@@ -68,7 +78,11 @@ impl PyWorkflowHandler {
     /// Create an async iterator over intermediate events.
     ///
     /// Steps publish events to the stream via `ctx.write_event_to_stream()`.
-    /// Each call returns a fresh stream starting from the current point.
+    /// The stream is pre-subscribed at handler construction time so no events
+    /// are lost between `wf.run()` and this call.
+    ///
+    /// The stream terminates when the workflow completes (a `blazen::StreamEnd`
+    /// sentinel is sent by the event loop).
     ///
     /// Returns:
     ///     An async iterator of Events.
@@ -77,23 +91,8 @@ impl PyWorkflowHandler {
     ///     >>> async for event in handler.stream_events():
     ///     ...     print(event.event_type, event.to_dict())
     fn stream_events(&self) -> PyResult<PyEventStream> {
-        let inner_guard = self.inner.clone();
-
-        // We need to subscribe before any events are published, so we do it
-        // synchronously. The handler is NOT consumed by subscribing.
-        // We use try_lock here since this is called from sync Python context.
-        let guard = inner_guard
-            .try_lock()
-            .map_err(|_| BlazenPyError::Workflow("Handler is locked".to_owned()))?;
-
-        let handler = guard
-            .as_ref()
-            .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
-
-        let stream = handler.stream_events();
         Ok(PyEventStream {
-            // We box and pin the stream for storage
-            stream: Arc::new(Mutex::new(Box::pin(stream))),
+            stream: self.pre_stream.clone(),
         })
     }
 
@@ -145,6 +144,9 @@ type PinnedEventStream = std::pin::Pin<
 ///
 /// Implements the Python `__aiter__` / `__anext__` protocol so it can be
 /// used with `async for`.
+///
+/// The stream terminates when it receives a `"blazen::StreamEnd"` sentinel
+/// event from the event loop, or when the underlying broadcast channel closes.
 #[pyclass(name = "_EventStream")]
 pub struct PyEventStream {
     stream: Arc<Mutex<PinnedEventStream>>,
@@ -162,11 +164,17 @@ impl PyEventStream {
             let mut guard = stream.lock().await;
             match guard.next().await {
                 Some(event) => {
+                    // Check for the stream-end sentinel sent by the event loop.
+                    if event.event_type_id() == "blazen::StreamEnd" {
+                        return Err(pyo3::exceptions::PyStopAsyncIteration::new_err(
+                            "stream exhausted",
+                        ));
+                    }
                     let py_event = any_event_to_py_event(&*event);
                     Ok(Some(py_event))
                 }
                 None => {
-                    // Signal end of iteration by raising StopAsyncIteration
+                    // Broadcast channel closed -- no more events.
                     Err(pyo3::exceptions::PyStopAsyncIteration::new_err(
                         "stream exhausted",
                     ))

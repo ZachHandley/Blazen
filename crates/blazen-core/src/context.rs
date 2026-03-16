@@ -268,6 +268,19 @@ impl Context {
         let mut inner = self.inner.write().await;
         inner.metadata.insert(key.to_owned(), value);
     }
+
+    /// Send a sentinel event through the broadcast stream to signal that
+    /// no more events will be published.
+    ///
+    /// Consumers that check for `"blazen::StreamEnd"` can use this to
+    /// terminate their iteration.
+    pub(crate) async fn signal_stream_end(&self) {
+        self.write_event_to_stream(blazen_events::DynamicEvent {
+            event_type: "blazen::StreamEnd".to_owned(),
+            data: serde_json::Value::Null,
+        })
+        .await;
+    }
 }
 
 #[cfg(test)]

@@ -19,6 +19,7 @@ use std::task::{self, Poll};
 
 use blazen_events::AnyEvent;
 use tokio::sync::{broadcast, oneshot};
+use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -39,6 +40,11 @@ pub struct WorkflowHandler {
     pause_tx: Option<oneshot::Sender<()>>,
     /// Receives the snapshot from the event loop after a pause.
     snapshot_rx: Option<oneshot::Receiver<WorkflowSnapshot>>,
+    /// Handle to the spawned event loop task. Awaited during `result()` and
+    /// `pause()` to ensure the task fully exits before returning, which
+    /// prevents orphaned Tokio tasks from keeping runtimes alive (important
+    /// for napi-rs / Node.js bindings).
+    event_loop_handle: Option<JoinHandle<()>>,
 }
 
 impl WorkflowHandler {
@@ -48,12 +54,14 @@ impl WorkflowHandler {
         stream_tx: broadcast::Sender<Box<dyn AnyEvent>>,
         pause_tx: Option<oneshot::Sender<()>>,
         snapshot_rx: Option<oneshot::Receiver<WorkflowSnapshot>>,
+        event_loop_handle: JoinHandle<()>,
     ) -> Self {
         Self {
             result_rx: Some(result_rx),
             stream_tx,
             pause_tx,
             snapshot_rx,
+            event_loop_handle: Some(event_loop_handle),
         }
     }
 
@@ -76,7 +84,15 @@ impl WorkflowHandler {
             .result_rx
             .take()
             .expect("result() called after result was already consumed");
-        rx.await.unwrap_or(Err(WorkflowError::ChannelClosed))
+        let result = rx.await.unwrap_or(Err(WorkflowError::ChannelClosed));
+
+        // Wait for the event loop task to fully exit so there are no orphaned
+        // Tokio tasks keeping runtimes alive (critical for napi-rs / Node.js).
+        if let Some(handle) = self.event_loop_handle.take() {
+            let _ = handle.await;
+        }
+
+        result
     }
 
     /// Subscribe to intermediate events published by steps via
@@ -128,7 +144,16 @@ impl WorkflowHandler {
             .map_err(|()| WorkflowError::ChannelClosed)?;
 
         // Await the snapshot from the event loop.
-        snapshot_rx.await.map_err(|_| WorkflowError::ChannelClosed)
+        let snapshot = snapshot_rx
+            .await
+            .map_err(|_| WorkflowError::ChannelClosed)?;
+
+        // Wait for the event loop task to fully exit.
+        if let Some(handle) = self.event_loop_handle.take() {
+            let _ = handle.await;
+        }
+
+        Ok(snapshot)
     }
 }
 
@@ -139,17 +164,38 @@ impl WorkflowHandler {
 /// Future type backing the `IntoFuture` implementation for `WorkflowHandler`.
 pub struct WorkflowHandlerFuture {
     rx: oneshot::Receiver<Result<Box<dyn AnyEvent>, WorkflowError>>,
+    event_loop_handle: Option<JoinHandle<()>>,
+    result: Option<Result<Box<dyn AnyEvent>, WorkflowError>>,
 }
 
 impl Future for WorkflowHandlerFuture {
     type Output = Result<Box<dyn AnyEvent>, WorkflowError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
-        match Pin::new(&mut self.rx).poll(cx) {
-            Poll::Ready(Ok(result)) => Poll::Ready(result),
-            Poll::Ready(Err(_)) => Poll::Ready(Err(WorkflowError::ChannelClosed)),
-            Poll::Pending => Poll::Pending,
+        // Phase 1: await the result from the oneshot channel.
+        if self.result.is_none() {
+            match Pin::new(&mut self.rx).poll(cx) {
+                Poll::Ready(Ok(result)) => {
+                    self.result = Some(result);
+                }
+                Poll::Ready(Err(_)) => {
+                    self.result = Some(Err(WorkflowError::ChannelClosed));
+                }
+                Poll::Pending => return Poll::Pending,
+            }
         }
+
+        // Phase 2: await the event loop task to ensure clean shutdown.
+        if let Some(handle) = &mut self.event_loop_handle {
+            match Pin::new(handle).poll(cx) {
+                Poll::Ready(_) => {
+                    self.event_loop_handle = None;
+                }
+                Poll::Pending => return Poll::Pending,
+            }
+        }
+
+        Poll::Ready(self.result.take().expect("result was already consumed"))
     }
 }
 
@@ -162,6 +208,10 @@ impl IntoFuture for WorkflowHandler {
             .result_rx
             .take()
             .expect("IntoFuture: result was already consumed");
-        WorkflowHandlerFuture { rx }
+        WorkflowHandlerFuture {
+            rx,
+            event_loop_handle: self.event_loop_handle.take(),
+            result: None,
+        }
     }
 }

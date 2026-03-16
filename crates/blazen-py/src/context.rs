@@ -6,7 +6,21 @@
 
 use pyo3::prelude::*;
 
-use crate::event::{JsonValue, PyEvent};
+use crate::event::PyEvent;
+
+/// Run a future to completion, handling both inside-tokio and outside-tokio
+/// contexts. Uses `block_in_place` when called from a tokio worker thread
+/// (e.g. from within a step handler), and falls back to the pyo3-async-runtimes
+/// runtime otherwise.
+fn block_on_context<F: std::future::Future>(fut: F) -> F::Output {
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        // We're inside a tokio runtime -- use block_in_place to avoid panics
+        tokio::task::block_in_place(|| handle.block_on(fut))
+    } else {
+        // No tokio runtime on this thread -- use the pyo3 runtime
+        pyo3_async_runtimes::tokio::get_runtime().block_on(fut)
+    }
+}
 
 /// Shared workflow context accessible by all steps.
 ///
@@ -14,10 +28,10 @@ use crate::event::{JsonValue, PyEvent};
 /// All values are stored as JSON internally, so they must be JSON-serializable.
 ///
 /// Example:
-///     >>> async def my_step(ctx: Context, ev: Event) -> Event:
-///     ...     await ctx.set("counter", 42)
-///     ...     val = await ctx.get("counter")  # returns 42
-///     ...     await ctx.send_event(Event("NextStep", data="hello"))
+///     >>> def my_step(ctx: Context, ev: Event) -> Event:
+///     ...     ctx.set("counter", 42)
+///     ...     val = ctx.get("counter")  # returns 42
+///     ...     ctx.send_event(Event("NextStep", data="hello"))
 #[pyclass(name = "Context", from_py_object)]
 #[derive(Clone)]
 pub struct PyContext {
@@ -33,19 +47,14 @@ impl PyContext {
     /// Args:
     ///     key: The storage key.
     ///     value: Any JSON-serializable Python value.
-    fn set<'py>(
-        &self,
-        py: Python<'py>,
-        key: &str,
-        value: &Bound<'py, PyAny>,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    fn set(&self, py: Python<'_>, key: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let json_val = crate::event::py_to_json(py, value)?;
         let inner = self.inner.clone();
         let key = key.to_string();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+        block_on_context(async {
             inner.set(&key, json_val).await;
-            Ok(())
-        })
+        });
+        Ok(())
     }
 
     /// Retrieve a value previously stored under the given key.
@@ -57,19 +66,14 @@ impl PyContext {
     ///
     /// Returns:
     ///     The stored value, or None.
-    fn get<'py>(&self, py: Python<'py>, key: &str) -> PyResult<Bound<'py, PyAny>> {
+    fn get(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
         let inner = self.inner.clone();
         let key = key.to_string();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let val: Option<serde_json::Value> = inner.get(&key).await;
-            match val {
-                Some(v) => {
-                    // Convert JSON to a Python-compatible wrapper
-                    Ok(JsonValue(v))
-                }
-                None => Ok(JsonValue(serde_json::Value::Null)),
-            }
-        })
+        let val: Option<serde_json::Value> = block_on_context(async { inner.get(&key).await });
+        match val {
+            Some(v) => crate::event::json_to_py(py, &v),
+            None => Ok(py.None()),
+        }
     }
 
     /// Emit an event into the internal routing queue.
@@ -79,20 +83,17 @@ impl PyContext {
     ///
     /// Args:
     ///     event: The event to send.
-    fn send_event<'py>(
-        &self,
-        py: Python<'py>,
-        event: PyRef<'py, PyEvent>,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    fn send_event(&self, _py: Python<'_>, event: PyRef<'_, PyEvent>) -> PyResult<()> {
         let dynamic = blazen_events::DynamicEvent {
             event_type: event.event_type.clone(),
             data: event.data.clone(),
         };
+        drop(event);
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+        block_on_context(async {
             inner.send_event(dynamic).await;
-            Ok(())
-        })
+        });
+        Ok(())
     }
 
     /// Publish an event to the external broadcast stream.
@@ -103,32 +104,27 @@ impl PyContext {
     ///
     /// Args:
     ///     event: The event to publish to the stream.
-    fn write_event_to_stream<'py>(
-        &self,
-        py: Python<'py>,
-        event: PyRef<'py, PyEvent>,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    fn write_event_to_stream(&self, _py: Python<'_>, event: PyRef<'_, PyEvent>) -> PyResult<()> {
         let dynamic = blazen_events::DynamicEvent {
             event_type: event.event_type.clone(),
             data: event.data.clone(),
         };
+        drop(event);
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+        block_on_context(async {
             inner.write_event_to_stream(dynamic).await;
-            Ok(())
-        })
+        });
+        Ok(())
     }
 
     /// Get the workflow run ID.
     ///
     /// Returns:
     ///     The UUID string for this workflow run.
-    fn run_id<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    fn run_id(&self, _py: Python<'_>) -> PyResult<String> {
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let id = inner.run_id().await;
-            Ok(id.to_string())
-        })
+        let id = block_on_context(async { inner.run_id().await });
+        Ok(id.to_string())
     }
 
     fn __repr__(&self) -> String {

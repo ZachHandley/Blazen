@@ -42,6 +42,8 @@ pub struct PyStepWrapper {
     /// Maximum concurrency (0 = unlimited).
     #[pyo3(get, set)]
     pub(crate) max_concurrency: usize,
+    /// Whether the wrapped function is an async coroutine function.
+    pub(crate) is_async: bool,
 }
 
 impl PyStepWrapper {
@@ -75,8 +77,12 @@ impl PyStepWrapper {
 
 impl PyStepWrapper {
     /// Convert this wrapper into a [`StepRegistration`](blazen_core::StepRegistration)
-    /// that can be added to a [`WorkflowBuilder`](blazen_core::WorkflowBuilder).
-    pub fn to_registration(&self) -> PyResult<blazen_core::StepRegistration> {
+    /// that can be added to a [`WorkflowBuilder`](blazen_core::WorkflowBuilder),
+    /// using the provided task locals for async Python function calls.
+    pub fn to_registration_with_locals(
+        &self,
+        locals: pyo3_async_runtimes::TaskLocals,
+    ) -> PyResult<blazen_core::StepRegistration> {
         let accepts: Vec<&'static str> =
             self.accepts.iter().map(|s| intern_event_type(s)).collect();
 
@@ -85,6 +91,7 @@ impl PyStepWrapper {
         // Clone the function handle while we have the GIL
         let func = Python::attach(|py| self.clone_func(py));
         let step_name = self.name.clone();
+        let is_async = self.is_async;
 
         let handler: blazen_core::StepFn = Arc::new(
             move |event: Box<dyn AnyEvent>,
@@ -101,42 +108,62 @@ impl PyStepWrapper {
             > {
                 let func = Python::attach(|py| func.clone_ref(py));
                 let step_name = step_name.clone();
+                let locals = locals.clone();
 
                 Box::pin(async move {
                     // Convert Rust event to PyEvent
                     let py_event = any_event_to_py_event(&*event);
                     let py_ctx = PyContext::new(ctx);
 
-                    // Call the Python async function to get a coroutine
-                    let coroutine: Py<PyAny> = Python::attach(|py| -> PyResult<Py<PyAny>> {
-                        let py_event_obj = Py::new(py, py_event)?;
-                        let py_ctx_obj = Py::new(py, py_ctx)?;
-                        func.call1(py, (py_ctx_obj, py_event_obj))
-                    })
-                    .map_err(|e: PyErr| {
-                        blazen_core::WorkflowError::StepFailed {
-                            step_name: step_name.clone(),
-                            source: Box::new(BlazenPyError::Workflow(e.to_string())),
-                        }
-                    })?;
+                    // Call the Python function
+                    let py_result: Py<PyAny> = if is_async {
+                        // Async path: call to get coroutine, then convert to future and await
+                        let coroutine: Py<PyAny> = Python::attach(|py| -> PyResult<Py<PyAny>> {
+                            let py_event_obj = Py::new(py, py_event)?;
+                            let py_ctx_obj = Py::new(py, py_ctx)?;
+                            func.call1(py, (py_ctx_obj, py_event_obj))
+                        })
+                        .map_err(|e: PyErr| {
+                            blazen_core::WorkflowError::StepFailed {
+                                step_name: step_name.clone(),
+                                source: Box::new(BlazenPyError::Workflow(e.to_string())),
+                            }
+                        })?;
 
-                    // Convert the Python coroutine to a Rust future and await it
-                    let future = Python::attach(|py| {
-                        pyo3_async_runtimes::tokio::into_future(coroutine.into_bound(py))
-                    })
-                    .map_err(|e: PyErr| {
-                        blazen_core::WorkflowError::StepFailed {
-                            step_name: step_name.clone(),
-                            source: Box::new(BlazenPyError::Workflow(e.to_string())),
-                        }
-                    })?;
+                        // Convert the Python coroutine to a Rust future and await it
+                        let future = Python::attach(|py| {
+                            pyo3_async_runtimes::into_future_with_locals(
+                                &locals,
+                                coroutine.into_bound(py),
+                            )
+                        })
+                        .map_err(|e: PyErr| {
+                            blazen_core::WorkflowError::StepFailed {
+                                step_name: step_name.clone(),
+                                source: Box::new(BlazenPyError::Workflow(e.to_string())),
+                            }
+                        })?;
 
-                    let py_result: Py<PyAny> = future.await.map_err(|e: PyErr| {
-                        blazen_core::WorkflowError::StepFailed {
-                            step_name: step_name.clone(),
-                            source: Box::new(BlazenPyError::Workflow(e.to_string())),
-                        }
-                    })?;
+                        pyo3_async_runtimes::tokio::scope(locals.clone(), future)
+                            .await
+                            .map_err(|e: PyErr| blazen_core::WorkflowError::StepFailed {
+                                step_name: step_name.clone(),
+                                source: Box::new(BlazenPyError::Workflow(e.to_string())),
+                            })?
+                    } else {
+                        // Sync path: call directly, returns the result (not a coroutine)
+                        Python::attach(|py| -> PyResult<Py<PyAny>> {
+                            let py_event_obj = Py::new(py, py_event)?;
+                            let py_ctx_obj = Py::new(py, py_ctx)?;
+                            func.call1(py, (py_ctx_obj, py_event_obj))
+                        })
+                        .map_err(|e: PyErr| {
+                            blazen_core::WorkflowError::StepFailed {
+                                step_name: step_name.clone(),
+                                source: Box::new(BlazenPyError::Workflow(e.to_string())),
+                            }
+                        })?
+                    };
 
                     // Convert the Python return value back to a Rust event
                     Python::attach(
@@ -208,6 +235,10 @@ impl PyStepWrapper {
 ///
 ///     async def my_step(ctx: Context, ev: Event) -> Event | list[Event] | None
 ///
+/// or:
+///
+///     def my_step(ctx: Context, ev: Event) -> Event | list[Event] | None
+///
 /// By default the step accepts `StartEvent` and emits any event type.
 /// Override with `.accepts` and `.emits` attributes on the returned wrapper.
 ///
@@ -235,12 +266,19 @@ pub fn step(
         // Used as @step (without arguments)
         let name: String = func.getattr(py, "__name__")?.extract(py)?;
 
+        // Detect whether the function is async
+        let inspect = py.import("inspect")?;
+        let is_async: bool = inspect
+            .call_method1("iscoroutinefunction", (&func,))?
+            .extract()?;
+
         let wrapper = PyStepWrapper {
             func,
             name,
             accepts,
             emits,
             max_concurrency,
+            is_async,
         };
         Ok(Py::new(py, wrapper)?.into_any())
     } else {
@@ -256,12 +294,19 @@ pub fn step(
                 let func: Py<PyAny> = args.get_item(0)?.extract()?;
                 let name: String = func.getattr(py, "__name__")?.extract(py)?;
 
+                // Detect whether the function is async
+                let inspect = py.import("inspect")?;
+                let is_async: bool = inspect
+                    .call_method1("iscoroutinefunction", (&func,))?
+                    .extract()?;
+
                 let wrapper = PyStepWrapper {
                     func,
                     name,
                     accepts: accepts.clone(),
                     emits: emits.clone(),
                     max_concurrency,
+                    is_async,
                 };
                 Ok(Py::new(py, wrapper)?.into_any())
             },

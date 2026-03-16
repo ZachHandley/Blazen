@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use blazen_events::{AnyEvent, intern_event_type};
+use napi::Status;
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
@@ -22,11 +23,38 @@ use crate::handler::JsWorkflowHandler;
 // ---------------------------------------------------------------------------
 
 /// Step handler: takes (event, ctx) and returns a `serde_json::Value`.
-type StepHandlerTsfn = ThreadsafeFunction<(serde_json::Value, JsContext), serde_json::Value>;
+///
+/// The `CalleeHandled = false` disables the error-first callback convention.
+/// Without this, napi-rs prepends a `null` first argument to the JS handler,
+/// shifting all parameters by one.
+///
+/// We use `FnArgs<(A, B)>` instead of a bare tuple `(A, B)` because bare tuples
+/// implement `ToNapiValue` (serialised as a JS Array), which means the blanket
+/// `JsValuesTupleIntoVec` impl converts them into a **single** Array argument.
+/// `FnArgs` has a dedicated `JsValuesTupleIntoVec` impl that **spreads** the
+/// elements into separate JS function arguments.
+///
+/// The `Return` type is `Promise<serde_json::Value>` because JS handlers are
+/// `async` functions that return a `Promise`. Using bare `serde_json::Value`
+/// would try to serialise the Promise object itself (yielding `{}`).
+///
+/// `Weak = true` unrefs the TSFN so it does not prevent Node.js from exiting
+/// once the workflow completes and the result Promise resolves.
+type StepHandlerTsfn = ThreadsafeFunction<
+    FnArgs<(serde_json::Value, JsContext)>,
+    Promise<serde_json::Value>,
+    FnArgs<(serde_json::Value, JsContext)>,
+    Status,
+    false,
+    true,
+>;
 
 /// Stream callback: takes a `serde_json::Value`, returns nothing meaningful.
 /// We use the default Unknown return type and fire-and-forget via `call`.
-type StreamCallbackTsfn = ThreadsafeFunction<serde_json::Value>;
+/// `CalleeHandled = false` to avoid the error-first callback convention.
+/// `Weak = true` so it does not prevent Node.js from exiting.
+type StreamCallbackTsfn =
+    ThreadsafeFunction<serde_json::Value, Unknown<'static>, serde_json::Value, Status, false, true>;
 
 // ---------------------------------------------------------------------------
 // Step registration data
@@ -170,9 +198,13 @@ impl JsWorkflow {
         let on_event_clone = Arc::clone(&on_event);
         let stream_handle = tokio::spawn(async move {
             while let Some(event) = stream.next().await {
+                // Stop on the stream-end sentinel (same as Python bindings).
+                if event.event_type_id() == "blazen::StreamEnd" {
+                    break;
+                }
                 let js_event = any_event_to_js_value(&*event);
                 // Fire-and-forget: call the JS callback without awaiting.
-                let _ = on_event_clone.call(Ok(js_event), ThreadsafeFunctionCallMode::NonBlocking);
+                let _ = on_event_clone.call(js_event, ThreadsafeFunctionCallMode::NonBlocking);
             }
         });
 
@@ -294,7 +326,9 @@ fn make_step_registration(step: &JsStepRegistration) -> blazen_core::StepRegistr
                 // ThreadsafeFunction::call_async returns a Future that resolves
                 // to the JS function's return value (serde_json::Value).
                 let result_value: serde_json::Value = tsfn
-                    .call_async(Ok((js_event, js_ctx)))
+                    .call_async(FnArgs::from((js_event, js_ctx)))
+                    .await
+                    .map_err(|e: napi::Error| blazen_core::WorkflowError::Context(e.to_string()))?
                     .await
                     .map_err(|e: napi::Error| blazen_core::WorkflowError::Context(e.to_string()))?;
 
