@@ -44,10 +44,11 @@ jobs:
         with:
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
       - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+        run: uv python install 3.12
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -66,13 +67,8 @@ jobs:
           access-key: ${{ secrets.S3_ACCESS_KEY }}
           secret-key: ${{ secrets.S3_ACCESS_SECRET }}
 
-      - name: Install uv
-        run: pip install uv
-
       - name: Build Python bindings
-        run: |
-          uv pip install --system maturin pytest pytest-asyncio
-          maturin develop -m crates/blazen-py/Cargo.toml --release
+        run: uv sync --directory crates/blazen-py --extra dev
 
       - name: Setup pnpm
         run: corepack enable && corepack prepare pnpm@latest --activate
@@ -86,7 +82,7 @@ jobs:
       - name: Run Python LLM smoke tests
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-        run: pytest tests/python/test_llm_smoke.py -v
+        run: uv run --directory crates/blazen-py pytest tests/python/test_llm_smoke.py -v
 
       - name: Run Node LLM smoke tests
         env:
@@ -232,19 +228,13 @@ jobs:
         with:
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
-      - name: Setup Python
-        if: steps.check.outputs.completed != 'true'
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
       - name: Install uv
         if: steps.check.outputs.completed != 'true'
-        run: pip install uv
+        uses: astral-sh/setup-uv@v6
 
-      - name: Install build tools
+      - name: Setup Python
         if: steps.check.outputs.completed != 'true'
-        run: uv pip install --system maturin twine
+        run: uv python install 3.12
 
       - name: Stamp version
         if: steps.check.outputs.completed != 'true'
@@ -255,12 +245,12 @@ jobs:
 
       - name: Build wheel with maturin
         if: steps.check.outputs.completed != 'true'
-        run: maturin build --release -m crates/blazen-py/Cargo.toml
+        run: uvx maturin build --release -m crates/blazen-py/Cargo.toml
 
       - name: Publish to Forgejo PyPI
         if: steps.check.outputs.completed != 'true'
         run: |
-          twine upload \
+          uvx twine upload \
             --repository-url https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/pypi \
             -u zachhandley \
             -p ${{ secrets.FORGEJO_ACTIONS_TOKEN }} \
