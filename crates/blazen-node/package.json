@@ -42,6 +42,8 @@
   "scripts": {
     "build": "napi build --release --platform --js index.js",
     "build:debug": "napi build --platform --js index.js",
+    "test": "node --test ../../tests/node/test_workflow.mjs",
+    "test:smoke": "node --test ../../tests/node/test_llm_smoke.mjs",
     "prepublishOnly": "echo 'skipping napi prepublish for Forgejo'"
   }
 }

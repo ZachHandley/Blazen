@@ -82,7 +82,7 @@ jobs:
       - name: Run Python LLM smoke tests
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-        run: uv run --directory crates/blazen-py pytest tests/python/test_llm_smoke.py -v
+        run: uv run --directory crates/blazen-py pytest -v -k "llm_smoke"
 
       - name: Run Node LLM smoke tests
         env:
