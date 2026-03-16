@@ -90,10 +90,10 @@ impl PyWorkflowHandler {
     /// Example:
     ///     >>> async for event in handler.stream_events():
     ///     ...     print(event.event_type, event.to_dict())
-    fn stream_events(&self) -> PyResult<PyEventStream> {
-        Ok(PyEventStream {
+    fn stream_events(&self) -> PyEventStream {
+        PyEventStream {
             stream: self.pre_stream.clone(),
-        })
+        }
     }
 
     /// Pause the running workflow and return a JSON snapshot.

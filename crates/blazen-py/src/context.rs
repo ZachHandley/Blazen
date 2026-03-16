@@ -83,7 +83,7 @@ impl PyContext {
     ///
     /// Args:
     ///     event: The event to send.
-    fn send_event(&self, _py: Python<'_>, event: PyRef<'_, PyEvent>) -> PyResult<()> {
+    fn send_event(&self, _py: Python<'_>, event: PyRef<'_, PyEvent>) {
         let dynamic = blazen_events::DynamicEvent {
             event_type: event.event_type.clone(),
             data: event.data.clone(),
@@ -93,7 +93,6 @@ impl PyContext {
         block_on_context(async {
             inner.send_event(dynamic).await;
         });
-        Ok(())
     }
 
     /// Publish an event to the external broadcast stream.
@@ -104,7 +103,7 @@ impl PyContext {
     ///
     /// Args:
     ///     event: The event to publish to the stream.
-    fn write_event_to_stream(&self, _py: Python<'_>, event: PyRef<'_, PyEvent>) -> PyResult<()> {
+    fn write_event_to_stream(&self, _py: Python<'_>, event: PyRef<'_, PyEvent>) {
         let dynamic = blazen_events::DynamicEvent {
             event_type: event.event_type.clone(),
             data: event.data.clone(),
@@ -114,17 +113,16 @@ impl PyContext {
         block_on_context(async {
             inner.write_event_to_stream(dynamic).await;
         });
-        Ok(())
     }
 
     /// Get the workflow run ID.
     ///
     /// Returns:
     ///     The UUID string for this workflow run.
-    fn run_id(&self, _py: Python<'_>) -> PyResult<String> {
+    fn run_id(&self, _py: Python<'_>) -> String {
         let inner = self.inner.clone();
         let id = block_on_context(async { inner.run_id().await });
-        Ok(id.to_string())
+        id.to_string()
     }
 
     fn __repr__(&self) -> String {

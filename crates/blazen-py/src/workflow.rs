@@ -43,18 +43,14 @@ impl PyWorkflow {
     ///     timeout: Optional timeout in seconds (default: 300).
     #[new]
     #[pyo3(signature = (name, steps, timeout=None))]
-    fn new(
-        name: &str,
-        steps: Vec<PyRef<'_, PyStepWrapper>>,
-        timeout: Option<f64>,
-    ) -> PyResult<Self> {
-        let step_refs: Vec<Py<PyStepWrapper>> = steps.into_iter().map(|s| s.into()).collect();
+    fn new(name: &str, steps: Vec<PyRef<'_, PyStepWrapper>>, timeout: Option<f64>) -> Self {
+        let step_refs: Vec<Py<PyStepWrapper>> = steps.into_iter().map(Into::into).collect();
 
-        Ok(Self {
+        Self {
             name: name.to_string(),
             steps: step_refs,
             timeout,
-        })
+        }
     }
 
     /// Execute the workflow with a JSON payload.

@@ -166,51 +166,7 @@ impl PyStepWrapper {
                     };
 
                     // Convert the Python return value back to a Rust event
-                    Python::attach(
-                        |py| -> std::result::Result<
-                            blazen_core::StepOutput,
-                            blazen_core::WorkflowError,
-                        > {
-                            let bound = py_result.bind(py);
-
-                            // If the return is None, no output
-                            if bound.is_none() {
-                                return Ok(blazen_core::StepOutput::None);
-                            }
-
-                            // If it's a list, multiple events
-                            if let Ok(list) = bound.cast::<pyo3::types::PyList>() {
-                                let mut events: Vec<Box<dyn AnyEvent>> =
-                                    Vec::with_capacity(list.len());
-                                for item in list.iter() {
-                                    let ev: Bound<'_, PyEvent> = item
-                                        .cast::<PyEvent>()
-                                        .map_err(|e| blazen_core::WorkflowError::StepFailed {
-                                            step_name: step_name.clone(),
-                                            source: Box::new(BlazenPyError::Workflow(
-                                                e.to_string(),
-                                            )),
-                                        })?
-                                        .clone();
-                                    events.push(py_event_to_any_event(&ev.borrow()));
-                                }
-                                return Ok(blazen_core::StepOutput::Multiple(events));
-                            }
-
-                            // Single event
-                            let ev_bound: Bound<'_, PyEvent> = bound
-                                .cast::<PyEvent>()
-                                .map_err(|e| blazen_core::WorkflowError::StepFailed {
-                                    step_name: step_name.clone(),
-                                    source: Box::new(BlazenPyError::Workflow(format!(
-                                        "step must return an Event, list of Events, or None: {e}"
-                                    ))),
-                                })?
-                                .clone();
-                            let ev = ev_bound.borrow();
-                            Ok(blazen_core::StepOutput::Single(py_event_to_any_event(&ev)))
-                        },
-                    )
+                    Python::attach(|py| py_result_to_step_output(py, &py_result, &step_name))
                 })
             },
         );
@@ -223,6 +179,49 @@ impl PyStepWrapper {
             max_concurrency: self.max_concurrency,
         })
     }
+}
+
+/// Convert a Python step return value into a [`StepOutput`](blazen_core::StepOutput).
+///
+/// Handles `None` (no output), a list of `PyEvent`s (fan-out), or a single
+/// `PyEvent`.
+fn py_result_to_step_output(
+    py: Python<'_>,
+    py_result: &Py<PyAny>,
+    step_name: &str,
+) -> std::result::Result<blazen_core::StepOutput, blazen_core::WorkflowError> {
+    let bound = py_result.bind(py);
+
+    if bound.is_none() {
+        return Ok(blazen_core::StepOutput::None);
+    }
+
+    if let Ok(list) = bound.cast::<pyo3::types::PyList>() {
+        let mut events: Vec<Box<dyn AnyEvent>> = Vec::with_capacity(list.len());
+        for item in list.iter() {
+            let ev: Bound<'_, PyEvent> = item
+                .cast::<PyEvent>()
+                .map_err(|e| blazen_core::WorkflowError::StepFailed {
+                    step_name: step_name.to_owned(),
+                    source: Box::new(BlazenPyError::Workflow(e.to_string())),
+                })?
+                .clone();
+            events.push(py_event_to_any_event(&ev.borrow()));
+        }
+        return Ok(blazen_core::StepOutput::Multiple(events));
+    }
+
+    let ev_bound: Bound<'_, PyEvent> = bound
+        .cast::<PyEvent>()
+        .map_err(|e| blazen_core::WorkflowError::StepFailed {
+            step_name: step_name.to_owned(),
+            source: Box::new(BlazenPyError::Workflow(format!(
+                "step must return an Event, list of Events, or None: {e}"
+            ))),
+        })?
+        .clone();
+    let ev = ev_bound.borrow();
+    Ok(blazen_core::StepOutput::Single(py_event_to_any_event(&ev)))
 }
 
 // ---------------------------------------------------------------------------
