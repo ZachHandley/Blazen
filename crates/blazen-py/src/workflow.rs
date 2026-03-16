@@ -48,10 +48,7 @@ impl PyWorkflow {
         steps: Vec<PyRef<'_, PyStepWrapper>>,
         timeout: Option<f64>,
     ) -> PyResult<Self> {
-        let step_refs: Vec<Py<PyStepWrapper>> = steps
-            .into_iter()
-            .map(|s| s.into())
-            .collect();
+        let step_refs: Vec<Py<PyStepWrapper>> = steps.into_iter().map(|s| s.into()).collect();
 
         Ok(Self {
             name: name.to_string(),

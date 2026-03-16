@@ -6,9 +6,9 @@
 
 use std::sync::Arc;
 
+use napi::Status;
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
-use napi::Status;
 use napi_derive::napi;
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
@@ -19,8 +19,9 @@ use crate::workflow::JsWorkflowResult;
 
 /// Stream callback: takes a `serde_json::Value`, returns nothing meaningful.
 /// `CalleeHandled = false` to avoid the error-first callback convention.
+/// `Weak = true` so it does not prevent Node.js from exiting.
 type StreamCallbackTsfn =
-    ThreadsafeFunction<serde_json::Value, Unknown<'static>, serde_json::Value, Status, false>;
+    ThreadsafeFunction<serde_json::Value, Unknown<'static>, serde_json::Value, Status, false, true>;
 
 /// A handle to a running workflow.
 ///
@@ -131,9 +132,13 @@ impl JsWorkflowHandler {
         let on_event = Arc::new(on_event);
 
         // Spawn a forwarding task. The stream will end when the workflow
-        // completes or is paused.
+        // completes or is paused (signaled by the StreamEnd sentinel).
         tokio::spawn(async move {
             while let Some(event) = stream.next().await {
+                // Stop on the stream-end sentinel (same as Python bindings).
+                if event.event_type_id() == "blazen::StreamEnd" {
+                    break;
+                }
                 let js_event = any_event_to_js_value(&*event);
                 let _ = on_event.call(js_event, ThreadsafeFunctionCallMode::NonBlocking);
             }

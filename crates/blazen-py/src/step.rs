@@ -118,18 +118,17 @@ impl PyStepWrapper {
                     // Call the Python function
                     let py_result: Py<PyAny> = if is_async {
                         // Async path: call to get coroutine, then convert to future and await
-                        let coroutine: Py<PyAny> =
-                            Python::attach(|py| -> PyResult<Py<PyAny>> {
-                                let py_event_obj = Py::new(py, py_event)?;
-                                let py_ctx_obj = Py::new(py, py_ctx)?;
-                                func.call1(py, (py_ctx_obj, py_event_obj))
-                            })
-                            .map_err(|e: PyErr| {
-                                blazen_core::WorkflowError::StepFailed {
-                                    step_name: step_name.clone(),
-                                    source: Box::new(BlazenPyError::Workflow(e.to_string())),
-                                }
-                            })?;
+                        let coroutine: Py<PyAny> = Python::attach(|py| -> PyResult<Py<PyAny>> {
+                            let py_event_obj = Py::new(py, py_event)?;
+                            let py_ctx_obj = Py::new(py, py_ctx)?;
+                            func.call1(py, (py_ctx_obj, py_event_obj))
+                        })
+                        .map_err(|e: PyErr| {
+                            blazen_core::WorkflowError::StepFailed {
+                                step_name: step_name.clone(),
+                                source: Box::new(BlazenPyError::Workflow(e.to_string())),
+                            }
+                        })?;
 
                         // Convert the Python coroutine to a Rust future and await it
                         let future = Python::attach(|py| {
@@ -147,11 +146,9 @@ impl PyStepWrapper {
 
                         pyo3_async_runtimes::tokio::scope(locals.clone(), future)
                             .await
-                            .map_err(|e: PyErr| {
-                                blazen_core::WorkflowError::StepFailed {
-                                    step_name: step_name.clone(),
-                                    source: Box::new(BlazenPyError::Workflow(e.to_string())),
-                                }
+                            .map_err(|e: PyErr| blazen_core::WorkflowError::StepFailed {
+                                step_name: step_name.clone(),
+                                source: Box::new(BlazenPyError::Workflow(e.to_string())),
                             })?
                     } else {
                         // Sync path: call directly, returns the result (not a coroutine)

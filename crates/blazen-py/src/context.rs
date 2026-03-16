@@ -69,9 +69,7 @@ impl PyContext {
     fn get(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
         let inner = self.inner.clone();
         let key = key.to_string();
-        let val: Option<serde_json::Value> = block_on_context(async {
-            inner.get(&key).await
-        });
+        let val: Option<serde_json::Value> = block_on_context(async { inner.get(&key).await });
         match val {
             Some(v) => crate::event::json_to_py(py, &v),
             None => Ok(py.None()),
@@ -125,9 +123,7 @@ impl PyContext {
     ///     The UUID string for this workflow run.
     fn run_id(&self, _py: Python<'_>) -> PyResult<String> {
         let inner = self.inner.clone();
-        let id = block_on_context(async {
-            inner.run_id().await
-        });
+        let id = block_on_context(async { inner.run_id().await });
         Ok(id.to_string())
     }
 

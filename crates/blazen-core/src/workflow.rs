@@ -239,7 +239,7 @@ impl Workflow {
             after_step: self.checkpoint_after_step,
         };
 
-        tokio::spawn(event_loop(
+        let event_loop_handle = tokio::spawn(event_loop(
             event_rx,
             event_tx,
             registry,
@@ -259,6 +259,7 @@ impl Workflow {
             stream_tx,
             Some(pause_tx),
             Some(snapshot_rx),
+            event_loop_handle,
         ))
     }
 
@@ -331,7 +332,7 @@ impl Workflow {
             after_step: false,
         };
 
-        tokio::spawn(event_loop(
+        let event_loop_handle = tokio::spawn(event_loop(
             event_rx,
             event_tx,
             registry,
@@ -351,6 +352,7 @@ impl Workflow {
             stream_tx,
             Some(pause_tx),
             Some(snapshot_rx),
+            event_loop_handle,
         ))
     }
 
