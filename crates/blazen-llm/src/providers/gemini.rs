@@ -435,7 +435,7 @@ impl crate::traits::CompletionModel for GeminiProvider {
 
         let result = parse_gemini_response(gemini)?;
 
-        span.record("duration_ms", start.elapsed().as_millis() as u64);
+        span.record("duration_ms", u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX));
         if let Some(ref u) = result.usage {
             span.record("prompt_tokens", u.prompt_tokens);
             span.record("completion_tokens", u.completion_tokens);
@@ -473,7 +473,7 @@ impl crate::traits::CompletionModel for GeminiProvider {
         let response = self.send_request(&url, &body).await?;
         let byte_stream = response.bytes_stream();
 
-        span.record("duration_ms", start.elapsed().as_millis() as u64);
+        span.record("duration_ms", u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX));
 
         let stream = GeminiSseParser::new(byte_stream);
         Ok(Box::pin(stream))

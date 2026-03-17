@@ -61,7 +61,7 @@ impl<M: CompletionModel> CompletionModel for TracingCompletionModel<M> {
 
         let start = std::time::Instant::now();
         let result = self.inner.complete(request).instrument(span.clone()).await;
-        let elapsed = start.elapsed().as_millis() as u64;
+        let elapsed = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
 
         span.record("duration_ms", elapsed);
 
@@ -92,7 +92,7 @@ impl<M: CompletionModel> CompletionModel for TracingCompletionModel<M> {
 
         let start = std::time::Instant::now();
         let result = self.inner.stream(request).instrument(span.clone()).await;
-        let elapsed = start.elapsed().as_millis() as u64;
+        let elapsed = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
 
         span.record("duration_ms", elapsed);
 

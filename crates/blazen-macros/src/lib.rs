@@ -207,6 +207,7 @@ pub fn step(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn step_impl(step_attr: &StepAttr, input_fn: &ItemFn) -> syn::Result<TokenStream> {
     let fn_name = &input_fn.sig.ident;
     let fn_name_str = fn_name.to_string();
