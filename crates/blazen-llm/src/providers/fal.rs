@@ -425,7 +425,10 @@ impl crate::traits::CompletionModel for FalProvider {
             )));
         }
 
-        span.record("duration_ms", u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX));
+        span.record(
+            "duration_ms",
+            u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
+        );
         span.record("finish_reason", "stop");
 
         Ok(CompletionResponse {
@@ -457,7 +460,10 @@ impl crate::traits::CompletionModel for FalProvider {
         // the complete result as a single chunk.
         let response = self.complete(request).await?;
 
-        span.record("duration_ms", u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX));
+        span.record(
+            "duration_ms",
+            u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
+        );
         span.record("chunk_count", 1u64);
 
         let chunks: Vec<Result<StreamChunk, LlmError>> = vec![Ok(StreamChunk {

@@ -293,7 +293,10 @@ impl crate::traits::CompletionModel for OpenAiProvider {
             total_tokens: u.total_tokens,
         });
 
-        span.record("duration_ms", u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX));
+        span.record(
+            "duration_ms",
+            u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
+        );
         if let Some(ref u) = usage {
             span.record("prompt_tokens", u.prompt_tokens);
             span.record("completion_tokens", u.completion_tokens);
@@ -333,7 +336,10 @@ impl crate::traits::CompletionModel for OpenAiProvider {
         let response = self.send_request(&body).await?;
         let byte_stream = response.bytes_stream();
 
-        span.record("duration_ms", u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX));
+        span.record(
+            "duration_ms",
+            u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
+        );
 
         let stream = SseParser::new(byte_stream);
         Ok(Box::pin(stream))

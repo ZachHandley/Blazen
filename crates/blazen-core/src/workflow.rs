@@ -1321,7 +1321,8 @@ fn dispatch_to_handlers(
                 let start = Instant::now();
                 match handler(event_clone, ctx_clone).await {
                     Ok(StepOutput::Single(output_event)) => {
-                        let duration = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+                        let duration =
+                            u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
                         step_span_clone.record("duration_ms", duration);
                         step_span_clone.record("otel.status_code", "OK");
 
@@ -1366,7 +1367,8 @@ fn dispatch_to_handlers(
                         let _ = event_tx_clone.send(envelope);
                     }
                     Ok(StepOutput::Multiple(events)) => {
-                        let duration = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+                        let duration =
+                            u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
                         step_span_clone.record("duration_ms", duration);
                         step_span_clone.record("otel.status_code", "OK");
 
@@ -1412,7 +1414,8 @@ fn dispatch_to_handlers(
                         }
                     }
                     Ok(StepOutput::None) => {
-                        let duration = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+                        let duration =
+                            u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
                         step_span_clone.record("duration_ms", duration);
                         step_span_clone.record("otel.status_code", "OK");
 
@@ -1455,7 +1458,8 @@ fn dispatch_to_handlers(
                         // Side-effect only step -- nothing to route.
                     }
                     Err(err) => {
-                        let duration = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+                        let duration =
+                            u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
                         step_span_clone.record("duration_ms", duration);
                         step_span_clone.record("otel.status_code", "ERROR");
 
