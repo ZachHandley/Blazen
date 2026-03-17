@@ -129,25 +129,7 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          cargo publish -p blazen-events --registry crates-io --no-verify --allow-dirty
-          sleep 10
-          cargo publish -p blazen-macros --registry crates-io --no-verify --allow-dirty
-          sleep 10
-          cargo publish -p blazen-persist --registry crates-io --no-verify --allow-dirty
-          sleep 10
-          cargo publish -p blazen-core --registry crates-io --no-verify --allow-dirty
-          sleep 10
-          cargo publish -p blazen-llm --all-features --registry crates-io --no-verify --allow-dirty
-          sleep 10
-          cargo publish -p blazen-prompts --registry crates-io --no-verify --allow-dirty
-          sleep 10
-          cargo publish -p blazen-pipeline --registry crates-io --no-verify --allow-dirty
-          sleep 10
-          cargo publish -p blazen-telemetry --all-features --registry crates-io --no-verify --allow-dirty
-          sleep 10
-          cargo publish -p blazen --all-features --registry crates-io --no-verify --allow-dirty
-          sleep 10
-          cargo publish -p blazen-cli --registry crates-io --no-verify --allow-dirty
+          cargo publish --workspace --registry crates-io --no-verify --allow-dirty --exclude blazen-py --exclude blazen-node
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
