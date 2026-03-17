@@ -22,6 +22,7 @@ pub struct WorkflowHistory {
 
 impl WorkflowHistory {
     /// Create a new empty history for a workflow run.
+    #[must_use]
     pub fn new(run_id: Uuid, workflow_name: String) -> Self {
         Self {
             run_id,
@@ -41,11 +42,13 @@ impl WorkflowHistory {
     }
 
     /// Return the number of events recorded.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.events.len()
     }
 
     /// Return `true` if no events have been recorded.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.events.is_empty()
     }

@@ -314,17 +314,17 @@ where
                         .fields
                         .get("run_id")
                         .and_then(|v| v.as_str())
-                        .map(|s| s.to_owned())
+                        .map(ToOwned::to_owned)
                         .or_else(|| Some(Uuid::new_v4().to_string()));
                     // The parent's Langfuse ID is the trace_id itself for root traces.
-                    data.parent_langfuse_id = data.trace_id.clone();
+                    data.parent_langfuse_id.clone_from(&data.trace_id);
                 } else {
-                    data.trace_id = parent_data.trace_id.clone();
+                    data.trace_id.clone_from(&parent_data.trace_id);
                     data.parent_langfuse_id = parent_data
                         .fields
                         .get("_langfuse_id")
                         .and_then(|v| v.as_str())
-                        .map(|s| s.to_owned());
+                        .map(ToOwned::to_owned);
                 }
             }
         }
@@ -336,8 +336,7 @@ where
                 data.fields
                     .get("run_id")
                     .and_then(|v| v.as_str())
-                    .map(|s| s.to_owned())
-                    .unwrap_or_else(|| Uuid::new_v4().to_string())
+                    .map_or_else(|| Uuid::new_v4().to_string(), ToOwned::to_owned)
             }
             _ => Uuid::new_v4().to_string(),
         };
@@ -352,7 +351,7 @@ where
                 .fields
                 .get("_langfuse_id")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_owned());
+                .map(ToOwned::to_owned);
         }
 
         let mut extensions = span.extensions_mut();
@@ -372,10 +371,7 @@ where
     }
 
     fn on_close(&self, id: Id, ctx: Context<'_, S>) {
-        let span = match ctx.span(&id) {
-            Some(s) => s,
-            None => return,
-        };
+        let Some(span) = ctx.span(&id) else { return };
 
         let data = {
             let extensions = span.extensions();
@@ -393,13 +389,15 @@ where
         let end_time = now.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
 
         let event = match data.name.as_str() {
-            "workflow.run" | "pipeline.run" => self.build_trace_create(&data, &start_time),
+            "workflow.run" | "pipeline.run" => Some(Self::build_trace_create(&data, &start_time)),
             "workflow.step"
             | "pipeline.stage"
             | "pipeline.stage.sequential"
-            | "pipeline.stage.parallel" => self.build_span_create(&data, &start_time, &end_time),
+            | "pipeline.stage.parallel" => {
+                Some(Self::build_span_create(&data, &start_time, &end_time))
+            }
             "llm.complete" | "llm.stream" => {
-                self.build_generation_create(&data, &start_time, &end_time)
+                Some(Self::build_generation_create(&data, &start_time, &end_time))
             }
             _ => None,
         };
@@ -424,7 +422,7 @@ where
 
 impl LangfuseLayer {
     /// Build a `trace-create` event for `workflow.run` / `pipeline.run` spans.
-    fn build_trace_create(&self, data: &SpanData, start_time: &str) -> Option<serde_json::Value> {
+    fn build_trace_create(data: &SpanData, start_time: &str) -> serde_json::Value {
         let trace_id = data
             .fields
             .get("_langfuse_id")
@@ -445,7 +443,7 @@ impl LangfuseLayer {
             }
         }
 
-        Some(serde_json::json!({
+        serde_json::json!({
             "id": Uuid::new_v4().to_string(),
             "type": "trace-create",
             "timestamp": start_time,
@@ -455,16 +453,11 @@ impl LangfuseLayer {
                 "timestamp": start_time,
                 "metadata": metadata,
             }
-        }))
+        })
     }
 
     /// Build a `span-create` event for `workflow.step` / `pipeline.stage` spans.
-    fn build_span_create(
-        &self,
-        data: &SpanData,
-        start_time: &str,
-        end_time: &str,
-    ) -> Option<serde_json::Value> {
+    fn build_span_create(data: &SpanData, start_time: &str, end_time: &str) -> serde_json::Value {
         let langfuse_id = data
             .fields
             .get("_langfuse_id")
@@ -507,21 +500,20 @@ impl LangfuseLayer {
             body["parentObservationId"] = serde_json::json!(parent_id);
         }
 
-        Some(serde_json::json!({
+        serde_json::json!({
             "id": Uuid::new_v4().to_string(),
             "type": "span-create",
             "timestamp": start_time,
             "body": body,
-        }))
+        })
     }
 
     /// Build a `generation-create` event for `llm.complete` / `llm.stream` spans.
     fn build_generation_create(
-        &self,
         data: &SpanData,
         start_time: &str,
         end_time: &str,
-    ) -> Option<serde_json::Value> {
+    ) -> serde_json::Value {
         let langfuse_id = data
             .fields
             .get("_langfuse_id")
@@ -540,8 +532,7 @@ impl LangfuseLayer {
             .fields
             .get("provider")
             .and_then(|v| v.as_str())
-            .map(|p| format!("{p}/{model}"))
-            .unwrap_or_else(|| model.to_owned());
+            .map_or_else(|| model.to_owned(), |p| format!("{p}/{model}"));
 
         // Build usage details from token fields.
         let mut usage = serde_json::Map::new();
@@ -586,12 +577,12 @@ impl LangfuseLayer {
             body["parentObservationId"] = serde_json::json!(parent_id);
         }
 
-        Some(serde_json::json!({
+        serde_json::json!({
             "id": Uuid::new_v4().to_string(),
             "type": "generation-create",
             "timestamp": start_time,
             "body": body,
-        }))
+        })
     }
 }
 
@@ -624,6 +615,7 @@ impl LangfuseLayer {
 ///     .with(init_langfuse(config))
 ///     .init();
 /// ```
+#[must_use]
 pub fn init_langfuse(config: LangfuseConfig) -> LangfuseLayer {
     let client = reqwest::Client::new();
     let buffer = EventBuffer::new();

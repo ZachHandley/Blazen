@@ -155,6 +155,7 @@ jobs:
           sed -i "s/blazen-persist = { version = \"0.1.0\"/blazen-persist = { version = \"$VERSION\"/" Cargo.toml
           sed -i "s/blazen-pipeline = { version = \"0.1.0\"/blazen-pipeline = { version = \"$VERSION\"/" Cargo.toml
           sed -i "s/blazen-prompts = { version = \"0.1.0\"/blazen-prompts = { version = \"$VERSION\"/" Cargo.toml
+          sed -i "s/blazen-telemetry = { version = \"0.1.0\"/blazen-telemetry = { version = \"$VERSION\"/" Cargo.toml
           sed -i "s/blazen = { version = \"0.1.0\"/blazen = { version = \"$VERSION\"/" Cargo.toml
 
       - name: Publish crates in dependency order
@@ -176,6 +177,8 @@ jobs:
           cargo publish -p blazen-prompts --no-verify --allow-dirty
           sleep 10
           cargo publish -p blazen-pipeline --no-verify --allow-dirty
+          sleep 10
+          cargo publish -p blazen-telemetry --all-features --no-verify --allow-dirty
           sleep 10
           cargo publish -p blazen --all-features --no-verify --allow-dirty
           sleep 10
@@ -234,9 +237,9 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         uses: astral-sh/setup-uv@v6
 
-      - name: Setup Python
+      - name: Install Python interpreters
         if: steps.check.outputs.completed != 'true'
-        run: uv python install 3.12
+        run: uv python install 3.10 3.11 3.12 3.13
 
       - name: Stamp version
         if: steps.check.outputs.completed != 'true'
@@ -245,9 +248,15 @@ jobs:
           # Update workspace version so maturin picks it up
           sed -i "s/^version = \"0.1.0\"/version = \"$VERSION\"/" Cargo.toml
 
-      - name: Build wheel with maturin
+      - name: Build wheels for all Python versions
         if: steps.check.outputs.completed != 'true'
-        run: uvx maturin build --release -m crates/blazen-py/Cargo.toml
+        run: |
+          uvx maturin build --release -m crates/blazen-py/Cargo.toml \
+            --interpreter python3.10 python3.11 python3.12 python3.13
+
+      - name: Build sdist
+        if: steps.check.outputs.completed != 'true'
+        run: uvx maturin sdist -m crates/blazen-py/Cargo.toml
 
       - name: Publish to PyPI
         if: steps.check.outputs.completed != 'true'
@@ -255,7 +264,7 @@ jobs:
           uvx twine upload \
             -u __token__ \
             -p ${{ secrets.PYPI_TOKEN }} \
-            target/wheels/*.whl
+            target/wheels/*.whl target/wheels/*.tar.gz
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'

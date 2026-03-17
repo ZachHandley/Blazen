@@ -752,7 +752,8 @@ async fn event_loop_inner(
                         timestamp: Utc::now(),
                         sequence: 0,
                         kind: blazen_telemetry::HistoryEventKind::WorkflowTimedOut {
-                            elapsed_ms: start.elapsed().as_millis() as u64,
+                            elapsed_ms: u64::try_from(start.elapsed().as_millis())
+                                .unwrap_or(u64::MAX),
                         },
                     });
                 }
@@ -776,7 +777,7 @@ async fn event_loop_inner(
                                 sequence: 0,
                                 kind: blazen_telemetry::HistoryEventKind::WorkflowFailed {
                                     error: workflow_err.to_string(),
-                                    duration_ms: start.elapsed().as_millis() as u64,
+                                    duration_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
                                 },
                             });
                         }
@@ -795,7 +796,7 @@ async fn event_loop_inner(
                             timestamp: Utc::now(),
                             sequence: 0,
                             kind: blazen_telemetry::HistoryEventKind::WorkflowTimedOut {
-                                elapsed_ms: start.elapsed().as_millis() as u64,
+                                elapsed_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
                             },
                         });
                     }
@@ -846,7 +847,7 @@ async fn event_loop_inner(
                                 sequence: 0,
                                 kind: blazen_telemetry::HistoryEventKind::WorkflowFailed {
                                     error: workflow_err.to_string(),
-                                    duration_ms: start.elapsed().as_millis() as u64,
+                                    duration_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
                                 },
                             });
                         }
@@ -939,7 +940,7 @@ async fn event_loop_inner(
                     timestamp: Utc::now(),
                     sequence: 0,
                     kind: blazen_telemetry::HistoryEventKind::WorkflowCompleted {
-                        duration_ms: start.elapsed().as_millis() as u64,
+                        duration_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
                     },
                 });
             }
@@ -1059,7 +1060,7 @@ async fn event_loop_inner(
                     sequence: 0,
                     kind: blazen_telemetry::HistoryEventKind::WorkflowFailed {
                         error: format!("no handler registered for event type: {event_type}"),
-                        duration_ms: start.elapsed().as_millis() as u64,
+                        duration_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
                     },
                 });
             }
@@ -1084,7 +1085,7 @@ async fn event_loop_inner(
             &in_flight_count,
             auto_publish_events,
             #[cfg(feature = "telemetry")]
-            &history_tx,
+            history_tx.as_ref(),
         );
 
         // Auto-checkpoint after dispatching step handlers (best-effort).
@@ -1247,8 +1248,8 @@ fn dispatch_to_handlers(
     in_flight: &mut JoinSet<()>,
     in_flight_count: &Arc<AtomicUsize>,
     auto_publish_events: bool,
-    #[cfg(feature = "telemetry")] history_tx: &Option<
-        mpsc::UnboundedSender<blazen_telemetry::HistoryEvent>,
+    #[cfg(feature = "telemetry")] history_tx: Option<
+        &mpsc::UnboundedSender<blazen_telemetry::HistoryEvent>,
     >,
 ) {
     for step in handlers {
@@ -1263,7 +1264,7 @@ fn dispatch_to_handlers(
 
         // Emit StepDispatched history event.
         #[cfg(feature = "telemetry")]
-        let htx = history_tx.clone();
+        let htx = history_tx.cloned();
         #[cfg(feature = "telemetry")]
         if let Some(ref tx) = htx {
             let _ = tx.send(blazen_telemetry::HistoryEvent {
