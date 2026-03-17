@@ -28,6 +28,7 @@ pub mod error;
 pub mod handler;
 pub mod snapshot;
 pub mod step;
+pub mod value;
 pub mod workflow;
 
 pub use context::Context;
@@ -35,4 +36,5 @@ pub use error::{Result, WorkflowError};
 pub use handler::WorkflowHandler;
 pub use snapshot::{SerializedEvent, WorkflowSnapshot};
 pub use step::{StepFn, StepOutput, StepRegistration};
-pub use workflow::{Workflow, WorkflowBuilder};
+pub use value::{BytesWrapper, StateValue};
+pub use workflow::{InputHandlerFn, Workflow, WorkflowBuilder};

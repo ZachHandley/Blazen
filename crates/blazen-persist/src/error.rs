@@ -21,9 +21,25 @@ pub enum PersistError {
     #[error("database error: {0}")]
     Database(String),
 
+    /// Binary (`MessagePack`) serialization or deserialization failed.
+    #[error("binary serialization error: {0}")]
+    BinarySerialization(String),
+
     /// An error from the Redis/ValKey backend.
     #[error("redis error: {0}")]
     Redis(String),
+}
+
+impl From<rmp_serde::encode::Error> for PersistError {
+    fn from(err: rmp_serde::encode::Error) -> Self {
+        Self::BinarySerialization(err.to_string())
+    }
+}
+
+impl From<rmp_serde::decode::Error> for PersistError {
+    fn from(err: rmp_serde::decode::Error) -> Self {
+        Self::BinarySerialization(err.to_string())
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -461,7 +461,7 @@ async fn test_e2e_pause_and_resume() {
 
     assert_eq!(
         snapshot.context_state.get("step_one_ran"),
-        Some(&serde_json::json!(true))
+        Some(&blazen_core::StateValue::Json(serde_json::json!(true)))
     );
     assert!(!snapshot.pending_events.is_empty());
 

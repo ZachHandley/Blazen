@@ -87,14 +87,16 @@ mod redb_backend {
     use super::{CheckpointStore, WorkflowCheckpoint};
     use crate::error::PersistError;
 
-    /// Table definition: `run_id` bytes (16) -> JSON bytes.
+    /// Table definition: `run_id` bytes (16) -> serialized checkpoint bytes.
     const CHECKPOINTS: redb::TableDefinition<&[u8], &[u8]> =
         redb::TableDefinition::new("checkpoints");
 
     /// Redb-backed checkpoint store.
     ///
     /// Uses a single table where the key is the 16-byte UUID of the run and the
-    /// value is the JSON-serialized [`WorkflowCheckpoint`].
+    /// value is the MessagePack-serialized [`WorkflowCheckpoint`]. Legacy
+    /// JSON-encoded entries are transparently decoded on read for backward
+    /// compatibility.
     pub struct RedbCheckpointStore {
         db: redb::Database,
     }
@@ -150,7 +152,7 @@ mod redb_backend {
     impl CheckpointStore for RedbCheckpointStore {
         async fn save(&self, checkpoint: &WorkflowCheckpoint) -> Result<(), PersistError> {
             let key = checkpoint.run_id.as_bytes().to_vec();
-            let value = serde_json::to_vec(checkpoint)?;
+            let value = rmp_serde::to_vec_named(checkpoint)?;
             let write_txn = self.db.begin_write()?;
             {
                 let mut table = write_txn.open_table(CHECKPOINTS)?;
@@ -167,7 +169,9 @@ mod redb_backend {
             match table.get(key.as_slice())? {
                 Some(guard) => {
                     let bytes: &[u8] = guard.value();
-                    let checkpoint: WorkflowCheckpoint = serde_json::from_slice(bytes)?;
+                    // Try MessagePack first (new format), fall back to JSON (legacy).
+                    let checkpoint: WorkflowCheckpoint = rmp_serde::from_slice(bytes)
+                        .or_else(|_| serde_json::from_slice(bytes).map_err(PersistError::from))?;
                     Ok(Some(checkpoint))
                 }
                 None => Ok(None),
@@ -182,7 +186,9 @@ mod redb_backend {
             for entry in iter {
                 let (_key_guard, value_guard) = entry?;
                 let bytes: &[u8] = value_guard.value();
-                let checkpoint: WorkflowCheckpoint = serde_json::from_slice(bytes)?;
+                // Try MessagePack first (new format), fall back to JSON (legacy).
+                let checkpoint: WorkflowCheckpoint = rmp_serde::from_slice(bytes)
+                    .or_else(|_| serde_json::from_slice(bytes).map_err(PersistError::from))?;
                 checkpoints.push(checkpoint);
             }
             // Sort by timestamp descending (most recent first).

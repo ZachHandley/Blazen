@@ -171,6 +171,70 @@ impl Event for StopEvent {
     }
 }
 
+/// Emitted by a step to request human input. Triggers auto-pause.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InputRequestEvent {
+    /// Unique ID for this request (for matching response).
+    pub request_id: String,
+    /// The question/prompt to show the human.
+    pub prompt: String,
+    /// Optional structured metadata (choices, type hints, etc.).
+    pub metadata: serde_json::Value,
+}
+
+impl Event for InputRequestEvent {
+    fn event_type() -> &'static str {
+        "blazen::InputRequestEvent"
+    }
+
+    fn event_type_id(&self) -> &'static str {
+        "blazen::InputRequestEvent"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn clone_boxed(&self) -> Box<dyn AnyEvent> {
+        Box::new(self.clone())
+    }
+
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::to_value(self).expect("InputRequestEvent serialization should never fail")
+    }
+}
+
+/// The human's response, injected on resume.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InputResponseEvent {
+    /// Matches the `InputRequestEvent.request_id`.
+    pub request_id: String,
+    /// The human's answer.
+    pub response: serde_json::Value,
+}
+
+impl Event for InputResponseEvent {
+    fn event_type() -> &'static str {
+        "blazen::InputResponseEvent"
+    }
+
+    fn event_type_id(&self) -> &'static str {
+        "blazen::InputResponseEvent"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn clone_boxed(&self) -> Box<dyn AnyEvent> {
+        Box::new(self.clone())
+    }
+
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::to_value(self).expect("InputResponseEvent serialization should never fail")
+    }
+}
+
 // ---------------------------------------------------------------------------
 // EventEnvelope
 // ---------------------------------------------------------------------------
@@ -379,5 +443,84 @@ mod tests {
             data: serde_json::json!({}),
         };
         assert_eq!(Event::event_type_id(&evt), "CustomEvent");
+    }
+
+    #[test]
+    fn input_request_event_type_id() {
+        assert_eq!(InputRequestEvent::event_type(), "blazen::InputRequestEvent");
+        let evt = InputRequestEvent {
+            request_id: "req-1".to_string(),
+            prompt: "What is your name?".to_string(),
+            metadata: serde_json::json!({"choices": ["Alice", "Bob"]}),
+        };
+        assert_eq!(Event::event_type_id(&evt), "blazen::InputRequestEvent");
+    }
+
+    #[test]
+    fn input_response_event_type_id() {
+        assert_eq!(
+            InputResponseEvent::event_type(),
+            "blazen::InputResponseEvent"
+        );
+        let evt = InputResponseEvent {
+            request_id: "req-1".to_string(),
+            response: serde_json::json!("Alice"),
+        };
+        assert_eq!(Event::event_type_id(&evt), "blazen::InputResponseEvent");
+    }
+
+    #[test]
+    fn input_request_event_roundtrip() {
+        let evt = InputRequestEvent {
+            request_id: "req-42".to_string(),
+            prompt: "Pick a number".to_string(),
+            metadata: serde_json::json!({"min": 1, "max": 100}),
+        };
+        let json = Event::to_json(&evt);
+        let deserialized: InputRequestEvent = serde_json::from_value(json).unwrap();
+        assert_eq!(evt.request_id, deserialized.request_id);
+        assert_eq!(evt.prompt, deserialized.prompt);
+        assert_eq!(evt.metadata, deserialized.metadata);
+    }
+
+    #[test]
+    fn input_response_event_roundtrip() {
+        let evt = InputResponseEvent {
+            request_id: "req-42".to_string(),
+            response: serde_json::json!(77),
+        };
+        let json = Event::to_json(&evt);
+        let deserialized: InputResponseEvent = serde_json::from_value(json).unwrap();
+        assert_eq!(evt.request_id, deserialized.request_id);
+        assert_eq!(evt.response, deserialized.response);
+    }
+
+    #[test]
+    fn input_request_event_downcast() {
+        let evt = InputRequestEvent {
+            request_id: "req-99".to_string(),
+            prompt: "Confirm?".to_string(),
+            metadata: serde_json::json!(null),
+        };
+        let boxed: Box<dyn AnyEvent> = Box::new(evt.clone());
+        let downcasted = boxed.downcast_ref::<InputRequestEvent>().unwrap();
+        assert_eq!(downcasted.request_id, evt.request_id);
+
+        // Wrong type returns None.
+        assert!(boxed.downcast_ref::<InputResponseEvent>().is_none());
+    }
+
+    #[test]
+    fn input_response_event_downcast() {
+        let evt = InputResponseEvent {
+            request_id: "req-99".to_string(),
+            response: serde_json::json!({"answer": true}),
+        };
+        let boxed: Box<dyn AnyEvent> = Box::new(evt.clone());
+        let downcasted = boxed.downcast_ref::<InputResponseEvent>().unwrap();
+        assert_eq!(downcasted.request_id, evt.request_id);
+
+        // Wrong type returns None.
+        assert!(boxed.downcast_ref::<InputRequestEvent>().is_none());
     }
 }

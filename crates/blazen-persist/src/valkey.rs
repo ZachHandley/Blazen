@@ -5,8 +5,9 @@
 //! `redis` crate's [`ConnectionManager`](redis::aio::ConnectionManager) for
 //! automatic reconnection and multiplexed async I/O.
 //!
-//! Checkpoints are stored as JSON strings under keys of the form
-//! `blazen:checkpoint:{run_id}`.
+//! Checkpoints are stored as MessagePack-encoded bytes under keys of the form
+//! `blazen:checkpoint:{run_id}`. Legacy JSON-encoded entries are transparently
+//! decoded on read for backward compatibility.
 
 use async_trait::async_trait;
 use redis::AsyncCommands;
@@ -102,7 +103,7 @@ impl std::fmt::Debug for ValkeyCheckpointStore {
 impl CheckpointStore for ValkeyCheckpointStore {
     async fn save(&self, checkpoint: &WorkflowCheckpoint) -> Result<(), PersistError> {
         let key = Self::key(&checkpoint.run_id);
-        let value = serde_json::to_string(checkpoint)?;
+        let value: Vec<u8> = rmp_serde::to_vec_named(checkpoint)?;
         let mut conn = self.conn.clone();
 
         if let Some(ttl) = self.ttl_seconds {
@@ -118,11 +119,13 @@ impl CheckpointStore for ValkeyCheckpointStore {
         let key = Self::key(run_id);
         let mut conn = self.conn.clone();
 
-        let value: Option<String> = conn.get(&key).await?;
+        let value: Option<Vec<u8>> = conn.get(&key).await?;
 
         match value {
-            Some(json) => {
-                let checkpoint: WorkflowCheckpoint = serde_json::from_str(&json)?;
+            Some(bytes) => {
+                // Try MessagePack first (new format), fall back to JSON (legacy).
+                let checkpoint: WorkflowCheckpoint = rmp_serde::from_slice(&bytes)
+                    .or_else(|_| serde_json::from_slice(&bytes).map_err(PersistError::from))?;
                 Ok(Some(checkpoint))
             }
             None => Ok(None),
@@ -159,9 +162,12 @@ impl CheckpointStore for ValkeyCheckpointStore {
         // GET each key and deserialize.
         let mut checkpoints = Vec::with_capacity(all_keys.len());
         for key in &all_keys {
-            let value: Option<String> = conn.get(key).await?;
-            if let Some(json) = value {
-                match serde_json::from_str::<WorkflowCheckpoint>(&json) {
+            let value: Option<Vec<u8>> = conn.get(key).await?;
+            if let Some(bytes) = value {
+                // Try MessagePack first (new format), fall back to JSON (legacy).
+                match rmp_serde::from_slice::<WorkflowCheckpoint>(&bytes)
+                    .or_else(|_| serde_json::from_slice(&bytes))
+                {
                     Ok(cp) => checkpoints.push(cp),
                     Err(e) => {
                         // Log and skip malformed entries rather than failing

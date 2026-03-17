@@ -1,0 +1,442 @@
+---
+import Layout from "~/layouts/Layout.astro";
+import FeatureCard from "~/components/vue/FeatureCard.vue";
+import CodeTabs from "~/components/vue/CodeTabs.vue";
+
+const title = "Blazen";
+const description =
+  "Event-driven AI workflow engine with first-class LLM integration, written in Rust. Open source, MIT licensed, with native Python and Node.js/TypeScript bindings.";
+
+const features = [
+  {
+    icon: "\u26A1",
+    title: "Event-Driven Architecture",
+    description:
+      "Type-safe events with zero boilerplate. Derive macros generate all the wiring so you focus on logic, not plumbing.",
+  },
+  {
+    icon: "\uD83D\uDD00",
+    title: "Multi-Workflow Pipelines",
+    description:
+      "Compose sequential and parallel stages into pipelines. Pause, resume, and stream results across stages.",
+  },
+  {
+    icon: "\uD83E\uDD16",
+    title: "15+ LLM Providers",
+    description:
+      "OpenAI, Claude, Gemini, Azure, fal.ai, OpenRouter, Groq, and more. Swap providers without changing workflow logic.",
+  },
+  {
+    icon: "\uD83D\uDCDD",
+    title: "Prompt Management",
+    description:
+      "Versioned prompt templates with {{variable}} interpolation. Load from YAML or JSON registries.",
+  },
+  {
+    icon: "\uD83C\uDF10",
+    title: "Branching & Streaming",
+    description:
+      "Conditional branching, parallel fan-out, and real-time streaming. Build complex DAGs with simple step definitions.",
+  },
+  {
+    icon: "\uD83D\uDCBE",
+    title: "Persistence",
+    description:
+      "Embedded redb for local storage, Redis/ValKey for distributed. MessagePack serialization for compact, fast state.",
+  },
+  {
+    icon: "\uD83D\uDC0D",
+    title: "Polyglot",
+    description:
+      "Native Rust performance with Python (PyO3) and Node.js/TypeScript (napi-rs) bindings. Use your preferred language.",
+  },
+  {
+    icon: "\uD83D\uDEE0\uFE0F",
+    title: "CLI Scaffolding",
+    description:
+      "blazen-cli scaffolds workflows, pipelines, and prompt registries. Get productive in seconds, not hours.",
+  },
+  {
+    icon: "\uD83D\uDC64",
+    title: "Human-in-the-Loop",
+    description:
+      "Steps can pause for human feedback via callbacks. Build durable approval workflows with first-class support.",
+  },
+];
+
+const workflowTabs = [
+  {
+    label: "Rust",
+    language: "rust",
+    code: `use blazen::prelude::*;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+struct GreetEvent {
+    name: String,
+}
+
+#[step]
+async fn parse_input(event: StartEvent, _ctx: Context) -> Result<GreetEvent, WorkflowError> {
+    let name = event.data["name"].as_str().unwrap_or("World").to_string();
+    Ok(GreetEvent { name })
+}
+
+#[step]
+async fn greet(event: GreetEvent, _ctx: Context) -> Result<StopEvent, WorkflowError> {
+    Ok(StopEvent {
+        result: serde_json::json!({ "greeting": format!("Hello, {}!", event.name) }),
+    })
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let workflow = WorkflowBuilder::new("greeter")
+        .step(parse_input_registration())
+        .step(greet_registration())
+        .build()?;
+
+    let result = workflow.run(serde_json::json!({ "name": "Blazen" })).await?.result().await?;
+    println!("{}", result.to_json());
+    Ok(())
+}`,
+  },
+  {
+    label: "Python",
+    language: "python",
+    code: `from blazen import Workflow, Context, Event, StartEvent, StopEvent, step
+
+@step
+async def analyze(ctx: Context, ev: Event):
+    return Event("AnalyzeDone", text=ev.message, length=len(ev.message))
+
+@step(accepts=["AnalyzeDone"])
+async def finalize(ctx: Context, ev: Event):
+    return StopEvent(result={"text": ev.text, "length": ev.length})
+
+wf = Workflow("pipeline", [analyze, finalize])
+handler = await wf.run(message="hello world")
+result = await handler.result()
+print(result.result)`,
+  },
+  {
+    label: "TypeScript",
+    language: "typescript",
+    code: `import { Workflow } from "blazen";
+
+const wf = new Workflow("echo");
+
+wf.addStep("analyze", ["blazen::StartEvent"], async (event, ctx) => {
+  return {
+    type: "AnalyzeEvent",
+    text: event.message,
+    length: event.message.length,
+  };
+});
+
+wf.addStep("finalize", ["AnalyzeEvent"], async (event, ctx) => {
+  return {
+    type: "blazen::StopEvent",
+    result: { text: event.text, length: event.length },
+  };
+});
+
+const result = await wf.run({ message: "hello world" });
+console.log(result.data);`,
+  },
+];
+
+const hitlTabs = [
+  {
+    label: "Rust",
+    language: "rust",
+    code: `let workflow = WorkflowBuilder::new("assistant")
+    .step(ai_step_registration())
+    .step(review_step_registration())
+    .input_handler(Arc::new(|request| Box::pin(async move {
+        println!("AI asks: {}", request.prompt);
+        let answer = get_user_input().await;
+        Ok(InputResponseEvent {
+            request_id: request.request_id,
+            response: serde_json::json!(answer),
+        })
+    })))
+    .build()?;
+
+let result = workflow.run(input).await?.result().await?;`,
+  },
+];
+
+const crates = [
+  { name: "blazen", description: "Umbrella crate with prelude re-exports" },
+  {
+    name: "blazen-events",
+    description: "Event trait, StartEvent, StopEvent, derive macro support",
+  },
+  {
+    name: "blazen-macros",
+    description: "Procedural macros: #[step], #[derive(Event)]",
+  },
+  {
+    name: "blazen-core",
+    description: "Workflow runtime, context, event loop, step registry",
+  },
+  {
+    name: "blazen-llm",
+    description: "LLM provider abstraction, 15+ integrations",
+  },
+  {
+    name: "blazen-pipeline",
+    description:
+      "Multi-workflow pipelines, sequential/parallel stages",
+  },
+  {
+    name: "blazen-prompts",
+    description:
+      "Prompt template engine, variable interpolation, registries",
+  },
+  {
+    name: "blazen-persist",
+    description: "Persistence layer: redb, Redis/ValKey, MessagePack",
+  },
+  { name: "blazen-py", description: "Python bindings via PyO3" },
+  { name: "blazen-node", description: "Node.js/TypeScript bindings via napi-rs" },
+  {
+    name: "blazen-cli",
+    description: "CLI tool for scaffolding workflows and pipelines",
+  },
+];
+---
+
+<Layout title={title} description={description}>
+  <!-- Hero -->
+  <section class="relative overflow-hidden">
+    <div
+      class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--color-blazen-500)_0%,_transparent_50%)] opacity-15"
+    >
+    </div>
+    <div class="relative mx-auto max-w-5xl px-6 pb-20 pt-28 text-center sm:pt-36 lg:pt-44">
+      <div class="mb-6 inline-flex items-center gap-2 rounded-full border border-surface-600 bg-surface-800 px-4 py-1.5 text-sm text-gray-300">
+        <span class="inline-block h-2 w-2 rounded-full bg-blazen-500"></span>
+        Open Source &middot; MIT License
+      </div>
+      <h1 class="mb-6 text-5xl font-extrabold tracking-tight sm:text-6xl lg:text-7xl">
+        <span
+          class="bg-gradient-to-r from-blazen-400 via-blazen-500 to-blazen-600 bg-clip-text text-transparent"
+          >Blazen</span
+        >
+      </h1>
+      <p
+        class="mx-auto mb-6 max-w-2xl text-lg leading-relaxed text-gray-300 sm:text-xl"
+      >
+        Event-driven AI workflow engine with first-class LLM integration, written in Rust.
+      </p>
+      <p class="mx-auto mb-10 max-w-xl text-sm leading-relaxed text-gray-500">
+        Type-safe events &middot; 15+ LLM providers &middot; Multi-workflow pipelines &middot; Python & TypeScript bindings
+      </p>
+      <div class="flex flex-col items-center justify-center gap-4 sm:flex-row">
+        <a
+          href="https://github.com/ZachHandley/Blazen"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-2 rounded-lg bg-surface-700 px-6 py-3 text-sm font-medium text-gray-100 transition-colors hover:bg-surface-600"
+        >
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+            <path
+              d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"
+            ></path>
+          </svg>
+          GitHub
+        </a>
+        <a
+          href="#install"
+          class="inline-flex items-center gap-2 rounded-lg bg-blazen-500 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-blazen-600"
+        >
+          Get Started
+          <svg
+            class="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="mx-auto max-w-6xl px-6 py-24">
+    <div class="mb-16 text-center">
+      <h2 class="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">
+        Everything you need to build AI workflows
+      </h2>
+      <p class="mx-auto max-w-2xl text-gray-400">
+        Blazen gives you the primitives to build complex, production-ready AI
+        pipelines with minimal boilerplate.
+      </p>
+    </div>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        features.map((feature) => (
+          <FeatureCard
+            icon={feature.icon}
+            title={feature.title}
+            description={feature.description}
+          />
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- Code Examples -->
+  <section class="mx-auto max-w-4xl px-6 py-24">
+    <div class="mb-16 text-center">
+      <h2 class="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">
+        Write workflows in your language
+      </h2>
+      <p class="mx-auto max-w-2xl text-gray-400">
+        Native bindings for Rust, Python, and TypeScript. Same concepts,
+        idiomatic APIs.
+      </p>
+    </div>
+    <div class="mb-16">
+      <h3 class="mb-4 text-lg font-semibold text-gray-200">
+        Basic Workflow
+      </h3>
+      <CodeTabs client:visible tabs={workflowTabs} />
+    </div>
+    <div>
+      <h3 class="mb-4 text-lg font-semibold text-gray-200">
+        Human-in-the-Loop
+      </h3>
+      <CodeTabs client:visible tabs={hitlTabs} />
+    </div>
+  </section>
+
+  <!-- Installation -->
+  <section id="install" class="mx-auto max-w-4xl px-6 py-24">
+    <div class="mb-16 text-center">
+      <h2 class="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">
+        Get started in seconds
+      </h2>
+      <p class="mx-auto max-w-2xl text-gray-400">
+        Install Blazen for your language of choice.
+      </p>
+    </div>
+    <div class="grid gap-6 sm:grid-cols-2">
+      <div class="rounded-xl border border-surface-600 bg-surface-800 p-6">
+        <div class="mb-3 text-sm font-medium text-gray-400">Rust</div>
+        <pre
+          class="overflow-x-auto rounded-lg bg-[var(--color-code-bg)] p-4 text-sm text-gray-300"><code>cargo add blazen</code></pre>
+      </div>
+      <div class="rounded-xl border border-surface-600 bg-surface-800 p-6">
+        <div class="mb-3 text-sm font-medium text-gray-400">Python</div>
+        <pre
+          class="overflow-x-auto rounded-lg bg-[var(--color-code-bg)] p-4 text-sm text-gray-300"><code>pip install blazen</code></pre>
+      </div>
+      <div class="rounded-xl border border-surface-600 bg-surface-800 p-6">
+        <div class="mb-3 text-sm font-medium text-gray-400">Node.js</div>
+        <pre
+          class="overflow-x-auto rounded-lg bg-[var(--color-code-bg)] p-4 text-sm text-gray-300"><code>pnpm add blazen</code></pre>
+      </div>
+      <div class="rounded-xl border border-surface-600 bg-surface-800 p-6">
+        <div class="mb-3 text-sm font-medium text-gray-400">CLI</div>
+        <pre
+          class="overflow-x-auto rounded-lg bg-[var(--color-code-bg)] p-4 text-sm text-gray-300"><code>cargo install blazen-cli</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Architecture -->
+  <section class="mx-auto max-w-4xl px-6 py-24">
+    <div class="mb-16 text-center">
+      <h2 class="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">
+        Modular crate architecture
+      </h2>
+      <p class="mx-auto max-w-2xl text-gray-400">
+        Use only what you need. Each crate is independently versioned and
+        focused on a single responsibility.
+      </p>
+    </div>
+    <div class="overflow-x-auto rounded-xl border border-surface-600">
+      <table class="w-full text-left text-sm">
+        <thead>
+          <tr class="border-b border-surface-600 bg-surface-800">
+            <th class="px-6 py-4 font-semibold text-gray-200">Crate</th>
+            <th class="px-6 py-4 font-semibold text-gray-200"
+              >Description</th
+            >
+          </tr>
+        </thead>
+        <tbody>
+          {
+            crates.map((crate, i) => (
+              <tr
+                class:list={[
+                  "border-b border-surface-600/50 transition-colors hover:bg-surface-800/50",
+                  i % 2 === 0 ? "bg-surface-900" : "bg-surface-800/20",
+                ]}
+              >
+                <td class="px-6 py-3">
+                  <code class="rounded bg-surface-700 px-2 py-0.5 font-mono text-xs text-blazen-400">
+                    {crate.name}
+                  </code>
+                </td>
+                <td class="px-6 py-3 text-gray-400">{crate.description}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="border-t border-surface-700 py-12">
+    <div class="mx-auto max-w-5xl px-6">
+      <div class="flex flex-col items-center justify-between gap-6 sm:flex-row">
+        <div class="flex items-center gap-3">
+          <span
+            class="bg-gradient-to-r from-blazen-400 to-blazen-600 bg-clip-text text-lg font-bold text-transparent"
+            >Blazen</span
+          >
+          <span class="text-sm text-gray-500">MIT License</span>
+        </div>
+        <div class="flex items-center gap-6 text-sm text-gray-400">
+          <a
+            href="https://github.com/ZachHandley/Blazen"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="transition-colors hover:text-gray-200">GitHub</a
+          >
+          <a
+            href="https://crates.io/crates/blazen"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="transition-colors hover:text-gray-200">crates.io</a
+          >
+          <a
+            href="https://docs.rs/blazen"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="transition-colors hover:text-gray-200">Docs</a
+          >
+        </div>
+      </div>
+      <div class="mt-8 text-center text-sm text-gray-600">
+        Built by <a
+          href="https://zachhandley.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-gray-400 transition-colors hover:text-blazen-400"
+          >Zach Handley</a
+        >
+      </div>
+    </div>
+  </footer>
+</Layout>

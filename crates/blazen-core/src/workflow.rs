@@ -18,11 +18,16 @@
 //! later be resumed from the snapshot via [`Workflow::resume`].
 
 use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use blazen_events::{AnyEvent, DynamicEvent, Event, EventEnvelope, StartEvent, StopEvent};
+use blazen_events::{
+    AnyEvent, DynamicEvent, Event, EventEnvelope, InputRequestEvent, InputResponseEvent,
+    StartEvent, StopEvent,
+};
 use chrono::Utc;
 use serde::Serialize;
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -35,11 +40,28 @@ use crate::handler::WorkflowHandler;
 use crate::snapshot::{SerializedEvent, WorkflowSnapshot};
 use crate::step::{StepOutput, StepRegistration};
 
+/// Async callback for handling input requests inline (without pausing).
+///
+/// When registered on a [`WorkflowBuilder`], the event loop will invoke this
+/// callback instead of auto-pausing when an [`InputRequestEvent`] arrives.
+/// The callback should return an [`InputResponseEvent`] which will be
+/// injected back into the event queue.
+pub type InputHandlerFn = Arc<
+    dyn Fn(
+            InputRequestEvent,
+        )
+            -> Pin<Box<dyn Future<Output = Result<InputResponseEvent, WorkflowError>> + Send>>
+        + Send
+        + Sync,
+>;
+
 /// Fluent builder for constructing a [`Workflow`].
 pub struct WorkflowBuilder {
     name: String,
     steps: Vec<StepRegistration>,
     timeout: Option<Duration>,
+    /// Optional inline handler for input requests (HITL without pausing).
+    input_handler: Option<InputHandlerFn>,
     /// Checkpoint store for durable persistence (requires `persist` feature).
     #[cfg(feature = "persist")]
     checkpoint_store: Option<Arc<dyn blazen_persist::CheckpointStore>>,
@@ -56,6 +78,7 @@ impl WorkflowBuilder {
             name: name.into(),
             steps: Vec::new(),
             timeout: Some(Duration::from_secs(300)), // 5 min default
+            input_handler: None,
             #[cfg(feature = "persist")]
             checkpoint_store: None,
             #[cfg(feature = "persist")]
@@ -81,6 +104,18 @@ impl WorkflowBuilder {
     #[must_use]
     pub fn no_timeout(mut self) -> Self {
         self.timeout = None;
+        self
+    }
+
+    /// Register an inline handler for [`InputRequestEvent`]s.
+    ///
+    /// When set, the event loop will call this handler instead of
+    /// auto-pausing when an input request arrives. The handler should
+    /// return an [`InputResponseEvent`] which is injected back into the
+    /// event queue, allowing the workflow to continue without interruption.
+    #[must_use]
+    pub fn input_handler(mut self, handler: InputHandlerFn) -> Self {
+        self.input_handler = Some(handler);
         self
     }
 
@@ -141,6 +176,7 @@ impl WorkflowBuilder {
             name: self.name,
             step_registry: registry,
             timeout: self.timeout,
+            input_handler: self.input_handler,
             #[cfg(feature = "persist")]
             checkpoint_store: self.checkpoint_store,
             #[cfg(feature = "persist")]
@@ -154,6 +190,8 @@ pub struct Workflow {
     name: String,
     step_registry: HashMap<String, Vec<StepRegistration>>,
     timeout: Option<Duration>,
+    /// Optional inline handler for input requests (HITL without pausing).
+    input_handler: Option<InputHandlerFn>,
     /// Checkpoint store for durable persistence (requires `persist` feature).
     #[cfg(feature = "persist")]
     checkpoint_store: Option<Arc<dyn blazen_persist::CheckpointStore>>,
@@ -232,6 +270,7 @@ impl Workflow {
         let registry = self.step_registry.clone();
         let timeout = self.timeout;
         let workflow_name = self.name.clone();
+        let input_handler = self.input_handler.clone();
 
         #[cfg(feature = "persist")]
         let checkpoint_config = CheckpointConfig {
@@ -250,6 +289,7 @@ impl Workflow {
             snapshot_tx,
             workflow_name,
             run_id,
+            input_handler,
             #[cfg(feature = "persist")]
             checkpoint_config,
         ));
@@ -343,6 +383,7 @@ impl Workflow {
             snapshot_tx,
             workflow_name,
             run_id,
+            None, // No inline input handler for resumed workflows.
             #[cfg(feature = "persist")]
             checkpoint_config,
         ));
@@ -387,6 +428,43 @@ impl Workflow {
 
         // Use a default 5-minute timeout for resumed workflows.
         Self::resume(snapshot, steps, Some(Duration::from_secs(300))).await
+    }
+
+    /// Resume a paused workflow, injecting a human's response.
+    ///
+    /// This is a convenience method for workflows that auto-paused due to an
+    /// [`InputRequestEvent`]. It injects the [`InputResponseEvent`] into the
+    /// snapshot's pending events and resumes execution.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the snapshot's pending events cannot be
+    /// reinjected into the event channel.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `InputResponseEvent` cannot be serialized to JSON, which
+    /// should never happen for a well-formed serde type.
+    pub async fn resume_with_input(
+        snapshot: WorkflowSnapshot,
+        response: InputResponseEvent,
+        steps: Vec<StepRegistration>,
+        timeout: Option<Duration>,
+    ) -> crate::error::Result<WorkflowHandler> {
+        let mut snapshot = snapshot;
+
+        // Inject the response as a pending event.
+        snapshot.pending_events.push(SerializedEvent {
+            event_type: "blazen::InputResponseEvent".to_owned(),
+            data: serde_json::to_value(&response)
+                .expect("InputResponseEvent serialization should never fail"),
+            source_step: Some("__human_input".to_owned()),
+        });
+
+        // Clear the input request from metadata.
+        snapshot.metadata.remove("__input_request");
+
+        Self::resume(snapshot, steps, timeout).await
     }
 }
 
@@ -464,6 +542,7 @@ async fn event_loop(
     snapshot_tx: oneshot::Sender<WorkflowSnapshot>,
     workflow_name: String,
     run_id: Uuid,
+    input_handler: Option<InputHandlerFn>,
     #[cfg(feature = "persist")] checkpoint_config: CheckpointConfig,
 ) {
     let stream_ctx = ctx.clone();
@@ -478,6 +557,7 @@ async fn event_loop(
         snapshot_tx,
         workflow_name,
         run_id,
+        input_handler,
         #[cfg(feature = "persist")]
         checkpoint_config,
     )
@@ -499,6 +579,7 @@ async fn event_loop_inner(
     snapshot_tx: oneshot::Sender<WorkflowSnapshot>,
     workflow_name: String,
     run_id: Uuid,
+    input_handler: Option<InputHandlerFn>,
     #[cfg(feature = "persist")] checkpoint_config: CheckpointConfig,
 ) {
     let start = Instant::now();
@@ -637,6 +718,57 @@ async fn event_loop_inner(
             return;
         }
 
+        // Check for InputRequestEvent -- triggers HITL pause or callback.
+        if event_type == InputRequestEvent::event_type() {
+            let request = if let Some(req) = event.as_any().downcast_ref::<InputRequestEvent>() {
+                req.clone()
+            } else if let Some(dynamic) = event.as_any().downcast_ref::<DynamicEvent>() {
+                if let Ok(req) = serde_json::from_value::<InputRequestEvent>(dynamic.data.clone()) {
+                    req
+                } else {
+                    let _ = result_tx.send(Err(WorkflowError::Context(
+                        "failed to deserialize InputRequestEvent from DynamicEvent".into(),
+                    )));
+                    return;
+                }
+            } else {
+                let _ = result_tx.send(Err(WorkflowError::Context(
+                    "InputRequestEvent type mismatch".into(),
+                )));
+                return;
+            };
+
+            // If an input handler callback is registered, call it inline.
+            if let Some(ref handler) = input_handler {
+                match handler(request).await {
+                    Ok(response) => {
+                        let envelope =
+                            EventEnvelope::new(Box::new(response), Some("__input_handler".into()));
+                        let _ = event_tx.send(envelope);
+                        continue;
+                    }
+                    Err(e) => {
+                        let _ = result_tx.send(Err(e));
+                        return;
+                    }
+                }
+            }
+
+            // No callback -- auto-pause with request attached to snapshot.
+            handle_input_pause(
+                &mut in_flight,
+                &mut event_rx,
+                &ctx,
+                result_tx,
+                snapshot_tx,
+                &workflow_name,
+                run_id,
+                &request,
+            )
+            .await;
+            return;
+        }
+
         // Look up step handlers for this event type.
         let Some(handlers) = registry.get(event_type) else {
             tracing::warn!(event_type, "no handler registered for event type");
@@ -730,6 +862,77 @@ async fn handle_pause(
 
     // 5. Signal the result channel with Paused.
     let _ = result_tx.send(Err(WorkflowError::Paused));
+}
+
+/// Handle the input-pause sequence (similar to [`handle_pause`]):
+///
+/// 1. Wait for all in-flight step tasks to finish.
+/// 2. Drain remaining events from the channel.
+/// 3. Store the input request in context metadata.
+/// 4. Snapshot context state.
+/// 5. Send the snapshot back to the handler.
+/// 6. Signal the result channel with `InputRequired`.
+#[allow(clippy::too_many_arguments)]
+async fn handle_input_pause(
+    in_flight: &mut JoinSet<()>,
+    event_rx: &mut mpsc::UnboundedReceiver<EventEnvelope>,
+    ctx: &Context,
+    result_tx: oneshot::Sender<Result<Box<dyn AnyEvent>, WorkflowError>>,
+    snapshot_tx: oneshot::Sender<WorkflowSnapshot>,
+    workflow_name: &str,
+    run_id: Uuid,
+    request: &InputRequestEvent,
+) {
+    tracing::info!(
+        request_id = %request.request_id,
+        "input requested -- pausing for human input"
+    );
+
+    // 1. Wait for all in-flight step tasks to finish.
+    while in_flight.join_next().await.is_some() {}
+
+    // 2. Drain remaining events from the channel.
+    let mut pending_events = Vec::new();
+    while let Ok(envelope) = event_rx.try_recv() {
+        let serialized = SerializedEvent {
+            event_type: envelope.event.event_type_id().to_owned(),
+            data: envelope.event.to_json(),
+            source_step: envelope.source_step,
+        };
+        pending_events.push(serialized);
+    }
+
+    // 3. Store the input request in metadata.
+    ctx.set_metadata(
+        "__input_request",
+        serde_json::to_value(request).expect("InputRequestEvent serialization should never fail"),
+    )
+    .await;
+
+    // 4. Snapshot context state.
+    let context_state = ctx.snapshot_state().await;
+    let collected_events = ctx.snapshot_collected().await;
+    let metadata = ctx.snapshot_metadata().await;
+
+    let snapshot = WorkflowSnapshot {
+        workflow_name: workflow_name.to_owned(),
+        run_id,
+        timestamp: Utc::now(),
+        context_state,
+        collected_events,
+        pending_events,
+        metadata,
+    };
+
+    // 5. Send the snapshot back to the handler.
+    let _ = snapshot_tx.send(snapshot);
+
+    // 6. Signal InputRequired.
+    let _ = result_tx.send(Err(WorkflowError::InputRequired {
+        request_id: request.request_id.clone(),
+        prompt: request.prompt.clone(),
+        metadata: request.metadata.clone(),
+    }));
 }
 
 /// Spawn step handler tasks for each matching step registration.

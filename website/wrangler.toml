@@ -1,0 +1,4 @@
+name = "blazen-dev"
+
+[assets]
+directory = "dist"

@@ -19,8 +19,10 @@ use serde::de::DeserializeOwned;
 use tokio::sync::{RwLock, broadcast, mpsc};
 use uuid::Uuid;
 
-/// Type alias for the JSON-backed state map.
-type StateMap = HashMap<String, serde_json::Value>;
+use crate::value::{BytesWrapper, StateValue};
+
+/// Type alias for the state map (supports both JSON and binary values).
+type StateMap = HashMap<String, StateValue>;
 
 /// Internal state behind the `Arc<RwLock<_>>`.
 struct ContextInner {
@@ -89,7 +91,9 @@ impl Context {
         let json_value =
             serde_json::to_value(&value).expect("Context::set: value must be JSON-serializable");
         let mut inner = self.inner.write().await;
-        inner.state.insert(key.to_owned(), json_value);
+        inner
+            .state
+            .insert(key.to_owned(), StateValue::Json(json_value));
     }
 
     /// Retrieve a typed value previously stored under `key`.
@@ -102,10 +106,33 @@ impl Context {
         key: &str,
     ) -> Option<T> {
         let inner = self.inner.read().await;
+        inner.state.get(key).and_then(|sv| match sv {
+            StateValue::Json(v) => serde_json::from_value::<T>(v.clone()).ok(),
+            StateValue::Bytes(_) => None,
+        })
+    }
+
+    /// Store raw binary data under `key`.
+    ///
+    /// Useful for files, images, audio, and other binary artifacts that
+    /// should not be JSON-serialized.
+    pub async fn set_bytes(&self, key: &str, data: Vec<u8>) {
+        let mut inner = self.inner.write().await;
         inner
             .state
-            .get(key)
-            .and_then(|v| serde_json::from_value::<T>(v.clone()).ok())
+            .insert(key.to_owned(), StateValue::Bytes(BytesWrapper(data)));
+    }
+
+    /// Retrieve raw binary data previously stored under `key`.
+    ///
+    /// Returns `None` if the key does not exist or the stored value is
+    /// a JSON variant rather than bytes.
+    pub async fn get_bytes(&self, key: &str) -> Option<Vec<u8>> {
+        let inner = self.inner.read().await;
+        inner.state.get(key).and_then(|sv| match sv {
+            StateValue::Bytes(b) => Some(b.0.clone()),
+            StateValue::Json(_) => None,
+        })
     }
 
     // -----------------------------------------------------------------
@@ -195,7 +222,7 @@ impl Context {
     ///
     /// Useful for checkpointing or pausing a workflow so it can be
     /// resumed later.
-    pub async fn snapshot_state(&self) -> HashMap<String, serde_json::Value> {
+    pub async fn snapshot_state(&self) -> HashMap<String, StateValue> {
         let inner = self.inner.read().await;
         inner.state.clone()
     }
@@ -204,7 +231,7 @@ impl Context {
     ///
     /// Used to restore state from a previous checkpoint. Any existing
     /// state is discarded.
-    pub async fn restore_state(&self, state: HashMap<String, serde_json::Value>) {
+    pub async fn restore_state(&self, state: HashMap<String, StateValue>) {
         let mut inner = self.inner.write().await;
         inner.state = state;
     }
@@ -358,8 +385,14 @@ mod tests {
         // Snapshot
         let snap = ctx.snapshot_state().await;
         assert_eq!(snap.len(), 2);
-        assert_eq!(snap.get("name").unwrap(), &serde_json::json!("alice"));
-        assert_eq!(snap.get("count").unwrap(), &serde_json::json!(10));
+        assert_eq!(
+            snap.get("name").unwrap(),
+            &StateValue::Json(serde_json::json!("alice"))
+        );
+        assert_eq!(
+            snap.get("count").unwrap(),
+            &StateValue::Json(serde_json::json!(10))
+        );
 
         // Modify state
         ctx.set("name", "bob".to_string()).await;
@@ -369,6 +402,30 @@ mod tests {
         ctx.restore_state(snap).await;
         assert_eq!(ctx.get::<String>("name").await, Some("alice".to_string()));
         assert_eq!(ctx.get::<u32>("count").await, Some(10));
+    }
+
+    #[tokio::test]
+    async fn set_and_get_bytes() {
+        let ctx = test_context();
+        let data = vec![0xDE, 0xAD, 0xBE, 0xEF];
+        ctx.set_bytes("binary", data.clone()).await;
+
+        assert_eq!(ctx.get_bytes("binary").await, Some(data));
+        // get<T> should return None for bytes values.
+        assert_eq!(ctx.get::<String>("binary").await, None);
+    }
+
+    #[tokio::test]
+    async fn get_bytes_returns_none_for_json() {
+        let ctx = test_context();
+        ctx.set("key", "value".to_string()).await;
+        assert_eq!(ctx.get_bytes("key").await, None);
+    }
+
+    #[tokio::test]
+    async fn get_bytes_returns_none_for_missing_key() {
+        let ctx = test_context();
+        assert_eq!(ctx.get_bytes("nope").await, None);
     }
 
     #[tokio::test]

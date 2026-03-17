@@ -48,7 +48,8 @@
 
 // Events: traits and built-in types.
 pub use blazen_events::{
-    AnyEvent, DynamicEvent, Event, EventEnvelope, StartEvent, StopEvent, intern_event_type,
+    AnyEvent, DynamicEvent, Event, EventEnvelope, InputRequestEvent, InputResponseEvent,
+    StartEvent, StopEvent, intern_event_type,
 };
 
 // Macros: derive and attribute macros.
@@ -56,8 +57,8 @@ pub use blazen_macros::{Event, step};
 
 // Core: workflow engine types.
 pub use blazen_core::{
-    Context, Result, StepFn, StepOutput, StepRegistration, Workflow, WorkflowBuilder,
-    WorkflowError, WorkflowHandler,
+    BytesWrapper, Context, InputHandlerFn, Result, StateValue, StepFn, StepOutput,
+    StepRegistration, Workflow, WorkflowBuilder, WorkflowError, WorkflowHandler,
 };
 
 // Serde: needed by derive(Event) expansion and examples.
@@ -107,15 +108,17 @@ pub mod prompts {
 /// ```
 pub mod prelude {
     // Event traits and built-in events.
-    pub use blazen_events::{AnyEvent, Event, StartEvent, StopEvent};
+    pub use blazen_events::{
+        AnyEvent, Event, InputRequestEvent, InputResponseEvent, StartEvent, StopEvent,
+    };
 
     // Derive and attribute macros.
     pub use blazen_macros::{Event, step};
 
     // Core workflow types.
     pub use blazen_core::{
-        Context, Result, StepOutput, StepRegistration, Workflow, WorkflowBuilder, WorkflowError,
-        WorkflowHandler,
+        Context, InputHandlerFn, Result, StateValue, StepOutput, StepRegistration, Workflow,
+        WorkflowBuilder, WorkflowError, WorkflowHandler,
     };
 
     // Serde derives (needed for #[derive(Event)] to work).

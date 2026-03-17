@@ -13,7 +13,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use blazen_events::InputRequestEvent;
+
 use crate::error::WorkflowError;
+use crate::value::StateValue;
 
 /// A serialized representation of an event captured during a pause.
 ///
@@ -48,7 +51,7 @@ pub struct WorkflowSnapshot {
     /// When the snapshot was captured.
     pub timestamp: DateTime<Utc>,
     /// The context's key/value state at snapshot time.
-    pub context_state: HashMap<String, serde_json::Value>,
+    pub context_state: HashMap<String, StateValue>,
     /// The fan-in collected events at snapshot time.
     pub collected_events: HashMap<String, Vec<serde_json::Value>>,
     /// Events that were pending in the routing channel at snapshot time.
@@ -85,6 +88,41 @@ impl WorkflowSnapshot {
     /// does not match the expected schema.
     pub fn from_json(json: &str) -> Result<Self, WorkflowError> {
         serde_json::from_str(json).map_err(WorkflowError::Serialization)
+    }
+
+    /// Serialize the snapshot to `MessagePack` bytes.
+    ///
+    /// `MessagePack` is a compact binary format that is especially efficient
+    /// for [`StateValue::Bytes`] data since `serde_bytes` avoids per-byte
+    /// overhead.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WorkflowError::BinarySerialization`] if serialization fails.
+    pub fn to_msgpack(&self) -> Result<Vec<u8>, WorkflowError> {
+        rmp_serde::to_vec(self).map_err(|e| WorkflowError::BinarySerialization(e.to_string()))
+    }
+
+    /// Deserialize a snapshot from `MessagePack` bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WorkflowError::BinarySerialization`] if the bytes are
+    /// malformed or do not match the expected schema.
+    pub fn from_msgpack(bytes: &[u8]) -> Result<Self, WorkflowError> {
+        rmp_serde::from_slice(bytes).map_err(|e| WorkflowError::BinarySerialization(e.to_string()))
+    }
+
+    /// Returns the pending input request, if the workflow paused for human input.
+    ///
+    /// When a workflow auto-pauses due to an [`InputRequestEvent`], the
+    /// request is stored in the snapshot's metadata under the
+    /// `"__input_request"` key. This method extracts and deserializes it.
+    #[must_use]
+    pub fn input_request(&self) -> Option<InputRequestEvent> {
+        self.metadata
+            .get("__input_request")
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
     }
 }
 
@@ -137,11 +175,23 @@ impl From<WorkflowSnapshot> for blazen_persist::WorkflowCheckpoint {
             })
             .collect();
 
+        // Convert StateValue map to serde_json::Value map for the persist
+        // layer. Binary values are serialized as JSON so they can be stored
+        // in the checkpoint's JSON-based state field.
+        let state = snap
+            .context_state
+            .into_iter()
+            .map(|(k, v)| {
+                let json = serde_json::to_value(&v).unwrap_or(serde_json::Value::Null);
+                (k, json)
+            })
+            .collect();
+
         blazen_persist::WorkflowCheckpoint {
             workflow_name: snap.workflow_name,
             run_id: snap.run_id,
             timestamp: snap.timestamp,
-            state: snap.context_state,
+            state,
             pending_events,
             metadata,
         }
@@ -178,11 +228,24 @@ impl From<blazen_persist::WorkflowCheckpoint> for WorkflowSnapshot {
             })
             .collect();
 
+        // Convert the checkpoint's serde_json::Value map back to StateValue.
+        // Try to deserialize each value as a StateValue first (preserving
+        // Bytes variants); fall back to wrapping as StateValue::Json.
+        let context_state = cp
+            .state
+            .into_iter()
+            .map(|(k, v)| {
+                let sv =
+                    serde_json::from_value::<StateValue>(v.clone()).unwrap_or(StateValue::Json(v));
+                (k, sv)
+            })
+            .collect();
+
         WorkflowSnapshot {
             workflow_name: cp.workflow_name,
             run_id: cp.run_id,
             timestamp: cp.timestamp,
-            context_state: cp.state,
+            context_state,
             collected_events,
             pending_events,
             metadata,
@@ -196,8 +259,14 @@ mod tests {
 
     fn sample_snapshot() -> WorkflowSnapshot {
         let mut state = HashMap::new();
-        state.insert("counter".to_owned(), serde_json::json!(42));
-        state.insert("name".to_owned(), serde_json::json!("alice"));
+        state.insert(
+            "counter".to_owned(),
+            StateValue::Json(serde_json::json!(42)),
+        );
+        state.insert(
+            "name".to_owned(),
+            StateValue::Json(serde_json::json!("alice")),
+        );
 
         let mut collected = HashMap::new();
         collected.insert(
@@ -258,6 +327,59 @@ mod tests {
     #[test]
     fn from_invalid_json_fails() {
         let result = WorkflowSnapshot::from_json("not valid json");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn msgpack_roundtrip() {
+        let snap = sample_snapshot();
+        let bytes = snap.to_msgpack().unwrap();
+        let restored = WorkflowSnapshot::from_msgpack(&bytes).unwrap();
+        assert_eq!(restored.workflow_name, snap.workflow_name);
+        assert_eq!(restored.run_id, snap.run_id);
+        assert_eq!(restored.context_state, snap.context_state);
+        assert_eq!(restored.collected_events, snap.collected_events);
+        assert_eq!(restored.pending_events.len(), snap.pending_events.len());
+    }
+
+    #[test]
+    fn msgpack_with_bytes_roundtrip() {
+        use crate::value::BytesWrapper;
+
+        let mut state = HashMap::new();
+        state.insert(
+            "data".to_owned(),
+            StateValue::Bytes(BytesWrapper(vec![0xDE, 0xAD, 0xBE, 0xEF])),
+        );
+        state.insert("count".to_owned(), StateValue::Json(serde_json::json!(42)));
+
+        let snap = WorkflowSnapshot {
+            workflow_name: "bytes_test".to_owned(),
+            run_id: Uuid::new_v4(),
+            timestamp: Utc::now(),
+            context_state: state,
+            collected_events: HashMap::new(),
+            pending_events: Vec::new(),
+            metadata: HashMap::new(),
+        };
+
+        let bytes = snap.to_msgpack().unwrap();
+        let restored = WorkflowSnapshot::from_msgpack(&bytes).unwrap();
+        assert_eq!(restored.context_state, snap.context_state);
+        assert_eq!(
+            restored
+                .context_state
+                .get("data")
+                .unwrap()
+                .as_bytes()
+                .unwrap(),
+            &[0xDE, 0xAD, 0xBE, 0xEF]
+        );
+    }
+
+    #[test]
+    fn from_invalid_msgpack_fails() {
+        let result = WorkflowSnapshot::from_msgpack(&[0xFF, 0xFF]);
         assert!(result.is_err());
     }
 }

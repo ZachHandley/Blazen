@@ -1,0 +1,29 @@
+name: Mirror to GitHub
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: mirror-github
+  cancel-in-progress: true
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to GitHub
+        run: |
+          git remote add github https://x-access-token:${{ secrets.GH_ACCESS_TOKEN }}@github.com/ZachHandley/Blazen.git || true
+          git push github main --force
+          git push github --tags --force
+        env:
+          GIT_AUTHOR_NAME: Zach Handley
+          GIT_AUTHOR_EMAIL: zachhandley@gmail.com

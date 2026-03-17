@@ -56,6 +56,10 @@ pub enum WorkflowError {
     #[error("serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 
+    /// A binary serialization or deserialization error (e.g. `MessagePack`).
+    #[error("binary serialization error: {0}")]
+    BinarySerialization(String),
+
     /// The workflow was paused.
     ///
     /// This is not truly an error -- it signals that the workflow event loop
@@ -64,6 +68,14 @@ pub enum WorkflowError {
     /// through a separate channel.
     #[error("workflow paused")]
     Paused,
+
+    /// The workflow paused because a step requested human input.
+    #[error("workflow paused for input: request_id={request_id}")]
+    InputRequired {
+        request_id: String,
+        prompt: String,
+        metadata: serde_json::Value,
+    },
 
     /// A catch-all for other errors.
     #[error("{0}")]

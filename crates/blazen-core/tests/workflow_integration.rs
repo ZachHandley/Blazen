@@ -1121,11 +1121,13 @@ async fn test_pause_captures_snapshot() {
     // Verify context state was captured.
     assert_eq!(
         snapshot.context_state.get("counter"),
-        Some(&serde_json::json!(42))
+        Some(&blazen_core::StateValue::Json(serde_json::json!(42)))
     );
     assert_eq!(
         snapshot.context_state.get("message"),
-        Some(&serde_json::json!("paused state"))
+        Some(&blazen_core::StateValue::Json(serde_json::json!(
+            "paused state"
+        )))
     );
 
     // The step should have produced a StopEvent that got drained as pending.
@@ -1245,11 +1247,11 @@ async fn test_pause_and_resume() {
     // Verify snapshot has the state from step_one.
     assert_eq!(
         snapshot.context_state.get("counter"),
-        Some(&serde_json::json!(1))
+        Some(&blazen_core::StateValue::Json(serde_json::json!(1)))
     );
     assert_eq!(
         snapshot.context_state.get("step_one_ran"),
-        Some(&serde_json::json!(true))
+        Some(&blazen_core::StateValue::Json(serde_json::json!(true)))
     );
 
     // The AnalyzeEvent from step_one should be pending.
@@ -1381,7 +1383,7 @@ async fn test_pause_resume_via_json() {
     assert_eq!(restored.workflow_name, "json-roundtrip-test");
     assert_eq!(
         restored.context_state.get("value"),
-        Some(&serde_json::json!(999))
+        Some(&blazen_core::StateValue::Json(serde_json::json!(999)))
     );
     assert_eq!(restored.pending_events.len(), snapshot.pending_events.len());
 
