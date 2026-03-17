@@ -120,19 +120,7 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         run: |
           VERSION="${{ needs.version.outputs.version }}"
-          echo "Stamping all crate versions with $VERSION"
-          # Update workspace version
-          sed -i "s/^version = \"0.0.0-dev\"/version = \"$VERSION\"/" Cargo.toml
-          # Update internal dependency versions
-          sed -i "s/blazen-events = { version = \"0.0.0-dev\"/blazen-events = { version = \"$VERSION\"/" Cargo.toml
-          sed -i "s/blazen-macros = { version = \"0.0.0-dev\"/blazen-macros = { version = \"$VERSION\"/" Cargo.toml
-          sed -i "s/blazen-core = { version = \"0.0.0-dev\"/blazen-core = { version = \"$VERSION\"/" Cargo.toml
-          sed -i "s/blazen-llm = { version = \"0.0.0-dev\"/blazen-llm = { version = \"$VERSION\"/" Cargo.toml
-          sed -i "s/blazen-persist = { version = \"0.0.0-dev\"/blazen-persist = { version = \"$VERSION\"/" Cargo.toml
-          sed -i "s/blazen-pipeline = { version = \"0.0.0-dev\"/blazen-pipeline = { version = \"$VERSION\"/" Cargo.toml
-          sed -i "s/blazen-prompts = { version = \"0.0.0-dev\"/blazen-prompts = { version = \"$VERSION\"/" Cargo.toml
-          sed -i "s/blazen-telemetry = { version = \"0.0.0-dev\"/blazen-telemetry = { version = \"$VERSION\"/" Cargo.toml
-          sed -i "s/blazen = { version = \"0.0.0-dev\"/blazen = { version = \"$VERSION\"/" Cargo.toml
+          sed -i "s/0.0.0-dev/$VERSION/g" Cargo.toml
 
       - name: Publish crates in dependency order
         if: steps.check.outputs.completed != 'true'
@@ -218,8 +206,7 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         run: |
           VERSION="${{ needs.version.outputs.version }}"
-          # Update workspace version so maturin picks it up
-          sed -i "s/^version = \"0.0.0-dev\"/version = \"$VERSION\"/" Cargo.toml
+          sed -i "s/0.0.0-dev/$VERSION/g" Cargo.toml
 
       - name: Build wheels for all Python versions
         if: steps.check.outputs.completed != 'true'
@@ -297,9 +284,7 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         run: |
           VERSION="${{ needs.version.outputs.version }}"
-          # Update workspace version
-          sed -i "s/^version = \"0.0.0-dev\"/version = \"$VERSION\"/" Cargo.toml
-          # Update package.json version
+          sed -i "s/0.0.0-dev/$VERSION/g" Cargo.toml
           sed -i "s/\"version\": \"0.1.0\"/\"version\": \"$VERSION\"/" crates/blazen-node/package.json
 
       - name: Setup pnpm
@@ -426,3 +411,16 @@ jobs:
           base-url: https://forge.blackleafdigital.com
           owner: BlackLeafDigital
           auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+  mirror-github:
+    name: Mirror to GitHub
+    runs-on: ubuntu-latest
+    needs: create-release
+    steps:
+      - name: Dispatch mirror workflow
+        run: |
+          curl -s -X POST \
+            -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/actions/workflows/mirror-github.yaml/dispatches" \
+            -d '{"ref": "main"}'
