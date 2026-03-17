@@ -16,7 +16,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.0.0-dev"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 authors = ["Zach Handley <zachhandley@gmail.com>"]
@@ -81,15 +81,15 @@ redb = "3"
 redis = { version = "1", features = ["aio", "tokio-comp", "connection-manager"] }
 
 # Internal crates
-blazen-events = { version = "0.1.0", path = "crates/blazen-events", registry = "forgejo" }
-blazen-macros = { version = "0.1.0", path = "crates/blazen-macros", registry = "forgejo" }
-blazen-core = { version = "0.1.0", path = "crates/blazen-core", registry = "forgejo" }
-blazen-llm = { version = "0.1.0", path = "crates/blazen-llm", registry = "forgejo" }
-blazen-persist = { version = "0.1.0", path = "crates/blazen-persist", registry = "forgejo" }
-blazen-pipeline = { version = "0.1.0", path = "crates/blazen-pipeline", registry = "forgejo" }
-blazen-prompts = { version = "0.1.0", path = "crates/blazen-prompts", registry = "forgejo" }
-blazen = { version = "0.1.0", path = "crates/blazen", registry = "forgejo" }
-blazen-telemetry = { version = "0.1.0", path = "crates/blazen-telemetry", registry = "forgejo" }
+blazen-events = { version = "0.0.0-dev", path = "crates/blazen-events", registry = "forgejo" }
+blazen-macros = { version = "0.0.0-dev", path = "crates/blazen-macros", registry = "forgejo" }
+blazen-core = { version = "0.0.0-dev", path = "crates/blazen-core", registry = "forgejo" }
+blazen-llm = { version = "0.0.0-dev", path = "crates/blazen-llm", registry = "forgejo" }
+blazen-persist = { version = "0.0.0-dev", path = "crates/blazen-persist", registry = "forgejo" }
+blazen-pipeline = { version = "0.0.0-dev", path = "crates/blazen-pipeline", registry = "forgejo" }
+blazen-prompts = { version = "0.0.0-dev", path = "crates/blazen-prompts", registry = "forgejo" }
+blazen = { version = "0.0.0-dev", path = "crates/blazen", registry = "forgejo" }
+blazen-telemetry = { version = "0.0.0-dev", path = "crates/blazen-telemetry", registry = "forgejo" }
 
 # Prompt/template support
 serde_yaml = "0.9"

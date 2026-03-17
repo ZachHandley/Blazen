@@ -171,7 +171,7 @@ checksum = "843867be96c8daad0d758b57df9392b6d8d271134fce549de6ce169ff98a92af"
 
 [[package]]
 name = "blazen"
-version = "0.1.0"
+version = "0.0.0-dev"
 dependencies = [
  "anyhow",
  "blazen-core",
@@ -191,14 +191,14 @@ dependencies = [
 
 [[package]]
 name = "blazen-cli"
-version = "0.1.0"
+version = "0.0.0-dev"
 dependencies = [
  "clap",
 ]
 
 [[package]]
 name = "blazen-core"
-version = "0.1.0"
+version = "0.0.0-dev"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -222,7 +222,7 @@ dependencies = [
 
 [[package]]
 name = "blazen-events"
-version = "0.1.0"
+version = "0.0.0-dev"
 dependencies = [
  "chrono",
  "dashmap",
@@ -233,7 +233,7 @@ dependencies = [
 
 [[package]]
 name = "blazen-llm"
-version = "0.1.0"
+version = "0.0.0-dev"
 dependencies = [
  "async-trait",
  "blazen-events",
@@ -250,7 +250,7 @@ dependencies = [
 
 [[package]]
 name = "blazen-macros"
-version = "0.1.0"
+version = "0.0.0-dev"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -260,7 +260,7 @@ dependencies = [
 
 [[package]]
 name = "blazen-node"
-version = "0.1.0"
+version = "0.0.0-dev"
 dependencies = [
  "blazen-core",
  "blazen-events",
@@ -277,7 +277,7 @@ dependencies = [
 
 [[package]]
 name = "blazen-persist"
-version = "0.1.0"
+version = "0.0.0-dev"
 dependencies = [
  "async-trait",
  "chrono",
@@ -295,7 +295,7 @@ dependencies = [
 
 [[package]]
 name = "blazen-pipeline"
-version = "0.1.0"
+version = "0.0.0-dev"
 dependencies = [
  "anyhow",
  "blazen-core",
@@ -314,7 +314,7 @@ dependencies = [
 
 [[package]]
 name = "blazen-prompts"
-version = "0.1.0"
+version = "0.0.0-dev"
 dependencies = [
  "blazen-llm",
  "regex",
@@ -328,7 +328,7 @@ dependencies = [
 
 [[package]]
 name = "blazen-py"
-version = "0.1.0"
+version = "0.0.0-dev"
 dependencies = [
  "blazen-core",
  "blazen-events",
@@ -345,7 +345,7 @@ dependencies = [
 
 [[package]]
 name = "blazen-telemetry"
-version = "0.1.0"
+version = "0.0.0-dev"
 dependencies = [
  "async-trait",
  "blazen-events",
