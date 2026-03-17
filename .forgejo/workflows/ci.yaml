@@ -129,6 +129,9 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Setup pnpm
+        run: corepack enable && corepack prepare pnpm@latest --activate
+
       - name: Build Node bindings
         run: |
           cd crates/blazen-node
