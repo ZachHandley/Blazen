@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
+repository.workspace = true
 description = "Observability and telemetry for Blazen workflows"
 
 [dependencies]

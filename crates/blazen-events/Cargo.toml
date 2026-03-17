@@ -4,6 +4,9 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "Event traits and built-in event types for the Blazen workflow engine"
 
 [dependencies]
 serde.workspace = true

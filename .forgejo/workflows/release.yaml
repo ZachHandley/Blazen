@@ -239,7 +239,10 @@ jobs:
 
       - name: Install Python interpreters
         if: steps.check.outputs.completed != 'true'
-        run: uv python install 3.10 3.11 3.12 3.13
+        run: |
+          uv python install 3.10 3.11 3.12 3.13 3.14 || true
+          echo "Installed interpreters:"
+          uv python list --only-installed
 
       - name: Stamp version
         if: steps.check.outputs.completed != 'true'
@@ -251,8 +254,13 @@ jobs:
       - name: Build wheels for all Python versions
         if: steps.check.outputs.completed != 'true'
         run: |
-          uvx maturin build --release -m crates/blazen-py/Cargo.toml \
-            --interpreter python3.10 python3.11 python3.12 python3.13
+          # Resolve full paths to uv-managed interpreters
+          INTERPRETERS=""
+          for V in 3.10 3.11 3.12 3.13 3.14; do
+            INTERP=$(uv python find "$V" 2>/dev/null) && INTERPRETERS="$INTERPRETERS -i $INTERP" || echo "Python $V not available, skipping"
+          done
+          echo "Building with: $INTERPRETERS"
+          uvx maturin build --release -m crates/blazen-py/Cargo.toml $INTERPRETERS
 
       - name: Build sdist
         if: steps.check.outputs.completed != 'true'
