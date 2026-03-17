@@ -22,8 +22,6 @@ jobs:
       - name: Push to GitHub
         run: |
           git remote add github https://x-access-token:${{ secrets.GH_ACCESS_TOKEN }}@github.com/ZachHandley/Blazen.git || true
-          git push github main --force
+          git fetch origin +refs/heads/*:refs/heads/* +refs/tags/*:refs/tags/*
+          git push github refs/heads/main:refs/heads/main --force
           git push github --tags --force
-        env:
-          GIT_AUTHOR_NAME: Zach Handley
-          GIT_AUTHOR_EMAIL: zachhandley@gmail.com
