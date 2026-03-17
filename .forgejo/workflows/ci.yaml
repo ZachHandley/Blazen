@@ -216,3 +216,21 @@ jobs:
           git push origin "$TAG"
         env:
           GITHUB_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
+
+      - name: Dispatch release workflow
+        if: steps.version.outputs.is-new == 'true'
+        run: |
+          curl -s -X POST \
+            -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/actions/workflows/release.yaml/dispatches" \
+            -d '{"ref": "v${{ steps.version.outputs.version }}"}'
+
+      - name: Dispatch deploy-website workflow
+        if: steps.version.outputs.is-new == 'true'
+        run: |
+          curl -s -X POST \
+            -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/actions/workflows/deploy-website.yaml/dispatches" \
+            -d '{"ref": "main"}'
