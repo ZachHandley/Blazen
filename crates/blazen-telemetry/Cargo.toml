@@ -19,8 +19,8 @@ chrono = { workspace = true }
 tokio = { workspace = true }
 
 # For TracingCompletionModel
-blazen-llm = { path = "../blazen-llm", optional = true, default-features = false }
-blazen-events = { path = "../blazen-events" }
+blazen-llm = { workspace = true, optional = true }
+blazen-events = { workspace = true }
 async-trait = { workspace = true }
 futures-util = { workspace = true }
 
