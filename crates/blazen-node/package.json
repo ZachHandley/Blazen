@@ -15,7 +15,7 @@
       "x86_64-apple-darwin"
     ]
   },
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "repository": {
     "type": "git",
     "url": "https://forge.blackleafdigital.com/BlackLeafDigital/Blazen"

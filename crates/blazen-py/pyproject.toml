@@ -14,11 +14,13 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 description = "Python bindings for the Blazen workflow engine"
+readme = "README.md"
+license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "Zach Handley", email = "zachhandley@gmail.com" }]
 dynamic = ["version"]
 
