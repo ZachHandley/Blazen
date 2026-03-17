@@ -30,38 +30,20 @@ jobs:
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
         with:
           components: rustfmt, clippy
+          sccache: true
+          sccache-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-region: ${{ secrets.S3_REGION }}
+          sccache-access-key: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/blazen-lint
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
-
-      - name: Restore cargo cache
-        uses: https://forge.blackleafdigital.com/Public/actions/s3-cache@main
-        with:
-          mode: restore
-          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git
-          bucket: ${{ secrets.S3_BUCKET }}
-          endpoint: https://${{ secrets.S3_ENDPOINT }}
-          region: ${{ secrets.S3_REGION }}
-          access-key: ${{ secrets.S3_ACCESS_KEY }}
-          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
 
       - name: Format check
         run: cargo fmt --all -- --check
 
       - name: Clippy
         run: cargo clippy --workspace --all-features -- -D warnings
-
-      - name: Save cargo cache
-        if: always()
-        uses: https://forge.blackleafdigital.com/Public/actions/s3-cache@main
-        with:
-          mode: save
-          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git
-          bucket: ${{ secrets.S3_BUCKET }}
-          endpoint: https://${{ secrets.S3_ENDPOINT }}
-          region: ${{ secrets.S3_REGION }}
-          access-key: ${{ secrets.S3_ACCESS_KEY }}
-          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
 
   test:
     name: Test
@@ -75,38 +57,20 @@ jobs:
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
         with:
           nextest: true
+          sccache: true
+          sccache-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-region: ${{ secrets.S3_REGION }}
+          sccache-access-key: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/blazen-test
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
-
-      - name: Restore cargo cache
-        uses: https://forge.blackleafdigital.com/Public/actions/s3-cache@main
-        with:
-          mode: restore
-          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git
-          bucket: ${{ secrets.S3_BUCKET }}
-          endpoint: https://${{ secrets.S3_ENDPOINT }}
-          region: ${{ secrets.S3_REGION }}
-          access-key: ${{ secrets.S3_ACCESS_KEY }}
-          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
 
       - name: Workspace tests (unit + integration)
         run: cargo nextest run --workspace --all-features
 
       - name: Workspace tests (doc tests)
         run: cargo test --workspace --doc --all-features
-
-      - name: Save cargo cache
-        if: always()
-        uses: https://forge.blackleafdigital.com/Public/actions/s3-cache@main
-        with:
-          mode: save
-          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git
-          bucket: ${{ secrets.S3_BUCKET }}
-          endpoint: https://${{ secrets.S3_ENDPOINT }}
-          region: ${{ secrets.S3_REGION }}
-          access-key: ${{ secrets.S3_ACCESS_KEY }}
-          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
 
   test-python:
     name: Test Python Bindings
@@ -119,6 +83,13 @@ jobs:
       - name: Setup Rust
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
         with:
+          sccache: true
+          sccache-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-region: ${{ secrets.S3_REGION }}
+          sccache-access-key: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/blazen-python
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
       - name: Install uv
@@ -127,36 +98,11 @@ jobs:
       - name: Setup Python
         run: uv python install 3.12
 
-      - name: Restore cargo cache
-        uses: https://forge.blackleafdigital.com/Public/actions/s3-cache@main
-        with:
-          mode: restore
-          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git
-          bucket: ${{ secrets.S3_BUCKET }}
-          endpoint: https://${{ secrets.S3_ENDPOINT }}
-          region: ${{ secrets.S3_REGION }}
-          access-key: ${{ secrets.S3_ACCESS_KEY }}
-          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
-
       - name: Install deps and build wheel
         run: uv sync --directory crates/blazen-py --extra dev
 
       - name: Run Python E2E tests
         run: uv run --directory crates/blazen-py pytest -v
-
-      - name: Save cargo cache
-        if: always()
-        uses: https://forge.blackleafdigital.com/Public/actions/s3-cache@main
-        with:
-          mode: save
-          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git
-          bucket: ${{ secrets.S3_BUCKET }}
-          endpoint: https://${{ secrets.S3_ENDPOINT }}
-          region: ${{ secrets.S3_REGION }}
-          access-key: ${{ secrets.S3_ACCESS_KEY }}
-          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
 
   test-node:
     name: Test Node.js Bindings
@@ -169,24 +115,19 @@ jobs:
       - name: Setup Rust
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
         with:
+          sccache: true
+          sccache-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-region: ${{ secrets.S3_REGION }}
+          sccache-access-key: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/blazen-node
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-
-      - name: Restore cargo cache
-        uses: https://forge.blackleafdigital.com/Public/actions/s3-cache@main
-        with:
-          mode: restore
-          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git
-          bucket: ${{ secrets.S3_BUCKET }}
-          endpoint: https://${{ secrets.S3_ENDPOINT }}
-          region: ${{ secrets.S3_REGION }}
-          access-key: ${{ secrets.S3_ACCESS_KEY }}
-          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
 
       - name: Build Node bindings
         run: |
@@ -196,19 +137,6 @@ jobs:
 
       - name: Run Node.js E2E tests
         run: node --test tests/node/test_workflow.mjs
-
-      - name: Save cargo cache
-        if: always()
-        uses: https://forge.blackleafdigital.com/Public/actions/s3-cache@main
-        with:
-          mode: save
-          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git
-          bucket: ${{ secrets.S3_BUCKET }}
-          endpoint: https://${{ secrets.S3_ENDPOINT }}
-          region: ${{ secrets.S3_REGION }}
-          access-key: ${{ secrets.S3_ACCESS_KEY }}
-          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
 
   build:
     name: Build (x86_64-unknown-linux-gnu)
@@ -243,35 +171,9 @@ jobs:
           sccache-key-prefix: sccache/blazen-x86_64-unknown-linux-gnu
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
-      - name: Restore cargo cache
-        if: steps.check.outputs.completed != 'true'
-        uses: https://forge.blackleafdigital.com/Public/actions/s3-cache@main
-        with:
-          mode: restore
-          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git
-          bucket: ${{ secrets.S3_BUCKET }}
-          endpoint: https://${{ secrets.S3_ENDPOINT }}
-          region: ${{ secrets.S3_REGION }}
-          access-key: ${{ secrets.S3_ACCESS_KEY }}
-          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
-
       - name: Build release
         if: steps.check.outputs.completed != 'true'
         run: cargo build --workspace --release --all-features --target x86_64-unknown-linux-gnu
-
-      - name: Save cargo cache
-        if: always() && steps.check.outputs.completed != 'true'
-        uses: https://forge.blackleafdigital.com/Public/actions/s3-cache@main
-        with:
-          mode: save
-          key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git
-          bucket: ${{ secrets.S3_BUCKET }}
-          endpoint: https://${{ secrets.S3_ENDPOINT }}
-          region: ${{ secrets.S3_REGION }}
-          access-key: ${{ secrets.S3_ACCESS_KEY }}
-          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
