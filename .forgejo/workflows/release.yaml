@@ -159,25 +159,27 @@ jobs:
 
       - name: Publish crates in dependency order
         if: steps.check.outputs.completed != 'true'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
           # Publish in dependency order with --no-verify (workspace deps are local/forgejo, not crates.io)
-          cargo publish -p blazen-events --registry forgejo --no-verify --allow-dirty
+          cargo publish -p blazen-events --no-verify --allow-dirty
           sleep 10
-          cargo publish -p blazen-macros --registry forgejo --no-verify --allow-dirty
+          cargo publish -p blazen-macros --no-verify --allow-dirty
           sleep 10
-          cargo publish -p blazen-persist --registry forgejo --no-verify --allow-dirty
+          cargo publish -p blazen-persist --no-verify --allow-dirty
           sleep 10
-          cargo publish -p blazen-core --registry forgejo --no-verify --allow-dirty
+          cargo publish -p blazen-core --no-verify --allow-dirty
           sleep 10
-          cargo publish -p blazen-llm --registry forgejo --all-features --no-verify --allow-dirty
+          cargo publish -p blazen-llm --all-features --no-verify --allow-dirty
           sleep 10
-          cargo publish -p blazen-prompts --registry forgejo --no-verify --allow-dirty
+          cargo publish -p blazen-prompts --no-verify --allow-dirty
           sleep 10
-          cargo publish -p blazen-pipeline --registry forgejo --no-verify --allow-dirty
+          cargo publish -p blazen-pipeline --no-verify --allow-dirty
           sleep 10
-          cargo publish -p blazen --registry forgejo --all-features --no-verify --allow-dirty
+          cargo publish -p blazen --all-features --no-verify --allow-dirty
           sleep 10
-          cargo publish -p blazen-cli --registry forgejo --no-verify --allow-dirty
+          cargo publish -p blazen-cli --no-verify --allow-dirty
 
       - name: Save cargo cache
         if: always() && steps.check.outputs.completed != 'true'
@@ -247,13 +249,12 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         run: uvx maturin build --release -m crates/blazen-py/Cargo.toml
 
-      - name: Publish to Forgejo PyPI
+      - name: Publish to PyPI
         if: steps.check.outputs.completed != 'true'
         run: |
           uvx twine upload \
-            --repository-url https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/pypi \
-            -u zachhandley \
-            -p ${{ secrets.FORGEJO_ACTIONS_TOKEN }} \
+            -u __token__ \
+            -p ${{ secrets.PYPI_TOKEN }} \
             target/wheels/*.whl
 
       - name: Mark step complete
@@ -323,12 +324,12 @@ jobs:
           cd crates/blazen-node
           pnpm run build
 
-      - name: Publish to Forgejo npm
+      - name: Publish to npm
         if: steps.check.outputs.completed != 'true'
         run: |
           cd crates/blazen-node
-          echo "//forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/:_authToken=${{ secrets.FORGEJO_ACTIONS_TOKEN }}" > .npmrc
-          pnpm publish --registry https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/ --no-git-checks
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_ACCESS_TOKEN }}" > .npmrc
+          pnpm publish --no-git-checks
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
@@ -390,17 +391,17 @@ jobs:
 
           **Rust:**
           \`\`\`bash
-          cargo add blazen --registry forgejo
+          cargo add blazen
           \`\`\`
 
           **Python:**
           \`\`\`bash
-          uv pip install blazen --index-url https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/pypi/simple/
+          pip install blazen
           \`\`\`
 
           **Node.js:**
           \`\`\`bash
-          pnpm add blazen --registry https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/npm/
+          pnpm add blazen
           \`\`\`
           NOTES_EOF
 
