@@ -34,6 +34,8 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinSet;
 use uuid::Uuid;
 
+use tracing::Instrument;
+
 use crate::context::Context;
 use crate::error::WorkflowError;
 use crate::handler::WorkflowHandler;
@@ -62,12 +64,17 @@ pub struct WorkflowBuilder {
     timeout: Option<Duration>,
     /// Optional inline handler for input requests (HITL without pausing).
     input_handler: Option<InputHandlerFn>,
+    /// Whether to automatically publish lifecycle events to the broadcast stream.
+    auto_publish_events: bool,
     /// Checkpoint store for durable persistence (requires `persist` feature).
     #[cfg(feature = "persist")]
     checkpoint_store: Option<Arc<dyn blazen_persist::CheckpointStore>>,
     /// Whether to automatically checkpoint after each step completes.
     #[cfg(feature = "persist")]
     checkpoint_after_step: bool,
+    /// Whether to collect an append-only history of workflow events (requires `telemetry` feature).
+    #[cfg(feature = "telemetry")]
+    collect_history: bool,
 }
 
 impl WorkflowBuilder {
@@ -79,10 +86,13 @@ impl WorkflowBuilder {
             steps: Vec::new(),
             timeout: Some(Duration::from_secs(300)), // 5 min default
             input_handler: None,
+            auto_publish_events: false,
             #[cfg(feature = "persist")]
             checkpoint_store: None,
             #[cfg(feature = "persist")]
             checkpoint_after_step: false,
+            #[cfg(feature = "telemetry")]
+            collect_history: false,
         }
     }
 
@@ -116,6 +126,39 @@ impl WorkflowBuilder {
     #[must_use]
     pub fn input_handler(mut self, handler: InputHandlerFn) -> Self {
         self.input_handler = Some(handler);
+        self
+    }
+
+    /// Enable or disable automatic publishing of lifecycle events to the
+    /// broadcast stream.
+    ///
+    /// When enabled, the event loop will publish `DynamicEvent`s with type
+    /// `"blazen::lifecycle"` at key decision points (event routed, step
+    /// started, step completed, step failed). Consumers that subscribe via
+    /// [`WorkflowHandler::stream_events`](crate::WorkflowHandler::stream_events)
+    /// will receive these alongside any events published by steps.
+    ///
+    /// Defaults to `false`.
+    #[must_use]
+    pub fn auto_publish_events(mut self, enabled: bool) -> Self {
+        self.auto_publish_events = enabled;
+        self
+    }
+
+    /// Enable collection of an append-only history of workflow events.
+    ///
+    /// When enabled, the event loop records a chronological log of
+    /// everything that happens during the workflow run: events received,
+    /// steps dispatched, steps completed/failed, pauses, and completion.
+    /// The history can be retrieved via
+    /// [`WorkflowHandler::collect_history`](crate::WorkflowHandler::collect_history)
+    /// after the workflow completes.
+    ///
+    /// Requires the `telemetry` feature.
+    #[cfg(feature = "telemetry")]
+    #[must_use]
+    pub fn with_history(mut self) -> Self {
+        self.collect_history = true;
         self
     }
 
@@ -177,10 +220,13 @@ impl WorkflowBuilder {
             step_registry: registry,
             timeout: self.timeout,
             input_handler: self.input_handler,
+            auto_publish_events: self.auto_publish_events,
             #[cfg(feature = "persist")]
             checkpoint_store: self.checkpoint_store,
             #[cfg(feature = "persist")]
             checkpoint_after_step: self.checkpoint_after_step,
+            #[cfg(feature = "telemetry")]
+            collect_history: self.collect_history,
         })
     }
 }
@@ -192,12 +238,17 @@ pub struct Workflow {
     timeout: Option<Duration>,
     /// Optional inline handler for input requests (HITL without pausing).
     input_handler: Option<InputHandlerFn>,
+    /// Whether to automatically publish lifecycle events to the broadcast stream.
+    auto_publish_events: bool,
     /// Checkpoint store for durable persistence (requires `persist` feature).
     #[cfg(feature = "persist")]
     checkpoint_store: Option<Arc<dyn blazen_persist::CheckpointStore>>,
     /// Whether to automatically checkpoint after each step completes.
     #[cfg(feature = "persist")]
     checkpoint_after_step: bool,
+    /// Whether to collect an append-only history of workflow events (requires `telemetry` feature).
+    #[cfg(feature = "telemetry")]
+    collect_history: bool,
 }
 
 impl std::fmt::Debug for Workflow {
@@ -266,11 +317,21 @@ impl Workflow {
             .send(envelope)
             .map_err(|_| WorkflowError::ChannelClosed)?;
 
+        // Create history channel if telemetry is enabled and history collection is on.
+        #[cfg(feature = "telemetry")]
+        let (history_tx, history_rx) = if self.collect_history {
+            let (tx, rx) = mpsc::unbounded_channel();
+            (Some(tx), Some(rx))
+        } else {
+            (None, None)
+        };
+
         // Spawn the event loop.
         let registry = self.step_registry.clone();
         let timeout = self.timeout;
         let workflow_name = self.name.clone();
         let input_handler = self.input_handler.clone();
+        let auto_publish = self.auto_publish_events;
 
         #[cfg(feature = "persist")]
         let checkpoint_config = CheckpointConfig {
@@ -290,8 +351,11 @@ impl Workflow {
             workflow_name,
             run_id,
             input_handler,
+            auto_publish,
             #[cfg(feature = "persist")]
             checkpoint_config,
+            #[cfg(feature = "telemetry")]
+            history_tx,
         ));
 
         Ok(WorkflowHandler::new(
@@ -300,6 +364,8 @@ impl Workflow {
             Some(pause_tx),
             Some(snapshot_rx),
             event_loop_handle,
+            #[cfg(feature = "telemetry")]
+            history_rx,
         ))
     }
 
@@ -350,13 +416,19 @@ impl Workflow {
         ctx.restore_metadata(snapshot.metadata).await;
 
         // Reinject pending events into the channel.
+        // Try to reconstruct concrete event types via the deserializer
+        // registry first; fall back to DynamicEvent if no deserializer is
+        // registered or deserialization fails.
         for serialized in &snapshot.pending_events {
-            let dynamic_event = DynamicEvent {
-                event_type: serialized.event_type.clone(),
-                data: serialized.data.clone(),
-            };
-            let envelope =
-                EventEnvelope::new(Box::new(dynamic_event), serialized.source_step.clone());
+            let event: Box<dyn AnyEvent> =
+                blazen_events::try_deserialize_event(&serialized.event_type, &serialized.data)
+                    .unwrap_or_else(|| {
+                        Box::new(DynamicEvent {
+                            event_type: serialized.event_type.clone(),
+                            data: serialized.data.clone(),
+                        })
+                    });
+            let envelope = EventEnvelope::new(event, serialized.source_step.clone());
             event_tx
                 .send(envelope)
                 .map_err(|_| WorkflowError::ChannelClosed)?;
@@ -365,6 +437,10 @@ impl Workflow {
         // Spawn the event loop.
         let workflow_name = snapshot.workflow_name;
         let run_id = snapshot.run_id;
+
+        // Resumed workflows do not collect history (no builder config available).
+        #[cfg(feature = "telemetry")]
+        let history_tx: Option<mpsc::UnboundedSender<blazen_telemetry::HistoryEvent>> = None;
 
         #[cfg(feature = "persist")]
         let checkpoint_config = CheckpointConfig {
@@ -383,9 +459,12 @@ impl Workflow {
             snapshot_tx,
             workflow_name,
             run_id,
-            None, // No inline input handler for resumed workflows.
+            None,  // No inline input handler for resumed workflows.
+            false, // No auto-publish for resumed workflows.
             #[cfg(feature = "persist")]
             checkpoint_config,
+            #[cfg(feature = "telemetry")]
+            history_tx,
         ));
 
         Ok(WorkflowHandler::new(
@@ -394,6 +473,8 @@ impl Workflow {
             Some(pause_tx),
             Some(snapshot_rx),
             event_loop_handle,
+            #[cfg(feature = "telemetry")]
+            None, // No history receiver for resumed workflows.
         ))
     }
 
@@ -502,6 +583,8 @@ async fn save_checkpoint(
         collected_events,
         pending_events: Vec::new(), // Cannot peek at the channel non-destructively.
         metadata,
+        #[cfg(feature = "telemetry")]
+        history: Vec::new(),
     };
 
     let checkpoint: blazen_persist::WorkflowCheckpoint = snapshot.into();
@@ -543,9 +626,18 @@ async fn event_loop(
     workflow_name: String,
     run_id: Uuid,
     input_handler: Option<InputHandlerFn>,
+    auto_publish_events: bool,
     #[cfg(feature = "persist")] checkpoint_config: CheckpointConfig,
+    #[cfg(feature = "telemetry")] history_tx: Option<
+        mpsc::UnboundedSender<blazen_telemetry::HistoryEvent>,
+    >,
 ) {
     let stream_ctx = ctx.clone();
+    let span = tracing::info_span!(
+        "workflow.run",
+        workflow_name = %workflow_name,
+        run_id = %run_id,
+    );
     event_loop_inner(
         event_rx,
         event_tx,
@@ -558,9 +650,13 @@ async fn event_loop(
         workflow_name,
         run_id,
         input_handler,
+        auto_publish_events,
         #[cfg(feature = "persist")]
         checkpoint_config,
+        #[cfg(feature = "telemetry")]
+        history_tx,
     )
+    .instrument(span)
     .await;
     stream_ctx.signal_stream_end().await;
 }
@@ -580,9 +676,25 @@ async fn event_loop_inner(
     workflow_name: String,
     run_id: Uuid,
     input_handler: Option<InputHandlerFn>,
+    auto_publish_events: bool,
     #[cfg(feature = "persist")] checkpoint_config: CheckpointConfig,
+    #[cfg(feature = "telemetry")] history_tx: Option<
+        mpsc::UnboundedSender<blazen_telemetry::HistoryEvent>,
+    >,
 ) {
     let start = Instant::now();
+
+    // Emit WorkflowStarted history event.
+    #[cfg(feature = "telemetry")]
+    if let Some(ref tx) = history_tx {
+        let _ = tx.send(blazen_telemetry::HistoryEvent {
+            timestamp: Utc::now(),
+            sequence: 0,
+            kind: blazen_telemetry::HistoryEventKind::WorkflowStarted {
+                input: serde_json::json!({}),
+            },
+        });
+    }
 
     // Channel for step errors -- steps run in spawned tasks and report
     // failures back here so the event loop can terminate.
@@ -594,11 +706,56 @@ async fn event_loop_inner(
     // Counter for in-flight tasks (used for logging/diagnostics).
     let in_flight_count = Arc::new(AtomicUsize::new(0));
 
+    // Helper closure for auto-publishing lifecycle events to the broadcast stream.
+    let publish_lifecycle = |ctx: &Context,
+                             kind: &str,
+                             step_name: Option<&str>,
+                             event_type_str: Option<&str>,
+                             duration_ms: Option<u64>,
+                             error: Option<&str>| {
+        let ctx = ctx.clone();
+        let kind = kind.to_owned();
+        let step_name = step_name.map(ToOwned::to_owned);
+        let event_type_str = event_type_str.map(ToOwned::to_owned);
+        let error = error.map(ToOwned::to_owned);
+        async move {
+            let mut data = serde_json::Map::new();
+            data.insert("kind".into(), serde_json::Value::String(kind));
+            if let Some(s) = step_name {
+                data.insert("step_name".into(), serde_json::Value::String(s));
+            }
+            if let Some(e) = event_type_str {
+                data.insert("event_type".into(), serde_json::Value::String(e));
+            }
+            if let Some(d) = duration_ms {
+                data.insert("duration_ms".into(), serde_json::Value::Number(d.into()));
+            }
+            if let Some(e) = error {
+                data.insert("error".into(), serde_json::Value::String(e));
+            }
+            ctx.write_event_to_stream(DynamicEvent {
+                event_type: "blazen::lifecycle".to_owned(),
+                data: serde_json::Value::Object(data),
+            })
+            .await;
+        }
+    };
+
     loop {
         // Calculate remaining time for timeout.
         let recv_result = if let Some(timeout_dur) = timeout {
             let remaining = timeout_dur.saturating_sub(start.elapsed());
             if remaining.is_zero() {
+                #[cfg(feature = "telemetry")]
+                if let Some(ref tx) = history_tx {
+                    let _ = tx.send(blazen_telemetry::HistoryEvent {
+                        timestamp: Utc::now(),
+                        sequence: 0,
+                        kind: blazen_telemetry::HistoryEventKind::WorkflowTimedOut {
+                            elapsed_ms: start.elapsed().as_millis() as u64,
+                        },
+                    });
+                }
                 let _ = result_tx.send(Err(WorkflowError::Timeout {
                     elapsed: start.elapsed(),
                 }));
@@ -612,6 +769,17 @@ async fn event_loop_inner(
 
                 err = error_rx.recv() => {
                     if let Some(workflow_err) = err {
+                        #[cfg(feature = "telemetry")]
+                        if let Some(ref tx) = history_tx {
+                            let _ = tx.send(blazen_telemetry::HistoryEvent {
+                                timestamp: Utc::now(),
+                                sequence: 0,
+                                kind: blazen_telemetry::HistoryEventKind::WorkflowFailed {
+                                    error: workflow_err.to_string(),
+                                    duration_ms: start.elapsed().as_millis() as u64,
+                                },
+                            });
+                        }
                         let _ = result_tx.send(Err(workflow_err));
                         return;
                     }
@@ -621,6 +789,16 @@ async fn event_loop_inner(
                     maybe_envelope.ok_or(())
                 }
                 () = tokio::time::sleep(remaining) => {
+                    #[cfg(feature = "telemetry")]
+                    if let Some(ref tx) = history_tx {
+                        let _ = tx.send(blazen_telemetry::HistoryEvent {
+                            timestamp: Utc::now(),
+                            sequence: 0,
+                            kind: blazen_telemetry::HistoryEventKind::WorkflowTimedOut {
+                                elapsed_ms: start.elapsed().as_millis() as u64,
+                            },
+                        });
+                    }
                     let _ = result_tx.send(Err(WorkflowError::Timeout {
                         elapsed: start.elapsed(),
                     }));
@@ -628,6 +806,17 @@ async fn event_loop_inner(
                 }
                 // Pause signal -- lowest priority so events are drained first.
                 _ = &mut pause_rx => {
+                    #[cfg(feature = "telemetry")]
+                    if let Some(ref tx) = history_tx {
+                        let _ = tx.send(blazen_telemetry::HistoryEvent {
+                            timestamp: Utc::now(),
+                            sequence: 0,
+                            kind: blazen_telemetry::HistoryEventKind::WorkflowPaused {
+                                reason: blazen_telemetry::PauseReason::Manual,
+                                pending_count: 0,
+                            },
+                        });
+                    }
                     handle_pause(
                         &mut in_flight,
                         &mut event_rx,
@@ -637,6 +826,7 @@ async fn event_loop_inner(
                         &workflow_name,
                         run_id,
                     )
+                    .instrument(tracing::info_span!("workflow.pause", pause_type = "manual"))
                     .await;
                     return;
                 }
@@ -649,6 +839,17 @@ async fn event_loop_inner(
 
                 err = error_rx.recv() => {
                     if let Some(workflow_err) = err {
+                        #[cfg(feature = "telemetry")]
+                        if let Some(ref tx) = history_tx {
+                            let _ = tx.send(blazen_telemetry::HistoryEvent {
+                                timestamp: Utc::now(),
+                                sequence: 0,
+                                kind: blazen_telemetry::HistoryEventKind::WorkflowFailed {
+                                    error: workflow_err.to_string(),
+                                    duration_ms: start.elapsed().as_millis() as u64,
+                                },
+                            });
+                        }
                         let _ = result_tx.send(Err(workflow_err));
                         return;
                     }
@@ -659,6 +860,17 @@ async fn event_loop_inner(
                 }
                 // Pause signal -- lowest priority.
                 _ = &mut pause_rx => {
+                    #[cfg(feature = "telemetry")]
+                    if let Some(ref tx) = history_tx {
+                        let _ = tx.send(blazen_telemetry::HistoryEvent {
+                            timestamp: Utc::now(),
+                            sequence: 0,
+                            kind: blazen_telemetry::HistoryEventKind::WorkflowPaused {
+                                reason: blazen_telemetry::PauseReason::Manual,
+                                pending_count: 0,
+                            },
+                        });
+                    }
                     handle_pause(
                         &mut in_flight,
                         &mut event_rx,
@@ -668,6 +880,7 @@ async fn event_loop_inner(
                         &workflow_name,
                         run_id,
                     )
+                    .instrument(tracing::info_span!("workflow.pause", pause_type = "manual"))
                     .await;
                     return;
                 }
@@ -682,15 +895,55 @@ async fn event_loop_inner(
         let event = envelope.event;
         let event_type = event.event_type_id();
 
-        tracing::debug!(
-            event_type,
-            source_step = ?envelope.source_step,
-            "event loop received event"
-        );
+        // Emit EventReceived history event.
+        #[cfg(feature = "telemetry")]
+        if let Some(ref tx) = history_tx {
+            let _ = tx.send(blazen_telemetry::HistoryEvent {
+                timestamp: Utc::now(),
+                sequence: 0,
+                kind: blazen_telemetry::HistoryEventKind::EventReceived {
+                    event_type: event_type.to_string(),
+                    source_step: envelope.source_step.clone(),
+                },
+            });
+        }
+
+        // Auto-publish event_routed lifecycle event.
+        if auto_publish_events {
+            publish_lifecycle(&ctx, "event_routed", None, Some(event_type), None, None).await;
+        }
+
+        {
+            let _event_span = tracing::debug_span!(
+                "workflow.event",
+                event_type = %event_type,
+                source_step = ?envelope.source_step,
+            )
+            .entered();
+
+            tracing::debug!(
+                event_type,
+                source_step = ?envelope.source_step,
+                "event loop received event"
+            );
+        }
 
         // Check for StopEvent -- terminates the loop.
         if event_type == StopEvent::event_type() {
             tracing::info!("workflow completed via StopEvent");
+
+            // Emit WorkflowCompleted history event.
+            #[cfg(feature = "telemetry")]
+            if let Some(ref tx) = history_tx {
+                let _ = tx.send(blazen_telemetry::HistoryEvent {
+                    timestamp: Utc::now(),
+                    sequence: 0,
+                    kind: blazen_telemetry::HistoryEventKind::WorkflowCompleted {
+                        duration_ms: start.elapsed().as_millis() as u64,
+                    },
+                });
+            }
+
             // If this is a DynamicEvent (e.g. reinjected after resume),
             // reconstruct a real StopEvent so callers can downcast.
             let final_event: Box<dyn AnyEvent> =
@@ -738,6 +991,19 @@ async fn event_loop_inner(
                 return;
             };
 
+            // Emit InputRequested history event.
+            #[cfg(feature = "telemetry")]
+            if let Some(ref tx) = history_tx {
+                let _ = tx.send(blazen_telemetry::HistoryEvent {
+                    timestamp: Utc::now(),
+                    sequence: 0,
+                    kind: blazen_telemetry::HistoryEventKind::InputRequested {
+                        request_id: request.request_id.clone(),
+                        prompt: request.prompt.clone(),
+                    },
+                });
+            }
+
             // If an input handler callback is registered, call it inline.
             if let Some(ref handler) = input_handler {
                 match handler(request).await {
@@ -754,6 +1020,19 @@ async fn event_loop_inner(
                 }
             }
 
+            // Emit WorkflowPaused history event (input required).
+            #[cfg(feature = "telemetry")]
+            if let Some(ref tx) = history_tx {
+                let _ = tx.send(blazen_telemetry::HistoryEvent {
+                    timestamp: Utc::now(),
+                    sequence: 0,
+                    kind: blazen_telemetry::HistoryEventKind::WorkflowPaused {
+                        reason: blazen_telemetry::PauseReason::InputRequired,
+                        pending_count: 0,
+                    },
+                });
+            }
+
             // No callback -- auto-pause with request attached to snapshot.
             handle_input_pause(
                 &mut in_flight,
@@ -765,6 +1044,7 @@ async fn event_loop_inner(
                 run_id,
                 &request,
             )
+            .instrument(tracing::info_span!("workflow.pause", pause_type = "input"))
             .await;
             return;
         }
@@ -772,6 +1052,17 @@ async fn event_loop_inner(
         // Look up step handlers for this event type.
         let Some(handlers) = registry.get(event_type) else {
             tracing::warn!(event_type, "no handler registered for event type");
+            #[cfg(feature = "telemetry")]
+            if let Some(ref tx) = history_tx {
+                let _ = tx.send(blazen_telemetry::HistoryEvent {
+                    timestamp: Utc::now(),
+                    sequence: 0,
+                    kind: blazen_telemetry::HistoryEventKind::WorkflowFailed {
+                        error: format!("no handler registered for event type: {event_type}"),
+                        duration_ms: start.elapsed().as_millis() as u64,
+                    },
+                });
+            }
             let _ = result_tx.send(Err(WorkflowError::NoHandler {
                 event_type: event_type.to_owned(),
             }));
@@ -791,6 +1082,9 @@ async fn event_loop_inner(
             &error_tx,
             &mut in_flight,
             &in_flight_count,
+            auto_publish_events,
+            #[cfg(feature = "telemetry")]
+            &history_tx,
         );
 
         // Auto-checkpoint after dispatching step handlers (best-effort).
@@ -855,6 +1149,8 @@ async fn handle_pause(
         collected_events,
         pending_events,
         metadata,
+        #[cfg(feature = "telemetry")]
+        history: Vec::new(),
     };
 
     // 4. Send the snapshot back to the handler.
@@ -922,6 +1218,8 @@ async fn handle_input_pause(
         collected_events,
         pending_events,
         metadata,
+        #[cfg(feature = "telemetry")]
+        history: Vec::new(),
     };
 
     // 5. Send the snapshot back to the handler.
@@ -939,6 +1237,7 @@ async fn handle_input_pause(
 ///
 /// Each spawned task is added to the `in_flight` [`JoinSet`] so the event
 /// loop can wait for all of them to complete during a pause.
+#[allow(clippy::too_many_arguments)]
 fn dispatch_to_handlers(
     handlers: &[StepRegistration],
     event: &dyn AnyEvent,
@@ -947,6 +1246,10 @@ fn dispatch_to_handlers(
     error_tx: &mpsc::UnboundedSender<WorkflowError>,
     in_flight: &mut JoinSet<()>,
     in_flight_count: &Arc<AtomicUsize>,
+    auto_publish_events: bool,
+    #[cfg(feature = "telemetry")] history_tx: &Option<
+        mpsc::UnboundedSender<blazen_telemetry::HistoryEvent>,
+    >,
 ) {
     for step in handlers {
         let event_clone = event.clone_boxed();
@@ -956,38 +1259,260 @@ fn dispatch_to_handlers(
         let event_tx_clone = event_tx.clone();
         let error_tx_clone = error_tx.clone();
         let counter = Arc::clone(in_flight_count);
+        let event_type = event.event_type_id().to_owned();
+
+        // Emit StepDispatched history event.
+        #[cfg(feature = "telemetry")]
+        let htx = history_tx.clone();
+        #[cfg(feature = "telemetry")]
+        if let Some(ref tx) = htx {
+            let _ = tx.send(blazen_telemetry::HistoryEvent {
+                timestamp: Utc::now(),
+                sequence: 0,
+                kind: blazen_telemetry::HistoryEventKind::StepDispatched {
+                    step_name: step_name.clone(),
+                    event_type: event_type.clone(),
+                },
+            });
+        }
+
+        // Auto-publish step_started lifecycle event.
+        let stream_ctx = if auto_publish_events {
+            Some(ctx.clone())
+        } else {
+            None
+        };
 
         counter.fetch_add(1, Ordering::Relaxed);
 
-        in_flight.spawn(async move {
-            match handler(event_clone, ctx_clone).await {
-                Ok(StepOutput::Single(output_event)) => {
-                    let envelope = EventEnvelope::new(output_event, Some(step_name));
-                    let _ = event_tx_clone.send(envelope);
+        let step_span = tracing::info_span!(
+            "workflow.step",
+            step_name = %step_name,
+            event_type = %event_type,
+            otel.status_code = tracing::field::Empty,
+            duration_ms = tracing::field::Empty,
+        );
+        let step_span_clone = step_span.clone();
+
+        in_flight.spawn(
+            async move {
+                // Auto-publish step_started.
+                if let Some(ref sctx) = stream_ctx {
+                    let mut data = serde_json::Map::new();
+                    data.insert(
+                        "kind".into(),
+                        serde_json::Value::String("step_started".into()),
+                    );
+                    data.insert(
+                        "step_name".into(),
+                        serde_json::Value::String(step_name.clone()),
+                    );
+                    data.insert(
+                        "event_type".into(),
+                        serde_json::Value::String(event_type.clone()),
+                    );
+                    sctx.write_event_to_stream(DynamicEvent {
+                        event_type: "blazen::lifecycle".to_owned(),
+                        data: serde_json::Value::Object(data),
+                    })
+                    .await;
                 }
-                Ok(StepOutput::Multiple(events)) => {
-                    for e in events {
-                        let envelope = EventEnvelope::new(e, Some(step_name.clone()));
+
+                let start = Instant::now();
+                match handler(event_clone, ctx_clone).await {
+                    Ok(StepOutput::Single(output_event)) => {
+                        let duration = start.elapsed().as_millis() as u64;
+                        step_span_clone.record("duration_ms", duration);
+                        step_span_clone.record("otel.status_code", "OK");
+
+                        // Emit StepCompleted history event.
+                        #[cfg(feature = "telemetry")]
+                        if let Some(ref tx) = htx {
+                            let output_type = output_event.event_type_id().to_owned();
+                            let _ = tx.send(blazen_telemetry::HistoryEvent {
+                                timestamp: Utc::now(),
+                                sequence: 0,
+                                kind: blazen_telemetry::HistoryEventKind::StepCompleted {
+                                    step_name: step_name.clone(),
+                                    duration_ms: duration,
+                                    output_type,
+                                },
+                            });
+                        }
+
+                        // Auto-publish step_completed.
+                        if let Some(ref sctx) = stream_ctx {
+                            let mut data = serde_json::Map::new();
+                            data.insert(
+                                "kind".into(),
+                                serde_json::Value::String("step_completed".into()),
+                            );
+                            data.insert(
+                                "step_name".into(),
+                                serde_json::Value::String(step_name.clone()),
+                            );
+                            data.insert(
+                                "duration_ms".into(),
+                                serde_json::Value::Number(duration.into()),
+                            );
+                            sctx.write_event_to_stream(DynamicEvent {
+                                event_type: "blazen::lifecycle".to_owned(),
+                                data: serde_json::Value::Object(data),
+                            })
+                            .await;
+                        }
+
+                        let envelope = EventEnvelope::new(output_event, Some(step_name));
                         let _ = event_tx_clone.send(envelope);
                     }
+                    Ok(StepOutput::Multiple(events)) => {
+                        let duration = start.elapsed().as_millis() as u64;
+                        step_span_clone.record("duration_ms", duration);
+                        step_span_clone.record("otel.status_code", "OK");
+
+                        // Emit StepCompleted history event.
+                        #[cfg(feature = "telemetry")]
+                        if let Some(ref tx) = htx {
+                            let _ = tx.send(blazen_telemetry::HistoryEvent {
+                                timestamp: Utc::now(),
+                                sequence: 0,
+                                kind: blazen_telemetry::HistoryEventKind::StepCompleted {
+                                    step_name: step_name.clone(),
+                                    duration_ms: duration,
+                                    output_type: "Multiple".to_owned(),
+                                },
+                            });
+                        }
+
+                        // Auto-publish step_completed.
+                        if let Some(ref sctx) = stream_ctx {
+                            let mut data = serde_json::Map::new();
+                            data.insert(
+                                "kind".into(),
+                                serde_json::Value::String("step_completed".into()),
+                            );
+                            data.insert(
+                                "step_name".into(),
+                                serde_json::Value::String(step_name.clone()),
+                            );
+                            data.insert(
+                                "duration_ms".into(),
+                                serde_json::Value::Number(duration.into()),
+                            );
+                            sctx.write_event_to_stream(DynamicEvent {
+                                event_type: "blazen::lifecycle".to_owned(),
+                                data: serde_json::Value::Object(data),
+                            })
+                            .await;
+                        }
+
+                        for e in events {
+                            let envelope = EventEnvelope::new(e, Some(step_name.clone()));
+                            let _ = event_tx_clone.send(envelope);
+                        }
+                    }
+                    Ok(StepOutput::None) => {
+                        let duration = start.elapsed().as_millis() as u64;
+                        step_span_clone.record("duration_ms", duration);
+                        step_span_clone.record("otel.status_code", "OK");
+
+                        // Emit StepCompleted history event.
+                        #[cfg(feature = "telemetry")]
+                        if let Some(ref tx) = htx {
+                            let _ = tx.send(blazen_telemetry::HistoryEvent {
+                                timestamp: Utc::now(),
+                                sequence: 0,
+                                kind: blazen_telemetry::HistoryEventKind::StepCompleted {
+                                    step_name: step_name.clone(),
+                                    duration_ms: duration,
+                                    output_type: "None".to_owned(),
+                                },
+                            });
+                        }
+
+                        // Auto-publish step_completed.
+                        if let Some(ref sctx) = stream_ctx {
+                            let mut data = serde_json::Map::new();
+                            data.insert(
+                                "kind".into(),
+                                serde_json::Value::String("step_completed".into()),
+                            );
+                            data.insert(
+                                "step_name".into(),
+                                serde_json::Value::String(step_name.clone()),
+                            );
+                            data.insert(
+                                "duration_ms".into(),
+                                serde_json::Value::Number(duration.into()),
+                            );
+                            sctx.write_event_to_stream(DynamicEvent {
+                                event_type: "blazen::lifecycle".to_owned(),
+                                data: serde_json::Value::Object(data),
+                            })
+                            .await;
+                        }
+
+                        // Side-effect only step -- nothing to route.
+                    }
+                    Err(err) => {
+                        let duration = start.elapsed().as_millis() as u64;
+                        step_span_clone.record("duration_ms", duration);
+                        step_span_clone.record("otel.status_code", "ERROR");
+
+                        let err_str = err.to_string();
+
+                        // Emit StepFailed history event.
+                        #[cfg(feature = "telemetry")]
+                        if let Some(ref tx) = htx {
+                            let _ = tx.send(blazen_telemetry::HistoryEvent {
+                                timestamp: Utc::now(),
+                                sequence: 0,
+                                kind: blazen_telemetry::HistoryEventKind::StepFailed {
+                                    step_name: step_name.clone(),
+                                    error: err_str.clone(),
+                                    duration_ms: duration,
+                                },
+                            });
+                        }
+
+                        // Auto-publish step_failed.
+                        if let Some(ref sctx) = stream_ctx {
+                            let mut data = serde_json::Map::new();
+                            data.insert(
+                                "kind".into(),
+                                serde_json::Value::String("step_failed".into()),
+                            );
+                            data.insert(
+                                "step_name".into(),
+                                serde_json::Value::String(step_name.clone()),
+                            );
+                            data.insert(
+                                "duration_ms".into(),
+                                serde_json::Value::Number(duration.into()),
+                            );
+                            data.insert("error".into(), serde_json::Value::String(err_str));
+                            sctx.write_event_to_stream(DynamicEvent {
+                                event_type: "blazen::lifecycle".to_owned(),
+                                data: serde_json::Value::Object(data),
+                            })
+                            .await;
+                        }
+
+                        tracing::error!(
+                            step = %step_name,
+                            error = %err,
+                            "step failed"
+                        );
+                        let _ = error_tx_clone.send(WorkflowError::StepFailed {
+                            step_name,
+                            source: Box::new(err),
+                        });
+                    }
                 }
-                Ok(StepOutput::None) => {
-                    // Side-effect only step -- nothing to route.
-                }
-                Err(err) => {
-                    tracing::error!(
-                        step = %step_name,
-                        error = %err,
-                        "step failed"
-                    );
-                    let _ = error_tx_clone.send(WorkflowError::StepFailed {
-                        step_name,
-                        source: Box::new(err),
-                    });
-                }
+                counter.fetch_sub(1, Ordering::Relaxed);
             }
-            counter.fetch_sub(1, Ordering::Relaxed);
-        });
+            .instrument(step_span),
+        );
     }
 }
 

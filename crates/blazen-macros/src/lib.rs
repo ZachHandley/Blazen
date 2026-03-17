@@ -42,6 +42,15 @@ pub fn derive_event(input: TokenStream) -> TokenStream {
     let expanded = quote! {
         impl #impl_generics blazen_events::Event for #name #ty_generics #where_clause {
             fn event_type() -> &'static str {
+                static REGISTER: ::std::sync::Once = ::std::sync::Once::new();
+                REGISTER.call_once(|| {
+                    blazen_events::register_event_deserializer(
+                        concat!(module_path!(), "::", stringify!(#name)),
+                        |value: ::serde_json::Value| -> Option<Box<dyn blazen_events::AnyEvent>> {
+                            ::serde_json::from_value::<#name>(value).ok().map(|e| Box::new(e) as _)
+                        },
+                    );
+                });
                 concat!(module_path!(), "::", stringify!(#name))
             }
 
@@ -269,27 +278,43 @@ fn step_impl(step_attr: &StepAttr, input_fn: &ItemFn) -> syn::Result<TokenStream
     let handler_body = if returns_step_output {
         // The function already returns StepOutput, so just pass through.
         quote! {
-            let typed_event = event
-                .as_any()
-                .downcast_ref::<#event_type>()
-                .ok_or_else(|| blazen_core::WorkflowError::EventDowncastFailed {
-                    expected: <#event_type as blazen_events::Event>::event_type(),
-                    got: event.event_type_id().to_string(),
-                })?
-                .clone();
+            let typed_event = if let Some(concrete) = event.as_any().downcast_ref::<#event_type>() {
+                concrete.clone()
+            } else {
+                // Fallback: deserialize from JSON (e.g. DynamicEvent after resume).
+                let json = event.to_json();
+                let data = if json.get("event_type").is_some() && json.get("data").is_some() {
+                    json["data"].clone()
+                } else {
+                    json
+                };
+                ::serde_json::from_value::<#event_type>(data)
+                    .map_err(|_| blazen_core::WorkflowError::EventDowncastFailed {
+                        expected: <#event_type as blazen_events::Event>::event_type(),
+                        got: event.event_type_id().to_string(),
+                    })?
+            };
             #fn_name(typed_event, ctx).await
         }
     } else {
         // Wrap the concrete event return in StepOutput::Single.
         quote! {
-            let typed_event = event
-                .as_any()
-                .downcast_ref::<#event_type>()
-                .ok_or_else(|| blazen_core::WorkflowError::EventDowncastFailed {
-                    expected: <#event_type as blazen_events::Event>::event_type(),
-                    got: event.event_type_id().to_string(),
-                })?
-                .clone();
+            let typed_event = if let Some(concrete) = event.as_any().downcast_ref::<#event_type>() {
+                concrete.clone()
+            } else {
+                // Fallback: deserialize from JSON (e.g. DynamicEvent after resume).
+                let json = event.to_json();
+                let data = if json.get("event_type").is_some() && json.get("data").is_some() {
+                    json["data"].clone()
+                } else {
+                    json
+                };
+                ::serde_json::from_value::<#event_type>(data)
+                    .map_err(|_| blazen_core::WorkflowError::EventDowncastFailed {
+                        expected: <#event_type as blazen_events::Event>::event_type(),
+                        got: event.event_type_id().to_string(),
+                    })?
+            };
             let result = #fn_name(typed_event, ctx).await?;
             Ok(blazen_core::StepOutput::Single(Box::new(result)))
         }

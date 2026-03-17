@@ -1269,52 +1269,11 @@ async fn test_pause_and_resume() {
         "expected AnalyzeEvent in pending events, got: {pending_types:?}"
     );
 
-    // Now resume with a new step set.
-    // For resume, events come in as DynamicEvent. Step 2 needs to handle
-    // the "test::AnalyzeEvent" event type. We register a DynamicEvent handler
-    // that routes on the same event type string.
-    let step_two_for_resume: StepRegistration = {
-        let handler: StepFn = Arc::new(|event: Box<dyn AnyEvent>, ctx: Context| {
-            Box::pin(async move {
-                // After resume, events arrive as DynamicEvent.
-                let json = event.to_json();
-                // DynamicEvent wraps data under a "data" key.
-                let data = if json.get("data").is_some() && json.get("event_type").is_some() {
-                    // This is a DynamicEvent envelope.
-                    json["data"].clone()
-                } else {
-                    json
-                };
-                let text = data["text"].as_str().unwrap_or_default().to_string();
-                let word_count = data["word_count"].as_u64().unwrap_or(0);
-
-                let counter: u64 = ctx.get::<u64>("counter").await.unwrap_or(0);
-                ctx.set("counter", counter + 1).await;
-                ctx.set("step_two_ran", true).await;
-
-                Ok(StepOutput::Single(Box::new(StopEvent {
-                    result: serde_json::json!({
-                        "text": text,
-                        "word_count": word_count,
-                        "final_counter": counter + 1,
-                    }),
-                })))
-            })
-        });
-
-        StepRegistration {
-            name: "step_two".to_string(),
-            // Use the interned event type so it matches the DynamicEvent's type.
-            accepts: vec![AnalyzeEvent::event_type()],
-            emits: vec![StopEvent::event_type()],
-            handler,
-            max_concurrency: 1,
-        }
-    };
-
+    // Resume with the same step set. With the flat DynamicEvent::to_json()
+    // format, the same handler works for both fresh and resumed runs.
     let resumed_handler = Workflow::resume(
         snapshot,
-        vec![step_one, step_two_for_resume],
+        vec![step_one, step_two],
         None, // no timeout
     )
     .await

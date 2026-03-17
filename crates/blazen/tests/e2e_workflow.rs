@@ -91,9 +91,8 @@ async fn test_e2e_multi_step_dynamic_pipeline() {
         handler: Arc::new(|event: Box<dyn AnyEvent>, _ctx: Context| {
             Box::pin(async move {
                 let json = event.to_json();
-                let data = &json["data"];
-                let text = data["text"].as_str().unwrap_or_default();
-                let word_count = data["word_count"].as_u64().unwrap_or(0);
+                let text = json["text"].as_str().unwrap_or_default();
+                let word_count = json["word_count"].as_u64().unwrap_or(0);
 
                 Ok(StepOutput::Single(Box::new(DynamicEvent {
                     event_type: "EnrichEvent".to_string(),
@@ -115,13 +114,12 @@ async fn test_e2e_multi_step_dynamic_pipeline() {
         handler: Arc::new(|event: Box<dyn AnyEvent>, _ctx: Context| {
             Box::pin(async move {
                 let json = event.to_json();
-                let data = &json["data"];
 
                 Ok(StepOutput::Single(Box::new(StopEvent {
                     result: serde_json::json!({
-                        "text": data["text"],
-                        "word_count": data["word_count"],
-                        "enriched": data["enriched"],
+                        "text": json["text"],
+                        "word_count": json["word_count"],
+                        "enriched": json["enriched"],
                     }),
                 })))
             })
@@ -413,7 +411,9 @@ async fn test_e2e_pause_and_resume() {
         max_concurrency: 1,
     };
 
-    // Step two reads via to_json() for resume compatibility (DynamicEvent after resume).
+    // Step two reads via to_json() -- with the deserializer registry, events
+    // are reconstructed as concrete types on resume, so to_json() always
+    // returns the flat data regardless of fresh vs resumed.
     let step_two = StepRegistration {
         name: "step_two".to_string(),
         accepts: vec![SlowMidEvent::event_type()],
@@ -421,13 +421,7 @@ async fn test_e2e_pause_and_resume() {
         handler: Arc::new(|event: Box<dyn AnyEvent>, ctx: Context| {
             Box::pin(async move {
                 let json = event.to_json();
-                // Handle both fresh (typed) and resumed (DynamicEvent) cases.
-                let data = if json.get("data").is_some() && json.get("event_type").is_some() {
-                    json["data"].clone()
-                } else {
-                    json
-                };
-                let value = data["value"].as_str().unwrap_or_default().to_string();
+                let value = json["value"].as_str().unwrap_or_default().to_string();
 
                 let step_one_ran = ctx.get::<bool>("step_one_ran").await.unwrap_or(false);
                 ctx.set("step_two_ran", true).await;

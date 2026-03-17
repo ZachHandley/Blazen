@@ -42,6 +42,7 @@ pub struct SerializedEvent {
 /// - Fan-in collected events
 /// - Events that were pending in the routing channel
 /// - Workflow metadata (run ID, workflow name, etc.)
+/// - History events recorded up to the pause point (requires `telemetry` feature)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowSnapshot {
     /// The name of the workflow that produced this snapshot.
@@ -59,6 +60,13 @@ pub struct WorkflowSnapshot {
     /// Arbitrary metadata (includes `run_id`, `workflow_name`, and any
     /// user-defined metadata set via `Context::set_metadata`).
     pub metadata: HashMap<String, serde_json::Value>,
+    /// History events recorded up to this snapshot point.
+    ///
+    /// Only populated when the `telemetry` feature is enabled and history
+    /// collection was turned on via [`WorkflowBuilder::with_history`].
+    #[cfg(feature = "telemetry")]
+    #[serde(default)]
+    pub history: Vec<blazen_telemetry::HistoryEvent>,
 }
 
 impl WorkflowSnapshot {
@@ -249,6 +257,8 @@ impl From<blazen_persist::WorkflowCheckpoint> for WorkflowSnapshot {
             collected_events,
             pending_events,
             metadata,
+            #[cfg(feature = "telemetry")]
+            history: Vec::new(),
         }
     }
 }
@@ -297,6 +307,8 @@ mod tests {
                 source_step: Some("step_a".to_owned()),
             }],
             metadata,
+            #[cfg(feature = "telemetry")]
+            history: Vec::new(),
         }
     }
 
@@ -361,6 +373,8 @@ mod tests {
             collected_events: HashMap::new(),
             pending_events: Vec::new(),
             metadata: HashMap::new(),
+            #[cfg(feature = "telemetry")]
+            history: Vec::new(),
         };
 
         let bytes = snap.to_msgpack().unwrap();

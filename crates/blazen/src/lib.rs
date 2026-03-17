@@ -40,6 +40,7 @@
 //! | `openai` | OpenAI + OpenAI-compatible providers |
 //! | `anthropic` | Anthropic Claude provider |
 //! | `persist` | Checkpoint storage via `redb` |
+//! | `telemetry` | Observability, tracing spans, and workflow history |
 //! | `all` | Everything |
 
 // ---------------------------------------------------------------------------
@@ -49,7 +50,7 @@
 // Events: traits and built-in types.
 pub use blazen_events::{
     AnyEvent, DynamicEvent, Event, EventEnvelope, InputRequestEvent, InputResponseEvent,
-    StartEvent, StopEvent, intern_event_type,
+    StartEvent, StopEvent, intern_event_type, register_event_deserializer, try_deserialize_event,
 };
 
 // Macros: derive and attribute macros.
@@ -96,6 +97,10 @@ pub mod pipeline {
 pub mod prompts {
     pub use blazen_prompts::*;
 }
+
+/// Observability and telemetry (requires `telemetry` feature).
+#[cfg(feature = "telemetry")]
+pub use blazen_telemetry as telemetry;
 
 // ---------------------------------------------------------------------------
 // Prelude

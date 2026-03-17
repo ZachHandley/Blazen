@@ -1,0 +1,49 @@
+[package]
+name = "blazen-telemetry"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "Observability and telemetry for Blazen workflows"
+
+[dependencies]
+# Always needed
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
+
+# For TracingCompletionModel
+blazen-llm = { path = "../blazen-llm", optional = true, default-features = false }
+blazen-events = { path = "../blazen-events" }
+async-trait = { workspace = true }
+futures-util = { workspace = true }
+
+# OTLP (feature-gated)
+opentelemetry = { version = "0.31", optional = true }
+opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"], optional = true }
+opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic"], optional = true }
+tracing-opentelemetry = { version = "0.32", optional = true }
+
+# Prometheus (feature-gated)
+metrics = { version = "0.24", optional = true, package = "metrics" }
+metrics-exporter-prometheus = { version = "0.18", features = ["http-listener"], optional = true }
+
+# Langfuse (feature-gated)
+reqwest = { workspace = true, optional = true }
+
+[features]
+default = ["spans"]
+spans = ["dep:blazen-llm"]
+history = []
+otlp = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-otlp", "dep:tracing-opentelemetry"]
+prometheus = ["dep:metrics", "dep:metrics-exporter-prometheus"]
+langfuse = ["dep:reqwest"]
+all = ["spans", "history", "otlp", "prometheus", "langfuse"]
+
+[lints]
+workspace = true

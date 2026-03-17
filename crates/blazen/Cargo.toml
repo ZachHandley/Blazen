@@ -11,12 +11,13 @@ llm = ["blazen-llm"]
 persist = ["blazen-persist", "blazen-core/persist"]
 pipeline = ["blazen-pipeline"]
 prompts = ["blazen-prompts"]
+telemetry = ["blazen-telemetry", "blazen-core/telemetry"]
 openai = ["llm", "blazen-llm/openai"]
 anthropic = ["llm", "blazen-llm/anthropic"]
 fal = ["llm", "blazen-llm/fal"]
 gemini = ["llm", "blazen-llm/gemini"]
 azure = ["llm", "blazen-llm/azure"]
-all = ["openai", "anthropic", "fal", "gemini", "azure", "persist", "pipeline", "prompts"]
+all = ["openai", "anthropic", "fal", "gemini", "azure", "persist", "pipeline", "prompts", "telemetry"]
 
 [dependencies]
 blazen-events.workspace = true
@@ -26,6 +27,7 @@ blazen-llm = { workspace = true, optional = true }
 blazen-persist = { workspace = true, optional = true }
 blazen-pipeline = { workspace = true, optional = true }
 blazen-prompts = { workspace = true, optional = true }
+blazen-telemetry = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 

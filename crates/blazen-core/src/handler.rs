@@ -20,6 +20,9 @@ use std::task::{self, Poll};
 use blazen_events::AnyEvent;
 use tokio::sync::{broadcast, oneshot};
 use tokio::task::JoinHandle;
+
+#[cfg(feature = "telemetry")]
+use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -45,6 +48,9 @@ pub struct WorkflowHandler {
     /// prevents orphaned Tokio tasks from keeping runtimes alive (important
     /// for napi-rs / Node.js bindings).
     event_loop_handle: Option<JoinHandle<()>>,
+    /// Receives history events from the event loop (requires `telemetry` feature).
+    #[cfg(feature = "telemetry")]
+    history_rx: Option<mpsc::UnboundedReceiver<blazen_telemetry::HistoryEvent>>,
 }
 
 impl WorkflowHandler {
@@ -55,6 +61,9 @@ impl WorkflowHandler {
         pause_tx: Option<oneshot::Sender<()>>,
         snapshot_rx: Option<oneshot::Receiver<WorkflowSnapshot>>,
         event_loop_handle: JoinHandle<()>,
+        #[cfg(feature = "telemetry")] history_rx: Option<
+            mpsc::UnboundedReceiver<blazen_telemetry::HistoryEvent>,
+        >,
     ) -> Self {
         Self {
             result_rx: Some(result_rx),
@@ -62,6 +71,8 @@ impl WorkflowHandler {
             pause_tx,
             snapshot_rx,
             event_loop_handle: Some(event_loop_handle),
+            #[cfg(feature = "telemetry")]
+            history_rx,
         }
     }
 
@@ -154,6 +165,41 @@ impl WorkflowHandler {
         }
 
         Ok(snapshot)
+    }
+
+    /// Collect the workflow execution history after the workflow completes.
+    ///
+    /// This method drains all history events from the internal channel and
+    /// returns a [`WorkflowHistory`](blazen_telemetry::WorkflowHistory)
+    /// with properly sequenced events.
+    ///
+    /// Should be called **after** [`result()`](Self::result) or
+    /// [`pause()`](Self::pause) to ensure all history events have been
+    /// emitted by the event loop.
+    ///
+    /// Returns `None` if history collection was not enabled on the
+    /// [`WorkflowBuilder`](crate::WorkflowBuilder) or if the history
+    /// receiver was already consumed.
+    ///
+    /// Requires the `telemetry` feature.
+    #[cfg(feature = "telemetry")]
+    pub fn collect_history(
+        &mut self,
+        run_id: uuid::Uuid,
+        workflow_name: String,
+    ) -> Option<blazen_telemetry::WorkflowHistory> {
+        let mut rx = self.history_rx.take()?;
+        let mut history = blazen_telemetry::WorkflowHistory::new(run_id, workflow_name);
+
+        // Drain all events from the channel (the sender side is dropped
+        // when the event loop exits, so try_recv will eventually return
+        // Empty or Disconnected).
+        while let Ok(mut event) = rx.try_recv() {
+            event.sequence = history.events.len() as u64;
+            history.events.push(event);
+        }
+
+        Some(history)
     }
 }
 

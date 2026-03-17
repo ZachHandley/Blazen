@@ -7,9 +7,11 @@ authors.workspace = true
 
 [features]
 persist = ["dep:blazen-persist"]
+telemetry = ["dep:blazen-telemetry"]
 
 [dependencies]
 blazen-persist = { workspace = true, optional = true }
+blazen-telemetry = { workspace = true, optional = true, features = ["history"] }
 blazen-events.workspace = true
 blazen-macros.workspace = true
 tokio.workspace = true

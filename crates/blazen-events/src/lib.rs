@@ -122,6 +122,14 @@ pub struct StartEvent {
 
 impl Event for StartEvent {
     fn event_type() -> &'static str {
+        static REGISTER: std::sync::Once = std::sync::Once::new();
+        REGISTER.call_once(|| {
+            register_event_deserializer("blazen::StartEvent", |value| {
+                serde_json::from_value::<StartEvent>(value)
+                    .ok()
+                    .map(|e| Box::new(e) as _)
+            });
+        });
         "blazen::StartEvent"
     }
 
@@ -151,6 +159,14 @@ pub struct StopEvent {
 
 impl Event for StopEvent {
     fn event_type() -> &'static str {
+        static REGISTER: std::sync::Once = std::sync::Once::new();
+        REGISTER.call_once(|| {
+            register_event_deserializer("blazen::StopEvent", |value| {
+                serde_json::from_value::<StopEvent>(value)
+                    .ok()
+                    .map(|e| Box::new(e) as _)
+            });
+        });
         "blazen::StopEvent"
     }
 
@@ -184,6 +200,14 @@ pub struct InputRequestEvent {
 
 impl Event for InputRequestEvent {
     fn event_type() -> &'static str {
+        static REGISTER: std::sync::Once = std::sync::Once::new();
+        REGISTER.call_once(|| {
+            register_event_deserializer("blazen::InputRequestEvent", |value| {
+                serde_json::from_value::<InputRequestEvent>(value)
+                    .ok()
+                    .map(|e| Box::new(e) as _)
+            });
+        });
         "blazen::InputRequestEvent"
     }
 
@@ -215,6 +239,14 @@ pub struct InputResponseEvent {
 
 impl Event for InputResponseEvent {
     fn event_type() -> &'static str {
+        static REGISTER: std::sync::Once = std::sync::Once::new();
+        REGISTER.call_once(|| {
+            register_event_deserializer("blazen::InputResponseEvent", |value| {
+                serde_json::from_value::<InputResponseEvent>(value)
+                    .ok()
+                    .map(|e| Box::new(e) as _)
+            });
+        });
         "blazen::InputResponseEvent"
     }
 
@@ -266,6 +298,45 @@ impl EventEnvelope {
             id: Uuid::new_v4(),
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Event deserializer registry
+// ---------------------------------------------------------------------------
+
+/// Function signature for deserializing JSON into a concrete event type.
+pub type EventDeserializerFn = fn(serde_json::Value) -> Option<Box<dyn AnyEvent>>;
+
+/// Global registry mapping event type strings to deserializer functions.
+///
+/// When a workflow is resumed from a snapshot, pending events are stored as
+/// JSON. This registry allows the runtime to reconstruct concrete event types
+/// from that JSON, avoiding the `DynamicEvent` wrapper that breaks
+/// `downcast_ref`.
+static EVENT_DESERIALIZER_REGISTRY: std::sync::LazyLock<
+    dashmap::DashMap<&'static str, EventDeserializerFn>,
+> = std::sync::LazyLock::new(dashmap::DashMap::new);
+
+/// Register a deserializer function for a given event type string.
+///
+/// Typically called once per event type, guarded by [`std::sync::Once`],
+/// inside the `event_type()` method of each concrete event.
+pub fn register_event_deserializer(event_type: &'static str, deserializer: EventDeserializerFn) {
+    EVENT_DESERIALIZER_REGISTRY.insert(event_type, deserializer);
+}
+
+/// Attempt to deserialize a JSON value into a concrete event type using the
+/// registry.
+///
+/// Returns `Some(boxed_event)` if a deserializer is registered for the given
+/// event type and deserialization succeeds, or `None` otherwise.
+pub fn try_deserialize_event(
+    event_type: &str,
+    data: &serde_json::Value,
+) -> Option<Box<dyn AnyEvent>> {
+    let entry = EVENT_DESERIALIZER_REGISTRY.get(event_type)?;
+    let deserializer = *entry.value();
+    deserializer(data.clone())
 }
 
 // ---------------------------------------------------------------------------
@@ -334,10 +405,7 @@ impl Event for DynamicEvent {
     }
 
     fn to_json(&self) -> serde_json::Value {
-        serde_json::json!({
-            "event_type": self.event_type,
-            "data": self.data,
-        })
+        self.data.clone()
     }
 }
 
@@ -432,8 +500,8 @@ mod tests {
             data: serde_json::json!({"key": "value"}),
         };
         let json = Event::to_json(&evt);
-        assert_eq!(json["event_type"], "MyEvent");
-        assert_eq!(json["data"]["key"], "value");
+        // DynamicEvent::to_json() now returns the flat data directly.
+        assert_eq!(json["key"], "value");
     }
 
     #[test]

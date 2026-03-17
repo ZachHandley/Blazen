@@ -13,6 +13,8 @@ use tokio::task::JoinSet;
 use tokio_stream::StreamExt;
 use uuid::Uuid;
 
+use tracing::Instrument;
+
 use crate::builder::{PersistFn, PersistJsonFn};
 use crate::error::PipelineError;
 use crate::handler::{PipelineEvent, PipelineHandler};
@@ -153,6 +155,13 @@ async fn execute_pipeline(
     mut pause_rx: oneshot::Receiver<()>,
     snapshot_tx: oneshot::Sender<PipelineSnapshot>,
 ) {
+    let span = tracing::info_span!(
+        "pipeline.run",
+        pipeline_name = %pipeline_name,
+        stage_count = stages.len(),
+    );
+    let _enter = span.enter();
+
     let mut state = PipelineState::new(input.clone());
     let mut stage_results: Vec<StageResult> = completed;
 
@@ -177,6 +186,15 @@ async fn execute_pipeline(
             return;
         }
 
+        let stage_span = tracing::info_span!(
+            "pipeline.stage",
+            stage_name = %stage.name(),
+            stage_index = stage_idx,
+            duration_ms = tracing::field::Empty,
+            skipped = tracing::field::Empty,
+        );
+        let _stage_enter = stage_span.enter();
+
         tracing::info!(
             pipeline = %pipeline_name,
             stage = %stage.name(),
@@ -191,10 +209,19 @@ async fn execute_pipeline(
         let stage_future = async {
             match stage {
                 StageKind::Sequential(s) => {
-                    run_sequential_stage(s, &state, &stream_tx, timeout_per_stage).await
+                    run_sequential_stage(s, &state, &stream_tx, timeout_per_stage)
+                        .instrument(
+                            tracing::info_span!("pipeline.stage.sequential", stage_name = %s.name),
+                        )
+                        .await
                 }
                 StageKind::Parallel(p) => {
-                    run_parallel_stage(p, &state, &stream_tx, timeout_per_stage).await
+                    run_parallel_stage(p, &state, &stream_tx, timeout_per_stage)
+                        .instrument(tracing::info_span!(
+                            "pipeline.stage.parallel",
+                            branch_count = p.branches.len()
+                        ))
+                        .await
                 }
             }
         };
@@ -225,6 +252,8 @@ async fn execute_pipeline(
 
         match result {
             Ok(stage_output) => {
+                stage_span.record("duration_ms", duration_ms);
+                stage_span.record("skipped", false);
                 let sr = StageResult {
                     name: stage.name().to_owned(),
                     output: stage_output.clone(),
@@ -235,6 +264,8 @@ async fn execute_pipeline(
                 stage_results.push(sr);
             }
             Err(StageOutcome::Skipped) => {
+                stage_span.record("duration_ms", duration_ms);
+                stage_span.record("skipped", true);
                 let sr = StageResult {
                     name: stage.name().to_owned(),
                     output: serde_json::Value::Null,
@@ -244,6 +275,7 @@ async fn execute_pipeline(
                 stage_results.push(sr);
             }
             Err(StageOutcome::Failed(e)) => {
+                stage_span.record("duration_ms", duration_ms);
                 let _ = result_tx.send(Err(e));
                 return;
             }

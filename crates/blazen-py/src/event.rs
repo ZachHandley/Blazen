@@ -340,7 +340,7 @@ mod tests {
             data: serde_json::json!({"key": "value"}),
         };
         let json = Event::to_json(&evt);
-        assert_eq!(json["event_type"], "MyEvent");
-        assert_eq!(json["data"]["key"], "value");
+        // DynamicEvent::to_json() now returns the flat data directly.
+        assert_eq!(json["key"], "value");
     }
 }

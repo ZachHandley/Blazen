@@ -22,6 +22,7 @@
 //! | [`OpenAiCompatProvider::bedrock`] | AWS Bedrock (Mantle) | `anthropic.claude-sonnet-4-20250514-v1:0` |
 
 use std::pin::Pin;
+use std::time::Instant;
 
 use async_trait::async_trait;
 use futures_util::Stream;
@@ -508,6 +509,24 @@ impl crate::traits::CompletionModel for OpenAiCompatProvider {
     }
 
     async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, LlmError> {
+        let model_id = request
+            .model
+            .as_deref()
+            .unwrap_or(&self.config.default_model);
+        let provider_name = self.config.provider_name.as_str();
+        let span = tracing::info_span!(
+            "llm.complete",
+            provider = %provider_name,
+            model = %model_id,
+            prompt_tokens = tracing::field::Empty,
+            completion_tokens = tracing::field::Empty,
+            total_tokens = tracing::field::Empty,
+            duration_ms = tracing::field::Empty,
+            finish_reason = tracing::field::Empty,
+        );
+        let _enter = span.enter();
+        let start = Instant::now();
+
         let body = self.build_body(&request, false);
         debug!(
             provider = %self.config.provider_name,
@@ -547,6 +566,16 @@ impl crate::traits::CompletionModel for OpenAiCompatProvider {
             total_tokens: u.total_tokens,
         });
 
+        span.record("duration_ms", start.elapsed().as_millis() as u64);
+        if let Some(ref u) = usage {
+            span.record("prompt_tokens", u.prompt_tokens);
+            span.record("completion_tokens", u.completion_tokens);
+            span.record("total_tokens", u.total_tokens);
+        }
+        if let Some(ref reason) = choice.finish_reason {
+            span.record("finish_reason", reason.as_str());
+        }
+
         Ok(CompletionResponse {
             content: choice.message.content,
             tool_calls,
@@ -560,6 +589,21 @@ impl crate::traits::CompletionModel for OpenAiCompatProvider {
         &self,
         request: CompletionRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LlmError>> + Send>>, LlmError> {
+        let model_id = request
+            .model
+            .as_deref()
+            .unwrap_or(&self.config.default_model);
+        let provider_name = self.config.provider_name.as_str();
+        let span = tracing::info_span!(
+            "llm.stream",
+            provider = %provider_name,
+            model = %model_id,
+            duration_ms = tracing::field::Empty,
+            chunk_count = tracing::field::Empty,
+        );
+        let _enter = span.enter();
+        let start = Instant::now();
+
         let body = self.build_body(&request, true);
         debug!(
             provider = %self.config.provider_name,
@@ -569,6 +613,8 @@ impl crate::traits::CompletionModel for OpenAiCompatProvider {
 
         let response = self.send_request(&body).await?;
         let byte_stream = response.bytes_stream();
+
+        span.record("duration_ms", start.elapsed().as_millis() as u64);
 
         let stream = SseParser::new(byte_stream);
         Ok(Box::pin(stream))

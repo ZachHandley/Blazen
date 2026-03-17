@@ -12,6 +12,7 @@
 //!   etc.) rather than generic `data:` lines.
 
 use std::pin::Pin;
+use std::time::Instant;
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -400,6 +401,20 @@ impl crate::traits::CompletionModel for AnthropicProvider {
     }
 
     async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, LlmError> {
+        let model_id = request.model.as_deref().unwrap_or(&self.default_model);
+        let span = tracing::info_span!(
+            "llm.complete",
+            provider = "anthropic",
+            model = %model_id,
+            prompt_tokens = tracing::field::Empty,
+            completion_tokens = tracing::field::Empty,
+            total_tokens = tracing::field::Empty,
+            duration_ms = tracing::field::Empty,
+            finish_reason = tracing::field::Empty,
+        );
+        let _enter = span.enter();
+        let start = Instant::now();
+
         let body = self.build_body(&request, false);
         debug!(model = %body["model"], "Anthropic completion request");
 
@@ -440,6 +455,16 @@ impl crate::traits::CompletionModel for AnthropicProvider {
             total_tokens: u.input_tokens + u.output_tokens,
         });
 
+        span.record("duration_ms", start.elapsed().as_millis() as u64);
+        if let Some(ref u) = usage {
+            span.record("prompt_tokens", u.prompt_tokens);
+            span.record("completion_tokens", u.completion_tokens);
+            span.record("total_tokens", u.total_tokens);
+        }
+        if let Some(ref reason) = anthropic.stop_reason {
+            span.record("finish_reason", reason.as_str());
+        }
+
         Ok(CompletionResponse {
             content,
             tool_calls,
@@ -453,11 +478,24 @@ impl crate::traits::CompletionModel for AnthropicProvider {
         &self,
         request: CompletionRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LlmError>> + Send>>, LlmError> {
+        let model_id = request.model.as_deref().unwrap_or(&self.default_model);
+        let span = tracing::info_span!(
+            "llm.stream",
+            provider = "anthropic",
+            model = %model_id,
+            duration_ms = tracing::field::Empty,
+            chunk_count = tracing::field::Empty,
+        );
+        let _enter = span.enter();
+        let start = Instant::now();
+
         let body = self.build_body(&request, true);
         debug!(model = %body["model"], "Anthropic streaming request");
 
         let response = self.send_request(&body).await?;
         let byte_stream = response.bytes_stream();
+
+        span.record("duration_ms", start.elapsed().as_millis() as u64);
 
         let stream = AnthropicSseParser::new(byte_stream);
         Ok(Box::pin(stream))

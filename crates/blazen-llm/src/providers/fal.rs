@@ -14,7 +14,7 @@
 //! For LLM specifically, fal.ai proxies through `OpenRouter` via `fal-ai/any-llm`.
 
 use std::pin::Pin;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use futures_util::Stream;
@@ -390,6 +390,20 @@ impl crate::traits::CompletionModel for FalProvider {
     }
 
     async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, LlmError> {
+        let model_id = request.model.as_deref().unwrap_or(&self.llm_model);
+        let span = tracing::info_span!(
+            "llm.complete",
+            provider = "fal",
+            model = %model_id,
+            prompt_tokens = tracing::field::Empty,
+            completion_tokens = tracing::field::Empty,
+            total_tokens = tracing::field::Empty,
+            duration_ms = tracing::field::Empty,
+            finish_reason = tracing::field::Empty,
+        );
+        let _enter = span.enter();
+        let start = Instant::now();
+
         let body = self.build_body(&request);
         debug!(model = %self.default_model, "fal.ai completion request");
 
@@ -411,6 +425,9 @@ impl crate::traits::CompletionModel for FalProvider {
             )));
         }
 
+        span.record("duration_ms", start.elapsed().as_millis() as u64);
+        span.record("finish_reason", "stop");
+
         Ok(CompletionResponse {
             content: fal_response.output,
             tool_calls: Vec::new(), // fal.ai/any-llm doesn't support tool calling.
@@ -424,10 +441,24 @@ impl crate::traits::CompletionModel for FalProvider {
         &self,
         request: CompletionRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LlmError>> + Send>>, LlmError> {
+        let model_id = request.model.as_deref().unwrap_or(&self.llm_model);
+        let span = tracing::info_span!(
+            "llm.stream",
+            provider = "fal",
+            model = %model_id,
+            duration_ms = tracing::field::Empty,
+            chunk_count = tracing::field::Empty,
+        );
+        let _enter = span.enter();
+        let start = Instant::now();
+
         // fal.ai does not natively support SSE streaming for LLM.
         // We simulate streaming by executing the request and then emitting
         // the complete result as a single chunk.
         let response = self.complete(request).await?;
+
+        span.record("duration_ms", start.elapsed().as_millis() as u64);
+        span.record("chunk_count", 1u64);
 
         let chunks: Vec<Result<StreamChunk, LlmError>> = vec![Ok(StreamChunk {
             delta: response.content,

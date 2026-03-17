@@ -12,6 +12,7 @@ members = [
     "crates/blazen-py",
     "crates/blazen-node",
     "crates/blazen-cli",
+    "crates/blazen-telemetry",
 ]
 
 [workspace.package]
@@ -88,6 +89,7 @@ blazen-persist = { version = "0.1.0", path = "crates/blazen-persist", registry =
 blazen-pipeline = { version = "0.1.0", path = "crates/blazen-pipeline", registry = "forgejo" }
 blazen-prompts = { version = "0.1.0", path = "crates/blazen-prompts", registry = "forgejo" }
 blazen = { version = "0.1.0", path = "crates/blazen", registry = "forgejo" }
+blazen-telemetry = { version = "0.1.0", path = "crates/blazen-telemetry", registry = "forgejo" }
 
 # Prompt/template support
 serde_yaml = "0.9"
