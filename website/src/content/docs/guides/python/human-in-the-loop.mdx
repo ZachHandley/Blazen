@@ -11,13 +11,15 @@ order: 6
 A step can return `None` and use `ctx.send_event()` to manually route events:
 
 ```python
+class ReviewComplete(Event):
+    pass
+
 @step
 async def review(ctx: Context, ev: Event):
     ctx.set("needs_approval", True)
-    # In production: wait for webhook, poll queue, etc.
     approved = simulate_human_review(ev)
     ctx.set("approved", approved)
-    ctx.send_event(Event("ReviewComplete"))
+    ctx.send_event(ReviewComplete())
     return None
 ```
 
@@ -27,7 +29,7 @@ Both `ctx.send_event()` and `ctx.set()` are synchronous.
 
 ```python
 handler = await wf.run(data="some input")
-snapshot = handler.pause()  # Serialize workflow state
+snapshot = handler.pause()
 
 # Later...
 handler = await Workflow.resume(snapshot)

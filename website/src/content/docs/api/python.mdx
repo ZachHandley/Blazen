@@ -8,17 +8,33 @@ order: 2
 
 ## Event
 
+The preferred way to define events is by subclassing `Event`. The `event_type` is automatically set to the class name.
+
+```python
+class AnalyzeEvent(Event):
+    text: str
+    score: float
+
+ev = AnalyzeEvent(text="hello", score=0.9)
+ev.event_type   # "AnalyzeEvent"
+ev.text          # "hello"
+```
+
+You can also construct events inline without a subclass:
+
 ```python
 Event(event_type: str, **kwargs)
 ```
 
-Create a custom event with an arbitrary event type and keyword arguments.
+```python
+ev = Event("AnalyzeEvent", text="hello", score=0.9)
+```
 
 | Member | Type | Description |
 |---|---|---|
-| `.event_type` | `str` | The event type string passed at construction. |
-| `.to_dict()` | `-> dict` | Serialize the event to a plain dictionary. |
-| `.field_name` | `Any` | Attribute access for any kwarg supplied at construction. |
+| `.event_type` | `str` | The event type string. Auto-set to the class name for subclasses. |
+| `.to_dict()` | `-> dict` | Serialize the event data to a plain dictionary. |
+| `.field_name` | `Any` | Attribute access for any keyword argument supplied at construction. |
 
 ---
 
@@ -48,23 +64,39 @@ Built-in event whose `event_type` is `"blazen::StopEvent"`.
 
 ## step decorator
 
+The `@step` decorator reads the type hint of the `ev` parameter to automatically determine which events the step accepts.
+
 ```python
+class AnalyzeEvent(Event):
+    text: str
+
 @step
-async def handle(ctx: Context, ev: Event) -> Event | list[Event] | None: ...
+async def analyze(ctx: Context, ev: AnalyzeEvent) -> Event | None:
+    ...
+# Equivalent to @step(accepts=["AnalyzeEvent"])
 ```
 
-Decorates an async (or sync) function as a workflow step. By default the step accepts `StartEvent`.
+When the annotation is the base `Event` class or absent, the step defaults to accepting `StartEvent`:
+
+```python
+@step
+async def start(ctx: Context, ev: Event) -> Event | None:
+    ...
+# Equivalent to @step(accepts=["blazen::StartEvent"])
+```
+
+Explicit overrides still work:
 
 | Variant | Description |
 |---|---|
-| `@step` | Accepts `StartEvent`, emits any event type. |
-| `@step(accepts=["EventType"])` | Only handles the specified event types. |
+| `@step` | Infers `accepts` from the `ev` type hint. Defaults to `StartEvent` when the hint is `Event` or missing. |
+| `@step(accepts=["EventType"])` | Explicitly sets accepted event types, overriding type-hint inference. |
 | `@step(emits=["EventType"])` | Declares the event types this step may produce. |
 
 **Step signature**
 
 ```python
-async def name(ctx: Context, ev: Event) -> Event | list[Event] | None
+async def name(ctx: Context, ev: MyEvent) -> Event | list[Event] | None
 ```
 
 Return an `Event` to emit it, a `list[Event]` to emit several, or `None` to emit nothing.
@@ -108,3 +140,80 @@ Available as the first parameter of every step function. All methods are synchro
 | `run_id` | `ctx.run_id() -> str` | Return the UUID of the current workflow run. |
 | `send_event` | `ctx.send_event(event: Event) -> None` | Route an event to matching steps manually. |
 | `write_event_to_stream` | `ctx.write_event_to_stream(event: Event) -> None` | Publish an event to the stream visible via `WorkflowHandler.stream_events()`. |
+
+---
+
+## CompletionModel
+
+Use static constructor methods to create a model for a specific provider, then call `complete()` to generate responses.
+
+```python
+model = CompletionModel.openai("sk-...")
+model = CompletionModel.anthropic("sk-ant-...")
+model = CompletionModel.openrouter("sk-or-...", model="meta-llama/llama-3-70b")
+```
+
+**Provider constructors**
+
+| Constructor | Signature |
+|---|---|
+| `openai` | `CompletionModel.openai(api_key: str, model: str = None)` |
+| `anthropic` | `CompletionModel.anthropic(api_key: str, model: str = None)` |
+| `gemini` | `CompletionModel.gemini(api_key: str, model: str = None)` |
+| `azure` | `CompletionModel.azure(api_key: str, resource_name: str, deployment_name: str)` |
+| `openrouter` | `CompletionModel.openrouter(api_key: str, model: str = None)` |
+| `groq` | `CompletionModel.groq(api_key: str, model: str = None)` |
+| `together` | `CompletionModel.together(api_key: str, model: str = None)` |
+| `mistral` | `CompletionModel.mistral(api_key: str, model: str = None)` |
+| `deepseek` | `CompletionModel.deepseek(api_key: str, model: str = None)` |
+| `fireworks` | `CompletionModel.fireworks(api_key: str, model: str = None)` |
+| `perplexity` | `CompletionModel.perplexity(api_key: str, model: str = None)` |
+| `xai` | `CompletionModel.xai(api_key: str, model: str = None)` |
+| `cohere` | `CompletionModel.cohere(api_key: str, model: str = None)` |
+| `bedrock` | `CompletionModel.bedrock(api_key: str, region: str, model: str = None)` |
+| `fal` | `CompletionModel.fal(api_key: str, model: str = None)` |
+
+**Properties**
+
+| Property | Type | Description |
+|---|---|---|
+| `.model_id` | `str` | The string identifier of the active model. |
+
+**complete()**
+
+```python
+response = await model.complete(
+    messages: list[ChatMessage],
+    temperature: float = None,
+    max_tokens: int = None,
+    model: str = None,
+)
+```
+
+Returns a `dict` with keys: `content`, `model`, `tool_calls`, `usage`, `finish_reason`.
+
+---
+
+## ChatMessage
+
+A single message in a chat conversation.
+
+```python
+msg = ChatMessage("user", "Hello, world!")
+```
+
+**Static constructors**
+
+| Method | Description |
+|---|---|
+| `ChatMessage.system(content: str)` | Create a system message. |
+| `ChatMessage.user(content: str)` | Create a user message. |
+| `ChatMessage.assistant(content: str)` | Create an assistant message. |
+| `ChatMessage.tool(content: str)` | Create a tool result message. |
+
+**Properties**
+
+| Property | Type | Description |
+|---|---|---|
+| `.role` | `str` | One of `"system"`, `"user"`, `"assistant"`, `"tool"`. |
+| `.content` | `str \| None` | The message text. |

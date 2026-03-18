@@ -18,25 +18,42 @@ Or with pip:
 pip install blazen
 ```
 
+## Define Your Events
+
+Blazen routes work through **typed events**. Subclass `Event` to declare the data each step expects:
+
+```python
+from blazen import Event
+
+class GreetEvent(Event):
+    name: str
+```
+
+Subclassing `Event` automatically sets `event_type` to the class name (`"GreetEvent"`). Fields are declared as plain type annotations -- Blazen uses them for validation and attribute access.
+
 ## Define Your Steps
 
 Create a simple greeter workflow with two steps: one to parse input and one to produce a greeting.
 
 ```python
 import asyncio
-from blazen import Workflow, Context, Event, StartEvent, StopEvent, step
+from blazen import Workflow, step, Event, StopEvent, Context
+
+class GreetEvent(Event):
+    name: str
 
 @step
 async def parse_input(ctx: Context, ev: Event):
-    name = ev.name if hasattr(ev, 'name') else "World"
-    return Event("GreetEvent", name=name)
+    return GreetEvent(name=ev.name or "World")
 
-@step(accepts=["GreetEvent"])
-async def greet(ctx: Context, ev: Event):
+@step
+async def greet(ctx: Context, ev: GreetEvent):
     return StopEvent(result={"greeting": f"Hello, {ev.name}!"})
 ```
 
-A `@step` with no arguments handles the `StartEvent` by default. Adding `accepts=["GreetEvent"]` tells Blazen to route only that specific event type to the step.
+The `@step` decorator reads the **type hint** on the `ev` parameter to decide which events a step receives. `parse_input` accepts the base `Event` (so it handles the initial start event), while `greet` accepts `GreetEvent` specifically. No `accepts=` argument is needed.
+
+Because `GreetEvent` has a typed `name` field, you access it directly as `ev.name` -- no `.to_dict()` unpacking required.
 
 ## Build and Run
 
@@ -56,8 +73,27 @@ Running this prints:
 {'greeting': 'Hello, Blazen!'}
 ```
 
+## Using Context
+
+Steps can share state through the `Context` object. Context access is **synchronous** -- no `await` needed:
+
+```python
+@step
+async def parse_input(ctx: Context, ev: Event):
+    ctx.set("request_count", ctx.get("request_count", 0) + 1)
+    return GreetEvent(name=ev.name or "World")
+
+@step
+async def greet(ctx: Context, ev: GreetEvent):
+    count = ctx.get("request_count", 0)
+    return StopEvent(result={"greeting": f"Hello, {ev.name}!", "request_number": count})
+```
+
+`ctx.set(key, value)` stores a value and `ctx.get(key)` (or `ctx.get(key, default)`) retrieves it. Both are plain synchronous calls you can use anywhere inside a step.
+
 ## Key Concepts
 
+- **Event subclasses** -- `class MyEvent(Event): ...` gives you typed fields, automatic `event_type` naming, and direct attribute access (`ev.field`).
+- **Type-hint routing** -- `@step` inspects the `ev` parameter's type hint to route events. A hint of `Event` receives the start event; a hint of `GreetEvent` receives only `GreetEvent` instances.
 - **Context is synchronous** -- `ctx.set("key", value)` and `ctx.get("key")` do not require `await`.
-- **Custom events** -- Create them inline with `Event("TypeName", field=value)`. No class declaration needed.
-- **Attribute access** -- Event fields are accessed as attributes: `ev.name`, `ev.text`, etc.
+- **Alternative syntax** -- `Event("GreetEvent", name=value)` still works for inline, one-off events when you don't need a dedicated class.

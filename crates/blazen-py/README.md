@@ -11,8 +11,14 @@ Blazen lets you build multi-step AI workflows as composable, event-driven graphs
 ## Installation
 
 ```bash
+# Recommended
+uv add blazen
+
+# Or with pip
 pip install blazen
 ```
+
+Requires Python 3.10+.
 
 ## Quick Start
 
@@ -20,90 +26,89 @@ pip install blazen
 import asyncio
 from blazen import Workflow, step, Event, StartEvent, StopEvent, Context
 
+class GreetEvent(Event):
+    name: str
+
 @step
-async def greet(ctx: Context, ev: Event) -> Event:
-    name = ev.to_dict().get("name", "world")
-    return StopEvent(result=f"Hello, {name}!")
+async def parse(ctx: Context, ev: Event):
+    return GreetEvent(name=ev.name)
+
+@step
+async def greet(ctx: Context, ev: GreetEvent):
+    return StopEvent(result={"greeting": f"Hello, {ev.name}!"})
 
 async def main():
-    wf = Workflow("hello", [greet])
+    wf = Workflow("hello", [parse, greet])
     handler = await wf.run(name="Blazen")
     result = await handler.result()
-    print(result.to_dict())  # {"result": "Hello, Blazen!"}
+    print(result.result)  # {"greeting": "Hello, Blazen!"}
 
 asyncio.run(main())
 ```
 
+### How it works
+
+- **`class GreetEvent(Event)`** -- Subclassing `Event` auto-sets `event_type` to the class name (`"GreetEvent"`). Annotations like `name: str` are for documentation only; at runtime all keyword arguments are stored as JSON.
+- **`@step` reads type annotations** -- `ev: GreetEvent` on a step function automatically sets `accepts=["GreetEvent"]`. The step will only receive events of that type.
+- **`@step` with no type hint or `ev: Event`** -- defaults to accepting `StartEvent` (the event emitted by `wf.run()`).
+- **`ev.name`** -- Direct attribute access on events. No need for `ev.to_dict()["name"]`.
+- **`wf.run(name="Blazen")`** -- Keyword arguments become the `StartEvent` payload. Steps that accept `StartEvent` receive an event where `ev.name == "Blazen"`.
+
 ## Multi-Step Workflows
 
-Chain steps together using custom event types. Each step declares which events it accepts and emits.
+Chain steps together using custom event subclasses. Each step declares which events it accepts via its type annotation.
 
 ```python
-from blazen import Workflow, step, Event, StartEvent, StopEvent, Context
+import asyncio
+from blazen import Workflow, step, Event, StopEvent, Context
 
-@step(emits=["AnalyzeEvent"])
-async def fetch_data(ctx: Context, ev: Event) -> Event:
-    url = ev.to_dict()["url"]
-    # ... fetch data ...
-    return Event("AnalyzeEvent", text="fetched content", source=url)
+class FetchedEvent(Event):
+    text: str
+    source: str
 
-@step(accepts=["AnalyzeEvent"], emits=["StopEvent"])
-async def analyze(ctx: Context, ev: Event) -> Event:
-    text = ev.text
-    return StopEvent(result={"summary": f"Analyzed: {text}"})
+class AnalyzedEvent(Event):
+    summary: str
+
+@step
+async def fetch(ctx: Context, ev: Event):
+    # ev is a StartEvent with url=...
+    text = f"Content from {ev.url}"
+    return FetchedEvent(text=text, source=ev.url)
+
+@step
+async def analyze(ctx: Context, ev: FetchedEvent):
+    summary = f"Analysis of: {ev.text}"
+    return AnalyzedEvent(summary=summary)
+
+@step
+async def report(ctx: Context, ev: AnalyzedEvent):
+    return StopEvent(result={"summary": ev.summary})
 
 async def main():
-    wf = Workflow("pipeline", [fetch_data, analyze])
+    wf = Workflow("pipeline", [fetch, analyze, report])
     handler = await wf.run(url="https://example.com")
     result = await handler.result()
-    print(result.to_dict())
-```
+    print(result.result)  # {"summary": "Analysis of: Content from https://example.com"}
 
-## LLM Integration
-
-Blazen includes a built-in multi-provider LLM client. Supports OpenAI, Anthropic, Gemini, Azure, OpenRouter, Groq, Together, Mistral, DeepSeek, Fireworks, Perplexity, xAI, Cohere, Bedrock, and fal.
-
-```python
-from blazen import CompletionModel, ChatMessage
-
-model = CompletionModel.openai("sk-...")
-# Or: CompletionModel.anthropic("sk-ant-...")
-# Or: CompletionModel.gemini("AI...")
-
-response = await model.complete(
-    [
-        ChatMessage.system("You are a helpful assistant."),
-        ChatMessage.user("Explain quantum computing in one sentence."),
-    ],
-    temperature=0.7,
-    max_tokens=256,
-)
-
-print(response["content"])
-# response also contains: model, tool_calls, usage, finish_reason
-```
-
-### Using LLMs in Workflows
-
-```python
-@step
-async def ask_llm(ctx: Context, ev: Event) -> Event:
-    model = CompletionModel.anthropic("sk-ant-...")
-    response = await model.complete([
-        ChatMessage.user(ev.to_dict()["prompt"]),
-    ])
-    return StopEvent(result=response["content"])
+asyncio.run(main())
 ```
 
 ## Event Streaming
 
-Stream intermediate events from a running workflow in real time.
+Stream intermediate events from a running workflow in real time using `ctx.write_event_to_stream()`.
 
 ```python
-@step(emits=["ProgressEvent", "StopEvent"])
-async def work(ctx: Context, ev: Event) -> Event:
+import asyncio
+from blazen import Workflow, step, Event, StopEvent, Context
+
+class ProgressEvent(Event):
+    step_num: int
+    message: str
+
+@step
+async def work(ctx: Context, ev: Event):
     for i in range(3):
-        ctx.write_event_to_stream(Event("ProgressEvent", step=i))
+        ctx.write_event_to_stream(ProgressEvent(step_num=i, message=f"Processing {i}"))
     return StopEvent(result="done")
 
 async def main():
@@ -111,10 +116,131 @@ async def main():
     handler = await wf.run()
 
     async for event in handler.stream_events():
-        print(event.event_type, event.to_dict())
+        print(event.event_type, event.step_num, event.message)
 
     result = await handler.result()
+    print(result.result)  # "done"
+
+asyncio.run(main())
 ```
+
+`write_event_to_stream()` publishes to an external broadcast stream. Consumers read it with `async for event in handler.stream_events()`. These events are **not** routed through the step graph -- they are for external observation only.
+
+## LLM Integration
+
+Blazen includes a built-in multi-provider LLM client. All providers share the same `CompletionModel` / `ChatMessage` interface.
+
+```python
+import os
+from blazen import CompletionModel, ChatMessage
+
+model = CompletionModel.openrouter(os.environ["OPENROUTER_API_KEY"])
+response = await model.complete([
+    ChatMessage.system("You are helpful."),
+    ChatMessage.user("What is 2+2?"),
+], temperature=0.7, max_tokens=256)
+
+print(response["content"])
+# response also contains: model, tool_calls, usage, finish_reason
+```
+
+### Supported Providers
+
+| Provider | Constructor | Default Model |
+|---|---|---|
+| OpenAI | `CompletionModel.openai(api_key, model=None)` | `gpt-4o` |
+| Anthropic | `CompletionModel.anthropic(api_key, model=None)` | `claude-sonnet-4-20250514` |
+| Google Gemini | `CompletionModel.gemini(api_key, model=None)` | `gemini-2.0-flash` |
+| Azure OpenAI | `CompletionModel.azure(api_key, resource_name, deployment_name)` | (deployment) |
+| OpenRouter | `CompletionModel.openrouter(api_key, model=None)` | -- |
+| Groq | `CompletionModel.groq(api_key, model=None)` | -- |
+| Together AI | `CompletionModel.together(api_key, model=None)` | -- |
+| Mistral | `CompletionModel.mistral(api_key, model=None)` | -- |
+| DeepSeek | `CompletionModel.deepseek(api_key, model=None)` | -- |
+| Fireworks | `CompletionModel.fireworks(api_key, model=None)` | -- |
+| Perplexity | `CompletionModel.perplexity(api_key, model=None)` | -- |
+| xAI (Grok) | `CompletionModel.xai(api_key, model=None)` | -- |
+| Cohere | `CompletionModel.cohere(api_key, model=None)` | -- |
+| AWS Bedrock | `CompletionModel.bedrock(api_key, region, model=None)` | -- |
+| fal.ai | `CompletionModel.fal(api_key, model=None)` | -- |
+
+### Using LLMs in Workflows
+
+```python
+import os
+from blazen import Workflow, step, Event, StopEvent, Context, CompletionModel, ChatMessage
+
+class AnswerEvent(Event):
+    answer: str
+
+@step
+async def ask_llm(ctx: Context, ev: Event):
+    model = CompletionModel.anthropic(os.environ["ANTHROPIC_API_KEY"])
+    response = await model.complete([
+        ChatMessage.system("Answer concisely."),
+        ChatMessage.user(ev.prompt),
+    ], max_tokens=256)
+    return AnswerEvent(answer=response["content"])
+
+@step
+async def format_answer(ctx: Context, ev: AnswerEvent):
+    return StopEvent(result={"answer": ev.answer})
+
+async def main():
+    wf = Workflow("llm-pipeline", [ask_llm, format_answer])
+    handler = await wf.run(prompt="Explain gravity in one sentence.")
+    result = await handler.result()
+    print(result.result)
+```
+
+## Branching / Fan-Out
+
+Return a list of events from a step to dispatch multiple events simultaneously. Each event is routed independently to steps that accept its type.
+
+```python
+from blazen import Workflow, step, Event, StopEvent, Context
+
+class TaskEvent(Event):
+    task_id: int
+    payload: str
+
+@step
+async def fan_out(ctx: Context, ev: Event):
+    return [
+        TaskEvent(task_id=1, payload="first"),
+        TaskEvent(task_id=2, payload="second"),
+        TaskEvent(task_id=3, payload="third"),
+    ]
+
+@step
+async def process_task(ctx: Context, ev: TaskEvent):
+    # Called once per TaskEvent
+    return StopEvent(result={"task_id": ev.task_id, "done": True})
+```
+
+## Side-Effect Steps
+
+A step can return `None` and use `ctx.send_event()` to route events through the internal step graph without returning them. This is useful for steps that perform side effects (logging, saving state) before forwarding.
+
+```python
+from blazen import Workflow, step, Event, StopEvent, Context
+
+class ProcessedEvent(Event):
+    data: str
+
+@step
+async def log_and_forward(ctx: Context, ev: Event):
+    ctx.set("received_at", "2025-01-01T00:00:00Z")
+    ctx.send_event(ProcessedEvent(data=ev.payload))
+    return None  # no direct return -- event sent via ctx
+
+@step
+async def finish(ctx: Context, ev: ProcessedEvent):
+    received = ctx.get("received_at")
+    return StopEvent(result={"data": ev.data, "received_at": received})
+```
+
+`ctx.send_event()` routes the event through the internal step registry (to steps whose `accepts` matches the event type). This is different from `ctx.write_event_to_stream()` which publishes to the external broadcast stream.
 
 ## Pause and Resume
 
@@ -131,46 +257,54 @@ handler = await Workflow.resume(snapshot_json, [step1, step2])
 result = await handler.result()
 ```
 
-## Human-in-the-Loop
+## Context API
 
-Combine pause/resume with custom events to build approval workflows where a human reviews intermediate results before the workflow continues.
+Steps share state through the `Context` object. All values must be JSON-serializable. Every method on `Context` is **synchronous** -- no `await` needed.
 
-## Shared Context
-
-Steps share state through the `Context` object. All values must be JSON-serializable.
+| Method | Description |
+|---|---|
+| `ctx.set(key, value)` | Store a JSON-serializable value. |
+| `ctx.get(key)` | Retrieve a value (returns `None` if missing). |
+| `ctx.send_event(event)` | Route an event through the internal step graph. |
+| `ctx.write_event_to_stream(event)` | Publish an event to the external broadcast stream. |
+| `ctx.run_id()` | Get the UUID string for the current workflow run. |
 
 ```python
-@step(emits=["NextEvent"])
-async def step_one(ctx: Context, ev: Event) -> Event:
-    ctx.set("count", 0)
-    return Event("NextEvent")
-
-@step(accepts=["NextEvent"])
-async def step_two(ctx: Context, ev: Event) -> Event:
-    count = ctx.get("count")  # 0
-    ctx.set("count", count + 1)
-    return StopEvent(result=ctx.get("count"))
+@step
+async def example(ctx: Context, ev: Event):
+    ctx.set("counter", 42)              # synchronous
+    val = ctx.get("counter")            # synchronous, returns 42
+    run = ctx.run_id()                  # synchronous, returns UUID string
+    ctx.send_event(SomeEvent(x=1))      # synchronous, routes internally
+    ctx.write_event_to_stream(SomeEvent(x=1))  # synchronous, broadcasts externally
+    return None
 ```
 
 ## API Reference
 
 | Class / Function | Description |
 |---|---|
-| `Event(event_type, **kwargs)` | Dict-like event for inter-step communication |
-| `StartEvent(**kwargs)` | Kicks off a workflow |
-| `StopEvent(**kwargs)` | Terminates a workflow with a result |
-| `Context` | Shared key/value store (`set`, `get`, `send_event`, `write_event_to_stream`, `run_id`) |
-| `@step` | Decorator for workflow steps. Options: `accepts`, `emits`, `max_concurrency` |
-| `Workflow(name, steps, timeout=None)` | Validated workflow. Call `.run(**kwargs)` to execute |
-| `WorkflowHandler` | Handle to a running workflow (`.result()`, `.stream_events()`, `.pause()`) |
-| `Workflow.resume(snapshot_json, steps)` | Static method to resume from a snapshot |
-| `CompletionModel.openai(api_key)` | LLM provider (also: `.anthropic`, `.gemini`, `.azure`, `.openrouter`, `.groq`, `.together`, `.mistral`, `.deepseek`, `.fireworks`, `.perplexity`, `.xai`, `.cohere`, `.bedrock`, `.fal`) |
-| `ChatMessage(role, content)` | Chat message (also: `.system()`, `.user()`, `.assistant()`, `.tool()`) |
+| `Event(event_type, **kwargs)` | Base event class. Subclass it: `class MyEvent(Event)` auto-sets `event_type` to class name. Direct attribute access: `ev.name`. Also has `ev.to_dict()` and `ev.event_type`. |
+| `StartEvent(**kwargs)` | Emitted by `wf.run(**kwargs)`. Steps with `ev: Event` or no annotation accept this. |
+| `StopEvent(**kwargs)` | Terminates the workflow. Access the result via `result.result`. |
+| `Context` | Shared key/value store. Methods: `set(key, value)`, `get(key)`, `send_event(event)`, `write_event_to_stream(event)`, `run_id()`. All synchronous. |
+| `@step` | Decorator for workflow steps. Infers `accepts` from the `ev` parameter type annotation. Supports `async def` and plain `def`. May also be called as `@step(accepts=[...], emits=[...], max_concurrency=N)`. |
+| `Workflow(name, steps, timeout=None)` | Validated workflow graph. `timeout` is in seconds (default: 300). |
+| `await wf.run(**kwargs)` | Execute the workflow. Returns a `WorkflowHandler`. Kwargs become the `StartEvent` payload. |
+| `WorkflowHandler` | Handle to a running workflow: `await handler.result()`, `async for ev in handler.stream_events()`, `await handler.pause()`. |
+| `await Workflow.resume(snapshot_json, steps, timeout=None)` | Resume a paused workflow from a JSON snapshot. Returns a `WorkflowHandler`. |
+| `CompletionModel.<provider>(api_key, ...)` | LLM provider. Providers: `openai`, `anthropic`, `gemini`, `azure`, `openrouter`, `groq`, `together`, `mistral`, `deepseek`, `fireworks`, `perplexity`, `xai`, `cohere`, `bedrock`, `fal`. |
+| `await model.complete(messages, temperature=None, max_tokens=None, model=None)` | Chat completion. Returns a dict with keys: `content`, `model`, `tool_calls`, `usage`, `finish_reason`. |
+| `ChatMessage(role, content)` | Chat message. Static constructors: `.system(content)`, `.user(content)`, `.assistant(content)`, `.tool(content)`. Properties: `.role`, `.content`. |
 
 ## Documentation
 
-Full docs and source: [github.com/ZachHandley/Blazen](https://github.com/ZachHandley/Blazen)
+Full docs: [blazen.dev](https://blazen.dev)
+
+Source: [github.com/ZachHandley/Blazen](https://github.com/ZachHandley/Blazen)
 
 ## License
 
 AGPL-3.0 -- see [LICENSE](https://github.com/ZachHandley/Blazen/blob/main/LICENSE) for details.
+
+Author: Zach Handley

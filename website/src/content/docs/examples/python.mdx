@@ -9,7 +9,7 @@ order: 2
 
 # Python Examples
 
-Five complete, runnable examples that demonstrate core Blazen workflow patterns in Python.
+Five complete, runnable examples that demonstrate core Blazen workflow patterns in Python using the subclass event model.
 
 ---
 
@@ -18,12 +18,15 @@ Five complete, runnable examples that demonstrate core Blazen workflow patterns 
 A 3-step sequential pipeline: **StartEvent** → **GreetEvent** → **FormattedEvent** → **StopEvent**.
 
 ```python
+class GreetEvent(Event):
+    name: str
+
 @step
 async def parse_input(ctx: Context, ev: Event):
-    return Event("GreetEvent", name=ev.name)
+    return GreetEvent(name=ev.name)
 
-@step(accepts=["GreetEvent"])
-async def greet(ctx: Context, ev: Event):
+@step
+async def greet(ctx: Context, ev: GreetEvent):
     return StopEvent(result={"greeting": f"Hello, {ev.name}!"})
 ```
 
@@ -35,10 +38,13 @@ python examples/basic_workflow.py
 
 ## Streaming Workflow
 
-Publishes progress events while processing via `ctx.write_event_to_stream()`.
+Publishes typed progress events while processing via `ctx.write_event_to_stream()`.
 
 ```python
-ctx.write_event_to_stream(Event("Progress", step=i))
+class ProgressEvent(Event):
+    step: int
+
+ctx.write_event_to_stream(ProgressEvent(step=i))
 async for event in handler.stream_events():
     print(event.event_type)
 ```
@@ -51,10 +57,15 @@ python examples/streaming_workflow.py
 
 ## Branching Workflow
 
-Conditional fan-out by returning a list of events.
+Conditional fan-out by returning a list of typed events.
 
 ```python
-return [Event("PositiveEvent", text=text), Event("NegativeEvent", text=text)]
+class PositiveEvent(Event):
+    text: str
+class NegativeEvent(Event):
+    text: str
+
+return [PositiveEvent(text=text), NegativeEvent(text=text)]
 ```
 
 ```sh
@@ -80,10 +91,13 @@ python examples/llm_rag_workflow.py
 
 ## Human-in-the-Loop
 
-Side-effect steps that pause for external input with `ctx.send_event()`.
+Side-effect steps that pause for external input with typed review events.
 
 ```python
-ctx.send_event(Event("ReviewComplete"))
+class ReviewComplete(Event):
+    pass
+
+ctx.send_event(ReviewComplete())
 return None
 ```
 

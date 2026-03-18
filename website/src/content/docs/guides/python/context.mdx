@@ -13,30 +13,39 @@ A key-value store shared across all steps in a workflow run.
 ## Setting and Getting Values
 
 ```python
+class NextEvent(Event):
+    pass
+
 @step
 async def store_data(ctx: Context, ev: Event):
     ctx.set("user_id", "user_123")
     ctx.set("doc_count", 5)
-    return Event("NextEvent")
+    return NextEvent()
 
-@step(accepts=["NextEvent"])
-async def use_data(ctx: Context, ev: Event):
+@step
+async def use_data(ctx: Context, ev: NextEvent):
     user_id = ctx.get("user_id")
     doc_count = ctx.get("doc_count")
     return StopEvent(result={"user": user_id, "docs": doc_count})
 ```
 
-**Important:** `ctx.set()` and `ctx.get()` are synchronous — no `await` needed.
+**Important:** `ctx.set()` and `ctx.get()` are synchronous — no `await`.
 
 ## Run ID
 
 ```python
-run_id = ctx.run_id()  # Returns a UUID string
+run_id = ctx.run_id()  # Synchronous, returns a UUID string
 ```
 
 ## Manual Event Routing
 
 ```python
-ctx.send_event(Event("Continue"))  # Synchronous, no await
+ctx.send_event(ContinueEvent())  # Synchronous, routes manually
 return None  # Don't return an event when using send_event
+```
+
+## Streaming Events Externally
+
+```python
+ctx.write_event_to_stream(ProgressEvent(...))  # Synchronous, external broadcast
 ```

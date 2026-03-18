@@ -8,40 +8,49 @@ order: 5
 
 ## Conditional Branching
 
-Return different event types based on conditions:
+Define typed event subclasses and return them based on conditions:
 
 ```python
+class PositiveEvent(Event):
+    text: str
+class NegativeEvent(Event):
+    text: str
+
 @step
 async def classify(ctx: Context, ev: Event):
     if "good" in ev.text.lower():
-        return Event("PositiveEvent", text=ev.text)
+        return PositiveEvent(text=ev.text)
     else:
-        return Event("NegativeEvent", text=ev.text)
+        return NegativeEvent(text=ev.text)
 ```
 
 ## Handling Branches
 
+Each handler declares the specific event subclass it accepts via the type annotation:
+
 ```python
-@step(accepts=["PositiveEvent"])
-async def handle_positive(ctx: Context, ev: Event):
+@step
+async def handle_positive(ctx: Context, ev: PositiveEvent):
     return StopEvent(result={"sentiment": "positive", "text": ev.text})
 
-@step(accepts=["NegativeEvent"])
-async def handle_negative(ctx: Context, ev: Event):
+@step
+async def handle_negative(ctx: Context, ev: NegativeEvent):
     return StopEvent(result={"sentiment": "negative", "text": ev.text})
 ```
 
 ## Fan-out
 
-Return a list to dispatch to multiple branches simultaneously:
+Define branch event subclasses and return a list to dispatch to multiple branches simultaneously:
 
 ```python
+class BranchA(Event):
+    value: str
+class BranchB(Event):
+    value: str
+
 @step
 async def fan_out(ctx: Context, ev: Event):
-    return [
-        Event("BranchA", value="a"),
-        Event("BranchB", value="b"),
-    ]
+    return [BranchA(value="a"), BranchB(value="b")]
 ```
 
 Both branches execute concurrently. First `StopEvent` wins.

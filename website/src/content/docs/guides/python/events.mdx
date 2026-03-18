@@ -6,66 +6,106 @@ section: "guides"
 order: 2
 ---
 
-## Custom Events
+## Defining Custom Events
+
+Subclass `Event` to define typed, self-documenting events. The `event_type` is
+automatically set to the class name, and fields are type-annotated for clarity
+but stored as JSON internally.
 
 ```python
 from blazen import Event
 
-ev = Event("AnalyzeEvent", text="hello", score=0.9)
+class AnalyzeEvent(Event):
+    text: str
+    score: float
+
+ev = AnalyzeEvent(text="hello", score=0.9)
 print(ev.event_type)  # "AnalyzeEvent"
 print(ev.text)        # "hello"
-print(ev.score)       # 0.9
 print(ev.to_dict())   # {"text": "hello", "score": 0.9}
 ```
 
-Events are dict-like with attribute access. Any keyword argument becomes a field.
-
 ## Built-in Events
+
+`StartEvent` and `StopEvent` are provided by the framework. Every workflow
+begins with a `StartEvent` and terminates when a `StopEvent` is returned.
 
 ```python
 from blazen import StartEvent, StopEvent
 
-start = StartEvent(message="hello")  # event_type: "blazen::StartEvent"
+start = StartEvent(message="hello")      # event_type: "blazen::StartEvent"
 stop = StopEvent(result={"answer": 42})  # event_type: "blazen::StopEvent"
 ```
 
-## Event Routing
+## Event Routing via Type Hints
 
-Steps declare which events they accept:
+The type hint on the `ev` parameter controls which events a step accepts.
+No explicit `accepts` list is needed.
+
+- **`ev: Event`** (or no type hint) -- the step handles `StartEvent` by default.
+- **`ev: SomeCustomEvent`** -- the step automatically accepts only `SomeCustomEvent`.
 
 ```python
-@step  # No accepts = handles StartEvent by default
-async def first(ctx: Context, ev: Event):
-    return Event("AnalyzeEvent", text=ev.message)
+from blazen import Event, StartEvent, StopEvent, Context, step
 
-@step(accepts=["AnalyzeEvent"])
-async def second(ctx: Context, ev: Event):
+class AnalyzeEvent(Event):
+    text: str
+
+@step
+async def first(ctx: Context, ev: Event):
+    # ev: Event -> accepts StartEvent
+    return AnalyzeEvent(text=ev.message)
+
+@step
+async def second(ctx: Context, ev: AnalyzeEvent):
+    # ev: AnalyzeEvent -> automatically accepts=["AnalyzeEvent"]
     return StopEvent(result={"text": ev.text})
 ```
 
 ## Fan-out (Multiple Events)
 
-Return a list to dispatch multiple events:
+Return a list to dispatch multiple events simultaneously. Each event routes to
+its matching step independently.
 
 ```python
+from blazen import Event, Context, step
+
+class BranchA(Event):
+    value: str
+
+class BranchB(Event):
+    value: str
+
 @step
 async def fan_out(ctx: Context, ev: Event):
-    return [
-        Event("BranchA", value="a"),
-        Event("BranchB", value="b"),
-    ]
+    return [BranchA(value="a"), BranchB(value="b")]
 ```
-
-Each event routes to its matching step independently.
 
 ## Side-Effect Steps
 
-Return `None` and use `ctx.send_event()` for manual routing:
+Return `None` and use `ctx.send_event()` when a step needs to perform a
+side effect without directly producing a next event in the return value.
 
 ```python
+from blazen import Event, Context, step
+
+class ContinueEvent(Event):
+    pass
+
 @step
 async def side_effect(ctx: Context, ev: Event):
     ctx.set("processed", True)
-    ctx.send_event(Event("Continue"))
+    ctx.send_event(ContinueEvent())
     return None
 ```
+
+## Alternative: Inline Events
+
+For quick prototyping you can still create events inline without a subclass:
+
+```python
+ev = Event("AnalyzeEvent", text="hello", score=0.9)
+```
+
+This is equivalent to defining a one-off event class. Prefer subclasses for
+production code since they give you type safety and self-documenting fields.

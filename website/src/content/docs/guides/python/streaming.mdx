@@ -12,13 +12,17 @@ Routing events flow between steps inside a workflow. Stream events are published
 
 ## Publishing Stream Events
 
-Use `ctx.write_event_to_stream()` inside any step to push an event to the external stream:
+Define a custom event by subclassing `Event`, then use `ctx.write_event_to_stream()` inside any step to push it to the external stream:
 
 ```python
+class ProgressEvent(Event):
+    step: int
+    message: str
+
 @step
 async def process(ctx: Context, ev: Event):
     for i in range(3):
-        ctx.write_event_to_stream(Event("Progress", step=i, message=f"Processing step {i}"))
+        ctx.write_event_to_stream(ProgressEvent(step=i, message=f"Processing step {i}"))
     return StopEvent(result={"done": True})
 ```
 
@@ -29,7 +33,6 @@ async def process(ctx: Context, ev: Event):
 After starting a workflow, iterate over `handler.stream_events()` to receive stream events as they arrive:
 
 ```python
-wf = Workflow("stream-demo", [process])
 handler = await wf.run()
 
 async for event in handler.stream_events():
