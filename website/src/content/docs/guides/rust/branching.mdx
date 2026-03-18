@@ -1,0 +1,50 @@
+---
+title: "Branching"
+description: "Conditional routing and fan-out in Rust"
+language: "rust"
+section: "guides"
+order: 5
+---
+
+## Conditional Branching
+
+Use `#[step(emits = [...])]` to declare multiple possible output types, then return a `StepOutput::Single`:
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+struct PositiveEvent { text: String }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+struct NegativeEvent { text: String }
+
+#[step(emits = [PositiveEvent, NegativeEvent])]
+async fn classify(event: AnalyzeEvent, _ctx: Context) -> Result<StepOutput, WorkflowError> {
+    if event.score > 0.5 {
+        Ok(StepOutput::Single(Box::new(PositiveEvent { text: event.text })))
+    } else {
+        Ok(StepOutput::Single(Box::new(NegativeEvent { text: event.text })))
+    }
+}
+```
+
+## Handling Branches
+
+Each branch has its own step:
+
+```rust
+#[step]
+async fn handle_positive(event: PositiveEvent, _ctx: Context) -> Result<StopEvent, WorkflowError> {
+    Ok(StopEvent { result: serde_json::json!({"sentiment": "positive", "text": event.text}) })
+}
+
+#[step]
+async fn handle_negative(event: NegativeEvent, _ctx: Context) -> Result<StopEvent, WorkflowError> {
+    Ok(StopEvent { result: serde_json::json!({"sentiment": "negative", "text": event.text}) })
+}
+```
+
+## How It Works
+
+- The router matches event types to steps
+- Only one branch executes based on which event is emitted
+- First `StopEvent` terminates the workflow

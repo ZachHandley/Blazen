@@ -1,0 +1,69 @@
+---
+title: "Events"
+description: "Create and route custom events in Node.js"
+language: "node"
+section: "guides"
+order: 2
+---
+
+## Custom Events
+
+Events are plain JavaScript objects with a `type` field:
+
+```javascript
+const event = { type: "AnalyzeEvent", text: "hello", score: 0.9 };
+```
+
+No classes needed — any object with `type` is an event.
+
+## Built-in Events
+
+- `"blazen::StartEvent"` — the input event, carries your workflow input as properties
+- `"blazen::StopEvent"` — terminates the workflow, must have a `result` field
+
+```javascript
+// Start event (created by wf.run()):
+{ type: "blazen::StartEvent", message: "hello" }
+
+// Stop event (returned by a step):
+{ type: "blazen::StopEvent", result: { answer: 42 } }
+```
+
+## Event Routing
+
+Steps declare which event types they handle in the `addStep` call:
+
+```javascript
+wf.addStep("first", ["blazen::StartEvent"], async (event, ctx) => {
+  return { type: "AnalyzeEvent", text: event.message };
+});
+
+wf.addStep("second", ["AnalyzeEvent"], async (event, ctx) => {
+  return { type: "blazen::StopEvent", result: { text: event.text } };
+});
+```
+
+## Fan-out (Multiple Events)
+
+Return an array to dispatch multiple events:
+
+```javascript
+wf.addStep("fan", ["blazen::StartEvent"], async (event, ctx) => {
+  return [
+    { type: "BranchA", value: "a" },
+    { type: "BranchB", value: "b" },
+  ];
+});
+```
+
+## Side-Effect Steps
+
+Return `null` and use `ctx.sendEvent()` for manual routing:
+
+```javascript
+wf.addStep("side_effect", ["blazen::StartEvent"], async (event, ctx) => {
+  await ctx.set("processed", true);
+  await ctx.sendEvent({ type: "Continue" });
+  return null;
+});
+```

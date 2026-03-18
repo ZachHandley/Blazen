@@ -1,0 +1,110 @@
+---
+title: "Python API Reference"
+description: "Complete API reference for blazen in Python"
+language: "python"
+section: "api"
+order: 2
+---
+
+## Event
+
+```python
+Event(event_type: str, **kwargs)
+```
+
+Create a custom event with an arbitrary event type and keyword arguments.
+
+| Member | Type | Description |
+|---|---|---|
+| `.event_type` | `str` | The event type string passed at construction. |
+| `.to_dict()` | `-> dict` | Serialize the event to a plain dictionary. |
+| `.field_name` | `Any` | Attribute access for any kwarg supplied at construction. |
+
+---
+
+## StartEvent
+
+```python
+StartEvent(**kwargs)
+```
+
+Built-in event whose `event_type` is `"blazen::StartEvent"`. All keyword arguments are available as attributes.
+
+---
+
+## StopEvent
+
+```python
+StopEvent(result=dict)
+```
+
+Built-in event whose `event_type` is `"blazen::StopEvent"`.
+
+| Member | Type | Description |
+|---|---|---|
+| `.result` | `dict` | The value passed via the `result` keyword argument. |
+
+---
+
+## step decorator
+
+```python
+@step
+async def handle(ctx: Context, ev: Event) -> Event | list[Event] | None: ...
+```
+
+Decorates an async (or sync) function as a workflow step. By default the step accepts `StartEvent`.
+
+| Variant | Description |
+|---|---|
+| `@step` | Accepts `StartEvent`, emits any event type. |
+| `@step(accepts=["EventType"])` | Only handles the specified event types. |
+| `@step(emits=["EventType"])` | Declares the event types this step may produce. |
+
+**Step signature**
+
+```python
+async def name(ctx: Context, ev: Event) -> Event | list[Event] | None
+```
+
+Return an `Event` to emit it, a `list[Event]` to emit several, or `None` to emit nothing.
+
+---
+
+## Workflow
+
+```python
+Workflow(name: str, steps: list)
+```
+
+Create a workflow from a name and an ordered list of steps.
+
+| Method | Signature | Description |
+|---|---|---|
+| `run` | `await wf.run(**kwargs) -> WorkflowHandler` | Start the workflow. Keyword arguments become fields on the initial `StartEvent`. |
+
+---
+
+## WorkflowHandler
+
+Returned by `Workflow.run()`. Provides control over a running workflow instance.
+
+| Method | Signature | Description |
+|---|---|---|
+| `result` | `await handler.result() -> Event` | Block until the workflow emits a `StopEvent` and return it. |
+| `stream_events` | `handler.stream_events() -> AsyncIterator[Event]` | Async iterator yielding events written to the stream. |
+| `pause` | `handler.pause() -> str` | Pause execution and return a serialized snapshot. |
+
+---
+
+## Context
+
+Available as the first parameter of every step function. All methods are synchronous.
+
+| Method | Signature | Description |
+|---|---|---|
+| `set` | `ctx.set(key: str, value: Any) -> None` | Store a value in the workflow context. |
+| `get` | `ctx.get(key: str) -> Any \| None` | Retrieve a value by key, or `None` if absent. |
+| `run_id` | `ctx.run_id() -> str` | Return the UUID of the current workflow run. |
+| `send_event` | `ctx.send_event(event: Event) -> None` | Route an event to matching steps manually. |
+| `write_event_to_stream` | `ctx.write_event_to_stream(event: Event) -> None` | Publish an event to the stream visible via `WorkflowHandler.stream_events()`. |

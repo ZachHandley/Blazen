@@ -1,0 +1,71 @@
+---
+title: "Events"
+description: "Create and route custom events in Python"
+language: "python"
+section: "guides"
+order: 2
+---
+
+## Custom Events
+
+```python
+from blazen import Event
+
+ev = Event("AnalyzeEvent", text="hello", score=0.9)
+print(ev.event_type)  # "AnalyzeEvent"
+print(ev.text)        # "hello"
+print(ev.score)       # 0.9
+print(ev.to_dict())   # {"text": "hello", "score": 0.9}
+```
+
+Events are dict-like with attribute access. Any keyword argument becomes a field.
+
+## Built-in Events
+
+```python
+from blazen import StartEvent, StopEvent
+
+start = StartEvent(message="hello")  # event_type: "blazen::StartEvent"
+stop = StopEvent(result={"answer": 42})  # event_type: "blazen::StopEvent"
+```
+
+## Event Routing
+
+Steps declare which events they accept:
+
+```python
+@step  # No accepts = handles StartEvent by default
+async def first(ctx: Context, ev: Event):
+    return Event("AnalyzeEvent", text=ev.message)
+
+@step(accepts=["AnalyzeEvent"])
+async def second(ctx: Context, ev: Event):
+    return StopEvent(result={"text": ev.text})
+```
+
+## Fan-out (Multiple Events)
+
+Return a list to dispatch multiple events:
+
+```python
+@step
+async def fan_out(ctx: Context, ev: Event):
+    return [
+        Event("BranchA", value="a"),
+        Event("BranchB", value="b"),
+    ]
+```
+
+Each event routes to its matching step independently.
+
+## Side-Effect Steps
+
+Return `None` and use `ctx.send_event()` for manual routing:
+
+```python
+@step
+async def side_effect(ctx: Context, ev: Event):
+    ctx.set("processed", True)
+    ctx.send_event(Event("Continue"))
+    return None
+```

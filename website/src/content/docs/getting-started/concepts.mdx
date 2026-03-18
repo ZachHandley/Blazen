@@ -1,0 +1,30 @@
+---
+title: "Core Concepts"
+description: "Events, Steps, Workflows, Context, and Streaming"
+section: "getting-started"
+order: 3
+---
+
+## Events
+
+Events are the fundamental data units that flow between steps in a workflow. Blazen provides several built-in event types: `StartEvent` triggers a workflow, `StopEvent` terminates it with a result, and `InputRequestEvent`/`InputResponseEvent` enable human-in-the-loop interactions. You can also define custom events to carry domain-specific data between steps. Events fall into two categories: **routing events** that control flow between steps, and **stream events** that are observed externally by consumers without affecting the workflow's execution path.
+
+## Steps
+
+Steps are async functions that receive an event and a context, then return one or more events. Each step declares which event types it accepts, allowing the workflow router to dispatch events correctly. A step can return a single event to continue the flow, a list of events to fan out to multiple downstream steps, or null/None to perform a side-effect without emitting further events.
+
+## Workflows
+
+A workflow is a collection of steps wired together by an event router that dispatches events to the appropriate step based on type. Every workflow begins with a `StartEvent` and completes when a `StopEvent` is produced. Workflows support snapshotting, meaning they can be paused at any point and resumed later from the saved state.
+
+## Context
+
+The context is a shared key-value store available to all steps within a single workflow run. Use `ctx.set(key, value)` and `ctx.get(key)` to share state between steps without coupling them directly. The context also provides `ctx.send_event()` for manually routing events to other steps and `ctx.write_event_to_stream()` for publishing events to external consumers.
+
+## Streaming
+
+Steps can publish non-routing events to an external stream via `ctx.write_event_to_stream()`. External consumers subscribe to this stream to receive updates in real time without interfering with the workflow's internal event routing. This is useful for progress reporting, logging, and delivering incremental results to a user interface.
+
+## Pipelines
+
+Pipelines compose multiple workflows into sequential or parallel stages, where each stage's output feeds into the next stage's input. This allows you to break complex processes into discrete, reusable workflows that can be tested and reasoned about independently. Pipelines handle the orchestration of data flow between stages automatically.

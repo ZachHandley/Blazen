@@ -1,0 +1,68 @@
+---
+title: "Human-in-the-Loop"
+description: "Build workflows that pause for human input in Rust"
+language: "rust"
+section: "guides"
+order: 6
+---
+
+## InputRequestEvent and InputResponseEvent
+
+When a step needs human input, it emits an `InputRequestEvent`. The workflow engine automatically pauses execution and waits for a matching `InputResponseEvent` before continuing. Events are correlated by `request_id`.
+
+```rust
+use blazen::prelude::*;
+
+#[step]
+async fn review(event: AnalyzeEvent, _ctx: Context) -> Result<InputRequestEvent, WorkflowError> {
+    Ok(InputRequestEvent {
+        request_id: uuid::Uuid::new_v4().to_string(),
+        prompt: format!("Approve analysis for '{}'?", event.text),
+        payload: serde_json::json!({ "score": event.score }),
+    })
+}
+```
+
+## Input Handlers
+
+Register an input handler when building the workflow. The handler receives each `InputRequestEvent` and must return an `InputResponseEvent` with the matching `request_id`:
+
+```rust
+let workflow = WorkflowBuilder::new("assistant")
+    .step(ai_step_registration())
+    .step(review_step_registration())
+    .input_handler(Arc::new(|request| Box::pin(async move {
+        println!("AI asks: {}", request.prompt);
+        let answer = get_user_input().await;
+        Ok(InputResponseEvent {
+            request_id: request.request_id,
+            response: serde_json::json!(answer),
+        })
+    })))
+    .build()?;
+```
+
+The handler is invoked each time any step emits an `InputRequestEvent`. After the handler returns, the workflow resumes with the response routed to the next matching step.
+
+## Pause and Resume
+
+For long-running approvals, workflows support durable pause and resume via snapshots:
+
+```rust
+let handler = workflow.run(input).await?;
+
+// Workflow auto-pauses when InputRequestEvent is emitted
+let snapshot = handler.snapshot().await?;
+save_to_database(&snapshot).await?;
+
+// Later -- restore and supply the response
+let handler = Workflow::resume(snapshot)?;
+handler.send_input(InputResponseEvent {
+    request_id: pending_request_id,
+    response: serde_json::json!({ "approved": true }),
+}).await?;
+
+let result = handler.result().await?;
+```
+
+Snapshots capture all in-flight state, so workflows survive process restarts and can be resumed from any instance.

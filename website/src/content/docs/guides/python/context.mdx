@@ -1,0 +1,42 @@
+---
+title: "Context"
+description: "Share state between workflow steps in Python"
+language: "python"
+section: "guides"
+order: 4
+---
+
+## What is Context?
+
+A key-value store shared across all steps in a workflow run.
+
+## Setting and Getting Values
+
+```python
+@step
+async def store_data(ctx: Context, ev: Event):
+    ctx.set("user_id", "user_123")
+    ctx.set("doc_count", 5)
+    return Event("NextEvent")
+
+@step(accepts=["NextEvent"])
+async def use_data(ctx: Context, ev: Event):
+    user_id = ctx.get("user_id")
+    doc_count = ctx.get("doc_count")
+    return StopEvent(result={"user": user_id, "docs": doc_count})
+```
+
+**Important:** `ctx.set()` and `ctx.get()` are synchronous — no `await` needed.
+
+## Run ID
+
+```python
+run_id = ctx.run_id()  # Returns a UUID string
+```
+
+## Manual Event Routing
+
+```python
+ctx.send_event(Event("Continue"))  # Synchronous, no await
+return None  # Don't return an event when using send_event
+```

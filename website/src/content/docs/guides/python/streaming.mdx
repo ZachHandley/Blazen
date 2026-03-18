@@ -1,0 +1,41 @@
+---
+title: "Streaming"
+description: "Stream events from running workflows in Python"
+language: "python"
+section: "guides"
+order: 3
+---
+
+## Stream vs Routing Events
+
+Routing events flow between steps inside a workflow. Stream events are published outward for external consumers -- they do not affect step routing.
+
+## Publishing Stream Events
+
+Use `ctx.write_event_to_stream()` inside any step to push an event to the external stream:
+
+```python
+@step
+async def process(ctx: Context, ev: Event):
+    for i in range(3):
+        ctx.write_event_to_stream(Event("Progress", step=i, message=f"Processing step {i}"))
+    return StopEvent(result={"done": True})
+```
+
+`ctx.write_event_to_stream()` is synchronous -- do not `await` it.
+
+## Consuming Stream Events
+
+After starting a workflow, iterate over `handler.stream_events()` to receive stream events as they arrive:
+
+```python
+wf = Workflow("stream-demo", [process])
+handler = await wf.run()
+
+async for event in handler.stream_events():
+    print(f"[{event.event_type}] step={event.step}")
+
+result = await handler.result()
+```
+
+`handler.stream_events()` returns an async iterator. It completes once the workflow finishes and all buffered events have been yielded.

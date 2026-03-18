@@ -1,0 +1,83 @@
+---
+title: "Quickstart"
+description: "Build your first Blazen workflow in Rust"
+language: "rust"
+section: "guides"
+order: 1
+---
+
+## Install
+
+Add Blazen to your project:
+
+```bash
+cargo add blazen
+```
+
+You will also need `tokio`, `serde`, `serde_json`, and `anyhow`:
+
+```bash
+cargo add tokio --features full
+cargo add serde --features derive
+cargo add serde_json anyhow
+```
+
+## Define a Custom Event
+
+Events are the data that flows between steps. Derive `Event` alongside `Serialize` and `Deserialize` to create your own:
+
+```rust
+use blazen::prelude::*;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+struct GreetEvent {
+    name: String,
+}
+```
+
+## Define Steps
+
+Each step is an async function annotated with `#[step]`. It takes an event and a context, then returns the next event in the chain:
+
+```rust
+#[step]
+async fn parse_input(event: StartEvent, _ctx: Context) -> Result<GreetEvent, WorkflowError> {
+    let name = event.data["name"].as_str().unwrap_or("World").to_string();
+    Ok(GreetEvent { name })
+}
+
+#[step]
+async fn greet(event: GreetEvent, _ctx: Context) -> Result<StopEvent, WorkflowError> {
+    Ok(StopEvent {
+        result: serde_json::json!({ "greeting": format!("Hello, {}!", event.name) }),
+    })
+}
+```
+
+## Build and Run the Workflow
+
+Wire the steps together with `WorkflowBuilder`. The `#[step]` macro generates a `_registration()` function for each step that you pass to the builder:
+
+```rust
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let workflow = WorkflowBuilder::new("greeter")
+        .step(parse_input_registration())
+        .step(greet_registration())
+        .build()?;
+
+    let result = workflow.run(serde_json::json!({ "name": "Blazen" })).await?.result().await?;
+    println!("{}", result.to_json());
+    Ok(())
+}
+```
+
+## How It Works
+
+The workflow follows a linear event chain:
+
+1. **`StartEvent`** -- the workflow begins with the JSON payload you pass to `run()`.
+2. **`GreetEvent`** -- `parse_input` extracts the name and emits a `GreetEvent`.
+3. **`StopEvent`** -- `greet` produces the final greeting and terminates the workflow.
+
+The event router automatically dispatches each event to the step that accepts it. No manual wiring between individual steps is required -- the types handle the routing.

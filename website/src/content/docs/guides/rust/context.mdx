@@ -1,0 +1,65 @@
+---
+title: "Context"
+description: "Share state between workflow steps in Rust"
+language: "rust"
+section: "guides"
+order: 4
+---
+
+## What is Context?
+
+Context is a key-value store shared across all steps in a workflow run. Use it to pass data between steps that doesn't fit neatly into events -- configuration, intermediate results, or anything you want accessible from any step without threading it through event payloads.
+
+## Setting and Getting Values
+
+Store values with `ctx.set()` and retrieve them with `ctx.get()`. Values are stored as `serde_json::Value`, so any serializable type works:
+
+```rust
+use blazen::prelude::*;
+
+#[step]
+async fn store_data(event: StartEvent, ctx: Context) -> Result<NextEvent, WorkflowError> {
+    ctx.set("user_id", serde_json::json!("user_123"));
+    ctx.set("doc_count", serde_json::json!(5));
+    Ok(NextEvent { /* ... */ })
+}
+
+#[step]
+async fn use_data(event: NextEvent, ctx: Context) -> Result<StopEvent, WorkflowError> {
+    let user_id: String = serde_json::from_value(ctx.get("user_id").unwrap()).unwrap();
+    let doc_count: i64 = serde_json::from_value(ctx.get("doc_count").unwrap()).unwrap();
+    Ok(StopEvent { result: serde_json::json!({"user": user_id, "docs": doc_count}) })
+}
+```
+
+## Run ID
+
+Each workflow run is assigned a unique identifier. Access it from any step via `ctx.run_id()`:
+
+```rust
+#[step]
+async fn log_run(event: StartEvent, ctx: Context) -> Result<StopEvent, WorkflowError> {
+    println!("Executing run: {}", ctx.run_id());
+    Ok(StopEvent { result: serde_json::json!({"run": ctx.run_id()}) })
+}
+```
+
+## Manual Event Routing
+
+Instead of returning an event from a step, you can use `ctx.send_event()` to route events programmatically. This is useful when a step needs to emit multiple events or decide at runtime which path the workflow takes:
+
+```rust
+#[step]
+async fn branch(event: StartEvent, ctx: Context) -> Result<(), WorkflowError> {
+    let score: f64 = serde_json::from_value(ctx.get("score").unwrap()).unwrap();
+
+    if score > 0.8 {
+        ctx.send_event(HighScoreEvent { score });
+    } else {
+        ctx.send_event(LowScoreEvent { score });
+    }
+    Ok(())
+}
+```
+
+When using `send_event`, the step returns `()` since routing is handled explicitly rather than through the return type.

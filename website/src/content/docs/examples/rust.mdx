@@ -1,0 +1,78 @@
+---
+title: "Rust Examples"
+description: "Complete runnable Rust examples for Blazen"
+language: "rust"
+section: "examples"
+order: 1
+---
+
+
+# Rust Examples
+
+Four complete, runnable examples that demonstrate core Blazen workflow patterns.
+
+---
+
+## Basic Workflow
+
+A 3-step sequential pipeline: **StartEvent** → **GreetEvent** → **StopEvent**.
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+struct GreetEvent { name: String }
+
+#[step]
+async fn parse_input(event: StartEvent, _ctx: Context) -> Result<GreetEvent, WorkflowError> {
+    Ok(GreetEvent { name: event.data["name"].as_str().unwrap_or("World").to_string() })
+}
+```
+
+```sh
+cargo run -p blazen --example basic_workflow
+```
+
+---
+
+## Streaming Workflow
+
+Publishes progress events while processing, observable via `stream_events()`.
+
+```rust
+ctx.write_event_to_stream(ProgressEvent { step: i, message: format!("Step {}", i) });
+```
+
+```sh
+cargo run -p blazen --example streaming_workflow
+```
+
+---
+
+## Branching Workflow
+
+Conditional routing based on sentiment analysis using `#[step(emits = [...])]`.
+
+```rust
+#[step(emits = [PositiveEvent, NegativeEvent])]
+async fn classify(event: AnalyzeEvent, _ctx: Context) -> Result<StepOutput, WorkflowError> {
+    // route to PositiveEvent or NegativeEvent based on sentiment
+}
+```
+
+```sh
+cargo run -p blazen --example branching_workflow
+```
+
+---
+
+## LLM RAG Workflow
+
+Multi-step RAG pipeline using context for shared state between steps.
+
+```rust
+ctx.set("documents", serde_json::json!(docs));
+let docs = ctx.get("documents").unwrap();
+```
+
+```sh
+cargo run -p blazen --example llm_rag_workflow
+```

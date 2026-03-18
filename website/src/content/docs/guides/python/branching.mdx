@@ -1,0 +1,47 @@
+---
+title: "Branching"
+description: "Conditional routing and fan-out in Python"
+language: "python"
+section: "guides"
+order: 5
+---
+
+## Conditional Branching
+
+Return different event types based on conditions:
+
+```python
+@step
+async def classify(ctx: Context, ev: Event):
+    if "good" in ev.text.lower():
+        return Event("PositiveEvent", text=ev.text)
+    else:
+        return Event("NegativeEvent", text=ev.text)
+```
+
+## Handling Branches
+
+```python
+@step(accepts=["PositiveEvent"])
+async def handle_positive(ctx: Context, ev: Event):
+    return StopEvent(result={"sentiment": "positive", "text": ev.text})
+
+@step(accepts=["NegativeEvent"])
+async def handle_negative(ctx: Context, ev: Event):
+    return StopEvent(result={"sentiment": "negative", "text": ev.text})
+```
+
+## Fan-out
+
+Return a list to dispatch to multiple branches simultaneously:
+
+```python
+@step
+async def fan_out(ctx: Context, ev: Event):
+    return [
+        Event("BranchA", value="a"),
+        Event("BranchB", value="b"),
+    ]
+```
+
+Both branches execute concurrently. First `StopEvent` wins.

@@ -1,0 +1,90 @@
+---
+title: "Node.js Examples"
+description: "Complete runnable Node.js examples for Blazen"
+language: "node"
+section: "examples"
+order: 3
+---
+
+
+# Node.js Examples
+
+Five complete, runnable examples that demonstrate core Blazen workflow patterns.
+
+---
+
+## Basic Workflow
+
+A 3-step sequential pipeline: **StartEvent** → **GreetEvent** → **FormattedEvent** → **StopEvent**.
+
+```javascript
+wf.addStep("greet", ["GreetEvent"], async (event, ctx) => {
+  return { type: "blazen::StopEvent", result: { greeting: `Hello, ${event.name}!` } };
+});
+```
+
+```sh
+node examples/basic_workflow.mjs
+```
+
+---
+
+## Streaming Workflow
+
+Publishes progress events while processing via `ctx.writeEventToStream()`.
+
+```javascript
+await ctx.writeEventToStream({ type: "Progress", step: i });
+const result = await wf.runStreaming({}, (event) => console.log(event));
+```
+
+```sh
+node examples/streaming_workflow.mjs
+```
+
+---
+
+## Branching Workflow
+
+Conditional fan-out by returning an array of events.
+
+```javascript
+return [
+  { type: "PositiveEvent", text },
+  { type: "NegativeEvent", text },
+];
+```
+
+```sh
+node examples/branching_workflow.mjs
+```
+
+---
+
+## LLM RAG Workflow
+
+Multi-step RAG pipeline using context for shared state between steps.
+
+```javascript
+await ctx.set("documents", docs);
+const docs = await ctx.get("documents");
+```
+
+```sh
+node examples/llm_rag_workflow.mjs
+```
+
+---
+
+## Human-in-the-Loop
+
+Side-effect steps that pause for external input via `ctx.sendEvent()`.
+
+```javascript
+await ctx.sendEvent({ type: "ReviewComplete" });
+return null;
+```
+
+```sh
+node examples/human_in_the_loop.mjs
+```

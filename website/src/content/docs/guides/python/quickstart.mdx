@@ -1,0 +1,63 @@
+---
+title: "Quickstart"
+description: "Build your first Blazen workflow in Python"
+language: "python"
+section: "guides"
+order: 1
+---
+
+## Installation
+
+Preferred (using [uv](https://docs.astral.sh/uv/)):
+```bash
+uv add blazen
+```
+
+Or with pip:
+```bash
+pip install blazen
+```
+
+## Define Your Steps
+
+Create a simple greeter workflow with two steps: one to parse input and one to produce a greeting.
+
+```python
+import asyncio
+from blazen import Workflow, Context, Event, StartEvent, StopEvent, step
+
+@step
+async def parse_input(ctx: Context, ev: Event):
+    name = ev.name if hasattr(ev, 'name') else "World"
+    return Event("GreetEvent", name=name)
+
+@step(accepts=["GreetEvent"])
+async def greet(ctx: Context, ev: Event):
+    return StopEvent(result={"greeting": f"Hello, {ev.name}!"})
+```
+
+A `@step` with no arguments handles the `StartEvent` by default. Adding `accepts=["GreetEvent"]` tells Blazen to route only that specific event type to the step.
+
+## Build and Run
+
+```python
+async def main():
+    wf = Workflow("greeter", [parse_input, greet])
+    handler = await wf.run(name="Blazen")
+    result = await handler.result()
+    print(result.result)
+
+asyncio.run(main())
+```
+
+Running this prints:
+
+```
+{'greeting': 'Hello, Blazen!'}
+```
+
+## Key Concepts
+
+- **Context is synchronous** -- `ctx.set("key", value)` and `ctx.get("key")` do not require `await`.
+- **Custom events** -- Create them inline with `Event("TypeName", field=value)`. No class declaration needed.
+- **Attribute access** -- Event fields are accessed as attributes: `ev.name`, `ev.text`, etc.

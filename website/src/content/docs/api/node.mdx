@@ -1,0 +1,153 @@
+---
+title: "Node.js API Reference"
+description: "Complete API reference for blazen in Node.js"
+language: "node"
+section: "api"
+order: 3
+---
+
+## Workflow
+
+### `new Workflow(name: string)`
+
+Create a new workflow instance.
+
+```ts
+const wf = new Workflow("my-workflow");
+```
+
+### `.addStep(name: string, eventTypes: string[], handler: StepHandler)`
+
+Register a step that listens for one or more event types.
+
+```ts
+wf.addStep("process", ["MyEvent"], async (event, ctx) => {
+  return { type: "blazen::StopEvent", result: { done: true } };
+});
+```
+
+### `.setTimeout(seconds: number)`
+
+Set the maximum execution time for the workflow in seconds.
+
+```ts
+wf.setTimeout(30);
+```
+
+### `await wf.run(input: object) -> WorkflowResult`
+
+Run the workflow to completion with the given input.
+
+```ts
+const result = await wf.run({ prompt: "Hello" });
+```
+
+### `await wf.runStreaming(input: object, callback: (event) => void) -> WorkflowResult`
+
+Run the workflow with a streaming callback invoked for each stream event.
+
+```ts
+const result = await wf.runStreaming({ prompt: "Hello" }, (event) => {
+  console.log("stream:", event);
+});
+```
+
+### `await wf.runWithHandler(input: object) -> WorkflowHandler`
+
+Run the workflow and return a handler that supports pause and resume.
+
+```ts
+const handler = await wf.runWithHandler({ prompt: "Hello" });
+```
+
+---
+
+## WorkflowResult
+
+### `.type: string`
+
+The event type of the final result (e.g. `"blazen::StopEvent"`).
+
+### `.data: object`
+
+The result data extracted from the `result` field of the `StopEvent`.
+
+---
+
+## StepHandler
+
+```ts
+async (event: object, ctx: Context) => object | object[] | null
+```
+
+A step handler receives an event and a context. It can return:
+
+- A single event object to emit one event.
+- An array of event objects to fan-out multiple events.
+- `null` for side-effect-only steps that emit no events.
+
+---
+
+## Events
+
+Events are plain objects with a `type` field.
+
+```ts
+{ type: "MyEvent", payload: "data" }
+```
+
+### Start Event
+
+```ts
+{ type: "blazen::StartEvent", ...input }
+```
+
+The workflow begins by emitting a `StartEvent` containing the input data.
+
+### Stop Event
+
+```ts
+{ type: "blazen::StopEvent", result: { ... } }
+```
+
+Returning a `StopEvent` from a step handler completes the workflow.
+
+---
+
+## Context
+
+All context methods are async.
+
+### `await ctx.set(key: string, value: any): void`
+
+Store a value in the workflow context.
+
+### `await ctx.get(key: string): any`
+
+Retrieve a value from the workflow context.
+
+### `await ctx.runId(): string`
+
+Get the unique run UUID for the current workflow execution.
+
+### `await ctx.sendEvent(event: object): void`
+
+Manually route an event into the workflow event bus.
+
+### `await ctx.writeEventToStream(event: object): void`
+
+Publish an event to the streaming callback registered via `runStreaming`.
+
+---
+
+## version
+
+### `version(): string`
+
+Returns the Blazen version string.
+
+```ts
+import { version } from "blazen";
+
+console.log(version()); // "0.1.0"
+```

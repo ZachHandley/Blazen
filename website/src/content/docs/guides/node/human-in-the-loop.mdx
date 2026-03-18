@@ -1,0 +1,39 @@
+---
+title: "Human-in-the-Loop"
+description: "Build workflows that pause for human input in Node.js"
+language: "node"
+section: "guides"
+order: 6
+---
+
+## Side-Effect Steps
+
+Return `null` from a step and use `ctx.sendEvent()` for manual routing. This lets you insert asynchronous human review, webhook callbacks, or queue polling before the workflow continues:
+
+```javascript
+wf.addStep("review", ["ReadyForReview"], async (event, ctx) => {
+  await ctx.set("needs_approval", true);
+  // In production: wait for webhook, poll queue, etc.
+  const approved = simulateHumanReview(event);
+  await ctx.set("approved", approved);
+  await ctx.sendEvent({ type: "ReviewComplete" });
+  return null;
+});
+```
+
+**Important:** `ctx.sendEvent()`, `ctx.set()`, and `ctx.get()` are all async — always use `await`.
+
+## Pause and Resume
+
+For long-running human tasks, serialize the workflow state and resume it later:
+
+```javascript
+const handler = await wf.runWithHandler(input);
+const snapshot = handler.pause(); // Serialize workflow state
+
+// Later...
+const handler2 = await wf.resume(snapshot);
+const result = await handler2.result();
+```
+
+This lets you persist the snapshot to a database or message queue and pick the workflow back up in a separate process or after a deployment.

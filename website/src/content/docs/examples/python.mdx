@@ -1,0 +1,92 @@
+---
+title: "Python Examples"
+description: "Complete runnable Python examples for Blazen"
+language: "python"
+section: "examples"
+order: 2
+---
+
+
+# Python Examples
+
+Five complete, runnable examples that demonstrate core Blazen workflow patterns in Python.
+
+---
+
+## Basic Workflow
+
+A 3-step sequential pipeline: **StartEvent** → **GreetEvent** → **FormattedEvent** → **StopEvent**.
+
+```python
+@step
+async def parse_input(ctx: Context, ev: Event):
+    return Event("GreetEvent", name=ev.name)
+
+@step(accepts=["GreetEvent"])
+async def greet(ctx: Context, ev: Event):
+    return StopEvent(result={"greeting": f"Hello, {ev.name}!"})
+```
+
+```sh
+python examples/basic_workflow.py
+```
+
+---
+
+## Streaming Workflow
+
+Publishes progress events while processing via `ctx.write_event_to_stream()`.
+
+```python
+ctx.write_event_to_stream(Event("Progress", step=i))
+async for event in handler.stream_events():
+    print(event.event_type)
+```
+
+```sh
+python examples/streaming_workflow.py
+```
+
+---
+
+## Branching Workflow
+
+Conditional fan-out by returning a list of events.
+
+```python
+return [Event("PositiveEvent", text=text), Event("NegativeEvent", text=text)]
+```
+
+```sh
+python examples/branching_workflow.py
+```
+
+---
+
+## LLM RAG Workflow
+
+Multi-step RAG pipeline with context sharing between steps.
+
+```python
+ctx.set("documents", docs)
+docs = ctx.get("documents")
+```
+
+```sh
+python examples/llm_rag_workflow.py
+```
+
+---
+
+## Human-in-the-Loop
+
+Side-effect steps that pause for external input with `ctx.send_event()`.
+
+```python
+ctx.send_event(Event("ReviewComplete"))
+return None
+```
+
+```sh
+python examples/human_in_the_loop.py
+```

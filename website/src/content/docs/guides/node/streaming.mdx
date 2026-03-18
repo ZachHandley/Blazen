@@ -1,0 +1,42 @@
+---
+title: "Streaming"
+description: "Stream events from running workflows in Node.js"
+language: "node"
+section: "guides"
+order: 3
+---
+
+## Stream vs Routing Events
+
+Routing events flow between steps — they drive the workflow forward. Stream events are published for external observation without affecting the workflow graph.
+
+## Publishing Stream Events
+
+Use `ctx.writeEventToStream()` inside a step to emit events to external consumers:
+
+```javascript
+wf.addStep("process", ["blazen::StartEvent"], async (event, ctx) => {
+  for (let i = 0; i < 3; i++) {
+    await ctx.writeEventToStream({ type: "Progress", step: i, message: `Processing step ${i}` });
+  }
+  return { type: "blazen::StopEvent", result: { done: true } };
+});
+```
+
+`ctx.writeEventToStream()` is async — always `await` it.
+
+## Consuming Stream Events
+
+Call `wf.runStreaming()` instead of `wf.run()` to receive streamed events via a callback:
+
+```javascript
+const collected = [];
+const result = await wf.runStreaming({}, (event) => {
+  console.log(`[${event.type}] step=${event.step}`);
+  collected.push(event);
+});
+console.log("Final result:", result.data);
+console.log("Streamed events:", collected.length);
+```
+
+`wf.runStreaming(input, callback)` calls the callback for each streamed event and resolves with the final workflow result.

@@ -1,0 +1,44 @@
+---
+title: "Introduction"
+description: "What is Blazen and why use it for AI workflows"
+section: "getting-started"
+order: 1
+---
+
+## What is Blazen?
+
+Blazen is an event-driven AI workflow engine written in Rust with native Python and Node.js bindings. It gives you a structured, type-safe way to build complex LLM-powered workflows that can pause, resume, branch, and compose together into larger pipelines.
+
+## Why Blazen?
+
+Building production AI workflows means dealing with unreliable providers, long-running tasks, human review gates, and the need to orchestrate multiple models across a single pipeline. Blazen solves these problems at the engine level:
+
+- **Type-safe events** -- Every piece of data flowing through your workflow is validated at compile time in Rust and at runtime in Python and Node.js.
+- **15+ LLM providers** -- OpenAI, Anthropic, Google, Mistral, Groq, and more, with a unified interface and automatic fallback.
+- **Multi-workflow pipelines** -- Chain workflows together with conditional routing, fan-out, and aggregation.
+- **Pause and resume** -- Persist workflow state to disk or a database and pick up exactly where you left off.
+- **Human-in-the-loop** -- Built-in support for approval gates, review steps, and manual intervention points.
+
+## Architecture Overview
+
+Blazen is built around three core abstractions. **Events** carry typed data between processing nodes. **Steps** consume events, perform work (calling an LLM, transforming data, waiting for human input), and emit new events. **Workflows** wire Steps together into a directed graph. When you need to go bigger, **Pipelines** compose multiple Workflows into an end-to-end system with shared context and cross-workflow routing.
+
+## Core Crates
+
+The engine is split into focused crates, each with a single responsibility:
+
+- **blazen-events** -- Event definitions, serialization, and type registry
+- **blazen-core** -- Workflow runtime, step execution, and scheduling
+- **blazen-macros** -- Derive macros for events, steps, and configuration
+- **blazen-llm** -- Unified LLM client with provider adapters and retry logic
+- **blazen-pipeline** -- Multi-workflow orchestration and routing
+- **blazen-persist** -- State serialization, checkpointing, and recovery
+- **blazen-prompts** -- Prompt templating, variable injection, and versioning
+
+## Polyglot by Design
+
+Blazen exposes the same concepts across Rust, Python, and Node.js. Each language gets idiomatic APIs -- PyO3 bindings for Python, NAPI-RS for Node.js -- so you write natural code in your language of choice while the Rust engine handles the heavy lifting.
+
+## License
+
+Blazen is open source under the **AGPL-3.0** license.

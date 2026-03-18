@@ -1,0 +1,48 @@
+---
+title: "Branching"
+description: "Conditional routing and fan-out in Node.js"
+language: "node"
+section: "guides"
+order: 5
+---
+
+## Conditional Branching
+
+Return different event types based on conditions:
+
+```javascript
+wf.addStep("classify", ["blazen::StartEvent"], async (event, ctx) => {
+  if (event.text.toLowerCase().includes("good")) {
+    return { type: "PositiveEvent", text: event.text };
+  } else {
+    return { type: "NegativeEvent", text: event.text };
+  }
+});
+```
+
+## Handling Branches
+
+```javascript
+wf.addStep("handle_positive", ["PositiveEvent"], async (event, ctx) => {
+  return { type: "blazen::StopEvent", result: { sentiment: "positive", text: event.text } };
+});
+
+wf.addStep("handle_negative", ["NegativeEvent"], async (event, ctx) => {
+  return { type: "blazen::StopEvent", result: { sentiment: "negative", text: event.text } };
+});
+```
+
+## Fan-out
+
+Return an array to dispatch to multiple branches simultaneously:
+
+```javascript
+wf.addStep("fan", ["blazen::StartEvent"], async (event, ctx) => {
+  return [
+    { type: "BranchA", value: "a" },
+    { type: "BranchB", value: "b" },
+  ];
+});
+```
+
+Both branches execute concurrently. First `StopEvent` wins.

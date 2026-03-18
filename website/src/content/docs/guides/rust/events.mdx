@@ -1,0 +1,59 @@
+---
+title: "Events"
+description: "Define and use custom events in Rust"
+language: "rust"
+section: "guides"
+order: 2
+---
+
+## Defining Custom Events
+
+```rust
+use blazen::prelude::*;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+struct AnalyzeEvent {
+    text: String,
+    score: f64,
+}
+```
+
+The `#[derive(Event)]` macro generates `event_type()`, serialization, and routing support.
+
+## Built-in Events
+
+- `StartEvent` — carries `data: serde_json::Value`, triggers workflow start
+- `StopEvent` — carries `result: serde_json::Value`, terminates workflow
+- `InputRequestEvent` — requests human input, auto-pauses workflow
+- `InputResponseEvent` — carries human response, matched by `request_id`
+
+## Event Flow
+
+Steps declare their input/output types:
+
+```rust
+#[step]
+async fn analyze(event: StartEvent, _ctx: Context) -> Result<AnalyzeEvent, WorkflowError> {
+    Ok(AnalyzeEvent {
+        text: event.data["text"].as_str().unwrap().into(),
+        score: 0.95,
+    })
+}
+```
+
+The router matches event types to steps automatically.
+
+## Multiple Output Events
+
+Use `#[step(emits = [...])]` and `StepOutput`:
+
+```rust
+#[step(emits = [PositiveEvent, NegativeEvent])]
+async fn route(event: AnalyzeEvent, _ctx: Context) -> Result<StepOutput, WorkflowError> {
+    if event.score > 0.5 {
+        Ok(StepOutput::Single(Box::new(PositiveEvent { text: event.text })))
+    } else {
+        Ok(StepOutput::Single(Box::new(NegativeEvent { text: event.text })))
+    }
+}
+```

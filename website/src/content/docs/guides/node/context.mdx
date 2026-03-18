@@ -1,0 +1,46 @@
+---
+title: "Context"
+description: "Share state between workflow steps in Node.js"
+language: "node"
+section: "guides"
+order: 4
+---
+
+## What is Context?
+
+Context is a key-value store shared across all steps in a workflow run. Every step handler receives a `ctx` object as its second argument, giving each step access to the same shared state.
+
+## Setting and Getting Values
+
+```javascript
+wf.addStep("store_data", ["blazen::StartEvent"], async (event, ctx) => {
+  await ctx.set("user_id", "user_123");
+  await ctx.set("doc_count", 5);
+  return { type: "NextEvent" };
+});
+
+wf.addStep("use_data", ["NextEvent"], async (event, ctx) => {
+  const userId = await ctx.get("user_id");
+  const docCount = await ctx.get("doc_count");
+  return { type: "blazen::StopEvent", result: { user: userId, docs: docCount } };
+});
+```
+
+**Important:** `ctx.set()` and `ctx.get()` are async — always use `await`.
+
+## Run ID
+
+Each workflow execution is assigned a unique run ID. Access it from the context:
+
+```javascript
+const runId = await ctx.runId(); // Returns a UUID string
+```
+
+## Manual Event Routing
+
+Use `ctx.sendEvent()` to emit an event manually instead of returning one from the step handler:
+
+```javascript
+await ctx.sendEvent({ type: "Continue" }); // Async
+return null; // Don't return an event when using sendEvent
+```

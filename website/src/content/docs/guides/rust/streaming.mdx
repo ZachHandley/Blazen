@@ -1,0 +1,57 @@
+---
+title: "Streaming"
+description: "Stream events from running workflows in Rust"
+language: "rust"
+section: "guides"
+order: 3
+---
+
+## Stream vs Routing Events
+
+Routing events flow between steps -- they are the internal data that drives the workflow forward. Stream events are different: they are published for external observation without affecting the workflow's execution path.
+
+Use `ctx.write_event_to_stream()` inside any step to publish a stream event.
+
+## Publishing Stream Events
+
+Define a stream event the same way as any other event, then write it to the stream from within a step:
+
+```rust
+use blazen::prelude::*;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Event)]
+struct ProgressEvent {
+    step: usize,
+    message: String,
+}
+
+#[step]
+async fn process(event: StartEvent, ctx: Context) -> Result<StopEvent, WorkflowError> {
+    for i in 0..3 {
+        ctx.write_event_to_stream(ProgressEvent {
+            step: i,
+            message: format!("Processing step {}", i),
+        });
+    }
+    Ok(StopEvent { result: serde_json::json!({"done": true}) })
+}
+```
+
+Stream events do not need to match any step's input type. They are silently forwarded to any active subscriber.
+
+## Subscribing to Events
+
+After starting a workflow, call `stream_events()` on the handler to receive stream events as they are published:
+
+```rust
+let handler = workflow.run(input).await?;
+let mut stream = handler.stream_events();
+
+while let Some(event) = stream.next().await {
+    println!("Stream event: {:?}", event);
+}
+
+let result = handler.result().await?;
+```
+
+The stream completes automatically when the workflow finishes. You can consume stream events and await the final result independently.

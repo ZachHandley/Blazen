@@ -1,0 +1,147 @@
+---
+interface Props {
+  entries: Array<{
+    id: string;
+    data: {
+      title: string;
+      section: string;
+      order: number;
+      language?: string;
+    };
+  }>;
+  currentPath: string;
+}
+
+const { entries, currentPath } = Astro.props;
+
+const sectionOrder = ["getting-started", "guides", "api", "examples"] as const;
+
+const sectionDisplayNames: Record<string, string> = {
+  "getting-started": "Getting Started",
+  guides: "Guides",
+  api: "API Reference",
+  examples: "Examples",
+};
+
+const languageDisplayNames: Record<string, string> = {
+  rust: "Rust",
+  python: "Python",
+  node: "Node.js",
+};
+
+const languageOrder = ["rust", "python", "node"];
+
+type Entry = (typeof entries)[number];
+
+const grouped = new Map<string, Entry[]>();
+for (const section of sectionOrder) {
+  grouped.set(
+    section,
+    entries
+      .filter((e) => e.data.section === section)
+      .sort((a, b) => a.data.order - b.data.order)
+  );
+}
+
+function getGuidesGroupedByLanguage(guideEntries: Entry[]) {
+  const byLang = new Map<string, Entry[]>();
+  for (const lang of languageOrder) {
+    const langEntries = guideEntries.filter((e) => e.data.language === lang);
+    if (langEntries.length > 0) {
+      byLang.set(lang, langEntries);
+    }
+  }
+  const ungrouped = guideEntries.filter(
+    (e) => !e.data.language || !languageOrder.includes(e.data.language)
+  );
+  return { byLang, ungrouped };
+}
+---
+
+<aside class="w-64 bg-surface-800 border-r border-surface-600 overflow-y-auto h-[calc(100vh-4rem)] px-4 py-4">
+  {sectionOrder.map((section) => {
+    const sectionEntries = grouped.get(section) ?? [];
+    if (sectionEntries.length === 0) return null;
+
+    return (
+      <div>
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2 mt-6">
+          {sectionDisplayNames[section]}
+        </h3>
+
+        {section === "guides" ? (
+          () => {
+            const { byLang, ungrouped } = getGuidesGroupedByLanguage(sectionEntries);
+            return (
+              <>
+                {ungrouped.map((entry) => {
+                  const href = `/docs/${entry.id}`;
+                  const isActive = currentPath === href;
+                  return (
+                    <a
+                      href={href}
+                      class:list={[
+                        "block px-3 py-1.5 text-sm rounded-md transition-colors",
+                        isActive
+                          ? "bg-surface-700 text-blazen-400"
+                          : "text-gray-400 hover:text-gray-200 hover:bg-surface-700/50",
+                      ]}
+                    >
+                      {entry.data.title}
+                    </a>
+                  );
+                })}
+                {languageOrder.map((lang) => {
+                  const langEntries = byLang.get(lang);
+                  if (!langEntries || langEntries.length === 0) return null;
+                  return (
+                    <div>
+                      <h4 class="text-xs font-medium text-gray-400 mb-1 mt-3 ml-2">
+                        {languageDisplayNames[lang]}
+                      </h4>
+                      {langEntries.map((entry) => {
+                        const href = `/docs/${entry.id}`;
+                        const isActive = currentPath === href;
+                        return (
+                          <a
+                            href={href}
+                            class:list={[
+                              "block px-3 py-1.5 text-sm rounded-md transition-colors",
+                              isActive
+                                ? "bg-surface-700 text-blazen-400"
+                                : "text-gray-400 hover:text-gray-200 hover:bg-surface-700/50",
+                            ]}
+                          >
+                            {entry.data.title}
+                          </a>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </>
+            );
+          }
+        )() : (
+          sectionEntries.map((entry) => {
+            const href = `/docs/${entry.id}`;
+            const isActive = currentPath === href;
+            return (
+              <a
+                href={href}
+                class:list={[
+                  "block px-3 py-1.5 text-sm rounded-md transition-colors",
+                  isActive
+                    ? "bg-surface-700 text-blazen-400"
+                    : "text-gray-400 hover:text-gray-200 hover:bg-surface-700/50",
+                ]}
+              >
+                {entry.data.title}
+              </a>
+            );
+          })
+        )}
+      </div>
+    );
+  })}
+</aside>

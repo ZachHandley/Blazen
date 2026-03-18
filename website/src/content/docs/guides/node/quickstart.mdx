@@ -1,0 +1,89 @@
+---
+title: "Quickstart"
+description: "Build your first Blazen workflow in Node.js"
+language: "node"
+section: "guides"
+order: 1
+---
+
+# Quickstart
+
+Get a Blazen workflow running in Node.js in under five minutes.
+
+## Installation
+
+```bash
+pnpm add blazen
+```
+
+## Your first workflow
+
+Create a file called `greeter.mjs` (or use `"type": "module"` in your `package.json` for ESM support):
+
+```javascript
+import { Workflow } from "blazen";
+
+const wf = new Workflow("greeter");
+
+wf.addStep("parse_input", ["blazen::StartEvent"], async (event, ctx) => {
+  const name = event.name || "World";
+  return { type: "GreetEvent", name };
+});
+
+wf.addStep("greet", ["GreetEvent"], async (event, ctx) => {
+  return {
+    type: "blazen::StopEvent",
+    result: { greeting: `Hello, ${event.name}!` },
+  };
+});
+
+const result = await wf.run({ name: "Blazen" });
+console.log(result.data);
+// => { greeting: "Hello, Blazen!" }
+```
+
+Run it:
+
+```bash
+node greeter.mjs
+```
+
+## How it works
+
+**Events** are plain objects with a `type` field. Blazen provides two built-in event types:
+
+- `"blazen::StartEvent"` -- emitted when the workflow begins. The object you pass to `wf.run()` is merged onto this event.
+- `"blazen::StopEvent"` -- returning an object with this type ends the workflow. Attach your final output to the `result` property.
+
+**Steps** are registered with `addStep(name, eventTypes, handler)`:
+
+- `name` -- a unique identifier for the step.
+- `eventTypes` -- an array of event type strings that trigger this step.
+- `handler` -- an async function receiving `(event, ctx)`. Return an event object to emit the next event in the workflow.
+
+**Context** lets steps share state across the workflow. Both `ctx.set()` and `ctx.get()` are async and must be awaited:
+
+```javascript
+wf.addStep("store_value", ["blazen::StartEvent"], async (event, ctx) => {
+  await ctx.set("user", event.name);
+  return { type: "NextEvent" };
+});
+
+wf.addStep("read_value", ["NextEvent"], async (event, ctx) => {
+  const user = await ctx.get("user");
+  return {
+    type: "blazen::StopEvent",
+    result: { user },
+  };
+});
+```
+
+**Result** -- `wf.run()` resolves with an object containing `.type` (always `"blazen::StopEvent"`) and `.data` (the `result` you returned from the final step).
+
+## Next steps
+
+You now have a working workflow. From here you can:
+
+- Chain more steps together to build complex pipelines.
+- Use context to pass data between non-adjacent steps.
+- Integrate LLM calls, database queries, or any async operation inside step handlers.

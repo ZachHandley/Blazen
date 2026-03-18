@@ -1,0 +1,35 @@
+---
+title: "Human-in-the-Loop"
+description: "Build workflows that pause for human input in Python"
+language: "python"
+section: "guides"
+order: 6
+---
+
+## Side-Effect Steps
+
+A step can return `None` and use `ctx.send_event()` to manually route events:
+
+```python
+@step
+async def review(ctx: Context, ev: Event):
+    ctx.set("needs_approval", True)
+    # In production: wait for webhook, poll queue, etc.
+    approved = simulate_human_review(ev)
+    ctx.set("approved", approved)
+    ctx.send_event(Event("ReviewComplete"))
+    return None
+```
+
+Both `ctx.send_event()` and `ctx.set()` are synchronous.
+
+## Pause and Resume
+
+```python
+handler = await wf.run(data="some input")
+snapshot = handler.pause()  # Serialize workflow state
+
+# Later...
+handler = await Workflow.resume(snapshot)
+result = await handler.result()
+```
