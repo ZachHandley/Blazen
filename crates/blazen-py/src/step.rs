@@ -249,6 +249,85 @@ fn py_result_to_step_output(
 ///     # Customize accepted event types:
 ///     >>> analyze.accepts = ["AnalyzeEvent"]
 ///     >>> analyze.emits = ["StopEvent"]
+/// Infer the `accepts` list from the type annotation of the `ev` parameter.
+///
+/// If the second parameter (after `ctx`) is annotated with an `Event` subclass,
+/// use that class name as the accepted event type. Falls back to
+/// `["blazen::StartEvent"]` when:
+/// - No annotation is present
+/// - The annotation is the base `Event` class
+/// - The annotation cannot be resolved
+fn infer_accepts_from_hints(py: Python<'_>, func: &Py<PyAny>) -> Vec<String> {
+    let default = vec!["blazen::StartEvent".to_owned()];
+
+    // Use typing.get_type_hints() to resolve annotations
+    let typing = match py.import("typing") {
+        Ok(m) => m,
+        Err(_) => return default,
+    };
+    let hints = match typing.call_method1("get_type_hints", (func,)) {
+        Ok(h) => h,
+        Err(_) => return default,
+    };
+    let hints_dict = match hints.cast::<PyDict>() {
+        Ok(d) => d,
+        Err(_) => return default,
+    };
+
+    // Look for the "ev" or "event" parameter annotation
+    let ev_hint = hints_dict
+        .get_item("ev")
+        .ok()
+        .flatten()
+        .or_else(|| hints_dict.get_item("event").ok().flatten());
+
+    let ev_type = match ev_hint {
+        Some(t) => t,
+        None => return default,
+    };
+
+    // Check if it's a subclass of our Event class
+    let event_cls_bound = py.get_type::<crate::event::PyEvent>().into_any();
+    let event_cls = match event_cls_bound.cast::<pyo3::types::PyType>() {
+        Ok(cls) => cls,
+        Err(_) => return default,
+    };
+
+    // Check if the annotated type is a subclass of Event using Python's issubclass()
+    let builtins = match py.import("builtins") {
+        Ok(b) => b,
+        Err(_) => return default,
+    };
+    let is_subclass: bool = match builtins.call_method1("issubclass", (&ev_type, &event_cls)) {
+        Ok(r) => match r.extract() {
+            Ok(b) => b,
+            Err(_) => return default,
+        },
+        Err(_) => return default,
+    };
+
+    if !is_subclass {
+        return default;
+    }
+
+    // Get the class name
+    let class_name: String = match ev_type.getattr("__name__") {
+        Ok(n) => match n.extract() {
+            Ok(s) => s,
+            Err(_) => return default,
+        },
+        Err(_) => return default,
+    };
+
+    // Map known classes to their internal event type strings
+    match class_name.as_str() {
+        "Event" => default, // Bare Event = default StartEvent
+        "StartEvent" => vec!["blazen::StartEvent".to_owned()],
+        "StopEvent" => vec!["blazen::StopEvent".to_owned()],
+        name => vec![name.to_owned()],
+    }
+}
+
 #[pyfunction]
 #[pyo3(signature = (func=None, *, accepts=None, emits=None, max_concurrency=0))]
 pub fn step(
@@ -258,7 +337,6 @@ pub fn step(
     emits: Option<Vec<String>>,
     max_concurrency: usize,
 ) -> PyResult<Py<PyAny>> {
-    let accepts = accepts.unwrap_or_else(|| vec!["blazen::StartEvent".to_owned()]);
     let emits = emits.unwrap_or_default();
 
     if let Some(func) = func {
@@ -270,6 +348,9 @@ pub fn step(
         let is_async: bool = inspect
             .call_method1("iscoroutinefunction", (&func,))?
             .extract()?;
+
+        // Infer accepts from type hints if not explicitly provided
+        let accepts = accepts.unwrap_or_else(|| infer_accepts_from_hints(py, &func));
 
         let wrapper = PyStepWrapper {
             func,
@@ -299,10 +380,16 @@ pub fn step(
                     .call_method1("iscoroutinefunction", (&func,))?
                     .extract()?;
 
+                // Infer accepts from type hints if not explicitly provided
+                let resolved_accepts = match &accepts {
+                    Some(a) => a.clone(),
+                    None => infer_accepts_from_hints(py, &func),
+                };
+
                 let wrapper = PyStepWrapper {
                     func,
                     name,
-                    accepts: accepts.clone(),
+                    accepts: resolved_accepts,
                     emits: emits.clone(),
                     max_concurrency,
                     is_async,

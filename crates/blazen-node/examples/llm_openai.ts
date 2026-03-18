@@ -54,7 +54,7 @@ if (!apiKey) {
   process.exit(1);
 }
 
-// Create the OpenAI completion model (gpt-4o-mini is cheap for examples).
+// Create the OpenAI completion model (gpt-5.3-chat-latest is cheap for examples).
 const model: CompletionModel = CompletionModel.openai(apiKey);
 
 // Build the 3-step content pipeline.
@@ -90,7 +90,7 @@ wf.addStep(
           content: `Create a blog post outline about: ${topic}`,
         },
       ],
-      { temperature: 0.7, maxTokens: 512, model: "gpt-4o-mini" }
+      { temperature: 0.7, maxTokens: 512, model: "gpt-5.3-chat-latest" }
     );
 
     const outline: string = response.content;
@@ -135,7 +135,7 @@ wf.addStep(
             "Write a short draft based on this outline.",
         },
       ],
-      { temperature: 0.8, maxTokens: 768, model: "gpt-4o-mini" }
+      { temperature: 0.8, maxTokens: 768, model: "gpt-5.3-chat-latest" }
     );
 
     const draft: string = response.content;
@@ -180,7 +180,7 @@ wf.addStep(
             "Provide editorial feedback.",
         },
       ],
-      { temperature: 0.5, maxTokens: 512, model: "gpt-4o-mini" }
+      { temperature: 0.5, maxTokens: 512, model: "gpt-5.3-chat-latest" }
     );
 
     const feedback: string = response.content;

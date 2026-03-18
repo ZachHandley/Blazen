@@ -24,7 +24,7 @@ use pyo3::types::PyDict;
 #[derive(Debug, Clone)]
 pub struct PyEvent {
     /// The event type name (e.g. `"AnalyzeEvent"`).
-    #[pyo3(get)]
+    #[pyo3(get, set)]
     pub event_type: String,
     /// The event data as a JSON object.
     pub data: serde_json::Value,
@@ -32,10 +32,27 @@ pub struct PyEvent {
 
 #[pymethods]
 impl PyEvent {
-    /// Create a new event with the given type and keyword arguments.
+    /// Create a new event.
+    ///
+    /// When called on the base `Event` class, `event_type` is required:
+    ///     `Event("MyEvent", key=value)`
+    ///
+    /// When called on a subclass, `event_type` is auto-inferred from the
+    /// class name:
+    ///     `class MyEvent(Event): ...`
+    ///     `MyEvent(key=value)`  # event_type == "MyEvent"
+    /// Create a new event.
+    ///
+    /// - Base `Event` class: `Event("MyEvent", key=value)`
+    /// - Subclasses: `MyEvent(key=value)` — event_type auto-set by `__init__`
     #[new]
-    #[pyo3(signature = (event_type, **kwargs))]
-    fn new(event_type: String, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+    #[pyo3(signature = (event_type=None, **kwargs))]
+    fn new(event_type: Option<String>, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+        // When event_type is None, use a placeholder. The __init__ generated
+        // by __init_subclass__ will set the real event_type on the instance.
+        // If no subclass __init__ runs (bare Event()), we reject it below.
+        let event_type = event_type.unwrap_or_default();
+
         let data = if let Some(kw) = kwargs {
             dict_to_json(kw)?
         } else {
@@ -66,6 +83,56 @@ impl PyEvent {
 
     fn __str__(&self) -> String {
         self.__repr__()
+    }
+
+    /// Called when a Python subclass of Event is defined.
+    ///
+    /// Auto-generates an `__init__` that sets `event_type` to the class name,
+    /// enabling:
+    /// ```python
+    /// class GreetEvent(Event):
+    ///     name: str
+    ///     style: str
+    ///
+    /// ev = GreetEvent(name="Alice", style="formal")
+    /// # ev.event_type == "GreetEvent"
+    /// ```
+    #[classmethod]
+    #[pyo3(signature = (**_kwargs))]
+    fn __init_subclass__(
+        cls: &Bound<'_, pyo3::types::PyType>,
+        _kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<()> {
+        let py = cls.py();
+        let class_name: String = cls.getattr("__name__")?.extract()?;
+
+        // Skip StartEvent and StopEvent — they have their own Rust-side __new__
+        if class_name == "StartEvent" || class_name == "StopEvent" {
+            return Ok(());
+        }
+
+        // Generate an __init__ that sets event_type to the class name.
+        // Flow: __new__ creates PyEvent with event_type="", then __init__
+        // patches it to the real class name.
+        let code = format!(
+            "def __init__(self, **kwargs):\n    self.event_type = '{}'\n",
+            class_name
+        );
+        let globals = PyDict::new(py);
+        let locals = PyDict::new(py);
+        py.run(
+            &std::ffi::CString::new(code).unwrap(),
+            Some(&globals),
+            Some(&locals),
+        )?;
+        let init_fn = locals.get_item("__init__")?.ok_or_else(|| {
+            pyo3::exceptions::PyRuntimeError::new_err(
+                "Failed to generate __init__ for Event subclass",
+            )
+        })?;
+        cls.setattr("__init__", init_fn)?;
+
+        Ok(())
     }
 }
 

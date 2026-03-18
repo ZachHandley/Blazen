@@ -43,7 +43,7 @@ def get_model() -> CompletionModel:
         print("ERROR: Set the ANTHROPIC_API_KEY environment variable.")
         print("  ANTHROPIC_API_KEY=sk-ant-... python llm_anthropic.py")
         sys.exit(1)
-    return CompletionModel.anthropic(api_key, model="claude-haiku-3-5-20241022")
+    return CompletionModel.anthropic(api_key, model="claude-haiku-4-5-20251001")
 
 
 MODEL = get_model()

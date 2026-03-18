@@ -37,7 +37,7 @@ from blazen import (
 # Default model routed through OpenRouter.  You can swap this to any model
 # OpenRouter supports, e.g. "openai/gpt-4o", "meta-llama/llama-3-70b",
 # "google/gemini-2.0-flash", etc.
-DEFAULT_MODEL = "anthropic/claude-sonnet-4"
+DEFAULT_MODEL = "anthropic/claude-sonnet-4-6"
 
 # Module-level model instance -- initialised in main() before the workflow runs.
 llm: CompletionModel

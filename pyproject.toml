@@ -1,0 +1,26 @@
+[project]
+name = "blazen-workspace"
+version = "0.0.0-dev"
+description = "Blazen workspace"
+requires-python = ">=3.10"
+license = "AGPL-3.0-or-later"
+authors = [{ name = "Zach Handley", email = "zachhandley@gmail.com" }]
+dependencies = ["blazen"]
+
+[tool.uv.workspace]
+members = ["crates/blazen-py"]
+
+[tool.uv.sources]
+blazen = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "maturin>=1.0",
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "ruff>=0.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/python"]
+asyncio_mode = "auto"

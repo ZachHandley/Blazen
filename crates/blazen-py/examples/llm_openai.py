@@ -172,11 +172,11 @@ async def main() -> None:
         )
         sys.exit(1)
 
-    # Create the OpenAI completion model (gpt-4o-mini is cheap for examples).
+    # Create the OpenAI completion model (gpt-5.3-chat-latest is cheap for examples).
     # Stored at module level because CompletionModel is a native object that
     # cannot be serialised into the JSON-based workflow context.
     global MODEL
-    MODEL = CompletionModel.openai(api_key, model="gpt-4o-mini")
+    MODEL = CompletionModel.openai(api_key, model="gpt-5.3-chat-latest")
 
     # Build the 3-step content pipeline.
     wf = Workflow("content-pipeline", [generate_outline, write_draft, review])

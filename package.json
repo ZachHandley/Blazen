@@ -1,0 +1,9 @@
+{
+  "name": "blazen-monorepo",
+  "private": true,
+  "scripts": {
+    "build:node": "pnpm --filter blazen run build",
+    "build:website": "pnpm --filter blazen-website run build",
+    "test:node": "node --test tests/node/test_workflow.mjs"
+  }
+}

@@ -27,7 +27,7 @@ import type { Context, JsWorkflowResult } from "blazen";
 // Default model routed through OpenRouter.  You can swap this to any model
 // OpenRouter supports, e.g. "openai/gpt-4o", "meta-llama/llama-3-70b",
 // "google/gemini-2.0-flash", etc.
-const DEFAULT_MODEL: string = "anthropic/claude-sonnet-4";
+const DEFAULT_MODEL: string = "anthropic/claude-sonnet-4-6";
 
 // ---------------------------------------------------------------------------
 // 1. Load API key from environment

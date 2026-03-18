@@ -76,7 +76,7 @@ wf.addStep(
         { role: "system", content: "You are a helpful assistant. Give concise, factual answers in 2-3 sentences maximum." },
         { role: "user", content: question },
       ],
-      { maxTokens: 256, model: "claude-haiku-3-5-20241022" },
+      { maxTokens: 256, model: "claude-haiku-4-5-20251001" },
     );
 
     const answer: string = response.content;
@@ -118,7 +118,7 @@ wf.addStep(
           content: `Question: ${question}\n\nProposed answer: ${answer}`,
         },
       ],
-      { maxTokens: 256, model: "claude-haiku-3-5-20241022" },
+      { maxTokens: 256, model: "claude-haiku-4-5-20251001" },
     );
 
     const verdict: string = response.content;
