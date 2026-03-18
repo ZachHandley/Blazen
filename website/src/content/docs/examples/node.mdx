@@ -24,7 +24,7 @@ wf.addStep("greet", ["GreetEvent"], async (event, ctx) => {
 ```
 
 ```sh
-node examples/basic_workflow.mjs
+npx tsx examples/basic_workflow.ts
 ```
 
 ---
@@ -39,7 +39,7 @@ const result = await wf.runStreaming({}, (event) => console.log(event));
 ```
 
 ```sh
-node examples/streaming_workflow.mjs
+npx tsx examples/streaming_workflow.ts
 ```
 
 ---
@@ -56,7 +56,7 @@ return [
 ```
 
 ```sh
-node examples/branching_workflow.mjs
+npx tsx examples/branching_workflow.ts
 ```
 
 ---
@@ -71,7 +71,7 @@ const docs = await ctx.get("documents");
 ```
 
 ```sh
-node examples/llm_rag_workflow.mjs
+npx tsx examples/llm_rag_workflow.ts
 ```
 
 ---
@@ -86,5 +86,5 @@ return null;
 ```
 
 ```sh
-node examples/human_in_the_loop.mjs
+npx tsx examples/human_in_the_loop.ts
 ```

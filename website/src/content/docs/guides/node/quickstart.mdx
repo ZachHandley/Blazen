@@ -18,9 +18,9 @@ pnpm add blazen
 
 ## Your first workflow
 
-Create a file called `greeter.mjs` (or use `"type": "module"` in your `package.json` for ESM support):
+Create a file called `greeter.ts`:
 
-```javascript
+```typescript
 import { Workflow } from "blazen";
 
 const wf = new Workflow("greeter");
@@ -45,7 +45,7 @@ console.log(result.data);
 Run it:
 
 ```bash
-node greeter.mjs
+npx tsx greeter.ts
 ```
 
 ## How it works
@@ -63,7 +63,7 @@ node greeter.mjs
 
 **Context** lets steps share state across the workflow. Both `ctx.set()` and `ctx.get()` are async and must be awaited:
 
-```javascript
+```typescript
 wf.addStep("store_value", ["blazen::StartEvent"], async (event, ctx) => {
   await ctx.set("user", event.name);
   return { type: "NextEvent" };
