@@ -64,21 +64,20 @@ jobs:
           node-version: "20"
 
       - name: Build Python bindings
-        run: uv sync --directory crates/blazen-py --extra dev
+        run: uv sync --group dev
 
       - name: Setup pnpm
         run: corepack enable && corepack prepare pnpm@latest --activate
 
       - name: Build Node bindings
         run: |
-          cd crates/blazen-node
           pnpm install
-          pnpm run build
+          pnpm --filter blazen run build
 
       - name: Run Python LLM smoke tests
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-        run: uv run --directory crates/blazen-py pytest -v -k "llm_smoke"
+        run: uv run pytest -v -k "llm_smoke"
 
       - name: Run Node LLM smoke tests
         env:
@@ -278,15 +277,11 @@ jobs:
 
       - name: Install dependencies
         if: steps.check.outputs.completed != 'true'
-        run: |
-          cd crates/blazen-node
-          pnpm install
+        run: pnpm install
 
       - name: Build with napi
         if: steps.check.outputs.completed != 'true'
-        run: |
-          cd crates/blazen-node
-          pnpm run build
+        run: pnpm --filter blazen run build
 
       - name: Publish to npm
         if: steps.check.outputs.completed != 'true'
