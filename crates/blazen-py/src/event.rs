@@ -114,10 +114,7 @@ impl PyEvent {
         // Generate an __init__ that sets event_type to the class name.
         // Flow: __new__ creates PyEvent with event_type="", then __init__
         // patches it to the real class name.
-        let code = format!(
-            "def __init__(self, **kwargs):\n    self.event_type = '{}'\n",
-            class_name
-        );
+        let code = format!("def __init__(self, **kwargs):\n    self.event_type = '{class_name}'\n");
         let globals = PyDict::new(py);
         let locals = PyDict::new(py);
         py.run(

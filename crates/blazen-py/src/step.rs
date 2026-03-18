@@ -261,17 +261,14 @@ fn infer_accepts_from_hints(py: Python<'_>, func: &Py<PyAny>) -> Vec<String> {
     let default = vec!["blazen::StartEvent".to_owned()];
 
     // Use typing.get_type_hints() to resolve annotations
-    let typing = match py.import("typing") {
-        Ok(m) => m,
-        Err(_) => return default,
+    let Ok(typing) = py.import("typing") else {
+        return default;
     };
-    let hints = match typing.call_method1("get_type_hints", (func,)) {
-        Ok(h) => h,
-        Err(_) => return default,
+    let Ok(hints) = typing.call_method1("get_type_hints", (func,)) else {
+        return default;
     };
-    let hints_dict = match hints.cast::<PyDict>() {
-        Ok(d) => d,
-        Err(_) => return default,
+    let Ok(hints_dict) = hints.cast::<PyDict>() else {
+        return default;
     };
 
     // Look for the "ev" or "event" parameter annotation
@@ -281,22 +278,19 @@ fn infer_accepts_from_hints(py: Python<'_>, func: &Py<PyAny>) -> Vec<String> {
         .flatten()
         .or_else(|| hints_dict.get_item("event").ok().flatten());
 
-    let ev_type = match ev_hint {
-        Some(t) => t,
-        None => return default,
+    let Some(ev_type) = ev_hint else {
+        return default;
     };
 
     // Check if it's a subclass of our Event class
     let event_cls_bound = py.get_type::<crate::event::PyEvent>().into_any();
-    let event_cls = match event_cls_bound.cast::<pyo3::types::PyType>() {
-        Ok(cls) => cls,
-        Err(_) => return default,
+    let Ok(event_cls) = event_cls_bound.cast::<pyo3::types::PyType>() else {
+        return default;
     };
 
     // Check if the annotated type is a subclass of Event using Python's issubclass()
-    let builtins = match py.import("builtins") {
-        Ok(b) => b,
-        Err(_) => return default,
+    let Ok(builtins) = py.import("builtins") else {
+        return default;
     };
     let is_subclass: bool = match builtins.call_method1("issubclass", (&ev_type, &event_cls)) {
         Ok(r) => match r.extract() {
