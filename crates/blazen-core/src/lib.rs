@@ -23,18 +23,21 @@
 //! queue until a [`StopEvent`](blazen_events::StopEvent) terminates the
 //! loop.
 
+pub mod builder;
 pub mod context;
 pub mod error;
+pub(crate) mod event_loop;
 pub mod handler;
 pub mod snapshot;
 pub mod step;
 pub mod value;
 pub mod workflow;
 
+pub use builder::{InputHandlerFn, WorkflowBuilder};
 pub use context::Context;
 pub use error::{Result, WorkflowError};
 pub use handler::WorkflowHandler;
 pub use snapshot::{SerializedEvent, WorkflowSnapshot};
 pub use step::{StepFn, StepOutput, StepRegistration};
 pub use value::{BytesWrapper, StateValue};
-pub use workflow::{InputHandlerFn, Workflow, WorkflowBuilder};
+pub use workflow::Workflow;

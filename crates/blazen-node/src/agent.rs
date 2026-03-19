@@ -17,7 +17,8 @@ use blazen_llm::traits::Tool;
 use blazen_llm::types::{ChatMessage, Role, ToolDefinition};
 
 use crate::error::llm_error_to_napi;
-use crate::llm::{JsChatMessage, JsCompletionModel, JsCompletionResponse, build_response};
+use crate::providers::JsCompletionModel;
+use crate::types::{JsChatMessage, JsCompletionResponse, build_response};
 
 // ---------------------------------------------------------------------------
 // Type alias for the tool handler ThreadsafeFunction

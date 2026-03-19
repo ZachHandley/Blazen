@@ -30,13 +30,9 @@
 
 pub mod agent;
 pub mod compute;
-pub mod context;
 pub mod error;
-pub mod event;
-pub mod fal;
-pub mod handler;
-pub mod llm;
-pub mod step;
+pub mod providers;
+pub mod types;
 pub mod workflow;
 
 use pyo3::prelude::*;
@@ -48,33 +44,35 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 
     // Event classes
-    m.add_class::<event::PyEvent>()?;
-    m.add_class::<event::PyStartEvent>()?;
-    m.add_class::<event::PyStopEvent>()?;
+    m.add_class::<workflow::event::PyEvent>()?;
+    m.add_class::<workflow::event::PyStartEvent>()?;
+    m.add_class::<workflow::event::PyStopEvent>()?;
 
     // Context
-    m.add_class::<context::PyContext>()?;
+    m.add_class::<workflow::context::PyContext>()?;
 
     // Step decorator
-    m.add_function(wrap_pyfunction!(step::step, m)?)?;
-    m.add_class::<step::PyStepWrapper>()?;
+    m.add_function(wrap_pyfunction!(workflow::step::step, m)?)?;
+    m.add_class::<workflow::step::PyStepWrapper>()?;
 
     // Workflow
-    m.add_class::<workflow::PyWorkflow>()?;
+    m.add_class::<workflow::workflow::PyWorkflow>()?;
 
     // Handler
-    m.add_class::<handler::PyWorkflowHandler>()?;
-    m.add_class::<handler::PyEventStream>()?;
+    m.add_class::<workflow::handler::PyWorkflowHandler>()?;
+    m.add_class::<workflow::handler::PyEventStream>()?;
 
-    // LLM
-    m.add_class::<llm::PyRole>()?;
-    m.add_class::<llm::PyContentPart>()?;
-    m.add_class::<llm::PyChatMessage>()?;
-    m.add_class::<llm::PyCompletionModel>()?;
-    m.add_class::<llm::PyToolCall>()?;
-    m.add_class::<llm::PyTokenUsage>()?;
-    m.add_class::<llm::PyRequestTiming>()?;
-    m.add_class::<llm::PyCompletionResponse>()?;
+    // LLM types
+    m.add_class::<types::PyRole>()?;
+    m.add_class::<types::PyContentPart>()?;
+    m.add_class::<types::PyChatMessage>()?;
+    m.add_class::<types::PyToolCall>()?;
+    m.add_class::<types::PyTokenUsage>()?;
+    m.add_class::<types::PyRequestTiming>()?;
+    m.add_class::<types::PyCompletionResponse>()?;
+
+    // Completion model (provider)
+    m.add_class::<providers::PyCompletionModel>()?;
 
     // Agent
     m.add_class::<agent::PyToolDef>()?;
@@ -82,7 +80,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(agent::run_agent, m)?)?;
 
     // Compute / Media -- Request types
-    m.add_class::<compute::PyMediaType>()?;
+    m.add_class::<types::PyMediaType>()?;
     m.add_class::<compute::PyImageRequest>()?;
     m.add_class::<compute::PyUpscaleRequest>()?;
     m.add_class::<compute::PyVideoRequest>()?;
@@ -97,14 +95,14 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<compute::PyComputeRequest>()?;
 
     // Compute / Media -- Generated media types
-    m.add_class::<compute::PyMediaOutput>()?;
-    m.add_class::<compute::PyGeneratedImage>()?;
-    m.add_class::<compute::PyGeneratedVideo>()?;
-    m.add_class::<compute::PyGeneratedAudio>()?;
-    m.add_class::<compute::PyGenerated3DModel>()?;
+    m.add_class::<types::PyMediaOutput>()?;
+    m.add_class::<types::PyGeneratedImage>()?;
+    m.add_class::<types::PyGeneratedVideo>()?;
+    m.add_class::<types::PyGeneratedAudio>()?;
+    m.add_class::<types::PyGenerated3DModel>()?;
 
     // Fal provider
-    m.add_class::<fal::PyFalProvider>()?;
+    m.add_class::<providers::fal::PyFalProvider>()?;
 
     // Error exception types
     error::register_exceptions(m)?;

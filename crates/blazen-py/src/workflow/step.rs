@@ -1,7 +1,7 @@
 //! Python `@step` decorator and step registration.
 //!
 //! The `@step` decorator wraps a Python async function so it can be registered
-//! with a [`Workflow`](crate::workflow::PyWorkflow). The wrapper inspects the
+//! with a [`Workflow`](super::workflow::PyWorkflow). The wrapper inspects the
 //! function name and optional metadata attributes to determine routing.
 
 use std::sync::Arc;
@@ -11,11 +11,11 @@ use pyo3::types::{PyCFunction, PyDict, PyTuple};
 
 use blazen_events::AnyEvent;
 
-use crate::context::PyContext;
+use super::context::PyContext;
 use crate::error::BlazenPyError;
 use blazen_events::intern_event_type;
 
-use crate::event::{PyEvent, any_event_to_py_event, py_event_to_any_event};
+use super::event::{PyEvent, any_event_to_py_event, py_event_to_any_event};
 
 /// Internal wrapper created by the `@step` decorator.
 ///
@@ -283,7 +283,7 @@ fn infer_accepts_from_hints(py: Python<'_>, func: &Py<PyAny>) -> Vec<String> {
     };
 
     // Check if it's a subclass of our Event class
-    let event_cls_bound = py.get_type::<crate::event::PyEvent>().into_any();
+    let event_cls_bound = py.get_type::<super::event::PyEvent>().into_any();
     let Ok(event_cls) = event_cls_bound.cast::<pyo3::types::PyType>() else {
         return default;
     };

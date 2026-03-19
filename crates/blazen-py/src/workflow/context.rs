@@ -6,7 +6,7 @@
 
 use pyo3::prelude::*;
 
-use crate::event::PyEvent;
+use super::event::PyEvent;
 
 /// Run a future to completion, handling both inside-tokio and outside-tokio
 /// contexts. Uses `block_in_place` when called from a tokio worker thread
@@ -48,7 +48,7 @@ impl PyContext {
     ///     key: The storage key.
     ///     value: Any JSON-serializable Python value.
     fn set(&self, py: Python<'_>, key: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        let json_val = crate::event::py_to_json(py, value)?;
+        let json_val = super::event::py_to_json(py, value)?;
         let inner = self.inner.clone();
         let key = key.to_string();
         block_on_context(async {
@@ -71,7 +71,7 @@ impl PyContext {
         let key = key.to_string();
         let val: Option<serde_json::Value> = block_on_context(async { inner.get(&key).await });
         match val {
-            Some(v) => crate::event::json_to_py(py, &v),
+            Some(v) => super::event::json_to_py(py, &v),
             None => Ok(py.None()),
         }
     }

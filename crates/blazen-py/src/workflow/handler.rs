@@ -11,8 +11,8 @@ use pyo3::prelude::*;
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 
+use super::event::any_event_to_py_event;
 use crate::error::BlazenPyError;
-use crate::event::any_event_to_py_event;
 
 /// Handle to a running workflow.
 ///

@@ -6,7 +6,7 @@
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
-use crate::event::js_value_to_any_event;
+use super::event::js_value_to_any_event;
 
 /// Shared workflow context accessible by all steps.
 ///

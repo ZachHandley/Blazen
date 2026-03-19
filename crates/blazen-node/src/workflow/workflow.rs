@@ -13,10 +13,10 @@ use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
 use tokio_stream::StreamExt;
 
-use crate::context::JsContext;
+use super::context::JsContext;
+use super::event::{any_event_to_js_value, js_value_to_any_event};
+use super::handler::JsWorkflowHandler;
 use crate::error::workflow_error_to_napi;
-use crate::event::{any_event_to_js_value, js_value_to_any_event};
-use crate::handler::JsWorkflowHandler;
 
 // ---------------------------------------------------------------------------
 // Type aliases for ThreadsafeFunction variants

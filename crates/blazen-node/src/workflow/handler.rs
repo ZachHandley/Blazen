@@ -13,9 +13,9 @@ use napi_derive::napi;
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 
+use super::event::any_event_to_js_value;
+use super::workflow::JsWorkflowResult;
 use crate::error::workflow_error_to_napi;
-use crate::event::any_event_to_js_value;
-use crate::workflow::JsWorkflowResult;
 
 /// Stream callback: takes a `serde_json::Value`, returns nothing meaningful.
 /// `CalleeHandled = false` to avoid the error-first callback convention.

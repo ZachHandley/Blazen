@@ -16,7 +16,8 @@ use blazen_llm::error::BlazenError;
 use blazen_llm::traits::Tool;
 use blazen_llm::types::{ChatMessage, ToolDefinition};
 
-use crate::llm::{PyChatMessage, PyCompletionModel, PyCompletionResponse};
+use crate::providers::PyCompletionModel;
+use crate::types::{PyChatMessage, PyCompletionResponse};
 
 // ---------------------------------------------------------------------------
 // PyToolWrapper -- bridges a Python callable into the Rust Tool trait
@@ -59,7 +60,7 @@ impl Tool for PyToolWrapper {
 
             let coroutine: Py<PyAny> = tokio::task::block_in_place(|| {
                 Python::attach(|py| {
-                    let args_py = crate::event::json_to_py(py, &args_value)?;
+                    let args_py = crate::workflow::event::json_to_py(py, &args_value)?;
                     callable.call1(py, (args_py,))
                 })
             })
@@ -75,7 +76,7 @@ impl Tool for PyToolWrapper {
                 .map_err(|e: PyErr| BlazenError::tool_error(e.to_string()))?;
 
             let result = tokio::task::block_in_place(|| {
-                Python::attach(|py| crate::event::py_to_json(py, py_result.bind(py)))
+                Python::attach(|py| crate::workflow::event::py_to_json(py, py_result.bind(py)))
             })
             .map_err(|e: PyErr| BlazenError::tool_error(e.to_string()))?;
 
@@ -84,9 +85,9 @@ impl Tool for PyToolWrapper {
             // Sync path: call directly and convert the result
             let result = tokio::task::block_in_place(|| {
                 Python::attach(|py| {
-                    let args_py = crate::event::json_to_py(py, &args_value)?;
+                    let args_py = crate::workflow::event::json_to_py(py, &args_value)?;
                     let result = callable.call1(py, (args_py,))?;
-                    crate::event::py_to_json(py, result.bind(py))
+                    crate::workflow::event::py_to_json(py, result.bind(py))
                 })
             })
             .map_err(|e: PyErr| BlazenError::tool_error(e.to_string()))?;
@@ -128,7 +129,7 @@ impl PyToolDef {
         parameters: &Bound<'_, PyAny>,
         handler: Py<PyAny>,
     ) -> PyResult<Self> {
-        let params = crate::event::py_to_json(py, parameters)?;
+        let params = crate::workflow::event::py_to_json(py, parameters)?;
         Ok(Self {
             name: name.to_owned(),
             description: description.to_owned(),

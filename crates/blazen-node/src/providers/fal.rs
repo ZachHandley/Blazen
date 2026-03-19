@@ -23,7 +23,7 @@ use crate::compute::{
     JsVideoRequest,
 };
 use crate::error::blazen_error_to_napi;
-use crate::llm::{JsChatMessage, JsCompletionResponse, build_response};
+use crate::types::{JsChatMessage, JsCompletionResponse, build_response};
 
 // ---------------------------------------------------------------------------
 // Converters: Js*Request -> Rust request types
