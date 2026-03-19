@@ -11,18 +11,18 @@
 //! - Tools use `functionDeclarations` format
 
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Instant;
 
 use async_trait::async_trait;
-use bytes::Bytes;
 use futures_util::Stream;
-use reqwest::Client;
 use serde::Deserialize;
 use tracing::{debug, warn};
 
 use super::openai_format::parse_retry_after;
 use crate::error::BlazenError;
+use crate::http::{ByteStream, HttpClient, HttpRequest, HttpResponse};
 use crate::traits::{ModelCapabilities, ModelInfo, ModelRegistry};
 use crate::types::{
     CompletionRequest, CompletionResponse, ContentPart, ImageContent, ImageSource, MessageContent,
@@ -112,12 +112,31 @@ fn content_to_gemini_parts(content: &MessageContent) -> Vec<serde_json::Value> {
 /// let provider = GeminiProvider::new("AIza...")
 ///     .with_model("gemini-2.5-pro");
 /// ```
-#[derive(Debug, Clone)]
 pub struct GeminiProvider {
-    client: Client,
+    client: Arc<dyn HttpClient>,
     api_key: String,
     base_url: String,
     default_model: String,
+}
+
+impl std::fmt::Debug for GeminiProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GeminiProvider")
+            .field("base_url", &self.base_url)
+            .field("default_model", &self.default_model)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Clone for GeminiProvider {
+    fn clone(&self) -> Self {
+        Self {
+            client: Arc::clone(&self.client),
+            api_key: self.api_key.clone(),
+            base_url: self.base_url.clone(),
+            default_model: self.default_model.clone(),
+        }
+    }
 }
 
 impl GeminiProvider {
@@ -125,7 +144,7 @@ impl GeminiProvider {
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
-            client: Client::new(),
+            client: crate::ReqwestHttpClient::new().into_arc(),
             api_key: api_key.into(),
             base_url: GEMINI_BASE_URL.to_owned(),
             default_model: "gemini-2.5-flash".to_owned(),
@@ -146,6 +165,13 @@ impl GeminiProvider {
         self
     }
 
+    /// Use a custom HTTP client backend.
+    #[must_use]
+    pub fn with_http_client(mut self, client: Arc<dyn HttpClient>) -> Self {
+        self.client = client;
+        self
+    }
+
     /// Build the JSON request body for the Gemini `generateContent` endpoint.
     #[allow(clippy::unused_self, clippy::too_many_lines)]
     fn build_body(&self, request: &CompletionRequest) -> serde_json::Value {
@@ -160,9 +186,6 @@ impl GeminiProvider {
                 }
             } else if msg.role == Role::Tool && msg.tool_call_id.is_some() {
                 // Gemini expects tool results as functionResponse parts.
-                // The tool_call_id here corresponds to the function name in
-                // the Gemini protocol (Gemini uses name-based matching, not IDs).
-                // We use the text content as the response payload.
                 let response_text = msg.content.text_content().unwrap_or_default();
                 let response_value: serde_json::Value = serde_json::from_str(&response_text)
                     .unwrap_or_else(|_| serde_json::json!({ "result": response_text }));
@@ -237,9 +260,6 @@ impl GeminiProvider {
                 "responseMimeType".into(),
                 serde_json::json!("application/json"),
             );
-            // If the caller passed a full OpenAI envelope
-            // ({"type": "json_schema", "json_schema": {"schema": ...}}),
-            // extract the bare schema for Gemini. Otherwise use as-is.
             let schema = if fmt.get("type").and_then(|v| v.as_str()) == Some("json_schema") {
                 fmt.get("json_schema")
                     .and_then(|js| js.get("schema"))
@@ -283,40 +303,39 @@ impl GeminiProvider {
             .unwrap_or_else(|| self.default_model.clone())
     }
 
+    /// Build an [`HttpRequest`] for a Gemini endpoint.
+    fn build_http_request(
+        &self,
+        url: &str,
+        body: &serde_json::Value,
+    ) -> Result<HttpRequest, BlazenError> {
+        HttpRequest::post(url)
+            .header("x-goog-api-key", &self.api_key)
+            .json_body(body)
+    }
+
     /// Send a request to the Gemini API, handling common errors.
     async fn send_request(
         &self,
         url: &str,
         body: &serde_json::Value,
-    ) -> Result<reqwest::Response, BlazenError> {
-        let response = self
-            .client
-            .post(url)
-            .header("x-goog-api-key", &self.api_key)
-            .header("Content-Type", "application/json")
-            .json(body)
-            .send()
-            .await
-            .map_err(|e| BlazenError::request(e.to_string()))?;
+    ) -> Result<HttpResponse, BlazenError> {
+        let request = self.build_http_request(url, body)?;
+        let response = self.client.send(request).await?;
 
-        let status = response.status();
-        if status.is_success() {
+        if response.is_success() {
             return Ok(response);
         }
 
-        // Extract Retry-After before consuming the body.
-        let retry_after_ms = parse_retry_after(response.headers());
+        // Extract Retry-After before inspecting the body.
+        let retry_after_ms = parse_retry_after(&response.headers);
+        let error_body = response.text();
 
-        let error_body = response
-            .text()
-            .await
-            .unwrap_or_else(|_| String::from("<unable to read error body>"));
-
-        match status.as_u16() {
+        match response.status {
             401 | 403 => Err(BlazenError::auth("authentication failed")),
             404 => Err(BlazenError::model_not_found(error_body)),
             429 => Err(BlazenError::RateLimit { retry_after_ms }),
-            _ => Err(BlazenError::request(format!("HTTP {status}: {error_body}"))),
+            status => Err(BlazenError::request(format!("HTTP {status}: {error_body}"))),
         }
     }
 }
@@ -490,7 +509,6 @@ impl crate::traits::CompletionModel for GeminiProvider {
         let response = self.send_request(&url, &body).await?;
         let gemini: GeminiResponse = response
             .json()
-            .await
             .map_err(|e| BlazenError::invalid_response(e.to_string()))?;
 
         let result = parse_gemini_response(gemini)?;
@@ -534,8 +552,18 @@ impl crate::traits::CompletionModel for GeminiProvider {
         let body = self.build_body(&request);
         debug!(%model, "Gemini streaming request");
 
-        let response = self.send_request(&url, &body).await?;
-        let byte_stream = response.bytes_stream();
+        let http_request = self.build_http_request(&url, &body)?;
+        let (status, headers, byte_stream) = self.client.send_streaming(http_request).await?;
+
+        if !(200..300).contains(&status) {
+            let retry_after_ms = parse_retry_after(&headers);
+            match status {
+                401 | 403 => return Err(BlazenError::auth("authentication failed")),
+                404 => return Err(BlazenError::model_not_found("model not found")),
+                429 => return Err(BlazenError::RateLimit { retry_after_ms }),
+                _ => return Err(BlazenError::request(format!("HTTP {status}"))),
+            }
+        }
 
         span.record(
             "duration_ms",
@@ -555,27 +583,19 @@ impl crate::traits::CompletionModel for GeminiProvider {
 impl ModelRegistry for GeminiProvider {
     async fn list_models(&self) -> Result<Vec<ModelInfo>, BlazenError> {
         let url = format!("{}/models", self.base_url);
+        let request = HttpRequest::get(&url).header("x-goog-api-key", &self.api_key);
+        let response = self.client.send(request).await?;
 
-        let response = self
-            .client
-            .get(&url)
-            .header("x-goog-api-key", &self.api_key)
-            .send()
-            .await
-            .map_err(|e| BlazenError::request(e.to_string()))?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let error_body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| String::from("<unable to read error body>"));
-            return Err(BlazenError::request(format!("HTTP {status}: {error_body}")));
+        if !response.is_success() {
+            let error_body = response.text();
+            return Err(BlazenError::request(format!(
+                "HTTP {}: {error_body}",
+                response.status
+            )));
         }
 
         let models_response: GeminiModelsResponse = response
             .json()
-            .await
             .map_err(|e| BlazenError::invalid_response(e.to_string()))?;
 
         let models = models_response
@@ -637,13 +657,13 @@ impl ModelRegistry for GeminiProvider {
 ///
 /// Gemini SSE uses `data: <json>` lines like `OpenAI`, but the JSON payload is
 /// a full `GeminiResponse` per chunk (not the `OpenAI` delta format).
-struct GeminiSseParser<S> {
-    inner: S,
+struct GeminiSseParser {
+    inner: ByteStream,
     buffer: String,
 }
 
-impl<S> GeminiSseParser<S> {
-    fn new(inner: S) -> Self {
+impl GeminiSseParser {
+    fn new(inner: ByteStream) -> Self {
         Self {
             inner,
             buffer: String::new(),
@@ -651,10 +671,7 @@ impl<S> GeminiSseParser<S> {
     }
 }
 
-impl<S> Stream for GeminiSseParser<S>
-where
-    S: Stream<Item = Result<Bytes, reqwest::Error>> + Unpin + Send,
-{
+impl Stream for GeminiSseParser {
     type Item = Result<StreamChunk, BlazenError>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {

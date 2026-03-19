@@ -1,0 +1,28 @@
+[package]
+name = "blazen-wasm"
+version = "0.0.0-dev"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+authors = ["Zach Handley <zachhandley@gmail.com>"]
+description = "Blazen WASM component for ZLayer deployment"
+rust-version = "1.85"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+blazen-llm = { path = "../blazen-llm", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+wit-bindgen = "0.36"
+
+[package.metadata.component]
+package = "blazen:handler"
+
+[lints.rust]
+unsafe_code = "warn"
+dead_code = "warn"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"

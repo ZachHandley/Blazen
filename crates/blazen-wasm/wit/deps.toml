@@ -1,0 +1,4 @@
+[deps]
+"wasi:http" = "0.2.0"
+"wasi:io" = "0.2.0"
+"wasi:clocks" = "0.2.0"

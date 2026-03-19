@@ -1,0 +1,5 @@
+package blazen:handler;
+
+world blazen-handler {
+    include wasi:http/proxy@0.2.0;
+}

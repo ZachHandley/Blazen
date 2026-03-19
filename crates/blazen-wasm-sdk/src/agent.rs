@@ -1,0 +1,255 @@
+//! `wasm-bindgen` wrapper for the agent loop from `blazen-llm`.
+//!
+//! Exposes `runAgent()` as an async function that orchestrates the LLM +
+//! tool calling pattern entirely in WASM, with tool execution delegated to
+//! JavaScript callback functions.
+
+use std::pin::Pin;
+use std::sync::Arc;
+
+use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::future_to_promise;
+
+use blazen_llm::agent::AgentConfig;
+use blazen_llm::traits::Tool;
+use blazen_llm::types::ToolDefinition;
+
+use crate::chat_message::js_messages_to_vec;
+use crate::completion_model::WasmCompletionModel;
+
+// ---------------------------------------------------------------------------
+// SendFuture wrapper (same as in http_fetch.rs)
+// ---------------------------------------------------------------------------
+
+/// Wrapper that unsafely implements `Send` for a non-Send future.
+/// SAFETY: WASM is single-threaded.
+struct SendFuture<F>(F);
+
+unsafe impl<F> Send for SendFuture<F> {}
+
+impl<F: std::future::Future> std::future::Future for SendFuture<F> {
+    type Output = F::Output;
+
+    fn poll(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        // SAFETY: We are not moving F, just projecting through the wrapper.
+        let inner = unsafe { self.map_unchecked_mut(|s| &mut s.0) };
+        inner.poll(cx)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// JS Tool wrapper
+// ---------------------------------------------------------------------------
+
+/// A tool whose execution is delegated to a JavaScript function.
+struct JsTool {
+    definition: ToolDefinition,
+    handler: js_sys::Function,
+}
+
+// SAFETY: WASM is single-threaded.
+unsafe impl Send for JsTool {}
+unsafe impl Sync for JsTool {}
+
+impl std::fmt::Debug for JsTool {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("JsTool")
+            .field("name", &self.definition.name)
+            .finish_non_exhaustive()
+    }
+}
+
+impl JsTool {
+    /// The actual async execute implementation (non-Send).
+    async fn execute_impl(
+        &self,
+        arguments: serde_json::Value,
+    ) -> Result<serde_json::Value, blazen_llm::BlazenError> {
+        // Convert arguments to JsValue.
+        let js_args = serde_wasm_bindgen::to_value(&arguments)
+            .map_err(|e| blazen_llm::BlazenError::tool_error(e.to_string()))?;
+
+        // Call the JS handler.
+        let result = self
+            .handler
+            .call1(&JsValue::NULL, &js_args)
+            .map_err(|e| blazen_llm::BlazenError::tool_error(format!("{e:?}")))?;
+
+        // If the result is a Promise, await it.
+        let result = if result.has_type::<js_sys::Promise>() {
+            let promise: js_sys::Promise = result.unchecked_into();
+            wasm_bindgen_futures::JsFuture::from(promise)
+                .await
+                .map_err(|e| blazen_llm::BlazenError::tool_error(format!("{e:?}")))?
+        } else {
+            result
+        };
+
+        // Convert the JS result back to serde_json::Value.
+        // If the result is a string, try parsing as JSON; fall back to a string value.
+        if let Some(s) = result.as_string() {
+            serde_json::from_str(&s).or_else(|_| Ok(serde_json::Value::String(s)))
+        } else {
+            serde_wasm_bindgen::from_value(result)
+                .map_err(|e| blazen_llm::BlazenError::tool_error(e.to_string()))
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl Tool for JsTool {
+    fn definition(&self) -> ToolDefinition {
+        self.definition.clone()
+    }
+
+    async fn execute(
+        &self,
+        arguments: serde_json::Value,
+    ) -> Result<serde_json::Value, blazen_llm::BlazenError> {
+        // SAFETY: WASM is single-threaded, Send is vacuously satisfied.
+        SendFuture(self.execute_impl(arguments)).await
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/// Run the agent loop with the given model, messages, and tools.
+///
+/// Each tool in the `tools` array should be a JS object with:
+/// - `name` (string) -- the tool name
+/// - `description` (string) -- what the tool does
+/// - `parameters` (object) -- JSON Schema for the tool's input
+/// - `handler` (function) -- called with the arguments object, should return
+///   a string or JSON value (may be async / return a Promise)
+///
+/// Returns a `Promise` that resolves to a JS object with:
+/// - `content` (string | undefined) -- the final text response
+/// - `messages` (array) -- the full message history
+/// - `iterations` (number) -- how many tool call rounds occurred
+/// - `totalUsage` (object | undefined) -- aggregated token usage
+/// - `totalCost` (number | undefined) -- aggregated cost in USD
+///
+/// ```js
+/// const result = await runAgent(model, [ChatMessage.user('What is 15*7?')], [
+///   {
+///     name: 'multiply',
+///     description: 'Multiply two numbers',
+///     parameters: { type: 'object', properties: { a: { type: 'number' }, b: { type: 'number' } }, required: ['a', 'b'] },
+///     handler: (args) => JSON.stringify({ result: args.a * args.b })
+///   }
+/// ]);
+/// ```
+#[wasm_bindgen(js_name = "runAgent")]
+pub fn run_agent(
+    model: &WasmCompletionModel,
+    messages: JsValue,
+    tools: JsValue,
+) -> js_sys::Promise {
+    let model_arc = model.inner_arc();
+
+    future_to_promise(async move {
+        let msgs = js_messages_to_vec(&messages)?;
+
+        // Parse tool definitions from the JS array.
+        let tools_array = js_sys::Array::from(&tools);
+        let mut tool_impls: Vec<Arc<dyn Tool>> = Vec::with_capacity(tools_array.length() as usize);
+
+        for i in 0..tools_array.length() {
+            let tool_obj = tools_array.get(i);
+
+            let name = js_sys::Reflect::get(&tool_obj, &JsValue::from_str("name"))
+                .ok()
+                .and_then(|v| v.as_string())
+                .ok_or_else(|| JsValue::from_str(&format!("Tool at index {i} missing 'name'")))?;
+
+            let description = js_sys::Reflect::get(&tool_obj, &JsValue::from_str("description"))
+                .ok()
+                .and_then(|v| v.as_string())
+                .ok_or_else(|| {
+                    JsValue::from_str(&format!("Tool '{name}' missing 'description'"))
+                })?;
+
+            let params_js = js_sys::Reflect::get(&tool_obj, &JsValue::from_str("parameters"))
+                .map_err(|e| JsValue::from_str(&format!("Tool '{name}' missing 'parameters': {e:?}")))?;
+            let parameters: serde_json::Value = serde_wasm_bindgen::from_value(params_js)
+                .map_err(|e| JsValue::from_str(&format!("Tool '{name}' invalid 'parameters': {e}")))?;
+
+            let handler_js = js_sys::Reflect::get(&tool_obj, &JsValue::from_str("handler"))
+                .map_err(|e| JsValue::from_str(&format!("Tool '{name}' missing 'handler': {e:?}")))?;
+            let handler: js_sys::Function = handler_js
+                .dyn_into()
+                .map_err(|_| JsValue::from_str(&format!("Tool '{name}' handler is not a function")))?;
+
+            tool_impls.push(Arc::new(JsTool {
+                definition: ToolDefinition {
+                    name,
+                    description,
+                    parameters,
+                },
+                handler,
+            }));
+        }
+
+        let config = AgentConfig::new(tool_impls);
+
+        let result = blazen_llm::run_agent(model_arc.as_ref(), msgs, config)
+            .await
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+        // Build the result JS object.
+        let obj = js_sys::Object::new();
+        js_sys::Reflect::set(
+            &obj,
+            &JsValue::from_str("content"),
+            &match result.response.content {
+                Some(ref c) => JsValue::from_str(c),
+                None => JsValue::UNDEFINED,
+            },
+        )?;
+        js_sys::Reflect::set(
+            &obj,
+            &JsValue::from_str("iterations"),
+            &JsValue::from_f64(f64::from(result.iterations)),
+        )?;
+
+        if let Some(ref usage) = result.total_usage {
+            let usage_obj = js_sys::Object::new();
+            js_sys::Reflect::set(
+                &usage_obj,
+                &JsValue::from_str("promptTokens"),
+                &JsValue::from_f64(f64::from(usage.prompt_tokens)),
+            )?;
+            js_sys::Reflect::set(
+                &usage_obj,
+                &JsValue::from_str("completionTokens"),
+                &JsValue::from_f64(f64::from(usage.completion_tokens)),
+            )?;
+            js_sys::Reflect::set(
+                &usage_obj,
+                &JsValue::from_str("totalTokens"),
+                &JsValue::from_f64(f64::from(usage.total_tokens)),
+            )?;
+            js_sys::Reflect::set(&obj, &JsValue::from_str("totalUsage"), &usage_obj)?;
+        }
+
+        if let Some(cost) = result.total_cost {
+            js_sys::Reflect::set(
+                &obj,
+                &JsValue::from_str("totalCost"),
+                &JsValue::from_f64(cost),
+            )?;
+        }
+
+        // Serialize the full message history as JSON.
+        let messages_js = serde_wasm_bindgen::to_value(&result.messages)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        js_sys::Reflect::set(&obj, &JsValue::from_str("messages"), &messages_js)?;
+
+        Ok(obj.into())
+    })
+}

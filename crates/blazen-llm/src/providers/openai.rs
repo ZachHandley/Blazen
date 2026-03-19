@@ -5,16 +5,17 @@
 //! Groq, Together AI, etc.), see [`super::openai_compat::OpenAiCompatProvider`].
 
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
 use futures_util::Stream;
-use reqwest::Client;
 use tracing::debug;
 
 use super::openai_format::{content_to_openai_value, parse_retry_after};
 use super::sse::{OaiResponse, SseParser};
 use crate::error::BlazenError;
+use crate::http::{HttpClient, HttpRequest, HttpResponse};
 use crate::types::{
     CompletionRequest, CompletionResponse, Role, StreamChunk, TokenUsage, ToolCall,
 };
@@ -33,12 +34,31 @@ use crate::types::{
 /// let provider = OpenAiProvider::new("sk-...")
 ///     .with_model("gpt-4.1-mini");
 /// ```
-#[derive(Debug, Clone)]
 pub struct OpenAiProvider {
-    client: Client,
+    client: Arc<dyn HttpClient>,
     api_key: String,
     base_url: String,
     default_model: String,
+}
+
+impl std::fmt::Debug for OpenAiProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OpenAiProvider")
+            .field("base_url", &self.base_url)
+            .field("default_model", &self.default_model)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Clone for OpenAiProvider {
+    fn clone(&self) -> Self {
+        Self {
+            client: Arc::clone(&self.client),
+            api_key: self.api_key.clone(),
+            base_url: self.base_url.clone(),
+            default_model: self.default_model.clone(),
+        }
+    }
 }
 
 impl OpenAiProvider {
@@ -47,7 +67,7 @@ impl OpenAiProvider {
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
-            client: Client::new(),
+            client: crate::ReqwestHttpClient::new().into_arc(),
             api_key: api_key.into(),
             base_url: "https://api.openai.com/v1".to_owned(),
             default_model: "gpt-4.1".to_owned(),
@@ -65,6 +85,13 @@ impl OpenAiProvider {
     #[must_use]
     pub fn with_model(mut self, model: impl Into<String>) -> Self {
         self.default_model = model.into();
+        self
+    }
+
+    /// Use a custom HTTP client backend.
+    #[must_use]
+    pub fn with_http_client(mut self, client: Arc<dyn HttpClient>) -> Self {
+        self.client = client;
         self
     }
 
@@ -188,41 +215,32 @@ impl OpenAiProvider {
         body
     }
 
-    /// Send a request and return the raw response, handling common errors.
-    async fn send_request(
-        &self,
-        body: &serde_json::Value,
-    ) -> Result<reqwest::Response, BlazenError> {
+    /// Build an [`HttpRequest`] for the chat completions endpoint.
+    fn build_http_request(&self, body: &serde_json::Value) -> Result<HttpRequest, BlazenError> {
         let url = format!("{}/chat/completions", self.base_url);
-
-        let response = self
-            .client
-            .post(&url)
+        HttpRequest::post(url)
             .bearer_auth(&self.api_key)
-            .json(body)
-            .send()
-            .await
-            .map_err(|e| BlazenError::request(e.to_string()))?;
+            .json_body(body)
+    }
 
-        let status = response.status();
-        if status.is_success() {
+    /// Send a request and return the raw response, handling common errors.
+    async fn send_request(&self, body: &serde_json::Value) -> Result<HttpResponse, BlazenError> {
+        let request = self.build_http_request(body)?;
+        let response = self.client.send(request).await?;
+
+        if response.is_success() {
             return Ok(response);
         }
 
-        // Extract Retry-After before consuming the body.
-        let retry_after_ms = parse_retry_after(response.headers());
+        // Extract Retry-After before inspecting the body.
+        let retry_after_ms = parse_retry_after(&response.headers);
+        let error_body = response.text();
 
-        // Try to read the error body for better diagnostics.
-        let error_body = response
-            .text()
-            .await
-            .unwrap_or_else(|_| String::from("<unable to read error body>"));
-
-        match status.as_u16() {
+        match response.status {
             401 => Err(BlazenError::auth("authentication failed")),
             404 => Err(BlazenError::model_not_found(error_body)),
             429 => Err(BlazenError::RateLimit { retry_after_ms }),
-            _ => Err(BlazenError::request(format!("HTTP {status}: {error_body}"))),
+            status => Err(BlazenError::request(format!("HTTP {status}: {error_body}"))),
         }
     }
 }
@@ -261,7 +279,6 @@ impl crate::traits::CompletionModel for OpenAiProvider {
         let response = self.send_request(&body).await?;
         let oai: OaiResponse = response
             .json()
-            .await
             .map_err(|e| BlazenError::invalid_response(e.to_string()))?;
 
         let choice = oai
@@ -337,8 +354,20 @@ impl crate::traits::CompletionModel for OpenAiProvider {
         let body = self.build_body(&request, true);
         debug!(model = %body["model"], "OpenAI streaming request");
 
-        let response = self.send_request(&body).await?;
-        let byte_stream = response.bytes_stream();
+        let http_request = self.build_http_request(&body)?;
+        let (status, headers, byte_stream) = self.client.send_streaming(http_request).await?;
+
+        if !(200..300).contains(&status) {
+            // For streaming, we need to handle errors before we start parsing.
+            // Read the error from the stream is not practical; use status + headers.
+            let retry_after_ms = parse_retry_after(&headers);
+            match status {
+                401 => return Err(BlazenError::auth("authentication failed")),
+                404 => return Err(BlazenError::model_not_found("model not found")),
+                429 => return Err(BlazenError::RateLimit { retry_after_ms }),
+                _ => return Err(BlazenError::request(format!("HTTP {status}"))),
+            }
+        }
 
         span.record(
             "duration_ms",

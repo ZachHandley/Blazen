@@ -19,10 +19,14 @@ use crate::types::{ContentPart, ImageContent, ImageSource, MessageContent};
 /// The `Retry-After` header can be either a number of seconds (e.g. `30`) or
 /// an HTTP date. This function handles the numeric form and returns the value
 /// in **milliseconds**. HTTP-date values are currently ignored (returns `None`).
-pub(crate) fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<u64> {
+///
+/// Accepts a slice of `(name, value)` pairs as provided by
+/// [`crate::http::HttpResponse::headers`].
+pub(crate) fn parse_retry_after(headers: &[(String, String)]) -> Option<u64> {
     headers
-        .get(reqwest::header::RETRY_AFTER)
-        .and_then(|v| v.to_str().ok())
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case("retry-after"))
+        .map(|(_, v)| v.as_str())
         .and_then(|s| s.parse::<f64>().ok())
         .and_then(|secs| {
             if secs.is_finite() && secs >= 0.0 {
@@ -110,43 +114,42 @@ pub(crate) fn content_to_openai_value(content: &MessageContent) -> serde_json::V
 #[cfg(test)]
 mod tests {
     use super::*;
-    use reqwest::header::{HeaderMap, HeaderValue, RETRY_AFTER};
+
+    fn headers(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .collect()
+    }
 
     #[test]
     fn parse_retry_after_integer_seconds() {
-        let mut headers = HeaderMap::new();
-        headers.insert(RETRY_AFTER, HeaderValue::from_static("30"));
-        assert_eq!(parse_retry_after(&headers), Some(30_000));
+        let h = headers(&[("Retry-After", "30")]);
+        assert_eq!(parse_retry_after(&h), Some(30_000));
     }
 
     #[test]
     fn parse_retry_after_fractional_seconds() {
-        let mut headers = HeaderMap::new();
-        headers.insert(RETRY_AFTER, HeaderValue::from_static("1.5"));
-        assert_eq!(parse_retry_after(&headers), Some(1_500));
+        let h = headers(&[("retry-after", "1.5")]);
+        assert_eq!(parse_retry_after(&h), Some(1_500));
     }
 
     #[test]
     fn parse_retry_after_missing() {
-        let headers = HeaderMap::new();
-        assert_eq!(parse_retry_after(&headers), None);
+        let h: Vec<(String, String)> = Vec::new();
+        assert_eq!(parse_retry_after(&h), None);
     }
 
     #[test]
     fn parse_retry_after_http_date_returns_none() {
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            RETRY_AFTER,
-            HeaderValue::from_static("Wed, 21 Oct 2026 07:28:00 GMT"),
-        );
+        let h = headers(&[("Retry-After", "Wed, 21 Oct 2026 07:28:00 GMT")]);
         // HTTP-date form is not yet supported, should return None.
-        assert_eq!(parse_retry_after(&headers), None);
+        assert_eq!(parse_retry_after(&h), None);
     }
 
     #[test]
     fn parse_retry_after_zero() {
-        let mut headers = HeaderMap::new();
-        headers.insert(RETRY_AFTER, HeaderValue::from_static("0"));
-        assert_eq!(parse_retry_after(&headers), Some(0));
+        let h = headers(&[("Retry-After", "0")]);
+        assert_eq!(parse_retry_after(&h), Some(0));
     }
 }

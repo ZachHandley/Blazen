@@ -1,0 +1,33 @@
+{
+  "name": "@blazen/sdk",
+  "version": "0.0.0-dev",
+  "description": "Blazen AI SDK for TypeScript/JavaScript (WebAssembly)",
+  "main": "blazen_wasm_sdk.js",
+  "types": "blazen_wasm_sdk.d.ts",
+  "files": [
+    "blazen_wasm_sdk_bg.wasm",
+    "blazen_wasm_sdk.js",
+    "blazen_wasm_sdk.d.ts"
+  ],
+  "scripts": {
+    "build": "wasm-pack build --target bundler",
+    "build:web": "wasm-pack build --target web",
+    "build:node": "wasm-pack build --target nodejs"
+  },
+  "keywords": [
+    "ai",
+    "llm",
+    "wasm",
+    "webassembly",
+    "blazen",
+    "openai",
+    "anthropic",
+    "workflow",
+    "agent"
+  ],
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZachHandley/Blazen"
+  }
+}

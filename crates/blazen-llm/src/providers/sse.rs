@@ -9,12 +9,12 @@
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use bytes::Bytes;
 use futures_util::Stream;
 use serde::Deserialize;
 use tracing::warn;
 
 use crate::error::BlazenError;
+use crate::http::ByteStream;
 use crate::types::{StreamChunk, ToolCall};
 
 // ---------------------------------------------------------------------------
@@ -108,13 +108,13 @@ pub(crate) struct OaiStreamFunction {
 ///
 /// The protocol sends lines of the form `data: <json>` separated by blank
 /// lines. The special value `data: [DONE]` signals the end of the stream.
-pub(crate) struct SseParser<S> {
-    inner: S,
+pub(crate) struct SseParser {
+    inner: ByteStream,
     buffer: String,
 }
 
-impl<S> SseParser<S> {
-    pub fn new(inner: S) -> Self {
+impl SseParser {
+    pub fn new(inner: ByteStream) -> Self {
         Self {
             inner,
             buffer: String::new(),
@@ -122,10 +122,7 @@ impl<S> SseParser<S> {
     }
 }
 
-impl<S> Stream for SseParser<S>
-where
-    S: Stream<Item = Result<Bytes, reqwest::Error>> + Unpin + Send,
-{
+impl Stream for SseParser {
     type Item = Result<StreamChunk, BlazenError>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {

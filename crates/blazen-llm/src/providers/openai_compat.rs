@@ -22,17 +22,18 @@
 //! | [`OpenAiCompatProvider::bedrock`] | AWS Bedrock (Mantle) | `anthropic.claude-sonnet-4-20250514-v1:0` |
 
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
 use futures_util::Stream;
-use reqwest::Client;
 use serde::Deserialize;
 use tracing::debug;
 
 use super::openai_format::{content_to_openai_value, parse_retry_after};
 use super::sse::{OaiResponse, SseParser};
 use crate::error::BlazenError;
+use crate::http::{HttpClient, HttpRequest, HttpResponse};
 use crate::traits::{ModelCapabilities, ModelInfo, ModelPricing, ModelRegistry};
 use crate::types::{
     CompletionRequest, CompletionResponse, Role, StreamChunk, TokenUsage, ToolCall,
@@ -88,10 +89,26 @@ pub struct OpenAiCompatConfig {
 ///
 /// Use the convenience constructors ([`Self::openai`], [`Self::openrouter`],
 /// etc.) or build a custom configuration with [`Self::new`].
-#[derive(Debug, Clone)]
 pub struct OpenAiCompatProvider {
     config: OpenAiCompatConfig,
-    client: Client,
+    client: Arc<dyn HttpClient>,
+}
+
+impl std::fmt::Debug for OpenAiCompatProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OpenAiCompatProvider")
+            .field("config", &self.config)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Clone for OpenAiCompatProvider {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            client: Arc::clone(&self.client),
+        }
+    }
 }
 
 impl OpenAiCompatProvider {
@@ -100,7 +117,7 @@ impl OpenAiCompatProvider {
     pub fn new(config: OpenAiCompatConfig) -> Self {
         Self {
             config,
-            client: Client::new(),
+            client: crate::ReqwestHttpClient::new().into_arc(),
         }
     }
 
@@ -301,6 +318,13 @@ impl OpenAiCompatProvider {
         self
     }
 
+    /// Use a custom HTTP client backend.
+    #[must_use]
+    pub fn with_http_client(mut self, client: Arc<dyn HttpClient>) -> Self {
+        self.client = client;
+        self
+    }
+
     // -----------------------------------------------------------------------
     // Internal helpers
     // -----------------------------------------------------------------------
@@ -423,74 +447,72 @@ impl OpenAiCompatProvider {
         body
     }
 
-    /// Apply authentication to a request builder.
-    fn apply_auth(&self, mut builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    /// Apply authentication and extra headers/query params to an [`HttpRequest`].
+    fn apply_config(&self, mut request: HttpRequest) -> HttpRequest {
+        // Auth
         match &self.config.auth_method {
             AuthMethod::Bearer => {
-                builder = builder.bearer_auth(&self.config.api_key);
+                request.headers.push((
+                    "Authorization".to_owned(),
+                    format!("Bearer {}", self.config.api_key),
+                ));
             }
             AuthMethod::ApiKeyHeader(header_name) => {
-                builder = builder.header(header_name.as_str(), &self.config.api_key);
+                request
+                    .headers
+                    .push((header_name.clone(), self.config.api_key.clone()));
             }
             AuthMethod::AzureApiKey => {
-                builder = builder.header("api-key", &self.config.api_key);
+                request
+                    .headers
+                    .push(("api-key".to_owned(), self.config.api_key.clone()));
             }
             AuthMethod::KeyPrefix => {
-                builder = builder.header("Authorization", format!("Key {}", self.config.api_key));
+                request.headers.push((
+                    "Authorization".to_owned(),
+                    format!("Key {}", self.config.api_key),
+                ));
             }
         }
 
-        // Apply extra headers
+        // Extra headers
         for (key, value) in &self.config.extra_headers {
-            builder = builder.header(key.as_str(), value.as_str());
+            request.headers.push((key.clone(), value.clone()));
         }
 
-        builder
+        // Query params
+        for (key, value) in &self.config.query_params {
+            request.query_params.push((key.clone(), value.clone()));
+        }
+
+        request
     }
 
-    /// Apply query parameters to a request builder.
-    fn apply_query_params(&self, mut builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        for (key, value) in &self.config.query_params {
-            builder = builder.query(&[(key.as_str(), value.as_str())]);
-        }
-        builder
+    /// Build an [`HttpRequest`] for the chat completions endpoint.
+    fn build_http_request(&self, body: &serde_json::Value) -> Result<HttpRequest, BlazenError> {
+        let url = format!("{}/chat/completions", self.config.base_url);
+        let request = HttpRequest::post(url).json_body(body)?;
+        Ok(self.apply_config(request))
     }
 
     /// Send a request and return the raw response, handling common HTTP errors.
-    async fn send_request(
-        &self,
-        body: &serde_json::Value,
-    ) -> Result<reqwest::Response, BlazenError> {
-        let url = format!("{}/chat/completions", self.config.base_url);
+    async fn send_request(&self, body: &serde_json::Value) -> Result<HttpResponse, BlazenError> {
+        let request = self.build_http_request(body)?;
+        let response = self.client.send(request).await?;
 
-        let builder = self.client.post(&url);
-        let builder = self.apply_auth(builder);
-        let builder = self.apply_query_params(builder);
-
-        let response = builder
-            .json(body)
-            .send()
-            .await
-            .map_err(|e| BlazenError::request(e.to_string()))?;
-
-        let status = response.status();
-        if status.is_success() {
+        if response.is_success() {
             return Ok(response);
         }
 
-        // Extract Retry-After before consuming the body.
-        let retry_after_ms = parse_retry_after(response.headers());
+        // Extract Retry-After before inspecting the body.
+        let retry_after_ms = parse_retry_after(&response.headers);
+        let error_body = response.text();
 
-        let error_body = response
-            .text()
-            .await
-            .unwrap_or_else(|_| String::from("<unable to read error body>"));
-
-        match status.as_u16() {
+        match response.status {
             401 => Err(BlazenError::auth("authentication failed")),
             404 => Err(BlazenError::model_not_found(error_body)),
             429 => Err(BlazenError::RateLimit { retry_after_ms }),
-            _ => Err(BlazenError::request(format!("HTTP {status}: {error_body}"))),
+            status => Err(BlazenError::request(format!("HTTP {status}: {error_body}"))),
         }
     }
 }
@@ -537,7 +559,6 @@ impl crate::traits::CompletionModel for OpenAiCompatProvider {
         let response = self.send_request(&body).await?;
         let oai: OaiResponse = response
             .json()
-            .await
             .map_err(|e| BlazenError::invalid_response(e.to_string()))?;
 
         let choice = oai
@@ -621,8 +642,18 @@ impl crate::traits::CompletionModel for OpenAiCompatProvider {
             "OpenAI-compat streaming request"
         );
 
-        let response = self.send_request(&body).await?;
-        let byte_stream = response.bytes_stream();
+        let http_request = self.build_http_request(&body)?;
+        let (status, headers, byte_stream) = self.client.send_streaming(http_request).await?;
+
+        if !(200..300).contains(&status) {
+            let retry_after_ms = parse_retry_after(&headers);
+            match status {
+                401 => return Err(BlazenError::auth("authentication failed")),
+                404 => return Err(BlazenError::model_not_found("model not found")),
+                429 => return Err(BlazenError::RateLimit { retry_after_ms }),
+                _ => return Err(BlazenError::request(format!("HTTP {status}"))),
+            }
+        }
 
         span.record(
             "duration_ms",
@@ -645,9 +676,6 @@ struct ModelsListResponse {
 }
 
 /// A model entry from the `/models` endpoint.
-///
-/// This struct is intentionally permissive (all `Option`) to handle the wide
-/// variety of response shapes across providers.
 #[derive(Debug, Deserialize)]
 struct ModelEntry {
     id: String,
@@ -698,29 +726,18 @@ impl ModelRegistry for OpenAiCompatProvider {
         }
 
         let url = format!("{}/models", self.config.base_url);
+        let request = self.apply_config(HttpRequest::get(&url));
+        let response = self.client.send(request).await?;
 
-        let builder = self.client.get(&url);
-        let builder = self.apply_auth(builder);
-        let builder = self.apply_query_params(builder);
-
-        let response = builder
-            .send()
-            .await
-            .map_err(|e| BlazenError::request(e.to_string()))?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let error_body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| String::from("<unable to read error body>"));
-            return Err(BlazenError::request(format!("HTTP {status}: {error_body}")));
+        if !response.is_success() {
+            let error_body = response.text();
+            return Err(BlazenError::request(format!(
+                "HTTP {}: {error_body}",
+                response.status
+            )));
         }
 
-        let body_text = response
-            .text()
-            .await
-            .map_err(|e| BlazenError::request(e.to_string()))?;
+        let body_text = response.text();
 
         // Try the standard `{ "data": [...] }` format first.
         if let Ok(list) = serde_json::from_str::<ModelsListResponse>(&body_text) {

@@ -61,6 +61,11 @@ pub mod agent;
 pub mod compute;
 pub mod error;
 pub mod events;
+pub mod http;
+#[cfg(feature = "reqwest")]
+mod http_reqwest;
+#[cfg(feature = "reqwest")]
+pub use http_reqwest::ReqwestHttpClient;
 pub mod media;
 pub mod providers;
 pub mod traits;

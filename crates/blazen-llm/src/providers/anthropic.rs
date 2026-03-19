@@ -12,17 +12,17 @@
 //!   etc.) rather than generic `data:` lines.
 
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use bytes::Bytes;
 use futures_util::Stream;
-use reqwest::Client;
 use serde::Deserialize;
 use tracing::{debug, warn};
 
 use super::openai_format::parse_retry_after;
 use crate::error::BlazenError;
+use crate::http::{ByteStream, HttpClient, HttpRequest, HttpResponse};
 use crate::types::{
     CompletionRequest, CompletionResponse, ContentPart, ImageContent, ImageSource, MessageContent,
     Role, StreamChunk, TokenUsage, ToolCall,
@@ -134,12 +134,31 @@ fn content_to_anthropic_value(content: &MessageContent) -> serde_json::Value {
 /// let provider = AnthropicProvider::new("sk-ant-...")
 ///     .with_model("claude-sonnet-4-20250514");
 /// ```
-#[derive(Debug, Clone)]
 pub struct AnthropicProvider {
-    client: Client,
+    client: Arc<dyn HttpClient>,
     api_key: String,
     base_url: String,
     default_model: String,
+}
+
+impl std::fmt::Debug for AnthropicProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AnthropicProvider")
+            .field("base_url", &self.base_url)
+            .field("default_model", &self.default_model)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Clone for AnthropicProvider {
+    fn clone(&self) -> Self {
+        Self {
+            client: Arc::clone(&self.client),
+            api_key: self.api_key.clone(),
+            base_url: self.base_url.clone(),
+            default_model: self.default_model.clone(),
+        }
+    }
 }
 
 impl AnthropicProvider {
@@ -148,7 +167,7 @@ impl AnthropicProvider {
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
-            client: Client::new(),
+            client: crate::ReqwestHttpClient::new().into_arc(),
             api_key: api_key.into(),
             base_url: "https://api.anthropic.com/v1".to_owned(),
             default_model: "claude-sonnet-4-20250514".to_owned(),
@@ -166,6 +185,13 @@ impl AnthropicProvider {
     #[must_use]
     pub fn with_model(mut self, model: impl Into<String>) -> Self {
         self.default_model = model.into();
+        self
+    }
+
+    /// Use a custom HTTP client backend.
+    #[must_use]
+    pub fn with_http_client(mut self, client: Arc<dyn HttpClient>) -> Self {
+        self.client = client;
         self
     }
 
@@ -288,42 +314,33 @@ impl AnthropicProvider {
         body
     }
 
-    /// Send a request to the Messages endpoint, handling common HTTP errors.
-    async fn send_request(
-        &self,
-        body: &serde_json::Value,
-    ) -> Result<reqwest::Response, BlazenError> {
+    /// Build an [`HttpRequest`] for the Anthropic Messages endpoint.
+    fn build_http_request(&self, body: &serde_json::Value) -> Result<HttpRequest, BlazenError> {
         let url = format!("{}/messages", self.base_url);
-
-        let response = self
-            .client
-            .post(&url)
+        HttpRequest::post(url)
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", ANTHROPIC_VERSION)
-            .header("content-type", "application/json")
-            .json(body)
-            .send()
-            .await
-            .map_err(|e| BlazenError::request(e.to_string()))?;
+            .json_body(body)
+    }
 
-        let status = response.status();
-        if status.is_success() {
+    /// Send a request to the Messages endpoint, handling common HTTP errors.
+    async fn send_request(&self, body: &serde_json::Value) -> Result<HttpResponse, BlazenError> {
+        let request = self.build_http_request(body)?;
+        let response = self.client.send(request).await?;
+
+        if response.is_success() {
             return Ok(response);
         }
 
-        // Extract Retry-After before consuming the body.
-        let retry_after_ms = parse_retry_after(response.headers());
+        // Extract Retry-After before inspecting the body.
+        let retry_after_ms = parse_retry_after(&response.headers);
+        let error_body = response.text();
 
-        let error_body = response
-            .text()
-            .await
-            .unwrap_or_else(|_| String::from("<unable to read error body>"));
-
-        match status.as_u16() {
+        match response.status {
             401 => Err(BlazenError::auth("authentication failed")),
             404 => Err(BlazenError::model_not_found(error_body)),
             429 => Err(BlazenError::RateLimit { retry_after_ms }),
-            _ => Err(BlazenError::request(format!("HTTP {status}: {error_body}"))),
+            status => Err(BlazenError::request(format!("HTTP {status}: {error_body}"))),
         }
     }
 }
@@ -479,7 +496,6 @@ impl crate::traits::CompletionModel for AnthropicProvider {
         let response = self.send_request(&body).await?;
         let anthropic: AnthropicResponse = response
             .json()
-            .await
             .map_err(|e| BlazenError::invalid_response(e.to_string()))?;
 
         // Extract text content and tool calls from content blocks.
@@ -560,8 +576,19 @@ impl crate::traits::CompletionModel for AnthropicProvider {
         let body = self.build_body(&request, true);
         debug!(model = %body["model"], "Anthropic streaming request");
 
-        let response = self.send_request(&body).await?;
-        let byte_stream = response.bytes_stream();
+        let http_request = self.build_http_request(&body)?;
+        let (status, headers, byte_stream) = self.client.send_streaming(http_request).await?;
+
+        if !(200..300).contains(&status) {
+            let retry_after_ms = parse_retry_after(&headers);
+            let error_body = String::from("streaming error");
+            match status {
+                401 => return Err(BlazenError::auth("authentication failed")),
+                404 => return Err(BlazenError::model_not_found(error_body)),
+                429 => return Err(BlazenError::RateLimit { retry_after_ms }),
+                _ => return Err(BlazenError::request(format!("HTTP {status}: {error_body}"))),
+            }
+        }
 
         span.record(
             "duration_ms",
@@ -583,8 +610,8 @@ impl crate::traits::CompletionModel for AnthropicProvider {
 /// Anthropic SSE uses typed events. Each SSE frame has an `event:` line
 /// followed by a `data:` line. We parse these pairs into [`StreamEvent`]
 /// variants and then map them to our provider-agnostic [`StreamChunk`].
-struct AnthropicSseParser<S> {
-    inner: S,
+struct AnthropicSseParser {
+    inner: ByteStream,
     buffer: String,
     /// Track in-progress tool use blocks by index.
     tool_blocks: Vec<ToolBlockState>,
@@ -598,8 +625,8 @@ struct ToolBlockState {
     json_buf: String,
 }
 
-impl<S> AnthropicSseParser<S> {
-    fn new(inner: S) -> Self {
+impl AnthropicSseParser {
+    fn new(inner: ByteStream) -> Self {
         Self {
             inner,
             buffer: String::new(),
@@ -608,10 +635,7 @@ impl<S> AnthropicSseParser<S> {
     }
 }
 
-impl<S> Stream for AnthropicSseParser<S>
-where
-    S: Stream<Item = Result<Bytes, reqwest::Error>> + Unpin + Send,
-{
+impl Stream for AnthropicSseParser {
     type Item = Result<StreamChunk, BlazenError>;
 
     fn poll_next(
@@ -748,7 +772,7 @@ fn parse_anthropic_event(
             } => {
                 match content_block {
                     ContentBlockStartPayload::Text { .. } => {
-                        // Text block start — nothing to emit yet.
+                        // Text block start -- nothing to emit yet.
                     }
                     ContentBlockStartPayload::ToolUse { id, name } => {
                         tool_blocks.push(ToolBlockState {
@@ -794,7 +818,7 @@ fn parse_anthropic_event(
             StreamEvent::Error { error } => {
                 return Some(Err(BlazenError::stream_error(error.message)));
             }
-            // Ping, MessageStart — skip.
+            // Ping, MessageStart -- skip.
             _ => {}
         }
     }

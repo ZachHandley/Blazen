@@ -15,13 +15,20 @@
 //!
 //! [`OpenAiCompatProvider`]: openai_compat::OpenAiCompatProvider
 
-// Shared SSE parser used by OpenAI-compatible, Azure, and Gemini providers.
+// Shared SSE parser used by OpenAI-compatible and Azure providers.
 // Enabled whenever any provider that needs it is active.
 #[cfg(any(feature = "openai", feature = "azure"))]
 pub(crate) mod sse;
 
-// Shared multimodal content helpers for OpenAI-compatible wire formats.
-#[cfg(any(feature = "openai", feature = "azure"))]
+// Shared multimodal content helpers and HTTP utilities for all providers.
+// The `parse_retry_after` helper is used by every provider.
+#[cfg(any(
+    feature = "openai",
+    feature = "azure",
+    feature = "anthropic",
+    feature = "gemini",
+    feature = "fal"
+))]
 pub(crate) mod openai_format;
 
 #[cfg(feature = "openai")]

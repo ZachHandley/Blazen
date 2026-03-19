@@ -22,13 +22,13 @@
 //! - [`Transcription`] for speech-to-text (Whisper)
 
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use chrono::Utc;
 use futures_util::Stream;
 use futures_util::stream;
-use reqwest::Client;
 use serde::Deserialize;
 use tracing::{debug, warn};
 
@@ -40,6 +40,7 @@ use crate::compute::{
     VideoGeneration, VideoRequest, VideoResult,
 };
 use crate::error::{BlazenError, ComputeErrorKind};
+use crate::http::{HttpClient, HttpRequest};
 use crate::media::{GeneratedAudio, GeneratedImage, GeneratedVideo, MediaOutput, MediaType};
 use crate::types::{
     CompletionRequest, CompletionResponse, MessageContent, RequestTiming, StreamChunk,
@@ -125,9 +126,8 @@ pub enum FalExecutionMode {
 /// let provider = FalProvider::new("fal-key-...")
 ///     .with_model("fal-ai/any-llm");
 /// ```
-#[derive(Debug, Clone)]
 pub struct FalProvider {
-    client: Client,
+    client: Arc<dyn HttpClient>,
     api_key: String,
     default_model: String,
     /// The underlying LLM model to use when proxying through `fal-ai/any-llm`.
@@ -135,12 +135,34 @@ pub struct FalProvider {
     execution_mode: FalExecutionMode,
 }
 
+impl std::fmt::Debug for FalProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FalProvider")
+            .field("default_model", &self.default_model)
+            .field("llm_model", &self.llm_model)
+            .field("execution_mode", &self.execution_mode)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Clone for FalProvider {
+    fn clone(&self) -> Self {
+        Self {
+            client: Arc::clone(&self.client),
+            api_key: self.api_key.clone(),
+            default_model: self.default_model.clone(),
+            llm_model: self.llm_model.clone(),
+            execution_mode: self.execution_mode.clone(),
+        }
+    }
+}
+
 impl FalProvider {
     /// Create a new fal.ai provider with the given API key.
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
-            client: Client::new(),
+            client: crate::ReqwestHttpClient::new().into_arc(),
             api_key: api_key.into(),
             default_model: "fal-ai/any-llm".to_owned(),
             llm_model: "anthropic/claude-sonnet-4.5".to_owned(),
@@ -174,13 +196,20 @@ impl FalProvider {
         self
     }
 
+    /// Use a custom HTTP client backend.
+    #[must_use]
+    pub fn with_http_client(mut self, client: Arc<dyn HttpClient>) -> Self {
+        self.client = client;
+        self
+    }
+
     // -----------------------------------------------------------------------
     // Auth helper
     // -----------------------------------------------------------------------
 
-    /// Apply fal.ai authentication (`Authorization: Key <key>`).
-    fn apply_auth(&self, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        builder.header("Authorization", format!("Key {}", self.api_key))
+    /// Apply fal.ai authentication (`Authorization: Key <key>`) to an [`HttpRequest`].
+    fn apply_auth(&self, request: HttpRequest) -> HttpRequest {
+        request.header("Authorization", format!("Key {}", self.api_key))
     }
 
     // -----------------------------------------------------------------------
@@ -264,24 +293,12 @@ impl FalProvider {
     // -----------------------------------------------------------------------
 
     /// Map an HTTP error response to the appropriate `BlazenError`.
-    fn map_http_error(
-        status: reqwest::StatusCode,
-        body: &str,
-        retry_after_ms: Option<u64>,
-    ) -> BlazenError {
-        match status.as_u16() {
+    fn map_http_error(status: u16, body: &str, retry_after_ms: Option<u64>) -> BlazenError {
+        match status {
             401 => BlazenError::auth("authentication failed"),
             429 => BlazenError::RateLimit { retry_after_ms },
             _ => BlazenError::request(format!("HTTP {status}: {body}")),
         }
-    }
-
-    /// Read the error body from a response, or return a fallback.
-    async fn read_error_body(response: reqwest::Response) -> String {
-        response
-            .text()
-            .await
-            .unwrap_or_else(|_| String::from("<unable to read error body>"))
     }
 
     // -----------------------------------------------------------------------
@@ -296,23 +313,21 @@ impl FalProvider {
         let model = self.resolve_fal_model();
         let url = format!("{FAL_SYNC_URL}/{model}");
 
-        let response = self
-            .apply_auth(self.client.post(&url))
-            .json(body)
-            .send()
-            .await
-            .map_err(|e| BlazenError::request(e.to_string()))?;
+        let request = self.apply_auth(HttpRequest::post(&url).json_body(body)?);
+        let response = self.client.send(request).await?;
 
-        let status = response.status();
-        if !status.is_success() {
-            let retry_after_ms = parse_retry_after(response.headers());
-            let error_body = Self::read_error_body(response).await;
-            return Err(Self::map_http_error(status, &error_body, retry_after_ms));
+        if !response.is_success() {
+            let retry_after_ms = parse_retry_after(&response.headers);
+            let error_body = response.text();
+            return Err(Self::map_http_error(
+                response.status,
+                &error_body,
+                retry_after_ms,
+            ));
         }
 
         response
             .json()
-            .await
             .map_err(|e| BlazenError::invalid_response(e.to_string()))
     }
 
@@ -329,24 +344,21 @@ impl FalProvider {
         let model = self.resolve_fal_model();
         let submit_url = format!("{FAL_QUEUE_URL}/{model}?fal_webhook={webhook_url}");
 
-        let submit_response = self
-            .apply_auth(self.client.post(&submit_url))
-            .json(body)
-            .send()
-            .await
-            .map_err(|e| BlazenError::request(e.to_string()))?;
+        let request = self.apply_auth(HttpRequest::post(&submit_url).json_body(body)?);
+        let response = self.client.send(request).await?;
 
-        let status = submit_response.status();
-        if !status.is_success() {
-            let error_body = Self::read_error_body(submit_response).await;
-            return Err(BlazenError::request(format!("HTTP {status}: {error_body}")));
+        if !response.is_success() {
+            let error_body = response.text();
+            return Err(BlazenError::request(format!(
+                "HTTP {}: {error_body}",
+                response.status
+            )));
         }
 
         // Webhook mode returns the queue submission response. The actual
         // result will be delivered to the webhook URL.
-        submit_response
+        response
             .json()
-            .await
             .map_err(|e| BlazenError::invalid_response(e.to_string()))
     }
 
@@ -366,23 +378,21 @@ impl FalProvider {
             submit_url = format!("{submit_url}?fal_webhook={wh}");
         }
 
-        let response = self
-            .apply_auth(self.client.post(&submit_url))
-            .json(body)
-            .send()
-            .await
-            .map_err(|e| BlazenError::request(e.to_string()))?;
+        let request = self.apply_auth(HttpRequest::post(&submit_url).json_body(body)?);
+        let response = self.client.send(request).await?;
 
-        let status = response.status();
-        if !status.is_success() {
-            let retry_after_ms = parse_retry_after(response.headers());
-            let error_body = Self::read_error_body(response).await;
-            return Err(Self::map_http_error(status, &error_body, retry_after_ms));
+        if !response.is_success() {
+            let retry_after_ms = parse_retry_after(&response.headers);
+            let error_body = response.text();
+            return Err(Self::map_http_error(
+                response.status,
+                &error_body,
+                retry_after_ms,
+            ));
         }
 
         response
             .json::<FalQueueSubmitResponse>()
-            .await
             .map_err(|e| BlazenError::Serialization(e.to_string()))
     }
 
@@ -394,14 +404,11 @@ impl FalProvider {
     ) -> Result<FalStatusResponse, BlazenError> {
         let status_url = format!("{FAL_QUEUE_URL}/{model}/requests/{request_id}/status");
 
-        let response = self
-            .apply_auth(self.client.get(&status_url))
-            .send()
-            .await
-            .map_err(|e| BlazenError::request(e.to_string()))?;
+        let request = self.apply_auth(HttpRequest::get(&status_url));
+        let response = self.client.send(request).await?;
 
-        if !response.status().is_success() {
-            let error_body = Self::read_error_body(response).await;
+        if !response.is_success() {
+            let error_body = response.text();
             return Err(BlazenError::request(format!(
                 "status poll failed: {error_body}"
             )));
@@ -409,7 +416,6 @@ impl FalProvider {
 
         response
             .json::<FalStatusResponse>()
-            .await
             .map_err(|e| BlazenError::Serialization(e.to_string()))
     }
 
@@ -421,14 +427,11 @@ impl FalProvider {
     ) -> Result<serde_json::Value, BlazenError> {
         let result_url = format!("{FAL_QUEUE_URL}/{model}/requests/{request_id}");
 
-        let response = self
-            .apply_auth(self.client.get(&result_url))
-            .send()
-            .await
-            .map_err(|e| BlazenError::request(e.to_string()))?;
+        let request = self.apply_auth(HttpRequest::get(&result_url));
+        let response = self.client.send(request).await?;
 
-        if !response.status().is_success() {
-            let error_body = Self::read_error_body(response).await;
+        if !response.is_success() {
+            let error_body = response.text();
             return Err(BlazenError::request(format!(
                 "result fetch failed: {error_body}"
             )));
@@ -436,7 +439,6 @@ impl FalProvider {
 
         response
             .json()
-            .await
             .map_err(|e| BlazenError::Serialization(e.to_string()))
     }
 
@@ -515,14 +517,11 @@ impl FalProvider {
 
     /// GET a URL and deserialize the response as [`FalStatusResponse`].
     async fn get_json_from_url(&self, url: &str) -> Result<FalStatusResponse, BlazenError> {
-        let response = self
-            .apply_auth(self.client.get(url))
-            .send()
-            .await
-            .map_err(|e| BlazenError::request(e.to_string()))?;
+        let request = self.apply_auth(HttpRequest::get(url));
+        let response = self.client.send(request).await?;
 
-        if !response.status().is_success() {
-            let error_body = Self::read_error_body(response).await;
+        if !response.is_success() {
+            let error_body = response.text();
             return Err(BlazenError::request(format!(
                 "status poll failed: {error_body}"
             )));
@@ -530,20 +529,16 @@ impl FalProvider {
 
         response
             .json::<FalStatusResponse>()
-            .await
             .map_err(|e| BlazenError::Serialization(e.to_string()))
     }
 
     /// GET a URL and deserialize the response as a generic JSON value.
     async fn get_json_value_from_url(&self, url: &str) -> Result<serde_json::Value, BlazenError> {
-        let response = self
-            .apply_auth(self.client.get(url))
-            .send()
-            .await
-            .map_err(|e| BlazenError::request(e.to_string()))?;
+        let request = self.apply_auth(HttpRequest::get(url));
+        let response = self.client.send(request).await?;
 
-        if !response.status().is_success() {
-            let error_body = Self::read_error_body(response).await;
+        if !response.is_success() {
+            let error_body = response.text();
             return Err(BlazenError::request(format!(
                 "result fetch failed: {error_body}"
             )));
@@ -551,7 +546,6 @@ impl FalProvider {
 
         response
             .json()
-            .await
             .map_err(|e| BlazenError::Serialization(e.to_string()))
     }
 
@@ -953,25 +947,22 @@ impl ComputeProvider for FalProvider {
     async fn cancel(&self, job: &JobHandle) -> Result<(), BlazenError> {
         let cancel_url = format!("{FAL_QUEUE_URL}/{}/requests/{}/cancel", job.model, job.id);
 
-        let response = self
-            .apply_auth(self.client.put(&cancel_url))
-            .send()
-            .await
-            .map_err(|e| BlazenError::request(e.to_string()))?;
+        let request = self.apply_auth(HttpRequest::put(&cancel_url));
+        let response = self.client.send(request).await?;
 
-        let status = response.status();
-        if status.is_success() || status.as_u16() == 202 {
+        let status = response.status;
+        if (200..300).contains(&status) || status == 202 {
             debug!(request_id = %job.id, "fal.ai job cancellation requested");
             return Ok(());
         }
 
         // 400 = ALREADY_COMPLETED, which is fine.
-        if status.as_u16() == 400 {
+        if status == 400 {
             debug!(request_id = %job.id, "fal.ai job already completed, cancel is a no-op");
             return Ok(());
         }
 
-        let error_body = Self::read_error_body(response).await;
+        let error_body = response.text();
         Err(BlazenError::request(format!(
             "cancel failed (HTTP {status}): {error_body}"
         )))
