@@ -86,7 +86,7 @@ jobs:
 
       - name: Build WASM SDK (verify compilation)
         run: |
-          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+          cargo install wasm-pack
           cd crates/blazen-wasm-sdk
           wasm-pack build --target bundler
 
@@ -341,7 +341,7 @@ jobs:
 
       - name: Install wasm-pack
         if: steps.check.outputs.completed != 'true'
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+        run: cargo install wasm-pack
 
       - name: Stamp versions
         if: steps.check.outputs.completed != 'true'
