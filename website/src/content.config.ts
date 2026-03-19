@@ -6,7 +6,7 @@ const docs = defineCollection({
   schema: z.object({
     title: z.string(),
     description: z.string(),
-    language: z.enum(["rust", "python", "node"]).optional(),
+    language: z.enum(["rust", "python", "node", "wasm"]).optional(),
     section: z.enum(["getting-started", "guides", "api", "examples"]),
     order: z.number(),
   }),

@@ -1,12 +1,13 @@
 <p align="center">
   <h1 align="center">Blazen</h1>
-  <p align="center">Event-driven AI workflow engine with first-class LLM integration.<br/>Written in Rust. Native bindings for Python and TypeScript.</p>
+  <p align="center">Event-driven AI workflow engine with first-class LLM integration.<br/>Written in Rust. Native bindings for Python, TypeScript, and WebAssembly.</p>
 </p>
 
 <p align="center">
   <a href="https://crates.io/crates/blazen"><img alt="crates.io" src="https://img.shields.io/crates/v/blazen.svg?style=flat-square&logo=rust&label=crates.io" /></a>
   <a href="https://pypi.org/project/blazen/"><img alt="PyPI" src="https://img.shields.io/pypi/v/blazen.svg?style=flat-square&logo=python&label=PyPI" /></a>
   <a href="https://www.npmjs.com/package/blazen"><img alt="npm" src="https://img.shields.io/npm/v/blazen.svg?style=flat-square&logo=npm&label=npm" /></a>
+  <a href="https://www.npmjs.com/package/@blazen/sdk"><img alt="npm wasm" src="https://img.shields.io/npm/v/@blazen/sdk.svg?style=flat-square&logo=webassembly&label=wasm" /></a>
   <a href="https://github.com/ZachHandley/Blazen/blob/main/LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square" /></a>
 </p>
 
@@ -19,6 +20,7 @@
 - **Multi-workflow pipelines** -- Orchestrate sequential and parallel stages with pause/resume and per-workflow streaming
 - **Branching and fan-out** -- Conditional branching, parallel fan-out, and real-time streaming within workflows
 - **Native Python and TypeScript bindings** -- Python via PyO3/maturin, Node.js/TypeScript via napi-rs. Not wrappers around HTTP -- actual compiled Rust running in-process
+- **WebAssembly SDK** -- Run Blazen in the browser, edge workers, Deno, and embedded runtimes via `@blazen/sdk`. Same Rust core compiled to WASM
 - **Prompt management** -- Versioned prompt templates with `{{variable}}` interpolation, YAML/JSON registries, and multimodal attachments
 - **Persistence** -- Embedded persistence via redb, or bring-your-own via callbacks. Pause a workflow, serialize state to JSON, resume later
 - **Observability** -- OpenTelemetry, Prometheus metrics, and Langfuse integration via the telemetry crate
@@ -42,6 +44,12 @@ pip install blazen   # also works
 
 ```bash
 pnpm add blazen
+```
+
+**WebAssembly** (browser, edge, Deno, Cloudflare Workers):
+
+```bash
+npm install @blazen/sdk
 ```
 
 ## Quick Start
@@ -276,6 +284,8 @@ const result = await handler.result();
 | `blazen-telemetry` | Observability: OpenTelemetry spans, Prometheus metrics, Langfuse, and LLM call history |
 | `blazen-py` | Python bindings via PyO3/maturin (published to PyPI as `blazen`) |
 | `blazen-node` | Node.js/TypeScript bindings via napi-rs (published to npm as `blazen`) |
+| [`blazen-wasm-sdk`](crates/blazen-wasm-sdk/) | TypeScript/JS client SDK via WebAssembly (published to npm as `@blazen/sdk`) |
+| [`blazen-wasm`](crates/blazen-wasm/) | WASIp2 WASM component for ZLayer edge deployment |
 | `blazen-cli` | CLI tool for scaffolding projects (`blazen init`) |
 
 ## Supported LLM Providers

@@ -1,0 +1,217 @@
+---
+title: "WASM Examples"
+description: "Example applications using Blazen WebAssembly SDK"
+language: "wasm"
+section: "examples"
+order: 4
+---
+
+# WASM Examples
+
+Three complete examples that demonstrate real-world usage of the Blazen WASM SDK.
+
+---
+
+## Browser Chat App
+
+A minimal chat interface that runs Blazen entirely in the browser. Tokens stream into the DOM as they arrive.
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+  <div id="chat"></div>
+  <input id="input" placeholder="Type a message..." />
+  <button id="send">Send</button>
+
+  <script type="module">
+    import init, { CompletionModel, ChatMessage } from '@blazen/sdk';
+
+    await init();
+
+    const chat = document.getElementById('chat');
+    const input = document.getElementById('input');
+    const send = document.getElementById('send');
+    const messages = [];
+
+    // In production, proxy through your backend -- never expose keys client-side
+    const model = CompletionModel.openrouter('your-proxy-token');
+
+    send.addEventListener('click', async () => {
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+
+      messages.push(ChatMessage.user(text));
+      const userDiv = document.createElement('div');
+      userDiv.textContent = `You: ${text}`;
+      chat.appendChild(userDiv);
+
+      const assistantDiv = document.createElement('div');
+      assistantDiv.textContent = 'Assistant: ';
+      chat.appendChild(assistantDiv);
+
+      await model.stream(messages, (chunk) => {
+        if (chunk.delta) {
+          assistantDiv.textContent += chunk.delta;
+        }
+      });
+
+      messages.push(ChatMessage.assistant(assistantDiv.textContent.replace('Assistant: ', '')));
+    });
+  </script>
+</body>
+</html>
+```
+
+---
+
+## Node.js Serverless Function
+
+A serverless API endpoint that uses the WASM SDK with tool calling. Deploy to any platform that supports Node.js (Vercel, AWS Lambda, etc.).
+
+```typescript
+import init, { CompletionModel, ChatMessage, runAgent } from '@blazen/sdk';
+
+let initialized = false;
+
+const tools = [
+  {
+    name: 'lookupOrder',
+    description: 'Look up an order by ID',
+    parameters: {
+      type: 'object',
+      properties: { orderId: { type: 'string' } },
+      required: ['orderId'],
+    },
+  },
+  {
+    name: 'cancelOrder',
+    description: 'Cancel an order by ID',
+    parameters: {
+      type: 'object',
+      properties: {
+        orderId: { type: 'string' },
+        reason: { type: 'string' },
+      },
+      required: ['orderId'],
+    },
+  },
+];
+
+async function toolHandler(toolName: string, args: Record<string, unknown>) {
+  switch (toolName) {
+    case 'lookupOrder':
+      // Replace with your database call
+      return { orderId: args.orderId, status: 'shipped', eta: '2026-03-21' };
+    case 'cancelOrder':
+      return { orderId: args.orderId, cancelled: true };
+    default:
+      throw new Error(`Unknown tool: ${toolName}`);
+  }
+}
+
+export default async function handler(req: Request): Promise<Response> {
+  if (!initialized) {
+    await init();
+    initialized = true;
+  }
+
+  const { message } = await req.json();
+  const model = CompletionModel.openai(process.env.OPENAI_API_KEY!);
+
+  const result = await runAgent(
+    model,
+    [
+      ChatMessage.system('You are a customer support agent. Use tools to look up and manage orders.'),
+      ChatMessage.user(message),
+    ],
+    tools,
+    toolHandler,
+    { maxIterations: 5 }
+  );
+
+  return new Response(JSON.stringify({
+    reply: result.response.content,
+    iterations: result.iterations,
+  }), {
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+```
+
+---
+
+## Tauri Desktop App
+
+Use the WASM SDK inside a Tauri v2 app to run AI features locally without a server.
+
+```typescript
+// src/lib/ai.ts
+import init, { CompletionModel, ChatMessage, Workflow } from '@blazen/sdk';
+
+let ready = false;
+
+export async function ensureInit() {
+  if (!ready) {
+    await init();
+    ready = true;
+  }
+}
+
+export async function summarize(text: string, apiKey: string): Promise<string> {
+  await ensureInit();
+
+  const wf = new Workflow('summarizer');
+
+  wf.addStep('summarize', ['blazen::StartEvent'], async (event, ctx) => {
+    const model = CompletionModel.anthropic(apiKey, 'claude-sonnet-4-20250514');
+    const response = await model.complete([
+      ChatMessage.system('Summarize the following text concisely.'),
+      ChatMessage.user(event.text),
+    ]);
+    return {
+      type: 'blazen::StopEvent',
+      result: { summary: response.content },
+    };
+  });
+
+  const result = await wf.run({ text });
+  return result.data.summary;
+}
+
+export async function chat(
+  messages: Array<{ role: string; content: string }>,
+  apiKey: string,
+  onChunk: (text: string) => void
+): Promise<void> {
+  await ensureInit();
+
+  const model = CompletionModel.openai(apiKey);
+  const chatMessages = messages.map((m) =>
+    m.role === 'user' ? ChatMessage.user(m.content) : ChatMessage.assistant(m.content)
+  );
+
+  await model.stream(chatMessages, (chunk) => {
+    if (chunk.delta) onChunk(chunk.delta);
+  });
+}
+```
+
+```typescript
+// src/App.svelte (or your framework of choice)
+import { chat } from './lib/ai';
+
+let output = '';
+
+async function handleSend() {
+  output = '';
+  await chat(
+    [{ role: 'user', content: 'Explain Tauri in one paragraph.' }],
+    apiKey,
+    (chunk) => { output += chunk; }
+  );
+}
+```
+
+The WASM binary runs inside the webview's JavaScript context. No Tauri command bridge is needed for AI calls -- only for filesystem or OS-level operations.

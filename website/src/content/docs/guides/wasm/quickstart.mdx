@@ -1,0 +1,90 @@
+---
+title: "WASM Quickstart"
+description: "Use Blazen in the browser or Node.js via WebAssembly"
+language: "wasm"
+section: "guides"
+order: 1
+---
+
+## What is blazen-wasm-sdk?
+
+The Blazen WebAssembly SDK is the core Rust library compiled to WASM. It runs the same completion, streaming, agent, and workflow logic as the native Rust crate -- directly in the browser or in any JavaScript runtime that supports WebAssembly (Node.js, Deno, Bun, Cloudflare Workers).
+
+The package is published as `@blazen/sdk` on npm.
+
+## Installation
+
+```bash
+npm install @blazen/sdk
+```
+
+Or with pnpm/yarn:
+
+```bash
+pnpm add @blazen/sdk
+yarn add @blazen/sdk
+```
+
+## Basic usage
+
+Initialize the WASM module, then use `CompletionModel` and `ChatMessage` the same way you would in the Node.js SDK:
+
+```typescript
+import init, { CompletionModel, ChatMessage } from '@blazen/sdk';
+
+await init();
+
+const model = CompletionModel.openrouter('your-key');
+const response = await model.complete([ChatMessage.user('Hello!')]);
+console.log(response.content);
+```
+
+`init()` loads and instantiates the WASM binary. Call it once before using any other export. In most bundlers (Vite, webpack 5, etc.) the binary is resolved automatically.
+
+## Streaming
+
+Stream tokens as they arrive using `model.stream()`:
+
+```typescript
+import init, { CompletionModel, ChatMessage } from '@blazen/sdk';
+
+await init();
+
+const model = CompletionModel.openai('your-key');
+
+await model.stream(
+  [ChatMessage.user('Write a haiku about WebAssembly')],
+  (chunk) => {
+    if (chunk.delta) {
+      document.getElementById('output').textContent += chunk.delta;
+    }
+  }
+);
+```
+
+Each chunk has the shape `{ delta?: string, finishReason?: string, toolCalls: ToolCall[] }`.
+
+## Completion options
+
+Pass options like `temperature` and `maxTokens` through `completeWithOptions()`:
+
+```typescript
+const response = await model.completeWithOptions(
+  [ChatMessage.user('Explain WASM in one sentence.')],
+  { temperature: 0.3, maxTokens: 100 }
+);
+```
+
+## API key security
+
+WASM runs client-side in the browser. Never embed raw API keys in frontend code shipped to users. Common strategies:
+
+- **Proxy server** -- route requests through your own backend that injects the key.
+- **Short-lived tokens** -- issue scoped, time-limited tokens from your server.
+- **Server-side only** -- run the WASM SDK in Node.js / Deno / edge functions where keys stay secret.
+
+## Next steps
+
+- Build multi-step pipelines with [WASM Workflows](/docs/guides/wasm/workflows).
+- Add tool calling with the [WASM Agent](/docs/guides/wasm/agent).
+- Ship to production with the [Edge Deployment](/docs/guides/wasm/deployment) guide.

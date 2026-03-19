@@ -1,0 +1,148 @@
+---
+title: "WASM Agent"
+description: "Run AI agents with tool calling in WebAssembly"
+language: "wasm"
+section: "guides"
+order: 3
+---
+
+## Overview
+
+The `runAgent` function executes an agentic tool-calling loop entirely within the WASM module. The model decides which tools to call, the WASM runtime invokes your JavaScript handler functions, feeds the results back, and repeats until the model finishes or `maxIterations` is reached.
+
+## Basic agent
+
+```typescript
+import init, { CompletionModel, ChatMessage, runAgent } from '@blazen/sdk';
+
+await init();
+
+const model = CompletionModel.openai('your-key');
+
+const tools = [
+  {
+    name: 'getWeather',
+    description: 'Get the current weather for a city',
+    parameters: {
+      type: 'object',
+      properties: { city: { type: 'string' } },
+      required: ['city'],
+    },
+  },
+];
+
+const result = await runAgent(
+  model,
+  [ChatMessage.user('What is the weather in Tokyo?')],
+  tools,
+  async (toolName, args) => {
+    if (toolName === 'getWeather') {
+      return { temp: 22, condition: 'cloudy', city: args.city };
+    }
+    throw new Error(`Unknown tool: ${toolName}`);
+  }
+);
+
+console.log(result.response.content);
+console.log(`Iterations: ${result.iterations}`);
+```
+
+## Tool handlers
+
+The fourth argument to `runAgent` is a JavaScript async function. It receives:
+
+- `toolName` -- the name of the tool the model wants to call.
+- `args` -- parsed JSON arguments matching the tool's parameter schema.
+
+Return any JSON-serializable value. The WASM runtime serializes it back into the conversation as a tool result message.
+
+```typescript
+async function toolHandler(toolName: string, args: Record<string, unknown>) {
+  switch (toolName) {
+    case 'search':
+      return await fetch(`/api/search?q=${args.query}`).then(r => r.json());
+    case 'calculate':
+      return { result: eval(args.expression as string) };
+    default:
+      throw new Error(`Unknown tool: ${toolName}`);
+  }
+}
+```
+
+## Agent options
+
+Pass an options object as the fifth argument:
+
+```typescript
+const result = await runAgent(model, messages, tools, handler, {
+  maxIterations: 5,
+  systemPrompt: 'You are a helpful research assistant.',
+  temperature: 0.3,
+  maxTokens: 1000,
+  addFinishTool: true,
+});
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `maxIterations` | `number` | `10` | Maximum tool-calling rounds |
+| `systemPrompt` | `string` | -- | System prompt prepended to the conversation |
+| `temperature` | `number` | -- | Sampling temperature |
+| `maxTokens` | `number` | -- | Max tokens per completion call |
+| `addFinishTool` | `boolean` | `false` | Add a built-in "finish" tool the model can call to signal completion |
+
+## Structured output
+
+Combine tool calling with a single-purpose tool to extract structured data:
+
+```typescript
+const extractTools = [
+  {
+    name: 'extractContact',
+    description: 'Extract contact information from text',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        email: { type: 'string' },
+        phone: { type: 'string' },
+      },
+      required: ['name'],
+    },
+  },
+];
+
+let extracted = null;
+
+const result = await runAgent(
+  model,
+  [ChatMessage.user('Extract: John Doe, john@example.com, 555-1234')],
+  extractTools,
+  async (toolName, args) => {
+    extracted = args;
+    return 'Extracted successfully.';
+  },
+  { maxIterations: 1 }
+);
+
+console.log(extracted);
+// { name: "John Doe", email: "john@example.com", phone: "555-1234" }
+```
+
+## Agent result
+
+`runAgent` resolves with an `AgentResult`:
+
+```typescript
+interface AgentResult {
+  response: CompletionResponse; // Final completion response
+  messages: object[];           // Full message history
+  iterations: number;           // Number of tool-calling iterations
+  totalCost?: number;           // Aggregated cost in USD
+}
+```
+
+## Next steps
+
+- Combine agents with workflows in the [WASM Workflows](/docs/guides/wasm/workflows) guide.
+- Deploy to edge platforms with the [Edge Deployment](/docs/guides/wasm/deployment) guide.

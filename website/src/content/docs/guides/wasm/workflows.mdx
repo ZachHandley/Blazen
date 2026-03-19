@@ -1,0 +1,112 @@
+---
+title: "WASM Workflows"
+description: "Run Blazen workflows entirely in WebAssembly"
+language: "wasm"
+section: "guides"
+order: 2
+---
+
+## Overview
+
+Blazen workflows run natively inside the WASM module. Steps, events, and the context store all execute locally -- no server round-trips for orchestration. Step handlers are plain JavaScript async functions that the WASM runtime calls back into.
+
+## Creating a workflow
+
+```typescript
+import init, { Workflow, ChatMessage, CompletionModel } from '@blazen/sdk';
+
+await init();
+
+const wf = new Workflow('summarizer');
+
+wf.addStep('fetch_text', ['blazen::StartEvent'], async (event, ctx) => {
+  await ctx.set('source', event.url);
+  const text = await fetch(event.url).then(r => r.text());
+  return { type: 'SummarizeEvent', text };
+});
+
+wf.addStep('summarize', ['SummarizeEvent'], async (event, ctx) => {
+  const model = CompletionModel.openrouter(event.apiKey);
+  const response = await model.complete([
+    ChatMessage.system('Summarize the following text in 2-3 sentences.'),
+    ChatMessage.user(event.text),
+  ]);
+  return {
+    type: 'blazen::StopEvent',
+    result: { summary: response.content },
+  };
+});
+
+const result = await wf.run({ url: 'https://example.com/article', apiKey: 'your-key' });
+console.log(result.data.summary);
+```
+
+## Event-driven architecture
+
+Events are plain objects with a `type` field. The WASM event router dispatches each event to the step whose `eventTypes` list includes that type -- identical to the Rust and Node.js SDKs.
+
+Built-in event types:
+
+- `"blazen::StartEvent"` -- emitted when the workflow begins. The object passed to `wf.run()` is merged onto it.
+- `"blazen::StopEvent"` -- returning this from a step ends the workflow. Attach your output to the `result` property.
+
+## Context
+
+The context object lets steps share state:
+
+```typescript
+wf.addStep('store', ['blazen::StartEvent'], async (event, ctx) => {
+  await ctx.set('user', event.name);
+  return { type: 'NextEvent' };
+});
+
+wf.addStep('read', ['NextEvent'], async (event, ctx) => {
+  const user = await ctx.get('user');
+  return { type: 'blazen::StopEvent', result: { user } };
+});
+```
+
+`ctx.set()` and `ctx.get()` are async. Binary data is supported via `ctx.setBytes()` and `ctx.getBytes()`.
+
+## Streaming events
+
+Publish progress events to external consumers with `ctx.writeEventToStream()`:
+
+```typescript
+wf.addStep('process', ['blazen::StartEvent'], async (event, ctx) => {
+  for (let i = 0; i < 5; i++) {
+    await ctx.writeEventToStream({ type: 'Progress', step: i });
+  }
+  return { type: 'blazen::StopEvent', result: { done: true } };
+});
+
+const result = await wf.runStreaming({}, (event) => {
+  console.log(`Progress: step ${event.step}`);
+});
+```
+
+## Branching
+
+Return an array of events to fan out to multiple steps:
+
+```typescript
+wf.addStep('classify', ['blazen::StartEvent'], async (event, ctx) => {
+  return [
+    { type: 'PositiveEvent', text: event.text },
+    { type: 'NegativeEvent', text: event.text },
+  ];
+});
+```
+
+## Timeouts
+
+Set a maximum execution time with `setTimeout()`:
+
+```typescript
+wf.setTimeout(30); // 30 seconds
+```
+
+## Next steps
+
+- Add tool-calling agents to your workflows with the [WASM Agent](/docs/guides/wasm/agent) guide.
+- Deploy workflows to the edge with the [Edge Deployment](/docs/guides/wasm/deployment) guide.

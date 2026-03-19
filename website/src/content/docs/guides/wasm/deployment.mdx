@@ -1,0 +1,151 @@
+---
+title: "Edge Deployment"
+description: "Deploy Blazen as a WASM component on ZLayer or edge platforms"
+language: "wasm"
+section: "guides"
+order: 4
+---
+
+## Overview
+
+`blazen-wasm` is the deployment-ready WASM component designed for ZLayer and other edge platforms. It packages your Blazen workflows and agents into a single WASM binary that runs at the edge with minimal cold-start overhead.
+
+## ZImagefile
+
+A `ZImagefile` defines the build and deployment spec for your WASM component, similar to a Dockerfile:
+
+```
+FROM blazen-wasm:latest
+
+COPY ./src /app/src
+COPY ./package.json /app/package.json
+
+RUN npm install --production
+RUN blazen-wasm build --entry /app/src/index.ts --output /app/dist/handler.wasm
+
+EXPOSE 8080
+ENTRYPOINT ["blazen-wasm", "serve", "--port", "8080"]
+```
+
+## Project structure
+
+A typical edge deployment looks like this:
+
+```
+my-blazen-edge/
+  src/
+    index.ts        # Entry point -- exports the request handler
+    tools.ts        # Tool handler implementations
+  ZImagefile
+  package.json
+```
+
+## Entry point
+
+Your entry point exports a handler function that receives HTTP requests:
+
+```typescript
+import init, { CompletionModel, ChatMessage, runAgent } from '@blazen/sdk';
+
+await init();
+
+export async function handler(request: Request): Promise<Response> {
+  const { prompt } = await request.json();
+  const model = CompletionModel.openrouter(getApiKey());
+
+  const result = await runAgent(
+    model,
+    [ChatMessage.user(prompt)],
+    tools,
+    toolHandler,
+    { maxIterations: 5 }
+  );
+
+  return new Response(JSON.stringify({ content: result.response.content }), {
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+```
+
+## API key strategies
+
+Edge functions need access to provider API keys without exposing them to clients.
+
+### Secrets (recommended)
+
+Store keys as platform secrets. ZLayer injects them as environment variables at runtime:
+
+```bash
+zlayer secret set OPENAI_API_KEY sk-...
+```
+
+```typescript
+function getApiKey(): string {
+  return process.env.OPENAI_API_KEY!;
+}
+```
+
+### Encrypted config
+
+Bundle an encrypted config file and decrypt at startup using a platform-provided key:
+
+```typescript
+import { decrypt } from './crypto';
+
+const config = decrypt(await Deno.readFile('./config.enc'), process.env.DECRYPT_KEY!);
+const apiKey = JSON.parse(config).openaiKey;
+```
+
+### Proxy
+
+Route all LLM requests through a central proxy that injects keys server-side. The edge function never sees the raw key:
+
+```typescript
+const model = CompletionModel.custom('https://proxy.yourcompany.com/v1', 'edge-token');
+```
+
+### Runtime injection
+
+For development and staging, pass keys at request time (never in production):
+
+```typescript
+const apiKey = request.headers.get('X-API-Key');
+```
+
+## Deploying to ZLayer
+
+```bash
+# Build the WASM component
+zlayer build
+
+# Deploy
+zlayer deploy --name my-blazen-agent --region us-east-1
+
+# Check status
+zlayer status my-blazen-agent
+```
+
+ZLayer handles TLS termination, auto-scaling, and geographic routing.
+
+## Scaling
+
+WASM components on ZLayer scale to zero by default and spin up in under 5ms. Key considerations:
+
+- **Cold start** -- the WASM binary is pre-compiled to native code at deploy time. No JIT warmup.
+- **Memory** -- each instance gets a dedicated linear memory. Default limit is 256 MB, configurable in the ZImagefile.
+- **Concurrency** -- each instance handles one request at a time. ZLayer spawns additional instances automatically.
+- **Regions** -- deploy to multiple regions with `--region us-east-1,eu-west-1,ap-northeast-1`.
+
+## Other edge platforms
+
+The `@blazen/sdk` WASM module works on any platform that supports WebAssembly:
+
+- **Cloudflare Workers** -- import the SDK and call `init()` in your worker entry.
+- **Vercel Edge Functions** -- use the SDK in an edge-runtime function.
+- **Deno Deploy** -- import from npm and call `init()`.
+- **Fastly Compute** -- compile the Rust crate directly to `wasm32-wasi`.
+
+## Next steps
+
+- See the full [WASM API Reference](/docs/api/wasm) for all available exports.
+- Browse [WASM Examples](/docs/examples/wasm) for complete runnable projects.

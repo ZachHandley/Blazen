@@ -1,0 +1,396 @@
+---
+title: "WASM API Reference"
+description: "Complete API reference for the Blazen WebAssembly SDK"
+language: "wasm"
+section: "api"
+order: 4
+---
+
+## init()
+
+Initialize the WASM module. Must be called once before using any other export.
+
+```typescript
+import init from '@blazen/sdk';
+
+await init();
+```
+
+Returns a `Promise<void>`. Subsequent calls are no-ops.
+
+---
+
+## CompletionModel
+
+A chat completion model. Created via static factory methods for each provider.
+
+### Provider Factory Methods
+
+All providers accept an API key and an optional model override. If `model` is omitted, the provider's default model is used.
+
+| Method | Signature |
+|---|---|
+| `CompletionModel.openai` | `(apiKey: string, model?: string)` |
+| `CompletionModel.anthropic` | `(apiKey: string, model?: string)` |
+| `CompletionModel.gemini` | `(apiKey: string, model?: string)` |
+| `CompletionModel.azure` | `(apiKey: string, resourceName: string, deploymentName: string)` |
+| `CompletionModel.fal` | `(apiKey: string, model?: string)` |
+| `CompletionModel.openrouter` | `(apiKey: string, model?: string)` |
+| `CompletionModel.groq` | `(apiKey: string, model?: string)` |
+| `CompletionModel.together` | `(apiKey: string, model?: string)` |
+| `CompletionModel.mistral` | `(apiKey: string, model?: string)` |
+| `CompletionModel.deepseek` | `(apiKey: string, model?: string)` |
+| `CompletionModel.fireworks` | `(apiKey: string, model?: string)` |
+| `CompletionModel.perplexity` | `(apiKey: string, model?: string)` |
+| `CompletionModel.xai` | `(apiKey: string, model?: string)` |
+| `CompletionModel.cohere` | `(apiKey: string, model?: string)` |
+| `CompletionModel.bedrock` | `(apiKey: string, region: string, model?: string)` |
+
+```typescript
+const model = CompletionModel.openai('sk-...');
+const claude = CompletionModel.anthropic('sk-ant-...', 'claude-sonnet-4-20250514');
+const gemini = CompletionModel.gemini('AIza...', 'gemini-2.5-flash');
+```
+
+### Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `.modelId` | `string` | The model identifier string |
+
+### `await model.complete(messages: ChatMessage[]): CompletionResponse`
+
+Perform a chat completion.
+
+```typescript
+const response = await model.complete([
+  ChatMessage.system('You are a helpful assistant.'),
+  ChatMessage.user('What is 2 + 2?'),
+]);
+console.log(response.content);
+```
+
+### `await model.completeWithOptions(messages: ChatMessage[], options: CompletionOptions): CompletionResponse`
+
+Perform a chat completion with additional options.
+
+```typescript
+const response = await model.completeWithOptions(
+  [ChatMessage.user('Write a haiku about WASM.')],
+  { temperature: 0.7, maxTokens: 100 }
+);
+```
+
+### `await model.stream(messages: ChatMessage[], onChunk: (chunk) => void): void`
+
+Stream a chat completion. The callback receives each chunk as it arrives.
+
+```typescript
+await model.stream(
+  [ChatMessage.user('Tell me a story')],
+  (chunk) => {
+    if (chunk.delta) process.stdout.write(chunk.delta);
+  }
+);
+```
+
+Each chunk has the shape:
+
+```typescript
+{
+  delta?: string;              // Text content delta
+  finishReason?: string;       // Set on the final chunk
+  toolCalls: ToolCall[];       // Tool calls, if any
+}
+```
+
+### `await model.streamWithOptions(messages: ChatMessage[], onChunk: (chunk) => void, options: CompletionOptions): void`
+
+Stream a chat completion with additional options.
+
+---
+
+## ChatMessage
+
+A class for building typed chat messages.
+
+### Static Factory Methods
+
+| Method | Description |
+|---|---|
+| `ChatMessage.system(content: string)` | Create a system message |
+| `ChatMessage.user(content: string)` | Create a user message |
+| `ChatMessage.assistant(content: string)` | Create an assistant message |
+| `ChatMessage.tool(content: string)` | Create a tool result message |
+| `ChatMessage.userImageUrl(text: string, url: string, mediaType?: string)` | User message with text and an image URL |
+| `ChatMessage.userImageBase64(text: string, data: string, mediaType: string)` | User message with text and a base64-encoded image |
+| `ChatMessage.userParts(parts: ContentPart[])` | User message from an explicit list of content parts |
+
+```typescript
+const msg = ChatMessage.user('Hello');
+const sys = ChatMessage.system('You are a helpful assistant.');
+const img = ChatMessage.userImageUrl('Describe this:', 'https://example.com/photo.jpg');
+```
+
+### Constructor
+
+```typescript
+new ChatMessage({ role?: string, content?: string, parts?: ContentPart[] })
+```
+
+### Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `.role` | `string` | `"system"`, `"user"`, `"assistant"`, or `"tool"` |
+| `.content` | `string \| undefined` | The text content of the message |
+
+---
+
+## CompletionResponse
+
+Returned by `model.complete()` and `model.completeWithOptions()`.
+
+```typescript
+interface CompletionResponse {
+  content?: string;                // The generated text
+  toolCalls: ToolCall[];           // Tool calls requested by the model
+  usage?: TokenUsage;              // Token usage statistics
+  model: string;                   // Model name used
+  finishReason?: string;           // "stop", "tool_calls", etc.
+  cost?: number;                   // Cost in USD
+  timing?: RequestTiming;          // Request timing breakdown
+  metadata: object;                // Raw provider-specific metadata
+}
+```
+
+---
+
+## CompletionOptions
+
+Options for `completeWithOptions()` and `streamWithOptions()`.
+
+```typescript
+interface CompletionOptions {
+  temperature?: number;        // Sampling temperature (0.0 - 2.0)
+  maxTokens?: number;          // Maximum tokens to generate
+  topP?: number;               // Nucleus sampling parameter
+  model?: string;              // Override the default model ID
+  tools?: ToolDefinition[];    // Tool definitions for function calling
+}
+```
+
+---
+
+## ToolCall
+
+A tool invocation requested by the model.
+
+| Property | Type | Description |
+|---|---|---|
+| `.id` | `string` | Unique identifier for the tool call |
+| `.name` | `string` | Name of the tool to invoke |
+| `.arguments` | `object` | Parsed JSON arguments |
+
+---
+
+## ToolDefinition
+
+Describes a tool that the model may invoke.
+
+```typescript
+interface ToolDefinition {
+  name: string;            // Unique tool name
+  description: string;     // Human-readable description
+  parameters: object;      // JSON Schema for the tool's parameters
+}
+```
+
+---
+
+## TokenUsage
+
+| Property | Type | Description |
+|---|---|---|
+| `.promptTokens` | `number` | Tokens in the prompt |
+| `.completionTokens` | `number` | Tokens in the completion |
+| `.totalTokens` | `number` | Total tokens used |
+
+---
+
+## RequestTiming
+
+| Property | Type | Description |
+|---|---|---|
+| `.queueMs` | `number \| undefined` | Time in queue (ms) |
+| `.executionMs` | `number \| undefined` | Execution time (ms) |
+| `.totalMs` | `number \| undefined` | Total wall-clock time (ms) |
+
+---
+
+## runAgent
+
+Run an agentic tool-calling loop.
+
+```typescript
+const result = await runAgent(model, messages, tools, toolHandler, options?);
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `model` | `CompletionModel` | The completion model to use |
+| `messages` | `ChatMessage[]` | Initial conversation messages |
+| `tools` | `ToolDef[]` | Tool definitions |
+| `toolHandler` | `(toolName: string, args: object) => Promise<any>` | Callback that executes tool calls |
+| `options` | `AgentRunOptions?` | Optional configuration |
+
+### AgentRunOptions
+
+```typescript
+interface AgentRunOptions {
+  maxIterations?: number;    // Max tool-calling iterations (default: 10)
+  systemPrompt?: string;     // System prompt prepended to conversation
+  temperature?: number;      // Sampling temperature
+  maxTokens?: number;        // Max tokens per call
+  addFinishTool?: boolean;   // Add a built-in "finish" tool
+}
+```
+
+### AgentResult
+
+```typescript
+interface AgentResult {
+  response: CompletionResponse;    // Final completion response
+  messages: object[];              // Full message history
+  iterations: number;              // Number of iterations
+  totalCost?: number;              // Aggregated cost in USD
+}
+```
+
+---
+
+## Workflow
+
+### `new Workflow(name: string)`
+
+Create a new workflow instance.
+
+### `.addStep(name: string, eventTypes: string[], handler: StepHandler)`
+
+Register a step that listens for one or more event types.
+
+```typescript
+wf.addStep('process', ['MyEvent'], async (event, ctx) => {
+  return { type: 'blazen::StopEvent', result: { done: true } };
+});
+```
+
+### `.setTimeout(seconds: number)`
+
+Set the maximum execution time in seconds.
+
+### `await wf.run(input: object): WorkflowResult`
+
+Run the workflow to completion.
+
+### `await wf.runStreaming(input: object, callback: (event) => void): WorkflowResult`
+
+Run the workflow with a streaming callback for events published via `ctx.writeEventToStream()`.
+
+### `await wf.runWithHandler(input: object): WorkflowHandler`
+
+Run the workflow and return a handler for pause/resume and streaming control.
+
+### `await wf.resume(snapshotJson: string): WorkflowHandler`
+
+Resume a previously paused workflow from a snapshot JSON string.
+
+---
+
+## WorkflowResult
+
+```typescript
+interface WorkflowResult {
+  type: string;     // Event type of the final result
+  data: object;     // Result data from the StopEvent
+}
+```
+
+---
+
+## WorkflowHandler
+
+Returned by `Workflow.runWithHandler()` and `Workflow.resume()`.
+
+### `await handler.result(): WorkflowResult`
+
+Await the final workflow result.
+
+### `await handler.pause(): string`
+
+Pause the workflow and return a snapshot JSON string.
+
+### `await handler.streamEvents(callback: (event) => void): void`
+
+Subscribe to intermediate events. Must be called before `result()` or `pause()`.
+
+---
+
+## Context
+
+Shared workflow context accessible by all steps. All methods are async.
+
+| Method | Description |
+|---|---|
+| `await ctx.set(key, value)` | Store a JSON-serializable value |
+| `await ctx.get(key)` | Retrieve a value (returns `null` if not found) |
+| `await ctx.setBytes(key, buffer)` | Store raw binary data |
+| `await ctx.getBytes(key)` | Retrieve raw binary data |
+| `await ctx.runId()` | Get the unique run UUID |
+| `await ctx.sendEvent(event)` | Route an event into the workflow event bus |
+| `await ctx.writeEventToStream(event)` | Publish an event to the external broadcast stream |
+
+---
+
+## Events
+
+Events are plain objects with a `type` field.
+
+### Start Event
+
+```typescript
+{ type: 'blazen::StartEvent', ...input }
+```
+
+### Stop Event
+
+```typescript
+{ type: 'blazen::StopEvent', result: { ... } }
+```
+
+---
+
+## Error Handling
+
+All errors are thrown as JavaScript `Error` objects. The message format indicates the category:
+
+| Error Pattern | Description |
+|---|---|
+| `"authentication failed: ..."` | Invalid or expired API key |
+| `"rate limited"` | Provider rate limit hit |
+| `"timed out after {ms}ms"` | Request timed out |
+| `"{provider} error: ..."` | Provider-specific error |
+| `"invalid input: ..."` | Validation error |
+| `"unsupported: ..."` | Feature not supported by provider |
+
+```typescript
+try {
+  const response = await model.complete([ChatMessage.user('Hello')]);
+} catch (e) {
+  if (e.message.startsWith('rate limited')) {
+    // Back off and retry
+  }
+}
+```

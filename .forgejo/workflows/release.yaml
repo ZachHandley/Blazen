@@ -84,6 +84,12 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: node --test tests/node/test_llm_smoke.mjs
 
+      - name: Build WASM SDK (verify compilation)
+        run: |
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+          cd crates/blazen-wasm-sdk
+          wasm-pack build --target bundler
+
   publish-rust:
     name: Publish Rust Crates
     runs-on: ubuntu-latest
@@ -301,10 +307,78 @@ jobs:
           owner: BlackLeafDigital
           auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
+  publish-wasm:
+    name: Publish WASM SDK
+    runs-on: ubuntu-latest
+    needs: version
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ needs.version.outputs.version }}
+          step: publish-wasm
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          sccache: true
+          sccache-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-region: ${{ secrets.S3_REGION }}
+          sccache-access-key: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/blazen-publish-wasm
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Install wasm-pack
+        if: steps.check.outputs.completed != 'true'
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Stamp versions
+        if: steps.check.outputs.completed != 'true'
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          sed -i "s/0.0.0-dev/$VERSION/g" Cargo.toml
+          sed -i 's/, registry = "forgejo"//g' Cargo.toml
+          sed -i "s/\"version\": \"0.0.0-dev\"/\"version\": \"$VERSION\"/" crates/blazen-wasm-sdk/package.json
+
+      - name: Build WASM SDK
+        if: steps.check.outputs.completed != 'true'
+        run: |
+          cd crates/blazen-wasm-sdk
+          wasm-pack build --target bundler --release
+
+      - name: Publish to npm
+        if: steps.check.outputs.completed != 'true'
+        run: |
+          cd crates/blazen-wasm-sdk/pkg
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_ACCESS_TOKEN }}" > .npmrc
+          npm publish --access public
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ needs.version.outputs.version }}
+          step: publish-wasm
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [version, publish-rust, publish-python, publish-node]
+    needs: [version, publish-rust, publish-python, publish-node, publish-wasm]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -361,6 +435,11 @@ jobs:
           **Node.js:**
           \`\`\`bash
           pnpm add blazen
+          \`\`\`
+
+          **WebAssembly:**
+          \`\`\`bash
+          npm install @blazen/sdk
           \`\`\`
           NOTES_EOF
 
