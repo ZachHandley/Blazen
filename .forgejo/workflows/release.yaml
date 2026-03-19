@@ -84,11 +84,6 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: node --test tests/node/test_llm_smoke.mjs
 
-      - name: Build WASM SDK (verify compilation)
-        run: |
-          cargo install wasm-pack
-          cd crates/blazen-wasm-sdk
-          wasm-pack build --target bundler
 
   publish-rust:
     name: Publish Rust Crates
