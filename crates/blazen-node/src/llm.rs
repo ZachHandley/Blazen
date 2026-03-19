@@ -112,6 +112,9 @@ pub struct JsCompletionOptions {
     pub top_p: Option<f64>,
     pub model: Option<String>,
     pub tools: Option<Vec<JsToolDefinition>>,
+    /// JSON Schema for structured output / response format.
+    #[napi(js_name = "responseFormat")]
+    pub response_format: Option<serde_json::Value>,
 }
 
 // ---------------------------------------------------------------------------
@@ -607,6 +610,9 @@ impl JsCompletionModel {
                 })
                 .collect();
         }
+        if let Some(fmt) = options.response_format {
+            request = request.with_response_format(fmt);
+        }
 
         let response = self
             .inner
@@ -704,6 +710,9 @@ impl JsCompletionModel {
                     parameters: t.parameters,
                 })
                 .collect();
+        }
+        if let Some(fmt) = options.response_format {
+            request = request.with_response_format(fmt);
         }
 
         let stream = self

@@ -1,10 +1,48 @@
 //! Error types for the Blazen Python bindings.
 //!
 //! Maps Rust-side errors to appropriate Python exception types.
+//! Provides rich exception subclasses that mirror [`BlazenError`] variants.
 
 use pyo3::exceptions::{PyRuntimeError, PyTimeoutError, PyValueError};
 use pyo3::prelude::*;
 use thiserror::Error;
+
+// ---------------------------------------------------------------------------
+// Custom Python exception hierarchy
+// ---------------------------------------------------------------------------
+
+pyo3::create_exception!(blazen, BlazenException, pyo3::exceptions::PyException);
+pyo3::create_exception!(blazen, AuthError, BlazenException);
+pyo3::create_exception!(blazen, RateLimitError, BlazenException);
+pyo3::create_exception!(blazen, BlazenTimeoutError, BlazenException);
+pyo3::create_exception!(blazen, ValidationError, BlazenException);
+pyo3::create_exception!(blazen, ContentPolicyError, BlazenException);
+pyo3::create_exception!(blazen, ProviderError, BlazenException);
+pyo3::create_exception!(blazen, UnsupportedError, BlazenException);
+pyo3::create_exception!(blazen, ComputeError, BlazenException);
+pyo3::create_exception!(blazen, MediaError, BlazenException);
+
+/// Register all custom exception types on the Python module.
+pub fn register_exceptions(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("BlazenError", m.py().get_type::<BlazenException>())?;
+    m.add("AuthError", m.py().get_type::<AuthError>())?;
+    m.add("RateLimitError", m.py().get_type::<RateLimitError>())?;
+    m.add("TimeoutError", m.py().get_type::<BlazenTimeoutError>())?;
+    m.add("ValidationError", m.py().get_type::<ValidationError>())?;
+    m.add(
+        "ContentPolicyError",
+        m.py().get_type::<ContentPolicyError>(),
+    )?;
+    m.add("ProviderError", m.py().get_type::<ProviderError>())?;
+    m.add("UnsupportedError", m.py().get_type::<UnsupportedError>())?;
+    m.add("ComputeError", m.py().get_type::<ComputeError>())?;
+    m.add("MediaError", m.py().get_type::<MediaError>())?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// BlazenPyError -- internal error type
+// ---------------------------------------------------------------------------
 
 /// Error type for `Blazen` Python bindings.
 #[derive(Error, Debug)]
@@ -71,6 +109,34 @@ impl From<blazen_llm::BlazenError> for BlazenPyError {
 impl From<serde_json::Error> for BlazenPyError {
     fn from(err: serde_json::Error) -> Self {
         BlazenPyError::Serialization(err.to_string())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// BlazenError -> PyErr conversion (rich exception mapping)
+// ---------------------------------------------------------------------------
+
+/// Convert a [`BlazenError`] to a rich [`PyErr`] with the appropriate
+/// exception subclass.
+///
+/// Cannot implement `From<BlazenError> for PyErr` due to the orphan rule,
+/// so this is a standalone function used throughout the crate.
+pub fn blazen_error_to_pyerr(err: blazen_llm::BlazenError) -> PyErr {
+    match &err {
+        blazen_llm::BlazenError::Auth { message } => AuthError::new_err(message.clone()),
+        blazen_llm::BlazenError::RateLimit { .. } => RateLimitError::new_err(err.to_string()),
+        blazen_llm::BlazenError::Timeout { .. } => BlazenTimeoutError::new_err(err.to_string()),
+        blazen_llm::BlazenError::Validation { .. } => ValidationError::new_err(err.to_string()),
+        blazen_llm::BlazenError::ContentPolicy { message } => {
+            ContentPolicyError::new_err(message.clone())
+        }
+        blazen_llm::BlazenError::Provider { .. } => ProviderError::new_err(err.to_string()),
+        blazen_llm::BlazenError::Unsupported { message } => {
+            UnsupportedError::new_err(message.clone())
+        }
+        blazen_llm::BlazenError::Compute(_) => ComputeError::new_err(err.to_string()),
+        blazen_llm::BlazenError::Media(_) => MediaError::new_err(err.to_string()),
+        _ => BlazenException::new_err(err.to_string()),
     }
 }
 

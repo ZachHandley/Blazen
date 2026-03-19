@@ -17,6 +17,7 @@ pub mod compute;
 pub mod context;
 pub mod error;
 pub mod event;
+pub mod fal;
 pub mod handler;
 pub mod llm;
 pub mod workflow;

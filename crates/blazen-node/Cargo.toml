@@ -15,6 +15,7 @@ crate-type = ["cdylib"]
 blazen-core.workspace = true
 blazen-events.workspace = true
 blazen-llm = { workspace = true, features = ["all-providers"] }
+chrono.workspace = true
 napi.workspace = true
 napi-derive.workspace = true
 tokio.workspace = true

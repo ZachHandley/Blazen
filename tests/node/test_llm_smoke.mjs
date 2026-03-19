@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import {
   Workflow,
   CompletionModel,
+  ChatMessage,
 } from "../../crates/blazen-node/index.js";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
@@ -19,7 +20,7 @@ describe("OpenRouter LLM smoke tests", { skip: !OPENROUTER_API_KEY }, () => {
   it("completes a basic prompt", async () => {
     const model = CompletionModel.openrouter(OPENROUTER_API_KEY);
     const response = await model.complete([
-      { role: "user", content: "What is 2+2? Reply with just the number." },
+      ChatMessage.user("What is 2+2? Reply with just the number."),
     ]);
 
     assert.ok(response.content, "expected content in response");
@@ -34,8 +35,8 @@ describe("OpenRouter LLM smoke tests", { skip: !OPENROUTER_API_KEY }, () => {
       const model = CompletionModel.openrouter(OPENROUTER_API_KEY);
       const response = await model.completeWithOptions(
         [
-          { role: "system", content: "You are a math tutor. Reply with just the number." },
-          { role: "user", content: event.question },
+          ChatMessage.system("You are a math tutor. Reply with just the number."),
+          ChatMessage.user(event.question),
         ],
         { maxTokens: 10 }
       );

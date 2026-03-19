@@ -562,6 +562,7 @@ impl PyCompletionModel {
     ///     temperature: Optional sampling temperature (0.0-2.0).
     ///     max_tokens: Optional maximum tokens to generate.
     ///     model: Optional model override for this request.
+    ///     response_format: Optional JSON schema dict for structured output.
     ///
     /// Returns:
     ///     A CompletionResponse with content, model, tool_calls, usage,
@@ -573,7 +574,7 @@ impl PyCompletionModel {
     ///     ...     ChatMessage.user("What is 2+2?"),
     ///     ... ])
     ///     >>> print(response.content)
-    #[pyo3(signature = (messages, temperature=None, max_tokens=None, model=None))]
+    #[pyo3(signature = (messages, temperature=None, max_tokens=None, model=None, response_format=None))]
     fn complete<'py>(
         &self,
         py: Python<'py>,
@@ -581,6 +582,7 @@ impl PyCompletionModel {
         temperature: Option<f32>,
         max_tokens: Option<u32>,
         model: Option<String>,
+        response_format: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
 
@@ -593,6 +595,10 @@ impl PyCompletionModel {
         }
         if let Some(m) = model {
             request = request.with_model(m);
+        }
+        if let Some(fmt) = response_format {
+            let schema = crate::event::py_to_json(py, fmt)?;
+            request = request.with_response_format(schema);
         }
 
         let inner = self.inner.clone();

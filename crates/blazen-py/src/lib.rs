@@ -33,6 +33,7 @@ pub mod compute;
 pub mod context;
 pub mod error;
 pub mod event;
+pub mod fal;
 pub mod handler;
 pub mod llm;
 pub mod step;
@@ -80,7 +81,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<agent::PyAgentResult>()?;
     m.add_function(wrap_pyfunction!(agent::run_agent, m)?)?;
 
-    // Compute / Media
+    // Compute / Media -- Request types
     m.add_class::<compute::PyMediaType>()?;
     m.add_class::<compute::PyImageRequest>()?;
     m.add_class::<compute::PyUpscaleRequest>()?;
@@ -89,6 +90,24 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<compute::PyMusicRequest>()?;
     m.add_class::<compute::PyTranscriptionRequest>()?;
     m.add_class::<compute::PyThreeDRequest>()?;
+
+    // Compute / Media -- Job types
+    m.add_class::<compute::PyJobStatus>()?;
+    m.add_class::<compute::PyJobHandle>()?;
+    m.add_class::<compute::PyComputeRequest>()?;
+
+    // Compute / Media -- Generated media types
+    m.add_class::<compute::PyMediaOutput>()?;
+    m.add_class::<compute::PyGeneratedImage>()?;
+    m.add_class::<compute::PyGeneratedVideo>()?;
+    m.add_class::<compute::PyGeneratedAudio>()?;
+    m.add_class::<compute::PyGenerated3DModel>()?;
+
+    // Fal provider
+    m.add_class::<fal::PyFalProvider>()?;
+
+    // Error exception types
+    error::register_exceptions(m)?;
 
     Ok(())
 }

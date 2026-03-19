@@ -102,6 +102,9 @@ jobs:
 
       - name: Run Python E2E tests
         run: uv run pytest -v
+        env:
+          FAL_API_KEY: ${{ secrets.FAL_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
   test-node:
     name: Test Node.js Bindings
@@ -138,6 +141,12 @@ jobs:
 
       - name: Run Node.js E2E tests
         run: node --test tests/node/test_workflow.mjs
+
+      - name: Run Node.js LLM smoke tests
+        run: node --test tests/node/test_llm_smoke.mjs tests/node/test_fal_smoke.mjs
+        env:
+          FAL_API_KEY: ${{ secrets.FAL_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
   build:
     name: Build (x86_64-unknown-linux-gnu)

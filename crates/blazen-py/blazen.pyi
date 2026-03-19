@@ -7,6 +7,76 @@ Python bindings.
 from typing import Any, AsyncIterator, Callable, Coroutine, Optional, Union
 
 
+# ---------------------------------------------------------------------------
+# Error types
+# ---------------------------------------------------------------------------
+
+
+class BlazenError(Exception):
+    """Base exception for all Blazen errors."""
+
+    ...
+
+
+class AuthError(BlazenError):
+    """Authentication or authorization failure."""
+
+    ...
+
+
+class RateLimitError(BlazenError):
+    """Rate limit exceeded."""
+
+    ...
+
+
+class TimeoutError(BlazenError):
+    """Operation timed out."""
+
+    ...
+
+
+class ValidationError(BlazenError):
+    """Input validation failure."""
+
+    ...
+
+
+class ContentPolicyError(BlazenError):
+    """Content policy violation."""
+
+    ...
+
+
+class ProviderError(BlazenError):
+    """Provider-level error (HTTP errors, network failures, etc.)."""
+
+    ...
+
+
+class UnsupportedError(BlazenError):
+    """The requested operation is not supported by this provider."""
+
+    ...
+
+
+class ComputeError(BlazenError):
+    """Compute job error."""
+
+    ...
+
+
+class MediaError(BlazenError):
+    """Media processing error."""
+
+    ...
+
+
+# ---------------------------------------------------------------------------
+# Event types
+# ---------------------------------------------------------------------------
+
+
 class Event:
     """A dict-like event object for inter-step communication.
 
@@ -406,6 +476,7 @@ class CompletionModel:
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
         model: Optional[str] = None,
+        response_format: Optional[dict[str, Any]] = None,
     ) -> CompletionResponse:
         """Perform a chat completion.
 
@@ -742,6 +813,373 @@ class ThreeDRequest:
         format: Optional[str] = None,
         model: Optional[str] = None,
     ) -> None: ...
+
+
+# ---------------------------------------------------------------------------
+# Job types
+# ---------------------------------------------------------------------------
+
+
+class JobStatus:
+    """Job status constants.
+
+    Example::
+
+        JobStatus.QUEUED     # "queued"
+        JobStatus.RUNNING    # "running"
+        JobStatus.COMPLETED  # "completed"
+    """
+
+    QUEUED: str
+    RUNNING: str
+    COMPLETED: str
+    FAILED: str
+    CANCELLED: str
+
+
+class JobHandle:
+    """A handle to a submitted compute job.
+
+    Example::
+
+        handle = await fal.submit(model="fal-ai/flux/dev", input={...})
+        print(handle.id, handle.model)
+    """
+
+    id: str
+    provider: str
+    model: str
+    submitted_at: str
+
+    def __getitem__(self, key: str) -> Any: ...
+
+
+class ComputeRequest:
+    """Input for a raw compute job.
+
+    Example::
+
+        req = ComputeRequest(model="fal-ai/flux/dev", input={"prompt": "a cat"})
+    """
+
+    model: str
+    input: dict[str, Any]
+
+    def __init__(self, *, model: str, input: dict[str, Any]) -> None: ...
+
+
+# ---------------------------------------------------------------------------
+# Media output types
+# ---------------------------------------------------------------------------
+
+
+class MediaOutput:
+    """A single piece of generated media content.
+
+    At least one of url, base64, or raw_content will be populated.
+
+    Example::
+
+        output.url
+        output.media_type
+        output.file_size
+    """
+
+    url: Optional[str]
+    base64: Optional[str]
+    raw_content: Optional[str]
+    media_type: str
+    file_size: Optional[int]
+    metadata: dict[str, Any]
+
+    def __getitem__(self, key: str) -> Any: ...
+
+
+class GeneratedImage:
+    """A single generated image with optional dimension metadata.
+
+    Example::
+
+        img.media.url
+        img.width, img.height
+    """
+
+    media: MediaOutput
+    width: Optional[int]
+    height: Optional[int]
+
+    def __getitem__(self, key: str) -> Any: ...
+
+
+class GeneratedVideo:
+    """A single generated video with optional metadata.
+
+    Example::
+
+        vid.media.url
+        vid.duration_seconds, vid.fps
+    """
+
+    media: MediaOutput
+    width: Optional[int]
+    height: Optional[int]
+    duration_seconds: Optional[float]
+    fps: Optional[float]
+
+    def __getitem__(self, key: str) -> Any: ...
+
+
+class GeneratedAudio:
+    """A single generated audio clip with optional metadata.
+
+    Example::
+
+        audio.media.url
+        audio.duration_seconds, audio.sample_rate
+    """
+
+    media: MediaOutput
+    duration_seconds: Optional[float]
+    sample_rate: Optional[int]
+    channels: Optional[int]
+
+    def __getitem__(self, key: str) -> Any: ...
+
+
+class Generated3DModel:
+    """A single generated 3D model with optional mesh metadata.
+
+    Example::
+
+        model.media.url
+        model.vertex_count, model.has_textures
+    """
+
+    media: MediaOutput
+    vertex_count: Optional[int]
+    face_count: Optional[int]
+    has_textures: bool
+    has_animations: bool
+
+    def __getitem__(self, key: str) -> Any: ...
+
+
+# ---------------------------------------------------------------------------
+# FalProvider
+# ---------------------------------------------------------------------------
+
+
+class FalProvider:
+    """A fal.ai provider for image gen, video, audio, TTS, transcription, and LLM.
+
+    This is the unified entry point for all fal.ai capabilities:
+    image generation and upscaling, video generation (text-to-video,
+    image-to-video), audio generation (TTS, music, sound effects),
+    audio transcription, raw compute job submission, and LLM chat
+    completions (via fal-ai/any-llm).
+
+    Example::
+
+        fal = FalProvider(api_key="fal-key-...")
+        result = await fal.generate_image(ImageRequest(prompt="a cat in space"))
+        response = await fal.complete([ChatMessage.user("Hello!")])
+    """
+
+    def __init__(self, *, api_key: str, model: Optional[str] = None) -> None: ...
+
+    @property
+    def model_id(self) -> str:
+        """Get the model ID."""
+        ...
+
+    # -- Image -----------------------------------------------------------------
+
+    async def generate_image(self, request: ImageRequest) -> dict[str, Any]:
+        """Generate images from a text prompt.
+
+        Args:
+            request: An ImageRequest with prompt, dimensions, etc.
+
+        Returns:
+            A dict with images, timing, cost, and metadata.
+        """
+        ...
+
+    async def upscale_image(self, request: UpscaleRequest) -> dict[str, Any]:
+        """Upscale an image.
+
+        Args:
+            request: An UpscaleRequest with image_url and scale factor.
+
+        Returns:
+            A dict with the upscaled image, timing, cost, and metadata.
+        """
+        ...
+
+    # -- Video -----------------------------------------------------------------
+
+    async def text_to_video(self, request: VideoRequest) -> dict[str, Any]:
+        """Generate a video from a text prompt.
+
+        Args:
+            request: A VideoRequest with prompt and optional parameters.
+
+        Returns:
+            A dict with videos, timing, cost, and metadata.
+        """
+        ...
+
+    async def image_to_video(self, request: VideoRequest) -> dict[str, Any]:
+        """Generate a video from a source image and prompt.
+
+        Args:
+            request: A VideoRequest with prompt and image_url.
+
+        Returns:
+            A dict with videos, timing, cost, and metadata.
+        """
+        ...
+
+    # -- Audio -----------------------------------------------------------------
+
+    async def text_to_speech(self, request: SpeechRequest) -> dict[str, Any]:
+        """Synthesize speech from text.
+
+        Args:
+            request: A SpeechRequest with text and optional voice/language.
+
+        Returns:
+            A dict with audio clips, timing, cost, and metadata.
+        """
+        ...
+
+    async def generate_music(self, request: MusicRequest) -> dict[str, Any]:
+        """Generate music from a prompt.
+
+        Args:
+            request: A MusicRequest with prompt and optional duration.
+
+        Returns:
+            A dict with audio clips, timing, cost, and metadata.
+        """
+        ...
+
+    async def generate_sfx(self, request: MusicRequest) -> dict[str, Any]:
+        """Generate sound effects from a prompt.
+
+        Args:
+            request: A MusicRequest with prompt and optional duration.
+
+        Returns:
+            A dict with audio clips, timing, cost, and metadata.
+        """
+        ...
+
+    # -- Transcription ---------------------------------------------------------
+
+    async def transcribe(self, request: TranscriptionRequest) -> dict[str, Any]:
+        """Transcribe audio to text.
+
+        Args:
+            request: A TranscriptionRequest with audio_url and options.
+
+        Returns:
+            A dict with text, segments, language, timing, cost, and metadata.
+        """
+        ...
+
+    # -- Raw compute -----------------------------------------------------------
+
+    async def run(self, *, model: str, input: dict[str, Any]) -> dict[str, Any]:
+        """Submit a compute job and wait for the result.
+
+        Args:
+            model: The fal.ai model endpoint (e.g. "fal-ai/flux/dev").
+            input: Input parameters as a dict.
+
+        Returns:
+            A dict with output, timing, cost, and metadata.
+        """
+        ...
+
+    async def submit(self, *, model: str, input: dict[str, Any]) -> dict[str, Any]:
+        """Submit a compute job without waiting (returns a job handle dict).
+
+        Args:
+            model: The fal.ai model endpoint.
+            input: Input parameters as a dict.
+
+        Returns:
+            A dict with id, provider, model, and submitted_at.
+        """
+        ...
+
+    async def status(self, *, job_id: str, model: str) -> str:
+        """Poll the status of a submitted job.
+
+        Args:
+            job_id: The job identifier returned by submit().
+            model: The model endpoint the job was submitted to.
+
+        Returns:
+            A status string: "queued", "running", "completed", "failed",
+            or "cancelled".
+        """
+        ...
+
+    async def cancel(self, *, job_id: str, model: str) -> None:
+        """Cancel a running or queued job.
+
+        Args:
+            job_id: The job identifier returned by submit().
+            model: The model endpoint the job was submitted to.
+        """
+        ...
+
+    # -- LLM -------------------------------------------------------------------
+
+    async def complete(
+        self,
+        messages: list[ChatMessage],
+        *,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        model: Optional[str] = None,
+        response_format: Optional[dict[str, Any]] = None,
+    ) -> CompletionResponse:
+        """Perform a chat completion via fal-ai/any-llm.
+
+        Args:
+            messages: A list of ChatMessage objects.
+            temperature: Optional sampling temperature (0.0-2.0).
+            max_tokens: Optional maximum tokens to generate.
+            model: Optional model override for this request.
+            response_format: Optional JSON schema dict for structured output.
+
+        Returns:
+            A CompletionResponse with content, model, tool_calls, usage, etc.
+        """
+        ...
+
+    async def stream(
+        self,
+        messages: list[ChatMessage],
+        on_chunk: Callable[[dict[str, Any]], Any],
+        *,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        model: Optional[str] = None,
+    ) -> None:
+        """Stream a chat completion, calling a callback for each chunk.
+
+        Args:
+            messages: A list of ChatMessage objects.
+            on_chunk: Callback function receiving each chunk as a dict.
+            temperature: Optional sampling temperature (0.0-2.0).
+            max_tokens: Optional maximum tokens to generate.
+            model: Optional model override for this request.
+        """
+        ...
 
 
 __version__: str
