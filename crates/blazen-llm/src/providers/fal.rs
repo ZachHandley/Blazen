@@ -1236,8 +1236,53 @@ fn parse_fal_audio(output: &serde_json::Value) -> Result<GeneratedAudio, BlazenE
         });
     }
 
+    // Try `audio_file` as an object (e.g. stable-audio returns this).
+    if let Some(audio_obj) = output.get("audio_file") {
+        if let Some(obj) = audio_obj.as_object() {
+            let url = obj
+                .get("url")
+                .and_then(serde_json::Value::as_str)
+                .map(String::from);
+            let content_type = obj
+                .get("content_type")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("audio/wav");
+            let file_size = obj.get("file_size").and_then(serde_json::Value::as_u64);
+
+            return Ok(GeneratedAudio {
+                media: MediaOutput {
+                    url,
+                    base64: None,
+                    raw_content: None,
+                    media_type: MediaType::from_mime(content_type),
+                    file_size,
+                    metadata: audio_obj.clone(),
+                },
+                duration_seconds: None,
+                sample_rate: None,
+                channels: None,
+            });
+        }
+
+        if let Some(url_str) = audio_obj.as_str() {
+            return Ok(GeneratedAudio {
+                media: MediaOutput {
+                    url: Some(url_str.to_owned()),
+                    base64: None,
+                    raw_content: None,
+                    media_type: MediaType::Wav,
+                    file_size: None,
+                    metadata: serde_json::Value::Null,
+                },
+                duration_seconds: None,
+                sample_rate: None,
+                channels: None,
+            });
+        }
+    }
+
     Err(BlazenError::Serialization(
-        "missing 'audio_url' or 'audio' field in response".into(),
+        "missing 'audio_url', 'audio', or 'audio_file' field in response".into(),
     ))
 }
 
