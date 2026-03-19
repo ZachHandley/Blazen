@@ -6,13 +6,444 @@ section: "api"
 order: 3
 ---
 
+## ChatMessage
+
+A class for building typed chat messages. Supports text, multimodal (image) content, and content parts.
+
+### Constructor
+
+```typescript
+new ChatMessage({ role?: string, content?: string, parts?: ContentPart[] })
+```
+
+Create a message from an options object. `role` defaults to `"user"` if omitted. Supply either `content` (text) or `parts` (multimodal), not both.
+
+```typescript
+// Text message with explicit role
+new ChatMessage({ role: "user", content: "Hello" })
+
+// Using the Role enum
+new ChatMessage({ role: Role.User, content: "Hello" })
+
+// System message
+new ChatMessage({ role: "system", content: "You are a helpful assistant." })
+
+// Multimodal message with content parts
+new ChatMessage({
+  role: "user",
+  parts: [
+    { partType: "text", text: "Describe this image:" },
+    { partType: "image", image: { source: { sourceType: "url", url: "https://example.com/photo.jpg" } } }
+  ]
+})
+```
+
+### Static Factory Methods
+
+| Method | Description |
+|---|---|
+| `ChatMessage.system(content: string)` | Create a system message |
+| `ChatMessage.user(content: string)` | Create a user message |
+| `ChatMessage.assistant(content: string)` | Create an assistant message |
+| `ChatMessage.tool(content: string)` | Create a tool result message |
+| `ChatMessage.userImageUrl(text: string, url: string, mediaType?: string)` | Create a user message with text and an image URL |
+| `ChatMessage.userImageBase64(text: string, data: string, mediaType: string)` | Create a user message with text and a base64-encoded image |
+| `ChatMessage.userParts(parts: ContentPart[])` | Create a user message from an explicit list of content parts |
+
+```typescript
+const msg = ChatMessage.user("What is 2 + 2?");
+
+const imgMsg = ChatMessage.userImageUrl(
+  "What's in this image?",
+  "https://example.com/photo.jpg",
+  "image/jpeg"
+);
+
+const b64Msg = ChatMessage.userImageBase64(
+  "Describe this:",
+  base64Data,
+  "image/png"
+);
+```
+
+### Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `.role` | `string` | The message role: `"system"`, `"user"`, `"assistant"`, or `"tool"` |
+| `.content` | `string \| undefined` | The text content of the message, if any |
+
+---
+
+## Role
+
+String enum for message roles.
+
+```typescript
+Role.System    // "system"
+Role.User      // "user"
+Role.Assistant // "assistant"
+Role.Tool      // "tool"
+```
+
+Can be used interchangeably with plain strings in the `ChatMessage` constructor.
+
+---
+
+## ContentPart
+
+Types for multimodal message content, used in the `parts` field of the `ChatMessage` constructor and in `ChatMessage.userParts()`.
+
+```typescript
+interface ContentPart {
+  partType: "text" | "image";
+  text?: string;          // Required when partType is "text"
+  image?: ImageContent;   // Required when partType is "image"
+}
+
+interface ImageContent {
+  source: ImageSource;
+  mediaType?: string;     // MIME type, e.g. "image/png"
+}
+
+interface ImageSource {
+  sourceType: "url" | "base64";
+  url?: string;           // Required when sourceType is "url"
+  data?: string;          // Required when sourceType is "base64"
+}
+```
+
+```typescript
+// Text part
+{ partType: "text", text: "Describe this image:" }
+
+// Image from URL
+{
+  partType: "image",
+  image: {
+    source: { sourceType: "url", url: "https://example.com/photo.jpg" },
+    mediaType: "image/jpeg"
+  }
+}
+
+// Image from base64
+{
+  partType: "image",
+  image: {
+    source: { sourceType: "base64", data: "iVBORw0KGgo..." },
+    mediaType: "image/png"
+  }
+}
+```
+
+---
+
+## CompletionModel
+
+A chat completion model. Created via static factory methods for each provider.
+
+### Provider Factory Methods
+
+All providers accept an API key and an optional model override. If `model` is omitted, the provider's default model is used.
+
+| Method | Signature |
+|---|---|
+| `CompletionModel.openai` | `(apiKey: string, model?: string)` |
+| `CompletionModel.anthropic` | `(apiKey: string, model?: string)` |
+| `CompletionModel.gemini` | `(apiKey: string, model?: string)` |
+| `CompletionModel.azure` | `(apiKey: string, resourceName: string, deploymentName: string)` |
+| `CompletionModel.fal` | `(apiKey: string, model?: string)` |
+| `CompletionModel.openrouter` | `(apiKey: string, model?: string)` |
+| `CompletionModel.groq` | `(apiKey: string, model?: string)` |
+| `CompletionModel.together` | `(apiKey: string, model?: string)` |
+| `CompletionModel.mistral` | `(apiKey: string, model?: string)` |
+| `CompletionModel.deepseek` | `(apiKey: string, model?: string)` |
+| `CompletionModel.fireworks` | `(apiKey: string, model?: string)` |
+| `CompletionModel.perplexity` | `(apiKey: string, model?: string)` |
+| `CompletionModel.xai` | `(apiKey: string, model?: string)` |
+| `CompletionModel.cohere` | `(apiKey: string, model?: string)` |
+| `CompletionModel.bedrock` | `(apiKey: string, region: string, model?: string)` |
+
+```typescript
+const model = CompletionModel.openai("sk-...");
+const claude = CompletionModel.anthropic("sk-ant-...", "claude-sonnet-4-20250514");
+const gemini = CompletionModel.gemini("AIza...", "gemini-2.5-flash");
+```
+
+### Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `.modelId` | `string` | The model identifier string |
+
+### `await model.complete(messages: ChatMessage[]): CompletionResponse`
+
+Perform a chat completion.
+
+```typescript
+const response = await model.complete([
+  ChatMessage.system("You are a helpful assistant."),
+  ChatMessage.user("What is 2 + 2?"),
+]);
+console.log(response.content); // "4"
+```
+
+### `await model.completeWithOptions(messages: ChatMessage[], options: CompletionOptions): CompletionResponse`
+
+Perform a chat completion with additional options.
+
+```typescript
+const response = await model.completeWithOptions(
+  [ChatMessage.user("Write a haiku about Rust.")],
+  { temperature: 0.7, maxTokens: 100 }
+);
+```
+
+### `await model.stream(messages: ChatMessage[], onChunk: (chunk) => void): void`
+
+Stream a chat completion. The callback receives each chunk as it arrives.
+
+```typescript
+await model.stream(
+  [ChatMessage.user("Tell me a story")],
+  (chunk) => {
+    if (chunk.delta) process.stdout.write(chunk.delta);
+  }
+);
+```
+
+Each chunk has the shape:
+
+```typescript
+{
+  delta?: string;              // Text content delta
+  finishReason?: string;       // Set on the final chunk
+  toolCalls: ToolCall[];       // Tool calls, if any
+}
+```
+
+### `await model.streamWithOptions(messages: ChatMessage[], onChunk: (chunk) => void, options: CompletionOptions): void`
+
+Stream a chat completion with additional options.
+
+```typescript
+await model.streamWithOptions(
+  [ChatMessage.user("Explain quantum computing")],
+  (chunk) => { if (chunk.delta) process.stdout.write(chunk.delta); },
+  { temperature: 0.5, maxTokens: 500 }
+);
+```
+
+---
+
+## CompletionOptions
+
+Options object for `completeWithOptions()` and `streamWithOptions()`.
+
+```typescript
+interface CompletionOptions {
+  temperature?: number;        // Sampling temperature (0.0 - 2.0)
+  maxTokens?: number;          // Maximum tokens to generate
+  topP?: number;               // Nucleus sampling parameter
+  model?: string;              // Override the default model ID
+  tools?: ToolDefinition[];    // Tool definitions for function calling
+}
+```
+
+---
+
+## CompletionResponse
+
+Returned by `model.complete()` and `model.completeWithOptions()`.
+
+```typescript
+interface CompletionResponse {
+  content?: string;                // The generated text
+  toolCalls: ToolCall[];           // Tool calls requested by the model
+  usage?: TokenUsage;              // Token usage statistics
+  model: string;                   // Model name used for the completion
+  finishReason?: string;           // Why generation stopped ("stop", "tool_calls", etc.)
+  cost?: number;                   // Cost in USD, if reported by the provider
+  timing?: RequestTiming;          // Request timing breakdown
+  images: object[];                // Generated images, if any (provider-specific)
+  audio: object[];                 // Generated audio, if any (provider-specific)
+  videos: object[];                // Generated videos, if any (provider-specific)
+  metadata: object;                // Raw provider-specific metadata
+}
+```
+
+---
+
+## ToolCall
+
+A tool invocation requested by the model.
+
+| Property | Type | Description |
+|---|---|---|
+| `.id` | `string` | Unique identifier for the tool call |
+| `.name` | `string` | Name of the tool to invoke |
+| `.arguments` | `object` | Parsed JSON arguments |
+
+---
+
+## ToolDefinition
+
+Describes a tool that the model may invoke.
+
+```typescript
+interface ToolDefinition {
+  name: string;            // Unique tool name
+  description: string;     // Human-readable description
+  parameters: object;      // JSON Schema for the tool's parameters
+}
+```
+
+```typescript
+const tools: ToolDefinition[] = [
+  {
+    name: "getWeather",
+    description: "Get the current weather for a city",
+    parameters: {
+      type: "object",
+      properties: { city: { type: "string" } },
+      required: ["city"]
+    }
+  }
+];
+```
+
+---
+
+## TokenUsage
+
+Token usage statistics for a completion request.
+
+| Property | Type | Description |
+|---|---|---|
+| `.promptTokens` | `number` | Tokens in the prompt |
+| `.completionTokens` | `number` | Tokens in the completion |
+| `.totalTokens` | `number` | Total tokens used |
+
+---
+
+## RequestTiming
+
+Timing metadata for a completion request.
+
+| Property | Type | Description |
+|---|---|---|
+| `.queueMs` | `number \| undefined` | Time spent waiting in queue (ms) |
+| `.executionMs` | `number \| undefined` | Time spent executing (ms) |
+| `.totalMs` | `number \| undefined` | Total wall-clock time (ms) |
+
+---
+
+## runAgent
+
+Run an agentic tool execution loop. The agent repeatedly calls the model, executes tool calls via the handler callback, feeds results back, and repeats until the model stops calling tools or `maxIterations` is reached.
+
+```typescript
+const result = await runAgent(model, messages, tools, toolHandler, options?);
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `model` | `CompletionModel` | The completion model to use |
+| `messages` | `ChatMessage[]` | Initial conversation messages |
+| `tools` | `ToolDef[]` | Tool definitions the agent can invoke |
+| `toolHandler` | `(toolName: string, args: object) => Promise<any>` | Callback that executes tool calls |
+| `options` | `AgentRunOptions?` | Optional configuration |
+
+### Example
+
+```typescript
+import { CompletionModel, ChatMessage, runAgent } from "blazen";
+
+const model = CompletionModel.openai("sk-...");
+
+const result = await runAgent(
+  model,
+  [ChatMessage.user("What is the weather in NYC?")],
+  [{
+    name: "getWeather",
+    description: "Get weather for a city",
+    parameters: {
+      type: "object",
+      properties: { city: { type: "string" } },
+      required: ["city"]
+    }
+  }],
+  async (toolName, args) => {
+    if (toolName === "getWeather") {
+      return { temp: 72, condition: "sunny" };
+    }
+    throw new Error(`Unknown tool: ${toolName}`);
+  },
+  { maxIterations: 5 }
+);
+
+console.log(result.response.content);
+console.log(`Took ${result.iterations} iterations`);
+```
+
+---
+
+## ToolDef
+
+Describes a tool that the agent may invoke.
+
+```typescript
+interface ToolDef {
+  name: string;            // Unique tool name
+  description: string;     // Human-readable description
+  parameters: object;      // JSON Schema for the tool's parameters
+}
+```
+
+---
+
+## AgentRunOptions
+
+Options for configuring an agent run.
+
+```typescript
+interface AgentRunOptions {
+  maxIterations?: number;    // Max tool-calling iterations (default: 10)
+  systemPrompt?: string;     // System prompt prepended to the conversation
+  temperature?: number;      // Sampling temperature (0.0 - 2.0)
+  maxTokens?: number;        // Maximum tokens per completion call
+  addFinishTool?: boolean;   // Add a built-in "finish" tool the model can call to signal completion
+}
+```
+
+---
+
+## AgentResult
+
+The result of an agent run, returned by `runAgent()`.
+
+```typescript
+interface AgentResult {
+  response: CompletionResponse;    // Final completion response from the model
+  messages: object[];              // Full message history (all tool calls and results)
+  iterations: number;              // Number of tool-calling iterations that occurred
+  totalCost?: number;              // Aggregated cost across all iterations (USD)
+}
+```
+
+Each entry in `messages` has the shape `{ role: string, content: string | null }`.
+
+---
+
 ## Workflow
 
 ### `new Workflow(name: string)`
 
-Create a new workflow instance.
+Create a new workflow instance. Default timeout is 300 seconds (5 minutes).
 
-```ts
+```typescript
 const wf = new Workflow("my-workflow");
 ```
 
@@ -20,7 +451,7 @@ const wf = new Workflow("my-workflow");
 
 Register a step that listens for one or more event types.
 
-```ts
+```typescript
 wf.addStep("process", ["MyEvent"], async (event, ctx) => {
   return { type: "blazen::StopEvent", result: { done: true } };
 });
@@ -28,55 +459,64 @@ wf.addStep("process", ["MyEvent"], async (event, ctx) => {
 
 ### `.setTimeout(seconds: number)`
 
-Set the maximum execution time for the workflow in seconds.
+Set the maximum execution time for the workflow in seconds. Set to 0 or negative to disable.
 
-```ts
+```typescript
 wf.setTimeout(30);
 ```
 
-### `await wf.run(input: object) -> WorkflowResult`
+### `await wf.run(input: object): WorkflowResult`
 
 Run the workflow to completion with the given input.
 
-```ts
+```typescript
 const result = await wf.run({ prompt: "Hello" });
 ```
 
-### `await wf.runStreaming(input: object, callback: (event) => void) -> WorkflowResult`
+### `await wf.runStreaming(input: object, callback: (event) => void): WorkflowResult`
 
-Run the workflow with a streaming callback invoked for each stream event.
+Run the workflow with a streaming callback invoked for each event published via `ctx.writeEventToStream()`.
 
-```ts
+```typescript
 const result = await wf.runStreaming({ prompt: "Hello" }, (event) => {
   console.log("stream:", event);
 });
 ```
 
-### `await wf.runWithHandler(input: object) -> WorkflowHandler`
+### `await wf.runWithHandler(input: object): WorkflowHandler`
 
-Run the workflow and return a handler that supports pause and resume.
+Run the workflow and return a handler for pause/resume and streaming control.
 
-```ts
+```typescript
 const handler = await wf.runWithHandler({ prompt: "Hello" });
+```
+
+### `await wf.resume(snapshotJson: string): WorkflowHandler`
+
+Resume a previously paused workflow from a snapshot JSON string.
+
+```typescript
+const snapshot = fs.readFileSync("snapshot.json", "utf-8");
+const handler = await wf.resume(snapshot);
+const result = await handler.result();
 ```
 
 ---
 
 ## WorkflowResult
 
-### `.type: string`
-
-The event type of the final result (e.g. `"blazen::StopEvent"`).
-
-### `.data: object`
-
-The result data extracted from the `result` field of the `StopEvent`.
+```typescript
+interface WorkflowResult {
+  type: string;     // Event type of the final result (e.g. "blazen::StopEvent")
+  data: object;     // Result data extracted from the StopEvent's result field
+}
+```
 
 ---
 
 ## StepHandler
 
-```ts
+```typescript
 async (event: object, ctx: Context) => object | object[] | null
 ```
 
@@ -88,17 +528,47 @@ A step handler receives an event and a context. It can return:
 
 ---
 
+## WorkflowHandler
+
+Returned by `Workflow.runWithHandler()` and `Workflow.resume()`. Provides control over a running workflow.
+
+**Important:** `result()` and `pause()` each consume the handler internally. You can only call one of them, and only once.
+
+### `await handler.result(): WorkflowResult`
+
+Await the final workflow result.
+
+### `await handler.pause(): string`
+
+Pause the workflow and return a snapshot as a JSON string. Save this to resume later with `Workflow.resume()`.
+
+### `await handler.streamEvents(callback: (event) => void): void`
+
+Subscribe to intermediate events published via `ctx.writeEventToStream()`. Must be called **before** `result()` or `pause()`.
+
+```typescript
+const handler = await wf.runWithHandler({ prompt: "Hello" });
+
+// Subscribe to stream events
+await handler.streamEvents((event) => console.log(event));
+
+// Then await the result
+const result = await handler.result();
+```
+
+---
+
 ## Events
 
 Events are plain objects with a `type` field.
 
-```ts
+```typescript
 { type: "MyEvent", payload: "data" }
 ```
 
 ### Start Event
 
-```ts
+```typescript
 { type: "blazen::StartEvent", ...input }
 ```
 
@@ -106,7 +576,7 @@ The workflow begins by emitting a `StartEvent` containing the input data.
 
 ### Stop Event
 
-```ts
+```typescript
 { type: "blazen::StopEvent", result: { ... } }
 ```
 
@@ -116,15 +586,23 @@ Returning a `StopEvent` from a step handler completes the workflow.
 
 ## Context
 
-All context methods are async.
+Shared workflow context accessible by all steps. All methods are async.
 
 ### `await ctx.set(key: string, value: any): void`
 
-Store a value in the workflow context.
+Store a JSON-serializable value in the workflow context.
 
 ### `await ctx.get(key: string): any`
 
-Retrieve a value from the workflow context.
+Retrieve a value from the workflow context. Returns `null` if not found.
+
+### `await ctx.setBytes(key: string, buffer: Buffer): void`
+
+Store raw binary data in the workflow context. No serialization requirement -- store any type by converting to bytes yourself (e.g., MessagePack, protobuf). Binary data persists through pause/resume/checkpoint.
+
+### `await ctx.getBytes(key: string): Buffer | null`
+
+Retrieve raw binary data from the workflow context. Returns `null` if not found.
 
 ### `await ctx.runId(): string`
 
@@ -132,21 +610,376 @@ Get the unique run UUID for the current workflow execution.
 
 ### `await ctx.sendEvent(event: object): void`
 
-Manually route an event into the workflow event bus.
+Manually route an event into the workflow event bus. The event will be delivered to any step whose `eventTypes` list includes its type.
 
 ### `await ctx.writeEventToStream(event: object): void`
 
-Publish an event to the streaming callback registered via `runStreaming`.
+Publish an event to the external broadcast stream. Consumers that subscribed via `runStreaming` or `handler.streamEvents()` will receive this event. Unlike `sendEvent`, this does **not** route the event through the internal step registry.
 
 ---
 
-## version
+## Compute Request Types
 
-### `version(): string`
+Typed request interfaces for compute operations (image generation, video, speech, music, transcription, 3D models).
 
-Returns the Blazen version string.
+### ImageRequest
 
-```ts
+```typescript
+interface ImageRequest {
+  prompt: string;                  // Text prompt describing the desired image
+  negativePrompt?: string;         // Things to avoid in the image
+  width?: number;                  // Desired image width in pixels
+  height?: number;                 // Desired image height in pixels
+  numImages?: number;              // Number of images to generate
+  model?: string;                  // Model override (provider-specific)
+  parameters?: object;             // Additional provider-specific parameters
+}
+```
+
+### UpscaleRequest
+
+```typescript
+interface UpscaleRequest {
+  imageUrl: string;                // URL of the image to upscale
+  scale: number;                   // Scale factor (e.g. 2.0, 4.0)
+  model?: string;
+  parameters?: object;
+}
+```
+
+### VideoRequest
+
+```typescript
+interface VideoRequest {
+  prompt: string;                  // Text prompt describing the desired video
+  imageUrl?: string;               // Source image URL for image-to-video
+  durationSeconds?: number;        // Desired duration in seconds
+  negativePrompt?: string;         // Things to avoid
+  width?: number;                  // Video width in pixels
+  height?: number;                 // Video height in pixels
+  model?: string;
+  parameters?: object;
+}
+```
+
+### SpeechRequest
+
+```typescript
+interface SpeechRequest {
+  text: string;                    // Text to synthesize into speech
+  voice?: string;                  // Voice identifier (provider-specific)
+  voiceUrl?: string;               // Reference voice sample URL for cloning
+  language?: string;               // Language code (e.g. "en", "fr", "ja")
+  speed?: number;                  // Speech speed multiplier (1.0 = normal)
+  model?: string;
+  parameters?: object;
+}
+```
+
+### MusicRequest
+
+```typescript
+interface MusicRequest {
+  prompt: string;                  // Text prompt describing the desired audio
+  durationSeconds?: number;        // Desired duration in seconds
+  model?: string;
+  parameters?: object;
+}
+```
+
+### TranscriptionRequest
+
+```typescript
+interface TranscriptionRequest {
+  audioUrl: string;                // URL of the audio file to transcribe
+  language?: string;               // Language hint (e.g. "en", "fr")
+  diarize?: boolean;               // Whether to perform speaker diarization
+  model?: string;
+  parameters?: object;
+}
+```
+
+### ThreeDRequest
+
+```typescript
+interface ThreeDRequest {
+  prompt?: string;                 // Text prompt describing the desired 3D model
+  imageUrl?: string;               // Source image URL for image-to-3D
+  format?: string;                 // Output format (e.g. "glb", "obj", "usdz")
+  model?: string;
+  parameters?: object;
+}
+```
+
+---
+
+## Compute Result Types
+
+### ImageResult
+
+```typescript
+interface ImageResult {
+  images: GeneratedImage[];        // Generated or upscaled images
+  timing?: ComputeTiming;          // Request timing breakdown
+  cost?: number;                   // Cost in USD
+  metadata: object;                // Provider-specific metadata
+}
+```
+
+### VideoResult
+
+```typescript
+interface VideoResult {
+  videos: GeneratedVideo[];
+  timing?: ComputeTiming;
+  cost?: number;
+  metadata: object;
+}
+```
+
+### AudioResult
+
+```typescript
+interface AudioResult {
+  audio: GeneratedAudio[];
+  timing?: ComputeTiming;
+  cost?: number;
+  metadata: object;
+}
+```
+
+### TranscriptionResult
+
+```typescript
+interface TranscriptionResult {
+  text: string;                          // Full transcribed text
+  segments: TranscriptionSegment[];      // Time-aligned segments
+  language?: string;                     // Detected or specified language code
+  timing?: ComputeTiming;
+  cost?: number;
+  metadata: object;
+}
+```
+
+### TranscriptionSegment
+
+```typescript
+interface TranscriptionSegment {
+  text: string;            // Transcribed text for this segment
+  start: number;           // Start time in seconds
+  end: number;             // End time in seconds
+  speaker?: string;        // Speaker label (if diarization enabled)
+}
+```
+
+### ThreeDResult
+
+```typescript
+interface ThreeDResult {
+  models: Generated3DModel[];
+  timing?: ComputeTiming;
+  cost?: number;
+  metadata: object;
+}
+```
+
+---
+
+## Compute Job Types
+
+Low-level types for generic compute jobs.
+
+### ComputeRequest
+
+```typescript
+interface ComputeRequest {
+  model: string;             // Model/endpoint to run (e.g. "fal-ai/flux/dev")
+  input: object;             // Input parameters (model-specific)
+  webhook?: string;          // Webhook URL for async completion notification
+}
+```
+
+### JobHandle
+
+```typescript
+interface JobHandle {
+  id: string;                // Provider-assigned job identifier
+  provider: string;          // Provider name (e.g. "fal", "replicate", "runpod")
+  model: string;             // Model/endpoint that was invoked
+  submittedAt: string;       // ISO 8601 timestamp
+}
+```
+
+### JobStatus
+
+String enum for compute job status.
+
+```typescript
+JobStatus.Queued      // "queued"
+JobStatus.Running     // "running"
+JobStatus.Completed   // "completed"
+JobStatus.Failed      // "failed"
+JobStatus.Cancelled   // "cancelled"
+```
+
+### ComputeResult
+
+```typescript
+interface ComputeResult {
+  job?: JobHandle;           // Job handle that produced this result
+  output: object;            // Output data (model-specific)
+  timing?: ComputeTiming;    // Request timing breakdown
+  cost?: number;             // Cost in USD
+  metadata: object;          // Raw provider-specific metadata
+}
+```
+
+### ComputeTiming
+
+```typescript
+interface ComputeTiming {
+  queueMs?: number;          // Time spent waiting in queue (ms)
+  executionMs?: number;      // Time spent executing (ms)
+  totalMs?: number;          // Total wall-clock time (ms)
+}
+```
+
+---
+
+## Media Output Types
+
+### MediaOutput
+
+A single piece of generated media content.
+
+```typescript
+interface MediaOutput {
+  url?: string;              // URL where the media can be downloaded
+  base64?: string;           // Base64-encoded media data
+  rawContent?: string;       // Raw text content (SVG, OBJ, GLTF JSON)
+  mediaType: string;         // MIME type (e.g. "image/png", "video/mp4")
+  fileSize?: number;         // File size in bytes
+  metadata: object;          // Provider-specific metadata
+}
+```
+
+### GeneratedImage
+
+```typescript
+interface GeneratedImage {
+  media: MediaOutput;
+  width?: number;            // Image width in pixels
+  height?: number;           // Image height in pixels
+}
+```
+
+### GeneratedVideo
+
+```typescript
+interface GeneratedVideo {
+  media: MediaOutput;
+  width?: number;            // Video width in pixels
+  height?: number;           // Video height in pixels
+  durationSeconds?: number;  // Duration in seconds
+  fps?: number;              // Frames per second
+}
+```
+
+### GeneratedAudio
+
+```typescript
+interface GeneratedAudio {
+  media: MediaOutput;
+  durationSeconds?: number;  // Duration in seconds
+  sampleRate?: number;       // Sample rate in Hz
+  channels?: number;         // Number of audio channels
+}
+```
+
+### Generated3DModel
+
+```typescript
+interface Generated3DModel {
+  media: MediaOutput;
+  vertexCount?: number;      // Total vertex count
+  faceCount?: number;        // Total face/triangle count
+  hasTextures: boolean;      // Whether the model includes textures
+  hasAnimations: boolean;    // Whether the model includes animations
+}
+```
+
+---
+
+## mediaTypes()
+
+Returns an object mapping friendly format names to MIME type strings. Useful for specifying `mediaType` when constructing image messages or compute requests.
+
+```typescript
+import { mediaTypes } from "blazen";
+
+const types = mediaTypes();
+console.log(types.png);   // "image/png"
+console.log(types.mp4);   // "video/mp4"
+console.log(types.glb);   // "model/gltf-binary"
+```
+
+| Category | Properties |
+|---|---|
+| Images | `png`, `jpeg`, `webp`, `gif`, `svg`, `bmp`, `tiff`, `avif`, `ico` |
+| Video | `mp4`, `webm`, `mov`, `avi`, `mkv` |
+| Audio | `mp3`, `wav`, `ogg`, `flac`, `aac`, `m4a` |
+| 3D Models | `glb`, `gltf`, `obj`, `fbx`, `usdz`, `stl`, `ply` |
+| Documents | `pdf` |
+
+---
+
+## Error Handling
+
+All errors from the SDK are thrown as JavaScript `Error` objects with descriptive message strings. The error message format indicates the error category:
+
+| Error Pattern | Description |
+|---|---|
+| `"authentication failed: ..."` | Invalid or expired API key |
+| `"rate limited"` / `"rate limited: retry after {ms}ms"` | Provider rate limit hit |
+| `"timed out after {ms}ms"` | Request timed out |
+| `"{provider} error: ..."` | Provider-specific error (may include HTTP status) |
+| `"invalid input: ..."` | Validation error in request parameters |
+| `"content policy violation: ..."` | Content moderated by the provider |
+| `"unsupported: ..."` | Feature not supported by the chosen provider |
+| `"serialization error: ..."` | JSON serialization/deserialization failure |
+| `"request failed: ..."` | Network or HTTP request failure |
+| `"completion error: model returned no content"` | Model returned an empty response |
+| `"completion error: model not found: ..."` | Invalid model identifier |
+| `"completion error: invalid response: ..."` | Malformed response from provider |
+| `"completion error: stream error: ..."` | Error during streaming |
+| `"compute error: job failed: ..."` | Compute job execution failure |
+| `"compute error: job cancelled"` | Compute job was cancelled |
+| `"compute error: quota exceeded: ..."` | Provider quota exhausted |
+| `"media error: invalid media: ..."` | Invalid media content |
+| `"media error: media too large: ..."` | Media exceeds size limit |
+| `"tool error: ..."` | Error in tool execution (agent system) |
+
+```typescript
+try {
+  const response = await model.complete([ChatMessage.user("Hello")]);
+} catch (e) {
+  if (e.message.startsWith("rate limited")) {
+    // Back off and retry
+  } else if (e.message.startsWith("authentication failed")) {
+    // Check API key
+  }
+}
+```
+
+Rate limit, timeout, and request errors are generally transient and safe to retry. Provider errors with 5xx status codes are also retryable.
+
+---
+
+## version()
+
+Returns the Blazen library version string.
+
+```typescript
 import { version } from "blazen";
 
 console.log(version()); // "0.1.0"

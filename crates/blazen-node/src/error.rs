@@ -18,11 +18,18 @@ pub fn workflow_error_to_napi(err: blazen_core::WorkflowError) -> napi::Error {
     napi::Error::new(Status::GenericFailure, err.to_string())
 }
 
-/// Convert an [`LlmError`](blazen_llm::LlmError) into a [`napi::Error`].
+/// Convert a [`BlazenError`](blazen_llm::BlazenError) into a [`napi::Error`].
 ///
 /// Intentionally takes by value for use with `map_err`.
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn llm_error_to_napi(err: blazen_llm::LlmError) -> napi::Error {
+pub fn blazen_error_to_napi(err: blazen_llm::BlazenError) -> napi::Error {
     napi::Error::new(Status::GenericFailure, err.to_string())
+}
+
+/// Backwards-compatible alias for [`blazen_error_to_napi`].
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn llm_error_to_napi(err: blazen_llm::BlazenError) -> napi::Error {
+    blazen_error_to_napi(err)
 }

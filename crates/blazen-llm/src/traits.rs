@@ -1,4 +1,34 @@
-//! Core traits defining the LLM provider abstraction layer.
+//! Provider traits for LLM and media model implementations.
+//!
+//! These traits define the interface that all providers must implement.
+//! You can create custom providers by implementing these traits on your
+//! own structs:
+//!
+//! ```rust,ignore
+//! use blazen_llm::{CompletionModel, CompletionRequest, CompletionResponse, BlazenError};
+//!
+//! struct MyCustomProvider { /* ... */ }
+//!
+//! #[async_trait::async_trait]
+//! impl CompletionModel for MyCustomProvider {
+//!     fn model_id(&self) -> &str { "my-model" }
+//!     async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, BlazenError> {
+//!         // Your implementation here
+//!         todo!()
+//!     }
+//!     // stream() must also be implemented
+//!     async fn stream(
+//!         &self,
+//!         request: CompletionRequest,
+//!     ) -> Result<
+//!         std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<blazen_llm::StreamChunk, BlazenError>> + Send>>,
+//!         BlazenError,
+//!     > {
+//!         // Your streaming implementation here
+//!         todo!()
+//!     }
+//! }
+//! ```
 //!
 //! [`CompletionModel`] is the central trait that every provider must implement.
 //! [`StructuredOutput`] and [`EmbeddingModel`] extend the surface area with
@@ -13,9 +43,10 @@ use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use crate::error::LlmError;
+use crate::error::BlazenError;
 use crate::types::{
-    ChatMessage, CompletionRequest, CompletionResponse, StreamChunk, ToolDefinition,
+    ChatMessage, CompletionRequest, CompletionResponse, EmbeddingResponse, StreamChunk,
+    StructuredResponse, ToolDefinition,
 };
 
 // ---------------------------------------------------------------------------
@@ -31,13 +62,14 @@ pub trait CompletionModel: Send + Sync {
     fn model_id(&self) -> &str;
 
     /// Perform a non-streaming chat completion.
-    async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, LlmError>;
+    async fn complete(&self, request: CompletionRequest)
+    -> Result<CompletionResponse, BlazenError>;
 
     /// Perform a streaming chat completion, returning an async stream of chunks.
     async fn stream(
         &self,
         request: CompletionRequest,
-    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LlmError>> + Send>>, LlmError>;
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>;
 }
 
 // ---------------------------------------------------------------------------
@@ -59,7 +91,7 @@ pub trait StructuredOutput: CompletionModel {
     async fn extract<T: JsonSchema + DeserializeOwned + Send>(
         &self,
         messages: Vec<ChatMessage>,
-    ) -> Result<T, LlmError> {
+    ) -> Result<StructuredResponse<T>, BlazenError> {
         let schema = schemars::schema_for!(T);
         let schema_json = serde_json::to_value(&schema)?;
 
@@ -71,12 +103,22 @@ pub trait StructuredOutput: CompletionModel {
             top_p: None,
             response_format: Some(schema_json),
             model: None,
+            modalities: None,
+            image_config: None,
+            audio_config: None,
         };
 
         let response = self.complete(request).await?;
-        let content = response.content.ok_or(LlmError::NoContent)?;
-        let parsed: T = serde_json::from_str(&content)?;
-        Ok(parsed)
+        let content = response.content.ok_or_else(BlazenError::no_content)?;
+        let data: T = serde_json::from_str(&content)?;
+        Ok(StructuredResponse {
+            data,
+            usage: response.usage,
+            model: response.model,
+            cost: response.cost,
+            timing: response.timing,
+            metadata: response.metadata,
+        })
     }
 }
 
@@ -98,7 +140,7 @@ pub trait EmbeddingModel: Send + Sync {
     fn dimensions(&self) -> usize;
 
     /// Embed one or more texts, returning one vector per input text.
-    async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, LlmError>;
+    async fn embed(&self, texts: &[String]) -> Result<EmbeddingResponse, BlazenError>;
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +157,8 @@ pub trait Tool: Send + Sync {
     fn definition(&self) -> ToolDefinition;
 
     /// Execute the tool with the given arguments and return the result.
-    async fn execute(&self, arguments: serde_json::Value) -> Result<serde_json::Value, LlmError>;
+    async fn execute(&self, arguments: serde_json::Value)
+    -> Result<serde_json::Value, BlazenError>;
 }
 
 // ---------------------------------------------------------------------------
@@ -170,14 +213,24 @@ pub struct ModelCapabilities {
     pub image_generation: bool,
     /// Supports text embeddings.
     pub embeddings: bool,
+    /// Video generation support (text-to-video, image-to-video).
+    pub video_generation: bool,
+    /// Text-to-speech synthesis.
+    pub text_to_speech: bool,
+    /// Speech-to-text transcription.
+    pub speech_to_text: bool,
+    /// Audio generation (music, sound effects).
+    pub audio_generation: bool,
+    /// 3D model generation.
+    pub three_d_generation: bool,
 }
 
 /// A provider that can list its available models.
 #[async_trait]
 pub trait ModelRegistry: Send + Sync {
     /// List all models available from this provider.
-    async fn list_models(&self) -> Result<Vec<ModelInfo>, LlmError>;
+    async fn list_models(&self) -> Result<Vec<ModelInfo>, BlazenError>;
 
     /// Look up a specific model by its identifier.
-    async fn get_model(&self, model_id: &str) -> Result<Option<ModelInfo>, LlmError>;
+    async fn get_model(&self, model_id: &str) -> Result<Option<ModelInfo>, BlazenError>;
 }

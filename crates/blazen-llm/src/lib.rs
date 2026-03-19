@@ -24,7 +24,7 @@
 //! use blazen_llm::providers::openai::OpenAiProvider;
 //!
 //! # #[cfg(feature = "openai")]
-//! # async fn example() -> Result<(), blazen_llm::LlmError> {
+//! # async fn example() -> Result<(), blazen_llm::BlazenError> {
 //! let model = OpenAiProvider::new("sk-...");
 //! let request = CompletionRequest::new(vec![
 //!     ChatMessage::user("What is 2 + 2?"),
@@ -57,20 +57,62 @@
 //! # }
 //! ```
 
+pub mod agent;
+pub mod compute;
 pub mod error;
 pub mod events;
+pub mod media;
 pub mod providers;
 pub mod traits;
 pub mod types;
 
 // Re-export primary types at crate root for ergonomic imports.
+pub use agent::{AgentConfig, AgentEvent, AgentResult, run_agent, run_agent_with_callback};
+pub use compute::{
+    // Audio
+    AudioGeneration,
+    AudioResult,
+    // Core compute
+    ComputeProvider,
+    ComputeRequest,
+    ComputeResult,
+    // Image
+    ImageGeneration,
+    ImageModel,
+    ImageRequest,
+    ImageResult,
+    JobHandle,
+    JobStatus,
+    MusicRequest,
+    SpeechRequest,
+    // 3D
+    ThreeDGeneration,
+    ThreeDRequest,
+    ThreeDResult,
+    // Transcription
+    Transcription,
+    TranscriptionRequest,
+    TranscriptionResult,
+    TranscriptionSegment,
+    UpscaleRequest,
+    // Video
+    VideoGeneration,
+    VideoRequest,
+    VideoResult,
+};
+#[allow(deprecated)]
 pub use error::LlmError;
+pub use error::{BlazenError, CompletionErrorKind, ComputeErrorKind, MediaErrorKind};
 pub use events::{StreamChunkEvent, StreamCompleteEvent};
+pub use media::{
+    Generated3DModel, GeneratedAudio, GeneratedImage, GeneratedVideo, MediaOutput, MediaType,
+};
 pub use traits::{
     CompletionModel, EmbeddingModel, ModelCapabilities, ModelInfo, ModelPricing, ModelRegistry,
     StructuredOutput, Tool,
 };
 pub use types::{
-    ChatMessage, CompletionRequest, CompletionResponse, ContentPart, FileContent, ImageContent,
-    ImageSource, MessageContent, Role, StreamChunk, TokenUsage, ToolCall, ToolDefinition,
+    ChatMessage, CompletionRequest, CompletionResponse, ContentPart, EmbeddingResponse,
+    FileContent, ImageContent, ImageSource, MessageContent, RequestTiming, Role, StreamChunk,
+    StructuredResponse, TokenUsage, ToolCall, ToolDefinition,
 };

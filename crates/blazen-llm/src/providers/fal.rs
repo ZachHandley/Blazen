@@ -12,19 +12,38 @@
 //! - Webhook mode: submit with callback URL
 //!
 //! For LLM specifically, fal.ai proxies through `OpenRouter` via `fal-ai/any-llm`.
+//!
+//! This module implements all media generation traits:
+//! - [`CompletionModel`] for LLM chat completions (via `fal-ai/any-llm`)
+//! - [`ComputeProvider`] for generic compute job submission/polling
+//! - [`ImageGeneration`] for typed image generation and upscaling
+//! - [`VideoGeneration`] for text-to-video and image-to-video
+//! - [`AudioGeneration`] for TTS, music, and sound effects
+//! - [`Transcription`] for speech-to-text (Whisper)
 
 use std::pin::Pin;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
+use chrono::Utc;
 use futures_util::Stream;
 use futures_util::stream;
 use reqwest::Client;
 use serde::Deserialize;
 use tracing::{debug, warn};
 
-use crate::error::LlmError;
-use crate::types::{CompletionRequest, CompletionResponse, MessageContent, StreamChunk};
+use super::openai_format::parse_retry_after;
+use crate::compute::{
+    AudioGeneration, AudioResult, ComputeProvider, ComputeRequest, ComputeResult, ImageGeneration,
+    ImageRequest, ImageResult, JobHandle, JobStatus, MusicRequest, SpeechRequest, Transcription,
+    TranscriptionRequest, TranscriptionResult, TranscriptionSegment, UpscaleRequest,
+    VideoGeneration, VideoRequest, VideoResult,
+};
+use crate::error::{BlazenError, ComputeErrorKind};
+use crate::media::{GeneratedAudio, GeneratedImage, GeneratedVideo, MediaOutput, MediaType};
+use crate::types::{
+    CompletionRequest, CompletionResponse, MessageContent, RequestTiming, StreamChunk,
+};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -38,6 +57,30 @@ const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 /// Maximum number of poll iterations before giving up.
 const MAX_POLL_ITERATIONS: u32 = 600; // 10 minutes at 1s intervals
+
+/// Default image generation model.
+const DEFAULT_IMAGE_MODEL: &str = "fal-ai/flux/schnell";
+
+/// Default upscaling model.
+const DEFAULT_UPSCALE_MODEL: &str = "fal-ai/esrgan";
+
+/// Default text-to-video model.
+const DEFAULT_TEXT_TO_VIDEO_MODEL: &str = "fal-ai/minimax/video-01";
+
+/// Default image-to-video model.
+const DEFAULT_IMAGE_TO_VIDEO_MODEL: &str = "fal-ai/kling-video/v2.1/pro/image-to-video";
+
+/// Default text-to-speech model.
+const DEFAULT_TTS_MODEL: &str = "fal-ai/chatterbox/text-to-speech";
+
+/// Default music generation model.
+const DEFAULT_MUSIC_MODEL: &str = "beatoven/music-generation";
+
+/// Default sound effect generation model.
+const DEFAULT_SFX_MODEL: &str = "beatoven/sound-effect-generation";
+
+/// Default transcription model.
+const DEFAULT_TRANSCRIPTION_MODEL: &str = "fal-ai/whisper";
 
 // ---------------------------------------------------------------------------
 // Execution mode
@@ -68,6 +111,11 @@ pub enum FalExecutionMode {
 ///
 /// For LLM usage, this provider uses the `fal-ai/any-llm` model which
 /// proxies through `OpenRouter` and accepts a simple prompt-based format.
+///
+/// For compute usage, this provider implements [`ComputeProvider`] with
+/// queue-based job submission, status polling, and result retrieval.
+///
+/// For image generation and upscaling, this provider implements [`ImageGeneration`].
 ///
 /// # Examples
 ///
@@ -126,11 +174,24 @@ impl FalProvider {
         self
     }
 
+    // -----------------------------------------------------------------------
+    // Auth helper
+    // -----------------------------------------------------------------------
+
+    /// Apply fal.ai authentication (`Authorization: Key <key>`).
+    fn apply_auth(&self, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        builder.header("Authorization", format!("Key {}", self.api_key))
+    }
+
+    // -----------------------------------------------------------------------
+    // LLM body builder
+    // -----------------------------------------------------------------------
+
     /// Build the JSON request body for the `fal-ai/any-llm` endpoint.
     ///
     /// fal-ai/any-llm is text-only. Non-text content (images, files) is
     /// dropped with a warning.
-    fn build_body(&self, request: &CompletionRequest) -> serde_json::Value {
+    fn build_llm_body(&self, request: &CompletionRequest) -> serde_json::Value {
         let llm_model = request.model.as_deref().unwrap_or(&self.llm_model);
 
         // Concatenate all messages into a prompt string.
@@ -176,6 +237,20 @@ impl FalProvider {
             body["system_prompt"] = serde_json::Value::String(system_parts.join("\n\n"));
         }
 
+        // Pass through optional LLM parameters.
+        if let Some(temperature) = request.temperature {
+            body["temperature"] = serde_json::json!(temperature);
+        }
+        if let Some(max_tokens) = request.max_tokens {
+            body["max_tokens"] = serde_json::json!(max_tokens);
+        }
+        if let Some(top_p) = request.top_p {
+            body["top_p"] = serde_json::json!(top_p);
+        }
+        if let Some(ref response_format) = request.response_format {
+            body["response_format"] = response_format.clone();
+        }
+
         body
     }
 
@@ -184,13 +259,40 @@ impl FalProvider {
         &self.default_model
     }
 
-    /// Apply fal.ai authentication (`Authorization: Key <key>`).
-    fn apply_auth(&self, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        builder.header("Authorization", format!("Key {}", self.api_key))
+    // -----------------------------------------------------------------------
+    // Shared HTTP helpers
+    // -----------------------------------------------------------------------
+
+    /// Map an HTTP error response to the appropriate `BlazenError`.
+    fn map_http_error(
+        status: reqwest::StatusCode,
+        body: &str,
+        retry_after_ms: Option<u64>,
+    ) -> BlazenError {
+        match status.as_u16() {
+            401 => BlazenError::auth("authentication failed"),
+            429 => BlazenError::RateLimit { retry_after_ms },
+            _ => BlazenError::request(format!("HTTP {status}: {body}")),
+        }
     }
 
+    /// Read the error body from a response, or return a fallback.
+    async fn read_error_body(response: reqwest::Response) -> String {
+        response
+            .text()
+            .await
+            .unwrap_or_else(|_| String::from("<unable to read error body>"))
+    }
+
+    // -----------------------------------------------------------------------
+    // Sync execution (for CompletionModel)
+    // -----------------------------------------------------------------------
+
     /// Execute synchronously: POST to fal.run and wait for the response.
-    async fn execute_sync(&self, body: &serde_json::Value) -> Result<serde_json::Value, LlmError> {
+    async fn execute_sync(
+        &self,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, BlazenError> {
         let model = self.resolve_fal_model();
         let url = format!("{FAL_SYNC_URL}/{model}");
 
@@ -199,149 +301,45 @@ impl FalProvider {
             .json(body)
             .send()
             .await
-            .map_err(|e| LlmError::Http(e.to_string()))?;
+            .map_err(|e| BlazenError::request(e.to_string()))?;
 
         let status = response.status();
         if !status.is_success() {
-            let error_body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| String::from("<unable to read error body>"));
-            return match status.as_u16() {
-                401 => Err(LlmError::AuthFailed),
-                429 => Err(LlmError::RateLimited { retry_after: None }),
-                _ => Err(LlmError::RequestFailed(format!(
-                    "HTTP {status}: {error_body}"
-                ))),
-            };
+            let retry_after_ms = parse_retry_after(response.headers());
+            let error_body = Self::read_error_body(response).await;
+            return Err(Self::map_http_error(status, &error_body, retry_after_ms));
         }
 
         response
             .json()
             .await
-            .map_err(|e| LlmError::InvalidResponse(e.to_string()))
+            .map_err(|e| BlazenError::invalid_response(e.to_string()))
     }
 
-    /// Execute via queue: submit, poll, return result.
-    async fn execute_queue(
-        &self,
-        body: &serde_json::Value,
-        poll_interval: Duration,
-    ) -> Result<serde_json::Value, LlmError> {
-        let model = self.resolve_fal_model();
-        let submit_url = format!("{FAL_QUEUE_URL}/{model}");
-
-        // Submit to queue.
-        let submit_response = self
-            .apply_auth(self.client.post(&submit_url))
-            .json(body)
-            .send()
-            .await
-            .map_err(|e| LlmError::Http(e.to_string()))?;
-
-        let status = submit_response.status();
-        if !status.is_success() {
-            let error_body = submit_response
-                .text()
-                .await
-                .unwrap_or_else(|_| String::from("<unable to read error body>"));
-            return match status.as_u16() {
-                401 => Err(LlmError::AuthFailed),
-                429 => Err(LlmError::RateLimited { retry_after: None }),
-                _ => Err(LlmError::RequestFailed(format!(
-                    "HTTP {status}: {error_body}"
-                ))),
-            };
-        }
-
-        let queue_response: FalQueueResponse = submit_response
-            .json()
-            .await
-            .map_err(|e| LlmError::InvalidResponse(e.to_string()))?;
-
-        let request_id = queue_response.request_id;
-        debug!(request_id = %request_id, "fal.ai job submitted to queue");
-
-        // Poll for completion.
-        let status_url = format!("{FAL_QUEUE_URL}/{model}/requests/{request_id}/status");
-        let result_url = format!("{FAL_QUEUE_URL}/{model}/requests/{request_id}");
-
-        for _ in 0..MAX_POLL_ITERATIONS {
-            tokio::time::sleep(poll_interval).await;
-
-            let status_response = self
-                .apply_auth(self.client.get(&status_url))
-                .send()
-                .await
-                .map_err(|e| LlmError::Http(e.to_string()))?;
-
-            if !status_response.status().is_success() {
-                continue;
-            }
-
-            let status_body: FalStatusResponse = status_response
-                .json()
-                .await
-                .map_err(|e| LlmError::InvalidResponse(e.to_string()))?;
-
-            match status_body.status.as_str() {
-                "COMPLETED" => {
-                    // Fetch the result.
-                    let result_response = self
-                        .apply_auth(self.client.get(&result_url))
-                        .send()
-                        .await
-                        .map_err(|e| LlmError::Http(e.to_string()))?;
-
-                    return result_response
-                        .json()
-                        .await
-                        .map_err(|e| LlmError::InvalidResponse(e.to_string()));
-                }
-                "FAILED" => {
-                    let error_msg = status_body
-                        .error
-                        .unwrap_or_else(|| "unknown error".to_owned());
-                    return Err(LlmError::RequestFailed(format!(
-                        "fal.ai job failed: {error_msg}"
-                    )));
-                }
-                // IN_QUEUE, IN_PROGRESS -- keep polling.
-                _ => {}
-            }
-        }
-
-        Err(LlmError::RequestFailed(
-            "fal.ai job timed out waiting for completion".into(),
-        ))
-    }
+    // -----------------------------------------------------------------------
+    // Webhook execution (for CompletionModel)
+    // -----------------------------------------------------------------------
 
     /// Execute via webhook: submit with webhook URL.
     async fn execute_webhook(
         &self,
         body: &serde_json::Value,
         webhook_url: &str,
-    ) -> Result<serde_json::Value, LlmError> {
+    ) -> Result<serde_json::Value, BlazenError> {
         let model = self.resolve_fal_model();
-        let submit_url = format!("{FAL_QUEUE_URL}/{model}");
+        let submit_url = format!("{FAL_QUEUE_URL}/{model}?fal_webhook={webhook_url}");
 
         let submit_response = self
             .apply_auth(self.client.post(&submit_url))
-            .header("fal_webhook", webhook_url)
             .json(body)
             .send()
             .await
-            .map_err(|e| LlmError::Http(e.to_string()))?;
+            .map_err(|e| BlazenError::request(e.to_string()))?;
 
         let status = submit_response.status();
         if !status.is_success() {
-            let error_body = submit_response
-                .text()
-                .await
-                .unwrap_or_else(|_| String::from("<unable to read error body>"));
-            return Err(LlmError::RequestFailed(format!(
-                "HTTP {status}: {error_body}"
-            )));
+            let error_body = Self::read_error_body(submit_response).await;
+            return Err(BlazenError::request(format!("HTTP {status}: {error_body}")));
         }
 
         // Webhook mode returns the queue submission response. The actual
@@ -349,7 +347,224 @@ impl FalProvider {
         submit_response
             .json()
             .await
-            .map_err(|e| LlmError::InvalidResponse(e.to_string()))
+            .map_err(|e| BlazenError::invalid_response(e.to_string()))
+    }
+
+    // -----------------------------------------------------------------------
+    // Shared queue polling logic
+    // -----------------------------------------------------------------------
+
+    /// Submit a request to the fal.ai queue and return the queue response.
+    async fn queue_submit(
+        &self,
+        model: &str,
+        body: &serde_json::Value,
+        webhook: Option<&str>,
+    ) -> Result<FalQueueSubmitResponse, BlazenError> {
+        let mut submit_url = format!("{FAL_QUEUE_URL}/{model}");
+        if let Some(wh) = webhook {
+            submit_url = format!("{submit_url}?fal_webhook={wh}");
+        }
+
+        let response = self
+            .apply_auth(self.client.post(&submit_url))
+            .json(body)
+            .send()
+            .await
+            .map_err(|e| BlazenError::request(e.to_string()))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let retry_after_ms = parse_retry_after(response.headers());
+            let error_body = Self::read_error_body(response).await;
+            return Err(Self::map_http_error(status, &error_body, retry_after_ms));
+        }
+
+        response
+            .json::<FalQueueSubmitResponse>()
+            .await
+            .map_err(|e| BlazenError::Serialization(e.to_string()))
+    }
+
+    /// Poll the fal.ai queue status endpoint.
+    async fn queue_poll_status(
+        &self,
+        model: &str,
+        request_id: &str,
+    ) -> Result<FalStatusResponse, BlazenError> {
+        let status_url = format!("{FAL_QUEUE_URL}/{model}/requests/{request_id}/status");
+
+        let response = self
+            .apply_auth(self.client.get(&status_url))
+            .send()
+            .await
+            .map_err(|e| BlazenError::request(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let error_body = Self::read_error_body(response).await;
+            return Err(BlazenError::request(format!(
+                "status poll failed: {error_body}"
+            )));
+        }
+
+        response
+            .json::<FalStatusResponse>()
+            .await
+            .map_err(|e| BlazenError::Serialization(e.to_string()))
+    }
+
+    /// Fetch the result of a completed queue job.
+    async fn queue_get_result(
+        &self,
+        model: &str,
+        request_id: &str,
+    ) -> Result<serde_json::Value, BlazenError> {
+        let result_url = format!("{FAL_QUEUE_URL}/{model}/requests/{request_id}");
+
+        let response = self
+            .apply_auth(self.client.get(&result_url))
+            .send()
+            .await
+            .map_err(|e| BlazenError::request(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let error_body = Self::read_error_body(response).await;
+            return Err(BlazenError::request(format!(
+                "result fetch failed: {error_body}"
+            )));
+        }
+
+        response
+            .json()
+            .await
+            .map_err(|e| BlazenError::Serialization(e.to_string()))
+    }
+
+    /// Poll until a queue job completes and return the result JSON plus timing.
+    ///
+    /// This is the shared polling logic used by both [`ComputeProvider::result`]
+    /// and [`CompletionModel::complete`] (queue mode).
+    async fn poll_until_complete(
+        &self,
+        model: &str,
+        request_id: &str,
+        poll_interval: Duration,
+    ) -> Result<(serde_json::Value, serde_json::Value, RequestTiming), BlazenError> {
+        let start = Instant::now();
+        let mut in_progress_at: Option<Instant> = None;
+
+        for _ in 0..MAX_POLL_ITERATIONS {
+            tokio::time::sleep(poll_interval).await;
+
+            let status_body = self.queue_poll_status(model, request_id).await?;
+
+            match status_body.status.as_str() {
+                "COMPLETED" => {
+                    // Check for error in COMPLETED status.
+                    if let Some(ref error) = status_body.error {
+                        return Err(BlazenError::Compute(ComputeErrorKind::JobFailed {
+                            message: error.clone(),
+                            error_type: None,
+                            retryable: false,
+                        }));
+                    }
+
+                    // Build timing from metrics.
+                    let inference_time =
+                        status_body.metrics.as_ref().and_then(|m| m.inference_time);
+                    let timing = build_timing(start, in_progress_at, inference_time);
+
+                    // Serialize status for metadata before moving on.
+                    let status_json =
+                        serde_json::to_value(&status_body).unwrap_or(serde_json::Value::Null);
+
+                    // Fetch the result.
+                    let result = self.queue_get_result(model, request_id).await?;
+
+                    return Ok((result, status_json, timing));
+                }
+                "IN_PROGRESS" => {
+                    if in_progress_at.is_none() {
+                        in_progress_at = Some(Instant::now());
+                    }
+                }
+                // IN_QUEUE -- keep polling.
+                _ => {}
+            }
+        }
+
+        Err(BlazenError::Timeout {
+            elapsed_ms: millis_u64(start.elapsed()),
+        })
+    }
+
+    /// Execute via queue: submit, poll, return result. Used by `CompletionModel`.
+    async fn execute_queue_llm(
+        &self,
+        body: &serde_json::Value,
+        poll_interval: Duration,
+    ) -> Result<(serde_json::Value, RequestTiming), BlazenError> {
+        let model = self.resolve_fal_model();
+
+        let submit_response = self.queue_submit(model, body, None).await?;
+
+        let request_id = &submit_response.request_id;
+        debug!(request_id = %request_id, "fal.ai LLM job submitted to queue");
+
+        let (result, _status, timing) = self
+            .poll_until_complete(model, request_id, poll_interval)
+            .await?;
+
+        Ok((result, timing))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Timing helpers
+// ---------------------------------------------------------------------------
+
+/// Safely convert a `Duration` to milliseconds as `u64`, saturating at `u64::MAX`.
+fn millis_u64(d: Duration) -> u64 {
+    u64::try_from(d.as_millis()).unwrap_or(u64::MAX)
+}
+
+/// Build a [`RequestTiming`] from measured instants and fal.ai metrics.
+fn build_timing(
+    start: Instant,
+    in_progress_at: Option<Instant>,
+    inference_time_secs: Option<f64>,
+) -> RequestTiming {
+    let total_ms = Some(millis_u64(start.elapsed()));
+
+    let queue_ms = in_progress_at.map(|t| millis_u64(t.duration_since(start)));
+
+    #[allow(
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_precision_loss
+    )]
+    let execution_ms = inference_time_secs
+        .map(|s| {
+            let ms = (s * 1000.0).max(0.0);
+            if ms > u64::MAX as f64 {
+                u64::MAX
+            } else {
+                ms as u64
+            }
+        })
+        .or_else(|| {
+            // Fallback: if we know when IN_PROGRESS started, compute
+            // execution as total minus queue time.
+            match (total_ms, queue_ms) {
+                (Some(total), Some(queue)) => Some(total.saturating_sub(queue)),
+                _ => None,
+            }
+        });
+
+    RequestTiming {
+        queue_ms,
+        execution_ms,
+        total_ms,
     }
 }
 
@@ -357,16 +572,42 @@ impl FalProvider {
 // Wire types
 // ---------------------------------------------------------------------------
 
+/// Response from the fal.ai queue submit endpoint.
 #[derive(Debug, Deserialize)]
-struct FalQueueResponse {
+struct FalQueueSubmitResponse {
     request_id: String,
+    #[serde(default)]
+    #[allow(dead_code)]
+    response_url: Option<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    status_url: Option<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    cancel_url: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+/// Response from the fal.ai queue status endpoint.
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 struct FalStatusResponse {
     status: String,
     #[serde(default)]
     error: Option<String>,
+    #[serde(default)]
+    metrics: Option<FalMetrics>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    queue_position: Option<u32>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    response_url: Option<String>,
+}
+
+/// Metrics returned by fal.ai in COMPLETED status.
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+struct FalMetrics {
+    /// Inference time in seconds.
+    inference_time: Option<f64>,
 }
 
 /// Response from `fal-ai/any-llm`.
@@ -379,6 +620,31 @@ struct FalLlmResponse {
     partial: Option<bool>,
 }
 
+/// A single image from fal.ai image generation output.
+#[derive(Debug, Deserialize)]
+struct FalImage {
+    url: Option<String>,
+    #[serde(default)]
+    width: Option<u32>,
+    #[serde(default)]
+    height: Option<u32>,
+    #[serde(default)]
+    content_type: Option<String>,
+}
+
+/// Image generation output from fal.ai.
+#[derive(Debug, Deserialize)]
+struct FalImageOutput {
+    #[serde(default)]
+    images: Vec<FalImage>,
+}
+
+/// ESRGAN upscale output from fal.ai (single image, not array).
+#[derive(Debug, Deserialize)]
+struct FalUpscaleOutput {
+    image: FalImage,
+}
+
 // ---------------------------------------------------------------------------
 // CompletionModel implementation
 // ---------------------------------------------------------------------------
@@ -389,7 +655,10 @@ impl crate::traits::CompletionModel for FalProvider {
         &self.default_model
     }
 
-    async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, LlmError> {
+    async fn complete(
+        &self,
+        request: CompletionRequest,
+    ) -> Result<CompletionResponse, BlazenError> {
         let model_id = request.model.as_deref().unwrap_or(&self.llm_model);
         let span = tracing::info_span!(
             "llm.complete",
@@ -404,30 +673,47 @@ impl crate::traits::CompletionModel for FalProvider {
         let _enter = span.enter();
         let start = Instant::now();
 
-        let body = self.build_body(&request);
+        let body = self.build_llm_body(&request);
         debug!(model = %self.default_model, "fal.ai completion request");
 
-        let result = match &self.execution_mode {
-            FalExecutionMode::Sync => self.execute_sync(&body).await?,
-            FalExecutionMode::Queue { poll_interval } => {
-                self.execute_queue(&body, *poll_interval).await?
+        let (result, timing) = match &self.execution_mode {
+            FalExecutionMode::Sync => {
+                let result = self.execute_sync(&body).await?;
+                let elapsed = millis_u64(start.elapsed());
+                let timing = RequestTiming {
+                    queue_ms: None,
+                    execution_ms: Some(elapsed),
+                    total_ms: Some(elapsed),
+                };
+                (result, timing)
             }
-            FalExecutionMode::Webhook { url } => self.execute_webhook(&body, url).await?,
+            FalExecutionMode::Queue { poll_interval } => {
+                self.execute_queue_llm(&body, *poll_interval).await?
+            }
+            FalExecutionMode::Webhook { url } => {
+                let result = self.execute_webhook(&body, url).await?;
+                let timing = RequestTiming {
+                    queue_ms: None,
+                    execution_ms: None,
+                    total_ms: Some(millis_u64(start.elapsed())),
+                };
+                (result, timing)
+            }
         };
 
         // Parse the fal.ai response.
-        let fal_response: FalLlmResponse =
-            serde_json::from_value(result).map_err(|e| LlmError::InvalidResponse(e.to_string()))?;
+        let fal_response: FalLlmResponse = serde_json::from_value(result)
+            .map_err(|e| BlazenError::invalid_response(e.to_string()))?;
 
         if let Some(error) = fal_response.error {
-            return Err(LlmError::RequestFailed(format!(
-                "fal.ai model error: {error}"
-            )));
+            return Err(BlazenError::request(format!("fal.ai model error: {error}")));
         }
 
         span.record(
             "duration_ms",
-            u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
+            timing
+                .total_ms
+                .unwrap_or_else(|| millis_u64(start.elapsed())),
         );
         span.record("finish_reason", "stop");
 
@@ -437,13 +723,20 @@ impl crate::traits::CompletionModel for FalProvider {
             usage: None,
             model: self.default_model.clone(),
             finish_reason: Some("stop".to_owned()),
+            cost: None,
+            timing: Some(timing),
+            images: vec![],
+            audio: vec![],
+            videos: vec![],
+            metadata: serde_json::Value::Null,
         })
     }
 
     async fn stream(
         &self,
         request: CompletionRequest,
-    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LlmError>> + Send>>, LlmError> {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
+    {
         let model_id = request.model.as_deref().unwrap_or(&self.llm_model);
         let span = tracing::info_span!(
             "llm.stream",
@@ -466,13 +759,685 @@ impl crate::traits::CompletionModel for FalProvider {
         );
         span.record("chunk_count", 1u64);
 
-        let chunks: Vec<Result<StreamChunk, LlmError>> = vec![Ok(StreamChunk {
+        let chunks: Vec<Result<StreamChunk, BlazenError>> = vec![Ok(StreamChunk {
             delta: response.content,
             tool_calls: Vec::new(),
             finish_reason: Some("stop".to_owned()),
         })];
 
         Ok(Box::pin(stream::iter(chunks)))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ComputeProvider implementation
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+impl ComputeProvider for FalProvider {
+    #[allow(clippy::unnecessary_literal_bound)]
+    fn provider_id(&self) -> &str {
+        "fal"
+    }
+
+    async fn submit(&self, request: ComputeRequest) -> Result<JobHandle, BlazenError> {
+        let submit_response = self
+            .queue_submit(&request.model, &request.input, request.webhook.as_deref())
+            .await?;
+
+        debug!(
+            request_id = %submit_response.request_id,
+            model = %request.model,
+            "fal.ai compute job submitted"
+        );
+
+        Ok(JobHandle {
+            id: submit_response.request_id,
+            provider: "fal".to_owned(),
+            model: request.model,
+            submitted_at: Utc::now(),
+        })
+    }
+
+    async fn status(&self, job: &JobHandle) -> Result<JobStatus, BlazenError> {
+        let status_body = self.queue_poll_status(&job.model, &job.id).await?;
+
+        match status_body.status.as_str() {
+            "IN_QUEUE" => Ok(JobStatus::Queued),
+            "IN_PROGRESS" => Ok(JobStatus::Running),
+            "COMPLETED" => {
+                if let Some(error) = status_body.error {
+                    Ok(JobStatus::Failed { error })
+                } else {
+                    Ok(JobStatus::Completed)
+                }
+            }
+            other => {
+                // Defensive: treat unknown statuses as queued.
+                warn!(status = %other, "unknown fal.ai queue status, treating as Queued");
+                Ok(JobStatus::Queued)
+            }
+        }
+    }
+
+    async fn result(&self, job: JobHandle) -> Result<ComputeResult, BlazenError> {
+        let poll_interval = match &self.execution_mode {
+            FalExecutionMode::Queue { poll_interval } => *poll_interval,
+            _ => DEFAULT_POLL_INTERVAL,
+        };
+
+        let (output, status_json, timing) = self
+            .poll_until_complete(&job.model, &job.id, poll_interval)
+            .await?;
+
+        Ok(ComputeResult {
+            job: Some(job),
+            output,
+            timing,
+            cost: None, // fal.ai does not return per-request cost in API responses.
+            metadata: status_json,
+        })
+    }
+
+    async fn cancel(&self, job: &JobHandle) -> Result<(), BlazenError> {
+        let cancel_url = format!("{FAL_QUEUE_URL}/{}/requests/{}/cancel", job.model, job.id);
+
+        let response = self
+            .apply_auth(self.client.put(&cancel_url))
+            .send()
+            .await
+            .map_err(|e| BlazenError::request(e.to_string()))?;
+
+        let status = response.status();
+        if status.is_success() || status.as_u16() == 202 {
+            debug!(request_id = %job.id, "fal.ai job cancellation requested");
+            return Ok(());
+        }
+
+        // 400 = ALREADY_COMPLETED, which is fine.
+        if status.as_u16() == 400 {
+            debug!(request_id = %job.id, "fal.ai job already completed, cancel is a no-op");
+            return Ok(());
+        }
+
+        let error_body = Self::read_error_body(response).await;
+        Err(BlazenError::request(format!(
+            "cancel failed (HTTP {status}): {error_body}"
+        )))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ImageGeneration implementation
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+impl ImageGeneration for FalProvider {
+    async fn generate_image(&self, request: ImageRequest) -> Result<ImageResult, BlazenError> {
+        let model = request
+            .model
+            .as_deref()
+            .unwrap_or(DEFAULT_IMAGE_MODEL)
+            .to_owned();
+
+        // Build the input JSON.
+        let mut input = serde_json::json!({
+            "prompt": request.prompt,
+        });
+
+        // Image size: pass as object if both dimensions are set.
+        if let (Some(w), Some(h)) = (request.width, request.height) {
+            input["image_size"] = serde_json::json!({
+                "width": w,
+                "height": h,
+            });
+        }
+
+        // Number of images.
+        if let Some(n) = request.num_images {
+            input["num_images"] = serde_json::json!(n);
+        }
+
+        // Negative prompt.
+        if let Some(ref neg) = request.negative_prompt {
+            input["negative_prompt"] = serde_json::json!(neg);
+        }
+
+        // Merge extra parameters from the request.
+        if let serde_json::Value::Object(params) = &request.parameters {
+            for (k, v) in params {
+                input[k] = v.clone();
+            }
+        }
+
+        // Submit as a compute job and wait for the result.
+        let compute_request = ComputeRequest {
+            model: model.clone(),
+            input,
+            webhook: None,
+        };
+        let result = self.run(compute_request).await?;
+
+        // Parse the image output.
+        let image_output: FalImageOutput =
+            serde_json::from_value(result.output.clone()).map_err(|e| {
+                BlazenError::Serialization(format!("failed to parse image output: {e}"))
+            })?;
+
+        let images = image_output
+            .images
+            .into_iter()
+            .map(|img| {
+                let content_type = img.content_type.unwrap_or_else(|| "image/jpeg".to_owned());
+                GeneratedImage {
+                    media: MediaOutput {
+                        url: img.url,
+                        base64: None,
+                        raw_content: None,
+                        media_type: MediaType::from_mime(&content_type),
+                        file_size: None,
+                        metadata: serde_json::Value::Null,
+                    },
+                    width: img.width,
+                    height: img.height,
+                }
+            })
+            .collect();
+
+        Ok(ImageResult {
+            images,
+            timing: result.timing,
+            cost: result.cost,
+            metadata: serde_json::Value::Null,
+        })
+    }
+
+    async fn upscale_image(&self, request: UpscaleRequest) -> Result<ImageResult, BlazenError> {
+        let model = request
+            .model
+            .as_deref()
+            .unwrap_or(DEFAULT_UPSCALE_MODEL)
+            .to_owned();
+
+        // Build the input JSON.
+        let mut input = serde_json::json!({
+            "image_url": request.image_url,
+            "scale": request.scale,
+        });
+
+        // Merge extra parameters.
+        if let serde_json::Value::Object(params) = &request.parameters {
+            for (k, v) in params {
+                input[k] = v.clone();
+            }
+        }
+
+        // Submit as a compute job and wait for the result.
+        let compute_request = ComputeRequest {
+            model: model.clone(),
+            input,
+            webhook: None,
+        };
+        let result = self.run(compute_request).await?;
+
+        // ESRGAN returns a single image object, not an array.
+        let upscale_output: FalUpscaleOutput = serde_json::from_value(result.output.clone())
+            .map_err(|e| {
+                BlazenError::Serialization(format!("failed to parse upscale output: {e}"))
+            })?;
+
+        let content_type = upscale_output
+            .image
+            .content_type
+            .unwrap_or_else(|| "image/png".to_owned());
+        let image = GeneratedImage {
+            media: MediaOutput {
+                url: upscale_output.image.url,
+                base64: None,
+                raw_content: None,
+                media_type: MediaType::from_mime(&content_type),
+                file_size: None,
+                metadata: serde_json::Value::Null,
+            },
+            width: upscale_output.image.width,
+            height: upscale_output.image.height,
+        };
+
+        Ok(ImageResult {
+            images: vec![image],
+            timing: result.timing,
+            cost: result.cost,
+            metadata: serde_json::Value::Null,
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Media parsing helpers
+// ---------------------------------------------------------------------------
+
+/// Parse a video from fal.ai response output.
+///
+/// fal.ai video models return `{ "video": { "url": "...", "content_type": "...", ... } }`.
+fn parse_fal_video(output: &serde_json::Value) -> Result<GeneratedVideo, BlazenError> {
+    let video_obj = output
+        .get("video")
+        .ok_or_else(|| BlazenError::Serialization("missing 'video' field in response".into()))?;
+
+    let url = video_obj
+        .get("url")
+        .and_then(serde_json::Value::as_str)
+        .map(String::from);
+    let content_type = video_obj
+        .get("content_type")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("video/mp4");
+    let file_size = video_obj
+        .get("file_size")
+        .and_then(serde_json::Value::as_u64);
+
+    Ok(GeneratedVideo {
+        media: MediaOutput {
+            url,
+            base64: None,
+            raw_content: None,
+            media_type: MediaType::from_mime(content_type),
+            file_size,
+            metadata: video_obj.clone(),
+        },
+        width: None,
+        height: None,
+        duration_seconds: None,
+        fps: None,
+    })
+}
+
+/// Parse audio from fal.ai response output.
+///
+/// fal.ai audio models may return either:
+/// - `{ "audio_url": { "url": "...", ... } }` (object with url field)
+/// - `{ "audio_url": "https://..." }` (direct URL string)
+/// - `{ "audio": { "url": "...", ... } }` (nested object)
+fn parse_fal_audio(output: &serde_json::Value) -> Result<GeneratedAudio, BlazenError> {
+    // Try `audio_url` as an object first (e.g. chatterbox returns this).
+    if let Some(audio_obj) = output.get("audio_url") {
+        if let Some(obj) = audio_obj.as_object() {
+            let url = obj
+                .get("url")
+                .and_then(serde_json::Value::as_str)
+                .map(String::from);
+            let content_type = obj
+                .get("content_type")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("audio/wav");
+            let file_size = obj.get("file_size").and_then(serde_json::Value::as_u64);
+
+            return Ok(GeneratedAudio {
+                media: MediaOutput {
+                    url,
+                    base64: None,
+                    raw_content: None,
+                    media_type: MediaType::from_mime(content_type),
+                    file_size,
+                    metadata: audio_obj.clone(),
+                },
+                duration_seconds: None,
+                sample_rate: None,
+                channels: None,
+            });
+        }
+
+        // `audio_url` as a plain string.
+        if let Some(url_str) = audio_obj.as_str() {
+            return Ok(GeneratedAudio {
+                media: MediaOutput {
+                    url: Some(url_str.to_owned()),
+                    base64: None,
+                    raw_content: None,
+                    media_type: MediaType::Wav,
+                    file_size: None,
+                    metadata: serde_json::Value::Null,
+                },
+                duration_seconds: None,
+                sample_rate: None,
+                channels: None,
+            });
+        }
+    }
+
+    // Try `audio` as a nested object.
+    if let Some(audio_obj) = output.get("audio") {
+        let url = audio_obj
+            .get("url")
+            .and_then(serde_json::Value::as_str)
+            .map(String::from);
+        let content_type = audio_obj
+            .get("content_type")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("audio/wav");
+        let file_size = audio_obj
+            .get("file_size")
+            .and_then(serde_json::Value::as_u64);
+
+        return Ok(GeneratedAudio {
+            media: MediaOutput {
+                url,
+                base64: None,
+                raw_content: None,
+                media_type: MediaType::from_mime(content_type),
+                file_size,
+                metadata: audio_obj.clone(),
+            },
+            duration_seconds: None,
+            sample_rate: None,
+            channels: None,
+        });
+    }
+
+    Err(BlazenError::Serialization(
+        "missing 'audio_url' or 'audio' field in response".into(),
+    ))
+}
+
+/// Merge extra parameters from a `serde_json::Value` into an input object.
+fn merge_parameters(input: &mut serde_json::Value, parameters: &serde_json::Value) {
+    if let Some(params) = parameters.as_object() {
+        for (k, v) in params {
+            input[k] = v.clone();
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// VideoGeneration implementation
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+impl VideoGeneration for FalProvider {
+    async fn text_to_video(&self, request: VideoRequest) -> Result<VideoResult, BlazenError> {
+        let model = request
+            .model
+            .as_deref()
+            .unwrap_or(DEFAULT_TEXT_TO_VIDEO_MODEL)
+            .to_owned();
+
+        let mut input = serde_json::json!({
+            "prompt": request.prompt,
+        });
+
+        if let Some(dur) = request.duration_seconds {
+            // Kling/MiniMax expect duration as a string (e.g. "5").
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let secs = dur as u32;
+            input["duration"] = serde_json::json!(secs.to_string());
+        }
+        if let Some(ref np) = request.negative_prompt {
+            input["negative_prompt"] = serde_json::json!(np);
+        }
+        merge_parameters(&mut input, &request.parameters);
+
+        let compute_req = ComputeRequest {
+            model,
+            input,
+            webhook: None,
+        };
+        let result = self.run(compute_req).await?;
+        let video = parse_fal_video(&result.output)?;
+
+        Ok(VideoResult {
+            videos: vec![video],
+            timing: result.timing,
+            cost: result.cost,
+            metadata: result.metadata,
+        })
+    }
+
+    async fn image_to_video(&self, request: VideoRequest) -> Result<VideoResult, BlazenError> {
+        let model = request
+            .model
+            .as_deref()
+            .unwrap_or(DEFAULT_IMAGE_TO_VIDEO_MODEL)
+            .to_owned();
+
+        let image_url = request
+            .image_url
+            .as_deref()
+            .ok_or_else(|| BlazenError::Validation {
+                field: Some("image_url".into()),
+                message: "image_url is required for image-to-video".into(),
+            })?;
+
+        let mut input = serde_json::json!({
+            "prompt": request.prompt,
+            "image_url": image_url,
+        });
+
+        if let Some(dur) = request.duration_seconds {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let secs = dur as u32;
+            input["duration"] = serde_json::json!(secs.to_string());
+        }
+        if let Some(ref np) = request.negative_prompt {
+            input["negative_prompt"] = serde_json::json!(np);
+        }
+        merge_parameters(&mut input, &request.parameters);
+
+        let compute_req = ComputeRequest {
+            model,
+            input,
+            webhook: None,
+        };
+        let result = self.run(compute_req).await?;
+        let video = parse_fal_video(&result.output)?;
+
+        Ok(VideoResult {
+            videos: vec![video],
+            timing: result.timing,
+            cost: result.cost,
+            metadata: result.metadata,
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AudioGeneration implementation
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+impl AudioGeneration for FalProvider {
+    async fn text_to_speech(&self, request: SpeechRequest) -> Result<AudioResult, BlazenError> {
+        let model = request
+            .model
+            .as_deref()
+            .unwrap_or(DEFAULT_TTS_MODEL)
+            .to_owned();
+
+        let mut input = serde_json::json!({
+            "text": request.text,
+        });
+
+        if let Some(ref voice) = request.voice {
+            input["voice"] = serde_json::json!(voice);
+        }
+        if let Some(ref voice_url) = request.voice_url {
+            input["voice_url"] = serde_json::json!(voice_url);
+        }
+        if let Some(ref language) = request.language {
+            input["language"] = serde_json::json!(language);
+        }
+        if let Some(speed) = request.speed {
+            input["speed"] = serde_json::json!(speed);
+        }
+        merge_parameters(&mut input, &request.parameters);
+
+        let compute_req = ComputeRequest {
+            model,
+            input,
+            webhook: None,
+        };
+        let result = self.run(compute_req).await?;
+        let audio = parse_fal_audio(&result.output)?;
+
+        Ok(AudioResult {
+            audio: vec![audio],
+            timing: result.timing,
+            cost: result.cost,
+            metadata: result.metadata,
+        })
+    }
+
+    async fn generate_music(&self, request: MusicRequest) -> Result<AudioResult, BlazenError> {
+        let model = request
+            .model
+            .as_deref()
+            .unwrap_or(DEFAULT_MUSIC_MODEL)
+            .to_owned();
+
+        let mut input = serde_json::json!({
+            "prompt": request.prompt,
+        });
+
+        if let Some(dur) = request.duration_seconds {
+            input["duration"] = serde_json::json!(dur);
+        }
+        merge_parameters(&mut input, &request.parameters);
+
+        let compute_req = ComputeRequest {
+            model,
+            input,
+            webhook: None,
+        };
+        let result = self.run(compute_req).await?;
+        let audio = parse_fal_audio(&result.output)?;
+
+        Ok(AudioResult {
+            audio: vec![audio],
+            timing: result.timing,
+            cost: result.cost,
+            metadata: result.metadata,
+        })
+    }
+
+    async fn generate_sfx(&self, request: MusicRequest) -> Result<AudioResult, BlazenError> {
+        let model = request
+            .model
+            .as_deref()
+            .unwrap_or(DEFAULT_SFX_MODEL)
+            .to_owned();
+
+        let mut input = serde_json::json!({
+            "prompt": request.prompt,
+        });
+
+        if let Some(dur) = request.duration_seconds {
+            input["duration"] = serde_json::json!(dur);
+        }
+        merge_parameters(&mut input, &request.parameters);
+
+        let compute_req = ComputeRequest {
+            model,
+            input,
+            webhook: None,
+        };
+        let result = self.run(compute_req).await?;
+        let audio = parse_fal_audio(&result.output)?;
+
+        Ok(AudioResult {
+            audio: vec![audio],
+            timing: result.timing,
+            cost: result.cost,
+            metadata: result.metadata,
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Transcription implementation
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+impl Transcription for FalProvider {
+    async fn transcribe(
+        &self,
+        request: TranscriptionRequest,
+    ) -> Result<TranscriptionResult, BlazenError> {
+        let model = request
+            .model
+            .as_deref()
+            .unwrap_or(DEFAULT_TRANSCRIPTION_MODEL)
+            .to_owned();
+
+        let mut input = serde_json::json!({
+            "audio_url": request.audio_url,
+        });
+
+        if let Some(ref lang) = request.language {
+            input["language"] = serde_json::json!(lang);
+        }
+        if request.diarize {
+            input["diarize"] = serde_json::json!(true);
+        }
+        merge_parameters(&mut input, &request.parameters);
+
+        let compute_req = ComputeRequest {
+            model,
+            input,
+            webhook: None,
+        };
+        let result = self.run(compute_req).await?;
+
+        // Parse Whisper response:
+        // { "text": "...", "chunks": [...], "inferred_languages": ["en"], ... }
+        let text = result
+            .output
+            .get("text")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("")
+            .to_owned();
+
+        let language = result
+            .output
+            .get("inferred_languages")
+            .and_then(|v| v.as_array())
+            .and_then(|a| a.first())
+            .and_then(serde_json::Value::as_str)
+            .map(String::from);
+
+        let segments = result
+            .output
+            .get("chunks")
+            .and_then(|v| v.as_array())
+            .map(|chunks| {
+                chunks
+                    .iter()
+                    .filter_map(|chunk| {
+                        let seg_text = chunk.get("text")?.as_str()?.to_owned();
+                        let timestamps = chunk.get("timestamp")?.as_array()?;
+                        let start = timestamps.first()?.as_f64()?;
+                        let end = timestamps.get(1)?.as_f64()?;
+                        let speaker = chunk
+                            .get("speaker")
+                            .and_then(serde_json::Value::as_str)
+                            .map(String::from);
+                        Some(TranscriptionSegment {
+                            text: seg_text,
+                            start,
+                            end,
+                            speaker,
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Ok(TranscriptionResult {
+            text,
+            segments,
+            language,
+            timing: result.timing,
+            cost: result.cost,
+            metadata: result.output,
+        })
     }
 }
 
@@ -484,6 +1449,10 @@ impl crate::traits::CompletionModel for FalProvider {
 mod tests {
     use super::*;
     use crate::types::ChatMessage;
+
+    // -----------------------------------------------------------------------
+    // Config / builder tests
+    // -----------------------------------------------------------------------
 
     #[test]
     fn default_config() {
@@ -514,12 +1483,16 @@ mod tests {
         assert!(matches!(provider.execution_mode, FalExecutionMode::Sync));
     }
 
+    // -----------------------------------------------------------------------
+    // LLM body builder tests
+    // -----------------------------------------------------------------------
+
     #[test]
     fn build_body_basic() {
         let provider = FalProvider::new("fal-test");
         let request = CompletionRequest::new(vec![ChatMessage::user("Hello world")]);
 
-        let body = provider.build_body(&request);
+        let body = provider.build_llm_body(&request);
         assert_eq!(body["model"], "anthropic/claude-sonnet-4");
         assert!(body["prompt"].as_str().unwrap().contains("Hello world"));
     }
@@ -532,7 +1505,7 @@ mod tests {
             ChatMessage::user("Hello"),
         ]);
 
-        let body = provider.build_body(&request);
+        let body = provider.build_llm_body(&request);
         assert_eq!(body["system_prompt"], "Be helpful");
         assert!(body["prompt"].as_str().unwrap().contains("Hello"));
     }
@@ -543,8 +1516,47 @@ mod tests {
         let request =
             CompletionRequest::new(vec![ChatMessage::user("Hi")]).with_model("openai/gpt-4o");
 
-        let body = provider.build_body(&request);
+        let body = provider.build_llm_body(&request);
         assert_eq!(body["model"], "openai/gpt-4o");
+    }
+
+    #[test]
+    fn build_body_with_temperature() {
+        let provider = FalProvider::new("fal-test");
+        let request = CompletionRequest::new(vec![ChatMessage::user("Hi")]).with_temperature(0.7);
+
+        let body = provider.build_llm_body(&request);
+        let temp = body["temperature"].as_f64().unwrap();
+        assert!((temp - 0.7).abs() < 0.001, "temperature was {temp}");
+    }
+
+    #[test]
+    fn build_body_with_max_tokens() {
+        let provider = FalProvider::new("fal-test");
+        let request = CompletionRequest::new(vec![ChatMessage::user("Hi")]).with_max_tokens(1024);
+
+        let body = provider.build_llm_body(&request);
+        assert_eq!(body["max_tokens"], 1024);
+    }
+
+    #[test]
+    fn build_body_with_top_p() {
+        let provider = FalProvider::new("fal-test");
+        let request = CompletionRequest::new(vec![ChatMessage::user("Hi")]).with_top_p(0.9);
+
+        let body = provider.build_llm_body(&request);
+        assert_eq!(body["top_p"], serde_json::json!(0.9_f32));
+    }
+
+    #[test]
+    fn build_body_with_response_format() {
+        let provider = FalProvider::new("fal-test");
+        let schema = serde_json::json!({"type": "object"});
+        let request = CompletionRequest::new(vec![ChatMessage::user("Hi")])
+            .with_response_format(schema.clone());
+
+        let body = provider.build_llm_body(&request);
+        assert_eq!(body["response_format"], schema);
     }
 
     #[test]
@@ -552,7 +1564,7 @@ mod tests {
         let provider = FalProvider::new("fal-test");
         let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]);
 
-        let body = provider.build_body(&request);
+        let body = provider.build_llm_body(&request);
         assert!(body["prompt"].as_str().unwrap().contains("Hello"));
     }
 
@@ -565,7 +1577,7 @@ mod tests {
             None,
         )]);
 
-        let body = provider.build_body(&request);
+        let body = provider.build_llm_body(&request);
         // Only the text part should be preserved.
         let prompt = body["prompt"].as_str().unwrap();
         assert!(prompt.contains("Describe this"));
@@ -581,7 +1593,7 @@ mod tests {
             "image/png",
         )]);
 
-        let body = provider.build_body(&request);
+        let body = provider.build_llm_body(&request);
         let prompt = body["prompt"].as_str().unwrap();
         assert!(prompt.contains("What is this"));
         assert!(!prompt.contains("abc123"));
@@ -607,12 +1619,16 @@ mod tests {
             },
         ])]);
 
-        let body = provider.build_body(&request);
+        let body = provider.build_llm_body(&request);
         let prompt = body["prompt"].as_str().unwrap();
         // Both text parts should be concatenated.
         assert!(prompt.contains("First"));
         assert!(prompt.contains("Second"));
     }
+
+    // -----------------------------------------------------------------------
+    // Wire type parsing tests
+    // -----------------------------------------------------------------------
 
     #[test]
     fn parse_fal_llm_response() {
@@ -634,9 +1650,22 @@ mod tests {
     }
 
     #[test]
-    fn parse_queue_response() {
+    fn parse_queue_submit_response() {
+        let json = r#"{
+            "request_id": "abc-123-def",
+            "response_url": "https://queue.fal.run/model/requests/abc-123-def/response",
+            "status_url": "https://queue.fal.run/model/requests/abc-123-def/status",
+            "cancel_url": "https://queue.fal.run/model/requests/abc-123-def/cancel"
+        }"#;
+        let response: FalQueueSubmitResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.request_id, "abc-123-def");
+    }
+
+    #[test]
+    fn parse_queue_submit_response_minimal() {
+        // Backwards compat: only request_id is required.
         let json = r#"{"request_id":"abc-123-def"}"#;
-        let response: FalQueueResponse = serde_json::from_str(json).unwrap();
+        let response: FalQueueSubmitResponse = serde_json::from_str(json).unwrap();
         assert_eq!(response.request_id, "abc-123-def");
     }
 
@@ -649,10 +1678,241 @@ mod tests {
     }
 
     #[test]
-    fn parse_status_failed() {
-        let json = r#"{"status":"FAILED","error":"Out of memory"}"#;
+    fn parse_status_completed_with_metrics() {
+        let json = r#"{"status":"COMPLETED","metrics":{"inference_time":3.42}}"#;
         let response: FalStatusResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(response.status, "FAILED");
+        assert_eq!(response.status, "COMPLETED");
+        let metrics = response.metrics.unwrap();
+        assert!((metrics.inference_time.unwrap() - 3.42).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn parse_status_completed_with_error() {
+        let json = r#"{"status":"COMPLETED","error":"Out of memory"}"#;
+        let response: FalStatusResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.status, "COMPLETED");
         assert_eq!(response.error.as_deref(), Some("Out of memory"));
+    }
+
+    #[test]
+    fn parse_status_in_queue() {
+        let json = r#"{"status":"IN_QUEUE","queue_position":2}"#;
+        let response: FalStatusResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.status, "IN_QUEUE");
+        assert_eq!(response.queue_position, Some(2));
+    }
+
+    #[test]
+    fn parse_status_in_progress() {
+        let json = r#"{"status":"IN_PROGRESS"}"#;
+        let response: FalStatusResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.status, "IN_PROGRESS");
+    }
+
+    // -----------------------------------------------------------------------
+    // Image wire type tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_image_output() {
+        let json = r#"{
+            "images": [
+                {
+                    "url": "https://v3.fal.media/files/rabbit/abc123.png",
+                    "width": 1024,
+                    "height": 768,
+                    "content_type": "image/jpeg"
+                }
+            ]
+        }"#;
+        let output: FalImageOutput = serde_json::from_str(json).unwrap();
+        assert_eq!(output.images.len(), 1);
+        assert_eq!(output.images[0].width, Some(1024));
+        assert_eq!(output.images[0].height, Some(768));
+    }
+
+    #[test]
+    fn parse_upscale_output() {
+        let json = r#"{
+            "image": {
+                "url": "https://v3.fal.media/files/out/upscaled.png",
+                "width": 2048,
+                "height": 2048,
+                "content_type": "image/png"
+            }
+        }"#;
+        let output: FalUpscaleOutput = serde_json::from_str(json).unwrap();
+        assert_eq!(output.image.width, Some(2048));
+        assert_eq!(output.image.height, Some(2048));
+        assert_eq!(output.image.content_type.as_deref(), Some("image/png"));
+    }
+
+    // -----------------------------------------------------------------------
+    // Timing helper tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn build_timing_with_all_data() {
+        let start = Instant::now();
+        // Simulate some elapsed time.
+        let in_progress = start; // effectively 0ms queue time for testing
+        let timing = build_timing(start, Some(in_progress), Some(1.5));
+        assert!(timing.total_ms.is_some());
+        assert!(timing.queue_ms.is_some());
+        assert_eq!(timing.execution_ms, Some(1500)); // 1.5s = 1500ms
+    }
+
+    #[test]
+    fn build_timing_without_in_progress() {
+        let start = Instant::now();
+        let timing = build_timing(start, None, Some(2.0));
+        assert!(timing.total_ms.is_some());
+        assert!(timing.queue_ms.is_none());
+        assert_eq!(timing.execution_ms, Some(2000));
+    }
+
+    #[test]
+    fn build_timing_without_inference_time() {
+        let start = Instant::now();
+        let timing = build_timing(start, None, None);
+        assert!(timing.total_ms.is_some());
+        assert!(timing.queue_ms.is_none());
+        // No inference_time and no in_progress => no execution_ms.
+        assert!(timing.execution_ms.is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // ComputeProvider trait tests (unit, not integration)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn provider_id_is_fal() {
+        let provider = FalProvider::new("fal-test");
+        assert_eq!(ComputeProvider::provider_id(&provider), "fal");
+    }
+
+    // -----------------------------------------------------------------------
+    // Video parsing tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_video_output_standard() {
+        let output = serde_json::json!({
+            "video": {
+                "url": "https://v3.fal.media/files/rabbit/abc123.mp4",
+                "file_name": "output.mp4",
+                "file_size": 1234567,
+                "content_type": "video/mp4"
+            }
+        });
+        let video = parse_fal_video(&output).unwrap();
+        assert_eq!(
+            video.media.url.as_deref(),
+            Some("https://v3.fal.media/files/rabbit/abc123.mp4")
+        );
+        assert_eq!(video.media.media_type, MediaType::Mp4);
+        assert_eq!(video.media.file_size, Some(1234567));
+    }
+
+    #[test]
+    fn parse_video_output_minimal() {
+        let output = serde_json::json!({
+            "video": {
+                "url": "https://example.com/video.mp4"
+            }
+        });
+        let video = parse_fal_video(&output).unwrap();
+        assert_eq!(
+            video.media.url.as_deref(),
+            Some("https://example.com/video.mp4")
+        );
+        // Defaults to video/mp4.
+        assert_eq!(video.media.media_type, MediaType::Mp4);
+    }
+
+    #[test]
+    fn parse_video_output_missing_field() {
+        let output = serde_json::json!({"result": "done"});
+        let err = parse_fal_video(&output).unwrap_err();
+        assert!(matches!(err, BlazenError::Serialization(_)));
+    }
+
+    // -----------------------------------------------------------------------
+    // Audio parsing tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_audio_output_audio_url_object() {
+        let output = serde_json::json!({
+            "audio_url": {
+                "url": "https://v3.fal.media/files/audio/speech.wav",
+                "content_type": "audio/wav",
+                "file_size": 98765
+            }
+        });
+        let audio = parse_fal_audio(&output).unwrap();
+        assert_eq!(
+            audio.media.url.as_deref(),
+            Some("https://v3.fal.media/files/audio/speech.wav")
+        );
+        assert_eq!(audio.media.media_type, MediaType::Wav);
+        assert_eq!(audio.media.file_size, Some(98765));
+    }
+
+    #[test]
+    fn parse_audio_output_audio_url_string() {
+        let output = serde_json::json!({
+            "audio_url": "https://example.com/audio.wav"
+        });
+        let audio = parse_fal_audio(&output).unwrap();
+        assert_eq!(
+            audio.media.url.as_deref(),
+            Some("https://example.com/audio.wav")
+        );
+        assert_eq!(audio.media.media_type, MediaType::Wav);
+    }
+
+    #[test]
+    fn parse_audio_output_nested_audio() {
+        let output = serde_json::json!({
+            "audio": {
+                "url": "https://example.com/music.mp3",
+                "content_type": "audio/mpeg"
+            }
+        });
+        let audio = parse_fal_audio(&output).unwrap();
+        assert_eq!(
+            audio.media.url.as_deref(),
+            Some("https://example.com/music.mp3")
+        );
+        assert_eq!(audio.media.media_type, MediaType::Mp3);
+    }
+
+    #[test]
+    fn parse_audio_output_missing_field() {
+        let output = serde_json::json!({"result": "done"});
+        let err = parse_fal_audio(&output).unwrap_err();
+        assert!(matches!(err, BlazenError::Serialization(_)));
+    }
+
+    // -----------------------------------------------------------------------
+    // merge_parameters tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn merge_params_into_input() {
+        let mut input = serde_json::json!({"prompt": "hello"});
+        let params = serde_json::json!({"seed": 42, "guidance_scale": 7.5});
+        merge_parameters(&mut input, &params);
+        assert_eq!(input["seed"], 42);
+        assert_eq!(input["guidance_scale"], 7.5);
+        assert_eq!(input["prompt"], "hello");
+    }
+
+    #[test]
+    fn merge_params_null_is_noop() {
+        let mut input = serde_json::json!({"prompt": "hello"});
+        merge_parameters(&mut input, &serde_json::Value::Null);
+        assert_eq!(input, serde_json::json!({"prompt": "hello"}));
     }
 }

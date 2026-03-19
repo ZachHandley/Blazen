@@ -74,6 +74,26 @@ impl JsContext {
         Ok(())
     }
 
+    /// Store raw binary data under the given key.
+    ///
+    /// Useful for storing files, images, serialized objects, or any binary
+    /// data that should not be JSON-serialized. The data persists through
+    /// pause/resume snapshots.
+    #[napi(js_name = "setBytes")]
+    pub async fn set_bytes(&self, key: String, data: Buffer) -> Result<()> {
+        self.inner.set_bytes(&key, data.to_vec()).await;
+        Ok(())
+    }
+
+    /// Retrieve raw binary data previously stored under the given key.
+    ///
+    /// Returns `null` if the key does not exist or the stored value is
+    /// not binary data.
+    #[napi(js_name = "getBytes")]
+    pub async fn get_bytes(&self, key: String) -> Result<Option<Buffer>> {
+        Ok(self.inner.get_bytes(&key).await.map(Buffer::from))
+    }
+
     /// Get the workflow run ID.
     #[napi(js_name = "runId")]
     pub async fn run_id(&self) -> Result<String> {

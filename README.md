@@ -167,33 +167,42 @@ let deepseek = OpenAiCompatProvider::deepseek("...");
 ### Python
 
 ```python
-from blazen import CompletionModel, ChatMessage
+from blazen import CompletionModel, ChatMessage, Role, CompletionResponse
 
 model = CompletionModel.openai("sk-...")
 # or: CompletionModel.anthropic("sk-ant-...")
 # or: CompletionModel.groq("gsk-...")
 # or: CompletionModel.openrouter("sk-or-...")
 
-response = await model.complete([
-    ChatMessage.user("What is the meaning of life?")
+response: CompletionResponse = await model.complete([
+    ChatMessage.system("You are helpful."),
+    ChatMessage.user("What is the meaning of life?"),
 ])
-print(response["content"])
+print(response.content)        # typed attribute access
+print(response.model)          # model name used
+print(response.usage)          # TokenUsage with .prompt_tokens, .completion_tokens, .total_tokens
+print(response.finish_reason)
 ```
 
 ### TypeScript
 
 ```typescript
-import { CompletionModel } from "blazen";
+import { CompletionModel, ChatMessage, Role } from "blazen";
+import type { CompletionResponse } from "blazen";
 
 const model = CompletionModel.openai("sk-...");
 // or: CompletionModel.anthropic("sk-ant-...")
 // or: CompletionModel.groq("gsk-...")
 // or: CompletionModel.openrouter("sk-or-...")
 
-const response = await model.complete([
-  { role: "user", content: "What is the meaning of life?" },
+const response: CompletionResponse = await model.complete([
+  ChatMessage.system("You are helpful."),
+  ChatMessage.user("What is the meaning of life?"),
 ]);
-console.log(response.content);
+console.log(response.content);      // string
+console.log(response.model);        // model name used
+console.log(response.usage);        // { promptTokens, completionTokens, totalTokens }
+console.log(response.finishReason);
 ```
 
 ## Streaming

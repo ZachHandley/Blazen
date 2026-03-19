@@ -92,6 +92,7 @@ Explicit overrides still work:
 | `@step` | Infers `accepts` from the `ev` type hint. Defaults to `StartEvent` when the hint is `Event` or missing. |
 | `@step(accepts=["EventType"])` | Explicitly sets accepted event types, overriding type-hint inference. |
 | `@step(emits=["EventType"])` | Declares the event types this step may produce. |
+| `@step(max_concurrency=N)` | Limits how many instances of this step may run concurrently. `0` means unlimited. |
 
 **Step signature**
 
@@ -99,17 +100,17 @@ Explicit overrides still work:
 async def name(ctx: Context, ev: MyEvent) -> Event | list[Event] | None
 ```
 
-Return an `Event` to emit it, a `list[Event]` to emit several, or `None` to emit nothing.
+Return an `Event` to emit it, a `list[Event]` to emit several, or `None` to emit nothing. Steps can be sync or async.
 
 ---
 
 ## Workflow
 
 ```python
-Workflow(name: str, steps: list)
+Workflow(name: str, steps: list, timeout: float = None)
 ```
 
-Create a workflow from a name and an ordered list of steps.
+Create a workflow from a name and an ordered list of steps. The optional `timeout` is in seconds.
 
 | Method | Signature | Description |
 |---|---|---|
@@ -125,7 +126,16 @@ Returned by `Workflow.run()`. Provides control over a running workflow instance.
 |---|---|---|
 | `result` | `await handler.result() -> Event` | Block until the workflow emits a `StopEvent` and return it. |
 | `stream_events` | `handler.stream_events() -> AsyncIterator[Event]` | Async iterator yielding events written to the stream. |
-| `pause` | `handler.pause() -> str` | Pause execution and return a serialized snapshot. |
+
+```python
+handler = await wf.run(prompt="Hello")
+
+# Stream intermediate events while waiting for the result
+async for event in handler.stream_events():
+    print(event.event_type, event.to_dict())
+
+result = await handler.result()
+```
 
 ---
 
@@ -135,17 +145,21 @@ Available as the first parameter of every step function. All methods are synchro
 
 | Method | Signature | Description |
 |---|---|---|
-| `set` | `ctx.set(key: str, value: Any) -> None` | Store a value in the workflow context. |
+| `set` | `ctx.set(key: str, value: Any) -> None` | Store a JSON-serializable value in the workflow context. |
 | `get` | `ctx.get(key: str) -> Any \| None` | Retrieve a value by key, or `None` if absent. |
+| `set_bytes` | `ctx.set_bytes(key: str, data: bytes) -> None` | Store raw binary data. No serialization requirement. |
+| `get_bytes` | `ctx.get_bytes(key: str) -> bytes \| None` | Retrieve raw binary data, or `None` if absent. |
 | `run_id` | `ctx.run_id() -> str` | Return the UUID of the current workflow run. |
 | `send_event` | `ctx.send_event(event: Event) -> None` | Route an event to matching steps manually. |
 | `write_event_to_stream` | `ctx.write_event_to_stream(event: Event) -> None` | Publish an event to the stream visible via `WorkflowHandler.stream_events()`. |
+
+`set_bytes` / `get_bytes` store raw binary data with no serialization requirement. Any type can be stored by converting to bytes yourself (e.g., pickle, msgpack, protobuf). Binary data persists through pause/resume/checkpoint.
 
 ---
 
 ## CompletionModel
 
-Use static constructor methods to create a model for a specific provider, then call `complete()` to generate responses.
+Use static constructor methods to create a model for a specific provider, then call `complete()` or `stream()` to generate responses.
 
 ```python
 model = CompletionModel.openai("sk-...")
@@ -182,7 +196,7 @@ model = CompletionModel.openrouter("sk-or-...", model="meta-llama/llama-3-70b")
 **complete()**
 
 ```python
-response = await model.complete(
+response: CompletionResponse = await model.complete(
     messages: list[ChatMessage],
     temperature: float = None,
     max_tokens: int = None,
@@ -190,7 +204,84 @@ response = await model.complete(
 )
 ```
 
-Returns a `dict` with keys: `content`, `model`, `tool_calls`, `usage`, `finish_reason`.
+Returns a typed `CompletionResponse` (see below). Also supports dict-style access for backwards compatibility: `response["content"]`.
+
+**stream()**
+
+```python
+await model.stream(
+    messages: list[ChatMessage],
+    on_chunk: Callable[[dict], Any],
+    *,
+    temperature: float = None,
+    max_tokens: int = None,
+    model: str = None,
+)
+```
+
+Streams a chat completion, calling `on_chunk` for each chunk received. Each chunk is a dict with the following keys:
+
+| Key | Type | Description |
+|---|---|---|
+| `delta` | `str \| None` | The incremental text content for this chunk. |
+| `finish_reason` | `str \| None` | Set on the final chunk (e.g. `"stop"`, `"tool_calls"`). |
+| `tool_calls` | `list[dict]` | Tool call fragments, if any. |
+
+```python
+def handle(chunk):
+    if chunk["delta"]:
+        print(chunk["delta"], end="")
+
+await model.stream([ChatMessage.user("Tell me a story")], handle)
+```
+
+---
+
+## CompletionResponse
+
+Returned by `model.complete()`. Supports both attribute access and dict-style access.
+
+| Property | Type | Description |
+|---|---|---|
+| `.content` | `str \| None` | The generated text. |
+| `.model` | `str` | Model name used for the completion. |
+| `.finish_reason` | `str \| None` | Why generation stopped (`"stop"`, `"tool_calls"`, etc.). |
+| `.tool_calls` | `list[ToolCall]` | Tool calls requested by the model. |
+| `.usage` | `TokenUsage \| None` | Token usage statistics. |
+| `.cost` | `float \| None` | Estimated cost in USD for this request. |
+| `.timing` | `RequestTiming \| None` | Timing metadata for the request. |
+| `.images` | `list[dict]` | Image outputs (provider-dependent). |
+| `.audio` | `list[dict]` | Audio outputs (provider-dependent). |
+| `.videos` | `list[dict]` | Video outputs (provider-dependent). |
+
+```python
+response = await model.complete([ChatMessage.user("Hello")])
+print(response.content)        # attribute access
+print(response["content"])     # dict-style access (backwards compatible)
+print(response.cost)           # e.g. 0.0023
+print(response.timing)         # RequestTiming or None
+print(response.keys())         # list of available keys
+```
+
+---
+
+## RequestTiming
+
+Timing metadata attached to a `CompletionResponse`. All fields are optional since not every provider reports timing data.
+
+| Property | Type | Description |
+|---|---|---|
+| `.queue_ms` | `int \| None` | Time spent waiting in the provider's queue. |
+| `.execution_ms` | `int \| None` | Time spent executing the request. |
+| `.total_ms` | `int \| None` | Total round-trip time. |
+
+```python
+response = await model.complete([ChatMessage.user("Hello")])
+if response.timing:
+    print(f"Total: {response.timing.total_ms}ms")
+    print(f"Queue: {response.timing.queue_ms}ms")
+    print(f"Execution: {response.timing.execution_ms}ms")
+```
 
 ---
 
@@ -199,7 +290,9 @@ Returns a `dict` with keys: `content`, `model`, `tool_calls`, `usage`, `finish_r
 A single message in a chat conversation.
 
 ```python
-msg = ChatMessage("user", "Hello, world!")
+msg = ChatMessage(role="user", content="Hello, world!")
+# role is optional, defaults to "user"
+msg = ChatMessage(content="Hello!")
 ```
 
 **Static constructors**
@@ -210,6 +303,9 @@ msg = ChatMessage("user", "Hello, world!")
 | `ChatMessage.user(content: str)` | Create a user message. |
 | `ChatMessage.assistant(content: str)` | Create an assistant message. |
 | `ChatMessage.tool(content: str)` | Create a tool result message. |
+| `ChatMessage.user_image_url(*, text, url, media_type=None)` | Create a user message with text and an image URL. |
+| `ChatMessage.user_image_base64(*, text, data, media_type)` | Create a user message with text and a base64 image. |
+| `ChatMessage.user_parts(*, parts: list[ContentPart])` | Create a user message with multiple content parts. |
 
 **Properties**
 
@@ -217,3 +313,484 @@ msg = ChatMessage("user", "Hello, world!")
 |---|---|---|
 | `.role` | `str` | One of `"system"`, `"user"`, `"assistant"`, `"tool"`. |
 | `.content` | `str \| None` | The message text. |
+
+---
+
+## Role
+
+Constants for message roles.
+
+```python
+from blazen import Role
+
+Role.SYSTEM     # "system"
+Role.USER       # "user"
+Role.ASSISTANT  # "assistant"
+Role.TOOL       # "tool"
+```
+
+---
+
+## ContentPart
+
+Build multimodal content parts for use with `ChatMessage.user_parts()`.
+
+| Factory Method | Description |
+|---|---|
+| `ContentPart.text(*, text=...)` | Create a text content part. |
+| `ContentPart.image_url(*, url=..., media_type=...)` | Create an image URL content part. |
+| `ContentPart.image_base64(*, data=..., media_type=...)` | Create a base64 image content part. |
+
+```python
+msg = ChatMessage.user_parts(parts=[
+    ContentPart.text(text="What's in this image?"),
+    ContentPart.image_url(url="https://example.com/photo.jpg", media_type=MediaType.JPEG),
+])
+```
+
+---
+
+## ToolCall
+
+A tool invocation requested by the model.
+
+| Property | Type | Description |
+|---|---|---|
+| `.id` | `str` | Unique identifier for the tool call. |
+| `.name` | `str` | Name of the tool to invoke. |
+| `.arguments` | `dict[str, Any]` | Parsed arguments for the tool call. |
+
+Supports dict-style access: `tool_call["name"]`.
+
+---
+
+## TokenUsage
+
+Token usage statistics for a completion.
+
+| Property | Type | Description |
+|---|---|---|
+| `.prompt_tokens` | `int` | Tokens in the prompt. |
+| `.completion_tokens` | `int` | Tokens in the completion. |
+| `.total_tokens` | `int` | Total tokens used. |
+
+Supports dict-style access: `usage["total_tokens"]`.
+
+---
+
+## Agent System
+
+The agent system provides an agentic tool-execution loop on top of `CompletionModel`. Define tools with `ToolDef`, then call `run_agent` to let the model iteratively call tools until it produces a final answer.
+
+### ToolDef
+
+Define a tool that the model can invoke during an agent run.
+
+```python
+ToolDef(
+    *,
+    name: str,
+    description: str,
+    parameters: dict[str, Any],
+    handler: Callable | AsyncCallable,
+)
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `name` | `str` | Unique tool name exposed to the model. |
+| `description` | `str` | Description the model uses to decide when to call this tool. |
+| `parameters` | `dict` | JSON Schema describing the tool's input parameters. |
+| `handler` | `Callable` | Function called when the model invokes the tool. Can be sync or async. Receives a `dict[str, Any]` of arguments and should return a JSON-serializable value. |
+
+```python
+# Sync handler
+tool = ToolDef(
+    name="search",
+    description="Search the web for a query",
+    parameters={
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Search query"}
+        },
+        "required": ["query"],
+    },
+    handler=lambda args: {"results": ["result1", "result2"]},
+)
+
+# Async handler
+async def fetch_weather(args):
+    data = await weather_api(args["city"])
+    return {"temperature": data.temp, "conditions": data.conditions}
+
+weather_tool = ToolDef(
+    name="weather",
+    description="Get current weather for a city",
+    parameters={
+        "type": "object",
+        "properties": {
+            "city": {"type": "string"}
+        },
+        "required": ["city"],
+    },
+    handler=fetch_weather,
+)
+```
+
+### run_agent
+
+Run an agentic tool-execution loop. The model is called repeatedly, executing any requested tool calls and feeding results back, until the model stops calling tools or `max_iterations` is reached.
+
+```python
+result: AgentResult = await run_agent(
+    model: CompletionModel,
+    messages: list[ChatMessage],
+    *,
+    tools: list[ToolDef],
+    max_iterations: int = 10,
+    system_prompt: str = None,
+    temperature: float = None,
+    max_tokens: int = None,
+    add_finish_tool: bool = False,
+)
+```
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `model` | `CompletionModel` | required | The model to use for completions. |
+| `messages` | `list[ChatMessage]` | required | Initial conversation messages. |
+| `tools` | `list[ToolDef]` | required | Tools available to the model. |
+| `max_iterations` | `int` | `10` | Maximum number of tool-call rounds before stopping. |
+| `system_prompt` | `str \| None` | `None` | Optional system prompt prepended to messages. |
+| `temperature` | `float \| None` | `None` | Sampling temperature override. |
+| `max_tokens` | `int \| None` | `None` | Max tokens per completion call. |
+| `add_finish_tool` | `bool` | `False` | If `True`, adds a built-in "finish" tool the model can call to explicitly end the loop. |
+
+```python
+model = CompletionModel.openai("sk-...")
+messages = [ChatMessage.user("What's the weather in Paris and London?")]
+
+result = await run_agent(model, messages, tools=[weather_tool])
+print(result.response.content)  # Final answer
+print(result.iterations)        # Number of tool-call rounds
+print(result.total_cost)        # Accumulated cost across all iterations
+```
+
+### AgentResult
+
+Returned by `run_agent`.
+
+| Property | Type | Description |
+|---|---|---|
+| `.response` | `CompletionResponse` | The final completion response from the model. |
+| `.messages` | `list[ChatMessage]` | The full conversation history including all tool calls and results. |
+| `.iterations` | `int` | Number of tool-call iterations executed. |
+| `.total_cost` | `float \| None` | Total cost in USD accumulated across all iterations. |
+
+---
+
+## MediaType
+
+Constants for common MIME types. Useful when constructing `ContentPart` or compute requests.
+
+```python
+from blazen import MediaType
+
+MediaType.PNG   # "image/png"
+MediaType.MP4   # "video/mp4"
+MediaType.MP3   # "audio/mpeg"
+MediaType.GLB   # "model/gltf-binary"
+```
+
+**Image types**
+
+| Constant | MIME Type |
+|---|---|
+| `MediaType.PNG` | `image/png` |
+| `MediaType.JPEG` | `image/jpeg` |
+| `MediaType.WEBP` | `image/webp` |
+| `MediaType.GIF` | `image/gif` |
+| `MediaType.SVG` | `image/svg+xml` |
+| `MediaType.BMP` | `image/bmp` |
+| `MediaType.TIFF` | `image/tiff` |
+| `MediaType.AVIF` | `image/avif` |
+
+**Video types**
+
+| Constant | MIME Type |
+|---|---|
+| `MediaType.MP4` | `video/mp4` |
+| `MediaType.WEBM` | `video/webm` |
+| `MediaType.MOV` | `video/quicktime` |
+
+**Audio types**
+
+| Constant | MIME Type |
+|---|---|
+| `MediaType.MP3` | `audio/mpeg` |
+| `MediaType.WAV` | `audio/wav` |
+| `MediaType.OGG` | `audio/ogg` |
+| `MediaType.FLAC` | `audio/flac` |
+| `MediaType.AAC` | `audio/aac` |
+| `MediaType.M4A` | `audio/m4a` |
+
+**3D model types**
+
+| Constant | MIME Type |
+|---|---|
+| `MediaType.GLB` | `model/gltf-binary` |
+| `MediaType.GLTF` | `model/gltf+json` |
+| `MediaType.OBJ` | `model/obj` |
+| `MediaType.USDZ` | `model/vnd.usdz+zip` |
+| `MediaType.FBX` | `model/fbx` |
+| `MediaType.STL` | `model/stl` |
+
+**Document types**
+
+| Constant | MIME Type |
+|---|---|
+| `MediaType.PDF` | `application/pdf` |
+
+---
+
+## Compute Request Types
+
+Compute requests define jobs for media generation and processing. All constructors use keyword-only arguments.
+
+### ImageRequest
+
+Generate images from a text prompt.
+
+```python
+ImageRequest(
+    *,
+    prompt: str,
+    negative_prompt: str = None,
+    width: int = None,
+    height: int = None,
+    num_images: int = None,
+    model: str = None,
+)
+```
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `prompt` | `str` | required | Text description of the image to generate. |
+| `negative_prompt` | `str \| None` | `None` | What to avoid in the generated image. |
+| `width` | `int \| None` | `None` | Image width in pixels. |
+| `height` | `int \| None` | `None` | Image height in pixels. |
+| `num_images` | `int \| None` | `None` | Number of images to generate. |
+| `model` | `str \| None` | `None` | Specific model to use (provider-dependent). |
+
+```python
+req = ImageRequest(prompt="a cat in space", width=1024, height=1024, num_images=2)
+```
+
+### UpscaleRequest
+
+Upscale an existing image to a higher resolution.
+
+```python
+UpscaleRequest(
+    *,
+    image_url: str,
+    scale: float,
+    model: str = None,
+)
+```
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `image_url` | `str` | required | URL of the image to upscale. |
+| `scale` | `float` | required | Upscale factor (e.g. `2.0`, `4.0`). |
+| `model` | `str \| None` | `None` | Specific model to use. |
+
+```python
+req = UpscaleRequest(image_url="https://example.com/photo.jpg", scale=4.0)
+```
+
+### VideoRequest
+
+Generate a video from a text prompt, optionally with an input image.
+
+```python
+VideoRequest(
+    *,
+    prompt: str,
+    image_url: str = None,
+    duration_seconds: float = None,
+    negative_prompt: str = None,
+    width: int = None,
+    height: int = None,
+    model: str = None,
+)
+```
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `prompt` | `str` | required | Text description of the video to generate. |
+| `image_url` | `str \| None` | `None` | Optional starting image to animate. |
+| `duration_seconds` | `float \| None` | `None` | Desired video length in seconds. |
+| `negative_prompt` | `str \| None` | `None` | What to avoid in the generated video. |
+| `width` | `int \| None` | `None` | Video width in pixels. |
+| `height` | `int \| None` | `None` | Video height in pixels. |
+| `model` | `str \| None` | `None` | Specific model to use. |
+
+```python
+req = VideoRequest(prompt="a sunset timelapse", duration_seconds=5.0)
+req = VideoRequest(prompt="animate this scene", image_url="https://example.com/frame.jpg")
+```
+
+### SpeechRequest
+
+Generate speech audio from text.
+
+```python
+SpeechRequest(
+    *,
+    text: str,
+    voice: str = None,
+    voice_url: str = None,
+    language: str = None,
+    speed: float = None,
+    model: str = None,
+)
+```
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `text` | `str` | required | The text to convert to speech. |
+| `voice` | `str \| None` | `None` | Voice preset name (e.g. `"alloy"`, `"nova"`). |
+| `voice_url` | `str \| None` | `None` | URL to a custom voice sample for cloning. |
+| `language` | `str \| None` | `None` | Language code (e.g. `"en"`, `"fr"`). |
+| `speed` | `float \| None` | `None` | Playback speed multiplier (e.g. `1.2` for 20% faster). |
+| `model` | `str \| None` | `None` | Specific model to use. |
+
+```python
+req = SpeechRequest(text="Hello world", voice="alloy", speed=1.2)
+```
+
+### MusicRequest
+
+Generate music or sound effects from a text prompt.
+
+```python
+MusicRequest(
+    *,
+    prompt: str,
+    duration_seconds: float = None,
+    model: str = None,
+)
+```
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `prompt` | `str` | required | Description of the music to generate. |
+| `duration_seconds` | `float \| None` | `None` | Desired duration in seconds. |
+| `model` | `str \| None` | `None` | Specific model to use. |
+
+```python
+req = MusicRequest(prompt="upbeat jazz", duration_seconds=30.0)
+```
+
+### TranscriptionRequest
+
+Transcribe audio to text.
+
+```python
+TranscriptionRequest(
+    *,
+    audio_url: str,
+    language: str = None,
+    diarize: bool = None,
+    model: str = None,
+)
+```
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `audio_url` | `str` | required | URL of the audio file to transcribe. |
+| `language` | `str \| None` | `None` | Language hint (e.g. `"en"`). |
+| `diarize` | `bool \| None` | `None` | If `True`, identify and label different speakers. |
+| `model` | `str \| None` | `None` | Specific model to use. |
+
+```python
+req = TranscriptionRequest(audio_url="https://example.com/audio.mp3", language="en", diarize=True)
+```
+
+### ThreeDRequest
+
+Generate a 3D model from a text prompt or image.
+
+```python
+ThreeDRequest(
+    *,
+    prompt: str = None,
+    image_url: str = None,
+    format: str = None,
+    model: str = None,
+)
+```
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `prompt` | `str \| None` | `None` | Text description of the 3D object to generate. |
+| `image_url` | `str \| None` | `None` | Image to use as reference for 3D generation. |
+| `format` | `str \| None` | `None` | Output format (e.g. `"glb"`, `"obj"`, `"usdz"`). |
+| `model` | `str \| None` | `None` | Specific model to use. |
+
+Provide at least one of `prompt` or `image_url`.
+
+```python
+req = ThreeDRequest(prompt="a 3D cat", format="glb")
+req = ThreeDRequest(image_url="https://example.com/photo.jpg", format="obj")
+```
+
+---
+
+## Error Handling
+
+All errors from `blazen` are raised as standard Python exceptions. LLM and compute errors originate from a unified `BlazenError` hierarchy internally, which is mapped to Python exceptions as follows:
+
+| Error Condition | Python Exception | Description |
+|---|---|---|
+| Invalid arguments, auth failure, validation | `ValueError` | Bad input, missing/invalid API keys, schema violations. |
+| Timeout | `TimeoutError` | The operation exceeded its time limit. |
+| All other errors | `RuntimeError` | Provider errors, rate limits, content policy, model not found, job failures, etc. |
+
+The error message includes a descriptive prefix indicating the category:
+
+```python
+try:
+    response = await model.complete([ChatMessage.user("Hello")])
+except ValueError as e:
+    # Authentication, validation errors
+    print(f"Invalid input: {e}")
+except TimeoutError as e:
+    # Request timed out
+    print(f"Timed out: {e}")
+except RuntimeError as e:
+    # Provider errors, rate limits, content policy, etc.
+    print(f"Error: {e}")
+```
+
+**Underlying error categories** (reflected in the error message string):
+
+| Category | Scope | Example Message |
+|---|---|---|
+| Auth | Shared | `"authentication failed: invalid API key"` |
+| RateLimit | Shared | `"rate limited: retry after 1000ms"` |
+| Timeout | Shared | `"timed out after 30000ms"` |
+| Provider | Shared | `"openai error: server overloaded"` |
+| Validation | Shared | `"invalid input: temperature must be >= 0"` |
+| ContentPolicy | Shared | `"content policy violation: ..."` |
+| Unsupported | Shared | `"unsupported: model does not support streaming"` |
+| NoContent | Completion | `"model returned no content"` |
+| ModelNotFound | Completion | `"model not found: gpt-5-turbo"` |
+| InvalidResponse | Completion | `"invalid response: malformed JSON"` |
+| Stream | Completion | `"stream error: connection reset"` |
+| JobFailed | Compute | `"job failed: out of memory"` |
+| Cancelled | Compute | `"job cancelled"` |
+| QuotaExceeded | Compute | `"quota exceeded: monthly limit reached"` |
+| Invalid | Media | `"invalid media: unsupported format"` |
+| TooLarge | Media | `"media too large: 52428800 bytes (max 10485760)"` |

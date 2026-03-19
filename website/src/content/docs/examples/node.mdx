@@ -63,11 +63,19 @@ npx tsx examples/branching_workflow.ts
 
 ## LLM RAG Workflow
 
-Multi-step RAG pipeline using context for shared state between steps.
+Multi-step RAG pipeline using context for shared state between steps. Uses typed `ChatMessage` and `CompletionResponse`:
 
 ```javascript
+import { CompletionModel, ChatMessage } from "blazen";
+
+const model = CompletionModel.openai(process.env.OPENAI_API_KEY);
+const response = await model.complete([
+  ChatMessage.system("Answer based on the provided documents."),
+  ChatMessage.user(query),
+]);
+console.log(response.content);     // typed string
+console.log(response.usage);       // { promptTokens, completionTokens, totalTokens }
 await ctx.set("documents", docs);
-const docs = await ctx.get("documents");
 ```
 
 ```sh

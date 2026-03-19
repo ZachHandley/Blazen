@@ -37,6 +37,26 @@ async def use_data(ctx: Context, ev: NextEvent):
 run_id = ctx.run_id()  # Synchronous, returns a UUID string
 ```
 
+## Binary Storage
+
+Use `ctx.set_bytes()` and `ctx.get_bytes()` to store raw binary data. No serialization requirement -- store any type by converting to bytes yourself (e.g., pickle, msgpack, protobuf). Binary data persists through pause/resume/checkpoint.
+
+```python
+import pickle
+
+@step
+async def store(ctx: Context, ev: Event):
+    data = pickle.dumps({"weights": [1.0, 2.0, 3.0]})
+    ctx.set_bytes("model", data)
+    return NextEvent()
+
+@step
+async def load(ctx: Context, ev: NextEvent):
+    raw = ctx.get_bytes("model")  # bytes | None
+    model = pickle.loads(raw)
+    return StopEvent(result=model)
+```
+
 ## Manual Event Routing
 
 ```python

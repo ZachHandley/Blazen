@@ -19,7 +19,7 @@ A workflow is a collection of steps wired together by an event router that dispa
 
 ## Context
 
-The context is a shared key-value store available to all steps within a single workflow run. Use `ctx.set(key, value)` and `ctx.get(key)` to share state between steps without coupling them directly. The context also provides `ctx.send_event()` for manually routing events to other steps and `ctx.write_event_to_stream()` for publishing events to external consumers.
+The context is a shared key-value store available to all steps within a single workflow run. Use `ctx.set(key, value)` and `ctx.get(key)` to share JSON-serializable state between steps without coupling them directly. For raw binary data, use `ctx.set_bytes(key, data)` and `ctx.get_bytes(key)` -- these require no serialization and persist through pause/resume/checkpoint. The context also provides `ctx.send_event()` for manually routing events to other steps and `ctx.write_event_to_stream()` for publishing events to external consumers.
 
 ## Streaming
 

@@ -56,9 +56,15 @@ impl From<blazen_core::WorkflowError> for BlazenPyError {
     }
 }
 
-impl From<blazen_llm::LlmError> for BlazenPyError {
-    fn from(err: blazen_llm::LlmError) -> Self {
-        BlazenPyError::Llm(err.to_string())
+impl From<blazen_llm::BlazenError> for BlazenPyError {
+    fn from(err: blazen_llm::BlazenError) -> Self {
+        match err {
+            blazen_llm::BlazenError::Timeout { .. } => Self::Timeout(err.to_string()),
+            blazen_llm::BlazenError::Auth { .. } | blazen_llm::BlazenError::Validation { .. } => {
+                Self::InvalidArgument(err.to_string())
+            }
+            _ => Self::Llm(err.to_string()),
+        }
     }
 }
 

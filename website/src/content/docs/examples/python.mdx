@@ -76,11 +76,19 @@ python examples/branching_workflow.py
 
 ## LLM RAG Workflow
 
-Multi-step RAG pipeline with context sharing between steps.
+Multi-step RAG pipeline with context sharing between steps. Uses typed `ChatMessage` and `CompletionResponse`:
 
 ```python
+from blazen import CompletionModel, ChatMessage, CompletionResponse
+
+model = CompletionModel.openai(os.environ["OPENAI_API_KEY"])
+response: CompletionResponse = await model.complete([
+    ChatMessage.system("Answer based on the provided documents."),
+    ChatMessage.user(query),
+])
+print(response.content)       # typed attribute access
+print(response.usage)         # TokenUsage with .prompt_tokens, .completion_tokens, .total_tokens
 ctx.set("documents", docs)
-docs = ctx.get("documents")
 ```
 
 ```sh

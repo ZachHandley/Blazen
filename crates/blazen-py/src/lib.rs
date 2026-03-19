@@ -28,6 +28,8 @@
 //!     print(result.to_dict())
 //! ```
 
+pub mod agent;
+pub mod compute;
 pub mod context;
 pub mod error;
 pub mod event;
@@ -64,8 +66,29 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<handler::PyEventStream>()?;
 
     // LLM
-    m.add_class::<llm::PyCompletionModel>()?;
+    m.add_class::<llm::PyRole>()?;
+    m.add_class::<llm::PyContentPart>()?;
     m.add_class::<llm::PyChatMessage>()?;
+    m.add_class::<llm::PyCompletionModel>()?;
+    m.add_class::<llm::PyToolCall>()?;
+    m.add_class::<llm::PyTokenUsage>()?;
+    m.add_class::<llm::PyRequestTiming>()?;
+    m.add_class::<llm::PyCompletionResponse>()?;
+
+    // Agent
+    m.add_class::<agent::PyToolDef>()?;
+    m.add_class::<agent::PyAgentResult>()?;
+    m.add_function(wrap_pyfunction!(agent::run_agent, m)?)?;
+
+    // Compute / Media
+    m.add_class::<compute::PyMediaType>()?;
+    m.add_class::<compute::PyImageRequest>()?;
+    m.add_class::<compute::PyUpscaleRequest>()?;
+    m.add_class::<compute::PyVideoRequest>()?;
+    m.add_class::<compute::PySpeechRequest>()?;
+    m.add_class::<compute::PyMusicRequest>()?;
+    m.add_class::<compute::PyTranscriptionRequest>()?;
+    m.add_class::<compute::PyThreeDRequest>()?;
 
     Ok(())
 }

@@ -238,6 +238,7 @@ dependencies = [
  "async-trait",
  "blazen-events",
  "bytes",
+ "chrono",
  "futures-util",
  "reqwest",
  "schemars",
@@ -262,6 +263,7 @@ dependencies = [
 name = "blazen-node"
 version = "0.0.0-dev"
 dependencies = [
+ "async-trait",
  "blazen-core",
  "blazen-events",
  "blazen-llm",
@@ -330,6 +332,7 @@ dependencies = [
 name = "blazen-py"
 version = "0.0.0-dev"
 dependencies = [
+ "async-trait",
  "blazen-core",
  "blazen-events",
  "blazen-llm",

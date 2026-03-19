@@ -5,6 +5,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::media::{GeneratedAudio, GeneratedImage, GeneratedVideo};
+
 // ---------------------------------------------------------------------------
 // Role & message content
 // ---------------------------------------------------------------------------
@@ -295,6 +297,12 @@ pub struct CompletionRequest {
     pub response_format: Option<serde_json::Value>,
     /// Override the provider's default model for this request.
     pub model: Option<String>,
+    /// Output modalities to request (e.g., \["text"\], \["image", "text"\]).
+    pub modalities: Option<Vec<String>>,
+    /// Image generation configuration (model-specific).
+    pub image_config: Option<serde_json::Value>,
+    /// Audio output configuration (voice, format, etc.).
+    pub audio_config: Option<serde_json::Value>,
 }
 
 impl CompletionRequest {
@@ -309,6 +317,9 @@ impl CompletionRequest {
             top_p: None,
             response_format: None,
             model: None,
+            modalities: None,
+            image_config: None,
+            audio_config: None,
         }
     }
 
@@ -353,6 +364,42 @@ impl CompletionRequest {
         self.model = Some(model.into());
         self
     }
+
+    /// Set output modalities (e.g., `["text"]`, `["image", "text"]`).
+    #[must_use]
+    pub fn with_modalities(mut self, modalities: Vec<String>) -> Self {
+        self.modalities = Some(modalities);
+        self
+    }
+
+    /// Set image generation configuration (model-specific).
+    #[must_use]
+    pub fn with_image_config(mut self, config: serde_json::Value) -> Self {
+        self.image_config = Some(config);
+        self
+    }
+
+    /// Set audio output configuration (voice, format, etc.).
+    #[must_use]
+    pub fn with_audio_config(mut self, config: serde_json::Value) -> Self {
+        self.audio_config = Some(config);
+        self
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Request timing
+// ---------------------------------------------------------------------------
+
+/// Timing metadata for a request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RequestTiming {
+    /// Time spent waiting in queue (ms), if applicable.
+    pub queue_ms: Option<u64>,
+    /// Time spent executing the request (ms).
+    pub execution_ms: Option<u64>,
+    /// Total wall-clock time from submit to response (ms).
+    pub total_ms: Option<u64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -372,6 +419,60 @@ pub struct CompletionResponse {
     pub model: String,
     /// The reason the model stopped generating (e.g. "stop", "`tool_use`").
     pub finish_reason: Option<String>,
+    /// Estimated cost for this request in USD, if available.
+    pub cost: Option<f64>,
+    /// Request timing breakdown, if available.
+    pub timing: Option<RequestTiming>,
+    /// Generated images (for multimodal models).
+    pub images: Vec<GeneratedImage>,
+    /// Generated audio (for TTS or multimodal models).
+    pub audio: Vec<GeneratedAudio>,
+    /// Generated videos (for video generation models).
+    pub videos: Vec<GeneratedVideo>,
+    /// Provider-specific metadata.
+    pub metadata: serde_json::Value,
+}
+
+// ---------------------------------------------------------------------------
+// Structured response
+// ---------------------------------------------------------------------------
+
+/// Response from structured output extraction, preserving metadata.
+#[derive(Debug, Clone)]
+pub struct StructuredResponse<T> {
+    /// The extracted structured data.
+    pub data: T,
+    /// Token usage statistics.
+    pub usage: Option<TokenUsage>,
+    /// The model that produced this response.
+    pub model: String,
+    /// Estimated cost in USD.
+    pub cost: Option<f64>,
+    /// Request timing.
+    pub timing: Option<RequestTiming>,
+    /// Provider-specific metadata.
+    pub metadata: serde_json::Value,
+}
+
+// ---------------------------------------------------------------------------
+// Embedding response
+// ---------------------------------------------------------------------------
+
+/// Response from an embedding operation.
+#[derive(Debug, Clone)]
+pub struct EmbeddingResponse {
+    /// The embedding vectors.
+    pub embeddings: Vec<Vec<f32>>,
+    /// The model used.
+    pub model: String,
+    /// Token usage statistics.
+    pub usage: Option<TokenUsage>,
+    /// Estimated cost in USD.
+    pub cost: Option<f64>,
+    /// Request timing.
+    pub timing: Option<RequestTiming>,
+    /// Provider-specific metadata.
+    pub metadata: serde_json::Value,
 }
 
 // ---------------------------------------------------------------------------

@@ -44,6 +44,25 @@ async fn log_run(event: StartEvent, ctx: Context) -> Result<StopEvent, WorkflowE
 }
 ```
 
+## Binary Storage
+
+Use `ctx.set_bytes()` and `ctx.get_bytes()` to store raw binary data. No serialization requirement -- store any type by converting to bytes yourself (e.g., MessagePack, protobuf, bincode). Binary data persists through pause/resume/checkpoint via efficient `serde_bytes` serialization.
+
+```rust
+#[step]
+async fn store_model(event: StartEvent, ctx: Context) -> Result<NextEvent, WorkflowError> {
+    let weights: Vec<u8> = vec![0x01, 0x02, 0x03, 0x04];
+    ctx.set_bytes("model-weights", weights);
+    Ok(NextEvent { /* ... */ })
+}
+
+#[step]
+async fn use_model(event: NextEvent, ctx: Context) -> Result<StopEvent, WorkflowError> {
+    let weights = ctx.get_bytes("model-weights").expect("weights should exist");
+    Ok(StopEvent { result: serde_json::json!({"weight_count": weights.len()}) })
+}
+```
+
 ## Manual Event Routing
 
 Instead of returning an event from a step, you can use `ctx.send_event()` to route events programmatically. This is useful when a step needs to emit multiple events or decide at runtime which path the workflow takes:

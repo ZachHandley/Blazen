@@ -14,7 +14,7 @@ use futures_util::Stream;
 use serde::Deserialize;
 use tracing::warn;
 
-use crate::error::LlmError;
+use crate::error::BlazenError;
 use crate::types::{StreamChunk, ToolCall};
 
 // ---------------------------------------------------------------------------
@@ -126,7 +126,7 @@ impl<S> Stream for SseParser<S>
 where
     S: Stream<Item = Result<Bytes, reqwest::Error>> + Unpin + Send,
 {
-    type Item = Result<StreamChunk, LlmError>;
+    type Item = Result<StreamChunk, BlazenError>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
@@ -145,7 +145,7 @@ where
                     // Loop back to try parsing again.
                 }
                 Poll::Ready(Some(Err(e))) => {
-                    return Poll::Ready(Some(Err(LlmError::Stream(e.to_string()))));
+                    return Poll::Ready(Some(Err(BlazenError::stream_error(e.to_string()))));
                 }
                 Poll::Ready(None) => {
                     // Stream ended. If there's leftover data, try one more parse.
@@ -169,7 +169,7 @@ where
 /// Returns `Some` if a complete event was found (including `[DONE]` which
 /// maps to a final chunk with `finish_reason: "stop"`). Returns `None` if
 /// more data is needed.
-pub(crate) fn parse_next_event(buffer: &mut String) -> Option<Result<StreamChunk, LlmError>> {
+pub(crate) fn parse_next_event(buffer: &mut String) -> Option<Result<StreamChunk, BlazenError>> {
     loop {
         // Look for a complete line.
         let newline_pos = buffer.find('\n')?;
@@ -226,7 +226,7 @@ pub(crate) fn parse_next_event(buffer: &mut String) -> Option<Result<StreamChunk
                 }
                 Err(e) => {
                     warn!(error = %e, data, "failed to parse OpenAI SSE chunk");
-                    return Some(Err(LlmError::Stream(format!(
+                    return Some(Err(BlazenError::stream_error(format!(
                         "failed to parse SSE chunk: {e}"
                     ))));
                 }

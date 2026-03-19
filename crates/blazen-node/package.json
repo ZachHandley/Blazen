@@ -34,7 +34,8 @@
     "index.d.ts"
   ],
   "devDependencies": {
-    "@napi-rs/cli": "^3.0.0"
+    "@napi-rs/cli": "^3.0.0",
+    "@biomejs/biome": "^2"
   },
   "engines": {
     "node": ">= 18"

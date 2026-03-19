@@ -12,73 +12,12 @@ use futures_util::Stream;
 use reqwest::Client;
 use tracing::debug;
 
+use super::openai_format::{content_to_openai_value, parse_retry_after};
 use super::sse::{OaiResponse, SseParser};
-use crate::error::LlmError;
+use crate::error::BlazenError;
 use crate::types::{
-    CompletionRequest, CompletionResponse, ContentPart, ImageContent, ImageSource, MessageContent,
-    Role, StreamChunk, TokenUsage, ToolCall,
+    CompletionRequest, CompletionResponse, Role, StreamChunk, TokenUsage, ToolCall,
 };
-
-// ---------------------------------------------------------------------------
-// Multimodal helpers
-// ---------------------------------------------------------------------------
-
-/// Convert an [`ImageContent`] to the `OpenAI` `image_url` content-part format.
-fn image_content_to_openai(img: &ImageContent) -> serde_json::Value {
-    let url = match &img.source {
-        ImageSource::Url { url } => url.clone(),
-        ImageSource::Base64 { data } => {
-            let media_type = img.media_type.as_deref().unwrap_or("image/png");
-            format!("data:{media_type};base64,{data}")
-        }
-    };
-    serde_json::json!({
-        "type": "image_url",
-        "image_url": { "url": url }
-    })
-}
-
-/// Convert a single [`ContentPart`] to an `OpenAI` content-array element.
-fn content_part_to_openai(part: &ContentPart) -> serde_json::Value {
-    match part {
-        ContentPart::Text { text } => {
-            serde_json::json!({ "type": "text", "text": text })
-        }
-        ContentPart::Image(img) => image_content_to_openai(img),
-        ContentPart::File(file) => {
-            // Files are sent as image_url with a data URI (best-effort for
-            // OpenAI-compatible endpoints).
-            let url = match &file.source {
-                ImageSource::Url { url } => url.clone(),
-                ImageSource::Base64 { data } => {
-                    format!("data:{};base64,{data}", file.media_type)
-                }
-            };
-            serde_json::json!({
-                "type": "image_url",
-                "image_url": { "url": url }
-            })
-        }
-    }
-}
-
-/// Convert [`MessageContent`] to a `serde_json::Value` suitable for the
-/// `OpenAI` `content` field.
-///
-/// - `Text` -> a plain JSON string (backward-compatible).
-/// - `Image` / `Parts` -> a JSON array of content parts.
-fn content_to_openai_value(content: &MessageContent) -> serde_json::Value {
-    match content {
-        MessageContent::Text(t) => serde_json::Value::String(t.clone()),
-        MessageContent::Image(img) => {
-            serde_json::json!([image_content_to_openai(img)])
-        }
-        MessageContent::Parts(parts) => {
-            let arr: Vec<serde_json::Value> = parts.iter().map(content_part_to_openai).collect();
-            serde_json::json!(arr)
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Provider
@@ -192,11 +131,29 @@ impl OpenAiProvider {
             body["tools"] = serde_json::json!(tools);
         }
 
+        // Multimodal output modalities
+        if let Some(modalities) = &request.modalities {
+            body["modalities"] = serde_json::to_value(modalities).unwrap_or_default();
+        }
+
+        // Image generation configuration
+        if let Some(image_config) = &request.image_config {
+            body["image_config"] = image_config.clone();
+        }
+
+        // Audio output configuration
+        if let Some(audio_config) = &request.audio_config {
+            body["audio"] = audio_config.clone();
+        }
+
         body
     }
 
     /// Send a request and return the raw response, handling common errors.
-    async fn send_request(&self, body: &serde_json::Value) -> Result<reqwest::Response, LlmError> {
+    async fn send_request(
+        &self,
+        body: &serde_json::Value,
+    ) -> Result<reqwest::Response, BlazenError> {
         let url = format!("{}/chat/completions", self.base_url);
 
         let response = self
@@ -206,12 +163,15 @@ impl OpenAiProvider {
             .json(body)
             .send()
             .await
-            .map_err(|e| LlmError::Http(e.to_string()))?;
+            .map_err(|e| BlazenError::request(e.to_string()))?;
 
         let status = response.status();
         if status.is_success() {
             return Ok(response);
         }
+
+        // Extract Retry-After before consuming the body.
+        let retry_after_ms = parse_retry_after(response.headers());
 
         // Try to read the error body for better diagnostics.
         let error_body = response
@@ -220,15 +180,10 @@ impl OpenAiProvider {
             .unwrap_or_else(|_| String::from("<unable to read error body>"));
 
         match status.as_u16() {
-            401 => Err(LlmError::AuthFailed),
-            404 => Err(LlmError::ModelNotFound(error_body)),
-            429 => {
-                // TODO: parse Retry-After header if present.
-                Err(LlmError::RateLimited { retry_after: None })
-            }
-            _ => Err(LlmError::RequestFailed(format!(
-                "HTTP {status}: {error_body}"
-            ))),
+            401 => Err(BlazenError::auth("authentication failed")),
+            404 => Err(BlazenError::model_not_found(error_body)),
+            429 => Err(BlazenError::RateLimit { retry_after_ms }),
+            _ => Err(BlazenError::request(format!("HTTP {status}: {error_body}"))),
         }
     }
 }
@@ -243,7 +198,10 @@ impl crate::traits::CompletionModel for OpenAiProvider {
         &self.default_model
     }
 
-    async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, LlmError> {
+    async fn complete(
+        &self,
+        request: CompletionRequest,
+    ) -> Result<CompletionResponse, BlazenError> {
         let model_id = request.model.as_deref().unwrap_or(&self.default_model);
         let span = tracing::info_span!(
             "llm.complete",
@@ -265,13 +223,13 @@ impl crate::traits::CompletionModel for OpenAiProvider {
         let oai: OaiResponse = response
             .json()
             .await
-            .map_err(|e| LlmError::InvalidResponse(e.to_string()))?;
+            .map_err(|e| BlazenError::invalid_response(e.to_string()))?;
 
         let choice = oai
             .choices
             .into_iter()
             .next()
-            .ok_or_else(|| LlmError::InvalidResponse("empty choices array".into()))?;
+            .ok_or_else(|| BlazenError::invalid_response("empty choices array"))?;
 
         let tool_calls = choice
             .message
@@ -312,13 +270,20 @@ impl crate::traits::CompletionModel for OpenAiProvider {
             usage,
             model: oai.model,
             finish_reason: choice.finish_reason,
+            cost: None,
+            timing: None,
+            images: vec![],
+            audio: vec![],
+            videos: vec![],
+            metadata: serde_json::Value::Null,
         })
     }
 
     async fn stream(
         &self,
         request: CompletionRequest,
-    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LlmError>> + Send>>, LlmError> {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
+    {
         let model_id = request.model.as_deref().unwrap_or(&self.default_model);
         let span = tracing::info_span!(
             "llm.stream",
@@ -368,6 +333,9 @@ mod tests {
             top_p: None,
             response_format: None,
             model: None,
+            modalities: None,
+            image_config: None,
+            audio_config: None,
         };
 
         let body = provider.build_body(&request, false);

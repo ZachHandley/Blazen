@@ -115,6 +115,38 @@ impl PyContext {
         });
     }
 
+    /// Store raw binary data under the given key.
+    ///
+    /// Useful for storing files, images, serialized objects, or any binary
+    /// data that should not be JSON-serialized. The data persists through
+    /// pause/resume snapshots.
+    ///
+    /// Args:
+    ///     key: The storage key.
+    ///     data: Raw bytes to store.
+    fn set_bytes(&self, _py: Python<'_>, key: &str, data: &[u8]) {
+        let inner = self.inner.clone();
+        let key = key.to_string();
+        let data = data.to_vec();
+        block_on_context(async { inner.set_bytes(&key, data).await });
+    }
+
+    /// Retrieve raw binary data previously stored under the given key.
+    ///
+    /// Returns None if the key does not exist or the stored value is
+    /// not binary data.
+    ///
+    /// Args:
+    ///     key: The storage key.
+    ///
+    /// Returns:
+    ///     The stored bytes, or None.
+    fn get_bytes(&self, _py: Python<'_>, key: &str) -> Option<Vec<u8>> {
+        let inner = self.inner.clone();
+        let key = key.to_string();
+        block_on_context(async { inner.get_bytes(&key).await })
+    }
+
     /// Get the workflow run ID.
     ///
     /// Returns:

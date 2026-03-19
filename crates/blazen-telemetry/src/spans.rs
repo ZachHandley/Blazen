@@ -6,7 +6,9 @@
 use std::pin::Pin;
 
 use async_trait::async_trait;
-use blazen_llm::{CompletionModel, CompletionRequest, CompletionResponse, LlmError, StreamChunk};
+use blazen_llm::{
+    BlazenError, CompletionModel, CompletionRequest, CompletionResponse, StreamChunk,
+};
 use futures_util::Stream;
 use tracing::Instrument;
 
@@ -47,7 +49,10 @@ impl<M: CompletionModel> CompletionModel for TracingCompletionModel<M> {
         self.inner.model_id()
     }
 
-    async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, LlmError> {
+    async fn complete(
+        &self,
+        request: CompletionRequest,
+    ) -> Result<CompletionResponse, BlazenError> {
         let span = tracing::info_span!(
             "llm.complete",
             provider = self.provider_name,
@@ -82,7 +87,8 @@ impl<M: CompletionModel> CompletionModel for TracingCompletionModel<M> {
     async fn stream(
         &self,
         request: CompletionRequest,
-    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LlmError>> + Send>>, LlmError> {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
+    {
         let span = tracing::info_span!(
             "llm.stream",
             provider = self.provider_name,

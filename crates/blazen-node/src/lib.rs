@@ -9,8 +9,11 @@
 //! - [`event`] -- Event conversion between JS objects and Rust events.
 //! - [`handler`] -- Workflow handler for pause/resume and streaming control.
 //! - [`llm`] -- LLM completion model wrappers with provider factories.
+//! - [`agent`] -- Agentic tool execution loop bindings.
 //! - [`workflow`] -- Workflow builder and runner.
 
+pub mod agent;
+pub mod compute;
 pub mod context;
 pub mod error;
 pub mod event;

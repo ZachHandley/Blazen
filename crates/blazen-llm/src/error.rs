@@ -1,54 +1,225 @@
-//! Error types for the `Blazen` LLM integration layer.
+//! Unified error types for all Blazen LLM and compute operations.
 
 use std::time::Duration;
 
-use thiserror::Error;
+/// The unified error type for all Blazen LLM and compute operations.
+#[derive(Debug, thiserror::Error)]
+pub enum BlazenError {
+    // ---- Shared (applies to completions, compute, media, tools) ----
+    #[error("authentication failed: {message}")]
+    Auth { message: String },
 
-/// Errors produced by LLM provider operations.
-#[derive(Debug, Error)]
-pub enum LlmError {
-    /// The HTTP request to the provider API failed.
-    #[error("API request failed: {0}")]
-    RequestFailed(String),
+    #[error("rate limited{}", retry_after_ms.map(|ms| format!(": retry after {ms}ms")).unwrap_or_default())]
+    RateLimit { retry_after_ms: Option<u64> },
 
-    /// The provider returned a rate-limit response.
-    #[error("rate limited, retry after {retry_after:?}")]
-    RateLimited {
-        /// How long to wait before retrying, if the provider specified it.
-        retry_after: Option<Duration>,
+    #[error("timed out after {elapsed_ms}ms")]
+    Timeout { elapsed_ms: u64 },
+
+    #[error("{provider} error: {message}")]
+    Provider {
+        provider: String,
+        message: String,
+        status_code: Option<u16>,
     },
 
-    /// The provided API key was rejected by the provider.
-    #[error("authentication failed")]
-    AuthFailed,
+    #[error("invalid input: {message}")]
+    Validation {
+        field: Option<String>,
+        message: String,
+    },
 
-    /// The requested model does not exist or is not accessible.
+    #[error("content policy violation: {message}")]
+    ContentPolicy { message: String },
+
+    #[error("unsupported: {message}")]
+    Unsupported { message: String },
+
+    #[error("serialization error: {0}")]
+    Serialization(String),
+
+    #[error("request failed: {message}")]
+    Request {
+        message: String,
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
+
+    // ---- LLM completion-specific ----
+    #[error("completion error: {0}")]
+    Completion(CompletionErrorKind),
+
+    // ---- Compute job-specific ----
+    #[error("compute error: {0}")]
+    Compute(ComputeErrorKind),
+
+    // ---- Media-specific ----
+    #[error("media error: {0}")]
+    Media(MediaErrorKind),
+
+    // ---- Tool-specific ----
+    #[error("tool error: {message}")]
+    Tool {
+        name: Option<String>,
+        message: String,
+    },
+}
+
+/// LLM completion-specific error variants.
+#[derive(Debug, thiserror::Error)]
+pub enum CompletionErrorKind {
+    #[error("model returned no content")]
+    NoContent,
     #[error("model not found: {0}")]
     ModelNotFound(String),
-
-    /// The provider returned a response with no content.
-    #[error("no content in response")]
-    NoContent,
-
-    /// The provider response could not be parsed into the expected format.
-    #[error("invalid response format: {0}")]
+    #[error("invalid response: {0}")]
     InvalidResponse(String),
-
-    /// Structured output JSON could not be deserialized into the target type.
-    #[error("structured output parse failed: {0}")]
-    ParseFailed(#[from] serde_json::Error),
-
-    /// An HTTP transport error occurred.
-    ///
-    /// Uses `String` rather than `reqwest::Error` to avoid feature-gating the
-    /// error enum itself.
-    #[error("HTTP error: {0}")]
-    Http(String),
-
-    /// An error occurred while processing a streaming response.
     #[error("stream error: {0}")]
     Stream(String),
 }
 
-/// Convenience alias for `Result<T, LlmError>`.
-pub type Result<T, E = LlmError> = std::result::Result<T, E>;
+/// Compute job-specific error variants.
+#[derive(Debug, thiserror::Error)]
+pub enum ComputeErrorKind {
+    #[error("job failed: {message}")]
+    JobFailed {
+        message: String,
+        error_type: Option<String>,
+        retryable: bool,
+    },
+    #[error("job cancelled")]
+    Cancelled,
+    #[error("quota exceeded: {message}")]
+    QuotaExceeded { message: String },
+}
+
+/// Media-specific error variants.
+#[derive(Debug, thiserror::Error)]
+pub enum MediaErrorKind {
+    #[error("invalid media: {message}")]
+    Invalid {
+        media_type: Option<String>,
+        message: String,
+    },
+    #[error("media too large: {size_bytes} bytes (max {max_bytes})")]
+    TooLarge { size_bytes: u64, max_bytes: u64 },
+}
+
+impl BlazenError {
+    /// Whether this error is likely transient and the request could be retried.
+    #[must_use]
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Self::RateLimit { .. } | Self::Timeout { .. } | Self::Request { .. } => true,
+            Self::Provider { status_code, .. } => status_code.is_none_or(|code| code >= 500),
+            Self::Compute(ComputeErrorKind::JobFailed { retryable, .. }) => *retryable,
+            _ => false,
+        }
+    }
+
+    // Convenience constructors
+
+    pub fn auth(message: impl Into<String>) -> Self {
+        Self::Auth {
+            message: message.into(),
+        }
+    }
+
+    #[must_use]
+    pub fn timeout(elapsed_ms: u64) -> Self {
+        Self::Timeout { elapsed_ms }
+    }
+
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn timeout_from_duration(elapsed: Duration) -> Self {
+        let ms = elapsed.as_millis();
+        Self::Timeout {
+            elapsed_ms: if ms > u128::from(u64::MAX) {
+                u64::MAX
+            } else {
+                ms as u64
+            },
+        }
+    }
+
+    pub fn request(message: impl Into<String>) -> Self {
+        Self::Request {
+            message: message.into(),
+            source: None,
+        }
+    }
+
+    pub fn unsupported(message: impl Into<String>) -> Self {
+        Self::Unsupported {
+            message: message.into(),
+        }
+    }
+
+    pub fn provider(provider: impl Into<String>, message: impl Into<String>) -> Self {
+        Self::Provider {
+            provider: provider.into(),
+            message: message.into(),
+            status_code: None,
+        }
+    }
+
+    pub fn validation(message: impl Into<String>) -> Self {
+        Self::Validation {
+            field: None,
+            message: message.into(),
+        }
+    }
+
+    pub fn tool_error(message: impl Into<String>) -> Self {
+        Self::Tool {
+            name: None,
+            message: message.into(),
+        }
+    }
+
+    #[must_use]
+    pub fn no_content() -> Self {
+        Self::Completion(CompletionErrorKind::NoContent)
+    }
+
+    pub fn model_not_found(model: impl Into<String>) -> Self {
+        Self::Completion(CompletionErrorKind::ModelNotFound(model.into()))
+    }
+
+    pub fn invalid_response(message: impl Into<String>) -> Self {
+        Self::Completion(CompletionErrorKind::InvalidResponse(message.into()))
+    }
+
+    pub fn stream_error(message: impl Into<String>) -> Self {
+        Self::Completion(CompletionErrorKind::Stream(message.into()))
+    }
+
+    pub fn job_failed(message: impl Into<String>) -> Self {
+        Self::Compute(ComputeErrorKind::JobFailed {
+            message: message.into(),
+            error_type: None,
+            retryable: false,
+        })
+    }
+
+    #[must_use]
+    pub fn cancelled() -> Self {
+        Self::Compute(ComputeErrorKind::Cancelled)
+    }
+}
+
+impl From<serde_json::Error> for BlazenError {
+    fn from(e: serde_json::Error) -> Self {
+        Self::Serialization(e.to_string())
+    }
+}
+
+/// Backwards-compatible alias.
+#[deprecated(note = "use BlazenError instead")]
+pub type LlmError = BlazenError;
+
+/// Backwards-compatible alias.
+#[deprecated(note = "use BlazenError instead")]
+pub type ComputeError = BlazenError;
+
+/// Result type alias for Blazen operations.
+pub type Result<T, E = BlazenError> = std::result::Result<T, E>;

@@ -128,20 +128,64 @@ asyncio.run(main())
 
 ## LLM Integration
 
-Blazen includes a built-in multi-provider LLM client. All providers share the same `CompletionModel` / `ChatMessage` interface.
+Blazen includes a built-in multi-provider LLM client. All providers share the same `CompletionModel` / `ChatMessage` interface. Responses are returned as typed `CompletionResponse` objects.
+
+### ChatMessage, Role, and CompletionResponse
 
 ```python
 import os
-from blazen import CompletionModel, ChatMessage
+from blazen import CompletionModel, ChatMessage, Role, CompletionResponse
 
 model = CompletionModel.openrouter(os.environ["OPENROUTER_API_KEY"])
-response = await model.complete([
+response: CompletionResponse = await model.complete([
     ChatMessage.system("You are helpful."),
     ChatMessage.user("What is 2+2?"),
 ], temperature=0.7, max_tokens=256)
 
+# Typed attribute access
+print(response.content)        # "4"
+print(response.model)          # model name used
+print(response.finish_reason)  # "stop", "tool_calls", etc.
+print(response.tool_calls)     # list[ToolCall] or None
+print(response.usage)          # TokenUsage with .prompt_tokens, .completion_tokens, .total_tokens
+
+# Dict-style access also works for backwards compatibility
 print(response["content"])
-# response also contains: model, tool_calls, usage, finish_reason
+```
+
+### Role Enum
+
+```python
+from blazen import Role
+
+Role.SYSTEM     # "system"
+Role.USER       # "user"
+Role.ASSISTANT  # "assistant"
+Role.TOOL       # "tool"
+
+# Use with ChatMessage constructor
+msg = ChatMessage(role=Role.USER, content="Hello")
+```
+
+### Multimodal Messages
+
+Send images alongside text using multimodal factory methods:
+
+```python
+from blazen import ChatMessage, ContentPart
+
+# Image from URL
+msg = ChatMessage.user_image_url("https://example.com/photo.jpg", "What's in this image?")
+
+# Image from base64
+msg = ChatMessage.user_image_base64(base64_data, "image/png", "Describe this.")
+
+# Multiple content parts
+msg = ChatMessage.user_parts([
+    ContentPart.text(text="Compare these two images:"),
+    ContentPart.image_url(url="https://example.com/a.jpg", media_type="image/jpeg"),
+    ContentPart.image_url(url="https://example.com/b.jpg", media_type="image/jpeg"),
+])
 ```
 
 ### Supported Providers
@@ -180,7 +224,7 @@ async def ask_llm(ctx: Context, ev: Event):
         ChatMessage.system("Answer concisely."),
         ChatMessage.user(ev.prompt),
     ], max_tokens=256)
-    return AnswerEvent(answer=response["content"])
+    return AnswerEvent(answer=response.content)  # typed attribute access
 
 @step
 async def format_answer(ctx: Context, ev: AnswerEvent):
@@ -259,12 +303,14 @@ result = await handler.result()
 
 ## Context API
 
-Steps share state through the `Context` object. All values must be JSON-serializable. Every method on `Context` is **synchronous** -- no `await` needed.
+Steps share state through the `Context` object. All values must be JSON-serializable (for `set`/`get`) or raw bytes (for `set_bytes`/`get_bytes`). Every method on `Context` is **synchronous** -- no `await` needed.
 
 | Method | Description |
 |---|---|
 | `ctx.set(key, value)` | Store a JSON-serializable value. |
 | `ctx.get(key)` | Retrieve a value (returns `None` if missing). |
+| `ctx.set_bytes(key, data)` | Store raw binary data (bytes). No serialization requirement. |
+| `ctx.get_bytes(key)` | Retrieve raw binary data (returns `None` if missing). |
 | `ctx.send_event(event)` | Route an event through the internal step graph. |
 | `ctx.write_event_to_stream(event)` | Publish an event to the external broadcast stream. |
 | `ctx.run_id()` | Get the UUID string for the current workflow run. |
@@ -280,6 +326,27 @@ async def example(ctx: Context, ev: Event):
     return None
 ```
 
+### Binary Storage
+
+`set_bytes` / `get_bytes` let you store raw binary data with no serialization requirement. Any type can be stored by converting to bytes yourself (e.g., pickle, msgpack, protobuf). Binary data persists through pause/resume/checkpoint.
+
+```python
+import pickle
+
+@step
+async def store_model(ctx: Context, ev: Event):
+    # Store arbitrary data as bytes
+    model_data = pickle.dumps({"weights": [1.0, 2.0, 3.0]})
+    ctx.set_bytes("model", model_data)
+    return NextEvent()
+
+@step
+async def load_model(ctx: Context, ev: NextEvent):
+    raw = ctx.get_bytes("model")
+    model = pickle.loads(raw)
+    return StopEvent(result=model)
+```
+
 ## API Reference
 
 | Class / Function | Description |
@@ -287,15 +354,20 @@ async def example(ctx: Context, ev: Event):
 | `Event(event_type, **kwargs)` | Base event class. Subclass it: `class MyEvent(Event)` auto-sets `event_type` to class name. Direct attribute access: `ev.name`. Also has `ev.to_dict()` and `ev.event_type`. |
 | `StartEvent(**kwargs)` | Emitted by `wf.run(**kwargs)`. Steps with `ev: Event` or no annotation accept this. |
 | `StopEvent(**kwargs)` | Terminates the workflow. Access the result via `result.result`. |
-| `Context` | Shared key/value store. Methods: `set(key, value)`, `get(key)`, `send_event(event)`, `write_event_to_stream(event)`, `run_id()`. All synchronous. |
+| `Context` | Shared key/value store. Methods: `set`, `get`, `set_bytes`, `get_bytes`, `send_event`, `write_event_to_stream`, `run_id`. All synchronous. |
 | `@step` | Decorator for workflow steps. Infers `accepts` from the `ev` parameter type annotation. Supports `async def` and plain `def`. May also be called as `@step(accepts=[...], emits=[...], max_concurrency=N)`. |
 | `Workflow(name, steps, timeout=None)` | Validated workflow graph. `timeout` is in seconds (default: 300). |
 | `await wf.run(**kwargs)` | Execute the workflow. Returns a `WorkflowHandler`. Kwargs become the `StartEvent` payload. |
 | `WorkflowHandler` | Handle to a running workflow: `await handler.result()`, `async for ev in handler.stream_events()`, `await handler.pause()`. |
 | `await Workflow.resume(snapshot_json, steps, timeout=None)` | Resume a paused workflow from a JSON snapshot. Returns a `WorkflowHandler`. |
 | `CompletionModel.<provider>(api_key, ...)` | LLM provider. Providers: `openai`, `anthropic`, `gemini`, `azure`, `openrouter`, `groq`, `together`, `mistral`, `deepseek`, `fireworks`, `perplexity`, `xai`, `cohere`, `bedrock`, `fal`. |
-| `await model.complete(messages, temperature=None, max_tokens=None, model=None)` | Chat completion. Returns a dict with keys: `content`, `model`, `tool_calls`, `usage`, `finish_reason`. |
-| `ChatMessage(role, content)` | Chat message. Static constructors: `.system(content)`, `.user(content)`, `.assistant(content)`, `.tool(content)`. Properties: `.role`, `.content`. |
+| `await model.complete(messages, ...)` | Chat completion. Returns a typed `CompletionResponse`. |
+| `ChatMessage(role=, content=, parts=)` | Chat message. Constructor with keyword args (role defaults to `"user"`). Static factories: `.system()`, `.user()`, `.assistant()`, `.tool()`, `.user_image_url()`, `.user_image_base64()`, `.user_parts()`. |
+| `Role` | Role enum: `Role.SYSTEM`, `Role.USER`, `Role.ASSISTANT`, `Role.TOOL`. |
+| `CompletionResponse` | Typed response: `.content`, `.model`, `.finish_reason`, `.tool_calls`, `.usage`. Also supports dict-style `response["content"]`. |
+| `ToolCall` | Tool call object: `.id`, `.name`, `.arguments`. |
+| `TokenUsage` | Token usage: `.prompt_tokens`, `.completion_tokens`, `.total_tokens`. |
+| `ContentPart` | Multimodal content part: `.text(text=...)`, `.image_url(url=..., media_type=...)`, `.image_base64(data=..., media_type=...)`. |
 
 ## Documentation
 

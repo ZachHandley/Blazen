@@ -36,6 +36,19 @@ Each workflow execution is assigned a unique run ID. Access it from the context:
 const runId = await ctx.runId(); // Returns a UUID string
 ```
 
+## Binary Storage
+
+Use `ctx.setBytes()` and `ctx.getBytes()` to store raw binary data in the context. No serialization requirement -- store any type by converting to bytes yourself (e.g., MessagePack, protobuf, or raw buffers). Binary data persists through pause/resume/checkpoint.
+
+```javascript
+// Store raw binary data
+const pixels = Buffer.from([0xff, 0x00, 0x00, 0xff]);
+await ctx.setBytes("image-pixels", pixels);
+
+// Retrieve it in another step
+const data = await ctx.getBytes("image-pixels"); // Buffer | null
+```
+
 ## Manual Event Routing
 
 Use `ctx.sendEvent()` to emit an event manually instead of returning one from the step handler:

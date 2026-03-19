@@ -28,3 +28,47 @@ dynamic = ["version"]
 features = ["pyo3/extension-module"]
 module-name = "blazen"
 manifest-path = "Cargo.toml"
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.38.3",
+    "mypy>=1.19.1",
+    "ruff>=0.15.6",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F",    # pycodestyle + pyflakes
+    "I",               # isort
+    "UP",              # pyupgrade
+    "N",               # pep8-naming
+    "S",               # bandit (security)
+    "B",               # bugbear
+    "A",               # builtins shadowing
+    "COM",             # commas
+    "C4",              # comprehensions
+    "ISC",             # implicit string concat
+    "PIE",             # misc lints
+    "PT",              # pytest style
+    "SIM",             # simplify
+    "TCH",             # type-checking imports
+    "PL",              # pylint
+]
+ignore = ["COM812", "ISC001"]  # conflicts with formatter
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.basedpyright]
+pythonVersion = "3.10"
+typeCheckingMode = "standard"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true

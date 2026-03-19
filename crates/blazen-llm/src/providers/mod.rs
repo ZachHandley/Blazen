@@ -20,6 +20,10 @@
 #[cfg(any(feature = "openai", feature = "azure"))]
 pub(crate) mod sse;
 
+// Shared multimodal content helpers for OpenAI-compatible wire formats.
+#[cfg(any(feature = "openai", feature = "azure"))]
+pub(crate) mod openai_format;
+
 #[cfg(feature = "openai")]
 pub mod openai;
 

@@ -13,6 +13,7 @@ name = "blazen"
 crate-type = ["cdylib"]
 
 [dependencies]
+async-trait.workspace = true
 blazen-core.workspace = true
 blazen-events.workspace = true
 blazen-llm = { workspace = true, features = ["all-providers"] }

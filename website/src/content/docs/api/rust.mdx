@@ -1,200 +1,1378 @@
 ---
 title: "Rust API Reference"
-description: "Complete API reference for blazen in Rust"
+description: "Complete API reference for blazen-llm in Rust"
 language: "rust"
 section: "api"
 order: 1
 ---
 
-## Derive Macros
+## Feature Flags
 
-### `#[derive(Event)]`
+| Feature | Description |
+|---------|-------------|
+| `openai` | Enables `OpenAiProvider` and `OpenAiCompatProvider` (covers OpenRouter, Groq, Together, Mistral, DeepSeek, Fireworks, Perplexity, xAI, Cohere, Bedrock) |
+| `anthropic` | Enables `AnthropicProvider` |
+| `gemini` | Enables `GeminiProvider` |
+| `fal` | Enables `FalProvider` (compute: image, video, audio, 3D) |
+| `azure` | Enables `AzureOpenAiProvider` |
+| `all-providers` | Enables all provider implementations |
 
-Implements the `Event` trait on a struct. Must be combined with `Serialize` and `Deserialize`.
+---
+
+## Core LLM Traits
+
+### `CompletionModel`
+
+The central trait every LLM provider must implement. Supports both one-shot and streaming completions.
 
 ```rust
-#[derive(Debug, Clone, Serialize, Deserialize, Event)]
-struct MyEvent {
-    payload: String,
+#[async_trait]
+pub trait CompletionModel: Send + Sync {
+    fn model_id(&self) -> &str;
+
+    async fn complete(
+        &self,
+        request: CompletionRequest,
+    ) -> Result<CompletionResponse, BlazenError>;
+
+    async fn stream(
+        &self,
+        request: CompletionRequest,
+    ) -> Result<
+        Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>,
+        BlazenError,
+    >;
 }
 ```
 
-Generates `event_type()`, serialization, and routing support.
-
-### `#[step]`
-
-Turns an async function into a workflow step. Generates a `<fn_name>_registration()` function used to register the step with a `WorkflowBuilder`.
+**Usage:**
 
 ```rust
-#[step]
-async fn my_step(event: StartEvent, ctx: Context) -> Result<StopEvent, WorkflowError> { ... }
+use blazen_llm::{CompletionModel, CompletionRequest, ChatMessage};
+use blazen_llm::providers::openai::OpenAiProvider;
+
+let model = OpenAiProvider::new("sk-...");
+let request = CompletionRequest::new(vec![
+    ChatMessage::user("What is 2 + 2?"),
+]);
+let response = model.complete(request).await?;
+println!("{}", response.content.unwrap_or_default());
 ```
 
-### `#[step(emits = [Type1, Type2])]`
-
-Marks a step that can emit one of several event types. The return type becomes `Result<StepOutput, WorkflowError>`.
+**Streaming:**
 
 ```rust
-#[step(emits = [PositiveEvent, NegativeEvent])]
-async fn route(event: AnalyzeEvent, ctx: Context) -> Result<StepOutput, WorkflowError> { ... }
+use futures_util::StreamExt;
+
+let request = CompletionRequest::new(vec![
+    ChatMessage::user("Tell me a story"),
+]);
+let mut stream = model.stream(request).await?;
+while let Some(chunk) = stream.next().await {
+    let chunk = chunk?;
+    if let Some(delta) = &chunk.delta {
+        print!("{delta}");
+    }
+}
 ```
 
 ---
 
-## Events
+### `StructuredOutput`
 
-All events live in `blazen::prelude`.
+Extract typed data from a model using JSON Schema constraints. This trait has a **blanket implementation** for every `CompletionModel` -- providers do not need to implement it.
 
-### `StartEvent`
+```rust
+#[async_trait]
+pub trait StructuredOutput: CompletionModel {
+    async fn extract<T: JsonSchema + DeserializeOwned + Send>(
+        &self,
+        messages: Vec<ChatMessage>,
+    ) -> Result<StructuredResponse<T>, BlazenError>;
+}
 
-| Field  | Type                 | Description                      |
-|--------|----------------------|----------------------------------|
-| `data` | `serde_json::Value`  | JSON payload passed to `run()`   |
+// Blanket impl: every CompletionModel automatically gets this.
+impl<M: CompletionModel> StructuredOutput for M {}
+```
 
-### `StopEvent`
+`T` must implement `schemars::JsonSchema` and `serde::de::DeserializeOwned`. The schema is derived at call time via `schemars::schema_for!` and injected into the request's `response_format`.
 
-| Field    | Type                 | Description                      |
-|----------|----------------------|----------------------------------|
-| `result` | `serde_json::Value`  | Final workflow output            |
+**Usage:**
 
-### `InputRequestEvent`
+```rust
+use schemars::JsonSchema;
+use serde::Deserialize;
+use blazen_llm::StructuredOutput;
 
-| Field        | Type                 | Description                          |
-|--------------|----------------------|--------------------------------------|
-| `request_id` | `String`            | Unique ID correlating request/response |
-| `prompt`     | `String`            | Human-readable prompt text           |
+#[derive(JsonSchema, Deserialize)]
+struct Sentiment {
+    label: String,
+    score: f64,
+}
 
-### `InputResponseEvent`
-
-| Field        | Type                 | Description                          |
-|--------------|----------------------|--------------------------------------|
-| `request_id` | `String`            | Must match the originating request   |
-| `response`   | `serde_json::Value`  | Human-provided response payload      |
+let result = model.extract::<Sentiment>(vec![
+    ChatMessage::user("Analyze sentiment: 'I love Rust'"),
+]).await?;
+println!("{}: {}", result.data.label, result.data.score);
+```
 
 ---
 
-## WorkflowBuilder
+### `EmbeddingModel`
 
-### `WorkflowBuilder::new(name)`
-
-```rust
-fn new(name: &str) -> WorkflowBuilder
-```
-
-Create a new workflow builder with the given name.
-
-### `.step(registration)`
+Produces vector embeddings for text inputs.
 
 ```rust
-fn step(self, registration: StepRegistration) -> Self
+#[async_trait]
+pub trait EmbeddingModel: Send + Sync {
+    fn model_id(&self) -> &str;
+    fn dimensions(&self) -> usize;
+    async fn embed(&self, texts: &[String]) -> Result<EmbeddingResponse, BlazenError>;
+}
 ```
 
-Add a step. Pass the `<fn_name>_registration()` function generated by `#[step]`.
-
-### `.input_handler(handler)`
+**Usage:**
 
 ```rust
-fn input_handler(self, handler: Arc<dyn Fn(InputRequestEvent) -> BoxFuture<Result<InputResponseEvent, WorkflowError>>>) -> Self
+let texts = vec!["Hello world".into(), "Goodbye world".into()];
+let response = embedding_model.embed(&texts).await?;
+for (i, vector) in response.embeddings.iter().enumerate() {
+    println!("text {i}: {} dimensions", vector.len());
+}
 ```
-
-Register a handler invoked each time a step emits an `InputRequestEvent`.
-
-### `.build()`
-
-```rust
-fn build(self) -> Result<Workflow, WorkflowError>
-```
-
-Finalize and return the `Workflow`. Returns an error if the configuration is invalid.
 
 ---
 
-## Workflow
+### `Tool`
 
-### `.run(input)`
+A callable tool that can be invoked by an LLM during a conversation.
 
 ```rust
-async fn run(&self, input: serde_json::Value) -> Result<WorkflowHandler, WorkflowError>
+#[async_trait]
+pub trait Tool: Send + Sync {
+    fn definition(&self) -> ToolDefinition;
+    async fn execute(
+        &self,
+        arguments: serde_json::Value,
+    ) -> Result<serde_json::Value, BlazenError>;
+}
 ```
 
-Start the workflow with the given JSON input. Returns a `WorkflowHandler` for observing results and stream events.
+**Usage:**
+
+```rust
+use blazen_llm::{Tool, ToolDefinition, BlazenError};
+
+struct WeatherTool;
+
+#[async_trait::async_trait]
+impl Tool for WeatherTool {
+    fn definition(&self) -> ToolDefinition {
+        ToolDefinition {
+            name: "get_weather".into(),
+            description: "Get the current weather for a city".into(),
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "city": { "type": "string" }
+                },
+                "required": ["city"]
+            }),
+        }
+    }
+
+    async fn execute(
+        &self,
+        arguments: serde_json::Value,
+    ) -> Result<serde_json::Value, BlazenError> {
+        let city = arguments["city"].as_str().unwrap_or("unknown");
+        Ok(serde_json::json!({ "temp": 72, "city": city }))
+    }
+}
+```
 
 ---
 
-## WorkflowHandler
+### `ModelRegistry`
 
-### `.result()`
-
-```rust
-async fn result(self) -> Result<StopEvent, WorkflowError>
-```
-
-Wait for the workflow to complete and return the final `StopEvent`.
-
-### `.stream_events()`
+Allows providers to advertise their available models.
 
 ```rust
-fn stream_events(&self) -> impl Stream<Item = Box<dyn Event>>
+#[async_trait]
+pub trait ModelRegistry: Send + Sync {
+    async fn list_models(&self) -> Result<Vec<ModelInfo>, BlazenError>;
+    async fn get_model(&self, model_id: &str) -> Result<Option<ModelInfo>, BlazenError>;
+}
 ```
 
-Subscribe to stream events published via `ctx.write_event_to_stream()`. The stream completes when the workflow finishes.
+#### `ModelInfo`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` | Model identifier used in API requests (e.g. `"gpt-4o"`) |
+| `name` | `Option<String>` | Human-readable display name |
+| `provider` | `String` | Provider that serves this model |
+| `context_length` | `Option<u64>` | Maximum context window in tokens |
+| `pricing` | `Option<ModelPricing>` | Pricing information |
+| `capabilities` | `ModelCapabilities` | What this model can do |
+
+#### `ModelPricing`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `input_per_million` | `Option<f64>` | Cost per million input tokens (USD) |
+| `output_per_million` | `Option<f64>` | Cost per million output tokens (USD) |
+| `per_image` | `Option<f64>` | Cost per image (image generation models) |
+| `per_second` | `Option<f64>` | Cost per second of compute |
+
+#### `ModelCapabilities`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `chat` | `bool` | Supports chat completions |
+| `streaming` | `bool` | Supports streaming responses |
+| `tool_use` | `bool` | Supports tool/function calling |
+| `structured_output` | `bool` | Supports JSON schema constraints |
+| `vision` | `bool` | Supports image inputs |
+| `image_generation` | `bool` | Supports image generation |
+| `embeddings` | `bool` | Supports text embeddings |
+| `video_generation` | `bool` | Video generation support |
+| `text_to_speech` | `bool` | Text-to-speech synthesis |
+| `speech_to_text` | `bool` | Speech-to-text transcription |
+| `audio_generation` | `bool` | Audio generation (music, SFX) |
+| `three_d_generation` | `bool` | 3D model generation |
 
 ---
 
-## Context
+## Types
 
-Passed as the second argument to every step function.
+### `ChatMessage`
 
-### `.set(key, value)`
+A single message in a chat conversation.
 
-```rust
-fn set(&self, key: &str, value: serde_json::Value)
-```
+| Field | Type | Description |
+|-------|------|-------------|
+| `role` | `Role` | Who produced this message |
+| `content` | `MessageContent` | The message payload |
 
-Store a value in the shared key-value store for this run.
-
-### `.get(key)`
-
-```rust
-fn get(&self, key: &str) -> Option<serde_json::Value>
-```
-
-Retrieve a value by key. Returns `None` if the key has not been set.
-
-### `.run_id()`
+**Constructors:**
 
 ```rust
-fn run_id(&self) -> String
+// Text messages
+ChatMessage::system("You are a helpful assistant")
+ChatMessage::user("Hello!")
+ChatMessage::assistant("Hi there!")
+ChatMessage::tool("{ \"result\": 42 }")
+
+// Multimodal messages
+ChatMessage::user_image_url("Describe this", "https://img.com/a.png", Some("image/png"))
+ChatMessage::user_image_base64("What is this?", "iVBORw0K...", "image/jpeg")
+ChatMessage::user_parts(vec![
+    ContentPart::Text { text: "Look at this:".into() },
+    ContentPart::Image(ImageContent {
+        source: ImageSource::Url { url: "https://...".into() },
+        media_type: Some("image/png".into()),
+    }),
+    ContentPart::File(FileContent {
+        source: ImageSource::Url { url: "https://...".into() },
+        media_type: "application/pdf".into(),
+        filename: Some("doc.pdf".into()),
+    }),
+])
 ```
-
-Get the unique UUID for this workflow run.
-
-### `.send_event(event)`
-
-```rust
-fn send_event(&self, event: impl Event)
-```
-
-Route an event manually instead of returning it from the step. When using `send_event`, the step returns `Result<(), WorkflowError>`.
-
-### `.write_event_to_stream(event)`
-
-```rust
-fn write_event_to_stream(&self, event: impl Event)
-```
-
-Publish an event to the external stream without affecting the routing pipeline. Subscribers receive it via `handler.stream_events()`.
 
 ---
 
-## StepOutput
-
-Used as the return type for steps annotated with `#[step(emits = [...])]`.
-
-### `StepOutput::Single(Box<dyn Event>)`
-
-Wrap a single event for output when the step can emit multiple types.
+### `Role`
 
 ```rust
-Ok(StepOutput::Single(Box::new(MyEvent { ... })))
+pub enum Role {
+    System,
+    User,
+    Assistant,
+    Tool,
+}
+```
+
+---
+
+### `MessageContent`
+
+```rust
+pub enum MessageContent {
+    Text(String),
+    Image(ImageContent),
+    Parts(Vec<ContentPart>),
+}
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `as_text()` | `&self -> Option<&str>` | Return the text if this is a `Text` variant |
+| `as_parts()` | `&self -> Vec<ContentPart>` | Convert any variant into a `Vec<ContentPart>` |
+| `text_content()` | `&self -> Option<String>` | Extract and concatenate all text content |
+
+`MessageContent` implements `From<&str>` and `From<String>`.
+
+---
+
+### `ContentPart`
+
+```rust
+pub enum ContentPart {
+    Text { text: String },
+    Image(ImageContent),
+    File(FileContent),
+}
+```
+
+### `ImageContent`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `source` | `ImageSource` | URL or base64 data |
+| `media_type` | `Option<String>` | MIME type (e.g. `"image/png"`) |
+
+### `ImageSource`
+
+```rust
+pub enum ImageSource {
+    Url { url: String },
+    Base64 { data: String },
+}
+```
+
+### `FileContent`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `source` | `ImageSource` | URL or base64 data |
+| `media_type` | `String` | MIME type (e.g. `"application/pdf"`) |
+| `filename` | `Option<String>` | Optional filename for display |
+
+---
+
+### `CompletionRequest`
+
+A provider-agnostic request for a chat completion.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `messages` | `Vec<ChatMessage>` | The conversation history |
+| `tools` | `Vec<ToolDefinition>` | Tools available for the model to invoke |
+| `temperature` | `Option<f32>` | Sampling temperature (0.0 = deterministic, 2.0 = very random) |
+| `max_tokens` | `Option<u32>` | Maximum number of tokens to generate |
+| `top_p` | `Option<f32>` | Nucleus sampling parameter |
+| `response_format` | `Option<serde_json::Value>` | JSON Schema for structured output |
+| `model` | `Option<String>` | Override the provider's default model |
+| `modalities` | `Option<Vec<String>>` | Output modalities (e.g. `["text"]`, `["image", "text"]`) |
+| `image_config` | `Option<serde_json::Value>` | Image generation configuration (model-specific) |
+| `audio_config` | `Option<serde_json::Value>` | Audio output configuration (voice, format, etc.) |
+
+**Builder pattern:**
+
+```rust
+let request = CompletionRequest::new(vec![ChatMessage::user("Hello")])
+    .with_tools(tool_defs)
+    .with_temperature(0.7)
+    .with_max_tokens(1024)
+    .with_top_p(0.9)
+    .with_response_format(schema_json)
+    .with_model("gpt-4o")
+    .with_modalities(vec!["text".into(), "image".into()])
+    .with_image_config(serde_json::json!({ "size": "1024x1024" }))
+    .with_audio_config(serde_json::json!({ "voice": "alloy" }));
+```
+
+---
+
+### `CompletionResponse`
+
+The result of a non-streaming chat completion.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `content` | `Option<String>` | Text content of the assistant's reply |
+| `tool_calls` | `Vec<ToolCall>` | Tool invocations requested by the model |
+| `usage` | `Option<TokenUsage>` | Token usage statistics |
+| `model` | `String` | The model that produced this response |
+| `finish_reason` | `Option<String>` | Why the model stopped (e.g. `"stop"`, `"tool_use"`) |
+| `cost` | `Option<f64>` | Estimated cost in USD |
+| `timing` | `Option<RequestTiming>` | Request timing breakdown |
+| `images` | `Vec<GeneratedImage>` | Generated images (multimodal models) |
+| `audio` | `Vec<GeneratedAudio>` | Generated audio (TTS / multimodal) |
+| `videos` | `Vec<GeneratedVideo>` | Generated videos |
+| `metadata` | `serde_json::Value` | Provider-specific metadata |
+
+---
+
+### `StructuredResponse<T>`
+
+Response from structured output extraction, preserving metadata.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `data` | `T` | The extracted structured data |
+| `usage` | `Option<TokenUsage>` | Token usage statistics |
+| `model` | `String` | The model that produced this response |
+| `cost` | `Option<f64>` | Estimated cost in USD |
+| `timing` | `Option<RequestTiming>` | Request timing |
+| `metadata` | `serde_json::Value` | Provider-specific metadata |
+
+---
+
+### `EmbeddingResponse`
+
+Response from an embedding operation.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `embeddings` | `Vec<Vec<f32>>` | The embedding vectors (one per input text) |
+| `model` | `String` | The model used |
+| `usage` | `Option<TokenUsage>` | Token usage statistics |
+| `cost` | `Option<f64>` | Estimated cost in USD |
+| `timing` | `Option<RequestTiming>` | Request timing |
+| `metadata` | `serde_json::Value` | Provider-specific metadata |
+
+---
+
+### `RequestTiming`
+
+Timing metadata for a request.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `queue_ms` | `Option<u64>` | Time spent waiting in queue (ms) |
+| `execution_ms` | `Option<u64>` | Time spent executing the request (ms) |
+| `total_ms` | `Option<u64>` | Total wall-clock time from submit to response (ms) |
+
+---
+
+### `TokenUsage`
+
+Token usage statistics for a completion request.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `prompt_tokens` | `u32` | Tokens in the prompt / input |
+| `completion_tokens` | `u32` | Tokens in the completion / output |
+| `total_tokens` | `u32` | Total tokens consumed (prompt + completion) |
+
+---
+
+### `ToolDefinition`
+
+Describes a tool that the model may invoke.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `String` | Unique name of the tool |
+| `description` | `String` | Human-readable description |
+| `parameters` | `serde_json::Value` | JSON Schema describing the tool's input parameters |
+
+---
+
+### `ToolCall`
+
+A tool invocation requested by the model.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` | Provider-assigned identifier for this invocation |
+| `name` | `String` | Name of the tool to invoke |
+| `arguments` | `serde_json::Value` | Arguments to pass, as JSON |
+
+---
+
+### `StreamChunk`
+
+A single chunk from a streaming completion response.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `delta` | `Option<String>` | Incremental text content |
+| `tool_calls` | `Vec<ToolCall>` | Tool invocations completed in this chunk |
+| `finish_reason` | `Option<String>` | Present in the final chunk to indicate why generation stopped |
+
+---
+
+## Agent System
+
+The agent system implements the standard LLM + tool calling loop: send messages with tool definitions, execute any tool calls the model makes, feed results back, and repeat until the model stops or `max_iterations` is reached.
+
+### `run_agent()`
+
+Run the agent loop without event callbacks.
+
+```rust
+pub async fn run_agent(
+    model: &dyn CompletionModel,
+    messages: Vec<ChatMessage>,
+    config: AgentConfig,
+) -> Result<AgentResult, BlazenError>
+```
+
+### `run_agent_with_callback()`
+
+Run the agent loop, emitting `AgentEvent`s to the supplied callback.
+
+```rust
+pub async fn run_agent_with_callback(
+    model: &dyn CompletionModel,
+    messages: Vec<ChatMessage>,
+    config: AgentConfig,
+    on_event: impl Fn(AgentEvent) + Send + Sync,
+) -> Result<AgentResult, BlazenError>
+```
+
+**The loop works as follows:**
+
+1. Build a `CompletionRequest` with the full message history and all tool definitions.
+2. Call the model.
+3. If the model responds with no tool calls, return immediately.
+4. If the model invoked the built-in "finish" tool (when enabled), extract the answer and return.
+5. Otherwise, execute each tool call, append results to messages, go back to step 1.
+6. If `max_iterations` is reached, make one final call **without** tools to force a text answer.
+
+**Usage:**
+
+```rust
+use std::sync::Arc;
+use blazen_llm::{run_agent, AgentConfig, ChatMessage};
+
+let config = AgentConfig::new(vec![Arc::new(WeatherTool)])
+    .with_system_prompt("You are a helpful assistant with weather tools.")
+    .with_max_iterations(5)
+    .with_finish_tool()
+    .with_temperature(0.7)
+    .with_max_tokens(2048);
+
+let result = run_agent(
+    &model,
+    vec![ChatMessage::user("What's the weather in Paris?")],
+    config,
+).await?;
+
+println!("Answer: {}", result.response.content.unwrap_or_default());
+println!("Iterations: {}", result.iterations);
+println!("Total cost: ${:.4}", result.total_cost.unwrap_or(0.0));
+```
+
+**With callback:**
+
+```rust
+use blazen_llm::{run_agent_with_callback, AgentEvent};
+
+let result = run_agent_with_callback(
+    &model,
+    vec![ChatMessage::user("What's the weather?")],
+    config,
+    |event| match &event {
+        AgentEvent::ToolCalled { iteration, tool_call } => {
+            println!("[iter {iteration}] calling tool: {}", tool_call.name);
+        }
+        AgentEvent::ToolResult { tool_name, result, .. } => {
+            println!("  {tool_name} -> {result}");
+        }
+        AgentEvent::IterationComplete { iteration, had_tool_calls } => {
+            println!("[iter {iteration}] done (tools: {had_tool_calls})");
+        }
+    },
+).await?;
+```
+
+---
+
+### `AgentConfig`
+
+Configuration for the agentic tool execution loop.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `max_iterations` | `u32` | `10` | Maximum tool call rounds before forcing a stop |
+| `tools` | `Vec<Arc<dyn Tool>>` | required | Tools available to the agent |
+| `add_finish_tool` | `bool` | `false` | Add an implicit "finish" tool the model can call to exit early |
+| `system_prompt` | `Option<String>` | `None` | System prompt prepended to messages |
+| `temperature` | `Option<f32>` | `None` | Sampling temperature |
+| `max_tokens` | `Option<u32>` | `None` | Maximum tokens per completion call |
+
+**Builder pattern:**
+
+```rust
+AgentConfig::new(tools)
+    .with_max_iterations(5)
+    .with_system_prompt("You are helpful.")
+    .with_finish_tool()
+    .with_temperature(0.7)
+    .with_max_tokens(2048)
+```
+
+---
+
+### `AgentResult`
+
+Result of an agent run.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `response` | `CompletionResponse` | The final completion response |
+| `messages` | `Vec<ChatMessage>` | Full message history including all tool calls and results |
+| `iterations` | `u32` | Number of tool call rounds that occurred |
+| `total_usage` | `Option<TokenUsage>` | Aggregated token usage across all rounds |
+| `total_cost` | `Option<f64>` | Aggregated cost across all rounds |
+| `timing` | `Option<RequestTiming>` | Total wall-clock time for the entire agent run |
+
+---
+
+### `AgentEvent`
+
+Events emitted during agent execution (passed to the callback in `run_agent_with_callback`).
+
+```rust
+pub enum AgentEvent {
+    ToolCalled {
+        iteration: u32,
+        tool_call: ToolCall,
+    },
+    ToolResult {
+        iteration: u32,
+        tool_name: String,
+        result: serde_json::Value,
+    },
+    IterationComplete {
+        iteration: u32,
+        had_tool_calls: bool,
+    },
+}
+```
+
+---
+
+## Compute Platform
+
+The compute module provides a unified trait system for async, job-based media generation providers (fal.ai, Replicate, RunPod, etc.) that model a submit-poll-retrieve workflow for GPU workloads.
+
+### `ComputeProvider`
+
+The base trait for compute providers.
+
+```rust
+#[async_trait]
+pub trait ComputeProvider: Send + Sync {
+    fn provider_id(&self) -> &str;
+
+    async fn submit(&self, request: ComputeRequest) -> Result<JobHandle, BlazenError>;
+
+    async fn status(&self, job: &JobHandle) -> Result<JobStatus, BlazenError>;
+
+    async fn result(&self, job: JobHandle) -> Result<ComputeResult, BlazenError>;
+
+    async fn cancel(&self, job: &JobHandle) -> Result<(), BlazenError>;
+
+    // Default: submit then wait for result
+    async fn run(&self, request: ComputeRequest) -> Result<ComputeResult, BlazenError> {
+        let job = self.submit(request).await?;
+        self.result(job).await
+    }
+}
+```
+
+---
+
+### `ImageGeneration`
+
+Image generation and upscaling. Requires `ComputeProvider` as a supertrait.
+
+```rust
+#[async_trait]
+pub trait ImageGeneration: ComputeProvider {
+    async fn generate_image(&self, request: ImageRequest) -> Result<ImageResult, BlazenError>;
+    async fn upscale_image(&self, request: UpscaleRequest) -> Result<ImageResult, BlazenError>;
+}
+```
+
+**Usage:**
+
+```rust
+use blazen_llm::compute::{ImageGeneration, ImageRequest};
+
+let result = provider.generate_image(
+    ImageRequest::new("a cat in space")
+        .with_size(1024, 1024)
+        .with_count(2)
+        .with_negative_prompt("blurry")
+        .with_model("flux-dev"),
+).await?;
+
+for image in &result.images {
+    println!("url: {:?}, {}x{}", image.media.url, image.width.unwrap_or(0), image.height.unwrap_or(0));
+}
+```
+
+---
+
+### `VideoGeneration`
+
+Video synthesis from text or images. Requires `ComputeProvider` as a supertrait.
+
+```rust
+#[async_trait]
+pub trait VideoGeneration: ComputeProvider {
+    async fn text_to_video(&self, request: VideoRequest) -> Result<VideoResult, BlazenError>;
+    async fn image_to_video(&self, request: VideoRequest) -> Result<VideoResult, BlazenError>;
+}
+```
+
+**Usage:**
+
+```rust
+use blazen_llm::compute::{VideoGeneration, VideoRequest};
+
+// Text-to-video
+let result = provider.text_to_video(
+    VideoRequest::new("a sunset timelapse")
+        .with_duration(5.0)
+        .with_size(1920, 1080)
+        .with_model("kling"),
+).await?;
+
+// Image-to-video
+let result = provider.image_to_video(
+    VideoRequest::for_image("https://example.com/img.png", "animate this scene")
+        .with_duration(3.0),
+).await?;
+```
+
+---
+
+### `AudioGeneration`
+
+Audio synthesis including TTS, music, and sound effects. Requires `ComputeProvider` as a supertrait.
+
+```rust
+#[async_trait]
+pub trait AudioGeneration: ComputeProvider {
+    async fn text_to_speech(&self, request: SpeechRequest) -> Result<AudioResult, BlazenError>;
+
+    // Default: returns BlazenError::Unsupported
+    async fn generate_music(&self, request: MusicRequest) -> Result<AudioResult, BlazenError>;
+
+    // Default: returns BlazenError::Unsupported
+    async fn generate_sfx(&self, request: MusicRequest) -> Result<AudioResult, BlazenError>;
+}
+```
+
+`generate_music()` and `generate_sfx()` have default implementations that return `BlazenError::Unsupported`. Providers override only the methods they support.
+
+**Usage:**
+
+```rust
+use blazen_llm::compute::{AudioGeneration, SpeechRequest, MusicRequest};
+
+let speech = provider.text_to_speech(
+    SpeechRequest::new("Hello world")
+        .with_voice("alloy")
+        .with_language("en")
+        .with_speed(1.0)
+        .with_voice_url("https://example.com/voice.wav") // voice cloning
+        .with_model("tts-1"),
+).await?;
+
+let music = provider.generate_music(
+    MusicRequest::new("upbeat jazz")
+        .with_duration(30.0)
+        .with_model("musicgen"),
+).await?;
+```
+
+---
+
+### `Transcription`
+
+Audio transcription (speech-to-text). Requires `ComputeProvider` as a supertrait.
+
+```rust
+#[async_trait]
+pub trait Transcription: ComputeProvider {
+    async fn transcribe(
+        &self,
+        request: TranscriptionRequest,
+    ) -> Result<TranscriptionResult, BlazenError>;
+}
+```
+
+**Usage:**
+
+```rust
+use blazen_llm::compute::{Transcription, TranscriptionRequest};
+
+let result = provider.transcribe(
+    TranscriptionRequest::new("https://example.com/audio.mp3")
+        .with_language("en")
+        .with_diarize(true)
+        .with_model("whisper-v3"),
+).await?;
+
+println!("Full text: {}", result.text);
+for segment in &result.segments {
+    println!("[{:.1}s - {:.1}s] {}: {}",
+        segment.start, segment.end,
+        segment.speaker.as_deref().unwrap_or("?"),
+        segment.text,
+    );
+}
+```
+
+---
+
+### `ThreeDGeneration`
+
+3D model generation from text or images. Requires `ComputeProvider` as a supertrait.
+
+```rust
+#[async_trait]
+pub trait ThreeDGeneration: ComputeProvider {
+    async fn generate_3d(&self, request: ThreeDRequest) -> Result<ThreeDResult, BlazenError>;
+}
+```
+
+**Usage:**
+
+```rust
+use blazen_llm::compute::{ThreeDGeneration, ThreeDRequest};
+
+// Text-to-3D
+let result = provider.generate_3d(
+    ThreeDRequest::new("a 3D cat")
+        .with_format("glb")
+        .with_model("triposr"),
+).await?;
+
+// Image-to-3D
+let result = provider.generate_3d(
+    ThreeDRequest::from_image("https://example.com/cat.png")
+        .with_format("obj"),
+).await?;
+
+for model_3d in &result.models {
+    println!("vertices: {:?}, faces: {:?}, textures: {}, animations: {}",
+        model_3d.vertex_count, model_3d.face_count,
+        model_3d.has_textures, model_3d.has_animations,
+    );
+}
+```
+
+---
+
+### Compute Request Types
+
+#### `ImageRequest`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `prompt` | `String` | Text prompt describing the desired image |
+| `negative_prompt` | `Option<String>` | Things to avoid in the image |
+| `width` | `Option<u32>` | Desired width in pixels |
+| `height` | `Option<u32>` | Desired height in pixels |
+| `num_images` | `Option<u32>` | Number of images to generate |
+| `model` | `Option<String>` | Model override |
+| `parameters` | `serde_json::Value` | Additional provider-specific parameters |
+
+Builder: `ImageRequest::new(prompt).with_size(w, h).with_count(n).with_negative_prompt(p).with_model(m)`
+
+#### `UpscaleRequest`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `image_url` | `String` | URL of the image to upscale |
+| `scale` | `f32` | Scale factor (e.g. 2.0, 4.0) |
+| `model` | `Option<String>` | Model override |
+| `parameters` | `serde_json::Value` | Additional provider-specific parameters |
+
+Builder: `UpscaleRequest::new(url, scale).with_model(m)`
+
+#### `VideoRequest`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `prompt` | `String` | Text prompt |
+| `image_url` | `Option<String>` | Source image for image-to-video |
+| `duration_seconds` | `Option<f32>` | Desired duration in seconds |
+| `negative_prompt` | `Option<String>` | Things to avoid |
+| `width` | `Option<u32>` | Desired width in pixels |
+| `height` | `Option<u32>` | Desired height in pixels |
+| `model` | `Option<String>` | Model override |
+| `parameters` | `serde_json::Value` | Additional provider-specific parameters |
+
+Builder: `VideoRequest::new(prompt)` or `VideoRequest::for_image(url, prompt)`, then `.with_duration(s).with_size(w, h).with_model(m)`
+
+#### `SpeechRequest`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `text` | `String` | Text to synthesize |
+| `voice` | `Option<String>` | Voice identifier (provider-specific) |
+| `voice_url` | `Option<String>` | Reference voice URL for voice cloning |
+| `language` | `Option<String>` | Language code (e.g. `"en"`, `"fr"`) |
+| `speed` | `Option<f32>` | Speed multiplier (1.0 = normal) |
+| `model` | `Option<String>` | Model override |
+| `parameters` | `serde_json::Value` | Additional provider-specific parameters |
+
+Builder: `SpeechRequest::new(text).with_voice(v).with_voice_url(url).with_language(l).with_speed(s).with_model(m)`
+
+#### `MusicRequest`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `prompt` | `String` | Text prompt |
+| `duration_seconds` | `Option<f32>` | Desired duration in seconds |
+| `model` | `Option<String>` | Model override |
+| `parameters` | `serde_json::Value` | Additional provider-specific parameters |
+
+Builder: `MusicRequest::new(prompt).with_duration(s).with_model(m)`
+
+#### `TranscriptionRequest`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `audio_url` | `String` | URL of the audio file |
+| `language` | `Option<String>` | Language hint |
+| `diarize` | `bool` | Enable speaker diarization (default: `false`) |
+| `model` | `Option<String>` | Model override |
+| `parameters` | `serde_json::Value` | Additional provider-specific parameters |
+
+Builder: `TranscriptionRequest::new(url).with_language(l).with_diarize(true).with_model(m)`
+
+#### `ThreeDRequest`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `prompt` | `String` | Text prompt |
+| `image_url` | `Option<String>` | Source image for image-to-3D |
+| `format` | `Option<String>` | Output format (e.g. `"glb"`, `"obj"`, `"usdz"`) |
+| `model` | `Option<String>` | Model override |
+| `parameters` | `serde_json::Value` | Additional provider-specific parameters |
+
+Builder: `ThreeDRequest::new(prompt)` or `ThreeDRequest::from_image(url)`, then `.with_format(f).with_model(m)`
+
+---
+
+### Compute Result Types
+
+#### `ImageResult`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `images` | `Vec<GeneratedImage>` | The generated/upscaled images |
+| `timing` | `RequestTiming` | Request timing breakdown |
+| `cost` | `Option<f64>` | Cost in USD |
+| `metadata` | `serde_json::Value` | Provider-specific metadata |
+
+#### `VideoResult`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `videos` | `Vec<GeneratedVideo>` | The generated videos |
+| `timing` | `RequestTiming` | Request timing breakdown |
+| `cost` | `Option<f64>` | Cost in USD |
+| `metadata` | `serde_json::Value` | Provider-specific metadata |
+
+#### `AudioResult`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `audio` | `Vec<GeneratedAudio>` | The generated audio clips |
+| `timing` | `RequestTiming` | Request timing breakdown |
+| `cost` | `Option<f64>` | Cost in USD |
+| `metadata` | `serde_json::Value` | Provider-specific metadata |
+
+#### `ThreeDResult`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `models` | `Vec<Generated3DModel>` | The generated 3D models |
+| `timing` | `RequestTiming` | Request timing breakdown |
+| `cost` | `Option<f64>` | Cost in USD |
+| `metadata` | `serde_json::Value` | Provider-specific metadata |
+
+#### `TranscriptionResult`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `text` | `String` | Full transcribed text |
+| `segments` | `Vec<TranscriptionSegment>` | Time-aligned segments |
+| `language` | `Option<String>` | Detected/specified language code |
+| `timing` | `RequestTiming` | Request timing breakdown |
+| `cost` | `Option<f64>` | Cost in USD |
+| `metadata` | `serde_json::Value` | Provider-specific metadata |
+
+#### `TranscriptionSegment`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `text` | `String` | Transcribed text for this segment |
+| `start` | `f64` | Start time in seconds |
+| `end` | `f64` | End time in seconds |
+| `speaker` | `Option<String>` | Speaker label (if diarization was enabled) |
+
+---
+
+### Compute Job Types
+
+#### `ComputeRequest`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `model` | `String` | Model/endpoint to run (e.g. `"fal-ai/flux/dev"`) |
+| `input` | `serde_json::Value` | Input parameters as JSON (model-specific) |
+| `webhook` | `Option<String>` | Webhook URL for async completion notification |
+
+#### `ComputeResult`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `job` | `Option<JobHandle>` | The job handle that produced this result |
+| `output` | `serde_json::Value` | Output data (model-specific JSON) |
+| `timing` | `RequestTiming` | Request timing breakdown |
+| `cost` | `Option<f64>` | Cost in USD |
+| `metadata` | `serde_json::Value` | Provider-specific metadata |
+
+#### `JobHandle`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` | Provider-assigned job identifier |
+| `provider` | `String` | Provider name (e.g. `"fal"`) |
+| `model` | `String` | Model/endpoint that was invoked |
+| `submitted_at` | `DateTime<Utc>` | When the job was submitted |
+
+#### `JobStatus`
+
+```rust
+pub enum JobStatus {
+    Queued,
+    Running,
+    Completed,
+    Failed { error: String },
+    Cancelled,
+}
+```
+
+---
+
+## Media
+
+### `MediaType`
+
+Exhaustive enumeration of media formats with detection support. Covers images, video, audio, 3D models, documents, and a catch-all `Other` variant.
+
+**Variants:**
+
+| Category | Variants |
+|----------|----------|
+| Image | `Png`, `Jpeg`, `WebP`, `Gif`, `Svg`, `Bmp`, `Tiff`, `Avif`, `Ico` |
+| Video | `Mp4`, `WebM`, `Mov`, `Avi`, `Mkv` |
+| Audio | `Mp3`, `Wav`, `Ogg`, `Flac`, `Aac`, `M4a`, `WebmAudio` |
+| 3D | `Glb`, `Gltf`, `Obj`, `Fbx`, `Usdz`, `Stl`, `Ply` |
+| Document | `Pdf` |
+| Catch-all | `Other { mime: String }` |
+
+**Methods:**
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `mime()` | `&self -> &str` | Return the MIME type string |
+| `extension()` | `&self -> &str` | Return the canonical file extension (no dot) |
+| `magic_bytes()` | `&self -> Option<&'static [u8]>` | Return the magic byte signature, if any |
+| `detect(bytes)` | `fn(&[u8]) -> Option<Self>` | Detect media type from file header bytes |
+| `from_mime(mime)` | `fn(&str) -> Self` | Parse a MIME string (unknown = `Other`) |
+| `from_extension(ext)` | `fn(&str) -> Self` | Parse a file extension (unknown = `Other`) |
+| `is_image()` | `&self -> bool` | Is this an image format? |
+| `is_video()` | `&self -> bool` | Is this a video format? |
+| `is_audio()` | `&self -> bool` | Is this an audio format? |
+| `is_3d()` | `&self -> bool` | Is this a 3D model format? |
+| `is_vector()` | `&self -> bool` | Is this a text-based format (SVG, GLTF, OBJ)? |
+
+`MediaType` implements `Display` (outputs the MIME string).
+
+**Example:**
+
+```rust
+use blazen_llm::MediaType;
+
+let mt = MediaType::from_extension("png");
+assert_eq!(mt.mime(), "image/png");
+assert!(mt.is_image());
+
+// Detect from raw bytes
+let bytes = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+assert_eq!(MediaType::detect(&bytes), Some(MediaType::Png));
+```
+
+---
+
+### `MediaOutput`
+
+A single piece of generated media content. At least one of `url`, `base64`, or `raw_content` will be populated.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `url` | `Option<String>` | URL where the media can be downloaded |
+| `base64` | `Option<String>` | Base64-encoded media data |
+| `raw_content` | `Option<String>` | Raw text content (SVG, OBJ, GLTF JSON) |
+| `media_type` | `MediaType` | Format of the media |
+| `file_size` | `Option<u64>` | File size in bytes |
+| `metadata` | `serde_json::Value` | Provider-specific metadata |
+
+**Constructors:**
+
+```rust
+let output = MediaOutput::from_url("https://example.com/img.png", MediaType::Png);
+let output = MediaOutput::from_base64("iVBORw0KGgo=", MediaType::Png);
+```
+
+---
+
+### `GeneratedImage`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `media` | `MediaOutput` | The image media output |
+| `width` | `Option<u32>` | Width in pixels |
+| `height` | `Option<u32>` | Height in pixels |
+
+### `GeneratedVideo`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `media` | `MediaOutput` | The video media output |
+| `width` | `Option<u32>` | Width in pixels |
+| `height` | `Option<u32>` | Height in pixels |
+| `duration_seconds` | `Option<f32>` | Duration in seconds |
+| `fps` | `Option<f32>` | Frames per second |
+
+### `GeneratedAudio`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `media` | `MediaOutput` | The audio media output |
+| `duration_seconds` | `Option<f32>` | Duration in seconds |
+| `sample_rate` | `Option<u32>` | Sample rate in Hz |
+| `channels` | `Option<u8>` | Number of audio channels |
+
+### `Generated3DModel`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `media` | `MediaOutput` | The 3D model media output |
+| `vertex_count` | `Option<u64>` | Total vertex count |
+| `face_count` | `Option<u64>` | Total face/triangle count |
+| `has_textures` | `bool` | Whether the model includes textures |
+| `has_animations` | `bool` | Whether the model includes animations |
+
+---
+
+## Error Handling
+
+### `BlazenError`
+
+The unified error type for all Blazen LLM and compute operations.
+
+| Variant | Fields | Description |
+|---------|--------|-------------|
+| `Auth` | `message: String` | Authentication failed |
+| `RateLimit` | `retry_after_ms: Option<u64>` | Rate limited by the provider |
+| `Timeout` | `elapsed_ms: u64` | Request timed out |
+| `Provider` | `provider: String, message: String, status_code: Option<u16>` | Provider-specific error |
+| `Validation` | `field: Option<String>, message: String` | Invalid input |
+| `ContentPolicy` | `message: String` | Content policy violation |
+| `Unsupported` | `message: String` | Requested capability is not supported |
+| `Serialization` | `String` | JSON serialization/deserialization error |
+| `Request` | `message: String, source: Option<Box<dyn Error>>` | Network or request-level failure |
+| `Completion` | `CompletionErrorKind` | LLM completion-specific error |
+| `Compute` | `ComputeErrorKind` | Compute job-specific error |
+| `Media` | `MediaErrorKind` | Media-specific error |
+| `Tool` | `name: Option<String>, message: String` | Tool execution error |
+
+### `CompletionErrorKind`
+
+| Variant | Description |
+|---------|-------------|
+| `NoContent` | Model returned no content |
+| `ModelNotFound(String)` | Model not found |
+| `InvalidResponse(String)` | Invalid response from the model |
+| `Stream(String)` | Streaming error |
+
+### `ComputeErrorKind`
+
+| Variant | Fields | Description |
+|---------|--------|-------------|
+| `JobFailed` | `message: String, error_type: Option<String>, retryable: bool` | Compute job failed |
+| `Cancelled` | -- | Job was cancelled |
+| `QuotaExceeded` | `message: String` | Provider quota exceeded |
+
+### `MediaErrorKind`
+
+| Variant | Fields | Description |
+|---------|--------|-------------|
+| `Invalid` | `media_type: Option<String>, message: String` | Invalid media |
+| `TooLarge` | `size_bytes: u64, max_bytes: u64` | Media exceeds size limit |
+
+### `is_retryable()`
+
+```rust
+impl BlazenError {
+    pub fn is_retryable(&self) -> bool;
+}
+```
+
+Returns `true` for `RateLimit`, `Timeout`, `Request`, provider errors with status >= 500, and `ComputeErrorKind::JobFailed` where `retryable` is true.
+
+### Convenience Constructors
+
+```rust
+BlazenError::auth("invalid api key")
+BlazenError::timeout(5000)
+BlazenError::timeout_from_duration(elapsed)
+BlazenError::request("connection reset")
+BlazenError::unsupported("music generation not available")
+BlazenError::provider("openai", "internal server error")
+BlazenError::validation("prompt must not be empty")
+BlazenError::tool_error("unknown tool: foo")
+BlazenError::no_content()
+BlazenError::model_not_found("gpt-5")
+BlazenError::invalid_response("missing content field")
+BlazenError::stream_error("unexpected EOF")
+BlazenError::job_failed("GPU out of memory")
+BlazenError::cancelled()
+```
+
+`BlazenError` also implements `From<serde_json::Error>` for automatic conversion.
+
+---
+
+## Custom Providers
+
+### Implementing `CompletionModel`
+
+```rust
+use blazen_llm::{
+    CompletionModel, CompletionRequest, CompletionResponse, StreamChunk, BlazenError,
+};
+use std::pin::Pin;
+use futures_util::Stream;
+
+struct MyProvider {
+    api_key: String,
+}
+
+#[async_trait::async_trait]
+impl CompletionModel for MyProvider {
+    fn model_id(&self) -> &str {
+        "my-custom-model"
+    }
+
+    async fn complete(
+        &self,
+        request: CompletionRequest,
+    ) -> Result<CompletionResponse, BlazenError> {
+        // Your HTTP/gRPC/local inference logic here
+        todo!()
+    }
+
+    async fn stream(
+        &self,
+        request: CompletionRequest,
+    ) -> Result<
+        Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>,
+        BlazenError,
+    > {
+        // Your streaming implementation here
+        todo!()
+    }
+}
+```
+
+Once implemented, `MyProvider` automatically gets `StructuredOutput` via the blanket impl, so `model.extract::<T>(messages)` works out of the box.
+
+### Implementing `ComputeProvider` + `ImageGeneration`
+
+```rust
+use blazen_llm::compute::*;
+use blazen_llm::BlazenError;
+
+struct MyImageProvider {
+    api_key: String,
+}
+
+#[async_trait::async_trait]
+impl ComputeProvider for MyImageProvider {
+    fn provider_id(&self) -> &str { "my-image-provider" }
+
+    async fn submit(&self, request: ComputeRequest) -> Result<JobHandle, BlazenError> {
+        todo!()
+    }
+
+    async fn status(&self, job: &JobHandle) -> Result<JobStatus, BlazenError> {
+        todo!()
+    }
+
+    async fn result(&self, job: JobHandle) -> Result<ComputeResult, BlazenError> {
+        todo!()
+    }
+
+    async fn cancel(&self, job: &JobHandle) -> Result<(), BlazenError> {
+        todo!()
+    }
+}
+
+#[async_trait::async_trait]
+impl ImageGeneration for MyImageProvider {
+    async fn generate_image(
+        &self,
+        request: ImageRequest,
+    ) -> Result<ImageResult, BlazenError> {
+        // Convert ImageRequest to your provider's format and call the API
+        todo!()
+    }
+
+    async fn upscale_image(
+        &self,
+        request: UpscaleRequest,
+    ) -> Result<ImageResult, BlazenError> {
+        todo!()
+    }
+}
+```
+
+---
+
+## Built-in Providers
+
+| Provider | Feature | Traits Implemented |
+|----------|---------|-------------------|
+| `OpenAiProvider` | `openai` | `CompletionModel`, `StructuredOutput` |
+| `OpenAiCompatProvider` | `openai` | `CompletionModel`, `StructuredOutput`, `ModelRegistry` |
+| `AnthropicProvider` | `anthropic` | `CompletionModel`, `StructuredOutput` |
+| `GeminiProvider` | `gemini` | `CompletionModel`, `StructuredOutput`, `ModelRegistry` |
+| `AzureOpenAiProvider` | `azure` | `CompletionModel`, `StructuredOutput` |
+| `FalProvider` | `fal` | `CompletionModel`, `StructuredOutput`, `ComputeProvider`, `ImageGeneration`, `VideoGeneration`, `AudioGeneration`, `Transcription` |
+
+### `OpenAiCompatProvider` Presets
+
+`OpenAiCompatProvider` works with any OpenAI-compatible endpoint. Named constructors are provided for popular services:
+
+```rust
+use blazen_llm::providers::openai_compat::OpenAiCompatProvider;
+
+let groq = OpenAiCompatProvider::groq("gsk-...");
+let openrouter = OpenAiCompatProvider::openrouter("sk-or-...");
+let together = OpenAiCompatProvider::together("...");
+let mistral = OpenAiCompatProvider::mistral("...");
+let deepseek = OpenAiCompatProvider::deepseek("...");
+let fireworks = OpenAiCompatProvider::fireworks("...");
+let perplexity = OpenAiCompatProvider::perplexity("...");
+let xai = OpenAiCompatProvider::xai("...");
+let cohere = OpenAiCompatProvider::cohere("...");
+let bedrock = OpenAiCompatProvider::bedrock("...", "us-east-1");
 ```

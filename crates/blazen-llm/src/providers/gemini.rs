@@ -21,7 +21,8 @@ use reqwest::Client;
 use serde::Deserialize;
 use tracing::{debug, warn};
 
-use crate::error::LlmError;
+use super::openai_format::parse_retry_after;
+use crate::error::BlazenError;
 use crate::traits::{ModelCapabilities, ModelInfo, ModelRegistry};
 use crate::types::{
     CompletionRequest, CompletionResponse, ContentPart, ImageContent, ImageSource, MessageContent,
@@ -161,7 +162,7 @@ impl GeminiProvider {
                 let role = match msg.role {
                     Role::User | Role::Tool => "user",
                     Role::Assistant => "model",
-                    Role::System => unreachable!(),
+                    Role::System => continue, // Already handled above
                 };
                 let parts = content_to_gemini_parts(&msg.content);
                 contents.push(serde_json::json!({
@@ -238,7 +239,7 @@ impl GeminiProvider {
         &self,
         url: &str,
         body: &serde_json::Value,
-    ) -> Result<reqwest::Response, LlmError> {
+    ) -> Result<reqwest::Response, BlazenError> {
         let response = self
             .client
             .post(url)
@@ -247,12 +248,15 @@ impl GeminiProvider {
             .json(body)
             .send()
             .await
-            .map_err(|e| LlmError::Http(e.to_string()))?;
+            .map_err(|e| BlazenError::request(e.to_string()))?;
 
         let status = response.status();
         if status.is_success() {
             return Ok(response);
         }
+
+        // Extract Retry-After before consuming the body.
+        let retry_after_ms = parse_retry_after(response.headers());
 
         let error_body = response
             .text()
@@ -260,12 +264,10 @@ impl GeminiProvider {
             .unwrap_or_else(|_| String::from("<unable to read error body>"));
 
         match status.as_u16() {
-            401 | 403 => Err(LlmError::AuthFailed),
-            404 => Err(LlmError::ModelNotFound(error_body)),
-            429 => Err(LlmError::RateLimited { retry_after: None }),
-            _ => Err(LlmError::RequestFailed(format!(
-                "HTTP {status}: {error_body}"
-            ))),
+            401 | 403 => Err(BlazenError::auth("authentication failed")),
+            404 => Err(BlazenError::model_not_found(error_body)),
+            429 => Err(BlazenError::RateLimit { retry_after_ms }),
+            _ => Err(BlazenError::request(format!("HTTP {status}: {error_body}"))),
         }
     }
 }
@@ -343,15 +345,15 @@ struct GeminiModelEntry {
 // Helper: parse a Gemini response into our types
 // ---------------------------------------------------------------------------
 
-fn parse_gemini_response(response: GeminiResponse) -> Result<CompletionResponse, LlmError> {
+fn parse_gemini_response(response: GeminiResponse) -> Result<CompletionResponse, BlazenError> {
     let candidates = response
         .candidates
-        .ok_or_else(|| LlmError::InvalidResponse("no candidates in response".into()))?;
+        .ok_or_else(|| BlazenError::invalid_response("no candidates in response"))?;
 
     let candidate = candidates
         .into_iter()
         .next()
-        .ok_or_else(|| LlmError::InvalidResponse("empty candidates array".into()))?;
+        .ok_or_else(|| BlazenError::invalid_response("empty candidates array"))?;
 
     let mut text_parts: Vec<String> = Vec::new();
     let mut tool_calls: Vec<ToolCall> = Vec::new();
@@ -395,6 +397,12 @@ fn parse_gemini_response(response: GeminiResponse) -> Result<CompletionResponse,
         usage,
         model,
         finish_reason: candidate.finish_reason,
+        cost: None,
+        timing: None,
+        images: vec![],
+        audio: vec![],
+        videos: vec![],
+        metadata: serde_json::Value::Null,
     })
 }
 
@@ -408,7 +416,10 @@ impl crate::traits::CompletionModel for GeminiProvider {
         &self.default_model
     }
 
-    async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, LlmError> {
+    async fn complete(
+        &self,
+        request: CompletionRequest,
+    ) -> Result<CompletionResponse, BlazenError> {
         let model = self.resolve_model(&request);
         let span = tracing::info_span!(
             "llm.complete",
@@ -431,7 +442,7 @@ impl crate::traits::CompletionModel for GeminiProvider {
         let gemini: GeminiResponse = response
             .json()
             .await
-            .map_err(|e| LlmError::InvalidResponse(e.to_string()))?;
+            .map_err(|e| BlazenError::invalid_response(e.to_string()))?;
 
         let result = parse_gemini_response(gemini)?;
 
@@ -454,7 +465,8 @@ impl crate::traits::CompletionModel for GeminiProvider {
     async fn stream(
         &self,
         request: CompletionRequest,
-    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LlmError>> + Send>>, LlmError> {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
+    {
         let model = self.resolve_model(&request);
         let span = tracing::info_span!(
             "llm.stream",
@@ -492,7 +504,7 @@ impl crate::traits::CompletionModel for GeminiProvider {
 
 #[async_trait]
 impl ModelRegistry for GeminiProvider {
-    async fn list_models(&self) -> Result<Vec<ModelInfo>, LlmError> {
+    async fn list_models(&self) -> Result<Vec<ModelInfo>, BlazenError> {
         let url = format!("{}/models", self.base_url);
 
         let response = self
@@ -501,7 +513,7 @@ impl ModelRegistry for GeminiProvider {
             .header("x-goog-api-key", &self.api_key)
             .send()
             .await
-            .map_err(|e| LlmError::Http(e.to_string()))?;
+            .map_err(|e| BlazenError::request(e.to_string()))?;
 
         let status = response.status();
         if !status.is_success() {
@@ -509,15 +521,13 @@ impl ModelRegistry for GeminiProvider {
                 .text()
                 .await
                 .unwrap_or_else(|_| String::from("<unable to read error body>"));
-            return Err(LlmError::RequestFailed(format!(
-                "HTTP {status}: {error_body}"
-            )));
+            return Err(BlazenError::request(format!("HTTP {status}: {error_body}")));
         }
 
         let models_response: GeminiModelsResponse = response
             .json()
             .await
-            .map_err(|e| LlmError::InvalidResponse(e.to_string()))?;
+            .map_err(|e| BlazenError::invalid_response(e.to_string()))?;
 
         let models = models_response
             .models
@@ -554,6 +564,7 @@ impl ModelRegistry for GeminiProvider {
                         vision: has_generate, // Most Gemini models support vision.
                         image_generation: false,
                         embeddings: has_embeddings,
+                        ..Default::default()
                     },
                 }
             })
@@ -562,7 +573,7 @@ impl ModelRegistry for GeminiProvider {
         Ok(models)
     }
 
-    async fn get_model(&self, model_id: &str) -> Result<Option<ModelInfo>, LlmError> {
+    async fn get_model(&self, model_id: &str) -> Result<Option<ModelInfo>, BlazenError> {
         let models = self.list_models().await?;
         Ok(models.into_iter().find(|m| m.id == model_id))
     }
@@ -595,7 +606,7 @@ impl<S> Stream for GeminiSseParser<S>
 where
     S: Stream<Item = Result<Bytes, reqwest::Error>> + Unpin + Send,
 {
-    type Item = Result<StreamChunk, LlmError>;
+    type Item = Result<StreamChunk, BlazenError>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
@@ -611,7 +622,7 @@ where
                     this.buffer.push_str(&text);
                 }
                 Poll::Ready(Some(Err(e))) => {
-                    return Poll::Ready(Some(Err(LlmError::Stream(e.to_string()))));
+                    return Poll::Ready(Some(Err(BlazenError::stream_error(e.to_string()))));
                 }
                 Poll::Ready(None) => {
                     if !this.buffer.is_empty()
@@ -633,7 +644,7 @@ where
 ///
 /// Each `data:` line contains a full `GeminiResponse` JSON object. We parse
 /// it and convert to a `StreamChunk`.
-fn parse_gemini_sse_event(buffer: &mut String) -> Option<Result<StreamChunk, LlmError>> {
+fn parse_gemini_sse_event(buffer: &mut String) -> Option<Result<StreamChunk, BlazenError>> {
     loop {
         let newline_pos = buffer.find('\n')?;
         let line = buffer[..newline_pos].trim().to_owned();
@@ -692,7 +703,7 @@ fn parse_gemini_sse_event(buffer: &mut String) -> Option<Result<StreamChunk, Llm
                 }
                 Err(e) => {
                     warn!(error = %e, data, "failed to parse Gemini SSE chunk");
-                    return Some(Err(LlmError::Stream(format!(
+                    return Some(Err(BlazenError::stream_error(format!(
                         "failed to parse Gemini SSE chunk: {e}"
                     ))));
                 }

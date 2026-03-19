@@ -21,7 +21,8 @@ use reqwest::Client;
 use serde::Deserialize;
 use tracing::{debug, warn};
 
-use crate::error::LlmError;
+use super::openai_format::parse_retry_after;
+use crate::error::BlazenError;
 use crate::types::{
     CompletionRequest, CompletionResponse, ContentPart, ImageContent, ImageSource, MessageContent,
     Role, StreamChunk, TokenUsage, ToolCall,
@@ -189,7 +190,7 @@ impl AnthropicProvider {
                 let role = match msg.role {
                     Role::User | Role::Tool => "user",
                     Role::Assistant => "assistant",
-                    Role::System => unreachable!(),
+                    Role::System => continue, // Already handled above
                 };
                 let content = content_to_anthropic_value(&msg.content);
                 messages.push(serde_json::json!({
@@ -238,7 +239,10 @@ impl AnthropicProvider {
     }
 
     /// Send a request to the Messages endpoint, handling common HTTP errors.
-    async fn send_request(&self, body: &serde_json::Value) -> Result<reqwest::Response, LlmError> {
+    async fn send_request(
+        &self,
+        body: &serde_json::Value,
+    ) -> Result<reqwest::Response, BlazenError> {
         let url = format!("{}/messages", self.base_url);
 
         let response = self
@@ -250,12 +254,15 @@ impl AnthropicProvider {
             .json(body)
             .send()
             .await
-            .map_err(|e| LlmError::Http(e.to_string()))?;
+            .map_err(|e| BlazenError::request(e.to_string()))?;
 
         let status = response.status();
         if status.is_success() {
             return Ok(response);
         }
+
+        // Extract Retry-After before consuming the body.
+        let retry_after_ms = parse_retry_after(response.headers());
 
         let error_body = response
             .text()
@@ -263,12 +270,10 @@ impl AnthropicProvider {
             .unwrap_or_else(|_| String::from("<unable to read error body>"));
 
         match status.as_u16() {
-            401 => Err(LlmError::AuthFailed),
-            404 => Err(LlmError::ModelNotFound(error_body)),
-            429 => Err(LlmError::RateLimited { retry_after: None }),
-            _ => Err(LlmError::RequestFailed(format!(
-                "HTTP {status}: {error_body}"
-            ))),
+            401 => Err(BlazenError::auth("authentication failed")),
+            404 => Err(BlazenError::model_not_found(error_body)),
+            429 => Err(BlazenError::RateLimit { retry_after_ms }),
+            _ => Err(BlazenError::request(format!("HTTP {status}: {error_body}"))),
         }
     }
 }
@@ -400,7 +405,10 @@ impl crate::traits::CompletionModel for AnthropicProvider {
         &self.default_model
     }
 
-    async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, LlmError> {
+    async fn complete(
+        &self,
+        request: CompletionRequest,
+    ) -> Result<CompletionResponse, BlazenError> {
         let model_id = request.model.as_deref().unwrap_or(&self.default_model);
         let span = tracing::info_span!(
             "llm.complete",
@@ -422,7 +430,7 @@ impl crate::traits::CompletionModel for AnthropicProvider {
         let anthropic: AnthropicResponse = response
             .json()
             .await
-            .map_err(|e| LlmError::InvalidResponse(e.to_string()))?;
+            .map_err(|e| BlazenError::invalid_response(e.to_string()))?;
 
         // Extract text content and tool calls from content blocks.
         let mut text_parts: Vec<String> = Vec::new();
@@ -474,13 +482,20 @@ impl crate::traits::CompletionModel for AnthropicProvider {
             usage,
             model: anthropic.model,
             finish_reason: anthropic.stop_reason,
+            cost: None,
+            timing: None,
+            images: vec![],
+            audio: vec![],
+            videos: vec![],
+            metadata: serde_json::Value::Null,
         })
     }
 
     async fn stream(
         &self,
         request: CompletionRequest,
-    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LlmError>> + Send>>, LlmError> {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
+    {
         let model_id = request.model.as_deref().unwrap_or(&self.default_model);
         let span = tracing::info_span!(
             "llm.stream",
@@ -547,7 +562,7 @@ impl<S> Stream for AnthropicSseParser<S>
 where
     S: Stream<Item = Result<Bytes, reqwest::Error>> + Unpin + Send,
 {
-    type Item = Result<StreamChunk, LlmError>;
+    type Item = Result<StreamChunk, BlazenError>;
 
     fn poll_next(
         self: Pin<&mut Self>,
@@ -567,7 +582,9 @@ where
                     this.buffer.push_str(&text);
                 }
                 std::task::Poll::Ready(Some(Err(e))) => {
-                    return std::task::Poll::Ready(Some(Err(LlmError::Stream(e.to_string()))));
+                    return std::task::Poll::Ready(Some(Err(BlazenError::stream_error(
+                        e.to_string(),
+                    ))));
                 }
                 std::task::Poll::Ready(None) => {
                     if !this.buffer.is_empty()
@@ -600,7 +617,7 @@ where
 fn parse_anthropic_event(
     buffer: &mut String,
     tool_blocks: &mut Vec<ToolBlockState>,
-) -> Option<Result<StreamChunk, LlmError>> {
+) -> Option<Result<StreamChunk, BlazenError>> {
     loop {
         // Find the data line - Anthropic SSE always has event: then data:
         // We just need the data: line to parse the typed JSON.
@@ -652,7 +669,7 @@ fn parse_anthropic_event(
             Ok(e) => e,
             Err(e) => {
                 warn!(error = %e, %data, "failed to parse Anthropic SSE event");
-                return Some(Err(LlmError::Stream(format!(
+                return Some(Err(BlazenError::stream_error(format!(
                     "failed to parse SSE event: {e}"
                 ))));
             }
@@ -725,7 +742,7 @@ fn parse_anthropic_event(
                 }));
             }
             StreamEvent::Error { error } => {
-                return Some(Err(LlmError::Stream(error.message)));
+                return Some(Err(BlazenError::stream_error(error.message)));
             }
             // Ping, MessageStart — skip.
             _ => {}
@@ -756,6 +773,9 @@ mod tests {
             top_p: None,
             response_format: None,
             model: None,
+            modalities: None,
+            image_config: None,
+            audio_config: None,
         };
 
         let body = provider.build_body(&request, false);

@@ -130,22 +130,55 @@ console.log(result.data); // { status: "done" }
 
 ## LLM Integration
 
-`CompletionModel` provides a unified interface to 15 LLM providers. Create a model instance with a static factory method and call `complete()` or `completeWithOptions()`.
+`CompletionModel` provides a unified interface to 15 LLM providers. Create a model instance with a static factory method and call `complete()` or `completeWithOptions()`. All messages and responses are fully typed.
+
+### ChatMessage and Role
+
+Build messages with the `ChatMessage` class and `Role` enum:
 
 ```typescript
-import { CompletionModel } from "blazen";
+import { CompletionModel, ChatMessage, Role } from "blazen";
+import type { CompletionResponse, ToolCall, TokenUsage } from "blazen";
 
 const model = CompletionModel.openrouter(process.env.OPENROUTER_API_KEY!);
 
-const response = await model.complete([
-  { role: "system", content: "You are helpful." },
-  { role: "user", content: "What is 2+2?" },
+// Using static factory methods (recommended)
+const response: CompletionResponse = await model.complete([
+  ChatMessage.system("You are helpful."),
+  ChatMessage.user("What is 2+2?"),
 ]);
 
-console.log(response.content);    // "4"
-console.log(response.model);      // model name used
-console.log(response.usage);      // { promptTokens, completionTokens, totalTokens }
-console.log(response.finishReason);
+console.log(response.content);      // "4"
+console.log(response.model);        // model name used
+console.log(response.usage);        // TokenUsage: { promptTokens, completionTokens, totalTokens }
+console.log(response.finishReason);  // "stop", "tool_calls", etc.
+console.log(response.toolCalls);     // ToolCall[] | undefined
+```
+
+You can also construct messages with the `ChatMessage` constructor:
+
+```typescript
+const msg = new ChatMessage({ role: Role.User, content: "Hello" });
+```
+
+### Multimodal Messages
+
+Send images alongside text using multimodal factory methods:
+
+```typescript
+// Image from URL
+const msg = ChatMessage.userImageUrl("https://example.com/photo.jpg", "What's in this image?");
+
+// Image from base64
+const msg = ChatMessage.userImageBase64(base64Data, "image/png", "Describe this.");
+
+// Multiple content parts
+import type { ContentPart } from "blazen";
+const msg = ChatMessage.userParts([
+  { type: "text", text: "Compare these two images:" },
+  { type: "image_url", imageUrl: { url: "https://example.com/a.jpg" } },
+  { type: "image_url", imageUrl: { url: "https://example.com/b.jpg" } },
+]);
 ```
 
 ### Advanced Options
@@ -153,18 +186,22 @@ console.log(response.finishReason);
 Use `completeWithOptions` to control temperature, token limits, model selection, and tool definitions:
 
 ```typescript
+import type { CompletionOptions } from "blazen";
+
+const options: CompletionOptions = {
+  temperature: 0.9,
+  maxTokens: 256,
+  topP: 0.95,
+  model: "anthropic/claude-sonnet-4-20250514",
+  tools: [/* tool definitions */],
+};
+
 const response = await model.completeWithOptions(
   [
-    { role: "system", content: "You are a creative writer." },
-    { role: "user", content: "Write a haiku about Rust." },
+    ChatMessage.system("You are a creative writer."),
+    ChatMessage.user("Write a haiku about Rust."),
   ],
-  {
-    temperature: 0.9,
-    maxTokens: 256,
-    topP: 0.95,
-    model: "anthropic/claude-sonnet-4-20250514",
-    tools: [/* tool definitions */],
-  }
+  options,
 );
 ```
 
@@ -191,7 +228,7 @@ const response = await model.completeWithOptions(
 ### Using LLMs Inside Workflows
 
 ```typescript
-import { Workflow, CompletionModel } from "blazen";
+import { Workflow, CompletionModel, ChatMessage } from "blazen";
 
 const model = CompletionModel.openai(process.env.OPENAI_API_KEY!);
 
@@ -199,8 +236,8 @@ const wf = new Workflow("llm-workflow");
 
 wf.addStep("ask", ["blazen::StartEvent"], async (event, ctx) => {
   const response = await model.complete([
-    { role: "system", content: "You are a helpful assistant." },
-    { role: "user", content: event.question },
+    ChatMessage.system("You are a helpful assistant."),
+    ChatMessage.user(event.question),
   ]);
   return { type: "blazen::StopEvent", result: { answer: response.content } };
 });
@@ -353,6 +390,12 @@ await ctx.set("key", { any: "value" });
 // Retrieve a stored value (returns null if not found)
 const value = await ctx.get("key");
 
+// Store raw binary data (no serialization requirement)
+await ctx.setBytes("model-weights", buffer);
+
+// Retrieve raw binary data (returns null if not found)
+const data: Buffer | null = await ctx.getBytes("model-weights");
+
 // Send an event through the internal step registry
 await ctx.sendEvent({ type: "MyEvent", data: "..." });
 
@@ -361,6 +404,19 @@ await ctx.writeEventToStream({ type: "Progress", percent: 50 });
 
 // Get the unique run ID for this workflow execution
 const runId = await ctx.runId();
+```
+
+### Binary Storage
+
+`setBytes` / `getBytes` let you store raw binary data in the context with no serialization requirement. Store any type by converting to bytes yourself (e.g., MessagePack, protobuf, or raw buffers). Binary data persists through pause/resume/checkpoint.
+
+```typescript
+// Store a raw buffer
+const pixels = Buffer.from([0xff, 0x00, 0x00, 0xff]);
+await ctx.setBytes("image-pixels", pixels);
+
+// Retrieve it later in another step
+const restored = await ctx.getBytes("image-pixels");
 ```
 
 ---
@@ -381,8 +437,14 @@ wf.setTimeout(60); // 60 second timeout
 Full TypeScript type definitions ship with the package -- no `@types` needed. All classes and interfaces are exported.
 
 ```typescript
-import { Workflow, WorkflowHandler, Context, CompletionModel, version } from "blazen";
-import type { JsWorkflowResult } from "blazen";
+import {
+  Workflow, WorkflowHandler, Context, CompletionModel,
+  ChatMessage, Role, version,
+} from "blazen";
+import type {
+  JsWorkflowResult, CompletionResponse, CompletionOptions,
+  ToolCall, TokenUsage, ContentPart, ImageContent, ImageSource,
+} from "blazen";
 ```
 
 ---
@@ -403,15 +465,24 @@ import type { JsWorkflowResult } from "blazen";
 | `WorkflowHandler.pause()` | Pause and get a serialized snapshot string |
 | `WorkflowHandler.streamEvents(callback)` | Subscribe to intermediate stream events |
 | `Context` | Per-run shared state, event routing, and stream output |
-| `Context.set(key, value)` | Store a value (async) |
+| `Context.set(key, value)` | Store a JSON-serializable value (async) |
 | `Context.get(key)` | Retrieve a value (async, returns null if missing) |
+| `Context.setBytes(key, buffer)` | Store raw binary data (async) |
+| `Context.getBytes(key)` | Retrieve raw binary data (async, returns null if missing) |
 | `Context.sendEvent(event)` | Route an event to matching steps (async) |
 | `Context.writeEventToStream(event)` | Publish to external stream consumers (async) |
 | `Context.runId()` | Get the workflow run ID (async) |
 | `CompletionModel` | Unified LLM client with 15 provider factory methods |
-| `CompletionModel.complete(messages)` | Chat completion (async) |
-| `CompletionModel.completeWithOptions(messages, opts)` | Chat completion with temperature, maxTokens, model, tools (async) |
+| `CompletionModel.complete(messages)` | Chat completion with typed `ChatMessage[]` input, returns `CompletionResponse` (async) |
+| `CompletionModel.completeWithOptions(messages, opts)` | Chat completion with `CompletionOptions` (async) |
 | `CompletionModel.modelId` | Getter for the current model ID |
+| `ChatMessage` | Chat message class with static factories: `.system()`, `.user()`, `.assistant()`, `.tool()`, `.userImageUrl()`, `.userImageBase64()`, `.userParts()` |
+| `Role` | String enum: `Role.System`, `Role.User`, `Role.Assistant`, `Role.Tool` |
+| `CompletionResponse` | Interface: `{ content, toolCalls, usage, model, finishReason }` |
+| `ToolCall` | Interface: `{ id, name, arguments }` |
+| `TokenUsage` | Interface: `{ promptTokens, completionTokens, totalTokens }` |
+| `CompletionOptions` | Interface: `{ temperature?, maxTokens?, topP?, model?, tools? }` |
+| `ContentPart` / `ImageContent` / `ImageSource` | Types for multimodal message content |
 | `JsWorkflowResult` | Interface: `{ type: string, data: any }` |
 | `version()` | Returns the blazen library version string |
 
