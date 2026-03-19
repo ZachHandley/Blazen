@@ -235,6 +235,26 @@ def handle(chunk):
 await model.stream([ChatMessage.user("Tell me a story")], handle)
 ```
 
+**Middleware decorators**
+
+Each decorator returns a new `CompletionModel` wrapping the original with additional behaviour.
+
+| Method | Signature | Description |
+|---|---|---|
+| `with_retry` | `.with_retry(*, max_retries=3, initial_delay_ms=1000, max_delay_ms=30000)` | Automatic retry with exponential backoff on transient failures. |
+| `with_cache` | `.with_cache(*, ttl_seconds=300, max_entries=1000)` | In-memory response cache for identical non-streaming requests. |
+| `with_fallback` | `CompletionModel.with_fallback(models: list[CompletionModel])` | Static method. Tries providers in order; falls back on transient errors. |
+
+```python
+# Chain decorators
+model = CompletionModel.openai("sk-...").with_cache().with_retry(max_retries=5)
+
+# Fallback across providers
+primary = CompletionModel.openai("sk-...")
+backup = CompletionModel.anthropic("sk-ant-...")
+model = CompletionModel.with_fallback([primary, backup])
+```
+
 ---
 
 ## CompletionResponse
@@ -745,6 +765,127 @@ Provide at least one of `prompt` or `image_url`.
 req = ThreeDRequest(prompt="a 3D cat", format="glb")
 req = ThreeDRequest(image_url="https://example.com/photo.jpg", format="obj")
 ```
+
+---
+
+## StreamChunk
+
+A typed object received by the `on_chunk` callback during streaming. Replaces the raw dict interface while remaining backwards-compatible via `chunk["key"]` access.
+
+| Property | Type | Description |
+|---|---|---|
+| `.delta` | `str \| None` | Incremental text content. |
+| `.finish_reason` | `str \| None` | Present only on the final chunk (`"stop"`, `"tool_calls"`, etc.). |
+| `.tool_calls` | `list[ToolCall]` | Tool invocations completed in this chunk. |
+
+```python
+async def on_chunk(chunk):
+    # Attribute access (preferred)
+    if chunk.delta:
+        print(chunk.delta, end="")
+
+    # Dict-style access (backwards compatible)
+    if chunk["finish_reason"]:
+        print(f"\n[done: {chunk['finish_reason']}]")
+```
+
+---
+
+## EmbeddingModel
+
+Generate vector embeddings from text. Created via static constructor methods, similar to `CompletionModel`.
+
+```python
+model = EmbeddingModel.openai("sk-...")
+model = EmbeddingModel.openai("sk-...", model="text-embedding-3-large", dimensions=3072)
+model = EmbeddingModel.together("tok-...")
+model = EmbeddingModel.cohere("co-...")
+model = EmbeddingModel.fireworks("fw-...")
+```
+
+**Provider constructors**
+
+| Constructor | Signature |
+|---|---|
+| `openai` | `EmbeddingModel.openai(api_key: str, model: str = None, dimensions: int = None)` |
+| `together` | `EmbeddingModel.together(api_key: str)` |
+| `cohere` | `EmbeddingModel.cohere(api_key: str)` |
+| `fireworks` | `EmbeddingModel.fireworks(api_key: str)` |
+
+**Properties**
+
+| Property | Type | Description |
+|---|---|---|
+| `.model_id` | `str` | The model identifier. |
+| `.dimensions` | `int` | Output vector dimensionality. |
+
+**embed()**
+
+```python
+response: EmbeddingResponse = await model.embed(texts: list[str])
+```
+
+Returns an `EmbeddingResponse` with one vector per input text.
+
+---
+
+## EmbeddingResponse
+
+Returned by `EmbeddingModel.embed()`.
+
+| Property | Type | Description |
+|---|---|---|
+| `.embeddings` | `list[list[float]]` | One vector per input text. |
+| `.model` | `str` | Model that produced the embeddings. |
+| `.usage` | `TokenUsage \| None` | Token usage statistics. |
+| `.cost` | `float \| None` | Estimated cost in USD. |
+| `.timing` | `RequestTiming \| None` | Request timing breakdown. |
+
+```python
+response = await model.embed(["Hello", "World"])
+print(len(response.embeddings))       # 2
+print(len(response.embeddings[0]))    # 1536
+print(response.model)                 # "text-embedding-3-small"
+print(response.cost)                  # e.g. 0.0001
+```
+
+---
+
+## Token Estimation
+
+Lightweight token counting functions that work without external data files. Uses a heuristic (~3.5 characters per token) suitable for budget checks.
+
+**estimate_tokens()**
+
+```python
+from blazen import estimate_tokens
+
+count = estimate_tokens("Hello, world!")          # 4
+count = estimate_tokens("Hello, world!", 32000)   # same, with custom context size
+```
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `text` | `str` | required | The text to estimate. |
+| `context_size` | `int` | `128000` | Context window size hint. |
+
+**count_message_tokens()**
+
+```python
+from blazen import count_message_tokens, ChatMessage
+
+count = count_message_tokens([
+    ChatMessage.system("You are helpful."),
+    ChatMessage.user("Hello!"),
+])
+```
+
+Includes per-message overhead (role markers, separators) in addition to content tokens.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `messages` | `list[ChatMessage]` | required | Messages to count. |
+| `context_size` | `int` | `128000` | Context window size hint. |
 
 ---
 

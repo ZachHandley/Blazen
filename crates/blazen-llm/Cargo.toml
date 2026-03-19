@@ -16,6 +16,7 @@ gemini = ["reqwest"]
 fal = ["reqwest"]
 azure = ["reqwest"]
 all-providers = ["openai", "anthropic", "gemini", "fal", "azure"]
+tiktoken = ["dep:tiktoken-rs"]
 
 [dependencies]
 blazen-events.workspace = true
@@ -30,6 +31,7 @@ tracing.workspace = true
 bytes.workspace = true
 chrono.workspace = true
 reqwest = { workspace = true, optional = true }
+tiktoken-rs = { version = "0.9", optional = true }
 
 [lints]
 workspace = true

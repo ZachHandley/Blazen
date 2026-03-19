@@ -1,0 +1,104 @@
+---
+title: "Middleware & Composition"
+description: "Compose retry, caching, fallback, and custom middleware in Node.js"
+language: "node"
+section: "guides"
+order: 7
+---
+
+Blazen models are immutable. Each decorator method (`withRetry()`, `withCache()`, `withFallback()`) returns a **new** `CompletionModel` that wraps the original, so you can layer behaviours without mutating anything.
+
+## Retry
+
+Wrap a model with automatic retry on transient failures (rate limits, timeouts, server errors). Retries use exponential backoff with jitter.
+
+```typescript
+import { CompletionModel } from "blazen";
+
+const model = CompletionModel.openai("sk-...").withRetry({
+  maxRetries: 5,
+  initialDelayMs: 500,
+  maxDelayMs: 15000,
+});
+```
+
+All config fields are optional:
+
+| Field | Default | Description |
+|---|---|---|
+| `maxRetries` | `3` | Maximum retry attempts. |
+| `initialDelayMs` | `1000` | Delay before the first retry (ms). |
+| `maxDelayMs` | `30000` | Upper bound on backoff delay (ms). |
+
+You can also call `withRetry()` with no argument to use the defaults.
+
+## Cache
+
+Cache identical non-streaming requests in memory so repeated prompts are served instantly without hitting the provider.
+
+```typescript
+const model = CompletionModel.openai("sk-...").withCache({
+  ttlSeconds: 600,
+  maxEntries: 500,
+});
+```
+
+| Field | Default | Description |
+|---|---|---|
+| `ttlSeconds` | `300` | How long a cached response stays valid. |
+| `maxEntries` | `1000` | Maximum entries before eviction. |
+
+Streaming requests (`model.stream(...)`) bypass the cache and always go to the provider.
+
+## Fallback
+
+Route requests through multiple providers in order. If the first provider fails with a transient error, the next one is tried automatically. Non-retryable errors (auth, validation) short-circuit immediately.
+
+```typescript
+const primary = CompletionModel.openai("sk-...");
+const backup = CompletionModel.anthropic("sk-ant-...");
+
+const model = CompletionModel.withFallback([primary, backup]);
+```
+
+`withFallback()` is a **static factory method** that takes an array of `CompletionModel` instances and returns a new `CompletionModel`.
+
+## Composing Middleware
+
+Because each decorator returns a new `CompletionModel`, you can chain them:
+
+```typescript
+const model = CompletionModel.openai("sk-...")
+  .withCache({ ttlSeconds: 300 })
+  .withRetry({ maxRetries: 3 });
+```
+
+The outermost wrapper executes first. In the example above, a request flows through retry first, then cache, then the provider:
+
+```
+request -> retry -> cache -> provider -> cache -> retry -> response
+```
+
+For maximum resilience, combine all three:
+
+```typescript
+const primary = CompletionModel.openai("sk-...").withCache().withRetry();
+const backup = CompletionModel.anthropic("sk-ant-...").withRetry();
+
+const model = CompletionModel.withFallback([primary, backup]);
+```
+
+This gives you caching on the primary, automatic retries on both, and automatic failover from OpenAI to Anthropic.
+
+## Using Decorated Models
+
+Decorated models are fully interchangeable with plain models. Pass them to `complete()`, `stream()`, `runAgent()`, or any workflow step:
+
+```typescript
+import { ChatMessage } from "blazen";
+
+const response = await model.complete([
+  ChatMessage.user("Explain quantum computing in one sentence."),
+]);
+console.log(response.content);
+```

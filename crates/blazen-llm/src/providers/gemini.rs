@@ -511,7 +511,12 @@ impl crate::traits::CompletionModel for GeminiProvider {
             .json()
             .map_err(|e| BlazenError::invalid_response(e.to_string()))?;
 
-        let result = parse_gemini_response(gemini)?;
+        let mut result = parse_gemini_response(gemini)?;
+
+        result.cost = result
+            .usage
+            .as_ref()
+            .and_then(|u| crate::pricing::compute_cost(&result.model, u));
 
         span.record(
             "duration_ms",

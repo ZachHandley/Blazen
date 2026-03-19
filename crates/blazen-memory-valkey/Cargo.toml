@@ -1,0 +1,24 @@
+[package]
+name = "blazen-memory-valkey"
+version = "0.0.0-dev"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Valkey/Redis backend for blazen-memory"
+
+[dependencies]
+blazen-memory = { path = "../blazen-memory" }
+redis = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+uuid = { workspace = true }
+
+[lints]
+workspace = true

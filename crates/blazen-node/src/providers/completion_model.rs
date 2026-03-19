@@ -1,27 +1,63 @@
 //! JavaScript wrapper for LLM completion models.
 //!
 //! Provides [`JsCompletionModel`] with factory constructors for each
-//! supported provider (`OpenAI`, Anthropic, Gemini, etc.).
+//! supported provider (`OpenAI`, Anthropic, Gemini, etc.), plus decorator
+//! methods for retry, fallback, and caching.
 
 use std::sync::Arc;
+use std::time::Duration;
 
-use napi::Status;
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
 use tokio_stream::StreamExt;
 
 use blazen_llm::CompletionModel;
+use blazen_llm::cache::{CacheConfig, CachedCompletionModel};
+use blazen_llm::fallback::FallbackModel;
+use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
 use blazen_llm::types::{ChatMessage, CompletionRequest, ToolDefinition};
 
 use crate::error::llm_error_to_napi;
-use crate::types::{JsChatMessage, JsCompletionOptions, JsCompletionResponse, build_response};
+use crate::types::{
+    JsChatMessage, JsCompletionOptions, JsCompletionResponse, JsStreamChunk, build_response,
+    build_stream_chunk,
+};
 
-/// Stream callback: takes a `serde_json::Value` chunk, returns nothing meaningful.
+/// Stream callback: takes a typed `JsStreamChunk`, returns nothing meaningful.
 /// `CalleeHandled = false` to avoid the error-first callback convention.
 /// `Weak = true` so it does not prevent Node.js from exiting.
 pub(crate) type StreamChunkCallbackTsfn =
-    ThreadsafeFunction<serde_json::Value, Unknown<'static>, serde_json::Value, Status, false, true>;
+    ThreadsafeFunction<JsStreamChunk, Unknown<'static>, JsStreamChunk, napi::Status, false, true>;
+
+// ---------------------------------------------------------------------------
+// Config objects for decorator methods
+// ---------------------------------------------------------------------------
+
+/// Configuration for the `withRetry` decorator.
+#[napi(object)]
+pub struct JsRetryConfig {
+    /// Maximum number of retry attempts (total calls = `maxRetries + 1`).
+    #[napi(js_name = "maxRetries")]
+    pub max_retries: Option<u32>,
+    /// Delay before the first retry, in milliseconds.
+    #[napi(js_name = "initialDelayMs")]
+    pub initial_delay_ms: Option<u32>,
+    /// Upper bound on the computed backoff delay, in milliseconds.
+    #[napi(js_name = "maxDelayMs")]
+    pub max_delay_ms: Option<u32>,
+}
+
+/// Configuration for the `withCache` decorator.
+#[napi(object)]
+pub struct JsCacheConfig {
+    /// How long a cached response remains valid, in seconds.
+    #[napi(js_name = "ttlSeconds")]
+    pub ttl_seconds: Option<u32>,
+    /// Maximum number of entries to keep in the cache.
+    #[napi(js_name = "maxEntries")]
+    pub max_entries: Option<u32>,
+}
 
 // ---------------------------------------------------------------------------
 // CompletionModel wrapper
@@ -249,6 +285,92 @@ impl JsCompletionModel {
     }
 
     // -----------------------------------------------------------------
+    // Decorator methods (retry, cache, fallback)
+    // -----------------------------------------------------------------
+
+    /// Wrap this model with automatic retry on transient failures.
+    ///
+    /// ```javascript
+    /// const model = CompletionModel.openrouter(key);
+    /// const withRetry = model.withRetry({ maxRetries: 3, initialDelayMs: 1000 });
+    /// ```
+    #[napi(js_name = "withRetry")]
+    #[must_use]
+    pub fn with_retry(&self, config: Option<JsRetryConfig>) -> JsCompletionModel {
+        let cfg = config.unwrap_or(JsRetryConfig {
+            max_retries: None,
+            initial_delay_ms: None,
+            max_delay_ms: None,
+        });
+        let retry_config = RetryConfig {
+            max_retries: cfg.max_retries.unwrap_or(3),
+            initial_delay: Duration::from_millis(u64::from(cfg.initial_delay_ms.unwrap_or(1000))),
+            max_delay: Duration::from_millis(u64::from(cfg.max_delay_ms.unwrap_or(30_000))),
+            honor_retry_after: true,
+            jitter: true,
+        };
+        JsCompletionModel {
+            inner: Arc::new(RetryCompletionModel::from_arc(
+                Arc::clone(&self.inner),
+                retry_config,
+            )),
+        }
+    }
+
+    /// Wrap this model with an in-memory response cache.
+    ///
+    /// Streaming requests are never cached and always delegate directly to the
+    /// underlying model.
+    ///
+    /// ```javascript
+    /// const cached = model.withCache({ ttlSeconds: 300, maxEntries: 1000 });
+    /// ```
+    #[napi(js_name = "withCache")]
+    #[must_use]
+    pub fn with_cache(&self, config: Option<JsCacheConfig>) -> JsCompletionModel {
+        let cfg = config.unwrap_or(JsCacheConfig {
+            ttl_seconds: None,
+            max_entries: None,
+        });
+        let cache_config = CacheConfig {
+            ttl: Duration::from_secs(u64::from(cfg.ttl_seconds.unwrap_or(300))),
+            max_entries: cfg.max_entries.unwrap_or(1000) as usize,
+            ..CacheConfig::default()
+        };
+        JsCompletionModel {
+            inner: Arc::new(CachedCompletionModel::from_arc(
+                Arc::clone(&self.inner),
+                cache_config,
+            )),
+        }
+    }
+
+    /// Create a fallback model that tries multiple providers in order.
+    ///
+    /// When the primary provider fails with a transient error (rate limit,
+    /// timeout, server error) the request is automatically forwarded to the
+    /// next provider. Non-retryable errors short-circuit immediately.
+    ///
+    /// ```javascript
+    /// const model = CompletionModel.withFallback([modelA, modelB]);
+    /// ```
+    #[napi(factory, js_name = "withFallback")]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn with_fallback(models: Vec<&JsCompletionModel>) -> Result<JsCompletionModel> {
+        if models.is_empty() {
+            return Err(napi::Error::new(
+                napi::Status::InvalidArg,
+                "withFallback requires at least one model",
+            ));
+        }
+        let providers: Vec<Arc<dyn CompletionModel>> =
+            models.iter().map(|m| Arc::clone(&m.inner)).collect();
+        Ok(JsCompletionModel {
+            inner: Arc::new(FallbackModel::new(providers)),
+        })
+    }
+
+    // -----------------------------------------------------------------
     // Completion methods
     // -----------------------------------------------------------------
 
@@ -328,8 +450,8 @@ impl JsCompletionModel {
 
     /// Stream a chat completion.
     ///
-    /// The `onChunk` callback receives each chunk as it arrives, with keys:
-    /// `delta`, `finishReason`, `toolCalls`.
+    /// The `onChunk` callback receives each chunk as a typed `StreamChunk` with
+    /// `delta`, `finishReason`, and `toolCalls` fields.
     ///
     /// ```javascript
     /// await model.stream(
@@ -356,14 +478,10 @@ impl JsCompletionModel {
         while let Some(result) = stream.next().await {
             match result {
                 Ok(chunk) => {
-                    let chunk_json = serde_json::json!({
-                        "delta": chunk.delta,
-                        "finishReason": chunk.finish_reason,
-                        "toolCalls": chunk.tool_calls.iter().map(|tc| {
-                            serde_json::json!({"id": tc.id, "name": tc.name, "arguments": tc.arguments})
-                        }).collect::<Vec<_>>(),
-                    });
-                    on_chunk.call(chunk_json, ThreadsafeFunctionCallMode::Blocking);
+                    on_chunk.call(
+                        build_stream_chunk(chunk),
+                        ThreadsafeFunctionCallMode::Blocking,
+                    );
                 }
                 Err(e) => {
                     return Err(napi::Error::from_reason(e.to_string()));
@@ -428,14 +546,10 @@ impl JsCompletionModel {
         while let Some(result) = stream.next().await {
             match result {
                 Ok(chunk) => {
-                    let chunk_json = serde_json::json!({
-                        "delta": chunk.delta,
-                        "finishReason": chunk.finish_reason,
-                        "toolCalls": chunk.tool_calls.iter().map(|tc| {
-                            serde_json::json!({"id": tc.id, "name": tc.name, "arguments": tc.arguments})
-                        }).collect::<Vec<_>>(),
-                    });
-                    on_chunk.call(chunk_json, ThreadsafeFunctionCallMode::Blocking);
+                    on_chunk.call(
+                        build_stream_chunk(chunk),
+                        ThreadsafeFunctionCallMode::Blocking,
+                    );
                 }
                 Err(e) => {
                     return Err(napi::Error::from_reason(e.to_string()));

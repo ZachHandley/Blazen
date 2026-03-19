@@ -1,0 +1,74 @@
+---
+title: "Embeddings"
+description: "Generate vector embeddings with Blazen in Node.js"
+language: "node"
+section: "guides"
+order: 8
+---
+
+Blazen provides a unified `EmbeddingModel` interface for generating vector embeddings across multiple providers. The API mirrors `CompletionModel`: create a model with a static factory method, then call `embed()`.
+
+## Create an Embedding Model
+
+```typescript
+import { EmbeddingModel } from "blazen";
+
+// OpenAI (default: text-embedding-3-small, 1536 dimensions)
+const model = EmbeddingModel.openai("sk-...");
+
+// Together AI
+const model = EmbeddingModel.together("tok-...");
+
+// Cohere
+const model = EmbeddingModel.cohere("co-...");
+
+// Fireworks AI
+const model = EmbeddingModel.fireworks("fw-...");
+```
+
+## Generate Embeddings
+
+Pass an array of strings to `embed()`. It returns an `EmbeddingResponse` with one vector per input text.
+
+```typescript
+const response = await model.embed(["Hello, world!", "Goodbye, world!"]);
+
+console.log(response.embeddings.length);       // 2
+console.log(response.embeddings[0].length);    // 1536 (dimensionality)
+console.log(response.model);                   // "text-embedding-3-small"
+```
+
+## EmbeddingResponse
+
+The response object has the following fields:
+
+| Property | Type | Description |
+|---|---|---|
+| `.embeddings` | `number[][]` | One vector per input text. |
+| `.model` | `string` | Model that produced the embeddings. |
+| `.usage` | `TokenUsage \| undefined` | Token usage statistics. |
+| `.cost` | `number \| undefined` | Estimated cost in USD. |
+| `.timing` | `RequestTiming \| undefined` | Request timing breakdown. |
+
+## Model Properties
+
+```typescript
+console.log(model.modelId);     // "text-embedding-3-small"
+console.log(model.dimensions);  // 1536
+```
+
+## Use Cases
+
+Embeddings are the building block for semantic search, RAG pipelines, clustering, and classification. A typical pattern inside a workflow step:
+
+```typescript
+import { EmbeddingModel } from "blazen";
+
+const embedModel = EmbeddingModel.openai("sk-...");
+
+wf.addStep("embed_documents", ["DocumentsReady"], async (event, ctx) => {
+  const response = await embedModel.embed(event.documents);
+  await ctx.set("vectors", response.embeddings);
+  return { type: "SearchEvent" };
+});
+```

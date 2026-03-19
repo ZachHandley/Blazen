@@ -17,6 +17,8 @@ async-trait.workspace = true
 blazen-core.workspace = true
 blazen-events.workspace = true
 blazen-llm = { workspace = true, features = ["all-providers"] }
+blazen-memory.workspace = true
+blazen-memory-valkey.workspace = true
 chrono.workspace = true
 pyo3 = { workspace = true, features = ["extension-module"] }
 pyo3-async-runtimes.workspace = true

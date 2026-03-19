@@ -1,0 +1,78 @@
+---
+title: "Embeddings"
+description: "Generate vector embeddings with Blazen in Python"
+language: "python"
+section: "guides"
+order: 8
+---
+
+Blazen provides a unified `EmbeddingModel` interface for generating vector embeddings across multiple providers. The API mirrors `CompletionModel`: create a model with a static constructor, then call `embed()`.
+
+## Create an Embedding Model
+
+```python
+from blazen import EmbeddingModel
+
+# OpenAI (default: text-embedding-3-small, 1536 dimensions)
+model = EmbeddingModel.openai("sk-...")
+
+# OpenAI with a specific model and dimensionality
+model = EmbeddingModel.openai("sk-...", model="text-embedding-3-large", dimensions=3072)
+
+# Together AI
+model = EmbeddingModel.together("tok-...")
+
+# Cohere
+model = EmbeddingModel.cohere("co-...")
+
+# Fireworks AI
+model = EmbeddingModel.fireworks("fw-...")
+```
+
+## Generate Embeddings
+
+Pass a list of strings to `embed()`. It returns an `EmbeddingResponse` with one vector per input text.
+
+```python
+response = await model.embed(["Hello, world!", "Goodbye, world!"])
+
+print(len(response.embeddings))       # 2
+print(len(response.embeddings[0]))    # 1536 (dimensionality)
+print(response.model)                 # "text-embedding-3-small"
+```
+
+## EmbeddingResponse
+
+The response object exposes the following properties:
+
+| Property | Type | Description |
+|---|---|---|
+| `.embeddings` | `list[list[float]]` | One vector per input text. |
+| `.model` | `str` | Model that produced the embeddings. |
+| `.usage` | `TokenUsage \| None` | Token usage statistics. |
+| `.cost` | `float \| None` | Estimated cost in USD. |
+| `.timing` | `RequestTiming \| None` | Request timing breakdown. |
+
+## Model Properties
+
+```python
+print(model.model_id)    # "text-embedding-3-small"
+print(model.dimensions)  # 1536
+```
+
+## Use Cases
+
+Embeddings are the building block for semantic search, RAG pipelines, clustering, and classification. A typical pattern inside a workflow step:
+
+```python
+from blazen import step, Context, Event, EmbeddingModel
+
+embed_model = EmbeddingModel.openai("sk-...")
+
+@step
+async def embed_documents(ctx: Context, ev: Event):
+    texts = ev.documents
+    response = await embed_model.embed(texts)
+    ctx.set("vectors", response.embeddings)
+    return Event("SearchEvent")
+```

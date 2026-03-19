@@ -1,0 +1,106 @@
+---
+title: "Middleware & Composition"
+description: "Compose retry, caching, fallback, and custom middleware in Python"
+language: "python"
+section: "guides"
+order: 7
+---
+
+Blazen models are immutable. Each decorator method (`with_retry()`, `with_cache()`, `with_fallback()`) returns a **new** `CompletionModel` that wraps the original, so you can layer behaviours without mutating anything.
+
+## Retry
+
+Wrap a model with automatic retry on transient failures (rate limits, timeouts, server errors). Retries use exponential backoff with jitter.
+
+```python
+from blazen import CompletionModel
+
+model = CompletionModel.openai("sk-...").with_retry(
+    max_retries=5,
+    initial_delay_ms=500,
+    max_delay_ms=15000,
+)
+```
+
+All parameters are optional and keyword-only:
+
+| Parameter | Default | Description |
+|---|---|---|
+| `max_retries` | `3` | Maximum retry attempts. |
+| `initial_delay_ms` | `1000` | Delay before the first retry (ms). |
+| `max_delay_ms` | `30000` | Upper bound on backoff delay (ms). |
+
+The retry layer honours `Retry-After` headers from providers when present.
+
+## Cache
+
+Cache identical non-streaming requests in memory so repeated prompts are served instantly without hitting the provider.
+
+```python
+model = CompletionModel.openai("sk-...").with_cache(
+    ttl_seconds=600,
+    max_entries=500,
+)
+```
+
+| Parameter | Default | Description |
+|---|---|---|
+| `ttl_seconds` | `300` | How long a cached response stays valid. |
+| `max_entries` | `1000` | Maximum entries before eviction. |
+
+Streaming requests (`model.stream(...)`) bypass the cache and always go to the provider.
+
+## Fallback
+
+Route requests through multiple providers in order. If the first provider fails with a transient error, the next one is tried automatically. Non-retryable errors (auth, validation) short-circuit immediately.
+
+```python
+primary = CompletionModel.openai("sk-...")
+backup = CompletionModel.anthropic("sk-ant-...")
+
+model = CompletionModel.with_fallback([primary, backup])
+```
+
+`with_fallback()` is a **static method** that takes a list of `CompletionModel` instances and returns a new `CompletionModel`.
+
+## Composing Middleware
+
+Because each decorator returns a new `CompletionModel`, you can chain them:
+
+```python
+model = (
+    CompletionModel.openai("sk-...")
+    .with_cache(ttl_seconds=300)
+    .with_retry(max_retries=3)
+)
+```
+
+The outermost wrapper executes first. In the example above, a request flows through retry first, then cache, then the provider:
+
+```
+request -> retry -> cache -> provider -> cache -> retry -> response
+```
+
+For maximum resilience, combine all three:
+
+```python
+primary = CompletionModel.openai("sk-...").with_cache().with_retry()
+backup = CompletionModel.anthropic("sk-ant-...").with_retry()
+
+model = CompletionModel.with_fallback([primary, backup])
+```
+
+This gives you caching on the primary, automatic retries on both, and automatic failover from OpenAI to Anthropic.
+
+## Using Decorated Models
+
+Decorated models are fully interchangeable with plain models. Pass them to `complete()`, `stream()`, `run_agent()`, or any workflow step:
+
+```python
+from blazen import ChatMessage
+
+response = await model.complete([
+    ChatMessage.user("Explain quantum computing in one sentence.")
+])
+print(response.content)
+```

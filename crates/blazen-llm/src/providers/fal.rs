@@ -43,7 +43,7 @@ use crate::error::{BlazenError, ComputeErrorKind};
 use crate::http::{HttpClient, HttpRequest};
 use crate::media::{GeneratedAudio, GeneratedImage, GeneratedVideo, MediaOutput, MediaType};
 use crate::types::{
-    CompletionRequest, CompletionResponse, MessageContent, RequestTiming, StreamChunk,
+    CompletionRequest, CompletionResponse, MessageContent, RequestTiming, StreamChunk, TokenUsage,
 };
 
 // ---------------------------------------------------------------------------
@@ -772,13 +772,19 @@ impl crate::traits::CompletionModel for FalProvider {
         );
         span.record("finish_reason", "stop");
 
+        // fal.ai/any-llm does not return token usage, so cost will be None.
+        let usage: Option<TokenUsage> = None;
+        let cost = usage
+            .as_ref()
+            .and_then(|u| crate::pricing::compute_cost(&self.default_model, u));
+
         Ok(CompletionResponse {
             content: fal_response.output,
             tool_calls: Vec::new(), // fal.ai/any-llm doesn't support tool calling.
-            usage: None,
+            usage,
             model: self.default_model.clone(),
             finish_reason: Some("stop".to_owned()),
-            cost: None,
+            cost,
             timing: Some(timing),
             images: vec![],
             audio: vec![],

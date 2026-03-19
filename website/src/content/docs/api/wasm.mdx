@@ -108,6 +108,42 @@ Each chunk has the shape:
 
 Stream a chat completion with additional options.
 
+### Middleware Decorators
+
+Each decorator returns a new `CompletionModel` wrapping the original.
+
+#### `model.withRetry(maxRetries?: number): CompletionModel`
+
+Automatic retry with exponential backoff on transient failures. Defaults to 3 retries.
+
+```typescript
+const resilient = model.withRetry(5);
+```
+
+#### `model.withCache(ttlSeconds?: number, maxEntries?: number): CompletionModel`
+
+In-memory response cache. Streaming requests bypass the cache.
+
+```typescript
+const cached = model.withCache(600, 500);
+```
+
+| Parameter | Default | Description |
+|---|---|---|
+| `ttlSeconds` | `300` | Cache entry TTL in seconds. |
+| `maxEntries` | `1000` | Maximum entries before eviction. |
+
+#### `CompletionModel.withFallback(models: CompletionModel[]): CompletionModel`
+
+Static method. Tries providers in order; falls back on transient errors.
+
+```typescript
+const model = CompletionModel.withFallback([
+  CompletionModel.openai('sk-...'),
+  CompletionModel.groq('gsk-...'),
+]);
+```
+
 ---
 
 ## ChatMessage
@@ -369,6 +405,78 @@ Events are plain objects with a `type` field.
 ```typescript
 { type: 'blazen::StopEvent', result: { ... } }
 ```
+
+---
+
+## EmbeddingModel
+
+Generate vector embeddings from text. Created via static factory methods.
+
+```typescript
+import { EmbeddingModel } from '@blazen/sdk';
+
+const model = EmbeddingModel.openai('sk-...');
+const together = EmbeddingModel.together('tok-...');
+const cohere = EmbeddingModel.cohere('co-...');
+const fireworks = EmbeddingModel.fireworks('fw-...');
+```
+
+### Provider Factory Methods
+
+| Method | Default Model | Default Dimensions |
+|---|---|---|
+| `EmbeddingModel.openai(apiKey)` | `text-embedding-3-small` | 1536 |
+| `EmbeddingModel.together(apiKey)` | `togethercomputer/m2-bert-80M-8k-retrieval` | 768 |
+| `EmbeddingModel.cohere(apiKey)` | `embed-v4.0` | 1024 |
+| `EmbeddingModel.fireworks(apiKey)` | `nomic-ai/nomic-embed-text-v1.5` | 768 |
+
+### Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `.modelId` | `string` | The model identifier. |
+| `.dimensions` | `number` | Output vector dimensionality. |
+
+### `await model.embed(texts: string[]): Promise<number[][]>`
+
+Embed one or more texts, returning a nested array of float vectors.
+
+```typescript
+const result = await model.embed(['Hello', 'World']);
+console.log(result.length);       // 2
+console.log(result[0].length);    // 1536
+```
+
+---
+
+## Token Estimation
+
+Lightweight token counting functions available without external data files.
+
+### `estimateTokens(text: string, contextSize?: number): number`
+
+Estimate token count for a string (~3.5 characters per token).
+
+```typescript
+import { estimateTokens } from '@blazen/sdk';
+
+const count = estimateTokens('Hello, world!');  // 4
+```
+
+### `countMessageTokens(messages: object[], contextSize?: number): number`
+
+Estimate total tokens for an array of chat messages (plain objects with `role` and `content` fields). Includes per-message overhead.
+
+```typescript
+import { countMessageTokens } from '@blazen/sdk';
+
+const count = countMessageTokens([
+  { role: 'system', content: 'You are helpful.' },
+  { role: 'user', content: 'Hello!' },
+]);
+```
+
+`contextSize` defaults to `128000` if omitted.
 
 ---
 

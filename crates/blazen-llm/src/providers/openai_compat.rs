@@ -36,7 +36,8 @@ use crate::error::BlazenError;
 use crate::http::{HttpClient, HttpRequest, HttpResponse};
 use crate::traits::{ModelCapabilities, ModelInfo, ModelPricing, ModelRegistry};
 use crate::types::{
-    CompletionRequest, CompletionResponse, Role, StreamChunk, TokenUsage, ToolCall,
+    CompletionRequest, CompletionResponse, EmbeddingResponse, Role, StreamChunk, TokenUsage,
+    ToolCall,
 };
 
 // ---------------------------------------------------------------------------
@@ -600,13 +601,17 @@ impl crate::traits::CompletionModel for OpenAiCompatProvider {
             span.record("finish_reason", reason.as_str());
         }
 
+        let cost = usage
+            .as_ref()
+            .and_then(|u| crate::pricing::compute_cost(&oai.model, u));
+
         Ok(CompletionResponse {
             content: choice.message.content,
             tool_calls,
             usage,
             model: oai.model,
             finish_reason: choice.finish_reason,
-            cost: None,
+            cost,
             timing: None,
             images: vec![],
             audio: vec![],
@@ -821,6 +826,297 @@ impl OpenAiCompatProvider {
                 ..Default::default()
             },
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Embedding model (OpenAI-compatible)
+// ---------------------------------------------------------------------------
+
+/// An OpenAI-compatible embedding model.
+///
+/// Works with any provider that implements the `OpenAI` embeddings API
+/// (`POST /embeddings`). Convenience constructors are provided for popular
+/// providers.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use blazen_llm::providers::openai_compat::{
+///     AuthMethod, OpenAiCompatConfig, OpenAiCompatEmbeddingModel,
+/// };
+///
+/// // Together AI
+/// let embedder = OpenAiCompatEmbeddingModel::together("your-key");
+///
+/// // Cohere
+/// let embedder = OpenAiCompatEmbeddingModel::cohere("your-key");
+///
+/// // Fireworks AI
+/// let embedder = OpenAiCompatEmbeddingModel::fireworks("your-key");
+///
+/// // Custom provider
+/// let embedder = OpenAiCompatEmbeddingModel::new(
+///     OpenAiCompatConfig {
+///         provider_name: "my-provider".into(),
+///         base_url: "https://api.example.com/v1".into(),
+///         api_key: "your-key".into(),
+///         default_model: String::new(),
+///         auth_method: AuthMethod::Bearer,
+///         extra_headers: Vec::new(),
+///         query_params: Vec::new(),
+///         supports_model_listing: false,
+///     },
+///     "my-embedding-model",
+///     768,
+/// );
+/// ```
+pub struct OpenAiCompatEmbeddingModel {
+    config: OpenAiCompatConfig,
+    client: Arc<dyn HttpClient>,
+    model: String,
+    dimensions: usize,
+}
+
+impl std::fmt::Debug for OpenAiCompatEmbeddingModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OpenAiCompatEmbeddingModel")
+            .field("provider", &self.config.provider_name)
+            .field("base_url", &self.config.base_url)
+            .field("model", &self.model)
+            .field("dimensions", &self.dimensions)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Clone for OpenAiCompatEmbeddingModel {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            client: Arc::clone(&self.client),
+            model: self.model.clone(),
+            dimensions: self.dimensions,
+        }
+    }
+}
+
+impl OpenAiCompatEmbeddingModel {
+    /// Create an embedding model from a fully-specified configuration.
+    #[must_use]
+    pub fn new(config: OpenAiCompatConfig, model: impl Into<String>, dimensions: usize) -> Self {
+        Self {
+            config,
+            client: crate::ReqwestHttpClient::new().into_arc(),
+            model: model.into(),
+            dimensions,
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Convenience constructors
+    // -----------------------------------------------------------------------
+
+    /// Together AI (`togethercomputer/m2-bert-80M-8k-retrieval`, 768 dimensions).
+    #[must_use]
+    pub fn together(api_key: impl Into<String>) -> Self {
+        Self::new(
+            OpenAiCompatConfig {
+                provider_name: "together".into(),
+                base_url: "https://api.together.xyz/v1".into(),
+                api_key: api_key.into(),
+                default_model: String::new(),
+                auth_method: AuthMethod::Bearer,
+                extra_headers: Vec::new(),
+                query_params: Vec::new(),
+                supports_model_listing: false,
+            },
+            "togethercomputer/m2-bert-80M-8k-retrieval",
+            768,
+        )
+    }
+
+    /// Cohere via compatibility endpoint (`embed-v4.0`, 1024 dimensions).
+    #[must_use]
+    pub fn cohere(api_key: impl Into<String>) -> Self {
+        Self::new(
+            OpenAiCompatConfig {
+                provider_name: "cohere".into(),
+                base_url: "https://api.cohere.ai/compatibility/v1".into(),
+                api_key: api_key.into(),
+                default_model: String::new(),
+                auth_method: AuthMethod::Bearer,
+                extra_headers: Vec::new(),
+                query_params: Vec::new(),
+                supports_model_listing: false,
+            },
+            "embed-v4.0",
+            1024,
+        )
+    }
+
+    /// Fireworks AI (`nomic-ai/nomic-embed-text-v1.5`, 768 dimensions).
+    #[must_use]
+    pub fn fireworks(api_key: impl Into<String>) -> Self {
+        Self::new(
+            OpenAiCompatConfig {
+                provider_name: "fireworks".into(),
+                base_url: "https://api.fireworks.ai/inference/v1".into(),
+                api_key: api_key.into(),
+                default_model: String::new(),
+                auth_method: AuthMethod::Bearer,
+                extra_headers: Vec::new(),
+                query_params: Vec::new(),
+                supports_model_listing: false,
+            },
+            "nomic-ai/nomic-embed-text-v1.5",
+            768,
+        )
+    }
+
+    // -----------------------------------------------------------------------
+    // Builder methods
+    // -----------------------------------------------------------------------
+
+    /// Override the embedding model and dimensionality.
+    #[must_use]
+    pub fn with_model(mut self, model: impl Into<String>, dimensions: usize) -> Self {
+        self.model = model.into();
+        self.dimensions = dimensions;
+        self
+    }
+
+    /// Use a custom HTTP client backend.
+    #[must_use]
+    pub fn with_http_client(mut self, client: Arc<dyn HttpClient>) -> Self {
+        self.client = client;
+        self
+    }
+
+    // -----------------------------------------------------------------------
+    // Internal helpers
+    // -----------------------------------------------------------------------
+
+    /// Apply authentication and extra headers/query params to an [`HttpRequest`].
+    fn apply_config(&self, mut request: HttpRequest) -> HttpRequest {
+        match &self.config.auth_method {
+            AuthMethod::Bearer => {
+                request.headers.push((
+                    "Authorization".to_owned(),
+                    format!("Bearer {}", self.config.api_key),
+                ));
+            }
+            AuthMethod::ApiKeyHeader(header_name) => {
+                request
+                    .headers
+                    .push((header_name.clone(), self.config.api_key.clone()));
+            }
+            AuthMethod::AzureApiKey => {
+                request
+                    .headers
+                    .push(("api-key".to_owned(), self.config.api_key.clone()));
+            }
+            AuthMethod::KeyPrefix => {
+                request.headers.push((
+                    "Authorization".to_owned(),
+                    format!("Key {}", self.config.api_key),
+                ));
+            }
+        }
+
+        for (key, value) in &self.config.extra_headers {
+            request.headers.push((key.clone(), value.clone()));
+        }
+
+        for (key, value) in &self.config.query_params {
+            request.query_params.push((key.clone(), value.clone()));
+        }
+
+        request
+    }
+}
+
+/// Wire format for an OpenAI-compatible embeddings API response.
+#[derive(Debug, Deserialize)]
+struct OaiCompatEmbeddingResponse {
+    data: Vec<OaiCompatEmbeddingData>,
+    model: String,
+    usage: Option<OaiCompatEmbeddingUsage>,
+}
+
+/// A single embedding vector from the response.
+#[derive(Debug, Deserialize)]
+struct OaiCompatEmbeddingData {
+    embedding: Vec<f32>,
+    #[allow(dead_code)]
+    index: usize,
+}
+
+/// Token usage from the embeddings response.
+#[derive(Debug, Deserialize)]
+struct OaiCompatEmbeddingUsage {
+    prompt_tokens: u32,
+    total_tokens: u32,
+}
+
+#[async_trait]
+impl crate::traits::EmbeddingModel for OpenAiCompatEmbeddingModel {
+    fn model_id(&self) -> &str {
+        &self.model
+    }
+
+    fn dimensions(&self) -> usize {
+        self.dimensions
+    }
+
+    async fn embed(&self, texts: &[String]) -> Result<EmbeddingResponse, BlazenError> {
+        let url = format!("{}/embeddings", self.config.base_url);
+        let body = serde_json::json!({
+            "model": self.model,
+            "input": texts,
+        });
+
+        let request = HttpRequest::post(url).json_body(&body)?;
+        let request = self.apply_config(request);
+
+        let response = self.client.send(request).await?;
+
+        if !response.is_success() {
+            let retry_after_ms = parse_retry_after(&response.headers);
+            let error_body = response.text();
+            return match response.status {
+                401 => Err(BlazenError::auth("authentication failed")),
+                404 => Err(BlazenError::model_not_found(error_body)),
+                429 => Err(BlazenError::RateLimit { retry_after_ms }),
+                status => Err(BlazenError::request(format!("HTTP {status}: {error_body}"))),
+            };
+        }
+
+        let oai: OaiCompatEmbeddingResponse = response
+            .json()
+            .map_err(|e| BlazenError::invalid_response(e.to_string()))?;
+
+        let mut embeddings: Vec<(usize, Vec<f32>)> = oai
+            .data
+            .into_iter()
+            .map(|d| (d.index, d.embedding))
+            .collect();
+        embeddings.sort_by_key(|(idx, _)| *idx);
+        let embeddings: Vec<Vec<f32>> = embeddings.into_iter().map(|(_, v)| v).collect();
+
+        let usage = oai.usage.map(|u| TokenUsage {
+            prompt_tokens: u.prompt_tokens,
+            completion_tokens: 0,
+            total_tokens: u.total_tokens,
+        });
+
+        Ok(EmbeddingResponse {
+            embeddings,
+            model: oai.model,
+            usage,
+            cost: None,
+            timing: None,
+            metadata: serde_json::Value::Null,
+        })
     }
 }
 
@@ -1135,5 +1431,95 @@ mod tests {
         assert_eq!(infos[0].name.as_deref(), Some("Llama 3 70B"));
         let pricing = infos[0].pricing.as_ref().unwrap();
         assert!((pricing.input_per_million.unwrap() - 0.9).abs() < 0.001);
+    }
+
+    // -----------------------------------------------------------------------
+    // Embedding model tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn together_embedding_defaults() {
+        use crate::traits::EmbeddingModel;
+
+        let embedder = OpenAiCompatEmbeddingModel::together("tog-test");
+        assert_eq!(
+            embedder.model_id(),
+            "togethercomputer/m2-bert-80M-8k-retrieval"
+        );
+        assert_eq!(embedder.dimensions(), 768);
+        assert_eq!(embedder.config.base_url, "https://api.together.xyz/v1");
+        assert_eq!(embedder.config.provider_name, "together");
+    }
+
+    #[test]
+    fn cohere_embedding_defaults() {
+        use crate::traits::EmbeddingModel;
+
+        let embedder = OpenAiCompatEmbeddingModel::cohere("co-test");
+        assert_eq!(embedder.model_id(), "embed-v4.0");
+        assert_eq!(embedder.dimensions(), 1024);
+        assert_eq!(
+            embedder.config.base_url,
+            "https://api.cohere.ai/compatibility/v1"
+        );
+        assert_eq!(embedder.config.provider_name, "cohere");
+    }
+
+    #[test]
+    fn fireworks_embedding_defaults() {
+        use crate::traits::EmbeddingModel;
+
+        let embedder = OpenAiCompatEmbeddingModel::fireworks("fw-test");
+        assert_eq!(embedder.model_id(), "nomic-ai/nomic-embed-text-v1.5");
+        assert_eq!(embedder.dimensions(), 768);
+        assert_eq!(
+            embedder.config.base_url,
+            "https://api.fireworks.ai/inference/v1"
+        );
+        assert_eq!(embedder.config.provider_name, "fireworks");
+    }
+
+    #[test]
+    fn compat_embedding_with_model_override() {
+        use crate::traits::EmbeddingModel;
+
+        let embedder = OpenAiCompatEmbeddingModel::together("tog-test")
+            .with_model("BAAI/bge-large-en-v1.5", 1024);
+        assert_eq!(embedder.model_id(), "BAAI/bge-large-en-v1.5");
+        assert_eq!(embedder.dimensions(), 1024);
+    }
+
+    #[test]
+    fn compat_embedding_response_parsing() {
+        let json = r#"{
+            "data": [
+                {"embedding": [0.7, 0.8, 0.9], "index": 2},
+                {"embedding": [0.1, 0.2, 0.3], "index": 0},
+                {"embedding": [0.4, 0.5, 0.6], "index": 1}
+            ],
+            "model": "togethercomputer/m2-bert-80M-8k-retrieval",
+            "usage": {"prompt_tokens": 25, "total_tokens": 25}
+        }"#;
+
+        let oai: OaiCompatEmbeddingResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(oai.data.len(), 3);
+        assert_eq!(oai.model, "togethercomputer/m2-bert-80M-8k-retrieval");
+
+        // Verify reordering by index
+        let mut embeddings: Vec<(usize, Vec<f32>)> = oai
+            .data
+            .into_iter()
+            .map(|d| (d.index, d.embedding))
+            .collect();
+        embeddings.sort_by_key(|(idx, _)| *idx);
+        let embeddings: Vec<Vec<f32>> = embeddings.into_iter().map(|(_, v)| v).collect();
+
+        assert_eq!(embeddings[0], vec![0.1, 0.2, 0.3]); // index 0
+        assert_eq!(embeddings[1], vec![0.4, 0.5, 0.6]); // index 1
+        assert_eq!(embeddings[2], vec![0.7, 0.8, 0.9]); // index 2
+
+        let usage = oai.usage.unwrap();
+        assert_eq!(usage.prompt_tokens, 25);
+        assert_eq!(usage.total_tokens, 25);
     }
 }

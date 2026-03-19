@@ -1,0 +1,77 @@
+---
+title: "Middleware & Composition"
+description: "Compose retry, caching, fallback, and custom middleware in the WASM SDK"
+language: "wasm"
+section: "guides"
+order: 7
+---
+
+The WASM SDK supports the same middleware patterns as the Node.js SDK. Each decorator method returns a **new** `CompletionModel`, keeping the original unchanged.
+
+## Retry
+
+Wrap a model with automatic retry on transient failures. The WASM `withRetry()` takes an optional `maxRetries` number (default 3).
+
+```typescript
+import init, { CompletionModel } from "@blazen/sdk";
+
+await init();
+
+const model = CompletionModel.openai("sk-...").withRetry(5);
+```
+
+## Cache
+
+Cache identical non-streaming requests in memory.
+
+```typescript
+// ttlSeconds (default 300), maxEntries (default 1000)
+const model = CompletionModel.openai("sk-...").withCache(600, 500);
+```
+
+Streaming requests always bypass the cache.
+
+## Fallback
+
+Route requests through multiple providers in order.
+
+```typescript
+const primary = CompletionModel.openai("sk-...");
+const backup = CompletionModel.groq("gsk-...");
+
+const model = CompletionModel.withFallback([primary, backup]);
+```
+
+When the first provider fails with a transient error (rate limit, timeout, server error), the next provider is tried. Non-retryable errors short-circuit immediately.
+
+## Composing Middleware
+
+Chain decorators to layer multiple behaviours:
+
+```typescript
+const model = CompletionModel.openai("sk-...")
+  .withCache(300, 1000)
+  .withRetry(3);
+```
+
+For maximum resilience, combine all three:
+
+```typescript
+const primary = CompletionModel.openai("sk-...").withCache().withRetry();
+const backup = CompletionModel.anthropic("sk-ant-...").withRetry();
+
+const model = CompletionModel.withFallback([primary, backup]);
+```
+
+## Using Decorated Models
+
+Decorated models work identically to plain models -- pass them to `complete()`, `stream()`, or `runAgent()`:
+
+```typescript
+import { ChatMessage } from "@blazen/sdk";
+
+const response = await model.complete([
+  ChatMessage.user("Explain quantum computing in one sentence."),
+]);
+console.log(response.content);
+```

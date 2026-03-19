@@ -58,21 +58,28 @@
 //! ```
 
 pub mod agent;
+pub mod cache;
 pub mod compute;
 pub mod error;
 pub mod events;
+pub mod fallback;
 pub mod http;
 #[cfg(feature = "reqwest")]
 mod http_reqwest;
 #[cfg(feature = "reqwest")]
 pub use http_reqwest::ReqwestHttpClient;
 pub mod media;
+pub mod middleware;
+pub mod pricing;
 pub mod providers;
+pub mod retry;
+pub mod tokens;
 pub mod traits;
 pub mod types;
 
 // Re-export primary types at crate root for ergonomic imports.
 pub use agent::{AgentConfig, AgentEvent, AgentResult, run_agent, run_agent_with_callback};
+pub use cache::{CacheConfig, CacheStrategy, CachedCompletionModel};
 pub use compute::{
     // Audio
     AudioGeneration,
@@ -109,9 +116,15 @@ pub use compute::{
 pub use error::LlmError;
 pub use error::{BlazenError, CompletionErrorKind, ComputeErrorKind, MediaErrorKind};
 pub use events::{StreamChunkEvent, StreamCompleteEvent};
+pub use fallback::FallbackModel;
 pub use media::{
     Generated3DModel, GeneratedAudio, GeneratedImage, GeneratedVideo, MediaOutput, MediaType,
 };
+pub use middleware::{CacheMiddleware, Middleware, MiddlewareStack, RetryMiddleware};
+pub use retry::{RetryCompletionModel, RetryConfig};
+#[cfg(feature = "tiktoken")]
+pub use tokens::TiktokenCounter;
+pub use tokens::{EstimateCounter, TokenCounter};
 pub use traits::{
     CompletionModel, EmbeddingModel, ModelCapabilities, ModelInfo, ModelPricing, ModelRegistry,
     StructuredOutput, Tool,

@@ -70,9 +70,18 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::PyTokenUsage>()?;
     m.add_class::<types::PyRequestTiming>()?;
     m.add_class::<types::PyCompletionResponse>()?;
+    m.add_class::<types::PyStreamChunk>()?;
 
     // Completion model (provider)
     m.add_class::<providers::PyCompletionModel>()?;
+
+    // Embedding model
+    m.add_class::<types::PyEmbeddingModel>()?;
+    m.add_class::<types::PyEmbeddingResponse>()?;
+
+    // Token counting utilities
+    m.add_function(wrap_pyfunction!(types::estimate_tokens, m)?)?;
+    m.add_function(wrap_pyfunction!(types::count_message_tokens, m)?)?;
 
     // Agent
     m.add_class::<agent::PyToolDef>()?;
@@ -103,6 +112,13 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Fal provider
     m.add_class::<providers::fal::PyFalProvider>()?;
+
+    // Memory
+    m.add_class::<types::PyMemory>()?;
+    m.add_class::<types::PyInMemoryBackend>()?;
+    m.add_class::<types::PyJsonlBackend>()?;
+    m.add_class::<types::PyValkeyBackend>()?;
+    m.add_class::<types::PyMemoryResult>()?;
 
     // Error exception types
     error::register_exceptions(m)?;

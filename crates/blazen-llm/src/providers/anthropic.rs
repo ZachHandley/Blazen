@@ -542,13 +542,17 @@ impl crate::traits::CompletionModel for AnthropicProvider {
             span.record("finish_reason", reason.as_str());
         }
 
+        let cost = usage
+            .as_ref()
+            .and_then(|u| crate::pricing::compute_cost(&anthropic.model, u));
+
         Ok(CompletionResponse {
             content,
             tool_calls,
             usage,
             model: anthropic.model,
             finish_reason: anthropic.stop_reason,
-            cost: None,
+            cost,
             timing: None,
             images: vec![],
             audio: vec![],

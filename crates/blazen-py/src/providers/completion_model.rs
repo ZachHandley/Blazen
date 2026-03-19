@@ -1,14 +1,18 @@
 //! Python wrapper for the CompletionModel type with all provider constructors.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use pyo3::prelude::*;
 use tokio_stream::StreamExt;
 
+use blazen_llm::cache::{CacheConfig, CacheStrategy, CachedCompletionModel};
+use blazen_llm::fallback::FallbackModel;
+use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
 use blazen_llm::{ChatMessage, CompletionModel, CompletionRequest};
 
 use crate::error::BlazenPyError;
-use crate::types::{PyChatMessage, PyCompletionResponse};
+use crate::types::{PyChatMessage, PyCompletionResponse, PyStreamChunk};
 
 // ---------------------------------------------------------------------------
 // PyCompletionModel
@@ -319,6 +323,104 @@ impl PyCompletionModel {
     }
 
     // -----------------------------------------------------------------
+    // Decorators: retry, fallback, caching
+    // -----------------------------------------------------------------
+
+    /// Wrap this model with automatic retry on transient failures.
+    ///
+    /// Returns a new CompletionModel that retries on rate limits,
+    /// timeouts, and server errors with exponential backoff.
+    ///
+    /// Args:
+    ///     max_retries: Maximum retry attempts (default: 3).
+    ///     initial_delay_ms: Delay before first retry in ms (default: 1000).
+    ///     max_delay_ms: Upper bound on backoff delay in ms (default: 30000).
+    ///
+    /// Returns:
+    ///     A new CompletionModel with retry behaviour.
+    ///
+    /// Example:
+    ///     >>> model = CompletionModel.openai("sk-...").with_retry(max_retries=5)
+    #[pyo3(signature = (*, max_retries=None, initial_delay_ms=None, max_delay_ms=None))]
+    fn with_retry(
+        &self,
+        max_retries: Option<u32>,
+        initial_delay_ms: Option<u64>,
+        max_delay_ms: Option<u64>,
+    ) -> Self {
+        let config = RetryConfig {
+            max_retries: max_retries.unwrap_or(3),
+            initial_delay: Duration::from_millis(initial_delay_ms.unwrap_or(1000)),
+            max_delay: Duration::from_millis(max_delay_ms.unwrap_or(30_000)),
+            honor_retry_after: true,
+            jitter: true,
+        };
+        let model = RetryCompletionModel::from_arc(self.inner.clone(), config);
+        Self {
+            inner: Arc::new(model),
+        }
+    }
+
+    /// Create a fallback model that tries multiple providers in order.
+    ///
+    /// When the first provider fails with a retryable error, the request
+    /// is forwarded to the next provider. Non-retryable errors (auth,
+    /// validation) short-circuit immediately.
+    ///
+    /// Args:
+    ///     models: A list of CompletionModel instances to try in order.
+    ///
+    /// Returns:
+    ///     A new CompletionModel that falls back through the providers.
+    ///
+    /// Example:
+    ///     >>> primary = CompletionModel.openai("sk-...")
+    ///     >>> backup = CompletionModel.anthropic("sk-ant-...")
+    ///     >>> model = CompletionModel.with_fallback([primary, backup])
+    #[staticmethod]
+    fn with_fallback(models: Vec<PyRef<'_, PyCompletionModel>>) -> PyResult<Self> {
+        if models.is_empty() {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "with_fallback requires at least one model",
+            ));
+        }
+        let providers: Vec<Arc<dyn CompletionModel>> =
+            models.iter().map(|m| m.inner.clone()).collect();
+        let model = FallbackModel::new(providers);
+        Ok(Self {
+            inner: Arc::new(model),
+        })
+    }
+
+    /// Wrap this model with response caching.
+    ///
+    /// Repeated identical requests are served from an in-memory cache
+    /// without hitting the underlying provider. Streaming requests are
+    /// never cached.
+    ///
+    /// Args:
+    ///     ttl_seconds: Cache entry time-to-live in seconds (default: 300).
+    ///     max_entries: Maximum cache entries before eviction (default: 1000).
+    ///
+    /// Returns:
+    ///     A new CompletionModel with caching enabled.
+    ///
+    /// Example:
+    ///     >>> model = CompletionModel.openai("sk-...").with_cache(ttl_seconds=600)
+    #[pyo3(signature = (*, ttl_seconds=None, max_entries=None))]
+    fn with_cache(&self, ttl_seconds: Option<u64>, max_entries: Option<usize>) -> Self {
+        let config = CacheConfig {
+            strategy: CacheStrategy::ContentHash,
+            ttl: Duration::from_secs(ttl_seconds.unwrap_or(300)),
+            max_entries: max_entries.unwrap_or(1000),
+        };
+        let model = CachedCompletionModel::from_arc(self.inner.clone(), config);
+        Self {
+            inner: Arc::new(model),
+        }
+    }
+
+    // -----------------------------------------------------------------
     // Completion
     // -----------------------------------------------------------------
 
@@ -425,19 +527,12 @@ impl PyCompletionModel {
             while let Some(result) = stream.next().await {
                 match result {
                     Ok(chunk) => {
-                        let chunk_json = serde_json::json!({
-                            "delta": chunk.delta,
-                            "finish_reason": chunk.finish_reason,
-                            "tool_calls": chunk.tool_calls.iter().map(|tc| {
-                                serde_json::json!({"id": tc.id, "name": tc.name, "arguments": tc.arguments})
-                            }).collect::<Vec<_>>(),
-                        });
+                        let py_chunk = PyStreamChunk { inner: chunk };
 
                         // Call the Python callback
                         tokio::task::block_in_place(|| {
                             Python::attach(|py| {
-                                let py_val = crate::workflow::event::json_to_py(py, &chunk_json)?;
-                                on_chunk.call1(py, (py_val,))?;
+                                on_chunk.call1(py, (py_chunk,))?;
                                 Ok::<_, PyErr>(())
                             })
                         })?;

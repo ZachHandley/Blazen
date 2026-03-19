@@ -12,12 +12,15 @@ use async_trait::async_trait;
 use futures_util::Stream;
 use tracing::debug;
 
+use serde::Deserialize;
+
 use super::openai_format::{content_to_openai_value, parse_retry_after};
 use super::sse::{OaiResponse, SseParser};
 use crate::error::BlazenError;
 use crate::http::{HttpClient, HttpRequest, HttpResponse};
 use crate::types::{
-    CompletionRequest, CompletionResponse, Role, StreamChunk, TokenUsage, ToolCall,
+    CompletionRequest, CompletionResponse, EmbeddingResponse, Role, StreamChunk, TokenUsage,
+    ToolCall,
 };
 
 // ---------------------------------------------------------------------------
@@ -320,13 +323,17 @@ impl crate::traits::CompletionModel for OpenAiProvider {
             span.record("finish_reason", reason.as_str());
         }
 
+        let cost = usage
+            .as_ref()
+            .and_then(|u| crate::pricing::compute_cost(&oai.model, u));
+
         Ok(CompletionResponse {
             content: choice.message.content,
             tool_calls,
             usage,
             model: oai.model,
             finish_reason: choice.finish_reason,
-            cost: None,
+            cost,
             timing: None,
             images: vec![],
             audio: vec![],
@@ -376,6 +383,182 @@ impl crate::traits::CompletionModel for OpenAiProvider {
 
         let stream = SseParser::new(byte_stream);
         Ok(Box::pin(stream))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Embedding model
+// ---------------------------------------------------------------------------
+
+/// An `OpenAI` embedding model.
+///
+/// This is a separate struct from [`OpenAiProvider`] because embedding models
+/// and chat completion models are fundamentally different endpoints with
+/// different capabilities.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use blazen_llm::providers::openai::OpenAiEmbeddingModel;
+///
+/// // Defaults to text-embedding-3-small (1536 dimensions)
+/// let embedder = OpenAiEmbeddingModel::new("sk-...");
+///
+/// // Or use a larger model
+/// let embedder = OpenAiEmbeddingModel::new("sk-...")
+///     .with_model("text-embedding-3-large", 3072);
+/// ```
+pub struct OpenAiEmbeddingModel {
+    client: Arc<dyn HttpClient>,
+    api_key: String,
+    base_url: String,
+    model: String,
+    dimensions: usize,
+}
+
+impl std::fmt::Debug for OpenAiEmbeddingModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OpenAiEmbeddingModel")
+            .field("base_url", &self.base_url)
+            .field("model", &self.model)
+            .field("dimensions", &self.dimensions)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Clone for OpenAiEmbeddingModel {
+    fn clone(&self) -> Self {
+        Self {
+            client: Arc::clone(&self.client),
+            api_key: self.api_key.clone(),
+            base_url: self.base_url.clone(),
+            model: self.model.clone(),
+            dimensions: self.dimensions,
+        }
+    }
+}
+
+impl OpenAiEmbeddingModel {
+    /// Create a new embedding model targeting the official `OpenAI` endpoint.
+    ///
+    /// Defaults to `text-embedding-3-small` with 1536 dimensions.
+    #[must_use]
+    pub fn new(api_key: impl Into<String>) -> Self {
+        Self {
+            client: crate::ReqwestHttpClient::new().into_arc(),
+            api_key: api_key.into(),
+            base_url: "https://api.openai.com/v1".to_owned(),
+            model: "text-embedding-3-small".to_owned(),
+            dimensions: 1536,
+        }
+    }
+
+    /// Set the embedding model and its output dimensionality.
+    #[must_use]
+    pub fn with_model(mut self, model: impl Into<String>, dimensions: usize) -> Self {
+        self.model = model.into();
+        self.dimensions = dimensions;
+        self
+    }
+
+    /// Use a custom base URL (e.g. for local proxies).
+    #[must_use]
+    pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
+        self.base_url = base_url.into();
+        self
+    }
+
+    /// Use a custom HTTP client backend.
+    #[must_use]
+    pub fn with_http_client(mut self, client: Arc<dyn HttpClient>) -> Self {
+        self.client = client;
+        self
+    }
+}
+
+/// Wire format for the `OpenAI` embeddings API response.
+#[derive(Debug, Deserialize)]
+struct OaiEmbeddingResponse {
+    data: Vec<OaiEmbeddingData>,
+    model: String,
+    usage: Option<OaiEmbeddingUsage>,
+}
+
+/// A single embedding vector from the `OpenAI` embeddings API.
+#[derive(Debug, Deserialize)]
+struct OaiEmbeddingData {
+    embedding: Vec<f32>,
+    #[allow(dead_code)]
+    index: usize,
+}
+
+/// Token usage from the `OpenAI` embeddings API.
+#[derive(Debug, Deserialize)]
+struct OaiEmbeddingUsage {
+    prompt_tokens: u32,
+    total_tokens: u32,
+}
+
+#[async_trait]
+impl crate::traits::EmbeddingModel for OpenAiEmbeddingModel {
+    fn model_id(&self) -> &str {
+        &self.model
+    }
+
+    fn dimensions(&self) -> usize {
+        self.dimensions
+    }
+
+    async fn embed(&self, texts: &[String]) -> Result<EmbeddingResponse, BlazenError> {
+        let url = format!("{}/embeddings", self.base_url);
+        let body = serde_json::json!({
+            "model": self.model,
+            "input": texts,
+        });
+
+        let request = HttpRequest::post(url)
+            .bearer_auth(&self.api_key)
+            .json_body(&body)?;
+
+        let response = self.client.send(request).await?;
+
+        if !response.is_success() {
+            let retry_after_ms = parse_retry_after(&response.headers);
+            let error_body = response.text();
+            return match response.status {
+                401 => Err(BlazenError::auth("authentication failed")),
+                404 => Err(BlazenError::model_not_found(error_body)),
+                429 => Err(BlazenError::RateLimit { retry_after_ms }),
+                status => Err(BlazenError::request(format!("HTTP {status}: {error_body}"))),
+            };
+        }
+
+        let oai: OaiEmbeddingResponse = response
+            .json()
+            .map_err(|e| BlazenError::invalid_response(e.to_string()))?;
+
+        let mut embeddings: Vec<(usize, Vec<f32>)> = oai
+            .data
+            .into_iter()
+            .map(|d| (d.index, d.embedding))
+            .collect();
+        embeddings.sort_by_key(|(idx, _)| *idx);
+        let embeddings: Vec<Vec<f32>> = embeddings.into_iter().map(|(_, v)| v).collect();
+
+        let usage = oai.usage.map(|u| TokenUsage {
+            prompt_tokens: u.prompt_tokens,
+            completion_tokens: 0,
+            total_tokens: u.total_tokens,
+        });
+
+        Ok(EmbeddingResponse {
+            embeddings,
+            model: oai.model,
+            usage,
+            cost: None,
+            timing: None,
+            metadata: serde_json::Value::Null,
+        })
     }
 }
 
@@ -551,5 +734,67 @@ mod tests {
         let result = parse_next_event(&mut buf).unwrap().unwrap();
         assert!(result.delta.is_none());
         assert_eq!(result.finish_reason.as_deref(), Some("stop"));
+    }
+
+    // -----------------------------------------------------------------------
+    // Embedding model tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_openai_embedding_default() {
+        use crate::traits::EmbeddingModel;
+
+        let embedder = OpenAiEmbeddingModel::new("sk-test");
+        assert_eq!(embedder.model_id(), "text-embedding-3-small");
+        assert_eq!(embedder.dimensions(), 1536);
+    }
+
+    #[test]
+    fn test_openai_embedding_with_model() {
+        use crate::traits::EmbeddingModel;
+
+        let embedder =
+            OpenAiEmbeddingModel::new("sk-test").with_model("text-embedding-3-large", 3072);
+        assert_eq!(embedder.model_id(), "text-embedding-3-large");
+        assert_eq!(embedder.dimensions(), 3072);
+    }
+
+    #[test]
+    fn test_openai_embedding_with_base_url() {
+        let embedder =
+            OpenAiEmbeddingModel::new("sk-test").with_base_url("https://custom.proxy.com/v1");
+        assert_eq!(embedder.base_url, "https://custom.proxy.com/v1");
+    }
+
+    #[test]
+    fn test_openai_embedding_response_parsing() {
+        let json = r#"{
+            "data": [
+                {"embedding": [0.1, 0.2, 0.3], "index": 1},
+                {"embedding": [0.4, 0.5, 0.6], "index": 0}
+            ],
+            "model": "text-embedding-3-small",
+            "usage": {"prompt_tokens": 10, "total_tokens": 10}
+        }"#;
+
+        let oai: OaiEmbeddingResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(oai.data.len(), 2);
+        assert_eq!(oai.model, "text-embedding-3-small");
+
+        // Verify reordering by index works
+        let mut embeddings: Vec<(usize, Vec<f32>)> = oai
+            .data
+            .into_iter()
+            .map(|d| (d.index, d.embedding))
+            .collect();
+        embeddings.sort_by_key(|(idx, _)| *idx);
+        let embeddings: Vec<Vec<f32>> = embeddings.into_iter().map(|(_, v)| v).collect();
+
+        assert_eq!(embeddings[0], vec![0.4, 0.5, 0.6]); // index 0
+        assert_eq!(embeddings[1], vec![0.1, 0.2, 0.3]); // index 1
+
+        let usage = oai.usage.unwrap();
+        assert_eq!(usage.prompt_tokens, 10);
+        assert_eq!(usage.total_tokens, 10);
     }
 }

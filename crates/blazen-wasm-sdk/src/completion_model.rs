@@ -4,12 +4,16 @@
 //! as async methods that return JavaScript `Promise`s.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 
+use blazen_llm::cache::{CacheConfig, CachedCompletionModel};
+use blazen_llm::fallback::FallbackModel;
 use blazen_llm::http::HttpClient;
 use blazen_llm::providers::openai_compat::OpenAiCompatProvider;
+use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
 use blazen_llm::traits::CompletionModel;
 use blazen_llm::types::CompletionRequest;
 
@@ -176,6 +180,84 @@ impl WasmCompletionModel {
                 inner: Arc::clone(&self.inner),
                 model: model.to_owned(),
             }),
+        }
+    }
+
+    /// Wrap this model with automatic retry on transient failures.
+    ///
+    /// Retries rate-limit, timeout, and server errors with exponential
+    /// backoff. `maxRetries` defaults to 3 if not specified.
+    ///
+    /// Returns a new `CompletionModel`.
+    ///
+    /// ```js
+    /// const resilient = model.withRetry(5);
+    /// const response = await resilient.complete([ChatMessage.user('Hi')]);
+    /// ```
+    #[wasm_bindgen(js_name = "withRetry")]
+    pub fn with_retry(&self, max_retries: Option<u32>) -> WasmCompletionModel {
+        let config = RetryConfig {
+            max_retries: max_retries.unwrap_or(3),
+            ..RetryConfig::default()
+        };
+        WasmCompletionModel {
+            inner: Arc::new(RetryCompletionModel::from_arc(
+                Arc::clone(&self.inner),
+                config,
+            )),
+        }
+    }
+
+    /// Create a fallback model that tries multiple providers in order.
+    ///
+    /// When one provider fails with a retryable error, the next is tried.
+    /// Non-retryable errors (e.g. auth) short-circuit immediately.
+    ///
+    /// `models` is an array of `CompletionModel` instances to try in order.
+    ///
+    /// ```js
+    /// const primary = CompletionModel.openai('sk-...');
+    /// const backup = CompletionModel.groq('gsk-...');
+    /// const resilient = CompletionModel.withFallback([primary, backup]);
+    /// ```
+    #[wasm_bindgen(js_name = "withFallback")]
+    pub fn with_fallback(models: Vec<WasmCompletionModel>) -> WasmCompletionModel {
+        let providers: Vec<Arc<dyn CompletionModel>> =
+            models.into_iter().map(|m| m.inner).collect();
+        WasmCompletionModel {
+            inner: Arc::new(FallbackModel::new(providers)),
+        }
+    }
+
+    /// Wrap this model with a response cache.
+    ///
+    /// Identical non-streaming requests will be served from memory for
+    /// `ttlSeconds` (default 300 = 5 minutes). Streaming is never cached.
+    ///
+    /// `maxEntries` caps the cache size (default 1000); the oldest entry
+    /// is evicted when the limit is reached.
+    ///
+    /// Returns a new `CompletionModel`.
+    ///
+    /// ```js
+    /// const cached = model.withCache(600, 500);
+    /// ```
+    #[wasm_bindgen(js_name = "withCache")]
+    pub fn with_cache(
+        &self,
+        ttl_seconds: Option<u32>,
+        max_entries: Option<u32>,
+    ) -> WasmCompletionModel {
+        let config = CacheConfig {
+            ttl: Duration::from_secs(u64::from(ttl_seconds.unwrap_or(300))),
+            max_entries: max_entries.unwrap_or(1000) as usize,
+            ..CacheConfig::default()
+        };
+        WasmCompletionModel {
+            inner: Arc::new(CachedCompletionModel::from_arc(
+                Arc::clone(&self.inner),
+                config,
+            )),
         }
     }
 

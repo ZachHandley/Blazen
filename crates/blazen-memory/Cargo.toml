@@ -1,0 +1,28 @@
+[package]
+name = "blazen-memory"
+version = "0.0.0-dev"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Memory and vector store for Blazen with ELID integration"
+
+[dependencies]
+blazen-llm = { path = "../blazen-llm" }
+elid = { path = "../../../ELID", default-features = false, features = ["embeddings"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true, features = ["fs"] }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+futures-util = { workspace = true }
+tempfile = "3"
+
+[lints]
+workspace = true

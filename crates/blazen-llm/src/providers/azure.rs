@@ -325,13 +325,17 @@ impl crate::traits::CompletionModel for AzureOpenAiProvider {
             span.record("finish_reason", reason.as_str());
         }
 
+        let cost = usage
+            .as_ref()
+            .and_then(|u| crate::pricing::compute_cost(&oai.model, u));
+
         Ok(CompletionResponse {
             content: choice.message.content,
             tool_calls,
             usage,
             model: oai.model,
             finish_reason: choice.finish_reason,
-            cost: None,
+            cost,
             timing: None,
             images: vec![],
             audio: vec![],
