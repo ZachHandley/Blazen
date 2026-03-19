@@ -272,15 +272,12 @@ pub async fn run_agent_with_callback(
             }
         }
 
-        // Append the assistant's text content to the conversation.
-        // ChatMessage does not store tool_calls directly, so we add the text
-        // portion as an assistant message and each tool result as a tool
-        // message. The model will understand this interleaving.
-        if let Some(content) = &response.content {
-            messages.push(ChatMessage::assistant(content));
-        } else {
-            messages.push(ChatMessage::assistant(""));
-        }
+        // Append the assistant's response including any tool calls so that
+        // the full conversation history is preserved for the provider.
+        messages.push(ChatMessage::assistant_with_tool_calls(
+            response.content.clone(),
+            response.tool_calls.clone(),
+        ));
 
         // Execute each tool call and add results.
         execute_tool_calls(
@@ -419,13 +416,14 @@ async fn execute_tool_calls(
             result: result.clone(),
         });
 
-        // Serialize the tool result and add it as a tool message.
+        // Serialize the tool result and add it as a tool message with the
+        // matching tool_call_id so providers can correlate results.
         let result_str = if let Some(s) = result.as_str() {
             s.to_owned()
         } else {
             serde_json::to_string(&result).unwrap_or_default()
         };
-        messages.push(ChatMessage::tool(&result_str));
+        messages.push(ChatMessage::tool_result(&tc.id, &result_str));
     }
     Ok(())
 }

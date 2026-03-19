@@ -4,6 +4,9 @@
   "scripts": {
     "build:node": "pnpm --filter blazen run build",
     "build:website": "pnpm --filter blazen-website run build",
-    "test:node": "node --test tests/node/test_workflow.mjs"
+    "test:node": "node --test tests/node/test_workflow.mjs",
+    "test:smoke": "node --test tests/node/test_llm_smoke.mjs tests/node/test_fal_smoke.mjs tests/node/test_capabilities_smoke.mjs tests/node/test_provider_smoke.mjs",
+    "test:smoke:compute": "node --test --test-timeout=600000 tests/node/test_fal_compute_smoke.mjs",
+    "test:smoke:all": "node --test --test-timeout=600000 tests/node/"
   }
 }

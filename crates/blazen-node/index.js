@@ -576,12 +576,20 @@ if (!nativeBinding) {
 }
 
 module.exports = nativeBinding
+module.exports.ChatMessage = nativeBinding.ChatMessage
+module.exports.JsChatMessage = nativeBinding.JsChatMessage
 module.exports.CompletionModel = nativeBinding.CompletionModel
 module.exports.JsCompletionModel = nativeBinding.JsCompletionModel
 module.exports.Context = nativeBinding.Context
 module.exports.JsContext = nativeBinding.JsContext
+module.exports.FalProvider = nativeBinding.FalProvider
+module.exports.JsFalProvider = nativeBinding.JsFalProvider
 module.exports.Workflow = nativeBinding.Workflow
 module.exports.JsWorkflow = nativeBinding.JsWorkflow
 module.exports.WorkflowHandler = nativeBinding.WorkflowHandler
 module.exports.JsWorkflowHandler = nativeBinding.JsWorkflowHandler
+module.exports.JsJobStatus = nativeBinding.JsJobStatus
+module.exports.JsRole = nativeBinding.JsRole
+module.exports.mediaTypes = nativeBinding.mediaTypes
+module.exports.runAgent = nativeBinding.runAgent
 module.exports.version = nativeBinding.version

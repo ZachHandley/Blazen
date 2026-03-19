@@ -9,16 +9,16 @@
 //!
 //! | Constructor | Provider | Default model |
 //! |-------------|----------|---------------|
-//! | [`OpenAiCompatProvider::openai`] | OpenAI | `gpt-4o` |
-//! | [`OpenAiCompatProvider::openrouter`] | OpenRouter | `openai/gpt-4o` |
+//! | [`OpenAiCompatProvider::openai`] | OpenAI | `gpt-4.1` |
+//! | [`OpenAiCompatProvider::openrouter`] | OpenRouter | `openai/gpt-4.1` |
 //! | [`OpenAiCompatProvider::groq`] | Groq | `llama-3.3-70b-versatile` |
-//! | [`OpenAiCompatProvider::together`] | Together AI | `meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo` |
+//! | [`OpenAiCompatProvider::together`] | Together AI | `meta-llama/Llama-3.3-70B-Instruct-Turbo` |
 //! | [`OpenAiCompatProvider::mistral`] | Mistral AI | `mistral-large-latest` |
 //! | [`OpenAiCompatProvider::deepseek`] | DeepSeek | `deepseek-chat` |
-//! | [`OpenAiCompatProvider::fireworks`] | Fireworks AI | `accounts/fireworks/models/llama-v3p1-70b-instruct` |
+//! | [`OpenAiCompatProvider::fireworks`] | Fireworks AI | `accounts/fireworks/models/llama-v3p3-70b-instruct` |
 //! | [`OpenAiCompatProvider::perplexity`] | Perplexity | `sonar-pro` |
 //! | [`OpenAiCompatProvider::xai`] | xAI (Grok) | `grok-3` |
-//! | [`OpenAiCompatProvider::cohere`] | Cohere | `command-a-03-2025` |
+//! | [`OpenAiCompatProvider::cohere`] | Cohere | `command-a-08-2025` |
 //! | [`OpenAiCompatProvider::bedrock`] | AWS Bedrock (Mantle) | `anthropic.claude-sonnet-4-20250514-v1:0` |
 
 use std::pin::Pin;
@@ -108,14 +108,14 @@ impl OpenAiCompatProvider {
     // Convenience constructors
     // -----------------------------------------------------------------------
 
-    /// `OpenAI` (`https://api.openai.com/v1`, default model `gpt-4o`).
+    /// `OpenAI` (`https://api.openai.com/v1`, default model `gpt-4.1`).
     #[must_use]
     pub fn openai(api_key: impl Into<String>) -> Self {
         Self::new(OpenAiCompatConfig {
             provider_name: "openai".into(),
             base_url: "https://api.openai.com/v1".into(),
             api_key: api_key.into(),
-            default_model: "gpt-4o".into(),
+            default_model: "gpt-4.1".into(),
             auth_method: AuthMethod::Bearer,
             extra_headers: Vec::new(),
             query_params: Vec::new(),
@@ -123,14 +123,14 @@ impl OpenAiCompatProvider {
         })
     }
 
-    /// `OpenRouter` (`https://openrouter.ai/api/v1`, default model `openai/gpt-4o`).
+    /// `OpenRouter` (`https://openrouter.ai/api/v1`, default model `openai/gpt-4.1`).
     #[must_use]
     pub fn openrouter(api_key: impl Into<String>) -> Self {
         Self::new(OpenAiCompatConfig {
             provider_name: "openrouter".into(),
             base_url: "https://openrouter.ai/api/v1".into(),
             api_key: api_key.into(),
-            default_model: "openai/gpt-4o".into(),
+            default_model: "openai/gpt-4.1".into(),
             auth_method: AuthMethod::Bearer,
             extra_headers: Vec::new(),
             query_params: Vec::new(),
@@ -153,14 +153,14 @@ impl OpenAiCompatProvider {
         })
     }
 
-    /// Together AI (`https://api.together.xyz/v1`, default model `meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo`).
+    /// Together AI (`https://api.together.xyz/v1`, default model `meta-llama/Llama-3.3-70B-Instruct-Turbo`).
     #[must_use]
     pub fn together(api_key: impl Into<String>) -> Self {
         Self::new(OpenAiCompatConfig {
             provider_name: "together".into(),
             base_url: "https://api.together.xyz/v1".into(),
             api_key: api_key.into(),
-            default_model: "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo".into(),
+            default_model: "meta-llama/Llama-3.3-70B-Instruct-Turbo".into(),
             auth_method: AuthMethod::Bearer,
             extra_headers: Vec::new(),
             query_params: Vec::new(),
@@ -198,14 +198,14 @@ impl OpenAiCompatProvider {
         })
     }
 
-    /// Fireworks AI (`https://api.fireworks.ai/inference/v1`, default model `accounts/fireworks/models/llama-v3p1-70b-instruct`).
+    /// Fireworks AI (`https://api.fireworks.ai/inference/v1`, default model `accounts/fireworks/models/llama-v3p3-70b-instruct`).
     #[must_use]
     pub fn fireworks(api_key: impl Into<String>) -> Self {
         Self::new(OpenAiCompatConfig {
             provider_name: "fireworks".into(),
             base_url: "https://api.fireworks.ai/inference/v1".into(),
             api_key: api_key.into(),
-            default_model: "accounts/fireworks/models/llama-v3p1-70b-instruct".into(),
+            default_model: "accounts/fireworks/models/llama-v3p3-70b-instruct".into(),
             auth_method: AuthMethod::Bearer,
             extra_headers: Vec::new(),
             query_params: Vec::new(),
@@ -243,14 +243,14 @@ impl OpenAiCompatProvider {
         })
     }
 
-    /// Cohere (via compatibility endpoint, default model `command-a-03-2025`).
+    /// Cohere (via compatibility endpoint, default model `command-a-08-2025`).
     #[must_use]
     pub fn cohere(api_key: impl Into<String>) -> Self {
         Self::new(OpenAiCompatConfig {
             provider_name: "cohere".into(),
             base_url: "https://api.cohere.ai/compatibility/v1".into(),
             api_key: api_key.into(),
-            default_model: "command-a-03-2025".into(),
+            default_model: "command-a-08-2025".into(),
             auth_method: AuthMethod::Bearer,
             extra_headers: Vec::new(),
             query_params: Vec::new(),
@@ -323,7 +323,37 @@ impl OpenAiCompatProvider {
                     Role::Tool => "tool",
                 };
                 let content = content_to_openai_value(&m.content);
-                serde_json::json!({ "role": role, "content": content })
+                let mut msg = serde_json::json!({ "role": role, "content": content });
+
+                // Tool result messages must include the tool_call_id.
+                if let Some(ref id) = m.tool_call_id {
+                    msg["tool_call_id"] = serde_json::json!(id);
+                }
+
+                // Assistant messages with tool calls must include the tool_calls
+                // array and may have null content.
+                if !m.tool_calls.is_empty() {
+                    let tc_arr: Vec<serde_json::Value> = m
+                        .tool_calls
+                        .iter()
+                        .map(|tc| {
+                            serde_json::json!({
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.name,
+                                    "arguments": tc.arguments.to_string(),
+                                }
+                            })
+                        })
+                        .collect();
+                    msg["tool_calls"] = serde_json::json!(tc_arr);
+                    if m.content.as_text().is_none_or(str::is_empty) {
+                        msg["content"] = serde_json::Value::Null;
+                    }
+                }
+
+                msg
             })
             .collect();
 
@@ -343,14 +373,18 @@ impl OpenAiCompatProvider {
             body["top_p"] = serde_json::json!(top_p);
         }
         if let Some(ref fmt) = request.response_format {
-            body["response_format"] = serde_json::json!({
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "structured_output",
-                    "schema": fmt,
-                    "strict": true,
-                }
-            });
+            if fmt.get("type").and_then(|v| v.as_str()) == Some("json_schema") {
+                body["response_format"] = fmt.clone();
+            } else {
+                body["response_format"] = serde_json::json!({
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "structured_output",
+                        "schema": fmt,
+                        "strict": true,
+                    }
+                });
+            }
         }
 
         if !request.tools.is_empty() {
@@ -786,7 +820,7 @@ mod tests {
     fn openai_defaults() {
         let provider = OpenAiCompatProvider::openai("sk-test");
         assert_eq!(provider.config.base_url, "https://api.openai.com/v1");
-        assert_eq!(provider.config.default_model, "gpt-4o");
+        assert_eq!(provider.config.default_model, "gpt-4.1");
         assert!(matches!(provider.config.auth_method, AuthMethod::Bearer));
         assert!(provider.config.supports_model_listing);
     }
@@ -795,7 +829,7 @@ mod tests {
     fn openrouter_defaults() {
         let provider = OpenAiCompatProvider::openrouter("or-test");
         assert_eq!(provider.config.base_url, "https://openrouter.ai/api/v1");
-        assert_eq!(provider.config.default_model, "openai/gpt-4o");
+        assert_eq!(provider.config.default_model, "openai/gpt-4.1");
     }
 
     #[test]
@@ -811,7 +845,7 @@ mod tests {
         assert_eq!(provider.config.base_url, "https://api.together.xyz/v1");
         assert_eq!(
             provider.config.default_model,
-            "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo"
+            "meta-llama/Llama-3.3-70B-Instruct-Turbo"
         );
     }
 
@@ -861,7 +895,7 @@ mod tests {
             provider.config.base_url,
             "https://api.cohere.ai/compatibility/v1"
         );
-        assert_eq!(provider.config.default_model, "command-a-03-2025");
+        assert_eq!(provider.config.default_model, "command-a-08-2025");
         assert!(!provider.config.supports_model_listing);
     }
 
@@ -880,8 +914,8 @@ mod tests {
 
     #[test]
     fn with_model_override() {
-        let provider = OpenAiCompatProvider::openai("sk-test").with_model("gpt-4o-mini");
-        assert_eq!(provider.config.default_model, "gpt-4o-mini");
+        let provider = OpenAiCompatProvider::openai("sk-test").with_model("gpt-4.1-mini");
+        assert_eq!(provider.config.default_model, "gpt-4.1-mini");
     }
 
     #[test]
@@ -909,7 +943,7 @@ mod tests {
         };
 
         let body = provider.build_body(&request, false);
-        assert_eq!(body["model"], "gpt-4o");
+        assert_eq!(body["model"], "gpt-4.1");
         assert_eq!(body["stream"], false);
         assert!(body.get("temperature").is_none());
         assert!(body.get("tools").is_none());
@@ -921,10 +955,10 @@ mod tests {
         let request = CompletionRequest::new(vec![ChatMessage::user("Hello")])
             .with_temperature(0.5)
             .with_max_tokens(100)
-            .with_model("gpt-4o-mini");
+            .with_model("gpt-4.1-mini");
 
         let body = provider.build_body(&request, true);
-        assert_eq!(body["model"], "gpt-4o-mini");
+        assert_eq!(body["model"], "gpt-4.1-mini");
         assert_eq!(body["stream"], true);
         assert_eq!(body["temperature"], 0.5);
         assert_eq!(body["max_tokens"], 100);

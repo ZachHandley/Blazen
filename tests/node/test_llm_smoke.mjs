@@ -38,7 +38,7 @@ describe("OpenRouter LLM smoke tests", { skip: !OPENROUTER_API_KEY }, () => {
           ChatMessage.system("You are a math tutor. Reply with just the number."),
           ChatMessage.user(event.question),
         ],
-        { maxTokens: 10 }
+        { maxTokens: 32 }
       );
       return {
         type: "blazen::StopEvent",

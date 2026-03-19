@@ -24,3 +24,12 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]
 asyncio_mode = "auto"
+markers = [
+    "timeout: set test timeout (requires pytest-timeout)",
+]
+
+[tool.uv.scripts]
+test = "pytest tests/python/ -v"
+"test:smoke" = "pytest tests/python/test_llm_smoke.py tests/python/test_fal_smoke.py tests/python/test_capabilities_smoke.py tests/python/test_provider_smoke.py -v"
+"test:smoke:compute" = "pytest tests/python/test_fal_compute_smoke.py -v"
+"test:smoke:all" = "pytest tests/python/ -v"

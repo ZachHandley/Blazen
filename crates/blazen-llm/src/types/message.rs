@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::tool::ToolCall;
+
 // ---------------------------------------------------------------------------
 // Role & message content
 // ---------------------------------------------------------------------------
@@ -143,6 +145,12 @@ pub struct ChatMessage {
     pub role: Role,
     /// The message payload.
     pub content: MessageContent,
+    /// The ID of the tool call this message is a response to (for `Role::Tool` messages).
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub tool_call_id: Option<String>,
+    /// Tool calls requested by the assistant in this message.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub tool_calls: Vec<ToolCall>,
 }
 
 impl ChatMessage {
@@ -152,6 +160,8 @@ impl ChatMessage {
         Self {
             role: Role::System,
             content: MessageContent::Text(content.into()),
+            tool_call_id: None,
+            tool_calls: Vec::new(),
         }
     }
 
@@ -161,6 +171,8 @@ impl ChatMessage {
         Self {
             role: Role::User,
             content: MessageContent::Text(content.into()),
+            tool_call_id: None,
+            tool_calls: Vec::new(),
         }
     }
 
@@ -170,6 +182,23 @@ impl ChatMessage {
         Self {
             role: Role::Assistant,
             content: MessageContent::Text(content.into()),
+            tool_call_id: None,
+            tool_calls: Vec::new(),
+        }
+    }
+
+    /// Create an assistant message that includes tool calls.
+    ///
+    /// When the model responds with tool invocations, use this constructor to
+    /// preserve the `tool_calls` array so that subsequent `tool` result messages
+    /// can be matched by their `tool_call_id`.
+    #[must_use]
+    pub fn assistant_with_tool_calls(content: Option<String>, tool_calls: Vec<ToolCall>) -> Self {
+        Self {
+            role: Role::Assistant,
+            content: content.map_or(MessageContent::Text(String::new()), MessageContent::Text),
+            tool_call_id: None,
+            tool_calls,
         }
     }
 
@@ -179,6 +208,22 @@ impl ChatMessage {
         Self {
             role: Role::Tool,
             content: MessageContent::Text(content.into()),
+            tool_call_id: None,
+            tool_calls: Vec::new(),
+        }
+    }
+
+    /// Create a tool result message with an associated tool call ID.
+    ///
+    /// OpenAI-compatible APIs require each tool result message to reference the
+    /// `tool_call_id` of the invocation it responds to.
+    #[must_use]
+    pub fn tool_result(call_id: impl Into<String>, content: impl Into<String>) -> Self {
+        Self {
+            role: Role::Tool,
+            content: MessageContent::Text(content.into()),
+            tool_call_id: Some(call_id.into()),
+            tool_calls: Vec::new(),
         }
     }
 
@@ -198,6 +243,8 @@ impl ChatMessage {
                     media_type: media_type.map(String::from),
                 }),
             ]),
+            tool_call_id: None,
+            tool_calls: Vec::new(),
         }
     }
 
@@ -217,6 +264,8 @@ impl ChatMessage {
                     media_type: Some(media_type.into()),
                 }),
             ]),
+            tool_call_id: None,
+            tool_calls: Vec::new(),
         }
     }
 
@@ -226,6 +275,8 @@ impl ChatMessage {
         Self {
             role: Role::User,
             content: MessageContent::Parts(parts),
+            tool_call_id: None,
+            tool_calls: Vec::new(),
         }
     }
 }

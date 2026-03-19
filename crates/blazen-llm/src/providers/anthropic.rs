@@ -186,11 +186,61 @@ impl AnthropicProvider {
                 if let Some(text) = msg.content.text_content() {
                     system_parts.push(text);
                 }
+            } else if msg.role == Role::Tool {
+                // Anthropic expects tool results as a user message with
+                // tool_result content blocks.
+                if let Some(ref call_id) = msg.tool_call_id {
+                    let text = msg.content.text_content().unwrap_or_default();
+                    messages.push(serde_json::json!({
+                        "role": "user",
+                        "content": [{
+                            "type": "tool_result",
+                            "tool_use_id": call_id,
+                            "content": text,
+                        }],
+                    }));
+                } else {
+                    // Legacy path: no tool_call_id, send as plain user message.
+                    let content = content_to_anthropic_value(&msg.content);
+                    messages.push(serde_json::json!({
+                        "role": "user",
+                        "content": content,
+                    }));
+                }
+            } else if msg.role == Role::Assistant {
+                // If the assistant message carries tool_calls, serialize them
+                // as tool_use content blocks (Anthropic format).
+                if msg.tool_calls.is_empty() {
+                    let content = content_to_anthropic_value(&msg.content);
+                    messages.push(serde_json::json!({
+                        "role": "assistant",
+                        "content": content,
+                    }));
+                } else {
+                    let mut content_blocks: Vec<serde_json::Value> = Vec::new();
+                    // Include text content if present.
+                    if let Some(text) = msg.content.text_content() {
+                        if !text.is_empty() {
+                            content_blocks.push(serde_json::json!({"type": "text", "text": text}));
+                        }
+                    }
+                    for tc in &msg.tool_calls {
+                        content_blocks.push(serde_json::json!({
+                            "type": "tool_use",
+                            "id": tc.id,
+                            "name": tc.name,
+                            "input": tc.arguments,
+                        }));
+                    }
+                    messages.push(serde_json::json!({
+                        "role": "assistant",
+                        "content": content_blocks,
+                    }));
+                }
             } else {
                 let role = match msg.role {
-                    Role::User | Role::Tool => "user",
-                    Role::Assistant => "assistant",
-                    Role::System => continue, // Already handled above
+                    Role::User => "user",
+                    _ => continue,
                 };
                 let content = content_to_anthropic_value(&msg.content);
                 messages.push(serde_json::json!({

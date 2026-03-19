@@ -147,7 +147,7 @@ impl GeminiProvider {
     }
 
     /// Build the JSON request body for the Gemini `generateContent` endpoint.
-    #[allow(clippy::unused_self)]
+    #[allow(clippy::unused_self, clippy::too_many_lines)]
     fn build_body(&self, request: &CompletionRequest) -> serde_json::Value {
         // Separate system instructions from conversation messages.
         let mut system_parts: Vec<String> = Vec::new();
@@ -158,6 +158,44 @@ impl GeminiProvider {
                 if let Some(text) = msg.content.text_content() {
                     system_parts.push(text);
                 }
+            } else if msg.role == Role::Tool && msg.tool_call_id.is_some() {
+                // Gemini expects tool results as functionResponse parts.
+                // The tool_call_id here corresponds to the function name in
+                // the Gemini protocol (Gemini uses name-based matching, not IDs).
+                // We use the text content as the response payload.
+                let response_text = msg.content.text_content().unwrap_or_default();
+                let response_value: serde_json::Value = serde_json::from_str(&response_text)
+                    .unwrap_or_else(|_| serde_json::json!({ "result": response_text }));
+                contents.push(serde_json::json!({
+                    "role": "user",
+                    "parts": [{
+                        "functionResponse": {
+                            "name": msg.tool_call_id.as_deref().unwrap_or("unknown"),
+                            "response": response_value,
+                        }
+                    }],
+                }));
+            } else if msg.role == Role::Assistant && !msg.tool_calls.is_empty() {
+                // Gemini represents tool calls as functionCall parts.
+                let mut parts = content_to_gemini_parts(&msg.content);
+                // Only keep non-empty text parts.
+                parts.retain(|p| {
+                    p.get("text")
+                        .and_then(|t| t.as_str())
+                        .is_none_or(|s| !s.is_empty())
+                });
+                for tc in &msg.tool_calls {
+                    parts.push(serde_json::json!({
+                        "functionCall": {
+                            "name": tc.name,
+                            "args": tc.arguments,
+                        }
+                    }));
+                }
+                contents.push(serde_json::json!({
+                    "role": "model",
+                    "parts": parts,
+                }));
             } else {
                 let role = match msg.role {
                     Role::User | Role::Tool => "user",
@@ -199,7 +237,18 @@ impl GeminiProvider {
                 "responseMimeType".into(),
                 serde_json::json!("application/json"),
             );
-            gen_config.insert("responseSchema".into(), fmt.clone());
+            // If the caller passed a full OpenAI envelope
+            // ({"type": "json_schema", "json_schema": {"schema": ...}}),
+            // extract the bare schema for Gemini. Otherwise use as-is.
+            let schema = if fmt.get("type").and_then(|v| v.as_str()) == Some("json_schema") {
+                fmt.get("json_schema")
+                    .and_then(|js| js.get("schema"))
+                    .cloned()
+                    .unwrap_or_else(|| fmt.clone())
+            } else {
+                fmt.clone()
+            };
+            gen_config.insert("responseSchema".into(), schema);
         }
         if !gen_config.is_empty() {
             body["generationConfig"] = serde_json::Value::Object(gen_config);

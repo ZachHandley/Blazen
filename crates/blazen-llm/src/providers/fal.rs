@@ -74,10 +74,10 @@ const DEFAULT_IMAGE_TO_VIDEO_MODEL: &str = "fal-ai/kling-video/v2.1/pro/image-to
 const DEFAULT_TTS_MODEL: &str = "fal-ai/chatterbox/text-to-speech";
 
 /// Default music generation model.
-const DEFAULT_MUSIC_MODEL: &str = "beatoven/music-generation";
+const DEFAULT_MUSIC_MODEL: &str = "fal-ai/stable-audio";
 
 /// Default sound effect generation model.
-const DEFAULT_SFX_MODEL: &str = "beatoven/sound-effect-generation";
+const DEFAULT_SFX_MODEL: &str = "fal-ai/stable-audio";
 
 /// Default transcription model.
 const DEFAULT_TRANSCRIPTION_MODEL: &str = "fal-ai/whisper";
@@ -143,7 +143,7 @@ impl FalProvider {
             client: Client::new(),
             api_key: api_key.into(),
             default_model: "fal-ai/any-llm".to_owned(),
-            llm_model: "anthropic/claude-sonnet-4".to_owned(),
+            llm_model: "anthropic/claude-sonnet-4.5".to_owned(),
             execution_mode: FalExecutionMode::Queue {
                 poll_interval: DEFAULT_POLL_INTERVAL,
             },
@@ -160,7 +160,7 @@ impl FalProvider {
     /// Set the underlying LLM model used by `fal-ai/any-llm`.
     ///
     /// This is the model name passed in the request body (e.g.
-    /// `"anthropic/claude-sonnet-4"`, `"openai/gpt-4o"`).
+    /// `"anthropic/claude-sonnet-4.5"`, `"openai/gpt-4o"`).
     #[must_use]
     pub fn with_llm_model(mut self, model: impl Into<String>) -> Self {
         self.llm_model = model.into();
@@ -444,11 +444,18 @@ impl FalProvider {
     ///
     /// This is the shared polling logic used by both [`ComputeProvider::result`]
     /// and [`CompletionModel::complete`] (queue mode).
+    ///
+    /// When `status_url` and `response_url` are provided (from the queue submit
+    /// response), they are used directly instead of constructing URLs from the
+    /// model and request ID. This avoids 405 errors with multi-segment model
+    /// IDs where manual URL construction produces incorrect paths.
     async fn poll_until_complete(
         &self,
         model: &str,
         request_id: &str,
         poll_interval: Duration,
+        status_url: Option<&str>,
+        response_url: Option<&str>,
     ) -> Result<(serde_json::Value, serde_json::Value, RequestTiming), BlazenError> {
         let start = Instant::now();
         let mut in_progress_at: Option<Instant> = None;
@@ -456,7 +463,11 @@ impl FalProvider {
         for _ in 0..MAX_POLL_ITERATIONS {
             tokio::time::sleep(poll_interval).await;
 
-            let status_body = self.queue_poll_status(model, request_id).await?;
+            let status_body = if let Some(url) = status_url {
+                self.get_json_from_url(url).await?
+            } else {
+                self.queue_poll_status(model, request_id).await?
+            };
 
             match status_body.status.as_str() {
                 "COMPLETED" => {
@@ -478,8 +489,12 @@ impl FalProvider {
                     let status_json =
                         serde_json::to_value(&status_body).unwrap_or(serde_json::Value::Null);
 
-                    // Fetch the result.
-                    let result = self.queue_get_result(model, request_id).await?;
+                    // Fetch the result using the server-provided URL if available.
+                    let result = if let Some(url) = response_url {
+                        self.get_json_value_from_url(url).await?
+                    } else {
+                        self.queue_get_result(model, request_id).await?
+                    };
 
                     return Ok((result, status_json, timing));
                 }
@@ -498,6 +513,48 @@ impl FalProvider {
         })
     }
 
+    /// GET a URL and deserialize the response as [`FalStatusResponse`].
+    async fn get_json_from_url(&self, url: &str) -> Result<FalStatusResponse, BlazenError> {
+        let response = self
+            .apply_auth(self.client.get(url))
+            .send()
+            .await
+            .map_err(|e| BlazenError::request(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let error_body = Self::read_error_body(response).await;
+            return Err(BlazenError::request(format!(
+                "status poll failed: {error_body}"
+            )));
+        }
+
+        response
+            .json::<FalStatusResponse>()
+            .await
+            .map_err(|e| BlazenError::Serialization(e.to_string()))
+    }
+
+    /// GET a URL and deserialize the response as a generic JSON value.
+    async fn get_json_value_from_url(&self, url: &str) -> Result<serde_json::Value, BlazenError> {
+        let response = self
+            .apply_auth(self.client.get(url))
+            .send()
+            .await
+            .map_err(|e| BlazenError::request(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let error_body = Self::read_error_body(response).await;
+            return Err(BlazenError::request(format!(
+                "result fetch failed: {error_body}"
+            )));
+        }
+
+        response
+            .json()
+            .await
+            .map_err(|e| BlazenError::Serialization(e.to_string()))
+    }
+
     /// Execute via queue: submit, poll, return result. Used by `CompletionModel`.
     async fn execute_queue_llm(
         &self,
@@ -512,7 +569,13 @@ impl FalProvider {
         debug!(request_id = %request_id, "fal.ai LLM job submitted to queue");
 
         let (result, _status, timing) = self
-            .poll_until_complete(model, request_id, poll_interval)
+            .poll_until_complete(
+                model,
+                request_id,
+                poll_interval,
+                submit_response.status_url.as_deref(),
+                submit_response.response_url.as_deref(),
+            )
             .await?;
 
         Ok((result, timing))
@@ -577,13 +640,11 @@ fn build_timing(
 struct FalQueueSubmitResponse {
     request_id: String,
     #[serde(default)]
-    #[allow(dead_code)]
     response_url: Option<String>,
     #[serde(default)]
-    #[allow(dead_code)]
     status_url: Option<String>,
     #[serde(default)]
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Cancel uses its own URL construction in cancel().
     cancel_url: Option<String>,
 }
 
@@ -826,8 +887,10 @@ impl ComputeProvider for FalProvider {
             _ => DEFAULT_POLL_INTERVAL,
         };
 
+        // External callers use submit() -> result() without access to the
+        // server-provided URLs, so we fall back to manual URL construction.
         let (output, status_json, timing) = self
-            .poll_until_complete(&job.model, &job.id, poll_interval)
+            .poll_until_complete(&job.model, &job.id, poll_interval, None, None)
             .await?;
 
         Ok(ComputeResult {
@@ -835,6 +898,54 @@ impl ComputeProvider for FalProvider {
             output,
             timing,
             cost: None, // fal.ai does not return per-request cost in API responses.
+            metadata: status_json,
+        })
+    }
+
+    /// Submit a job and wait for the result, using server-provided URLs for
+    /// queue polling and result retrieval.
+    ///
+    /// This overrides the default `run()` to avoid the 405 errors that occur
+    /// when manually constructing URLs for models with multi-segment IDs
+    /// (e.g. `fal-ai/kling-video/v2.1/pro/image-to-video`).
+    async fn run(&self, request: ComputeRequest) -> Result<ComputeResult, BlazenError> {
+        let poll_interval = match &self.execution_mode {
+            FalExecutionMode::Queue { poll_interval } => *poll_interval,
+            _ => DEFAULT_POLL_INTERVAL,
+        };
+
+        let submit_response = self
+            .queue_submit(&request.model, &request.input, request.webhook.as_deref())
+            .await?;
+
+        debug!(
+            request_id = %submit_response.request_id,
+            model = %request.model,
+            "fal.ai compute job submitted (via run)"
+        );
+
+        let job = JobHandle {
+            id: submit_response.request_id.clone(),
+            provider: "fal".to_owned(),
+            model: request.model,
+            submitted_at: Utc::now(),
+        };
+
+        let (output, status_json, timing) = self
+            .poll_until_complete(
+                &job.model,
+                &job.id,
+                poll_interval,
+                submit_response.status_url.as_deref(),
+                submit_response.response_url.as_deref(),
+            )
+            .await?;
+
+        Ok(ComputeResult {
+            job: Some(job),
+            output,
+            timing,
+            cost: None,
             metadata: status_json,
         })
     }
@@ -1458,7 +1569,7 @@ mod tests {
     fn default_config() {
         let provider = FalProvider::new("fal-test");
         assert_eq!(provider.default_model, "fal-ai/any-llm");
-        assert_eq!(provider.llm_model, "anthropic/claude-sonnet-4");
+        assert_eq!(provider.llm_model, "anthropic/claude-sonnet-4.5");
         assert!(matches!(
             provider.execution_mode,
             FalExecutionMode::Queue { .. }
@@ -1493,7 +1604,7 @@ mod tests {
         let request = CompletionRequest::new(vec![ChatMessage::user("Hello world")]);
 
         let body = provider.build_llm_body(&request);
-        assert_eq!(body["model"], "anthropic/claude-sonnet-4");
+        assert_eq!(body["model"], "anthropic/claude-sonnet-4.5");
         assert!(body["prompt"].as_str().unwrap().contains("Hello world"));
     }
 

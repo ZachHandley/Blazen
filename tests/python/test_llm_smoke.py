@@ -32,7 +32,7 @@ async def test_openrouter_completion():
     model = CompletionModel.openrouter(OPENROUTER_API_KEY)
     response = await model.complete(
         [ChatMessage.user("What is 2+2? Reply with just the number.")],
-        max_tokens=10,
+        max_tokens=32,
     )
 
     assert response["content"] is not None
@@ -51,7 +51,7 @@ async def test_openrouter_in_workflow():
                 ChatMessage.system("You are a math tutor. Reply with just the number."),
                 ChatMessage.user(ev.question),
             ],
-            max_tokens=10,
+            max_tokens=32,
         )
         return StopEvent(result={"answer": response["content"]})
 

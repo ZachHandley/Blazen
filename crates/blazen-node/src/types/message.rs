@@ -99,7 +99,12 @@ impl JsChatMessage {
         };
 
         Ok(Self {
-            inner: ChatMessage { role, content },
+            inner: ChatMessage {
+                role,
+                content,
+                tool_call_id: None,
+                tool_calls: Vec::new(),
+            },
         })
     }
 

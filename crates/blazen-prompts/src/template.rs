@@ -206,6 +206,8 @@ impl PromptTemplate {
         Ok(ChatMessage {
             role: Role::from(&self.role),
             content: MessageContent::Text(output),
+            tool_call_id: None,
+            tool_calls: Vec::new(),
         })
     }
 

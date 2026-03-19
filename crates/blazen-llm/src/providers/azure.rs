@@ -28,7 +28,7 @@ use crate::types::{
 // ---------------------------------------------------------------------------
 
 /// Default Azure `OpenAI` API version.
-const DEFAULT_API_VERSION: &str = "2024-10-21";
+const DEFAULT_API_VERSION: &str = "2025-04-01-preview";
 
 // ---------------------------------------------------------------------------
 // Provider
@@ -107,7 +107,37 @@ impl AzureOpenAiProvider {
                     Role::Tool => "tool",
                 };
                 let content = content_to_openai_value(&m.content);
-                serde_json::json!({ "role": role, "content": content })
+                let mut msg = serde_json::json!({ "role": role, "content": content });
+
+                // Tool result messages must include the tool_call_id.
+                if let Some(ref id) = m.tool_call_id {
+                    msg["tool_call_id"] = serde_json::json!(id);
+                }
+
+                // Assistant messages with tool calls must include the tool_calls
+                // array and may have null content.
+                if !m.tool_calls.is_empty() {
+                    let tc_arr: Vec<serde_json::Value> = m
+                        .tool_calls
+                        .iter()
+                        .map(|tc| {
+                            serde_json::json!({
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.name,
+                                    "arguments": tc.arguments.to_string(),
+                                }
+                            })
+                        })
+                        .collect();
+                    msg["tool_calls"] = serde_json::json!(tc_arr);
+                    if m.content.as_text().is_none_or(str::is_empty) {
+                        msg["content"] = serde_json::Value::Null;
+                    }
+                }
+
+                msg
             })
             .collect();
 
@@ -120,20 +150,24 @@ impl AzureOpenAiProvider {
             body["temperature"] = serde_json::json!(temp);
         }
         if let Some(max) = request.max_tokens {
-            body["max_tokens"] = serde_json::json!(max);
+            body["max_completion_tokens"] = serde_json::json!(max);
         }
         if let Some(top_p) = request.top_p {
             body["top_p"] = serde_json::json!(top_p);
         }
         if let Some(ref fmt) = request.response_format {
-            body["response_format"] = serde_json::json!({
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "structured_output",
-                    "schema": fmt,
-                    "strict": true,
-                }
-            });
+            if fmt.get("type").and_then(|v| v.as_str()) == Some("json_schema") {
+                body["response_format"] = fmt.clone();
+            } else {
+                body["response_format"] = serde_json::json!({
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "structured_output",
+                        "schema": fmt,
+                        "strict": true,
+                    }
+                });
+            }
         }
 
         if !request.tools.is_empty() {
@@ -334,7 +368,7 @@ mod tests {
         let url = provider.completions_url();
         assert_eq!(
             url,
-            "https://my-resource.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-21"
+            "https://my-resource.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2025-04-01-preview"
         );
     }
 
@@ -376,7 +410,7 @@ mod tests {
         let body = provider.build_body(&request, true);
         assert_eq!(body["stream"], true);
         assert_eq!(body["temperature"], 0.5);
-        assert_eq!(body["max_tokens"], 100);
+        assert_eq!(body["max_completion_tokens"], 100);
     }
 
     #[test]
