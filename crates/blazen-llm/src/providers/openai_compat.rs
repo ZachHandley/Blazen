@@ -792,7 +792,7 @@ impl OpenAiCompatProvider {
             }
         });
 
-        ModelInfo {
+        let info = ModelInfo {
             id: entry.id,
             name: entry.name,
             provider: self.config.provider_name.clone(),
@@ -803,7 +803,9 @@ impl OpenAiCompatProvider {
                 streaming: true,
                 ..Default::default()
             },
-        }
+        };
+        crate::pricing::register_from_model_info(&info);
+        info
     }
 
     /// Convert a Together AI model entry to [`ModelInfo`].
@@ -814,7 +816,7 @@ impl OpenAiCompatProvider {
             ..Default::default()
         });
 
-        ModelInfo {
+        let info = ModelInfo {
             id: entry.id,
             name: entry.display_name,
             provider: self.config.provider_name.clone(),
@@ -825,7 +827,9 @@ impl OpenAiCompatProvider {
                 streaming: true,
                 ..Default::default()
             },
-        }
+        };
+        crate::pricing::register_from_model_info(&info);
+        info
     }
 }
 

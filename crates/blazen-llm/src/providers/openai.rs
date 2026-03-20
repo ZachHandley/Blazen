@@ -18,6 +18,7 @@ use super::openai_format::{content_to_openai_value, parse_retry_after};
 use super::sse::{OaiResponse, SseParser};
 use crate::error::BlazenError;
 use crate::http::{HttpClient, HttpRequest, HttpResponse};
+use crate::traits::{ModelCapabilities, ModelInfo, ModelRegistry};
 use crate::types::{
     CompletionRequest, CompletionResponse, EmbeddingResponse, Role, StreamChunk, TokenUsage,
     ToolCall,
@@ -383,6 +384,78 @@ impl crate::traits::CompletionModel for OpenAiProvider {
 
         let stream = SseParser::new(byte_stream);
         Ok(Box::pin(stream))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ModelRegistry implementation
+// ---------------------------------------------------------------------------
+
+/// Wire format for the `OpenAI` `/models` endpoint.
+#[derive(Debug, Deserialize)]
+struct OaiModelsResponse {
+    data: Vec<OaiModelEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OaiModelEntry {
+    id: String,
+}
+
+#[async_trait]
+impl ModelRegistry for OpenAiProvider {
+    async fn list_models(&self) -> Result<Vec<ModelInfo>, BlazenError> {
+        let url = format!("{}/models", self.base_url);
+        let request = HttpRequest::get(&url).bearer_auth(&self.api_key);
+        let response = self.client.send(request).await?;
+
+        if !response.is_success() {
+            let error_body = response.text();
+            return Err(BlazenError::request(format!(
+                "HTTP {}: {error_body}",
+                response.status
+            )));
+        }
+
+        let list: OaiModelsResponse = response
+            .json()
+            .map_err(|e| BlazenError::invalid_response(e.to_string()))?;
+
+        let models = list
+            .data
+            .into_iter()
+            .map(|entry| {
+                let is_chat = entry.id.starts_with("gpt-")
+                    || entry.id.starts_with("o3")
+                    || entry.id.starts_with("o4")
+                    || entry.id.starts_with("chatgpt");
+                let is_embedding = entry.id.contains("embedding");
+
+                ModelInfo {
+                    id: entry.id,
+                    name: None,
+                    provider: "openai".into(),
+                    context_length: None,
+                    pricing: None, // OpenAI /models does not include pricing.
+                    capabilities: ModelCapabilities {
+                        chat: is_chat,
+                        streaming: is_chat,
+                        tool_use: is_chat,
+                        structured_output: is_chat,
+                        vision: is_chat,
+                        embeddings: is_embedding,
+                        ..Default::default()
+                    },
+                }
+            })
+            .collect();
+
+        Ok(models)
+    }
+
+    async fn get_model(&self, model_id: &str) -> Result<Option<ModelInfo>, BlazenError> {
+        let models = self.list_models().await?;
+        Ok(models.into_iter().find(|m| m.id == model_id))
     }
 }
 

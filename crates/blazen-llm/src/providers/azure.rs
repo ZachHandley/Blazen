@@ -14,12 +14,14 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use futures_util::Stream;
+use serde::Deserialize;
 use tracing::debug;
 
 use super::openai_format::{content_to_openai_value, parse_retry_after};
 use super::sse::{OaiResponse, SseParser};
 use crate::error::BlazenError;
 use crate::http::{HttpClient, HttpRequest, HttpResponse};
+use crate::traits::{ModelCapabilities, ModelInfo, ModelRegistry};
 use crate::types::{
     CompletionRequest, CompletionResponse, Role, StreamChunk, TokenUsage, ToolCall,
 };
@@ -383,6 +385,71 @@ impl crate::traits::CompletionModel for AzureOpenAiProvider {
 
         let stream = SseParser::new(byte_stream);
         Ok(Box::pin(stream))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ModelRegistry implementation
+// ---------------------------------------------------------------------------
+
+/// Wire format for the Azure `OpenAI` `/models` endpoint.
+#[derive(Debug, Deserialize)]
+struct AzureModelsResponse {
+    data: Vec<AzureModelEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AzureModelEntry {
+    id: String,
+}
+
+#[async_trait]
+impl ModelRegistry for AzureOpenAiProvider {
+    async fn list_models(&self) -> Result<Vec<ModelInfo>, BlazenError> {
+        let url = format!(
+            "https://{}.openai.azure.com/openai/models?api-version={}",
+            self.resource_name, self.api_version
+        );
+        let request = HttpRequest::get(&url).header("api-key", &self.api_key);
+        let response = self.client.send(request).await?;
+
+        if !response.is_success() {
+            let error_body = response.text();
+            return Err(BlazenError::request(format!(
+                "HTTP {}: {error_body}",
+                response.status
+            )));
+        }
+
+        let list: AzureModelsResponse = response
+            .json()
+            .map_err(|e| BlazenError::invalid_response(e.to_string()))?;
+
+        let models = list
+            .data
+            .into_iter()
+            .map(|entry| ModelInfo {
+                id: entry.id,
+                name: None,
+                provider: "azure".into(),
+                context_length: None,
+                pricing: None, // Azure pricing is per-deployment/region, not in API.
+                capabilities: ModelCapabilities {
+                    chat: true,
+                    streaming: true,
+                    tool_use: true,
+                    structured_output: true,
+                    ..Default::default()
+                },
+            })
+            .collect();
+
+        Ok(models)
+    }
+
+    async fn get_model(&self, model_id: &str) -> Result<Option<ModelInfo>, BlazenError> {
+        let models = self.list_models().await?;
+        Ok(models.into_iter().find(|m| m.id == model_id))
     }
 }
 

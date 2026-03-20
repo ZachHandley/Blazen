@@ -20,7 +20,7 @@ use crate::types::{MemoryEntry, MemoryResult, StoredEntry};
 const DEFAULT_NUM_BANDS: u8 = 4;
 
 /// Default seed for `SimHash` (matches ELID's conventional seed).
-const DEFAULT_SEED: u64 = 0x454c4944_53494d48; // "ELIDSIMH"
+const DEFAULT_SEED: u64 = 0x454c_4944_5349_4d48; // "ELIDSIMH"
 
 /// A memory store that uses ELID for vector indexing.
 ///
@@ -236,7 +236,7 @@ impl MemoryStore for Memory {
         // Step 4: Score each candidate.
         let mut scored: Vec<MemoryResult> = candidates
             .into_iter()
-            .filter_map(|entry| {
+            .map(|entry| {
                 // Prefer ELID-based similarity, fall back to embedding SimHash, then text SimHash.
                 let score = if let (Some(entry_elid), true) = (&entry.elid, !query_elid.is_empty())
                 {
@@ -256,12 +256,12 @@ impl MemoryStore for Memory {
                     compute_text_simhash_similarity(entry.text_simhash, elid::simhash(query))
                 };
 
-                Some(MemoryResult {
+                MemoryResult {
                     id: entry.id,
                     text: entry.text,
                     score,
                     metadata: entry.metadata,
-                })
+                }
             })
             .collect();
 

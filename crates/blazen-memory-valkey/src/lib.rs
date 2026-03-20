@@ -72,7 +72,7 @@ impl ValkeyBackend {
     /// Valkey instance.
     #[must_use]
     pub fn with_prefix(mut self, prefix: &str) -> Self {
-        self.prefix = prefix.to_owned();
+        prefix.clone_into(&mut self.prefix);
         self
     }
 

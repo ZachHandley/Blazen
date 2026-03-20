@@ -30,6 +30,10 @@ impl JsonlBackend {
     ///
     /// If the file exists, its contents are loaded. Otherwise an empty store
     /// is created (the file is written on the first `put`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file exists but cannot be read or parsed.
     pub async fn new(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
         let entries = if path.exists() {

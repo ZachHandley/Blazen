@@ -46,6 +46,8 @@ pub fn compute_embedding_simhash_similarity(a: u128, b: u128) -> f64 {
 /// Decodes both ELIDs and computes the Hamming distance between their
 /// Mini128 payloads, then normalizes to 0.0..=1.0.
 ///
+/// # Errors
+///
 /// Returns `Err` if either string is not a valid Mini128 ELID.
 pub fn compute_elid_similarity(a: &str, b: &str) -> Result<f64> {
     let elid_a =

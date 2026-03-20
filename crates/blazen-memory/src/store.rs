@@ -36,6 +36,11 @@ pub trait MemoryStore: Send + Sync {
 
     /// Return the number of entries.
     async fn len(&self) -> Result<usize>;
+
+    /// Return `true` if the store contains no entries.
+    async fn is_empty(&self) -> Result<bool> {
+        Ok(self.len().await? == 0)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -63,6 +68,11 @@ pub trait MemoryBackend: Send + Sync {
 
     /// Return the number of stored entries.
     async fn len(&self) -> Result<usize>;
+
+    /// Return `true` if the backend contains no entries.
+    async fn is_empty(&self) -> Result<bool> {
+        Ok(self.len().await? == 0)
+    }
 
     /// Return candidate entries that share at least one LSH band with the query bands.
     ///

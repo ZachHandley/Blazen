@@ -831,6 +831,25 @@ impl crate::traits::CompletionModel for FalProvider {
 }
 
 // ---------------------------------------------------------------------------
+// ModelRegistry implementation
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+impl crate::traits::ModelRegistry for FalProvider {
+    async fn list_models(&self) -> Result<Vec<crate::traits::ModelInfo>, BlazenError> {
+        // fal.ai is a compute platform without a model listing API.
+        Ok(Vec::new())
+    }
+
+    async fn get_model(
+        &self,
+        _model_id: &str,
+    ) -> Result<Option<crate::traits::ModelInfo>, BlazenError> {
+        Ok(None)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // ComputeProvider implementation
 // ---------------------------------------------------------------------------
 
@@ -1166,6 +1185,7 @@ fn parse_fal_video(output: &serde_json::Value) -> Result<GeneratedVideo, BlazenE
 /// - `{ "audio_url": { "url": "...", ... } }` (object with url field)
 /// - `{ "audio_url": "https://..." }` (direct URL string)
 /// - `{ "audio": { "url": "...", ... } }` (nested object)
+#[allow(clippy::too_many_lines)]
 fn parse_fal_audio(output: &serde_json::Value) -> Result<GeneratedAudio, BlazenError> {
     // Try `audio_url` as an object first (e.g. chatterbox returns this).
     if let Some(audio_obj) = output.get("audio_url") {

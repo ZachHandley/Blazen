@@ -133,6 +133,10 @@ impl CachedCompletionModel {
     }
 
     /// Returns the number of entries currently in the cache.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal `RwLock` is poisoned.
     #[must_use]
     pub fn len(&self) -> usize {
         self.cache.read().expect("cache lock poisoned").len()
@@ -145,6 +149,10 @@ impl CachedCompletionModel {
     }
 
     /// Remove all entries from the cache.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal `RwLock` is poisoned.
     pub fn clear(&self) {
         self.cache.write().expect("cache lock poisoned").clear();
     }

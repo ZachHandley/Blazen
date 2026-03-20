@@ -1,13 +1,18 @@
 //! Model pricing lookup and cost computation.
 //!
-//! This module provides a static pricing table for major LLM models and a
-//! [`compute_cost`] function that estimates the USD cost of a completion based
-//! on model ID and token usage.
+//! Pricing is stored in a global [`PricingRegistry`] that is pre-seeded with
+//! default prices for well-known models.  Providers can register dynamic
+//! pricing at runtime (e.g. after calling their `/models` endpoint) via
+//! [`register_pricing`] or [`register_from_model_info`].
 //!
 //! Model IDs are normalized before lookup -- date suffixes (e.g.
 //! `claude-sonnet-4-20250514`) and version tags are stripped so that
 //! point-in-time snapshots resolve to their base model pricing.
 
+use std::collections::HashMap;
+use std::sync::{LazyLock, RwLock};
+
+use crate::traits::{ModelInfo, ModelPricing};
 use crate::types::TokenUsage;
 
 // ---------------------------------------------------------------------------
@@ -24,13 +29,177 @@ pub struct PricingEntry {
 }
 
 // ---------------------------------------------------------------------------
-// Cost computation
+// PricingRegistry
+// ---------------------------------------------------------------------------
+
+/// Thread-safe pricing registry.  Pre-seeded with defaults; providers can
+/// push dynamic pricing via [`register_pricing`].
+struct PricingRegistry {
+    entries: RwLock<HashMap<String, PricingEntry>>,
+}
+
+impl PricingRegistry {
+    fn new() -> Self {
+        let mut map = HashMap::new();
+
+        // OpenAI
+        map.insert(
+            "gpt-4.1".into(),
+            PricingEntry {
+                input_per_million: 2.0,
+                output_per_million: 8.0,
+            },
+        );
+        map.insert(
+            "gpt-4.1-mini".into(),
+            PricingEntry {
+                input_per_million: 0.40,
+                output_per_million: 1.60,
+            },
+        );
+        map.insert(
+            "gpt-4.1-nano".into(),
+            PricingEntry {
+                input_per_million: 0.10,
+                output_per_million: 0.40,
+            },
+        );
+        map.insert(
+            "gpt-4o".into(),
+            PricingEntry {
+                input_per_million: 2.50,
+                output_per_million: 10.0,
+            },
+        );
+        map.insert(
+            "gpt-4o-mini".into(),
+            PricingEntry {
+                input_per_million: 0.15,
+                output_per_million: 0.60,
+            },
+        );
+        map.insert(
+            "o3".into(),
+            PricingEntry {
+                input_per_million: 10.0,
+                output_per_million: 40.0,
+            },
+        );
+        map.insert(
+            "o4-mini".into(),
+            PricingEntry {
+                input_per_million: 1.10,
+                output_per_million: 4.40,
+            },
+        );
+
+        // Anthropic
+        map.insert(
+            "claude-sonnet-4".into(),
+            PricingEntry {
+                input_per_million: 3.0,
+                output_per_million: 15.0,
+            },
+        );
+        map.insert(
+            "claude-opus-4".into(),
+            PricingEntry {
+                input_per_million: 15.0,
+                output_per_million: 75.0,
+            },
+        );
+        map.insert(
+            "claude-haiku-4".into(),
+            PricingEntry {
+                input_per_million: 0.80,
+                output_per_million: 4.0,
+            },
+        );
+
+        // Google
+        map.insert(
+            "gemini-2.5-flash".into(),
+            PricingEntry {
+                input_per_million: 0.15,
+                output_per_million: 0.60,
+            },
+        );
+        map.insert(
+            "gemini-2.5-pro".into(),
+            PricingEntry {
+                input_per_million: 1.25,
+                output_per_million: 10.0,
+            },
+        );
+
+        // Others
+        map.insert(
+            "deepseek-chat".into(),
+            PricingEntry {
+                input_per_million: 0.27,
+                output_per_million: 1.10,
+            },
+        );
+        map.insert(
+            "mistral-large-latest".into(),
+            PricingEntry {
+                input_per_million: 2.0,
+                output_per_million: 6.0,
+            },
+        );
+        map.insert(
+            "grok-3".into(),
+            PricingEntry {
+                input_per_million: 3.0,
+                output_per_million: 15.0,
+            },
+        );
+        map.insert(
+            "sonar-pro".into(),
+            PricingEntry {
+                input_per_million: 3.0,
+                output_per_million: 15.0,
+            },
+        );
+        map.insert(
+            "command-a".into(),
+            PricingEntry {
+                input_per_million: 2.50,
+                output_per_million: 10.0,
+            },
+        );
+
+        Self {
+            entries: RwLock::new(map),
+        }
+    }
+
+    fn lookup(&self, normalized_id: &str) -> Option<PricingEntry> {
+        self.entries
+            .read()
+            .expect("pricing registry lock poisoned")
+            .get(normalized_id)
+            .copied()
+    }
+
+    fn register(&self, normalized_id: &str, entry: PricingEntry) {
+        self.entries
+            .write()
+            .expect("pricing registry lock poisoned")
+            .insert(normalized_id.to_owned(), entry);
+    }
+}
+
+static REGISTRY: LazyLock<PricingRegistry> = LazyLock::new(PricingRegistry::new);
+
+// ---------------------------------------------------------------------------
+// Public API
 // ---------------------------------------------------------------------------
 
 /// Compute the estimated USD cost of a completion given a model ID and token
 /// usage.
 ///
-/// Returns `None` if the model is not in the pricing table.
+/// Returns `None` if the model is not in the pricing registry.
 ///
 /// # Examples
 ///
@@ -61,7 +230,40 @@ pub fn compute_cost(model_id: &str, usage: &TokenUsage) -> Option<f64> {
 #[must_use]
 pub fn lookup_pricing(model_id: &str) -> Option<PricingEntry> {
     let normalized = normalize_model_id(model_id);
-    pricing_table(&normalized)
+    REGISTRY.lookup(&normalized)
+}
+
+/// Register (or overwrite) pricing for a model.
+///
+/// The `model_id` is normalized before storage, so both `"gpt-4o"` and
+/// `"openai/gpt-4o-2024-08-06"` resolve to the same entry.
+pub fn register_pricing(model_id: &str, entry: PricingEntry) {
+    let normalized = normalize_model_id(model_id);
+    REGISTRY.register(&normalized, entry);
+}
+
+/// Register pricing from a [`ModelInfo`] returned by a provider's
+/// [`ModelRegistry`](crate::traits::ModelRegistry).
+///
+/// Does nothing if the model info has no pricing data.
+pub fn register_from_model_info(info: &ModelInfo) {
+    if let Some(ref pricing) = info.pricing {
+        if let Some(entry) = model_pricing_to_entry(pricing) {
+            register_pricing(&info.id, entry);
+        }
+    }
+}
+
+/// Convert a [`ModelPricing`] to a [`PricingEntry`], returning `None` if
+/// both input and output are missing.
+fn model_pricing_to_entry(pricing: &ModelPricing) -> Option<PricingEntry> {
+    match (pricing.input_per_million, pricing.output_per_million) {
+        (Some(input), Some(output)) => Some(PricingEntry {
+            input_per_million: input,
+            output_per_million: output,
+        }),
+        _ => None,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -136,103 +338,6 @@ fn strip_date_suffix(id: &str) -> String {
     }
 
     id.to_owned()
-}
-
-// ---------------------------------------------------------------------------
-// Pricing table
-// ---------------------------------------------------------------------------
-
-/// Static pricing table. Prices are USD per million tokens as of March 2026.
-fn pricing_table(normalized_id: &str) -> Option<PricingEntry> {
-    let entry = match normalized_id {
-        // -----------------------------------------------------------------
-        // OpenAI
-        // -----------------------------------------------------------------
-        "gpt-4.1" => PricingEntry {
-            input_per_million: 2.0,
-            output_per_million: 8.0,
-        },
-        "gpt-4.1-mini" => PricingEntry {
-            input_per_million: 0.40,
-            output_per_million: 1.60,
-        },
-        "gpt-4.1-nano" => PricingEntry {
-            input_per_million: 0.10,
-            output_per_million: 0.40,
-        },
-        "gpt-4o" => PricingEntry {
-            input_per_million: 2.50,
-            output_per_million: 10.0,
-        },
-        "gpt-4o-mini" => PricingEntry {
-            input_per_million: 0.15,
-            output_per_million: 0.60,
-        },
-        "o3" => PricingEntry {
-            input_per_million: 10.0,
-            output_per_million: 40.0,
-        },
-        "o4-mini" => PricingEntry {
-            input_per_million: 1.10,
-            output_per_million: 4.40,
-        },
-
-        // -----------------------------------------------------------------
-        // Anthropic
-        // -----------------------------------------------------------------
-        "claude-sonnet-4" => PricingEntry {
-            input_per_million: 3.0,
-            output_per_million: 15.0,
-        },
-        "claude-opus-4" => PricingEntry {
-            input_per_million: 15.0,
-            output_per_million: 75.0,
-        },
-        "claude-haiku-4" => PricingEntry {
-            input_per_million: 0.80,
-            output_per_million: 4.0,
-        },
-
-        // -----------------------------------------------------------------
-        // Google
-        // -----------------------------------------------------------------
-        "gemini-2.5-flash" => PricingEntry {
-            input_per_million: 0.15,
-            output_per_million: 0.60,
-        },
-        "gemini-2.5-pro" => PricingEntry {
-            input_per_million: 1.25,
-            output_per_million: 10.0,
-        },
-
-        // -----------------------------------------------------------------
-        // Others
-        // -----------------------------------------------------------------
-        "deepseek-chat" => PricingEntry {
-            input_per_million: 0.27,
-            output_per_million: 1.10,
-        },
-        "mistral-large-latest" => PricingEntry {
-            input_per_million: 2.0,
-            output_per_million: 6.0,
-        },
-        "grok-3" => PricingEntry {
-            input_per_million: 3.0,
-            output_per_million: 15.0,
-        },
-        "sonar-pro" => PricingEntry {
-            input_per_million: 3.0,
-            output_per_million: 15.0,
-        },
-        "command-a" => PricingEntry {
-            input_per_million: 2.50,
-            output_per_million: 10.0,
-        },
-
-        _ => return None,
-    };
-
-    Some(entry)
 }
 
 // ---------------------------------------------------------------------------
@@ -434,5 +539,60 @@ mod tests {
                 "{model} has non-positive output pricing"
             );
         }
+    }
+
+    #[test]
+    fn test_register_dynamic_pricing() {
+        // Register a new model dynamically.
+        register_pricing(
+            "my-custom-model",
+            PricingEntry {
+                input_per_million: 5.0,
+                output_per_million: 20.0,
+            },
+        );
+
+        let entry = lookup_pricing("my-custom-model").expect("should find registered model");
+        assert!((entry.input_per_million - 5.0).abs() < f64::EPSILON);
+        assert!((entry.output_per_million - 20.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_register_overrides_default() {
+        // Override gpt-4.1 pricing with new values.
+        let original = lookup_pricing("gpt-4.1").unwrap();
+        let new_entry = PricingEntry {
+            input_per_million: 99.0,
+            output_per_million: 99.0,
+        };
+        register_pricing("gpt-4.1", new_entry);
+
+        let updated = lookup_pricing("gpt-4.1").unwrap();
+        assert!((updated.input_per_million - 99.0).abs() < f64::EPSILON);
+
+        // Restore original so other tests aren't affected.
+        register_pricing("gpt-4.1", original);
+    }
+
+    #[test]
+    fn test_register_from_model_info() {
+        let info = ModelInfo {
+            id: "test-registry-model".into(),
+            name: None,
+            provider: "test".into(),
+            context_length: None,
+            pricing: Some(ModelPricing {
+                input_per_million: Some(1.5),
+                output_per_million: Some(6.0),
+                per_image: None,
+                per_second: None,
+            }),
+            capabilities: Default::default(),
+        };
+
+        register_from_model_info(&info);
+        let entry = lookup_pricing("test-registry-model").expect("should find model");
+        assert!((entry.input_per_million - 1.5).abs() < f64::EPSILON);
+        assert!((entry.output_per_million - 6.0).abs() < f64::EPSILON);
     }
 }

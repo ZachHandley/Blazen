@@ -23,6 +23,7 @@ use tracing::{debug, warn};
 use super::openai_format::parse_retry_after;
 use crate::error::BlazenError;
 use crate::http::{ByteStream, HttpClient, HttpRequest, HttpResponse};
+use crate::traits::{ModelCapabilities, ModelInfo, ModelRegistry};
 use crate::types::{
     CompletionRequest, CompletionResponse, ContentPart, ImageContent, ImageSource, MessageContent,
     Role, StreamChunk, TokenUsage, ToolCall,
@@ -601,6 +602,72 @@ impl crate::traits::CompletionModel for AnthropicProvider {
 
         let stream = AnthropicSseParser::new(byte_stream);
         Ok(Box::pin(stream))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ModelRegistry implementation
+// ---------------------------------------------------------------------------
+
+/// Wire format for the Anthropic `/models` endpoint.
+#[derive(Debug, Deserialize)]
+struct AnthropicModelsResponse {
+    data: Vec<AnthropicModelEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AnthropicModelEntry {
+    id: String,
+    display_name: Option<String>,
+}
+
+#[async_trait]
+impl ModelRegistry for AnthropicProvider {
+    async fn list_models(&self) -> Result<Vec<ModelInfo>, BlazenError> {
+        let url = format!("{}/models", self.base_url);
+        let request = HttpRequest::get(&url)
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", ANTHROPIC_VERSION);
+        let response = self.client.send(request).await?;
+
+        if !response.is_success() {
+            let error_body = response.text();
+            return Err(BlazenError::request(format!(
+                "HTTP {}: {error_body}",
+                response.status
+            )));
+        }
+
+        let list: AnthropicModelsResponse = response
+            .json()
+            .map_err(|e| BlazenError::invalid_response(e.to_string()))?;
+
+        let models = list
+            .data
+            .into_iter()
+            .map(|entry| ModelInfo {
+                id: entry.id,
+                name: entry.display_name,
+                provider: "anthropic".into(),
+                context_length: None,
+                pricing: None, // Anthropic /models does not include pricing.
+                capabilities: ModelCapabilities {
+                    chat: true,
+                    streaming: true,
+                    tool_use: true,
+                    structured_output: true,
+                    vision: true,
+                    ..Default::default()
+                },
+            })
+            .collect();
+
+        Ok(models)
+    }
+
+    async fn get_model(&self, model_id: &str) -> Result<Option<ModelInfo>, BlazenError> {
+        let models = self.list_models().await?;
+        Ok(models.into_iter().find(|m| m.id == model_id))
     }
 }
 

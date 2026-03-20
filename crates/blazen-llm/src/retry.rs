@@ -108,6 +108,7 @@ impl RetryCompletionModel {
 }
 
 /// Standard exponential backoff: `initial * 2^attempt`, capped.
+#[allow(clippy::cast_possible_truncation)] // `.min(u128::from(u64::MAX))` guarantees no truncation
 fn exp_backoff(initial: Duration, attempt: u32, max: Duration) -> Duration {
     // Saturating shift to avoid overflow.
     let factor = 1u64.checked_shl(attempt).unwrap_or(u64::MAX);
@@ -120,11 +121,12 @@ fn exp_backoff(initial: Duration, attempt: u32, max: Duration) -> Duration {
 
 /// Add 0-25 % random jitter using `RandomState` so we avoid pulling in
 /// the `rand` crate.
+#[allow(clippy::cast_possible_truncation)] // durations here are small (seconds), never exceed u64
 fn add_jitter(d: Duration) -> Duration {
     // `RandomState::new()` is seeded from the OS on each call.
     let hash = RandomState::new().hash_one(0u64);
     // Map the hash into 0..=25  (percent).
-    let pct = (hash % 26); // 0-25 inclusive
+    let pct = hash % 26; // 0-25 inclusive
     let extra_millis = d.as_millis() as u64 * pct / 100;
     d + Duration::from_millis(extra_millis)
 }
@@ -167,7 +169,7 @@ impl CompletionModel for RetryCompletionModel {
                     tracing::warn!(
                         attempt = attempt + 1,
                         max_retries = max,
-                        delay_ms = delay.as_millis() as u64,
+                        delay_ms = u64::try_from(delay.as_millis()).unwrap_or(u64::MAX),
                         error = %err,
                         "retrying after {}ms, attempt {}/{}",
                         delay.as_millis(),
@@ -205,7 +207,7 @@ impl CompletionModel for RetryCompletionModel {
                     tracing::warn!(
                         attempt = attempt + 1,
                         max_retries = max,
-                        delay_ms = delay.as_millis() as u64,
+                        delay_ms = u64::try_from(delay.as_millis()).unwrap_or(u64::MAX),
                         error = %err,
                         "stream: retrying after {}ms, attempt {}/{}",
                         delay.as_millis(),
