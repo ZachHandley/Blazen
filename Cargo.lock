@@ -821,7 +821,9 @@ checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
 name = "elid"
-version = "0.0.0-dev"
+version = "0.4.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b507d3f2675a8ffb9e95962fa5dce53b11555023b41f7be0c8a8ce3da40ce548"
 dependencies = [
  "blake3",
  "cbindgen",
