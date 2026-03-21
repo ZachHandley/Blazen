@@ -159,10 +159,11 @@ impl Clone for FalProvider {
 
 impl FalProvider {
     /// Create a new fal.ai provider with the given API key.
+    #[cfg(any(target_arch = "wasm32", feature = "reqwest"))]
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
-            client: crate::ReqwestHttpClient::new().into_arc(),
+            client: crate::default_http_client(),
             api_key: api_key.into(),
             default_model: "fal-ai/any-llm".to_owned(),
             llm_model: "anthropic/claude-sonnet-4.5".to_owned(),

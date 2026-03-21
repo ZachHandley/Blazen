@@ -86,6 +86,7 @@ impl AzureOpenAiProvider {
     /// - `api_key`: The Azure API key.
     /// - `resource_name`: The Azure `OpenAI` resource name (the subdomain).
     /// - `deployment_name`: The model deployment name.
+    #[cfg(any(target_arch = "wasm32", feature = "reqwest"))]
     #[must_use]
     pub fn new(
         api_key: impl Into<String>,
@@ -93,7 +94,7 @@ impl AzureOpenAiProvider {
         deployment_name: impl Into<String>,
     ) -> Self {
         Self {
-            client: crate::ReqwestHttpClient::new().into_arc(),
+            client: crate::default_http_client(),
             api_key: api_key.into(),
             resource_name: resource_name.into(),
             deployment_name: deployment_name.into(),

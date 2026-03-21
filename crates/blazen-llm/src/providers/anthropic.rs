@@ -165,10 +165,11 @@ impl Clone for AnthropicProvider {
 impl AnthropicProvider {
     /// Create a new provider with the given API key, targeting the official
     /// Anthropic endpoint.
+    #[cfg(any(target_arch = "wasm32", feature = "reqwest"))]
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
-            client: crate::ReqwestHttpClient::new().into_arc(),
+            client: crate::default_http_client(),
             api_key: api_key.into(),
             base_url: "https://api.anthropic.com/v1".to_owned(),
             default_model: "claude-sonnet-4-20250514".to_owned(),

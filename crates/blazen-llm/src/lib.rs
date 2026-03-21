@@ -64,10 +64,27 @@ pub mod error;
 pub mod events;
 pub mod fallback;
 pub mod http;
-#[cfg(feature = "reqwest")]
+#[cfg(all(feature = "reqwest", not(target_arch = "wasm32")))]
 mod http_reqwest;
-#[cfg(feature = "reqwest")]
+#[cfg(all(feature = "reqwest", not(target_arch = "wasm32")))]
 pub use http_reqwest::ReqwestHttpClient;
+#[cfg(target_arch = "wasm32")]
+mod http_fetch;
+#[cfg(target_arch = "wasm32")]
+pub use http_fetch::FetchHttpClient;
+
+/// Returns the platform-appropriate default HTTP client.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn default_http_client() -> std::sync::Arc<dyn http::HttpClient> {
+    FetchHttpClient::new().into_arc()
+}
+
+/// Returns the platform-appropriate default HTTP client.
+#[cfg(all(not(target_arch = "wasm32"), feature = "reqwest"))]
+pub(crate) fn default_http_client() -> std::sync::Arc<dyn http::HttpClient> {
+    ReqwestHttpClient::new().into_arc()
+}
+
 pub mod media;
 pub mod middleware;
 pub mod pricing;

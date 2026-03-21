@@ -15,7 +15,7 @@ use blazen_llm::providers::openai_compat::{
 };
 use blazen_llm::traits::EmbeddingModel;
 
-use crate::http_fetch::FetchHttpClient;
+use blazen_llm::FetchHttpClient;
 
 // ---------------------------------------------------------------------------
 // WasmEmbeddingModel

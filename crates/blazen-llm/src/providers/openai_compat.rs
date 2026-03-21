@@ -114,18 +114,24 @@ impl Clone for OpenAiCompatProvider {
 
 impl OpenAiCompatProvider {
     /// Create a provider from a fully-specified configuration.
+    #[cfg(any(target_arch = "wasm32", feature = "reqwest"))]
     #[must_use]
     pub fn new(config: OpenAiCompatConfig) -> Self {
         Self {
             config,
-            client: crate::ReqwestHttpClient::new().into_arc(),
+            client: crate::default_http_client(),
         }
     }
 
     // -----------------------------------------------------------------------
     // Convenience constructors
+    //
+    // These require a default HTTP backend (reqwest on native, fetch on WASM).
     // -----------------------------------------------------------------------
+}
 
+#[cfg(any(target_arch = "wasm32", feature = "reqwest"))]
+impl OpenAiCompatProvider {
     /// `OpenAI` (`https://api.openai.com/v1`, default model `gpt-4.1`).
     #[must_use]
     pub fn openai(api_key: impl Into<String>) -> Self {
@@ -293,7 +299,9 @@ impl OpenAiCompatProvider {
             supports_model_listing: true,
         })
     }
+}
 
+impl OpenAiCompatProvider {
     // -----------------------------------------------------------------------
     // Builder methods
     // -----------------------------------------------------------------------
@@ -906,20 +914,20 @@ impl Clone for OpenAiCompatEmbeddingModel {
 
 impl OpenAiCompatEmbeddingModel {
     /// Create an embedding model from a fully-specified configuration.
+    #[cfg(any(target_arch = "wasm32", feature = "reqwest"))]
     #[must_use]
     pub fn new(config: OpenAiCompatConfig, model: impl Into<String>, dimensions: usize) -> Self {
         Self {
             config,
-            client: crate::ReqwestHttpClient::new().into_arc(),
+            client: crate::default_http_client(),
             model: model.into(),
             dimensions,
         }
     }
+}
 
-    // -----------------------------------------------------------------------
-    // Convenience constructors
-    // -----------------------------------------------------------------------
-
+#[cfg(any(target_arch = "wasm32", feature = "reqwest"))]
+impl OpenAiCompatEmbeddingModel {
     /// Together AI (`togethercomputer/m2-bert-80M-8k-retrieval`, 768 dimensions).
     #[must_use]
     pub fn together(api_key: impl Into<String>) -> Self {
@@ -976,7 +984,9 @@ impl OpenAiCompatEmbeddingModel {
             768,
         )
     }
+}
 
+impl OpenAiCompatEmbeddingModel {
     // -----------------------------------------------------------------------
     // Builder methods
     // -----------------------------------------------------------------------

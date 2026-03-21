@@ -14,7 +14,7 @@ crate-type = ["cdylib"]
 [dependencies]
 blazen-core.workspace = true
 blazen-events.workspace = true
-blazen-llm = { workspace = true, features = ["all-providers"] }
+blazen-llm = { workspace = true, features = ["all-providers", "reqwest"] }
 blazen-memory.workspace = true
 blazen-memory-valkey.workspace = true
 chrono.workspace = true

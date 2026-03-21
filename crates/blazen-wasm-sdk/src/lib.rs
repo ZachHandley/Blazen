@@ -4,8 +4,8 @@
 //! workflow engine, LLM completion, agent loop, and pipeline to
 //! TypeScript / JavaScript in the browser and Node.js.
 //!
-//! HTTP calls are routed through the browser `fetch()` API via a
-//! [`FetchHttpClient`](http_fetch::FetchHttpClient) that implements the
+//! HTTP calls are routed through the browser `fetch()` API via
+//! [`blazen_llm::FetchHttpClient`] which implements the
 //! [`blazen_llm::http::HttpClient`] trait.
 //!
 //! ## Quick start (TypeScript)
@@ -24,7 +24,6 @@ pub mod agent;
 pub mod chat_message;
 pub mod completion_model;
 pub mod embedding;
-pub mod http_fetch;
 pub mod tokens;
 pub mod types;
 pub mod workflow;

@@ -12,31 +12,22 @@ description = "Blazen SDK for TypeScript/JavaScript via WebAssembly"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-blazen-llm = { version = "0.0.0-dev", path = "../blazen-llm", default-features = false, features = ["openai"] }
+blazen-llm = { version = "0.0.0-dev", path = "../blazen-llm", default-features = false, features = ["openai", "reqwest"] }
 blazen-core = { version = "0.0.0-dev", path = "../blazen-core", default-features = false }
 blazen-events = { version = "0.0.0-dev", path = "../blazen-events" }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
-web-sys = { version = "0.3", features = [
-    "Request",
-    "RequestInit",
-    "Response",
-    "Headers",
-    "Window",
-    "ReadableStream",
-    "ReadableStreamDefaultReader",
-] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde-wasm-bindgen = "0.6"
 console_error_panic_hook = "0.1"
 async-trait = "0.1"
 futures-util = "0.3"
-bytes = "1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }
+uuid = { version = "1", features = ["v4", "js"] }
 
 [lints.rust]
 # unsafe impl Send/Sync is required for WASM single-threaded interop

@@ -18,7 +18,7 @@ use blazen_llm::traits::CompletionModel;
 use blazen_llm::types::CompletionRequest;
 
 use crate::chat_message::js_messages_to_vec;
-use crate::http_fetch::FetchHttpClient;
+use blazen_llm::FetchHttpClient;
 use crate::types::WasmCompletionResponse;
 
 // ---------------------------------------------------------------------------

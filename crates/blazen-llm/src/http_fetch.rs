@@ -14,8 +14,8 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Headers, Request, RequestInit, Response};
 
-use blazen_llm::error::BlazenError;
-use blazen_llm::http::{ByteStream, HttpClient, HttpMethod, HttpRequest, HttpResponse};
+use crate::error::BlazenError;
+use crate::http::{ByteStream, HttpClient, HttpMethod, HttpRequest, HttpResponse};
 
 // ---------------------------------------------------------------------------
 // SendFuture wrapper
@@ -126,8 +126,7 @@ fn build_web_request(req: &HttpRequest) -> Result<Request, BlazenError> {
         opts.set_body(&uint8);
     }
 
-    Request::new_with_str_and_init(&url, &opts)
-        .map_err(|e| BlazenError::request(format!("{e:?}")))
+    Request::new_with_str_and_init(&url, &opts).map_err(|e| BlazenError::request(format!("{e:?}")))
 }
 
 /// Call global `fetch()` -- works in both browser (window.fetch) and
@@ -263,9 +262,9 @@ impl FetchHttpClient {
         let status = resp.status();
         let headers = extract_headers(&resp.headers());
 
-        let body = resp.body().ok_or_else(|| {
-            BlazenError::request("response has no body for streaming")
-        })?;
+        let body = resp
+            .body()
+            .ok_or_else(|| BlazenError::request("response has no body for streaming"))?;
         let reader: web_sys::ReadableStreamDefaultReader = body
             .get_reader()
             .dyn_into()

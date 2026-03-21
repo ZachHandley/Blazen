@@ -10,11 +10,12 @@ description = "LLM provider abstraction layer for the Blazen workflow engine"
 
 [features]
 default = []
-openai = ["reqwest"]
-anthropic = ["reqwest"]
-gemini = ["reqwest"]
-fal = ["reqwest"]
-azure = ["reqwest"]
+reqwest = ["dep:reqwest"]
+openai = []
+anthropic = []
+gemini = []
+fal = []
+azure = []
 all-providers = ["openai", "anthropic", "gemini", "fal", "azure"]
 tiktoken = ["dep:tiktoken-rs"]
 
@@ -32,6 +33,20 @@ bytes.workspace = true
 chrono.workspace = true
 reqwest = { workspace = true, optional = true }
 tiktoken-rs = { version = "0.9", optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+    "Request",
+    "RequestInit",
+    "Response",
+    "Headers",
+    "Window",
+    "ReadableStream",
+    "ReadableStreamDefaultReader",
+] }
 
 [lints]
 workspace = true

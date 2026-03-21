@@ -68,10 +68,11 @@ impl Clone for OpenAiProvider {
 impl OpenAiProvider {
     /// Create a new provider with the given API key, targeting the official
     /// `OpenAI` endpoint.
+    #[cfg(any(target_arch = "wasm32", feature = "reqwest"))]
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
-            client: crate::ReqwestHttpClient::new().into_arc(),
+            client: crate::default_http_client(),
             api_key: api_key.into(),
             base_url: "https://api.openai.com/v1".to_owned(),
             default_model: "gpt-4.1".to_owned(),
@@ -515,10 +516,11 @@ impl OpenAiEmbeddingModel {
     /// Create a new embedding model targeting the official `OpenAI` endpoint.
     ///
     /// Defaults to `text-embedding-3-small` with 1536 dimensions.
+    #[cfg(any(target_arch = "wasm32", feature = "reqwest"))]
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
-            client: crate::ReqwestHttpClient::new().into_arc(),
+            client: crate::default_http_client(),
             api_key: api_key.into(),
             base_url: "https://api.openai.com/v1".to_owned(),
             model: "text-embedding-3-small".to_owned(),
