@@ -40,137 +40,8 @@ struct PricingRegistry {
 
 impl PricingRegistry {
     fn new() -> Self {
-        let mut map = HashMap::new();
-
-        // OpenAI
-        map.insert(
-            "gpt-4.1".into(),
-            PricingEntry {
-                input_per_million: 2.0,
-                output_per_million: 8.0,
-            },
-        );
-        map.insert(
-            "gpt-4.1-mini".into(),
-            PricingEntry {
-                input_per_million: 0.40,
-                output_per_million: 1.60,
-            },
-        );
-        map.insert(
-            "gpt-4.1-nano".into(),
-            PricingEntry {
-                input_per_million: 0.10,
-                output_per_million: 0.40,
-            },
-        );
-        map.insert(
-            "gpt-4o".into(),
-            PricingEntry {
-                input_per_million: 2.50,
-                output_per_million: 10.0,
-            },
-        );
-        map.insert(
-            "gpt-4o-mini".into(),
-            PricingEntry {
-                input_per_million: 0.15,
-                output_per_million: 0.60,
-            },
-        );
-        map.insert(
-            "o3".into(),
-            PricingEntry {
-                input_per_million: 10.0,
-                output_per_million: 40.0,
-            },
-        );
-        map.insert(
-            "o4-mini".into(),
-            PricingEntry {
-                input_per_million: 1.10,
-                output_per_million: 4.40,
-            },
-        );
-
-        // Anthropic
-        map.insert(
-            "claude-sonnet-4".into(),
-            PricingEntry {
-                input_per_million: 3.0,
-                output_per_million: 15.0,
-            },
-        );
-        map.insert(
-            "claude-opus-4".into(),
-            PricingEntry {
-                input_per_million: 15.0,
-                output_per_million: 75.0,
-            },
-        );
-        map.insert(
-            "claude-haiku-4".into(),
-            PricingEntry {
-                input_per_million: 0.80,
-                output_per_million: 4.0,
-            },
-        );
-
-        // Google
-        map.insert(
-            "gemini-2.5-flash".into(),
-            PricingEntry {
-                input_per_million: 0.15,
-                output_per_million: 0.60,
-            },
-        );
-        map.insert(
-            "gemini-2.5-pro".into(),
-            PricingEntry {
-                input_per_million: 1.25,
-                output_per_million: 10.0,
-            },
-        );
-
-        // Others
-        map.insert(
-            "deepseek-chat".into(),
-            PricingEntry {
-                input_per_million: 0.27,
-                output_per_million: 1.10,
-            },
-        );
-        map.insert(
-            "mistral-large-latest".into(),
-            PricingEntry {
-                input_per_million: 2.0,
-                output_per_million: 6.0,
-            },
-        );
-        map.insert(
-            "grok-3".into(),
-            PricingEntry {
-                input_per_million: 3.0,
-                output_per_million: 15.0,
-            },
-        );
-        map.insert(
-            "sonar-pro".into(),
-            PricingEntry {
-                input_per_million: 3.0,
-                output_per_million: 15.0,
-            },
-        );
-        map.insert(
-            "command-a".into(),
-            PricingEntry {
-                input_per_million: 2.50,
-                output_per_million: 10.0,
-            },
-        );
-
         Self {
-            entries: RwLock::new(map),
+            entries: RwLock::new(default_pricing()),
         }
     }
 
@@ -191,6 +62,50 @@ impl PricingRegistry {
 }
 
 static REGISTRY: LazyLock<PricingRegistry> = LazyLock::new(PricingRegistry::new);
+
+/// Default pricing entries seeded into the registry.
+///
+/// These are fallback values used when providers have not yet pushed
+/// dynamic pricing via their `/models` endpoints.
+fn default_pricing() -> HashMap<String, PricingEntry> {
+    // (model_id, input_per_million, output_per_million)
+    let defaults: &[(&str, f64, f64)] = &[
+        // OpenAI
+        ("gpt-4.1", 2.0, 8.0),
+        ("gpt-4.1-mini", 0.40, 1.60),
+        ("gpt-4.1-nano", 0.10, 0.40),
+        ("gpt-4o", 2.50, 10.0),
+        ("gpt-4o-mini", 0.15, 0.60),
+        ("o3", 10.0, 40.0),
+        ("o4-mini", 1.10, 4.40),
+        // Anthropic
+        ("claude-sonnet-4", 3.0, 15.0),
+        ("claude-opus-4", 15.0, 75.0),
+        ("claude-haiku-4", 0.80, 4.0),
+        // Google
+        ("gemini-2.5-flash", 0.15, 0.60),
+        ("gemini-2.5-pro", 1.25, 10.0),
+        // Others
+        ("deepseek-chat", 0.27, 1.10),
+        ("mistral-large-latest", 2.0, 6.0),
+        ("grok-3", 3.0, 15.0),
+        ("sonar-pro", 3.0, 15.0),
+        ("command-a", 2.50, 10.0),
+    ];
+
+    defaults
+        .iter()
+        .map(|&(id, input, output)| {
+            (
+                id.to_owned(),
+                PricingEntry {
+                    input_per_million: input,
+                    output_per_million: output,
+                },
+            )
+        })
+        .collect()
+}
 
 // ---------------------------------------------------------------------------
 // Public API
