@@ -68,7 +68,7 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         run: |
           VERSION="${{ needs.version.outputs.version }}"
-          sed -i "s/0.0.0-dev/$VERSION/g" Cargo.toml
+          find . -name Cargo.toml -exec sed -i "s/0.0.0-dev/$VERSION/g" {} +
           sed -i 's/, registry = "forgejo"//g' Cargo.toml
 
       - name: Publish crates in dependency order
@@ -136,7 +136,7 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         run: |
           VERSION="${{ needs.version.outputs.version }}"
-          sed -i "s/0.0.0-dev/$VERSION/g" Cargo.toml
+          find . -name Cargo.toml -exec sed -i "s/0.0.0-dev/$VERSION/g" {} +
           sed -i 's/, registry = "forgejo"//g' Cargo.toml
 
       - name: Build wheels for all Python versions
@@ -215,7 +215,7 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         run: |
           VERSION="${{ needs.version.outputs.version }}"
-          sed -i "s/0.0.0-dev/$VERSION/g" Cargo.toml
+          find . -name Cargo.toml -exec sed -i "s/0.0.0-dev/$VERSION/g" {} +
           sed -i 's/, registry = "forgejo"//g' Cargo.toml
           sed -i "s/\"version\": \"0.1.0\"/\"version\": \"$VERSION\"/" crates/blazen-node/package.json
 
@@ -289,7 +289,7 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         run: |
           VERSION="${{ needs.version.outputs.version }}"
-          sed -i "s/0.0.0-dev/$VERSION/g" Cargo.toml
+          find . -name Cargo.toml -exec sed -i "s/0.0.0-dev/$VERSION/g" {} +
           sed -i 's/, registry = "forgejo"//g' Cargo.toml
           sed -i "s/\"version\": \"0.0.0-dev\"/\"version\": \"$VERSION\"/" crates/blazen-wasm-sdk/package.json
 

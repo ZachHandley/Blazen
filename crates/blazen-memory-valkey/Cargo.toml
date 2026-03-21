@@ -9,7 +9,7 @@ rust-version.workspace = true
 description = "Valkey/Redis backend for blazen-memory"
 
 [dependencies]
-blazen-memory = { path = "../blazen-memory" }
+blazen-memory.workspace = true
 redis = { workspace = true }
 serde_json = { workspace = true }
 async-trait = { workspace = true }

@@ -12,9 +12,9 @@ description = "Blazen SDK for TypeScript/JavaScript via WebAssembly"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-blazen-llm = { path = "../blazen-llm", default-features = false, features = ["openai"] }
-blazen-core = { path = "../blazen-core", default-features = false }
-blazen-events = { path = "../blazen-events" }
+blazen-llm = { version = "0.0.0-dev", path = "../blazen-llm", default-features = false, features = ["openai"] }
+blazen-core = { version = "0.0.0-dev", path = "../blazen-core", default-features = false }
+blazen-events = { version = "0.0.0-dev", path = "../blazen-events" }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
