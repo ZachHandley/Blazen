@@ -112,10 +112,13 @@ impl RetryCompletionModel {
 fn exp_backoff(initial: Duration, attempt: u32, max: Duration) -> Duration {
     // Saturating shift to avoid overflow.
     let factor = 1u64.checked_shl(attempt).unwrap_or(u64::MAX);
-    let millis = initial
-        .as_millis()
-        .saturating_mul(u128::from(factor))
-        .min(u128::from(u64::MAX)) as u64;
+    let millis = u64::try_from(
+        initial
+            .as_millis()
+            .saturating_mul(u128::from(factor))
+            .min(u128::from(u64::MAX)),
+    )
+    .unwrap_or(u64::MAX);
     Duration::from_millis(millis).min(max)
 }
 
@@ -127,7 +130,7 @@ fn add_jitter(d: Duration) -> Duration {
     let hash = RandomState::new().hash_one(0u64);
     // Map the hash into 0..=25  (percent).
     let pct = hash % 26; // 0-25 inclusive
-    let extra_millis = d.as_millis() as u64 * pct / 100;
+    let extra_millis = u64::try_from(d.as_millis()).unwrap_or(u64::MAX) * pct / 100;
     d + Duration::from_millis(extra_millis)
 }
 

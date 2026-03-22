@@ -33,7 +33,8 @@ impl JsonlBackend {
     ///
     /// # Errors
     ///
-    /// Returns an error if the file exists but cannot be read or parsed.
+    /// Returns an error if the file exists but cannot be read or contains
+    /// malformed entries.
     pub async fn new(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
         let entries = if path.exists() {
