@@ -141,11 +141,25 @@ impl Clone for GeminiProvider {
 
 impl GeminiProvider {
     /// Create a new Gemini provider with the given API key.
-    #[cfg(any(target_arch = "wasm32", feature = "reqwest"))]
+    #[cfg(any(
+        all(target_arch = "wasm32", not(target_os = "wasi")),
+        feature = "reqwest"
+    ))]
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             client: crate::default_http_client(),
+            api_key: api_key.into(),
+            base_url: GEMINI_BASE_URL.to_owned(),
+            default_model: "gemini-2.5-flash".to_owned(),
+        }
+    }
+
+    /// Create a new Gemini provider with an explicit HTTP client backend.
+    #[must_use]
+    pub fn new_with_client(api_key: impl Into<String>, client: Arc<dyn HttpClient>) -> Self {
+        Self {
+            client,
             api_key: api_key.into(),
             base_url: GEMINI_BASE_URL.to_owned(),
             default_model: "gemini-2.5-flash".to_owned(),

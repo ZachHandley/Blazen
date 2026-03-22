@@ -7,11 +7,11 @@
 use blazen_llm::error::BlazenError;
 use blazen_llm::http::{ByteStream, HttpClient, HttpMethod, HttpRequest, HttpResponse};
 
-use crate::bindings::wasi::http::outgoing_handler;
-use crate::bindings::wasi::http::types::{
+use crate::wasi::http::outgoing_handler;
+use crate::wasi::http::types::{
     Fields, IncomingBody, Method, OutgoingBody, OutgoingRequest, Scheme,
 };
-use crate::bindings::wasi::io::streams::StreamError;
+use crate::wasi::io::streams::StreamError;
 
 use std::sync::Arc;
 
@@ -131,10 +131,10 @@ fn write_body(outgoing: &OutgoingRequest, body: &[u8]) -> Result<(), BlazenError
     let mut offset = 0;
     while offset < body.len() {
         let chunk_size = (body.len() - offset).min(16384);
-        let written = write_stream
+        write_stream
             .write(&body[offset..offset + chunk_size])
             .map_err(|e| BlazenError::request(format!("failed to write body: {e:?}")))?;
-        offset += written as usize;
+        offset += chunk_size;
     }
 
     // Must drop the write stream before finishing the body

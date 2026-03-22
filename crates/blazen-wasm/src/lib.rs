@@ -28,6 +28,7 @@
 //! | POST   | /v1/audio/speech           | Text-to-speech        |
 //! | POST   | /v1/agent/run              | Agent execution       |
 
+pub mod executor;
 pub mod http_wasi;
 pub mod keys;
 pub mod router;
@@ -37,15 +38,16 @@ pub mod router;
 wit_bindgen::generate!({
     world: "blazen-handler",
     path: "wit",
+    generate_all,
 });
 
 use std::sync::Arc;
 
-use crate::bindings::exports::wasi::http::incoming_handler::Guest;
-use crate::bindings::wasi::http::types::{
+use crate::exports::wasi::http::incoming_handler::Guest;
+use crate::wasi::http::types::{
     Fields, IncomingBody, IncomingRequest, OutgoingBody, OutgoingResponse, ResponseOutparam,
 };
-use crate::bindings::wasi::io::streams::StreamError;
+use crate::wasi::io::streams::StreamError;
 
 use http_wasi::WasiHttpClient;
 use keys::KeyProvider;
@@ -147,11 +149,17 @@ fn write_response(response_out: ResponseOutparam, result: RouteResponse) {
     let headers = Fields::new();
 
     // Set Content-Type
-    let _ = headers.append("content-type", result.content_type.as_bytes());
+    let _ = headers.append(
+        &"content-type".to_owned(),
+        &result.content_type.as_bytes().to_vec(),
+    );
 
     // Set Content-Length
     let len_str = result.body.len().to_string();
-    let _ = headers.append("content-length", len_str.as_bytes());
+    let _ = headers.append(
+        &"content-length".to_owned(),
+        &len_str.as_bytes().to_vec(),
+    );
 
     let response = OutgoingResponse::new(headers);
     response.set_status_code(result.status).ok();
@@ -171,7 +179,7 @@ fn write_response(response_out: ResponseOutparam, result: RouteResponse) {
         while offset < result.body.len() {
             let chunk_end = (offset + 16384).min(result.body.len());
             match write_stream.write(&result.body[offset..chunk_end]) {
-                Ok(written) => offset += written as usize,
+                Ok(()) => offset = chunk_end,
                 Err(_) => break,
             }
         }

@@ -68,11 +68,25 @@ impl Clone for OpenAiProvider {
 impl OpenAiProvider {
     /// Create a new provider with the given API key, targeting the official
     /// `OpenAI` endpoint.
-    #[cfg(any(target_arch = "wasm32", feature = "reqwest"))]
+    #[cfg(any(
+        all(target_arch = "wasm32", not(target_os = "wasi")),
+        feature = "reqwest"
+    ))]
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             client: crate::default_http_client(),
+            api_key: api_key.into(),
+            base_url: "https://api.openai.com/v1".to_owned(),
+            default_model: "gpt-4.1".to_owned(),
+        }
+    }
+
+    /// Create a new provider with an explicit HTTP client backend.
+    #[must_use]
+    pub fn new_with_client(api_key: impl Into<String>, client: Arc<dyn HttpClient>) -> Self {
+        Self {
+            client,
             api_key: api_key.into(),
             base_url: "https://api.openai.com/v1".to_owned(),
             default_model: "gpt-4.1".to_owned(),
@@ -516,11 +530,26 @@ impl OpenAiEmbeddingModel {
     /// Create a new embedding model targeting the official `OpenAI` endpoint.
     ///
     /// Defaults to `text-embedding-3-small` with 1536 dimensions.
-    #[cfg(any(target_arch = "wasm32", feature = "reqwest"))]
+    #[cfg(any(
+        all(target_arch = "wasm32", not(target_os = "wasi")),
+        feature = "reqwest"
+    ))]
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             client: crate::default_http_client(),
+            api_key: api_key.into(),
+            base_url: "https://api.openai.com/v1".to_owned(),
+            model: "text-embedding-3-small".to_owned(),
+            dimensions: 1536,
+        }
+    }
+
+    /// Create a new embedding model with an explicit HTTP client backend.
+    #[must_use]
+    pub fn new_with_client(api_key: impl Into<String>, client: Arc<dyn HttpClient>) -> Self {
+        Self {
+            client,
             api_key: api_key.into(),
             base_url: "https://api.openai.com/v1".to_owned(),
             model: "text-embedding-3-small".to_owned(),

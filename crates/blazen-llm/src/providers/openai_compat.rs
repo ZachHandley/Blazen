@@ -114,13 +114,22 @@ impl Clone for OpenAiCompatProvider {
 
 impl OpenAiCompatProvider {
     /// Create a provider from a fully-specified configuration.
-    #[cfg(any(target_arch = "wasm32", feature = "reqwest"))]
+    #[cfg(any(
+        all(target_arch = "wasm32", not(target_os = "wasi")),
+        feature = "reqwest"
+    ))]
     #[must_use]
     pub fn new(config: OpenAiCompatConfig) -> Self {
         Self {
             config,
             client: crate::default_http_client(),
         }
+    }
+
+    /// Create a provider from a configuration with an explicit HTTP client backend.
+    #[must_use]
+    pub fn new_with_client(config: OpenAiCompatConfig, client: Arc<dyn HttpClient>) -> Self {
+        Self { config, client }
     }
 
     // -----------------------------------------------------------------------
@@ -130,7 +139,10 @@ impl OpenAiCompatProvider {
     // -----------------------------------------------------------------------
 }
 
-#[cfg(any(target_arch = "wasm32", feature = "reqwest"))]
+#[cfg(any(
+    all(target_arch = "wasm32", not(target_os = "wasi")),
+    feature = "reqwest"
+))]
 impl OpenAiCompatProvider {
     /// `OpenAI` (`https://api.openai.com/v1`, default model `gpt-4.1`).
     #[must_use]
@@ -914,7 +926,10 @@ impl Clone for OpenAiCompatEmbeddingModel {
 
 impl OpenAiCompatEmbeddingModel {
     /// Create an embedding model from a fully-specified configuration.
-    #[cfg(any(target_arch = "wasm32", feature = "reqwest"))]
+    #[cfg(any(
+        all(target_arch = "wasm32", not(target_os = "wasi")),
+        feature = "reqwest"
+    ))]
     #[must_use]
     pub fn new(config: OpenAiCompatConfig, model: impl Into<String>, dimensions: usize) -> Self {
         Self {
@@ -924,9 +939,28 @@ impl OpenAiCompatEmbeddingModel {
             dimensions,
         }
     }
+
+    /// Create an embedding model with an explicit HTTP client backend.
+    #[must_use]
+    pub fn new_with_client(
+        config: OpenAiCompatConfig,
+        model: impl Into<String>,
+        dimensions: usize,
+        client: Arc<dyn HttpClient>,
+    ) -> Self {
+        Self {
+            config,
+            client,
+            model: model.into(),
+            dimensions,
+        }
+    }
 }
 
-#[cfg(any(target_arch = "wasm32", feature = "reqwest"))]
+#[cfg(any(
+    all(target_arch = "wasm32", not(target_os = "wasi")),
+    feature = "reqwest"
+))]
 impl OpenAiCompatEmbeddingModel {
     /// Together AI (`togethercomputer/m2-bert-80M-8k-retrieval`, 768 dimensions).
     #[must_use]

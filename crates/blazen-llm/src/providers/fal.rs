@@ -159,11 +159,28 @@ impl Clone for FalProvider {
 
 impl FalProvider {
     /// Create a new fal.ai provider with the given API key.
-    #[cfg(any(target_arch = "wasm32", feature = "reqwest"))]
+    #[cfg(any(
+        all(target_arch = "wasm32", not(target_os = "wasi")),
+        feature = "reqwest"
+    ))]
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             client: crate::default_http_client(),
+            api_key: api_key.into(),
+            default_model: "fal-ai/any-llm".to_owned(),
+            llm_model: "anthropic/claude-sonnet-4.5".to_owned(),
+            execution_mode: FalExecutionMode::Queue {
+                poll_interval: DEFAULT_POLL_INTERVAL,
+            },
+        }
+    }
+
+    /// Create a new fal.ai provider with an explicit HTTP client backend.
+    #[must_use]
+    pub fn new_with_client(api_key: impl Into<String>, client: Arc<dyn HttpClient>) -> Self {
+        Self {
+            client,
             api_key: api_key.into(),
             default_model: "fal-ai/any-llm".to_owned(),
             llm_model: "anthropic/claude-sonnet-4.5".to_owned(),
@@ -464,7 +481,12 @@ impl FalProvider {
         let mut in_progress_at: Option<Instant> = None;
 
         for _ in 0..MAX_POLL_ITERATIONS {
+            #[cfg(not(target_os = "wasi"))]
             tokio::time::sleep(poll_interval).await;
+            #[cfg(target_os = "wasi")]
+            {
+                let _ = poll_interval;
+            }
 
             let status_body = if let Some(url) = status_url {
                 self.get_json_from_url(url).await?

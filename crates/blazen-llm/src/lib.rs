@@ -68,13 +68,13 @@ pub mod http;
 mod http_reqwest;
 #[cfg(all(feature = "reqwest", not(target_arch = "wasm32")))]
 pub use http_reqwest::ReqwestHttpClient;
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
 mod http_fetch;
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
 pub use http_fetch::FetchHttpClient;
 
 /// Returns the platform-appropriate default HTTP client.
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
 pub(crate) fn default_http_client() -> std::sync::Arc<dyn http::HttpClient> {
     FetchHttpClient::new().into_arc()
 }

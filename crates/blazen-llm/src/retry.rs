@@ -180,7 +180,12 @@ impl CompletionModel for RetryCompletionModel {
                         max,
                     );
                     last_err = Some(err);
+                    #[cfg(not(target_os = "wasi"))]
                     tokio::time::sleep(delay).await;
+                    #[cfg(target_os = "wasi")]
+                    {
+                        let _ = delay;
+                    }
                 }
             }
         }
@@ -218,7 +223,12 @@ impl CompletionModel for RetryCompletionModel {
                         max,
                     );
                     last_err = Some(err);
+                    #[cfg(not(target_os = "wasi"))]
                     tokio::time::sleep(delay).await;
+                    #[cfg(target_os = "wasi")]
+                    {
+                        let _ = delay;
+                    }
                 }
             }
         }
