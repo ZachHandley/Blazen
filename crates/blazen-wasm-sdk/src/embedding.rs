@@ -77,7 +77,20 @@ impl WasmEmbeddingModel {
     #[wasm_bindgen]
     pub fn together(api_key: &str) -> Self {
         let model =
-            compat_embedding_with_fetch(OpenAiCompatEmbeddingModel::together(api_key));
+            compat_embedding_with_fetch(OpenAiCompatEmbeddingModel::new(
+                OpenAiCompatConfig {
+                    provider_name: "together".into(),
+                    base_url: "https://api.together.xyz/v1".into(),
+                    api_key: api_key.into(),
+                    default_model: String::new(),
+                    auth_method: AuthMethod::Bearer,
+                    extra_headers: Vec::new(),
+                    query_params: Vec::new(),
+                    supports_model_listing: false,
+                },
+                "togethercomputer/m2-bert-80M-8k-retrieval",
+                768,
+            ));
         Self {
             inner: Arc::new(model),
         }
@@ -87,7 +100,20 @@ impl WasmEmbeddingModel {
     #[wasm_bindgen]
     pub fn cohere(api_key: &str) -> Self {
         let model =
-            compat_embedding_with_fetch(OpenAiCompatEmbeddingModel::cohere(api_key));
+            compat_embedding_with_fetch(OpenAiCompatEmbeddingModel::new(
+                OpenAiCompatConfig {
+                    provider_name: "cohere".into(),
+                    base_url: "https://api.cohere.ai/compatibility/v1".into(),
+                    api_key: api_key.into(),
+                    default_model: String::new(),
+                    auth_method: AuthMethod::Bearer,
+                    extra_headers: Vec::new(),
+                    query_params: Vec::new(),
+                    supports_model_listing: false,
+                },
+                "embed-v4.0",
+                1024,
+            ));
         Self {
             inner: Arc::new(model),
         }
@@ -97,7 +123,20 @@ impl WasmEmbeddingModel {
     #[wasm_bindgen]
     pub fn fireworks(api_key: &str) -> Self {
         let model =
-            compat_embedding_with_fetch(OpenAiCompatEmbeddingModel::fireworks(api_key));
+            compat_embedding_with_fetch(OpenAiCompatEmbeddingModel::new(
+                OpenAiCompatConfig {
+                    provider_name: "fireworks".into(),
+                    base_url: "https://api.fireworks.ai/inference/v1".into(),
+                    api_key: api_key.into(),
+                    default_model: String::new(),
+                    auth_method: AuthMethod::Bearer,
+                    extra_headers: Vec::new(),
+                    query_params: Vec::new(),
+                    supports_model_listing: false,
+                },
+                "nomic-ai/nomic-embed-text-v1.5",
+                768,
+            ));
         Self {
             inner: Arc::new(model),
         }

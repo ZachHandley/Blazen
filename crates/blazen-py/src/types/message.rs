@@ -145,6 +145,7 @@ impl PyChatMessage {
                 role,
                 content: message_content,
                 tool_call_id: None,
+                name: None,
                 tool_calls: Vec::new(),
             },
         })

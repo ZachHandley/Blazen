@@ -5,6 +5,7 @@ use std::sync::Arc;
 use pyo3::prelude::*;
 
 use blazen_llm::EmbeddingModel;
+use blazen_llm::providers::openai_compat::{AuthMethod, OpenAiCompatConfig};
 
 use crate::error::BlazenPyError;
 use crate::types::usage::{PyRequestTiming, PyTokenUsage};
@@ -60,8 +61,20 @@ impl PyEmbeddingModel {
     ///     api_key: Your Together API key.
     #[staticmethod]
     fn together(api_key: &str) -> Self {
-        let provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::together(api_key);
+        let provider = blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::new(
+            OpenAiCompatConfig {
+                provider_name: "together".into(),
+                base_url: "https://api.together.xyz/v1".into(),
+                api_key: api_key.into(),
+                default_model: String::new(),
+                auth_method: AuthMethod::Bearer,
+                extra_headers: Vec::new(),
+                query_params: Vec::new(),
+                supports_model_listing: false,
+            },
+            "togethercomputer/m2-bert-80M-8k-retrieval",
+            768,
+        );
         Self {
             inner: Arc::new(provider),
         }
@@ -73,8 +86,20 @@ impl PyEmbeddingModel {
     ///     api_key: Your Cohere API key.
     #[staticmethod]
     fn cohere(api_key: &str) -> Self {
-        let provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::cohere(api_key);
+        let provider = blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::new(
+            OpenAiCompatConfig {
+                provider_name: "cohere".into(),
+                base_url: "https://api.cohere.ai/compatibility/v1".into(),
+                api_key: api_key.into(),
+                default_model: String::new(),
+                auth_method: AuthMethod::Bearer,
+                extra_headers: Vec::new(),
+                query_params: Vec::new(),
+                supports_model_listing: false,
+            },
+            "embed-v4.0",
+            1024,
+        );
         Self {
             inner: Arc::new(provider),
         }
@@ -86,8 +111,20 @@ impl PyEmbeddingModel {
     ///     api_key: Your Fireworks API key.
     #[staticmethod]
     fn fireworks(api_key: &str) -> Self {
-        let provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::fireworks(api_key);
+        let provider = blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::new(
+            OpenAiCompatConfig {
+                provider_name: "fireworks".into(),
+                base_url: "https://api.fireworks.ai/inference/v1".into(),
+                api_key: api_key.into(),
+                default_model: String::new(),
+                auth_method: AuthMethod::Bearer,
+                extra_headers: Vec::new(),
+                query_params: Vec::new(),
+                supports_model_listing: false,
+            },
+            "nomic-ai/nomic-embed-text-v1.5",
+            768,
+        );
         Self {
             inner: Arc::new(provider),
         }

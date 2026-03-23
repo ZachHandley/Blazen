@@ -12,7 +12,7 @@ use wasm_bindgen_futures::future_to_promise;
 use blazen_llm::cache::{CacheConfig, CachedCompletionModel};
 use blazen_llm::fallback::FallbackModel;
 use blazen_llm::http::HttpClient;
-use blazen_llm::providers::openai_compat::OpenAiCompatProvider;
+use blazen_llm::providers::openai_compat::{AuthMethod, OpenAiCompatConfig, OpenAiCompatProvider};
 use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
 use blazen_llm::traits::CompletionModel;
 use blazen_llm::types::CompletionRequest;
@@ -67,7 +67,16 @@ impl WasmCompletionModel {
     /// OpenAI (`gpt-4.1`).
     #[wasm_bindgen]
     pub fn openai(api_key: &str) -> Self {
-        let provider = compat_with_fetch(OpenAiCompatProvider::openai(api_key));
+        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+            provider_name: "openai".into(),
+            base_url: "https://api.openai.com/v1".into(),
+            api_key: api_key.into(),
+            default_model: "gpt-4.1".into(),
+            auth_method: AuthMethod::Bearer,
+            extra_headers: Vec::new(),
+            query_params: Vec::new(),
+            supports_model_listing: true,
+        }));
         Self {
             inner: Arc::new(provider),
         }
@@ -76,7 +85,16 @@ impl WasmCompletionModel {
     /// OpenRouter (400+ models, default `openai/gpt-4.1`).
     #[wasm_bindgen]
     pub fn openrouter(api_key: &str) -> Self {
-        let provider = compat_with_fetch(OpenAiCompatProvider::openrouter(api_key));
+        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+            provider_name: "openrouter".into(),
+            base_url: "https://openrouter.ai/api/v1".into(),
+            api_key: api_key.into(),
+            default_model: "openai/gpt-4.1".into(),
+            auth_method: AuthMethod::Bearer,
+            extra_headers: Vec::new(),
+            query_params: Vec::new(),
+            supports_model_listing: true,
+        }));
         Self {
             inner: Arc::new(provider),
         }
@@ -85,7 +103,16 @@ impl WasmCompletionModel {
     /// Groq (fast inference, default `llama-3.3-70b-versatile`).
     #[wasm_bindgen]
     pub fn groq(api_key: &str) -> Self {
-        let provider = compat_with_fetch(OpenAiCompatProvider::groq(api_key));
+        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+            provider_name: "groq".into(),
+            base_url: "https://api.groq.com/openai/v1".into(),
+            api_key: api_key.into(),
+            default_model: "llama-3.3-70b-versatile".into(),
+            auth_method: AuthMethod::Bearer,
+            extra_headers: Vec::new(),
+            query_params: Vec::new(),
+            supports_model_listing: true,
+        }));
         Self {
             inner: Arc::new(provider),
         }
@@ -94,7 +121,16 @@ impl WasmCompletionModel {
     /// Together AI (default `meta-llama/Llama-3.3-70B-Instruct-Turbo`).
     #[wasm_bindgen]
     pub fn together(api_key: &str) -> Self {
-        let provider = compat_with_fetch(OpenAiCompatProvider::together(api_key));
+        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+            provider_name: "together".into(),
+            base_url: "https://api.together.xyz/v1".into(),
+            api_key: api_key.into(),
+            default_model: "meta-llama/Llama-3.3-70B-Instruct-Turbo".into(),
+            auth_method: AuthMethod::Bearer,
+            extra_headers: Vec::new(),
+            query_params: Vec::new(),
+            supports_model_listing: true,
+        }));
         Self {
             inner: Arc::new(provider),
         }
@@ -103,7 +139,16 @@ impl WasmCompletionModel {
     /// Mistral AI (default `mistral-large-latest`).
     #[wasm_bindgen]
     pub fn mistral(api_key: &str) -> Self {
-        let provider = compat_with_fetch(OpenAiCompatProvider::mistral(api_key));
+        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+            provider_name: "mistral".into(),
+            base_url: "https://api.mistral.ai/v1".into(),
+            api_key: api_key.into(),
+            default_model: "mistral-large-latest".into(),
+            auth_method: AuthMethod::Bearer,
+            extra_headers: Vec::new(),
+            query_params: Vec::new(),
+            supports_model_listing: true,
+        }));
         Self {
             inner: Arc::new(provider),
         }
@@ -112,7 +157,16 @@ impl WasmCompletionModel {
     /// DeepSeek (default `deepseek-chat`).
     #[wasm_bindgen]
     pub fn deepseek(api_key: &str) -> Self {
-        let provider = compat_with_fetch(OpenAiCompatProvider::deepseek(api_key));
+        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+            provider_name: "deepseek".into(),
+            base_url: "https://api.deepseek.com".into(),
+            api_key: api_key.into(),
+            default_model: "deepseek-chat".into(),
+            auth_method: AuthMethod::Bearer,
+            extra_headers: Vec::new(),
+            query_params: Vec::new(),
+            supports_model_listing: false,
+        }));
         Self {
             inner: Arc::new(provider),
         }
@@ -121,7 +175,16 @@ impl WasmCompletionModel {
     /// Fireworks AI.
     #[wasm_bindgen]
     pub fn fireworks(api_key: &str) -> Self {
-        let provider = compat_with_fetch(OpenAiCompatProvider::fireworks(api_key));
+        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+            provider_name: "fireworks".into(),
+            base_url: "https://api.fireworks.ai/inference/v1".into(),
+            api_key: api_key.into(),
+            default_model: "accounts/fireworks/models/llama-v3p3-70b-instruct".into(),
+            auth_method: AuthMethod::Bearer,
+            extra_headers: Vec::new(),
+            query_params: Vec::new(),
+            supports_model_listing: true,
+        }));
         Self {
             inner: Arc::new(provider),
         }
@@ -130,7 +193,16 @@ impl WasmCompletionModel {
     /// Perplexity (default `sonar-pro`).
     #[wasm_bindgen]
     pub fn perplexity(api_key: &str) -> Self {
-        let provider = compat_with_fetch(OpenAiCompatProvider::perplexity(api_key));
+        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+            provider_name: "perplexity".into(),
+            base_url: "https://api.perplexity.ai".into(),
+            api_key: api_key.into(),
+            default_model: "sonar-pro".into(),
+            auth_method: AuthMethod::Bearer,
+            extra_headers: Vec::new(),
+            query_params: Vec::new(),
+            supports_model_listing: false,
+        }));
         Self {
             inner: Arc::new(provider),
         }
@@ -139,7 +211,16 @@ impl WasmCompletionModel {
     /// xAI / Grok (default `grok-3`).
     #[wasm_bindgen]
     pub fn xai(api_key: &str) -> Self {
-        let provider = compat_with_fetch(OpenAiCompatProvider::xai(api_key));
+        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+            provider_name: "xai".into(),
+            base_url: "https://api.x.ai/v1".into(),
+            api_key: api_key.into(),
+            default_model: "grok-3".into(),
+            auth_method: AuthMethod::Bearer,
+            extra_headers: Vec::new(),
+            query_params: Vec::new(),
+            supports_model_listing: true,
+        }));
         Self {
             inner: Arc::new(provider),
         }
@@ -148,7 +229,16 @@ impl WasmCompletionModel {
     /// Cohere (default `command-a-08-2025`).
     #[wasm_bindgen]
     pub fn cohere(api_key: &str) -> Self {
-        let provider = compat_with_fetch(OpenAiCompatProvider::cohere(api_key));
+        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+            provider_name: "cohere".into(),
+            base_url: "https://api.cohere.ai/compatibility/v1".into(),
+            api_key: api_key.into(),
+            default_model: "command-a-08-2025".into(),
+            auth_method: AuthMethod::Bearer,
+            extra_headers: Vec::new(),
+            query_params: Vec::new(),
+            supports_model_listing: false,
+        }));
         Self {
             inner: Arc::new(provider),
         }
@@ -157,7 +247,16 @@ impl WasmCompletionModel {
     /// AWS Bedrock via Mantle endpoint.
     #[wasm_bindgen]
     pub fn bedrock(api_key: &str, region: &str) -> Self {
-        let provider = compat_with_fetch(OpenAiCompatProvider::bedrock(api_key, region));
+        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+            provider_name: "bedrock".into(),
+            base_url: format!("https://bedrock-mantle.{region}.api.aws/v1"),
+            api_key: api_key.into(),
+            default_model: "anthropic.claude-sonnet-4-20250514-v1:0".into(),
+            auth_method: AuthMethod::Bearer,
+            extra_headers: Vec::new(),
+            query_params: Vec::new(),
+            supports_model_listing: true,
+        }));
         Self {
             inner: Arc::new(provider),
         }

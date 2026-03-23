@@ -208,7 +208,7 @@ impl GeminiProvider {
                     "role": "user",
                     "parts": [{
                         "functionResponse": {
-                            "name": msg.tool_call_id.as_deref().unwrap_or("unknown"),
+                            "name": msg.name.as_deref().unwrap_or("unknown"),
                             "response": response_value,
                         }
                     }],
@@ -794,6 +794,31 @@ fn parse_gemini_sse_event(buffer: &mut String) -> Option<Result<StreamChunk, Bla
                     ))));
                 }
             }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ProviderInfo implementation
+// ---------------------------------------------------------------------------
+
+impl crate::traits::ProviderInfo for GeminiProvider {
+    fn provider_name(&self) -> &str {
+        "gemini"
+    }
+
+    fn base_url(&self) -> &str {
+        &self.base_url
+    }
+
+    fn capabilities(&self) -> crate::traits::ProviderCapabilities {
+        crate::traits::ProviderCapabilities {
+            streaming: true,
+            tool_calling: true,
+            structured_output: true,
+            vision: true,
+            model_listing: true,
+            embeddings: false,
         }
     }
 }

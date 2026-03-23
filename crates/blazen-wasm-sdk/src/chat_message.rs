@@ -64,11 +64,11 @@ impl WasmChatMessage {
         }
     }
 
-    /// Create a tool result message with an associated tool call ID.
+    /// Create a tool result message with an associated tool call ID and function name.
     #[wasm_bindgen(js_name = "toolResult")]
-    pub fn tool_result(call_id: &str, content: &str) -> Self {
+    pub fn tool_result(call_id: &str, name: &str, content: &str) -> Self {
         Self {
-            inner: InnerChatMessage::tool_result(call_id, content),
+            inner: InnerChatMessage::tool_result(call_id, name, content),
         }
     }
 
@@ -100,6 +100,12 @@ impl WasmChatMessage {
     #[wasm_bindgen(getter, js_name = "toolCallId")]
     pub fn tool_call_id(&self) -> Option<String> {
         self.inner.tool_call_id.clone()
+    }
+
+    /// The function name, if this is a tool result message.
+    #[wasm_bindgen(getter)]
+    pub fn name(&self) -> Option<String> {
+        self.inner.name.clone()
     }
 
     /// Serialize this message to a JSON object.

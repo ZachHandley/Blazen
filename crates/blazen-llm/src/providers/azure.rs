@@ -475,6 +475,33 @@ impl ModelRegistry for AzureOpenAiProvider {
 }
 
 // ---------------------------------------------------------------------------
+// ProviderInfo implementation
+// ---------------------------------------------------------------------------
+
+impl crate::traits::ProviderInfo for AzureOpenAiProvider {
+    fn provider_name(&self) -> &str {
+        "azure"
+    }
+
+    fn base_url(&self) -> &str {
+        // Azure uses a dynamic URL based on resource + deployment, not a static base URL.
+        // Return the resource-level base.
+        "https://openai.azure.com"
+    }
+
+    fn capabilities(&self) -> crate::traits::ProviderCapabilities {
+        crate::traits::ProviderCapabilities {
+            streaming: true,
+            tool_calling: true,
+            structured_output: true,
+            vision: true,
+            model_listing: true,
+            embeddings: false,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 

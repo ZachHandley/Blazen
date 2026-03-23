@@ -1638,6 +1638,31 @@ impl Transcription for FalProvider {
 }
 
 // ---------------------------------------------------------------------------
+// ProviderInfo implementation
+// ---------------------------------------------------------------------------
+
+impl crate::traits::ProviderInfo for FalProvider {
+    fn provider_name(&self) -> &str {
+        "fal"
+    }
+
+    fn base_url(&self) -> &str {
+        FAL_QUEUE_URL
+    }
+
+    fn capabilities(&self) -> crate::traits::ProviderCapabilities {
+        crate::traits::ProviderCapabilities {
+            streaming: false,
+            tool_calling: false,
+            structured_output: false,
+            vision: false,
+            model_listing: false,
+            embeddings: false,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 

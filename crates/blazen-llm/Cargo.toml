@@ -11,12 +11,6 @@ description = "LLM provider abstraction layer for the Blazen workflow engine"
 [features]
 default = []
 reqwest = ["dep:reqwest"]
-openai = []
-anthropic = []
-gemini = []
-fal = []
-azure = []
-all-providers = ["openai", "anthropic", "gemini", "fal", "azure"]
 tiktoken = ["dep:tiktoken-rs"]
 
 [dependencies]

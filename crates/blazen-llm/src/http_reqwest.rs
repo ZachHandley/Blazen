@@ -36,6 +36,8 @@ impl ReqwestHttpClient {
             HttpMethod::Get => self.client.get(&request.url),
             HttpMethod::Post => self.client.post(&request.url),
             HttpMethod::Put => self.client.put(&request.url),
+            HttpMethod::Delete => self.client.delete(&request.url),
+            HttpMethod::Patch => self.client.patch(&request.url),
         };
 
         for (k, v) in &request.headers {

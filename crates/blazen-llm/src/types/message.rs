@@ -148,6 +148,12 @@ pub struct ChatMessage {
     /// The ID of the tool call this message is a response to (for `Role::Tool` messages).
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub tool_call_id: Option<String>,
+    /// The name of the tool/function that produced this result (for `Role::Tool` messages).
+    ///
+    /// Some providers (e.g. Gemini) require the function name alongside the tool
+    /// result, rather than a synthetic call ID.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub name: Option<String>,
     /// Tool calls requested by the assistant in this message.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub tool_calls: Vec<ToolCall>,
@@ -161,6 +167,7 @@ impl ChatMessage {
             role: Role::System,
             content: MessageContent::Text(content.into()),
             tool_call_id: None,
+            name: None,
             tool_calls: Vec::new(),
         }
     }
@@ -172,6 +179,7 @@ impl ChatMessage {
             role: Role::User,
             content: MessageContent::Text(content.into()),
             tool_call_id: None,
+            name: None,
             tool_calls: Vec::new(),
         }
     }
@@ -183,6 +191,7 @@ impl ChatMessage {
             role: Role::Assistant,
             content: MessageContent::Text(content.into()),
             tool_call_id: None,
+            name: None,
             tool_calls: Vec::new(),
         }
     }
@@ -198,6 +207,7 @@ impl ChatMessage {
             role: Role::Assistant,
             content: content.map_or(MessageContent::Text(String::new()), MessageContent::Text),
             tool_call_id: None,
+            name: None,
             tool_calls,
         }
     }
@@ -209,20 +219,27 @@ impl ChatMessage {
             role: Role::Tool,
             content: MessageContent::Text(content.into()),
             tool_call_id: None,
+            name: None,
             tool_calls: Vec::new(),
         }
     }
 
-    /// Create a tool result message with an associated tool call ID.
+    /// Create a tool result message with an associated tool call ID and function name.
     ///
     /// OpenAI-compatible APIs require each tool result message to reference the
-    /// `tool_call_id` of the invocation it responds to.
+    /// `tool_call_id` of the invocation it responds to.  Gemini requires the
+    /// original function `name` in the `functionResponse` payload.
     #[must_use]
-    pub fn tool_result(call_id: impl Into<String>, content: impl Into<String>) -> Self {
+    pub fn tool_result(
+        call_id: impl Into<String>,
+        name: impl Into<String>,
+        content: impl Into<String>,
+    ) -> Self {
         Self {
             role: Role::Tool,
             content: MessageContent::Text(content.into()),
             tool_call_id: Some(call_id.into()),
+            name: Some(name.into()),
             tool_calls: Vec::new(),
         }
     }
@@ -244,6 +261,7 @@ impl ChatMessage {
                 }),
             ]),
             tool_call_id: None,
+            name: None,
             tool_calls: Vec::new(),
         }
     }
@@ -265,6 +283,7 @@ impl ChatMessage {
                 }),
             ]),
             tool_call_id: None,
+            name: None,
             tool_calls: Vec::new(),
         }
     }
@@ -276,6 +295,7 @@ impl ChatMessage {
             role: Role::User,
             content: MessageContent::Parts(parts),
             tool_call_id: None,
+            name: None,
             tool_calls: Vec::new(),
         }
     }

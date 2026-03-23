@@ -911,6 +911,31 @@ fn parse_anthropic_event(
 }
 
 // ---------------------------------------------------------------------------
+// ProviderInfo implementation
+// ---------------------------------------------------------------------------
+
+impl crate::traits::ProviderInfo for AnthropicProvider {
+    fn provider_name(&self) -> &str {
+        "anthropic"
+    }
+
+    fn base_url(&self) -> &str {
+        &self.base_url
+    }
+
+    fn capabilities(&self) -> crate::traits::ProviderCapabilities {
+        crate::traits::ProviderCapabilities {
+            streaming: true,
+            tool_calling: true,
+            structured_output: true,
+            vision: true,
+            model_listing: true,
+            embeddings: false,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 

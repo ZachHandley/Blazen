@@ -69,6 +69,8 @@ fn to_wasi_method(method: HttpMethod) -> Method {
         HttpMethod::Get => Method::Get,
         HttpMethod::Post => Method::Post,
         HttpMethod::Put => Method::Put,
+        HttpMethod::Delete => Method::Delete,
+        HttpMethod::Patch => Method::Patch,
     }
 }
 

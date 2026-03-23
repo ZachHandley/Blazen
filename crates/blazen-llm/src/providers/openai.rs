@@ -667,6 +667,31 @@ impl crate::traits::EmbeddingModel for OpenAiEmbeddingModel {
 }
 
 // ---------------------------------------------------------------------------
+// ProviderInfo implementation
+// ---------------------------------------------------------------------------
+
+impl crate::traits::ProviderInfo for OpenAiProvider {
+    fn provider_name(&self) -> &str {
+        "openai"
+    }
+
+    fn base_url(&self) -> &str {
+        &self.base_url
+    }
+
+    fn capabilities(&self) -> crate::traits::ProviderCapabilities {
+        crate::traits::ProviderCapabilities {
+            streaming: true,
+            tool_calling: true,
+            structured_output: true,
+            vision: true,
+            model_listing: true,
+            embeddings: true,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 

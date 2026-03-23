@@ -13,10 +13,20 @@ use blazen_llm::error::BlazenError;
 use blazen_llm::http::HttpClient;
 use blazen_llm::providers::anthropic::AnthropicProvider;
 use blazen_llm::providers::azure::AzureOpenAiProvider;
+use blazen_llm::providers::bedrock::BedrockProvider;
+use blazen_llm::providers::cohere::CohereProvider;
+use blazen_llm::providers::deepseek::DeepSeekProvider;
 use blazen_llm::providers::fal::FalProvider;
+use blazen_llm::providers::fireworks::FireworksProvider;
 use blazen_llm::providers::gemini::GeminiProvider;
+use blazen_llm::providers::groq::GroqProvider;
+use blazen_llm::providers::mistral::MistralProvider;
 use blazen_llm::providers::openai::OpenAiProvider;
 use blazen_llm::providers::openai_compat::{AuthMethod, OpenAiCompatConfig, OpenAiCompatProvider};
+use blazen_llm::providers::openrouter::OpenRouterProvider;
+use blazen_llm::providers::perplexity::PerplexityProvider;
+use blazen_llm::providers::together::TogetherProvider;
+use blazen_llm::providers::xai::XaiProvider;
 use blazen_llm::types::{ChatMessage, CompletionRequest, CompletionResponse};
 
 use crate::keys::KeyProvider;
@@ -289,6 +299,7 @@ fn handle_list_providers(keys: &KeyProvider) -> RouteResponse {
         ("perplexity", "openai_compat"),
         ("xai", "openai_compat"),
         ("cohere", "openai_compat"),
+        ("bedrock", "openai_compat"),
     ];
 
     let mut providers: Vec<ProviderInfo> = built_in
@@ -515,75 +526,6 @@ fn handle_stub(feature: &str) -> RouteResponse {
 // Provider resolution
 // ---------------------------------------------------------------------------
 
-/// Built-in OpenAI-compatible provider configurations.
-///
-/// Each entry maps a provider name to its (base_url, auth_method, default_model,
-/// supports_model_listing) tuple.
-fn openai_compat_config(
-    provider_name: &str,
-    api_key: &str,
-) -> Option<OpenAiCompatConfig> {
-    let (base_url, default_model, supports_listing) = match provider_name {
-        "openrouter" => (
-            "https://openrouter.ai/api/v1",
-            "openai/gpt-4.1",
-            true,
-        ),
-        "groq" => (
-            "https://api.groq.com/openai/v1",
-            "llama-3.3-70b-versatile",
-            true,
-        ),
-        "together" => (
-            "https://api.together.xyz/v1",
-            "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-            true,
-        ),
-        "mistral" => (
-            "https://api.mistral.ai/v1",
-            "mistral-large-latest",
-            true,
-        ),
-        "deepseek" => (
-            "https://api.deepseek.com",
-            "deepseek-chat",
-            false,
-        ),
-        "fireworks" => (
-            "https://api.fireworks.ai/inference/v1",
-            "accounts/fireworks/models/llama-v3p3-70b-instruct",
-            true,
-        ),
-        "perplexity" => (
-            "https://api.perplexity.ai",
-            "sonar-pro",
-            false,
-        ),
-        "xai" => (
-            "https://api.x.ai/v1",
-            "grok-3",
-            true,
-        ),
-        "cohere" => (
-            "https://api.cohere.ai/compatibility/v1",
-            "command-a-08-2025",
-            false,
-        ),
-        _ => return None,
-    };
-
-    Some(OpenAiCompatConfig {
-        provider_name: provider_name.to_owned(),
-        base_url: base_url.to_owned(),
-        api_key: api_key.to_owned(),
-        default_model: default_model.to_owned(),
-        auth_method: AuthMethod::Bearer,
-        extra_headers: Vec::new(),
-        query_params: Vec::new(),
-        supports_model_listing: supports_listing,
-    })
-}
-
 /// Map a provider name to a concrete `CompletionModel` implementation.
 fn resolve_provider(
     provider_name: &str,
@@ -624,13 +566,40 @@ fn resolve_provider(
             FalProvider::new_with_client(api_key, http_client).with_llm_model(model_id),
         )),
 
-        // OpenAI-compatible providers
-        name @ ("openrouter" | "groq" | "together" | "mistral" | "deepseek" | "fireworks"
-        | "perplexity" | "xai" | "cohere") => {
-            let config = openai_compat_config(name, api_key)
-                .expect("openai_compat_config should match known providers");
+        // OpenAI-compatible providers (dedicated types)
+        "openrouter" => Ok(Box::new(
+            OpenRouterProvider::new_with_client(api_key, http_client).with_model(model_id),
+        )),
+        "groq" => Ok(Box::new(
+            GroqProvider::new_with_client(api_key, http_client).with_model(model_id),
+        )),
+        "together" => Ok(Box::new(
+            TogetherProvider::new_with_client(api_key, http_client).with_model(model_id),
+        )),
+        "mistral" => Ok(Box::new(
+            MistralProvider::new_with_client(api_key, http_client).with_model(model_id),
+        )),
+        "deepseek" => Ok(Box::new(
+            DeepSeekProvider::new_with_client(api_key, http_client).with_model(model_id),
+        )),
+        "fireworks" => Ok(Box::new(
+            FireworksProvider::new_with_client(api_key, http_client).with_model(model_id),
+        )),
+        "perplexity" => Ok(Box::new(
+            PerplexityProvider::new_with_client(api_key, http_client).with_model(model_id),
+        )),
+        "xai" => Ok(Box::new(
+            XaiProvider::new_with_client(api_key, http_client).with_model(model_id),
+        )),
+        "cohere" => Ok(Box::new(
+            CohereProvider::new_with_client(api_key, http_client).with_model(model_id),
+        )),
+        "bedrock" => {
+            let region =
+                std::env::var("BEDROCK_REGION").unwrap_or_else(|_| "us-east-1".to_owned());
             Ok(Box::new(
-                OpenAiCompatProvider::new_with_client(config, http_client).with_model(model_id),
+                BedrockProvider::new_with_client(api_key, region, http_client)
+                    .with_model(model_id),
             ))
         }
 

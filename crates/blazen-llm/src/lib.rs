@@ -9,21 +9,17 @@
 //!
 //! | Feature | Description |
 //! |---------|-------------|
-//! | `openai` | Enables [`providers::openai::OpenAiProvider`] and [`providers::openai_compat::OpenAiCompatProvider`] (covers `OpenRouter`, Groq, Together, Mistral, `DeepSeek`, Fireworks, Perplexity, xAI, Cohere, Bedrock) |
-//! | `anthropic` | Enables [`providers::anthropic::AnthropicProvider`] |
-//! | `gemini` | Enables [`providers::gemini::GeminiProvider`] |
-//! | `fal` | Enables [`providers::fal::FalProvider`] |
-//! | `azure` | Enables [`providers::azure::AzureOpenAiProvider`] |
-//! | `all-providers` | Enables all provider implementations |
+//! | `reqwest` | Enables the native HTTP client (for non-WASM targets) |
+//! | `tiktoken` | Enables exact BPE token counting |
+//!
+//! All providers are always compiled -- no feature flags needed.
 //!
 //! ## Quick start
 //!
 //! ```rust,no_run
 //! use blazen_llm::{CompletionModel, CompletionRequest, ChatMessage};
-//! # #[cfg(feature = "openai")]
 //! use blazen_llm::providers::openai::OpenAiProvider;
 //!
-//! # #[cfg(feature = "openai")]
 //! # async fn example() -> Result<(), blazen_llm::BlazenError> {
 //! let model = OpenAiProvider::new("sk-...");
 //! let request = CompletionRequest::new(vec![
@@ -41,19 +37,19 @@
 //! OpenAI-compatible service:
 //!
 //! ```rust,no_run
-//! # #[cfg(feature = "openai")]
-//! use blazen_llm::providers::openai_compat::OpenAiCompatProvider;
+//! use blazen_llm::providers::groq::GroqProvider;
+//! use blazen_llm::providers::openrouter::OpenRouterProvider;
+//! use blazen_llm::providers::together::TogetherProvider;
 //!
-//! # #[cfg(feature = "openai")]
 //! # fn example() {
 //! // Groq (fast inference)
-//! let groq = OpenAiCompatProvider::groq("gsk-...");
+//! let groq = GroqProvider::new("gsk-...");
 //!
 //! // OpenRouter (400+ models)
-//! let openrouter = OpenAiCompatProvider::openrouter("sk-or-...");
+//! let openrouter = OpenRouterProvider::new("sk-or-...");
 //!
 //! // Together AI
-//! let together = OpenAiCompatProvider::together("...");
+//! let together = TogetherProvider::new("...");
 //! # }
 //! ```
 
@@ -144,7 +140,7 @@ pub use tokens::TiktokenCounter;
 pub use tokens::{EstimateCounter, TokenCounter};
 pub use traits::{
     CompletionModel, EmbeddingModel, ModelCapabilities, ModelInfo, ModelPricing, ModelRegistry,
-    StructuredOutput, Tool,
+    ProviderCapabilities, ProviderInfo, StructuredOutput, Tool,
 };
 pub use types::{
     ChatMessage, CompletionRequest, CompletionResponse, ContentPart, EmbeddingResponse,

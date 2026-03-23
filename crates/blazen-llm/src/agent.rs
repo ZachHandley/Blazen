@@ -423,7 +423,7 @@ async fn execute_tool_calls(
         } else {
             serde_json::to_string(&result).unwrap_or_default()
         };
-        messages.push(ChatMessage::tool_result(&tc.id, &result_str));
+        messages.push(ChatMessage::tool_result(&tc.id, &tc.name, &result_str));
     }
     Ok(())
 }

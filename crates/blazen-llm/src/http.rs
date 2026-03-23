@@ -26,6 +26,8 @@ pub enum HttpMethod {
     Get,
     Post,
     Put,
+    Delete,
+    Patch,
 }
 
 /// An outgoing HTTP request.
@@ -65,6 +67,28 @@ impl HttpRequest {
     pub fn put(url: impl Into<String>) -> Self {
         Self {
             method: HttpMethod::Put,
+            url: url.into(),
+            headers: Vec::new(),
+            body: None,
+            query_params: Vec::new(),
+        }
+    }
+
+    /// Convenience: create a DELETE request.
+    pub fn delete(url: impl Into<String>) -> Self {
+        Self {
+            method: HttpMethod::Delete,
+            url: url.into(),
+            headers: Vec::new(),
+            body: None,
+            query_params: Vec::new(),
+        }
+    }
+
+    /// Convenience: create a PATCH request.
+    pub fn patch(url: impl Into<String>) -> Self {
+        Self {
+            method: HttpMethod::Patch,
             url: url.into(),
             headers: Vec::new(),
             body: None,

@@ -9,6 +9,7 @@ use tokio_stream::StreamExt;
 use blazen_llm::cache::{CacheConfig, CacheStrategy, CachedCompletionModel};
 use blazen_llm::fallback::FallbackModel;
 use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
+use blazen_llm::types::ToolDefinition;
 use blazen_llm::{ChatMessage, CompletionModel, CompletionRequest};
 
 use crate::error::BlazenPyError;
@@ -120,8 +121,7 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, model=None))]
     fn openrouter(api_key: &str, model: Option<&str>) -> Self {
-        let mut provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatProvider::openrouter(api_key);
+        let mut provider = blazen_llm::providers::openrouter::OpenRouterProvider::new(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -138,8 +138,7 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, model=None))]
     fn groq(api_key: &str, model: Option<&str>) -> Self {
-        let mut provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatProvider::groq(api_key);
+        let mut provider = blazen_llm::providers::groq::GroqProvider::new(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -156,8 +155,7 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, model=None))]
     fn together(api_key: &str, model: Option<&str>) -> Self {
-        let mut provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatProvider::together(api_key);
+        let mut provider = blazen_llm::providers::together::TogetherProvider::new(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -174,8 +172,7 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, model=None))]
     fn mistral(api_key: &str, model: Option<&str>) -> Self {
-        let mut provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatProvider::mistral(api_key);
+        let mut provider = blazen_llm::providers::mistral::MistralProvider::new(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -192,8 +189,7 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, model=None))]
     fn deepseek(api_key: &str, model: Option<&str>) -> Self {
-        let mut provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatProvider::deepseek(api_key);
+        let mut provider = blazen_llm::providers::deepseek::DeepSeekProvider::new(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -210,8 +206,7 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, model=None))]
     fn fireworks(api_key: &str, model: Option<&str>) -> Self {
-        let mut provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatProvider::fireworks(api_key);
+        let mut provider = blazen_llm::providers::fireworks::FireworksProvider::new(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -228,8 +223,7 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, model=None))]
     fn perplexity(api_key: &str, model: Option<&str>) -> Self {
-        let mut provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatProvider::perplexity(api_key);
+        let mut provider = blazen_llm::providers::perplexity::PerplexityProvider::new(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -246,7 +240,7 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, model=None))]
     fn xai(api_key: &str, model: Option<&str>) -> Self {
-        let mut provider = blazen_llm::providers::openai_compat::OpenAiCompatProvider::xai(api_key);
+        let mut provider = blazen_llm::providers::xai::XaiProvider::new(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -263,8 +257,7 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, model=None))]
     fn cohere(api_key: &str, model: Option<&str>) -> Self {
-        let mut provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatProvider::cohere(api_key);
+        let mut provider = blazen_llm::providers::cohere::CohereProvider::new(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -282,8 +275,7 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, region, model=None))]
     fn bedrock(api_key: &str, region: &str, model: Option<&str>) -> Self {
-        let mut provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatProvider::bedrock(api_key, region);
+        let mut provider = blazen_llm::providers::bedrock::BedrockProvider::new(api_key, region);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -430,7 +422,10 @@ impl PyCompletionModel {
     ///     messages: A list of ChatMessage objects.
     ///     temperature: Optional sampling temperature (0.0-2.0).
     ///     max_tokens: Optional maximum tokens to generate.
+    ///     top_p: Optional nucleus sampling parameter (0.0-1.0).
     ///     model: Optional model override for this request.
+    ///     tools: Optional list of dicts with ``name``, ``description``, and
+    ///         ``parameters`` keys for function calling.
     ///     response_format: Optional JSON schema dict for structured output.
     ///
     /// Returns:
@@ -443,14 +438,16 @@ impl PyCompletionModel {
     ///     ...     ChatMessage.user("What is 2+2?"),
     ///     ... ])
     ///     >>> print(response.content)
-    #[pyo3(signature = (messages, temperature=None, max_tokens=None, model=None, response_format=None))]
+    #[pyo3(signature = (messages, temperature=None, max_tokens=None, top_p=None, model=None, tools=None, response_format=None))]
     fn complete<'py>(
         &self,
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
         temperature: Option<f32>,
         max_tokens: Option<u32>,
+        top_p: Option<f32>,
         model: Option<String>,
+        tools: Option<Vec<Bound<'py, PyAny>>>,
         response_format: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
@@ -462,8 +459,15 @@ impl PyCompletionModel {
         if let Some(mt) = max_tokens {
             request = request.with_max_tokens(mt);
         }
+        if let Some(tp) = top_p {
+            request = request.with_top_p(tp);
+        }
         if let Some(m) = model {
             request = request.with_model(m);
+        }
+        if let Some(tool_list) = tools {
+            let rust_tools = extract_tool_definitions(py, &tool_list)?;
+            request = request.with_tools(rust_tools);
         }
         if let Some(fmt) = response_format {
             let schema = crate::workflow::event::py_to_json(py, fmt)?;
@@ -485,14 +489,18 @@ impl PyCompletionModel {
     ///         keys: ``delta``, ``finish_reason``, ``tool_calls``.
     ///     temperature: Optional sampling temperature (0.0-2.0).
     ///     max_tokens: Optional maximum tokens to generate.
+    ///     top_p: Optional nucleus sampling parameter (0.0-1.0).
     ///     model: Optional model override for this request.
+    ///     tools: Optional list of dicts with ``name``, ``description``, and
+    ///         ``parameters`` keys for function calling.
+    ///     response_format: Optional JSON schema dict for structured output.
     ///
     /// Example:
     ///     >>> async def handle_chunk(chunk):
     ///     ...     if chunk["delta"]:
     ///     ...         print(chunk["delta"], end="")
     ///     >>> await model.stream([ChatMessage.user("Hi!")], handle_chunk)
-    #[pyo3(signature = (messages, on_chunk, *, temperature=None, max_tokens=None, model=None))]
+    #[pyo3(signature = (messages, on_chunk, *, temperature=None, max_tokens=None, top_p=None, model=None, tools=None, response_format=None))]
     fn stream<'py>(
         &self,
         py: Python<'py>,
@@ -500,7 +508,10 @@ impl PyCompletionModel {
         on_chunk: Py<PyAny>,
         temperature: Option<f32>,
         max_tokens: Option<u32>,
+        top_p: Option<f32>,
         model: Option<String>,
+        tools: Option<Vec<Bound<'py, PyAny>>>,
+        response_format: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
 
@@ -511,8 +522,19 @@ impl PyCompletionModel {
         if let Some(mt) = max_tokens {
             request = request.with_max_tokens(mt);
         }
+        if let Some(tp) = top_p {
+            request = request.with_top_p(tp);
+        }
         if let Some(m) = model {
             request = request.with_model(m);
+        }
+        if let Some(tool_list) = tools {
+            let rust_tools = extract_tool_definitions(py, &tool_list)?;
+            request = request.with_tools(rust_tools);
+        }
+        if let Some(fmt) = response_format {
+            let schema = crate::workflow::event::py_to_json(py, fmt)?;
+            request = request.with_response_format(schema);
         }
 
         let inner = self.inner.clone();
@@ -549,4 +571,30 @@ impl PyCompletionModel {
     fn __repr__(&self) -> String {
         format!("CompletionModel(model_id='{}')", self.inner.model_id())
     }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// Extract a list of [`ToolDefinition`] from Python dicts (or dict-like objects).
+///
+/// Each element must have `"name"` (str), `"description"` (str), and
+/// `"parameters"` (JSON-serialisable dict) entries.
+fn extract_tool_definitions(
+    py: Python<'_>,
+    tool_list: &[Bound<'_, PyAny>],
+) -> PyResult<Vec<ToolDefinition>> {
+    let mut rust_tools = Vec::with_capacity(tool_list.len());
+    for tool in tool_list {
+        let name: String = tool.get_item("name")?.extract()?;
+        let description: String = tool.get_item("description")?.extract()?;
+        let parameters = crate::workflow::event::py_to_json(py, &tool.get_item("parameters")?)?;
+        rust_tools.push(ToolDefinition {
+            name,
+            description,
+            parameters,
+        });
+    }
+    Ok(rust_tools)
 }

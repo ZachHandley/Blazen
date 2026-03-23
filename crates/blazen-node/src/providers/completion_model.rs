@@ -148,8 +148,7 @@ impl JsCompletionModel {
     /// Create an `OpenRouter` completion model.
     #[napi(factory)]
     pub fn openrouter(api_key: String, model: Option<String>) -> Self {
-        let mut provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatProvider::openrouter(api_key);
+        let mut provider = blazen_llm::providers::openrouter::OpenRouterProvider::new(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -161,8 +160,7 @@ impl JsCompletionModel {
     /// Create a Groq completion model.
     #[napi(factory)]
     pub fn groq(api_key: String, model: Option<String>) -> Self {
-        let mut provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatProvider::groq(api_key);
+        let mut provider = blazen_llm::providers::groq::GroqProvider::new(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -174,8 +172,7 @@ impl JsCompletionModel {
     /// Create a Together AI completion model.
     #[napi(factory)]
     pub fn together(api_key: String, model: Option<String>) -> Self {
-        let mut provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatProvider::together(api_key);
+        let mut provider = blazen_llm::providers::together::TogetherProvider::new(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -187,8 +184,7 @@ impl JsCompletionModel {
     /// Create a Mistral AI completion model.
     #[napi(factory)]
     pub fn mistral(api_key: String, model: Option<String>) -> Self {
-        let mut provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatProvider::mistral(api_key);
+        let mut provider = blazen_llm::providers::mistral::MistralProvider::new(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -200,8 +196,7 @@ impl JsCompletionModel {
     /// Create a `DeepSeek` completion model.
     #[napi(factory)]
     pub fn deepseek(api_key: String, model: Option<String>) -> Self {
-        let mut provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatProvider::deepseek(api_key);
+        let mut provider = blazen_llm::providers::deepseek::DeepSeekProvider::new(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -213,8 +208,7 @@ impl JsCompletionModel {
     /// Create a Fireworks AI completion model.
     #[napi(factory)]
     pub fn fireworks(api_key: String, model: Option<String>) -> Self {
-        let mut provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatProvider::fireworks(api_key);
+        let mut provider = blazen_llm::providers::fireworks::FireworksProvider::new(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -226,8 +220,7 @@ impl JsCompletionModel {
     /// Create a Perplexity completion model.
     #[napi(factory)]
     pub fn perplexity(api_key: String, model: Option<String>) -> Self {
-        let mut provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatProvider::perplexity(api_key);
+        let mut provider = blazen_llm::providers::perplexity::PerplexityProvider::new(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -239,7 +232,7 @@ impl JsCompletionModel {
     /// Create an xAI (Grok) completion model.
     #[napi(factory)]
     pub fn xai(api_key: String, model: Option<String>) -> Self {
-        let mut provider = blazen_llm::providers::openai_compat::OpenAiCompatProvider::xai(api_key);
+        let mut provider = blazen_llm::providers::xai::XaiProvider::new(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -251,8 +244,7 @@ impl JsCompletionModel {
     /// Create a Cohere completion model.
     #[napi(factory)]
     pub fn cohere(api_key: String, model: Option<String>) -> Self {
-        let mut provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatProvider::cohere(api_key);
+        let mut provider = blazen_llm::providers::cohere::CohereProvider::new(api_key);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }
@@ -264,8 +256,7 @@ impl JsCompletionModel {
     /// Create an AWS Bedrock completion model.
     #[napi(factory)]
     pub fn bedrock(api_key: String, region: String, model: Option<String>) -> Self {
-        let mut provider =
-            blazen_llm::providers::openai_compat::OpenAiCompatProvider::bedrock(api_key, region);
+        let mut provider = blazen_llm::providers::bedrock::BedrockProvider::new(api_key, region);
         if let Some(m) = model {
             provider = provider.with_model(m);
         }

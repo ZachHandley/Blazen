@@ -5,21 +5,9 @@
 //! [`CompletionModel`] that works with any OpenAI-compatible endpoint by
 //! configuring the base URL, auth method, and extra headers.
 //!
-//! Convenience constructors are provided for popular providers:
-//!
-//! | Constructor | Provider | Default model |
-//! |-------------|----------|---------------|
-//! | [`OpenAiCompatProvider::openai`] | OpenAI | `gpt-4.1` |
-//! | [`OpenAiCompatProvider::openrouter`] | OpenRouter | `openai/gpt-4.1` |
-//! | [`OpenAiCompatProvider::groq`] | Groq | `llama-3.3-70b-versatile` |
-//! | [`OpenAiCompatProvider::together`] | Together AI | `meta-llama/Llama-3.3-70B-Instruct-Turbo` |
-//! | [`OpenAiCompatProvider::mistral`] | Mistral AI | `mistral-large-latest` |
-//! | [`OpenAiCompatProvider::deepseek`] | DeepSeek | `deepseek-chat` |
-//! | [`OpenAiCompatProvider::fireworks`] | Fireworks AI | `accounts/fireworks/models/llama-v3p3-70b-instruct` |
-//! | [`OpenAiCompatProvider::perplexity`] | Perplexity | `sonar-pro` |
-//! | [`OpenAiCompatProvider::xai`] | xAI (Grok) | `grok-3` |
-//! | [`OpenAiCompatProvider::cohere`] | Cohere | `command-a-08-2025` |
-//! | [`OpenAiCompatProvider::bedrock`] | AWS Bedrock (Mantle) | `anthropic.claude-sonnet-4-20250514-v1:0` |
+//! For specific providers, use the dedicated provider modules (e.g.
+//! `GroqProvider`, `OpenRouterProvider`, etc.) which wrap this type with
+//! pre-configured defaults.
 
 use std::pin::Pin;
 use std::sync::Arc;
@@ -88,8 +76,8 @@ pub struct OpenAiCompatConfig {
 
 /// A generic OpenAI-compatible chat completion provider.
 ///
-/// Use the convenience constructors ([`Self::openai`], [`Self::openrouter`],
-/// etc.) or build a custom configuration with [`Self::new`].
+/// Build a custom configuration with [`Self::new`] or use a dedicated
+/// provider module for popular services.
 pub struct OpenAiCompatProvider {
     config: OpenAiCompatConfig,
     client: Arc<dyn HttpClient>,
@@ -130,186 +118,6 @@ impl OpenAiCompatProvider {
     #[must_use]
     pub fn new_with_client(config: OpenAiCompatConfig, client: Arc<dyn HttpClient>) -> Self {
         Self { config, client }
-    }
-
-    // -----------------------------------------------------------------------
-    // Convenience constructors
-    //
-    // These require a default HTTP backend (reqwest on native, fetch on WASM).
-    // -----------------------------------------------------------------------
-}
-
-#[cfg(any(
-    all(target_arch = "wasm32", not(target_os = "wasi")),
-    feature = "reqwest"
-))]
-impl OpenAiCompatProvider {
-    /// `OpenAI` (`https://api.openai.com/v1`, default model `gpt-4.1`).
-    #[must_use]
-    pub fn openai(api_key: impl Into<String>) -> Self {
-        Self::new(OpenAiCompatConfig {
-            provider_name: "openai".into(),
-            base_url: "https://api.openai.com/v1".into(),
-            api_key: api_key.into(),
-            default_model: "gpt-4.1".into(),
-            auth_method: AuthMethod::Bearer,
-            extra_headers: Vec::new(),
-            query_params: Vec::new(),
-            supports_model_listing: true,
-        })
-    }
-
-    /// `OpenRouter` (`https://openrouter.ai/api/v1`, default model `openai/gpt-4.1`).
-    #[must_use]
-    pub fn openrouter(api_key: impl Into<String>) -> Self {
-        Self::new(OpenAiCompatConfig {
-            provider_name: "openrouter".into(),
-            base_url: "https://openrouter.ai/api/v1".into(),
-            api_key: api_key.into(),
-            default_model: "openai/gpt-4.1".into(),
-            auth_method: AuthMethod::Bearer,
-            extra_headers: Vec::new(),
-            query_params: Vec::new(),
-            supports_model_listing: true,
-        })
-    }
-
-    /// Groq (`https://api.groq.com/openai/v1`, default model `llama-3.3-70b-versatile`).
-    #[must_use]
-    pub fn groq(api_key: impl Into<String>) -> Self {
-        Self::new(OpenAiCompatConfig {
-            provider_name: "groq".into(),
-            base_url: "https://api.groq.com/openai/v1".into(),
-            api_key: api_key.into(),
-            default_model: "llama-3.3-70b-versatile".into(),
-            auth_method: AuthMethod::Bearer,
-            extra_headers: Vec::new(),
-            query_params: Vec::new(),
-            supports_model_listing: true,
-        })
-    }
-
-    /// Together AI (`https://api.together.xyz/v1`, default model `meta-llama/Llama-3.3-70B-Instruct-Turbo`).
-    #[must_use]
-    pub fn together(api_key: impl Into<String>) -> Self {
-        Self::new(OpenAiCompatConfig {
-            provider_name: "together".into(),
-            base_url: "https://api.together.xyz/v1".into(),
-            api_key: api_key.into(),
-            default_model: "meta-llama/Llama-3.3-70B-Instruct-Turbo".into(),
-            auth_method: AuthMethod::Bearer,
-            extra_headers: Vec::new(),
-            query_params: Vec::new(),
-            supports_model_listing: true,
-        })
-    }
-
-    /// Mistral AI (`https://api.mistral.ai/v1`, default model `mistral-large-latest`).
-    #[must_use]
-    pub fn mistral(api_key: impl Into<String>) -> Self {
-        Self::new(OpenAiCompatConfig {
-            provider_name: "mistral".into(),
-            base_url: "https://api.mistral.ai/v1".into(),
-            api_key: api_key.into(),
-            default_model: "mistral-large-latest".into(),
-            auth_method: AuthMethod::Bearer,
-            extra_headers: Vec::new(),
-            query_params: Vec::new(),
-            supports_model_listing: true,
-        })
-    }
-
-    /// `DeepSeek` (`https://api.deepseek.com`, default model `deepseek-chat`).
-    #[must_use]
-    pub fn deepseek(api_key: impl Into<String>) -> Self {
-        Self::new(OpenAiCompatConfig {
-            provider_name: "deepseek".into(),
-            base_url: "https://api.deepseek.com".into(),
-            api_key: api_key.into(),
-            default_model: "deepseek-chat".into(),
-            auth_method: AuthMethod::Bearer,
-            extra_headers: Vec::new(),
-            query_params: Vec::new(),
-            supports_model_listing: false,
-        })
-    }
-
-    /// Fireworks AI (`https://api.fireworks.ai/inference/v1`, default model `accounts/fireworks/models/llama-v3p3-70b-instruct`).
-    #[must_use]
-    pub fn fireworks(api_key: impl Into<String>) -> Self {
-        Self::new(OpenAiCompatConfig {
-            provider_name: "fireworks".into(),
-            base_url: "https://api.fireworks.ai/inference/v1".into(),
-            api_key: api_key.into(),
-            default_model: "accounts/fireworks/models/llama-v3p3-70b-instruct".into(),
-            auth_method: AuthMethod::Bearer,
-            extra_headers: Vec::new(),
-            query_params: Vec::new(),
-            supports_model_listing: true,
-        })
-    }
-
-    /// Perplexity (`https://api.perplexity.ai`, default model `sonar-pro`).
-    #[must_use]
-    pub fn perplexity(api_key: impl Into<String>) -> Self {
-        Self::new(OpenAiCompatConfig {
-            provider_name: "perplexity".into(),
-            base_url: "https://api.perplexity.ai".into(),
-            api_key: api_key.into(),
-            default_model: "sonar-pro".into(),
-            auth_method: AuthMethod::Bearer,
-            extra_headers: Vec::new(),
-            query_params: Vec::new(),
-            supports_model_listing: false,
-        })
-    }
-
-    /// xAI / Grok (`https://api.x.ai/v1`, default model `grok-3`).
-    #[must_use]
-    pub fn xai(api_key: impl Into<String>) -> Self {
-        Self::new(OpenAiCompatConfig {
-            provider_name: "xai".into(),
-            base_url: "https://api.x.ai/v1".into(),
-            api_key: api_key.into(),
-            default_model: "grok-3".into(),
-            auth_method: AuthMethod::Bearer,
-            extra_headers: Vec::new(),
-            query_params: Vec::new(),
-            supports_model_listing: true,
-        })
-    }
-
-    /// Cohere (via compatibility endpoint, default model `command-a-08-2025`).
-    #[must_use]
-    pub fn cohere(api_key: impl Into<String>) -> Self {
-        Self::new(OpenAiCompatConfig {
-            provider_name: "cohere".into(),
-            base_url: "https://api.cohere.ai/compatibility/v1".into(),
-            api_key: api_key.into(),
-            default_model: "command-a-08-2025".into(),
-            auth_method: AuthMethod::Bearer,
-            extra_headers: Vec::new(),
-            query_params: Vec::new(),
-            supports_model_listing: false,
-        })
-    }
-
-    /// AWS Bedrock via Mantle OpenAI-compatible endpoint.
-    ///
-    /// URL pattern: `https://bedrock-mantle.{region}.api.aws/v1`
-    #[must_use]
-    pub fn bedrock(api_key: impl Into<String>, region: impl Into<String>) -> Self {
-        let region = region.into();
-        Self::new(OpenAiCompatConfig {
-            provider_name: "bedrock".into(),
-            base_url: format!("https://bedrock-mantle.{region}.api.aws/v1"),
-            api_key: api_key.into(),
-            default_model: "anthropic.claude-sonnet-4-20250514-v1:0".into(),
-            auth_method: AuthMethod::Bearer,
-            extra_headers: Vec::new(),
-            query_params: Vec::new(),
-            supports_model_listing: true,
-        })
     }
 }
 
@@ -860,8 +668,8 @@ impl OpenAiCompatProvider {
 /// An OpenAI-compatible embedding model.
 ///
 /// Works with any provider that implements the `OpenAI` embeddings API
-/// (`POST /embeddings`). Convenience constructors are provided for popular
-/// providers.
+/// (`POST /embeddings`). For specific providers, use the dedicated provider
+/// modules.
 ///
 /// # Examples
 ///
@@ -870,16 +678,6 @@ impl OpenAiCompatProvider {
 ///     AuthMethod, OpenAiCompatConfig, OpenAiCompatEmbeddingModel,
 /// };
 ///
-/// // Together AI
-/// let embedder = OpenAiCompatEmbeddingModel::together("your-key");
-///
-/// // Cohere
-/// let embedder = OpenAiCompatEmbeddingModel::cohere("your-key");
-///
-/// // Fireworks AI
-/// let embedder = OpenAiCompatEmbeddingModel::fireworks("your-key");
-///
-/// // Custom provider
 /// let embedder = OpenAiCompatEmbeddingModel::new(
 ///     OpenAiCompatConfig {
 ///         provider_name: "my-provider".into(),
@@ -954,69 +752,6 @@ impl OpenAiCompatEmbeddingModel {
             model: model.into(),
             dimensions,
         }
-    }
-}
-
-#[cfg(any(
-    all(target_arch = "wasm32", not(target_os = "wasi")),
-    feature = "reqwest"
-))]
-impl OpenAiCompatEmbeddingModel {
-    /// Together AI (`togethercomputer/m2-bert-80M-8k-retrieval`, 768 dimensions).
-    #[must_use]
-    pub fn together(api_key: impl Into<String>) -> Self {
-        Self::new(
-            OpenAiCompatConfig {
-                provider_name: "together".into(),
-                base_url: "https://api.together.xyz/v1".into(),
-                api_key: api_key.into(),
-                default_model: String::new(),
-                auth_method: AuthMethod::Bearer,
-                extra_headers: Vec::new(),
-                query_params: Vec::new(),
-                supports_model_listing: false,
-            },
-            "togethercomputer/m2-bert-80M-8k-retrieval",
-            768,
-        )
-    }
-
-    /// Cohere via compatibility endpoint (`embed-v4.0`, 1024 dimensions).
-    #[must_use]
-    pub fn cohere(api_key: impl Into<String>) -> Self {
-        Self::new(
-            OpenAiCompatConfig {
-                provider_name: "cohere".into(),
-                base_url: "https://api.cohere.ai/compatibility/v1".into(),
-                api_key: api_key.into(),
-                default_model: String::new(),
-                auth_method: AuthMethod::Bearer,
-                extra_headers: Vec::new(),
-                query_params: Vec::new(),
-                supports_model_listing: false,
-            },
-            "embed-v4.0",
-            1024,
-        )
-    }
-
-    /// Fireworks AI (`nomic-ai/nomic-embed-text-v1.5`, 768 dimensions).
-    #[must_use]
-    pub fn fireworks(api_key: impl Into<String>) -> Self {
-        Self::new(
-            OpenAiCompatConfig {
-                provider_name: "fireworks".into(),
-                base_url: "https://api.fireworks.ai/inference/v1".into(),
-                api_key: api_key.into(),
-                default_model: String::new(),
-                auth_method: AuthMethod::Bearer,
-                extra_headers: Vec::new(),
-                query_params: Vec::new(),
-                supports_model_listing: false,
-            },
-            "nomic-ai/nomic-embed-text-v1.5",
-            768,
-        )
     }
 }
 
@@ -1169,6 +904,31 @@ impl crate::traits::EmbeddingModel for OpenAiCompatEmbeddingModel {
 }
 
 // ---------------------------------------------------------------------------
+// ProviderInfo implementation
+// ---------------------------------------------------------------------------
+
+impl crate::traits::ProviderInfo for OpenAiCompatProvider {
+    fn provider_name(&self) -> &str {
+        &self.config.provider_name
+    }
+
+    fn base_url(&self) -> &str {
+        &self.config.base_url
+    }
+
+    fn capabilities(&self) -> crate::traits::ProviderCapabilities {
+        crate::traits::ProviderCapabilities {
+            streaming: true,
+            tool_calling: true,
+            structured_output: true,
+            vision: true,
+            model_listing: self.config.supports_model_listing,
+            embeddings: true,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -1177,9 +937,23 @@ mod tests {
     use super::*;
     use crate::types::{ChatMessage, ToolDefinition};
 
+    /// Helper to create a test provider with sensible defaults.
+    fn test_provider(model: &str) -> OpenAiCompatProvider {
+        OpenAiCompatProvider::new(OpenAiCompatConfig {
+            provider_name: "test".into(),
+            base_url: "https://api.openai.com/v1".into(),
+            api_key: "test-key".into(),
+            default_model: model.into(),
+            auth_method: AuthMethod::Bearer,
+            extra_headers: Vec::new(),
+            query_params: Vec::new(),
+            supports_model_listing: true,
+        })
+    }
+
     #[test]
-    fn openai_defaults() {
-        let provider = OpenAiCompatProvider::openai("sk-test");
+    fn new_creates_provider_with_config() {
+        let provider = test_provider("gpt-4.1");
         assert_eq!(provider.config.base_url, "https://api.openai.com/v1");
         assert_eq!(provider.config.default_model, "gpt-4.1");
         assert!(matches!(provider.config.auth_method, AuthMethod::Bearer));
@@ -1187,101 +961,14 @@ mod tests {
     }
 
     #[test]
-    fn openrouter_defaults() {
-        let provider = OpenAiCompatProvider::openrouter("or-test");
-        assert_eq!(provider.config.base_url, "https://openrouter.ai/api/v1");
-        assert_eq!(provider.config.default_model, "openai/gpt-4.1");
-    }
-
-    #[test]
-    fn groq_defaults() {
-        let provider = OpenAiCompatProvider::groq("gsk-test");
-        assert_eq!(provider.config.base_url, "https://api.groq.com/openai/v1");
-        assert_eq!(provider.config.default_model, "llama-3.3-70b-versatile");
-    }
-
-    #[test]
-    fn together_defaults() {
-        let provider = OpenAiCompatProvider::together("tog-test");
-        assert_eq!(provider.config.base_url, "https://api.together.xyz/v1");
-        assert_eq!(
-            provider.config.default_model,
-            "meta-llama/Llama-3.3-70B-Instruct-Turbo"
-        );
-    }
-
-    #[test]
-    fn mistral_defaults() {
-        let provider = OpenAiCompatProvider::mistral("ms-test");
-        assert_eq!(provider.config.base_url, "https://api.mistral.ai/v1");
-        assert_eq!(provider.config.default_model, "mistral-large-latest");
-    }
-
-    #[test]
-    fn deepseek_defaults() {
-        let provider = OpenAiCompatProvider::deepseek("ds-test");
-        assert_eq!(provider.config.base_url, "https://api.deepseek.com");
-        assert_eq!(provider.config.default_model, "deepseek-chat");
-        assert!(!provider.config.supports_model_listing);
-    }
-
-    #[test]
-    fn fireworks_defaults() {
-        let provider = OpenAiCompatProvider::fireworks("fw-test");
-        assert_eq!(
-            provider.config.base_url,
-            "https://api.fireworks.ai/inference/v1"
-        );
-    }
-
-    #[test]
-    fn perplexity_defaults() {
-        let provider = OpenAiCompatProvider::perplexity("pplx-test");
-        assert_eq!(provider.config.base_url, "https://api.perplexity.ai");
-        assert_eq!(provider.config.default_model, "sonar-pro");
-        assert!(!provider.config.supports_model_listing);
-    }
-
-    #[test]
-    fn xai_defaults() {
-        let provider = OpenAiCompatProvider::xai("xai-test");
-        assert_eq!(provider.config.base_url, "https://api.x.ai/v1");
-        assert_eq!(provider.config.default_model, "grok-3");
-    }
-
-    #[test]
-    fn cohere_defaults() {
-        let provider = OpenAiCompatProvider::cohere("co-test");
-        assert_eq!(
-            provider.config.base_url,
-            "https://api.cohere.ai/compatibility/v1"
-        );
-        assert_eq!(provider.config.default_model, "command-a-08-2025");
-        assert!(!provider.config.supports_model_listing);
-    }
-
-    #[test]
-    fn bedrock_defaults() {
-        let provider = OpenAiCompatProvider::bedrock("bk-test", "us-east-1");
-        assert_eq!(
-            provider.config.base_url,
-            "https://bedrock-mantle.us-east-1.api.aws/v1"
-        );
-        assert_eq!(
-            provider.config.default_model,
-            "anthropic.claude-sonnet-4-20250514-v1:0"
-        );
-    }
-
-    #[test]
     fn with_model_override() {
-        let provider = OpenAiCompatProvider::openai("sk-test").with_model("gpt-4.1-mini");
+        let provider = test_provider("gpt-4.1").with_model("gpt-4.1-mini");
         assert_eq!(provider.config.default_model, "gpt-4.1-mini");
     }
 
     #[test]
     fn with_header_appends() {
-        let provider = OpenAiCompatProvider::openrouter("or-test")
+        let provider = test_provider("gpt-4.1")
             .with_header("HTTP-Referer", "https://myapp.com")
             .with_header("X-Title", "My App");
         assert_eq!(provider.config.extra_headers.len(), 2);
@@ -1289,7 +976,7 @@ mod tests {
 
     #[test]
     fn build_body_minimal() {
-        let provider = OpenAiCompatProvider::openai("test-key");
+        let provider = test_provider("gpt-4.1");
         let request = CompletionRequest {
             messages: vec![ChatMessage::user("Hello")],
             tools: vec![],
@@ -1312,7 +999,7 @@ mod tests {
 
     #[test]
     fn build_body_with_options() {
-        let provider = OpenAiCompatProvider::openai("test-key");
+        let provider = test_provider("gpt-4.1");
         let request = CompletionRequest::new(vec![ChatMessage::user("Hello")])
             .with_temperature(0.5)
             .with_max_tokens(100)
@@ -1327,7 +1014,7 @@ mod tests {
 
     #[test]
     fn build_body_with_tools() {
-        let provider = OpenAiCompatProvider::groq("test-key");
+        let provider = test_provider("gpt-4.1");
         let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]).with_tools(vec![
             ToolDefinition {
                 name: "get_weather".to_owned(),
@@ -1349,7 +1036,7 @@ mod tests {
 
     #[test]
     fn test_text_backward_compat() {
-        let provider = OpenAiCompatProvider::openai("test-key");
+        let provider = test_provider("gpt-4.1");
         let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]);
 
         let body = provider.build_body(&request, false);
@@ -1358,7 +1045,7 @@ mod tests {
 
     #[test]
     fn test_build_body_image_url() {
-        let provider = OpenAiCompatProvider::openai("test-key");
+        let provider = test_provider("gpt-4.1");
         let request = CompletionRequest::new(vec![ChatMessage::user_image_url(
             "What is this?",
             "https://example.com/cat.jpg",
@@ -1379,7 +1066,7 @@ mod tests {
 
     #[test]
     fn test_build_body_base64_image() {
-        let provider = OpenAiCompatProvider::openai("test-key");
+        let provider = test_provider("gpt-4.1");
         let request = CompletionRequest::new(vec![ChatMessage::user_image_base64(
             "Describe this",
             "abc123base64data",
@@ -1402,7 +1089,7 @@ mod tests {
     fn test_build_body_multipart() {
         use crate::types::{ContentPart, ImageContent, ImageSource};
 
-        let provider = OpenAiCompatProvider::openrouter("test-key");
+        let provider = test_provider("gpt-4.1");
         let request = CompletionRequest::new(vec![ChatMessage::user_parts(vec![
             ContentPart::Text {
                 text: "First".into(),
@@ -1428,7 +1115,7 @@ mod tests {
 
     #[test]
     fn parse_standard_model_list() {
-        let provider = OpenAiCompatProvider::openai("test-key");
+        let provider = test_provider("gpt-4.1");
         let json = r#"{"data":[{"id":"gpt-4o","context_length":128000}]}"#;
 
         let list: ModelsListResponse = serde_json::from_str(json).unwrap();
@@ -1441,12 +1128,12 @@ mod tests {
         assert_eq!(models.len(), 1);
         assert_eq!(models[0].id, "gpt-4o");
         assert_eq!(models[0].context_length, Some(128_000));
-        assert_eq!(models[0].provider, "openai");
+        assert_eq!(models[0].provider, "test");
     }
 
     #[test]
     fn parse_openrouter_model_with_pricing() {
-        let provider = OpenAiCompatProvider::openrouter("test-key");
+        let provider = test_provider("gpt-4.1");
         let json = r#"{"data":[{"id":"openai/gpt-4o","context_length":128000,"pricing":{"prompt":"0.000005","completion":"0.000015"}}]}"#;
 
         let list: ModelsListResponse = serde_json::from_str(json).unwrap();
@@ -1465,7 +1152,7 @@ mod tests {
 
     #[test]
     fn parse_together_model_list() {
-        let provider = OpenAiCompatProvider::together("test-key");
+        let provider = test_provider("gpt-4.1");
         let json = r#"[{"id":"meta-llama/Llama-3-70b","display_name":"Llama 3 70B","context_length":8192,"pricing":{"input":0.9,"output":0.9}}]"#;
 
         let models: Vec<TogetherModelEntry> = serde_json::from_str(json).unwrap();
@@ -1485,53 +1172,40 @@ mod tests {
     // Embedding model tests
     // -----------------------------------------------------------------------
 
-    #[test]
-    fn together_embedding_defaults() {
-        use crate::traits::EmbeddingModel;
-
-        let embedder = OpenAiCompatEmbeddingModel::together("tog-test");
-        assert_eq!(
-            embedder.model_id(),
-            "togethercomputer/m2-bert-80M-8k-retrieval"
-        );
-        assert_eq!(embedder.dimensions(), 768);
-        assert_eq!(embedder.config.base_url, "https://api.together.xyz/v1");
-        assert_eq!(embedder.config.provider_name, "together");
+    /// Helper to create a test embedding model.
+    fn test_embedding_model(model: &str, dimensions: usize) -> OpenAiCompatEmbeddingModel {
+        OpenAiCompatEmbeddingModel::new(
+            OpenAiCompatConfig {
+                provider_name: "test".into(),
+                base_url: "https://api.example.com/v1".into(),
+                api_key: "test-key".into(),
+                default_model: String::new(),
+                auth_method: AuthMethod::Bearer,
+                extra_headers: Vec::new(),
+                query_params: Vec::new(),
+                supports_model_listing: false,
+            },
+            model,
+            dimensions,
+        )
     }
 
     #[test]
-    fn cohere_embedding_defaults() {
+    fn compat_embedding_new() {
         use crate::traits::EmbeddingModel;
 
-        let embedder = OpenAiCompatEmbeddingModel::cohere("co-test");
-        assert_eq!(embedder.model_id(), "embed-v4.0");
-        assert_eq!(embedder.dimensions(), 1024);
-        assert_eq!(
-            embedder.config.base_url,
-            "https://api.cohere.ai/compatibility/v1"
-        );
-        assert_eq!(embedder.config.provider_name, "cohere");
-    }
-
-    #[test]
-    fn fireworks_embedding_defaults() {
-        use crate::traits::EmbeddingModel;
-
-        let embedder = OpenAiCompatEmbeddingModel::fireworks("fw-test");
-        assert_eq!(embedder.model_id(), "nomic-ai/nomic-embed-text-v1.5");
+        let embedder = test_embedding_model("text-embedding-3-small", 768);
+        assert_eq!(embedder.model_id(), "text-embedding-3-small");
         assert_eq!(embedder.dimensions(), 768);
-        assert_eq!(
-            embedder.config.base_url,
-            "https://api.fireworks.ai/inference/v1"
-        );
-        assert_eq!(embedder.config.provider_name, "fireworks");
+        assert_eq!(embedder.config.base_url, "https://api.example.com/v1");
+        assert_eq!(embedder.config.provider_name, "test");
     }
 
     #[test]
     fn compat_embedding_with_model_override() {
         use crate::traits::EmbeddingModel;
 
-        let embedder = OpenAiCompatEmbeddingModel::together("tog-test")
+        let embedder = test_embedding_model("text-embedding-3-small", 768)
             .with_model("BAAI/bge-large-en-v1.5", 1024);
         assert_eq!(embedder.model_id(), "BAAI/bge-large-en-v1.5");
         assert_eq!(embedder.dimensions(), 1024);

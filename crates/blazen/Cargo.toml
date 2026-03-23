@@ -15,12 +15,7 @@ persist = ["blazen-persist", "blazen-core/persist"]
 pipeline = ["blazen-pipeline"]
 prompts = ["blazen-prompts"]
 telemetry = ["blazen-telemetry", "blazen-core/telemetry"]
-openai = ["llm", "blazen-llm/openai"]
-anthropic = ["llm", "blazen-llm/anthropic"]
-fal = ["llm", "blazen-llm/fal"]
-gemini = ["llm", "blazen-llm/gemini"]
-azure = ["llm", "blazen-llm/azure"]
-all = ["openai", "anthropic", "fal", "gemini", "azure", "persist", "pipeline", "prompts", "telemetry"]
+all = ["llm", "persist", "pipeline", "prompts", "telemetry"]
 
 [dependencies]
 blazen-events.workspace = true

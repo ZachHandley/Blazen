@@ -5,6 +5,7 @@ use std::sync::Arc;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
+use blazen_llm::providers::openai_compat::{AuthMethod, OpenAiCompatConfig};
 use blazen_llm::traits::EmbeddingModel;
 
 use super::usage::{JsRequestTiming, JsTokenUsage};
@@ -82,7 +83,20 @@ impl JsEmbeddingModel {
     pub fn together(api_key: String) -> Self {
         Self {
             inner: Arc::new(
-                blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::together(api_key),
+                blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::new(
+                    OpenAiCompatConfig {
+                        provider_name: "together".into(),
+                        base_url: "https://api.together.xyz/v1".into(),
+                        api_key: api_key.into(),
+                        default_model: String::new(),
+                        auth_method: AuthMethod::Bearer,
+                        extra_headers: Vec::new(),
+                        query_params: Vec::new(),
+                        supports_model_listing: false,
+                    },
+                    "togethercomputer/m2-bert-80M-8k-retrieval",
+                    768,
+                ),
             ),
         }
     }
@@ -94,7 +108,20 @@ impl JsEmbeddingModel {
     pub fn cohere(api_key: String) -> Self {
         Self {
             inner: Arc::new(
-                blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::cohere(api_key),
+                blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::new(
+                    OpenAiCompatConfig {
+                        provider_name: "cohere".into(),
+                        base_url: "https://api.cohere.ai/compatibility/v1".into(),
+                        api_key: api_key.into(),
+                        default_model: String::new(),
+                        auth_method: AuthMethod::Bearer,
+                        extra_headers: Vec::new(),
+                        query_params: Vec::new(),
+                        supports_model_listing: false,
+                    },
+                    "embed-v4.0",
+                    1024,
+                ),
             ),
         }
     }
@@ -106,8 +133,19 @@ impl JsEmbeddingModel {
     pub fn fireworks(api_key: String) -> Self {
         Self {
             inner: Arc::new(
-                blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::fireworks(
-                    api_key,
+                blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::new(
+                    OpenAiCompatConfig {
+                        provider_name: "fireworks".into(),
+                        base_url: "https://api.fireworks.ai/inference/v1".into(),
+                        api_key: api_key.into(),
+                        default_model: String::new(),
+                        auth_method: AuthMethod::Bearer,
+                        extra_headers: Vec::new(),
+                        query_params: Vec::new(),
+                        supports_model_listing: false,
+                    },
+                    "nomic-ai/nomic-embed-text-v1.5",
+                    768,
                 ),
             ),
         }

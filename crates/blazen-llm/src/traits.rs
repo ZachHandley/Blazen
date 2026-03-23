@@ -234,3 +234,40 @@ pub trait ModelRegistry: Send + Sync {
     /// Look up a specific model by its identifier.
     async fn get_model(&self, model_id: &str) -> Result<Option<ModelInfo>, BlazenError>;
 }
+
+// ---------------------------------------------------------------------------
+// ProviderInfo
+// ---------------------------------------------------------------------------
+
+/// Capabilities advertised by a provider.
+#[derive(Debug, Clone, Default)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct ProviderCapabilities {
+    /// Whether the provider supports streaming responses.
+    pub streaming: bool,
+    /// Whether the provider supports tool/function calling.
+    pub tool_calling: bool,
+    /// Whether the provider supports structured output (JSON mode).
+    pub structured_output: bool,
+    /// Whether the provider supports vision/image inputs.
+    pub vision: bool,
+    /// Whether the provider supports the /models listing endpoint.
+    pub model_listing: bool,
+    /// Whether the provider supports embeddings.
+    pub embeddings: bool,
+}
+
+/// Information about a provider's identity, endpoint, and capabilities.
+///
+/// Implemented by each dedicated provider to expose its configuration
+/// for discovery, registry, and routing purposes.
+pub trait ProviderInfo {
+    /// The provider's canonical name (e.g. "groq", "openai", "anthropic").
+    fn provider_name(&self) -> &str;
+
+    /// The provider's base API URL.
+    fn base_url(&self) -> &str;
+
+    /// The provider's capabilities.
+    fn capabilities(&self) -> ProviderCapabilities;
+}

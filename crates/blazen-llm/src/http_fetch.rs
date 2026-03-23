@@ -89,6 +89,8 @@ fn build_web_request(req: &HttpRequest) -> Result<Request, BlazenError> {
         HttpMethod::Get => "GET",
         HttpMethod::Post => "POST",
         HttpMethod::Put => "PUT",
+        HttpMethod::Delete => "DELETE",
+        HttpMethod::Patch => "PATCH",
     };
 
     // Build the full URL with query parameters.

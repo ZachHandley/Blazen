@@ -5,10 +5,9 @@
 //! runtime. This module provides a simplified workflow abstraction that runs
 //! steps sequentially via JS callback functions.
 //!
-//! **Status**: Stub implementation. The `addStep` / `run` API shape is
-//! defined so that TypeScript consumers can code against the interface now,
-//! but execution is not yet wired up. A follow-up will implement a
-//! WASM-compatible event loop.
+//! **Status**: Fully implemented. Steps are executed sequentially in a
+//! WASM-compatible event loop that supports both sync and async (Promise)
+//! handlers, with automatic `StopEvent` detection and iteration limits.
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;

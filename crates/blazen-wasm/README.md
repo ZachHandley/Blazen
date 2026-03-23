@@ -20,13 +20,15 @@ WASIp2 WASM component for deploying Blazen as an edge HTTP handler via ZLayer (o
 
 ### Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | Health check |
-| POST | `/v1/chat/completions` | Chat completion |
-| POST | `/v1/images/generations` | Image generation |
-| POST | `/v1/audio/speech` | Text-to-speech |
-| POST | `/v1/agent/run` | Agent execution |
+| Method | Path | Status | Description |
+|--------|------|--------|-------------|
+| GET | `/health` | Working | Health check |
+| POST | `/v1/chat/completions` | Working | Chat completion (dispatches to real providers) |
+| GET | `/v1/providers` | Working | List available providers (built-in + custom) |
+| POST | `/v1/providers/register` | Working | Register a custom OpenAI-compatible provider |
+| POST | `/v1/images/generations` | Not yet implemented (501) | Image generation |
+| POST | `/v1/audio/speech` | Not yet implemented (501) | Text-to-speech |
+| POST | `/v1/agent/run` | Not yet implemented (501) | Agent execution |
 
 ## Build
 

@@ -86,6 +86,8 @@ fn default_pricing() -> HashMap<String, PricingEntry> {
         ("gemini-2.5-flash", 0.15, 0.60),
         ("gemini-2.5-pro", 1.25, 10.0),
         // Others
+        ("llama-3.3-70b-versatile", 0.59, 0.79), // Groq default
+        ("llama-3.3-70b-instruct-turbo", 0.88, 0.88), // Together/Fireworks default
         ("deepseek-chat", 0.27, 1.10),
         ("mistral-large-latest", 2.0, 6.0),
         ("grok-3", 3.0, 15.0),

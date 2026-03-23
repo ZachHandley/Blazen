@@ -1,50 +1,53 @@
 //! LLM provider implementations.
 //!
-//! Each provider is behind a feature flag so that downstream crates only pull
-//! in the HTTP dependencies they actually need.
+//! All providers are always available. The only opt-in features are:
+//! - `reqwest` — enables the native HTTP client (for non-WASM targets)
+//! - `tiktoken` — enables exact BPE token counting
+//!
+//! ## Native providers (custom API formats)
+//!
+//! - [`openai`] — OpenAI Chat Completions API
+//! - [`anthropic`] — Anthropic Messages API
+//! - [`gemini`] — Google Gemini API
+//! - [`azure`] — Azure OpenAI Service
+//! - [`fal`] — fal.ai compute platform (LLM + media generation)
 //!
 //! ## OpenAI-compatible providers
 //!
-//! The [`openai_compat`] module provides a single [`OpenAiCompatProvider`]
-//! that works with any `OpenAI`-compatible endpoint. This covers `OpenAI`,
-//! `OpenRouter`, Groq, Together AI, Mistral, `DeepSeek`, Fireworks, Perplexity,
-//! xAI, Cohere, and AWS Bedrock (Mantle).
-//!
-//! The original [`openai`] module is retained for backwards compatibility but
-//! is a simpler wrapper around the same underlying logic.
-//!
-//! [`OpenAiCompatProvider`]: openai_compat::OpenAiCompatProvider
+//! - [`openai_compat`] — Generic OpenAI-compatible base
+//! - [`groq`] — Groq (ultra-fast LPU inference)
+//! - [`openrouter`] — OpenRouter (400+ models)
+//! - [`together`] — Together AI
+//! - [`mistral`] — Mistral AI
+//! - [`deepseek`] — DeepSeek
+//! - [`fireworks`] — Fireworks AI
+//! - [`perplexity`] — Perplexity
+//! - [`xai`] — xAI (Grok)
+//! - [`cohere`] — Cohere
+//! - [`bedrock`] — AWS Bedrock (via Mantle)
 
 // Shared SSE parser used by OpenAI-compatible and Azure providers.
-// Enabled whenever any provider that needs it is active.
-#[cfg(any(feature = "openai", feature = "azure"))]
 pub(crate) mod sse;
 
-// Shared multimodal content helpers and HTTP utilities for all providers.
-// The `parse_retry_after` helper is used by every provider.
-#[cfg(any(
-    feature = "openai",
-    feature = "azure",
-    feature = "anthropic",
-    feature = "gemini",
-    feature = "fal"
-))]
+// Shared multimodal content helpers and HTTP utilities.
 pub(crate) mod openai_format;
 
-#[cfg(feature = "openai")]
+// Native providers
+pub mod anthropic;
+pub mod azure;
+pub mod fal;
+pub mod gemini;
 pub mod openai;
-
-#[cfg(feature = "openai")]
 pub mod openai_compat;
 
-#[cfg(feature = "anthropic")]
-pub mod anthropic;
-
-#[cfg(feature = "gemini")]
-pub mod gemini;
-
-#[cfg(feature = "fal")]
-pub mod fal;
-
-#[cfg(feature = "azure")]
-pub mod azure;
+// OpenAI-compatible dedicated providers
+pub mod bedrock;
+pub mod cohere;
+pub mod deepseek;
+pub mod fireworks;
+pub mod groq;
+pub mod mistral;
+pub mod openrouter;
+pub mod perplexity;
+pub mod together;
+pub mod xai;

@@ -11,7 +11,7 @@ rust-version = "1.85"
 crate-type = ["cdylib"]
 
 [dependencies]
-blazen-llm = { version = "0.0.0-dev", path = "../blazen-llm", default-features = false, features = ["all-providers"] }
+blazen-llm = { version = "0.0.0-dev", path = "../blazen-llm", default-features = false }
 async-trait = "0.1"
 bytes = "1"
 serde = { version = "1", features = ["derive"] }
