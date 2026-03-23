@@ -158,11 +158,11 @@ impl ModelRegistry for GroqProvider {
 // ---------------------------------------------------------------------------
 
 impl ProviderInfo for GroqProvider {
-    fn provider_name(&self) -> &str {
+    fn provider_name(&self) -> &'static str {
         "groq"
     }
 
-    fn base_url(&self) -> &str {
+    fn base_url(&self) -> &'static str {
         "https://api.groq.com/openai/v1"
     }
 

@@ -1,4 +1,4 @@
-//! OpenRouter provider -- unified gateway to hundreds of LLM providers.
+//! `OpenRouter` provider -- unified gateway to hundreds of LLM providers.
 //!
 //! Uses the OpenAI-compatible API at `https://openrouter.ai/api/v1`.
 
@@ -20,11 +20,11 @@ use crate::types::{CompletionRequest, CompletionResponse, StreamChunk};
 // Provider
 // ---------------------------------------------------------------------------
 
-/// An OpenRouter chat completion provider.
+/// An `OpenRouter` chat completion provider.
 ///
-/// Delegates to [`OpenAiCompatProvider`] with the OpenRouter base URL and
-/// authentication pre-configured. OpenRouter is a meta-provider that routes
-/// requests to upstream providers (OpenAI, Anthropic, Google, etc.).
+/// Delegates to [`OpenAiCompatProvider`] with the `OpenRouter` base URL and
+/// authentication pre-configured. `OpenRouter` is a meta-provider that routes
+/// requests to upstream providers (`OpenAI`, Anthropic, Google, etc.).
 ///
 /// # Examples
 ///
@@ -55,7 +55,7 @@ impl Clone for OpenRouterProvider {
 }
 
 impl OpenRouterProvider {
-    /// Create a new OpenRouter provider with the given API key.
+    /// Create a new `OpenRouter` provider with the given API key.
     ///
     /// Uses the default HTTP client backend (reqwest on native, fetch on WASM).
     #[cfg(any(
@@ -78,7 +78,7 @@ impl OpenRouterProvider {
         }
     }
 
-    /// Create a new OpenRouter provider with an explicit HTTP client backend.
+    /// Create a new `OpenRouter` provider with an explicit HTTP client backend.
     #[must_use]
     pub fn new_with_client(api_key: impl Into<String>, client: Arc<dyn HttpClient>) -> Self {
         Self {
@@ -159,11 +159,11 @@ impl ModelRegistry for OpenRouterProvider {
 // ---------------------------------------------------------------------------
 
 impl ProviderInfo for OpenRouterProvider {
-    fn provider_name(&self) -> &str {
+    fn provider_name(&self) -> &'static str {
         "openrouter"
     }
 
-    fn base_url(&self) -> &str {
+    fn base_url(&self) -> &'static str {
         "https://openrouter.ai/api/v1"
     }
 

@@ -803,7 +803,7 @@ fn parse_gemini_sse_event(buffer: &mut String) -> Option<Result<StreamChunk, Bla
 // ---------------------------------------------------------------------------
 
 impl crate::traits::ProviderInfo for GeminiProvider {
-    fn provider_name(&self) -> &str {
+    fn provider_name(&self) -> &'static str {
         "gemini"
     }
 

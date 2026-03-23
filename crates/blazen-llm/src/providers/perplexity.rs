@@ -158,11 +158,11 @@ impl ModelRegistry for PerplexityProvider {
 // ---------------------------------------------------------------------------
 
 impl ProviderInfo for PerplexityProvider {
-    fn provider_name(&self) -> &str {
+    fn provider_name(&self) -> &'static str {
         "perplexity"
     }
 
-    fn base_url(&self) -> &str {
+    fn base_url(&self) -> &'static str {
         "https://api.perplexity.ai"
     }
 

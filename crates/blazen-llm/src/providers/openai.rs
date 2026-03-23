@@ -671,7 +671,7 @@ impl crate::traits::EmbeddingModel for OpenAiEmbeddingModel {
 // ---------------------------------------------------------------------------
 
 impl crate::traits::ProviderInfo for OpenAiProvider {
-    fn provider_name(&self) -> &str {
+    fn provider_name(&self) -> &'static str {
         "openai"
     }
 

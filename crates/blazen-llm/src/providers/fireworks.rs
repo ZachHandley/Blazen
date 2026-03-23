@@ -158,11 +158,11 @@ impl ModelRegistry for FireworksProvider {
 // ---------------------------------------------------------------------------
 
 impl ProviderInfo for FireworksProvider {
-    fn provider_name(&self) -> &str {
+    fn provider_name(&self) -> &'static str {
         "fireworks"
     }
 
-    fn base_url(&self) -> &str {
+    fn base_url(&self) -> &'static str {
         "https://api.fireworks.ai/inference/v1"
     }
 

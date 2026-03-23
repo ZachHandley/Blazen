@@ -1,4 +1,4 @@
-//! DeepSeek provider.
+//! `DeepSeek` provider.
 //!
 //! Uses the OpenAI-compatible API at `https://api.deepseek.com`.
 
@@ -20,9 +20,9 @@ use crate::types::{CompletionRequest, CompletionResponse, StreamChunk};
 // Provider
 // ---------------------------------------------------------------------------
 
-/// A DeepSeek chat completion provider.
+/// A `DeepSeek` chat completion provider.
 ///
-/// Delegates to [`OpenAiCompatProvider`] with the DeepSeek base URL and
+/// Delegates to [`OpenAiCompatProvider`] with the `DeepSeek` base URL and
 /// authentication pre-configured.
 ///
 /// # Examples
@@ -54,7 +54,7 @@ impl Clone for DeepSeekProvider {
 }
 
 impl DeepSeekProvider {
-    /// Create a new DeepSeek provider with the given API key.
+    /// Create a new `DeepSeek` provider with the given API key.
     ///
     /// Uses the default HTTP client backend (reqwest on native, fetch on WASM).
     #[cfg(any(
@@ -77,7 +77,7 @@ impl DeepSeekProvider {
         }
     }
 
-    /// Create a new DeepSeek provider with an explicit HTTP client backend.
+    /// Create a new `DeepSeek` provider with an explicit HTTP client backend.
     #[must_use]
     pub fn new_with_client(api_key: impl Into<String>, client: Arc<dyn HttpClient>) -> Self {
         Self {
@@ -158,11 +158,11 @@ impl ModelRegistry for DeepSeekProvider {
 // ---------------------------------------------------------------------------
 
 impl ProviderInfo for DeepSeekProvider {
-    fn provider_name(&self) -> &str {
+    fn provider_name(&self) -> &'static str {
         "deepseek"
     }
 
-    fn base_url(&self) -> &str {
+    fn base_url(&self) -> &'static str {
         "https://api.deepseek.com"
     }
 

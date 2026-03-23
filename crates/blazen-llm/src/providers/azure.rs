@@ -479,11 +479,11 @@ impl ModelRegistry for AzureOpenAiProvider {
 // ---------------------------------------------------------------------------
 
 impl crate::traits::ProviderInfo for AzureOpenAiProvider {
-    fn provider_name(&self) -> &str {
+    fn provider_name(&self) -> &'static str {
         "azure"
     }
 
-    fn base_url(&self) -> &str {
+    fn base_url(&self) -> &'static str {
         // Azure uses a dynamic URL based on resource + deployment, not a static base URL.
         // Return the resource-level base.
         "https://openai.azure.com"

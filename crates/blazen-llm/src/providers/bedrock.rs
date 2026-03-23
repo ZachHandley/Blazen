@@ -42,7 +42,7 @@ impl std::fmt::Debug for BedrockProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BedrockProvider")
             .field("inner", &self.inner)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -170,7 +170,7 @@ impl ModelRegistry for BedrockProvider {
 // ---------------------------------------------------------------------------
 
 impl ProviderInfo for BedrockProvider {
-    fn provider_name(&self) -> &str {
+    fn provider_name(&self) -> &'static str {
         "bedrock"
     }
 

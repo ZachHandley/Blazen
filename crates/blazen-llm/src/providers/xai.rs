@@ -158,11 +158,11 @@ impl ModelRegistry for XaiProvider {
 // ---------------------------------------------------------------------------
 
 impl ProviderInfo for XaiProvider {
-    fn provider_name(&self) -> &str {
+    fn provider_name(&self) -> &'static str {
         "xai"
     }
 
-    fn base_url(&self) -> &str {
+    fn base_url(&self) -> &'static str {
         "https://api.x.ai/v1"
     }
 

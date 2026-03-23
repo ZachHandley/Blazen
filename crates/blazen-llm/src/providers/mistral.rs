@@ -158,11 +158,11 @@ impl ModelRegistry for MistralProvider {
 // ---------------------------------------------------------------------------
 
 impl ProviderInfo for MistralProvider {
-    fn provider_name(&self) -> &str {
+    fn provider_name(&self) -> &'static str {
         "mistral"
     }
 
-    fn base_url(&self) -> &str {
+    fn base_url(&self) -> &'static str {
         "https://api.mistral.ai/v1"
     }
 

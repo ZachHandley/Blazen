@@ -158,11 +158,11 @@ impl ModelRegistry for CohereProvider {
 // ---------------------------------------------------------------------------
 
 impl ProviderInfo for CohereProvider {
-    fn provider_name(&self) -> &str {
+    fn provider_name(&self) -> &'static str {
         "cohere"
     }
 
-    fn base_url(&self) -> &str {
+    fn base_url(&self) -> &'static str {
         "https://api.cohere.ai/compatibility/v1"
     }
 

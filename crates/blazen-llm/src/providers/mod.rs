@@ -6,20 +6,20 @@
 //!
 //! ## Native providers (custom API formats)
 //!
-//! - [`openai`] — OpenAI Chat Completions API
+//! - [`openai`] — `OpenAI` Chat Completions API
 //! - [`anthropic`] — Anthropic Messages API
 //! - [`gemini`] — Google Gemini API
-//! - [`azure`] — Azure OpenAI Service
+//! - [`azure`] — Azure `OpenAI` Service
 //! - [`fal`] — fal.ai compute platform (LLM + media generation)
 //!
 //! ## OpenAI-compatible providers
 //!
 //! - [`openai_compat`] — Generic OpenAI-compatible base
 //! - [`groq`] — Groq (ultra-fast LPU inference)
-//! - [`openrouter`] — OpenRouter (400+ models)
+//! - [`openrouter`] — `OpenRouter` (400+ models)
 //! - [`together`] — Together AI
 //! - [`mistral`] — Mistral AI
-//! - [`deepseek`] — DeepSeek
+//! - [`deepseek`] — `DeepSeek`
 //! - [`fireworks`] — Fireworks AI
 //! - [`perplexity`] — Perplexity
 //! - [`xai`] — xAI (Grok)

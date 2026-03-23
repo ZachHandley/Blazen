@@ -158,11 +158,11 @@ impl ModelRegistry for TogetherProvider {
 // ---------------------------------------------------------------------------
 
 impl ProviderInfo for TogetherProvider {
-    fn provider_name(&self) -> &str {
+    fn provider_name(&self) -> &'static str {
         "together"
     }
 
-    fn base_url(&self) -> &str {
+    fn base_url(&self) -> &'static str {
         "https://api.together.xyz/v1"
     }
 

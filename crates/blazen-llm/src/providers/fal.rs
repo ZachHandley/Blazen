@@ -1642,7 +1642,7 @@ impl Transcription for FalProvider {
 // ---------------------------------------------------------------------------
 
 impl crate::traits::ProviderInfo for FalProvider {
-    fn provider_name(&self) -> &str {
+    fn provider_name(&self) -> &'static str {
         "fal"
     }
 
