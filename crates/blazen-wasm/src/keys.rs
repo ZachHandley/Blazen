@@ -14,7 +14,7 @@ pub enum KeyStrategy {
     /// `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.
     RuntimeInjection,
 
-    /// Read keys from ZLayer's secret store.
+    /// Read keys from `ZLayer`'s secret store.
     /// TODO: Implement via `wasi:keyvalue` or a ZLayer-specific interface.
     ZLayerSecrets,
 

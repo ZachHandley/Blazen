@@ -1,4 +1,4 @@
-//! Minimal async executor for WASIp2.
+//! Minimal async executor for `WASIp2`.
 //!
 //! All I/O in [`WasiHttpClient`](crate::http_wasi::WasiHttpClient) uses
 //! `pollable.block()` internally, so futures returned by provider methods

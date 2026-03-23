@@ -56,7 +56,7 @@ pub struct OaiChatRequest {
     pub stream: Option<bool>,
 }
 
-/// A message in the OpenAI chat format.
+/// A message in the `OpenAI` chat format.
 #[derive(Debug, Deserialize)]
 pub struct OaiMessage {
     pub role: String,
@@ -75,7 +75,7 @@ pub struct OaiChatResponse {
     pub usage: Option<OaiUsage>,
 }
 
-/// A choice in the OpenAI response.
+/// A choice in the `OpenAI` response.
 #[derive(Debug, Serialize)]
 pub struct OaiChoice {
     pub index: u32,
@@ -90,7 +90,7 @@ pub struct OaiResponseMessage {
     pub content: Option<String>,
 }
 
-/// Token usage in the OpenAI response format.
+/// Token usage in the `OpenAI` response format.
 #[derive(Debug, Serialize)]
 pub struct OaiUsage {
     pub prompt_tokens: u64,
@@ -98,13 +98,13 @@ pub struct OaiUsage {
     pub total_tokens: u64,
 }
 
-/// An error response in the OpenAI format.
+/// An error response in the `OpenAI` format.
 #[derive(Debug, Serialize)]
 pub struct OaiErrorResponse {
     pub error: OaiErrorBody,
 }
 
-/// The error body within an OpenAI error response.
+/// The error body within an `OpenAI` error response.
 #[derive(Debug, Serialize)]
 pub struct OaiErrorBody {
     pub message: String,
@@ -122,17 +122,17 @@ pub struct OaiErrorBody {
 pub struct RegisterProviderRequest {
     /// Unique name for this provider (used as the provider prefix in model strings).
     pub name: String,
-    /// Base URL for the API (e.g. "https://my-llm.example.com/v1").
+    /// Base URL for the API (e.g. "<https://my-llm.example.com/v1>").
     pub base_url: String,
     /// API key for this provider.
     pub api_key: String,
     /// Default model to use.
     #[serde(default = "default_custom_model")]
     pub default_model: String,
-    /// Authentication method: "bearer", "api_key_header", "azure_api_key", "key_prefix".
+    /// Authentication method: "bearer", "`api_key_header`", "`azure_api_key`", "`key_prefix`".
     #[serde(default = "default_auth_method")]
     pub auth_method: String,
-    /// Optional custom header name for API key auth (used with "api_key_header").
+    /// Optional custom header name for API key auth (used with "`api_key_header`").
     pub api_key_header: Option<String>,
     /// Extra headers to include in every request.
     #[serde(default)]
@@ -196,7 +196,7 @@ impl RouteResponse {
         Self::json(200, value)
     }
 
-    /// Error response in OpenAI format.
+    /// Error response in `OpenAI` format.
     pub fn error(status: u16, message: impl Into<String>, error_type: impl Into<String>) -> Self {
         let resp = OaiErrorResponse {
             error: OaiErrorBody {
@@ -209,16 +209,19 @@ impl RouteResponse {
     }
 
     /// 404 Not Found.
+    #[must_use] 
     pub fn not_found() -> Self {
         Self::error(404, "Not found", "not_found")
     }
 
     /// 405 Method Not Allowed.
+    #[must_use] 
     pub fn method_not_allowed() -> Self {
         Self::error(405, "Method not allowed", "method_not_allowed")
     }
 
-    /// Map a `BlazenError` to the appropriate HTTP status and OpenAI error body.
+    /// Map a `BlazenError` to the appropriate HTTP status and `OpenAI` error body.
+    #[must_use] 
     pub fn from_blazen_error(err: &BlazenError) -> Self {
         let (status, error_type) = match err {
             BlazenError::Auth { .. } => (401, "authentication_error"),
@@ -449,15 +452,12 @@ fn handle_chat_completions(
                 .and_then(|reg| reg.get(provider_name).map(|cp| cp.config.api_key.clone()))
         });
 
-    let api_key = match api_key {
-        Some(key) => key,
-        None => {
-            return RouteResponse::error(
-                401,
-                format!("No API key configured for provider: {provider_name}"),
-                "authentication_error",
-            );
-        }
+    let Some(api_key) = api_key else {
+        return RouteResponse::error(
+            401,
+            format!("No API key configured for provider: {provider_name}"),
+            "authentication_error",
+        );
     };
 
     // Convert OAI messages to blazen-llm ChatMessages
@@ -614,7 +614,7 @@ fn resolve_provider(
                 Some(mut config) => {
                     // Use the api_key from the resolved key (env var takes precedence)
                     if !api_key.is_empty() {
-                        config.api_key = api_key.to_owned();
+                        api_key.clone_into(&mut config.api_key);
                     }
                     Ok(Box::new(
                         OpenAiCompatProvider::new_with_client(config, http_client)

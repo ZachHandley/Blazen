@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 /// An [`HttpClient`] that uses `wasi:http/outgoing-handler` for outbound requests.
 ///
-/// This is the HTTP backend used when Blazen runs as a WASM component on ZLayer.
+/// This is the HTTP backend used when Blazen runs as a WASM component on `ZLayer`.
 /// The host runtime (wasmtime) provides TLS, DNS resolution, and connection pooling.
 #[derive(Debug, Clone)]
 pub struct WasiHttpClient;
@@ -42,7 +42,7 @@ impl Default for WasiHttpClient {
     }
 }
 
-/// Parse a URL string into (scheme, authority, path_with_query).
+/// Parse a URL string into (scheme, authority, `path_with_query`).
 fn parse_url(url: &str) -> Result<(Scheme, String, String), BlazenError> {
     // Minimal URL parsing -- we avoid pulling in a full URL crate for WASM size.
     let (scheme, rest) = if let Some(rest) = url.strip_prefix("https://") {

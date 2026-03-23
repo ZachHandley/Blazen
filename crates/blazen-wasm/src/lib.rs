@@ -1,6 +1,6 @@
 //! # Blazen WASM Component
 //!
-//! A WASIp2 WASM component that implements `wasi:http/incoming-handler` to
+//! A `WASIp2` WASM component that implements `wasi:http/incoming-handler` to
 //! serve an OpenAI-compatible API backed by Blazen's LLM providers. Outbound
 //! LLM API calls are made via `wasi:http/outgoing-handler`.
 //!
@@ -47,8 +47,6 @@ use crate::exports::wasi::http::incoming_handler::Guest;
 use crate::wasi::http::types::{
     Fields, IncomingBody, IncomingRequest, OutgoingBody, OutgoingResponse, ResponseOutparam,
 };
-use crate::wasi::io::streams::StreamError;
-
 use http_wasi::WasiHttpClient;
 use keys::KeyProvider;
 use router::{RouteResponse, route};
@@ -98,7 +96,7 @@ impl Guest for BlazenComponent {
         let result = route(method_str, route_path, &body, &key_provider, &http_client);
 
         // Write the response
-        write_response(response_out, result);
+        write_response(response_out, &result);
     }
 }
 
@@ -108,30 +106,22 @@ impl Guest for BlazenComponent {
 
 /// Read the entire body from an incoming request.
 fn read_request_body(request: &IncomingRequest) -> Vec<u8> {
-    let incoming_body = match request.consume() {
-        Ok(body) => body,
-        Err(()) => return Vec::new(),
+    let Ok(incoming_body) = request.consume() else {
+        return Vec::new();
     };
 
-    let stream = match incoming_body.stream() {
-        Ok(s) => s,
-        Err(()) => return Vec::new(),
+    let Ok(stream) = incoming_body.stream() else {
+        return Vec::new();
     };
 
     let mut body = Vec::new();
-    loop {
-        match stream.read(65536) {
-            Ok(chunk) => {
-                if chunk.is_empty() {
-                    let pollable = stream.subscribe();
-                    pollable.block();
-                    continue;
-                }
-                body.extend_from_slice(&chunk);
-            }
-            Err(StreamError::Closed) => break,
-            Err(StreamError::LastOperationFailed(_)) => break,
+    while let Ok(chunk) = stream.read(65536) {
+        if chunk.is_empty() {
+            let pollable = stream.subscribe();
+            pollable.block();
+            continue;
         }
+        body.extend_from_slice(&chunk);
     }
 
     drop(stream);
@@ -145,7 +135,7 @@ fn read_request_body(request: &IncomingRequest) -> Vec<u8> {
 // ---------------------------------------------------------------------------
 
 /// Write a `RouteResponse` to the WASI HTTP response outparam.
-fn write_response(response_out: ResponseOutparam, result: RouteResponse) {
+fn write_response(response_out: ResponseOutparam, result: &RouteResponse) {
     let headers = Fields::new();
 
     // Set Content-Type
