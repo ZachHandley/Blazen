@@ -28,8 +28,8 @@ chrono.workspace = true
 reqwest = { workspace = true, optional = true }
 tiktoken-rs = { version = "0.9", optional = true }
 
-# Timer/runtime features only on non-WASI targets (tokio::time doesn't work on WASIp2)
-[target.'cfg(not(target_os = "wasi"))'.dependencies]
+# Timer/runtime features only on native targets (mio doesn't support any wasm32 target)
+[target.'cfg(not(any(target_os = "wasi", target_arch = "wasm32")))'.dependencies]
 tokio = { version = "1", default-features = false, features = ["rt", "time"] }
 
 # Browser WASM only (not WASIp2 -- WASIp2 has no JS runtime)
