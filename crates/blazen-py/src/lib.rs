@@ -74,6 +74,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Completion model (provider)
     m.add_class::<providers::PyCompletionModel>()?;
+    m.add_class::<providers::completion_model::PyCompletionOptions>()?;
 
     // Embedding model
     m.add_class::<types::PyEmbeddingModel>()?;

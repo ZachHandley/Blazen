@@ -87,7 +87,7 @@ impl JsEmbeddingModel {
                     OpenAiCompatConfig {
                         provider_name: "together".into(),
                         base_url: "https://api.together.xyz/v1".into(),
-                        api_key: api_key.into(),
+                        api_key,
                         default_model: String::new(),
                         auth_method: AuthMethod::Bearer,
                         extra_headers: Vec::new(),
@@ -112,7 +112,7 @@ impl JsEmbeddingModel {
                     OpenAiCompatConfig {
                         provider_name: "cohere".into(),
                         base_url: "https://api.cohere.ai/compatibility/v1".into(),
-                        api_key: api_key.into(),
+                        api_key,
                         default_model: String::new(),
                         auth_method: AuthMethod::Bearer,
                         extra_headers: Vec::new(),
@@ -137,7 +137,7 @@ impl JsEmbeddingModel {
                     OpenAiCompatConfig {
                         provider_name: "fireworks".into(),
                         base_url: "https://api.fireworks.ai/inference/v1".into(),
-                        api_key: api_key.into(),
+                        api_key,
                         default_model: String::new(),
                         auth_method: AuthMethod::Bearer,
                         extra_headers: Vec::new(),

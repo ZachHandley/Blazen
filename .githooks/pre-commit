@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Running cargo fmt check..."
+cargo fmt --all -- --check
+
+echo "Running cargo clippy (workspace, all features, deny warnings)..."
+cargo clippy --workspace --all-features -- -D warnings
