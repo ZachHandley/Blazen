@@ -8,7 +8,7 @@ import os
 
 import pytest
 
-from blazen import AgentResult, ChatMessage, CompletionModel, ToolDef, run_agent
+from blazen import AgentResult, ChatMessage, CompletionModel, CompletionOptions, ToolDef, run_agent
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 
@@ -37,7 +37,7 @@ async def test_streaming_completion():
     await model.stream(
         [ChatMessage.user("Count from 1 to 5.")],
         on_chunk,
-        max_tokens=64,
+        CompletionOptions(max_tokens=64),
     )
 
     assert len(chunks) > 0, "Expected at least one streamed chunk"
@@ -56,21 +56,23 @@ async def test_structured_output():
 
     response = await model.complete(
         [ChatMessage.user("What is 2+2? Return JSON.")],
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "math",
-                "strict": True,
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "answer": {"type": "integer"},
+        CompletionOptions(
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "math",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "answer": {"type": "integer"},
+                        },
+                        "required": ["answer"],
                     },
-                    "required": ["answer"],
                 },
             },
-        },
-        max_tokens=64,
+            max_tokens=64,
+        ),
     )
 
     assert response.content is not None

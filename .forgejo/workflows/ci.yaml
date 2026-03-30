@@ -199,7 +199,7 @@ jobs:
   auto-tag:
     name: Auto Tag
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, test-python, test-node]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - name: Checkout

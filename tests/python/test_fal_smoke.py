@@ -11,6 +11,7 @@ import pytest
 from blazen import (
     ChatMessage,
     CompletionModel,
+    CompletionOptions,
 )
 
 FAL_API_KEY = os.environ.get("FAL_API_KEY")
@@ -32,7 +33,7 @@ async def test_fal_basic_completion():
     model = CompletionModel.fal(FAL_API_KEY)
     response = await model.complete(
         [ChatMessage.user("What is 2+2? Reply with just the number.")],
-        max_tokens=10,
+        CompletionOptions(max_tokens=10),
     )
 
     assert response.content is not None
@@ -60,8 +61,7 @@ async def test_fal_passes_temperature():
     model = CompletionModel.fal(FAL_API_KEY)
     response = await model.complete(
         [ChatMessage.user("Write a one-word greeting.")],
-        temperature=0.1,
-        max_tokens=10,
+        CompletionOptions(temperature=0.1, max_tokens=10),
     )
 
     assert response.content is not None
@@ -76,7 +76,7 @@ async def test_fal_completion_response_fields():
     model = CompletionModel.fal(FAL_API_KEY)
     response = await model.complete(
         [ChatMessage.user("Hi")],
-        max_tokens=5,
+        CompletionOptions(max_tokens=5),
     )
 
     # Attribute access

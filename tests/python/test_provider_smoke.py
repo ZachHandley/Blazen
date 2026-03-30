@@ -8,7 +8,7 @@ import os
 
 import pytest
 
-from blazen import ChatMessage, CompletionModel
+from blazen import ChatMessage, CompletionModel, CompletionOptions
 
 # ---------------------------------------------------------------------------
 # API keys
@@ -51,7 +51,7 @@ PROMPT = [ChatMessage.user("What is 2+2? Reply with just the number.")]
 
 async def _assert_completion(model: CompletionModel) -> None:
     """Send a simple completion and verify the response."""
-    response = await model.complete(PROMPT, max_tokens=10)
+    response = await model.complete(PROMPT, CompletionOptions(max_tokens=10))
     assert response.content is not None
     assert "4" in response.content
     assert response.model is not None

@@ -175,7 +175,7 @@ impl AnthropicProvider {
             client: crate::default_http_client(),
             api_key: api_key.into(),
             base_url: "https://api.anthropic.com/v1".to_owned(),
-            default_model: "claude-sonnet-4-20250514".to_owned(),
+            default_model: "claude-sonnet-4-5-20250929".to_owned(),
         }
     }
 
@@ -186,7 +186,7 @@ impl AnthropicProvider {
             client,
             api_key: api_key.into(),
             base_url: "https://api.anthropic.com/v1".to_owned(),
-            default_model: "claude-sonnet-4-20250514".to_owned(),
+            default_model: "claude-sonnet-4-5-20250929".to_owned(),
         }
     }
 

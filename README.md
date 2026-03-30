@@ -280,7 +280,9 @@ const result = await handler.result();
 | `blazen-llm` | LLM provider abstraction -- `CompletionModel`, `StructuredOutput`, `EmbeddingModel`, `Tool` |
 | `blazen-pipeline` | Multi-workflow pipeline orchestrator with sequential/parallel stages |
 | `blazen-prompts` | Prompt template management with versioning and YAML/JSON registries |
-| `blazen-persist` | Optional persistence layer (redb / ValKey) |
+| `blazen-memory` | Memory and vector store with LSH-based approximate nearest-neighbor retrieval |
+| `blazen-memory-valkey` | Valkey/Redis backend for `blazen-memory` |
+| `blazen-persist` | Optional persistence layer (redb) |
 | `blazen-telemetry` | Observability: OpenTelemetry spans, Prometheus metrics, Langfuse, and LLM call history |
 | `blazen-py` | Python bindings via PyO3/maturin (published to PyPI as `blazen`) |
 | `blazen-node` | Node.js/TypeScript bindings via napi-rs (published to npm as `blazen`) |
@@ -292,20 +294,20 @@ const result = await handler.result();
 
 | Provider | Constructor | Default Model |
 |----------|-------------|---------------|
-| OpenAI | `OpenAiProvider::new` / `.openai()` | `gpt-4o` |
-| Anthropic | `AnthropicProvider::new` / `.anthropic()` | `claude-sonnet-4-20250514` |
-| Google Gemini | `GeminiProvider::new` / `.gemini()` | `gemini-2.0-flash` |
+| OpenAI | `OpenAiProvider::new` / `.openai()` | `gpt-4.1` |
+| Anthropic | `AnthropicProvider::new` / `.anthropic()` | `claude-sonnet-4-5-20250929` |
+| Google Gemini | `GeminiProvider::new` / `.gemini()` | `gemini-2.5-flash` |
 | Azure OpenAI | `AzureOpenAiProvider::new` / `.azure()` | (deployment-specific) |
-| OpenRouter | `.openrouter()` | `openai/gpt-4o` |
+| OpenRouter | `.openrouter()` | `openai/gpt-4.1` |
 | Groq | `.groq()` | `llama-3.3-70b-versatile` |
-| Together AI | `.together()` | `meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo` |
+| Together AI | `.together()` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` |
 | Mistral | `.mistral()` | `mistral-large-latest` |
 | DeepSeek | `.deepseek()` | `deepseek-chat` |
-| Fireworks | `.fireworks()` | `accounts/fireworks/models/llama-v3p1-70b-instruct` |
+| Fireworks | `.fireworks()` | `accounts/fireworks/models/llama-v3p3-70b-instruct` |
 | Perplexity | `.perplexity()` | `sonar-pro` |
 | xAI (Grok) | `.xai()` | `grok-3` |
-| Cohere | `.cohere()` | `command-a-03-2025` |
-| AWS Bedrock | `.bedrock()` | `anthropic.claude-sonnet-4-20250514-v1:0` |
+| Cohere | `.cohere()` | `command-a-08-2025` |
+| AWS Bedrock | `.bedrock()` | `anthropic.claude-sonnet-4-5-20250929-v1:0` |
 | fal.ai | `FalProvider::new` / `.fal()` | (image generation) |
 
 All OpenAI-compatible providers are accessible through `OpenAiCompatProvider` in Rust, or through static factory methods on `CompletionModel` in Python and TypeScript.
