@@ -7,6 +7,7 @@ authors.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 description = "Blazen - A Rust-native AI workflow engine with event-driven orchestration"
+readme = "../../README.md"
 
 [features]
 default = ["llm"]
