@@ -2,6 +2,10 @@
 import Layout from "~/layouts/Layout.astro";
 import FeatureCard from "~/components/vue/FeatureCard.vue";
 import CodeTabs from "~/components/vue/CodeTabs.vue";
+import { getCollection } from "astro:content";
+
+const docs = await getCollection("docs");
+const knownRoutes = ["/", ...docs.map((entry) => `/docs/${entry.id}`)];
 
 const title = "Blazen";
 const description =
@@ -443,4 +447,119 @@ const crates = [
       </div>
     </div>
   </footer>
+
+  <!-- 404 overlay (hidden by default, shown by client-side router when path doesn't match) -->
+  <div id="not-found-overlay" class="fixed inset-0 z-[100] hidden items-center justify-center bg-surface-900/95 backdrop-blur-sm">
+    <div class="w-full max-w-lg px-6 text-center">
+      <h1 class="mb-2 text-8xl font-extrabold tracking-tight sm:text-9xl">
+        <span class="bg-gradient-to-r from-blazen-400 via-blazen-500 to-blazen-600 bg-clip-text text-transparent">404</span>
+      </h1>
+      <p class="mb-2 text-xl font-semibold text-gray-200">Page not found</p>
+      <p class="mb-8 text-sm text-gray-400">The page you're looking for doesn't exist or may have moved.</p>
+      <div id="suggestions" class="mb-8 hidden">
+        <p class="mb-3 text-sm text-gray-400">Did you mean?</p>
+        <div id="suggestion-links" class="flex flex-col items-center gap-2"></div>
+      </div>
+      <div class="flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <button id="go-back-btn" class="inline-flex items-center gap-2 rounded-lg bg-surface-700 px-6 py-3 text-sm font-medium text-gray-100 transition-colors hover:bg-surface-600">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+          Go back
+        </button>
+        <a href="/docs/getting-started/introduction" class="inline-flex items-center gap-2 rounded-lg bg-blazen-500 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-blazen-600">
+          Browse docs
+        </a>
+        <a href="/" class="inline-flex items-center gap-2 rounded-lg bg-surface-700 px-6 py-3 text-sm font-medium text-gray-100 transition-colors hover:bg-surface-600">
+          Home
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script define:vars={{ knownRoutes }}>
+    (function () {
+      const path = window.location.pathname.replace(/\/+$/, "") || "/";
+      if (path === "/") return; // Homepage — do nothing
+
+      const routeSet = new Set(knownRoutes.map((r) => r.replace(/\/+$/, "") || "/"));
+
+      // Exact match (trailing slash difference) — redirect
+      if (routeSet.has(path)) {
+        window.location.replace(path);
+        return;
+      }
+
+      // Prefix match — e.g. /docs → first docs page
+      const prefixMatches = knownRoutes.filter(
+        (r) => r !== "/" && r.startsWith(path + "/")
+      );
+      if (prefixMatches.length > 0) {
+        window.location.replace(prefixMatches[0]);
+        return;
+      }
+
+      // Levenshtein typo detection on last segment
+      function levenshtein(a, b) {
+        const m = a.length, n = b.length;
+        const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+        for (let i = 0; i <= m; i++) dp[i][0] = i;
+        for (let j = 0; j <= n; j++) dp[0][j] = j;
+        for (let i = 1; i <= m; i++) {
+          for (let j = 1; j <= n; j++) {
+            dp[i][j] = a[i - 1] === b[j - 1]
+              ? dp[i - 1][j - 1]
+              : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+          }
+        }
+        return dp[m][n];
+      }
+
+      const pathParts = path.split("/").filter(Boolean);
+      const suggestions = [];
+      for (const route of knownRoutes) {
+        if (route === "/") continue;
+        const routeParts = route.replace(/\/+$/, "").split("/").filter(Boolean);
+        if (
+          pathParts.length === routeParts.length &&
+          pathParts.slice(0, -1).join("/") === routeParts.slice(0, -1).join("/")
+        ) {
+          const dist = levenshtein(pathParts.at(-1), routeParts.at(-1));
+          if (dist <= 3) suggestions.push({ route, dist });
+        }
+      }
+      suggestions.sort((a, b) => a.dist - b.dist);
+
+      if (suggestions.length === 1 && suggestions[0].dist <= 1) {
+        window.location.replace(suggestions[0].route);
+        return;
+      }
+
+      // Show 404 overlay
+      const overlay = document.getElementById("not-found-overlay");
+      if (!overlay) return;
+      overlay.classList.remove("hidden");
+      overlay.classList.add("flex");
+
+      if (suggestions.length > 0) {
+        const container = document.getElementById("suggestions");
+        const links = document.getElementById("suggestion-links");
+        if (container && links) {
+          container.classList.remove("hidden");
+          for (const s of suggestions.slice(0, 3)) {
+            const a = document.createElement("a");
+            a.href = s.route;
+            a.textContent = s.route;
+            a.className = "rounded-lg border border-surface-600 bg-surface-800 px-4 py-2 text-sm text-blazen-400 transition-colors hover:bg-surface-700 hover:text-blazen-300";
+            links.appendChild(a);
+          }
+        }
+      }
+
+      document.getElementById("go-back-btn")?.addEventListener("click", () => {
+        if (window.history.length > 1) window.history.back();
+        else window.location.href = "/";
+      });
+    })();
+  </script>
 </Layout>
