@@ -4,7 +4,7 @@ Provides IDE support (auto-completion, type checking) for the Blazen
 Python bindings.
 """
 
-from typing import Any, AsyncIterator, Callable, Coroutine, Optional, Union
+from typing import Any, AsyncIterator, Callable, ClassVar, Coroutine, Optional, Protocol, Union
 
 StateValue = Any
 """Any Python value that can be stored in the workflow context.
@@ -13,6 +13,84 @@ JSON-serializable types (dict, list, str, int, float, bool, None) are stored
 efficiently as JSON. ``bytes``/``bytearray`` are stored as raw binary. All
 other objects (Pydantic models, custom classes, etc.) are pickled automatically
 and deserialized back to their original type on retrieval."""
+
+
+class FieldStore(Protocol):
+    """Custom persistence strategy for a BlazenState field.
+
+    Implement this protocol to provide custom save/load behavior
+    for specific fields (e.g., S3 storage, database, etc.).
+    """
+
+    def save(self, key: str, value: Any, ctx: "Context") -> None:
+        """Persist the field value."""
+        ...
+
+    def load(self, key: str, ctx: "Context") -> Any:
+        """Load the field value."""
+        ...
+
+
+class CallbackFieldStore:
+    """Store/load a field via user-provided callables.
+
+    Example::
+
+        CallbackFieldStore(
+            save_fn=lambda k, v: s3.put_object(Bucket="b", Key=k, Body=v),
+            load_fn=lambda k: s3.get_object(Bucket="b", Key=k)["Body"].read(),
+        )
+    """
+
+    def __init__(
+        self,
+        save_fn: Callable[[str, Any], None],
+        load_fn: Callable[[str], Any],
+    ) -> None: ...
+    def save(self, key: str, value: Any, ctx: "Context") -> None: ...
+    def load(self, key: str, ctx: "Context") -> Any: ...
+
+
+class BlazenState:
+    """Base class for typed workflow state with per-field context storage.
+
+    Subclass with ``@dataclass`` to get typed, per-field storage where each
+    field is stored individually with its optimal tier. Fields in
+    ``Meta.transient`` are excluded from serialization and recreated via
+    ``restore()``.
+
+    Example::
+
+        @dataclass
+        class MyState(BlazenState):
+            input_path: str = ""
+            conn: sqlite3.Connection | None = None
+
+            class Meta:
+                transient = {"conn"}
+                store_by = {}
+
+            def restore(self):
+                if self.input_path:
+                    self.conn = sqlite3.connect(self.input_path)
+    """
+
+    class Meta:
+        """Configuration for field storage behavior."""
+
+        transient: ClassVar[set[str]]
+        """Field names excluded from serialization."""
+        store_by: ClassVar[dict[str, FieldStore]]
+        """Custom persistence strategies per field."""
+
+    def restore(self) -> None:
+        """Override to recreate transient fields after deserialization.
+
+        Called automatically when the state is restored from a snapshot
+        or context. All serializable fields are already set; transient
+        fields are ``None``.
+        """
+        ...
 
 
 # ---------------------------------------------------------------------------

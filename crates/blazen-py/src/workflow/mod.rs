@@ -3,6 +3,7 @@
 pub mod context;
 pub mod event;
 pub mod handler;
+pub mod state;
 pub mod step;
 #[allow(clippy::module_inception)]
 pub mod workflow;

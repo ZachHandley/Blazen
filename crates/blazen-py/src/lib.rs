@@ -51,6 +51,9 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Context
     m.add_class::<workflow::context::PyContext>()?;
 
+    // State base class
+    m.add_class::<workflow::state::PyBlazenState>()?;
+
     // Step decorator
     m.add_function(wrap_pyfunction!(workflow::step::step, m)?)?;
     m.add_class::<workflow::step::PyStepWrapper>()?;

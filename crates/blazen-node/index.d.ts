@@ -10,6 +10,104 @@ export type StateValue =
   | Buffer
   | StateValue[]
   | { [key: string]: StateValue }
+
+/** Custom persistence strategy for a BlazenState field. */
+export interface FieldStore {
+  save(key: string, value: any, ctx: Context): Promise<void> | void
+  load(key: string, ctx: Context): Promise<any> | any
+}
+
+/** Store/load a field via user-provided callables. */
+export declare class CallbackFieldStore implements FieldStore {
+  constructor(options: {
+    saveFn: (key: string, value: any) => void | Promise<void>
+    loadFn: (key: string) => any | Promise<any>
+  })
+  save(key: string, value: any, ctx: Context): Promise<void>
+  load(key: string, ctx: Context): Promise<any>
+}
+
+/** Configuration for BlazenState field storage. */
+export interface BlazenStateMeta {
+  /** Field names excluded from serialization (recreated via restore()). */
+  transient?: Set<string> | string[]
+  /** Custom persistence strategies per field. */
+  storeBy?: Record<string, FieldStore>
+}
+
+/**
+ * Base class for typed workflow state with per-field context storage.
+ *
+ * This is a TypeScript-only base class (not backed by native code). It
+ * provides `saveTo()` and `loadFrom()` methods that iterate over the
+ * instance fields and store/load each one individually through the
+ * workflow `Context`.
+ *
+ * Fields listed in `meta.transient` are excluded from serialization and
+ * recreated via `restore()` after deserialization. Fields listed in
+ * `meta.storeBy` use a custom `FieldStore` for persistence instead of the
+ * default `ctx.set()`/`ctx.get()` path.
+ *
+ * ```typescript
+ * class MyState extends BlazenState {
+ *   inputPath: string = "";
+ *   dbConn: any = null;
+ *
+ *   static meta: BlazenStateMeta = {
+ *     transient: ["dbConn"],
+ *   };
+ *
+ *   restore() {
+ *     if (this.inputPath) {
+ *       this.dbConn = openDb(this.inputPath);
+ *     }
+ *   }
+ * }
+ *
+ * // Save state per-field into the context:
+ * const state = new MyState();
+ * state.inputPath = "/data/main.db";
+ * await state.saveTo(ctx, "my_state");
+ *
+ * // Later, reconstruct from context:
+ * const restored = await MyState.loadFrom(ctx, "my_state");
+ * // restored.inputPath === "/data/main.db"
+ * // restored.dbConn is recreated by restore()
+ * ```
+ */
+export declare class BlazenState {
+  /** Override in subclass to configure transient fields and custom stores. */
+  static meta?: BlazenStateMeta
+
+  /** Override to recreate transient fields after deserialization. */
+  restore?(): void | Promise<void>
+
+  /**
+   * Store this state per-field in the context.
+   *
+   * Each non-transient field is stored individually under the key
+   * `${key}.__blazen_state__.${fieldName}`. A metadata entry is also
+   * written so that `loadFrom()` knows which fields to reconstruct.
+   *
+   * Fields with a custom `FieldStore` in `meta.storeBy` are persisted
+   * through that store instead of the default context path.
+   */
+  saveTo(ctx: Context, key: string): Promise<void>
+
+  /**
+   * Reconstruct a BlazenState from per-field context storage.
+   *
+   * Reads the metadata entry written by `saveTo()`, loads each field
+   * individually, assigns them to a new instance, and calls `restore()`
+   * if defined.
+   */
+  static loadFrom<T extends BlazenState>(
+    this: new () => T,
+    ctx: Context,
+    key: string,
+  ): Promise<T>
+}
+
 /** A single message in a chat conversation. */
 export declare class ChatMessage {
   /**
