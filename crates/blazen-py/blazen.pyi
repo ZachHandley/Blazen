@@ -145,9 +145,10 @@ class Context:
     def set(self, key: str, value: StateValue) -> None:
         """Store any value under *key*.
 
-        - ``bytes``/``bytearray`` → stored as raw binary
-        - JSON-serializable (dict, list, str, int, float, bool, None) → stored as JSON
-        - Everything else (Pydantic models, custom classes) → pickled automatically
+        - ``bytes``/``bytearray`` → stored as raw binary (survives snapshots)
+        - JSON-serializable (dict, list, str, int, float, bool, None) → stored as JSON (survives snapshots)
+        - Picklable objects (Pydantic, dataclasses) → pickled automatically (survives snapshots)
+        - Unpicklable objects (DB connections, file handles) → stored as live reference (same-process only)
         """
         ...
 
@@ -155,8 +156,8 @@ class Context:
         """Retrieve the value stored under *key*, deserialized to its original type.
 
         Returns the original Python type for JSON values, ``bytes`` for
-        binary data, the original object for pickled values, or ``None``
-        if the key does not exist.
+        binary data, the original object for pickled or live-reference
+        values, or ``None`` if the key does not exist.
         """
         ...
 

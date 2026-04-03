@@ -1,8 +1,11 @@
 //! Python wrapper for the workflow [`Context`](blazen_core::Context).
 //!
 //! Accepts any Python value — JSON-serializable types are stored efficiently
-//! as JSON, `bytes`/`bytearray` as raw binary, and everything else (Pydantic
-//! models, custom classes, etc.) is pickled automatically.
+//! as JSON, `bytes`/`bytearray` as raw binary, picklable objects via pickle,
+//! and unpicklable objects (DB connections, file handles) as live references.
+
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use pyo3::prelude::*;
 
@@ -25,28 +28,34 @@ fn block_on_context<F: std::future::Future>(fut: F) -> F::Output {
 /// Shared workflow context accessible by all steps.
 ///
 /// Provides typed key/value storage, event emission, and stream publishing.
-/// Accepts any Python value — JSON-serializable types, raw bytes, or
-/// arbitrary objects (pickled automatically).
+/// Accepts any Python value — JSON-serializable types, raw bytes, picklable
+/// objects, or live references for unpicklable objects (DB connections, etc.).
 ///
 /// Example:
 ///     >>> def my_step(ctx: Context, ev: Event) -> Event:
 ///     ...     ctx.set("counter", 42)
 ///     ...     ctx.set("model", MyPydanticModel(name="foo"))
+///     ...     ctx.set("db", sqlite3.connect(":memory:"))
 ///     ...     val = ctx.get("counter")  # returns 42
-///     ...     model = ctx.get("model")  # returns MyPydanticModel
+///     ...     db = ctx.get("db")        # returns the same connection
 #[pyclass(name = "Context", from_py_object)]
 #[derive(Clone)]
 pub struct PyContext {
     pub(crate) inner: blazen_core::Context,
+    /// Live Python object references for unpicklable values.
+    /// Shared across steps via Arc. NOT persisted through snapshots.
+    locals: Arc<Mutex<HashMap<String, Py<PyAny>>>>,
 }
 
 #[pymethods]
 impl PyContext {
     /// Store any value under the given key.
     ///
-    /// - `bytes`/`bytearray` → stored as raw binary
-    /// - JSON-serializable (dict, list, str, int, float, bool, None) → stored as JSON
-    /// - Everything else (Pydantic models, custom classes) → pickled automatically
+    /// Storage tiers (tried in order):
+    /// 1. `bytes`/`bytearray` → raw binary (survives snapshots)
+    /// 2. JSON-serializable (dict, list, str, int, float, bool, None) → JSON (survives snapshots)
+    /// 3. Picklable objects (Pydantic, dataclasses, etc.) → pickled bytes (survives snapshots)
+    /// 4. Unpicklable objects (DB connections, file handles) → live reference (same-process only)
     ///
     /// Args:
     ///     key: The storage key.
@@ -56,17 +65,31 @@ impl PyContext {
         let key = key.to_string();
 
         if let Ok(bytes) = value.extract::<Vec<u8>>() {
-            // bytes/bytearray → Bytes variant (raw binary, returned as bytes on get)
+            // Tier 1: bytes/bytearray → Bytes variant
+            self.locals.lock().unwrap().remove(&key);
             block_on_context(async { inner.set_bytes(&key, bytes).await });
         } else if let Ok(json_val) = super::event::try_py_to_json(py, value) {
-            // JSON-serializable primitive/container → Json variant
+            // Tier 2: JSON-serializable → Json variant
+            self.locals.lock().unwrap().remove(&key);
             block_on_context(async { inner.set(&key, json_val).await });
         } else {
-            // Anything else (Pydantic, custom class, etc.) → pickle → Native variant
+            // Tier 3: try pickle → Native variant
             let pickle = py.import("pickle")?;
-            let pickled: Vec<u8> = pickle.call_method1("dumps", (value,))?.extract()?;
-            let sv = blazen_core::StateValue::Native(blazen_core::BytesWrapper(pickled));
-            block_on_context(async { inner.set_value(&key, sv).await });
+            match pickle.call_method1("dumps", (value,)) {
+                Ok(pickled_obj) => {
+                    let pickled: Vec<u8> = pickled_obj.extract()?;
+                    let sv = blazen_core::StateValue::Native(blazen_core::BytesWrapper(pickled));
+                    self.locals.lock().unwrap().remove(&key);
+                    block_on_context(async { inner.set_value(&key, sv).await });
+                }
+                Err(_) => {
+                    // Tier 4: unpicklable → store live Python reference
+                    self.locals
+                        .lock()
+                        .unwrap()
+                        .insert(key, value.clone().unbind());
+                }
+            }
         }
         Ok(())
     }
@@ -75,7 +98,8 @@ impl PyContext {
     ///
     /// Returns the original Python type: JSON values as their Python
     /// equivalents, binary data as `bytes`, pickled objects as their
-    /// original type. Returns `None` if the key does not exist.
+    /// original type, live references as-is. Returns `None` if the key
+    /// does not exist.
     ///
     /// Args:
     ///     key: The storage key.
@@ -83,6 +107,12 @@ impl PyContext {
     /// Returns:
     ///     The stored value in its original type, or None.
     fn get(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
+        // Check live object store first (tier 4 values).
+        if let Some(obj) = self.locals.lock().unwrap().get(key) {
+            return Ok(obj.clone_ref(py));
+        }
+
+        // Fall through to Rust core (tiers 1-3).
         let inner = self.inner.clone();
         let key = key.to_string();
         let val = block_on_context(async { inner.get_value(&key).await });
@@ -151,6 +181,7 @@ impl PyContext {
         let inner = self.inner.clone();
         let key = key.to_string();
         let data = data.to_vec();
+        self.locals.lock().unwrap().remove(&key);
         block_on_context(async { inner.set_bytes(&key, data).await });
     }
 
@@ -188,6 +219,9 @@ impl PyContext {
 impl PyContext {
     /// Create a new `PyContext` wrapping a Rust `Context`.
     pub fn new(inner: blazen_core::Context) -> Self {
-        Self { inner }
+        Self {
+            inner,
+            locals: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 }
