@@ -91,11 +91,10 @@ jobs:
           sccache-key-prefix: sccache/blazen-python
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-
-      - name: Setup Python
-        run: uv python install 3.12
+      - name: Setup Python + uv
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
+        with:
+          python-version: '3.12'
 
       - name: Install deps and build wheel
         run: uv sync --group dev
