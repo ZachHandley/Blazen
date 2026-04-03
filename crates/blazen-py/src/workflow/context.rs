@@ -1,8 +1,8 @@
 //! Python wrapper for the workflow [`Context`](blazen_core::Context).
 //!
-//! Python values are serialized to JSON before storage in the Rust context,
-//! and deserialized back when retrieved. This means all Python context values
-//! must be JSON-serializable.
+//! Accepts any Python value — JSON-serializable types are stored efficiently
+//! as JSON, `bytes`/`bytearray` as raw binary, and everything else (Pydantic
+//! models, custom classes, etc.) is pickled automatically.
 
 use pyo3::prelude::*;
 
@@ -25,13 +25,15 @@ fn block_on_context<F: std::future::Future>(fut: F) -> F::Output {
 /// Shared workflow context accessible by all steps.
 ///
 /// Provides typed key/value storage, event emission, and stream publishing.
-/// All values are stored as JSON internally, so they must be JSON-serializable.
+/// Accepts any Python value — JSON-serializable types, raw bytes, or
+/// arbitrary objects (pickled automatically).
 ///
 /// Example:
 ///     >>> def my_step(ctx: Context, ev: Event) -> Event:
 ///     ...     ctx.set("counter", 42)
+///     ...     ctx.set("model", MyPydanticModel(name="foo"))
 ///     ...     val = ctx.get("counter")  # returns 42
-///     ...     ctx.send_event(Event("NextStep", data="hello"))
+///     ...     model = ctx.get("model")  # returns MyPydanticModel
 #[pyclass(name = "Context", from_py_object)]
 #[derive(Clone)]
 pub struct PyContext {
@@ -40,38 +42,60 @@ pub struct PyContext {
 
 #[pymethods]
 impl PyContext {
-    /// Store a value under the given key.
+    /// Store any value under the given key.
     ///
-    /// The value is serialized to JSON before storage.
+    /// - `bytes`/`bytearray` → stored as raw binary
+    /// - JSON-serializable (dict, list, str, int, float, bool, None) → stored as JSON
+    /// - Everything else (Pydantic models, custom classes) → pickled automatically
     ///
     /// Args:
     ///     key: The storage key.
-    ///     value: Any JSON-serializable Python value.
+    ///     value: Any Python value.
     fn set(&self, py: Python<'_>, key: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        let json_val = super::event::py_to_json(py, value)?;
         let inner = self.inner.clone();
         let key = key.to_string();
-        block_on_context(async {
-            inner.set(&key, json_val).await;
-        });
+
+        if let Ok(bytes) = value.extract::<Vec<u8>>() {
+            // bytes/bytearray → Bytes variant (raw binary, returned as bytes on get)
+            block_on_context(async { inner.set_bytes(&key, bytes).await });
+        } else if let Ok(json_val) = super::event::try_py_to_json(py, value) {
+            // JSON-serializable primitive/container → Json variant
+            block_on_context(async { inner.set(&key, json_val).await });
+        } else {
+            // Anything else (Pydantic, custom class, etc.) → pickle → Native variant
+            let pickle = py.import("pickle")?;
+            let pickled: Vec<u8> = pickle.call_method1("dumps", (value,))?.extract()?;
+            let sv = blazen_core::StateValue::Native(blazen_core::BytesWrapper(pickled));
+            block_on_context(async { inner.set_value(&key, sv).await });
+        }
         Ok(())
     }
 
     /// Retrieve a value previously stored under the given key.
     ///
-    /// Returns `None` if the key does not exist.
+    /// Returns the original Python type: JSON values as their Python
+    /// equivalents, binary data as `bytes`, pickled objects as their
+    /// original type. Returns `None` if the key does not exist.
     ///
     /// Args:
     ///     key: The storage key.
     ///
     /// Returns:
-    ///     The stored value, or None.
+    ///     The stored value in its original type, or None.
     fn get(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
         let inner = self.inner.clone();
         let key = key.to_string();
-        let val: Option<serde_json::Value> = block_on_context(async { inner.get(&key).await });
+        let val = block_on_context(async { inner.get_value(&key).await });
         match val {
-            Some(v) => super::event::json_to_py(py, &v),
+            Some(blazen_core::StateValue::Json(v)) => super::event::json_to_py(py, &v),
+            Some(blazen_core::StateValue::Bytes(b)) => {
+                Ok(pyo3::types::PyBytes::new(py, &b.0).into_any().unbind())
+            }
+            Some(blazen_core::StateValue::Native(b)) => {
+                let pickle = py.import("pickle")?;
+                let obj = pickle.call_method1("loads", (&b.0[..],))?;
+                Ok(obj.unbind())
+            }
             None => Ok(py.None()),
         }
     }
@@ -117,9 +141,8 @@ impl PyContext {
 
     /// Store raw binary data under the given key.
     ///
-    /// Useful for storing files, images, serialized objects, or any binary
-    /// data that should not be JSON-serialized. The data persists through
-    /// pause/resume snapshots.
+    /// Convenience method — equivalent to `ctx.set(key, data)` when `data`
+    /// is `bytes`. Useful when you want to be explicit about binary storage.
     ///
     /// Args:
     ///     key: The storage key.

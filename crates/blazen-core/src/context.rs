@@ -108,8 +108,26 @@ impl Context {
         let inner = self.inner.read().await;
         inner.state.get(key).and_then(|sv| match sv {
             StateValue::Json(v) => serde_json::from_value::<T>(v.clone()).ok(),
-            StateValue::Bytes(_) => None,
+            StateValue::Bytes(_) | StateValue::Native(_) => None,
         })
+    }
+
+    /// Store a raw [`StateValue`] directly.
+    ///
+    /// Used by language bindings for polymorphic dispatch (e.g. storing
+    /// platform-serialized opaque objects via [`StateValue::Native`]).
+    pub async fn set_value(&self, key: &str, value: StateValue) {
+        let mut inner = self.inner.write().await;
+        inner.state.insert(key.to_owned(), value);
+    }
+
+    /// Retrieve the raw [`StateValue`] stored under `key`.
+    ///
+    /// Returns `None` if the key does not exist. Unlike [`get`](Self::get),
+    /// this returns the value regardless of its variant.
+    pub async fn get_value(&self, key: &str) -> Option<StateValue> {
+        let inner = self.inner.read().await;
+        inner.state.get(key).cloned()
     }
 
     /// Store raw binary data under `key`.
@@ -131,7 +149,7 @@ impl Context {
         let inner = self.inner.read().await;
         inner.state.get(key).and_then(|sv| match sv {
             StateValue::Bytes(b) => Some(b.0.clone()),
-            StateValue::Json(_) => None,
+            StateValue::Json(_) | StateValue::Native(_) => None,
         })
     }
 
@@ -442,5 +460,45 @@ mod tests {
         assert_eq!(snap.len(), 1);
         let start_events = snap.get("blazen::StartEvent").unwrap();
         assert_eq!(start_events.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn set_value_and_get_value() {
+        let ctx = test_context();
+        let native = StateValue::native(vec![0x80, 0x04, 0x95]);
+        ctx.set_value("pickled", native.clone()).await;
+
+        let retrieved = ctx.get_value("pickled").await;
+        assert_eq!(retrieved, Some(native));
+    }
+
+    #[tokio::test]
+    async fn get_value_returns_all_variants() {
+        let ctx = test_context();
+        ctx.set("json_key", "hello".to_string()).await;
+        ctx.set_bytes("bytes_key", vec![1, 2, 3]).await;
+        ctx.set_value("native_key", StateValue::native(vec![4, 5, 6]))
+            .await;
+
+        assert!(ctx.get_value("json_key").await.unwrap().is_json());
+        assert!(ctx.get_value("bytes_key").await.unwrap().is_bytes());
+        assert!(ctx.get_value("native_key").await.unwrap().is_native());
+        assert!(ctx.get_value("missing").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn get_returns_none_for_native() {
+        let ctx = test_context();
+        ctx.set_value("key", StateValue::native(vec![0x80, 0x04]))
+            .await;
+        assert_eq!(ctx.get::<String>("key").await, None);
+    }
+
+    #[tokio::test]
+    async fn get_bytes_returns_none_for_native() {
+        let ctx = test_context();
+        ctx.set_value("key", StateValue::native(vec![0x80, 0x04]))
+            .await;
+        assert_eq!(ctx.get_bytes("key").await, None);
     }
 }

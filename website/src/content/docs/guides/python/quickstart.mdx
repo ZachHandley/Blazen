@@ -91,6 +91,8 @@ async def greet(ctx: Context, ev: GreetEvent):
 
 `ctx.set(key, value)` stores a value and `ctx.get(key)` (or `ctx.get(key, default)`) retrieves it. Both are plain synchronous calls you can use anywhere inside a step.
 
+`ctx.set()` accepts any Python value -- not just JSON-serializable types. Bytes are stored as raw binary, Pydantic models and other complex objects are pickled automatically, and `ctx.get()` returns the original type transparently.
+
 ## Key Concepts
 
 - **Event subclasses** -- `class MyEvent(Event): ...` gives you typed fields, automatic `event_type` naming, and direct attribute access (`ev.field`).

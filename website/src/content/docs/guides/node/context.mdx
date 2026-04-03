@@ -10,18 +10,34 @@ order: 4
 
 Context is a key-value store shared across all steps in a workflow run. Every step handler receives a `ctx` object as its second argument, giving each step access to the same shared state.
 
+## StateValue Type
+
+All context values are represented by the `StateValue` type:
+
+```typescript
+type StateValue = string | number | boolean | null | Buffer | StateValue[] | { [key: string]: StateValue };
+```
+
+`ctx.set()` accepts any JSON-serializable subset of `StateValue` (everything except `Buffer`). For binary data, use the dedicated `setBytes`/`getBytes` methods described below.
+
+`ctx.get()` returns `Promise<StateValue | null>` and now returns data for **all** `StateValue` variants, including arrays and nested objects. It no longer silently drops bytes or native data -- if a key was stored via `setBytes`, `get()` will return the data as a `Buffer`.
+
 ## Setting and Getting Values
 
 ```javascript
 wf.addStep("store_data", ["blazen::StartEvent"], async (event, ctx) => {
   await ctx.set("user_id", "user_123");
   await ctx.set("doc_count", 5);
+  await ctx.set("tags", ["rust", "workflow"]);
+  await ctx.set("config", { retries: 3, verbose: true });
   return { type: "NextEvent" };
 });
 
 wf.addStep("use_data", ["NextEvent"], async (event, ctx) => {
-  const userId = await ctx.get("user_id");
-  const docCount = await ctx.get("doc_count");
+  const userId = await ctx.get("user_id");     // "user_123"
+  const docCount = await ctx.get("doc_count"); // 5
+  const tags = await ctx.get("tags");          // ["rust", "workflow"]
+  const config = await ctx.get("config");      // { retries: 3, verbose: true }
   return { type: "blazen::StopEvent", result: { user: userId, docs: docCount } };
 });
 ```
@@ -38,7 +54,7 @@ const runId = await ctx.runId(); // Returns a UUID string
 
 ## Binary Storage
 
-Use `ctx.setBytes()` and `ctx.getBytes()` to store raw binary data in the context. No serialization requirement -- store any type by converting to bytes yourself (e.g., MessagePack, protobuf, or raw buffers). Binary data persists through pause/resume/checkpoint.
+While `ctx.get()` now returns data for all value types (including binary), you can still use `ctx.setBytes()` and `ctx.getBytes()` for explicit binary storage. These methods are useful when you want to make it clear that a value is raw binary data, or when you need to store data that should not be JSON-serialized. Binary data persists through pause/resume/checkpoint.
 
 ```javascript
 // Store raw binary data

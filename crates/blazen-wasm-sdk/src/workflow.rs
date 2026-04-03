@@ -118,8 +118,12 @@ impl WasmWorkflow {
             )?;
             js_sys::Reflect::set(&start_event, &JsValue::from_str("data"), &input)?;
 
+            // Create the shared context for this run.
+            let ctx = crate::context::WasmContext::new(workflow_name.clone());
+
             // Simple sequential event loop.
             let mut current_event: JsValue = start_event.into();
+            let mut pending_events: Vec<JsValue> = Vec::new();
             let max_iterations = 100_u32;
 
             for _ in 0..max_iterations {
@@ -148,16 +152,9 @@ impl WasmWorkflow {
                     )));
                 };
 
-                // Build a simple context object.
-                let ctx = js_sys::Object::new();
-                js_sys::Reflect::set(
-                    &ctx,
-                    &JsValue::from_str("workflowName"),
-                    &JsValue::from_str(&workflow_name),
-                )?;
-
-                // Call the handler.
-                let result = handler.call2(&JsValue::NULL, &current_event, &ctx)
+                // Call the handler with the shared context.
+                let ctx_ref: &JsValue = ctx.as_ref();
+                let result = handler.call2(&JsValue::NULL, &current_event, ctx_ref)
                     .map_err(|e| JsValue::from_str(&format!("Step handler error: {e:?}")))?;
 
                 // If the result is a Promise, await it.
@@ -172,12 +169,30 @@ impl WasmWorkflow {
                     result
                 };
 
-                // If the handler returned null/undefined, treat as StopEvent.
-                if result.is_null() || result.is_undefined() {
-                    return Ok(JsValue::UNDEFINED);
+                // Process any events queued via ctx.sendEvent() before the
+                // handler's return value.
+                let queued = ctx.drain_events();
+                if !queued.is_empty() {
+                    // Insert queued events: process them FIFO before the
+                    // handler's returned event.
+                    pending_events.extend(queued);
                 }
 
-                current_event = result;
+                // If the handler returned null/undefined, treat as StopEvent.
+                if result.is_null() || result.is_undefined() {
+                    if pending_events.is_empty() {
+                        return Ok(JsValue::UNDEFINED);
+                    }
+                    // Continue processing queued events.
+                } else {
+                    pending_events.push(result);
+                }
+
+                // Pull the next event to process.
+                if pending_events.is_empty() {
+                    return Ok(JsValue::UNDEFINED);
+                }
+                current_event = pending_events.remove(0);
             }
 
             Err(JsValue::from_str(&format!(

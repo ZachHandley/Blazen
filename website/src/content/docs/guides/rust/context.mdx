@@ -63,6 +63,58 @@ async fn use_model(event: NextEvent, ctx: Context) -> Result<StopEvent, Workflow
 }
 ```
 
+## StateValue and Direct Access
+
+Under the hood, every context value is stored as a `StateValue` enum:
+
+```rust
+pub enum StateValue {
+    Json(serde_json::Value),   // structured, serializable data
+    Bytes(BytesWrapper),       // raw binary data
+    Native(BytesWrapper),      // platform-serialized opaque objects
+}
+```
+
+The `Json` and `Bytes` variants correspond to the typed and binary APIs shown above. The `Native` variant holds opaque bytes produced by a platform serializer (e.g., Python pickle). It exists so that a value set in a Python or Node.js binding step can round-trip through Rust steps without losing fidelity -- Rust code can inspect or forward the raw bytes, but shouldn't attempt to deserialize them as JSON.
+
+Use `ctx.set_value()` and `ctx.get_value()` to work with `StateValue` directly:
+
+```rust
+use blazen::prelude::*;
+use blazen::context::StateValue;
+
+#[step]
+async fn store_raw(event: StartEvent, ctx: Context) -> Result<NextEvent, WorkflowError> {
+    // Store a JSON StateValue directly
+    ctx.set_value("config", StateValue::Json(serde_json::json!({"retries": 3})));
+
+    // Store raw bytes as a Native value (e.g., forwarded from a Python step)
+    let opaque: Vec<u8> = vec![0x80, 0x04, 0x95]; // pickle header bytes
+    ctx.set_value("py_obj", StateValue::Native(opaque.into()));
+
+    Ok(NextEvent { /* ... */ })
+}
+
+#[step]
+async fn read_raw(event: NextEvent, ctx: Context) -> Result<StopEvent, WorkflowError> {
+    match ctx.get_value("config") {
+        Some(StateValue::Json(v)) => println!("retries = {}", v["retries"]),
+        Some(StateValue::Bytes(b)) => println!("got {} raw bytes", b.len()),
+        Some(StateValue::Native(b)) => println!("got {} native bytes", b.len()),
+        None => println!("key not found"),
+    }
+    Ok(StopEvent { result: serde_json::json!("done") })
+}
+```
+
+**When to use each API:**
+
+| Method | Stored as | Best for |
+|--------|-----------|----------|
+| `ctx.set(key, value)` / `ctx.get(key)` | `StateValue::Json` | Typed Rust data (`String`, structs, numbers) |
+| `ctx.set_bytes(key, data)` / `ctx.get_bytes(key)` | `StateValue::Bytes` | Raw binary blobs (model weights, protobuf) |
+| `ctx.set_value(key, sv)` / `ctx.get_value(key)` | Any `StateValue` | Direct control, cross-language interop, forwarding `Native` values |
+
 ## Manual Event Routing
 
 Instead of returning an event from a step, you can use `ctx.send_event()` to route events programmatically. This is useful when a step needs to emit multiple events or decide at runtime which path the workflow takes:

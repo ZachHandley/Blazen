@@ -145,15 +145,15 @@ Available as the first parameter of every step function. All methods are synchro
 
 | Method | Signature | Description |
 |---|---|---|
-| `set` | `ctx.set(key: str, value: Any) -> None` | Store a JSON-serializable value in the workflow context. |
-| `get` | `ctx.get(key: str) -> Any \| None` | Retrieve a value by key, or `None` if absent. |
-| `set_bytes` | `ctx.set_bytes(key: str, data: bytes) -> None` | Store raw binary data. No serialization requirement. |
-| `get_bytes` | `ctx.get_bytes(key: str) -> bytes \| None` | Retrieve raw binary data, or `None` if absent. |
+| `set` | `ctx.set(key: str, value: StateValue) -> None` | Store any Python value. `bytes`/`bytearray` are stored as raw binary; JSON-serializable types (`dict`, `list`, `str`, `int`, `float`, `bool`, `None`) are stored as JSON; all other objects (Pydantic models, dataclasses, custom classes) are pickled automatically. |
+| `get` | `ctx.get(key: str) -> StateValue \| None` | Retrieve a value by key, or `None` if absent. Returns the original type transparently: JSON values come back as their Python type, bytes come back as `bytes`, and pickled objects are unpickled to their original class. |
+| `set_bytes` | `ctx.set_bytes(key: str, data: bytes) -> None` | Convenience alias for storing raw binary data. Equivalent to `ctx.set(key, data)` when `data` is `bytes`. |
+| `get_bytes` | `ctx.get_bytes(key: str) -> bytes \| None` | Convenience alias for retrieving raw binary data, or `None` if absent. |
 | `run_id` | `ctx.run_id() -> str` | Return the UUID of the current workflow run. |
 | `send_event` | `ctx.send_event(event: Event) -> None` | Route an event to matching steps manually. |
 | `write_event_to_stream` | `ctx.write_event_to_stream(event: Event) -> None` | Publish an event to the stream visible via `WorkflowHandler.stream_events()`. |
 
-`set_bytes` / `get_bytes` store raw binary data with no serialization requirement. Any type can be stored by converting to bytes yourself (e.g., pickle, msgpack, protobuf). Binary data persists through pause/resume/checkpoint.
+`StateValue = Any` — a type alias defined in the `.pyi` stubs indicating that any Python value is accepted. All stored values persist through pause/resume/checkpoint.
 
 ---
 

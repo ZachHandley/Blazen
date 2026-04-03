@@ -61,7 +61,7 @@ npx tsx greeter.ts
 - `eventTypes` -- an array of event type strings that trigger this step.
 - `handler` -- an async function receiving `(event, ctx)`. Return an event object to emit the next event in the workflow.
 
-**Context** lets steps share state across the workflow. Both `ctx.set()` and `ctx.get()` are async and must be awaited:
+**Context** lets steps share state across the workflow. Both `ctx.set()` and `ctx.get()` are async and must be awaited. `ctx.get()` returns all value types -- strings, numbers, booleans, arrays, objects, and binary data -- nothing is silently dropped:
 
 ```typescript
 wf.addStep("store_value", ["blazen::StartEvent"], async (event, ctx) => {
@@ -70,7 +70,7 @@ wf.addStep("store_value", ["blazen::StartEvent"], async (event, ctx) => {
 });
 
 wf.addStep("read_value", ["NextEvent"], async (event, ctx) => {
-  const user = await ctx.get("user");
+  const user = await ctx.get("user"); // StateValue | null
   return {
     type: "blazen::StopEvent",
     result: { user },

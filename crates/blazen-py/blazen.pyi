@@ -6,6 +6,14 @@ Python bindings.
 
 from typing import Any, AsyncIterator, Callable, Coroutine, Optional, Union
 
+StateValue = Any
+"""Any Python value that can be stored in the workflow context.
+
+JSON-serializable types (dict, list, str, int, float, bool, None) are stored
+efficiently as JSON. ``bytes``/``bytearray`` are stored as raw binary. All
+other objects (Pydantic models, custom classes, etc.) are pickled automatically
+and deserialized back to their original type on retrieval."""
+
 
 # ---------------------------------------------------------------------------
 # Error types
@@ -125,20 +133,31 @@ class Context:
     """Shared workflow context accessible by all steps.
 
     Provides typed key/value storage, event emission, and stream
-    publishing.  All values must be JSON-serializable (for ``set``/``get``)
-    or raw bytes (for ``set_bytes``/``get_bytes``).
+    publishing.  Accepts any Python value — JSON-serializable types are
+    stored as JSON, ``bytes``/``bytearray`` as raw binary, and all other
+    objects (Pydantic models, custom classes, etc.) are pickled automatically.
 
     All context methods are synchronous (they block on in-memory
     operations), so they can be called from both sync and async steps
     without ``await``.
     """
 
-    def set(self, key: str, value: Any) -> None:
-        """Store a JSON-serializable value under *key*."""
+    def set(self, key: str, value: StateValue) -> None:
+        """Store any value under *key*.
+
+        - ``bytes``/``bytearray`` → stored as raw binary
+        - JSON-serializable (dict, list, str, int, float, bool, None) → stored as JSON
+        - Everything else (Pydantic models, custom classes) → pickled automatically
+        """
         ...
 
-    def get(self, key: str) -> Optional[Any]:
-        """Retrieve a value previously stored under *key*."""
+    def get(self, key: str) -> Optional[StateValue]:
+        """Retrieve the value stored under *key*, deserialized to its original type.
+
+        Returns the original Python type for JSON values, ``bytes`` for
+        binary data, the original object for pickled values, or ``None``
+        if the key does not exist.
+        """
         ...
 
     def set_bytes(self, key: str, data: bytes) -> None:

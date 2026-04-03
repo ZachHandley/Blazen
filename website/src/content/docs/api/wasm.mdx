@@ -374,19 +374,35 @@ Subscribe to intermediate events. Must be called before `result()` or `pause()`.
 
 ---
 
-## Context
+## Context (WasmContext)
 
-Shared workflow context accessible by all steps. All methods are async.
+Shared workflow context accessible by all steps. Unlike the Node.js SDK, all methods are **synchronous** -- no `await` needed.
 
-| Method | Description |
-|---|---|
-| `await ctx.set(key, value)` | Store a JSON-serializable value |
-| `await ctx.get(key)` | Retrieve a value (returns `null` if not found) |
-| `await ctx.setBytes(key, buffer)` | Store raw binary data |
-| `await ctx.getBytes(key)` | Retrieve raw binary data |
-| `await ctx.runId()` | Get the unique run UUID |
-| `await ctx.sendEvent(event)` | Route an event into the workflow event bus |
-| `await ctx.writeEventToStream(event)` | Publish an event to the external broadcast stream |
+### StateValue
+
+Values stored in the context can be any `StateValue`:
+
+```typescript
+type StateValue = string | number | boolean | null | Uint8Array | StateValue[] | { [key: string]: StateValue };
+```
+
+### Methods
+
+| Method | Signature | Description |
+|---|---|---|
+| `ctx.set(key, value)` | `(key: string, value: StateValue) => void` | Store a value. Auto-detects `Uint8Array` and stores it as binary; everything else is stored as-is. |
+| `ctx.get(key)` | `(key: string) => StateValue \| null` | Retrieve a value. Returns `Uint8Array` for binary data, the original `JsValue` for everything else, or `null` if the key is missing. |
+| `ctx.setBytes(key, data)` | `(key: string, data: Uint8Array) => void` | Explicitly store binary data. |
+| `ctx.getBytes(key)` | `(key: string) => Uint8Array \| null` | Retrieve binary data. Returns `null` if the key is missing. |
+| `ctx.sendEvent(event)` | `(event: object) => void` | Queue an event into the workflow event loop. |
+| `ctx.writeEventToStream(event)` | `(event: object) => void` | No-op in WASM. Present for API compatibility with the Node.js and Rust SDKs. |
+| `ctx.runId()` | `() => string` | Returns the unique UUID v4 for the current workflow run. |
+
+### Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `ctx.workflowName` | `string` | Getter property returning the workflow name. |
 
 ---
 

@@ -23,6 +23,7 @@
 pub mod agent;
 pub mod chat_message;
 pub mod completion_model;
+pub mod context;
 pub mod embedding;
 pub mod tokens;
 pub mod types;

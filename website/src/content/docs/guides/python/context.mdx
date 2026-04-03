@@ -12,21 +12,45 @@ A key-value store shared across all steps in a workflow run.
 
 ## Setting and Getting Values
 
+`ctx.set()` accepts **any Python value**. The binding automatically chooses the best storage format:
+
+- **`bytes` / `bytearray`** — stored as raw binary
+- **JSON-serializable types** (`dict`, `list`, `str`, `int`, `float`, `bool`, `None`) — stored as JSON
+- **Everything else** (Pydantic models, dataclasses, custom classes) — pickled automatically
+
+`ctx.get()` returns the original type transparently — no manual deserialization needed.
+
 ```python
+from pydantic import BaseModel
+
+class UserProfile(BaseModel):
+    name: str
+    score: float
+
 class NextEvent(Event):
     pass
 
 @step
 async def store_data(ctx: Context, ev: Event):
+    # JSON-serializable values (stored as JSON)
     ctx.set("user_id", "user_123")
     ctx.set("doc_count", 5)
+    ctx.set("tags", ["admin", "active"])
+
+    # Raw bytes (stored as binary)
+    ctx.set("thumbnail", b"\x89PNG\r\n...")
+
+    # Pydantic model (pickled automatically)
+    ctx.set("profile", UserProfile(name="Alice", score=0.95))
     return NextEvent()
 
 @step
 async def use_data(ctx: Context, ev: NextEvent):
-    user_id = ctx.get("user_id")
-    doc_count = ctx.get("doc_count")
-    return StopEvent(result={"user": user_id, "docs": doc_count})
+    user_id = ctx.get("user_id")          # str
+    doc_count = ctx.get("doc_count")      # int
+    thumbnail = ctx.get("thumbnail")      # bytes
+    profile = ctx.get("profile")          # UserProfile
+    return StopEvent(result={"user": user_id, "name": profile.name})
 ```
 
 **Important:** `ctx.set()` and `ctx.get()` are synchronous — no `await`.
@@ -39,23 +63,21 @@ run_id = ctx.run_id()  # Synchronous, returns a UUID string
 
 ## Binary Storage
 
-Use `ctx.set_bytes()` and `ctx.get_bytes()` to store raw binary data. No serialization requirement -- store any type by converting to bytes yourself (e.g., pickle, msgpack, protobuf). Binary data persists through pause/resume/checkpoint.
+Since `ctx.set()` now handles `bytes` and `bytearray` natively (stored as raw binary), you can pass binary data directly:
 
 ```python
-import pickle
-
 @step
 async def store(ctx: Context, ev: Event):
-    data = pickle.dumps({"weights": [1.0, 2.0, 3.0]})
-    ctx.set_bytes("model", data)
+    ctx.set("model", b"\x00\x01\x02...")  # stored as raw bytes
     return NextEvent()
 
 @step
 async def load(ctx: Context, ev: NextEvent):
-    raw = ctx.get_bytes("model")  # bytes | None
-    model = pickle.loads(raw)
-    return StopEvent(result=model)
+    raw = ctx.get("model")  # bytes
+    return StopEvent(result=raw)
 ```
+
+`ctx.set_bytes()` and `ctx.get_bytes()` remain available as explicit convenience aliases for binary data. They behave identically to calling `ctx.set()` / `ctx.get()` with `bytes` values. Binary data persists through pause/resume/checkpoint.
 
 ## Manual Event Routing
 

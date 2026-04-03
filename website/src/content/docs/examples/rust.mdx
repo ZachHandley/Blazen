@@ -69,8 +69,12 @@ cargo run -p blazen --example branching_workflow
 Multi-step RAG pipeline using context for shared state between steps.
 
 ```rust
+// Typed JSON via set/get
 ctx.set("documents", serde_json::json!(docs));
 let docs = ctx.get("documents").unwrap();
+
+// Direct StateValue access for cross-language or binary data
+ctx.set_value("embeddings", StateValue::Bytes(embedding_bytes.into()));
 ```
 
 ```sh

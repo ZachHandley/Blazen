@@ -20,7 +20,7 @@ await init();
 const wf = new Workflow('summarizer');
 
 wf.addStep('fetch_text', ['blazen::StartEvent'], async (event, ctx) => {
-  await ctx.set('source', event.url);
+  ctx.set('source', event.url);
   const text = await fetch(event.url).then(r => r.text());
   return { type: 'SummarizeEvent', text };
 });
@@ -52,30 +52,105 @@ Built-in event types:
 
 ## Context
 
-The context object lets steps share state:
+The `ctx` parameter is a `WasmContext` instance -- a real object with methods for sharing state, emitting events, and inspecting the current run. All methods are **synchronous** (unlike the Node.js SDK, which is async).
+
+### Storing and retrieving values
 
 ```typescript
 wf.addStep('store', ['blazen::StartEvent'], async (event, ctx) => {
-  await ctx.set('user', event.name);
+  ctx.set('user', event.name);
+  ctx.set('count', 42);
+  ctx.set('tags', ['intro', 'demo']);
   return { type: 'NextEvent' };
 });
 
 wf.addStep('read', ['NextEvent'], async (event, ctx) => {
-  const user = await ctx.get('user');
-  return { type: 'blazen::StopEvent', result: { user } };
+  const user = ctx.get('user');   // 'Alice'
+  const count = ctx.get('count'); // 42
+  const missing = ctx.get('nope'); // null
+  return { type: 'blazen::StopEvent', result: { user, count } };
 });
 ```
 
-`ctx.set()` and `ctx.get()` are async. Binary data is supported via `ctx.setBytes()` and `ctx.getBytes()`.
+`ctx.set(key, value)` auto-detects `Uint8Array` values and stores them as binary. Everything else is stored as-is. `ctx.get(key)` returns the original value, or `null` if the key is missing.
+
+Values can be any `StateValue`:
+
+```typescript
+type StateValue = string | number | boolean | null | Uint8Array | StateValue[] | { [key: string]: StateValue };
+```
+
+### Binary data
+
+For explicit binary storage, use `ctx.setBytes()` and `ctx.getBytes()`:
+
+```typescript
+wf.addStep('binary', ['blazen::StartEvent'], async (event, ctx) => {
+  const data = new Uint8Array([0x48, 0x65, 0x6c, 0x6c, 0x6f]);
+
+  // Either approach works for storing binary:
+  ctx.set('via_set', data);          // auto-detected as binary
+  ctx.setBytes('via_explicit', data); // explicit binary storage
+
+  // Both return Uint8Array on read:
+  const a = ctx.get('via_set');          // Uint8Array
+  const b = ctx.getBytes('via_explicit'); // Uint8Array | null
+
+  return { type: 'blazen::StopEvent', result: { ok: true } };
+});
+```
+
+### Emitting events
+
+`ctx.sendEvent(event)` queues an event into the workflow's event loop, allowing a step to trigger other steps mid-execution:
+
+```typescript
+wf.addStep('kickoff', ['blazen::StartEvent'], async (event, ctx) => {
+  ctx.sendEvent({ type: 'SideTask', payload: 'extra work' });
+  return { type: 'MainTask' };
+});
+```
+
+### Run ID
+
+Each workflow run is assigned a unique UUID v4. Access it with `ctx.runId()`:
+
+```typescript
+wf.addStep('log', ['blazen::StartEvent'], async (event, ctx) => {
+  console.log('Run:', ctx.runId());
+  return { type: 'blazen::StopEvent', result: {} };
+});
+```
+
+### Workflow name
+
+The workflow name is available as a getter property:
+
+```typescript
+console.log(ctx.workflowName); // 'summarizer'
+```
+
+### Method summary
+
+| Method | Return type | Description |
+|---|---|---|
+| `ctx.set(key, value)` | `void` | Store a value; auto-detects `Uint8Array` for binary |
+| `ctx.get(key)` | `StateValue \| null` | Retrieve a value, or `null` if missing |
+| `ctx.setBytes(key, data)` | `void` | Explicitly store binary data (`Uint8Array`) |
+| `ctx.getBytes(key)` | `Uint8Array \| null` | Retrieve binary data |
+| `ctx.sendEvent(event)` | `void` | Queue an event into the workflow event loop |
+| `ctx.writeEventToStream(event)` | `void` | No-op in WASM (present for API compatibility) |
+| `ctx.runId()` | `string` | Unique UUID v4 for the current run |
+| `ctx.workflowName` | `string` | Getter property for the workflow name |
 
 ## Streaming events
 
-Publish progress events to external consumers with `ctx.writeEventToStream()`:
+In the WASM SDK, `ctx.writeEventToStream()` is a **no-op** -- it exists for API compatibility with the Node.js and Rust SDKs but does not emit events to an external stream. You can still use `wf.runStreaming()` to receive events routed via `ctx.sendEvent()`:
 
 ```typescript
 wf.addStep('process', ['blazen::StartEvent'], async (event, ctx) => {
   for (let i = 0; i < 5; i++) {
-    await ctx.writeEventToStream({ type: 'Progress', step: i });
+    ctx.sendEvent({ type: 'Progress', step: i });
   }
   return { type: 'blazen::StopEvent', result: { done: true } };
 });

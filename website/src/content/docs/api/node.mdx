@@ -630,21 +630,29 @@ Returning a `StopEvent` from a step handler completes the workflow.
 
 Shared workflow context accessible by all steps. All methods are async.
 
-### `await ctx.set(key: string, value: any): void`
+### StateValue
 
-Store a JSON-serializable value in the workflow context.
+All context values conform to the `StateValue` type:
 
-### `await ctx.get(key: string): any`
+```typescript
+type StateValue = string | number | boolean | null | Buffer | StateValue[] | { [key: string]: StateValue };
+```
 
-Retrieve a value from the workflow context. Returns `null` if not found.
+### `await ctx.set(key: string, value: Exclude<StateValue, Buffer>): void`
+
+Store a JSON-serializable value in the workflow context. Accepts strings, numbers, booleans, null, arrays, and nested objects. For binary data, use `ctx.setBytes()` instead.
+
+### `await ctx.get(key: string): Promise<StateValue | null>`
+
+Retrieve a value from the workflow context. Returns `null` if not found. Returns data for **all** `StateValue` variants -- strings, numbers, booleans, arrays, objects, and `Buffer` (if the key was stored via `setBytes`). No data is silently dropped.
 
 ### `await ctx.setBytes(key: string, buffer: Buffer): void`
 
-Store raw binary data in the workflow context. No serialization requirement -- store any type by converting to bytes yourself (e.g., MessagePack, protobuf). Binary data persists through pause/resume/checkpoint.
+Store raw binary data in the workflow context. Use this for explicit binary storage (e.g., MessagePack, protobuf, raw buffers). Binary data persists through pause/resume/checkpoint.
 
 ### `await ctx.getBytes(key: string): Buffer | null`
 
-Retrieve raw binary data from the workflow context. Returns `null` if not found.
+Retrieve raw binary data from the workflow context. Returns `null` if not found. Note that `ctx.get()` also returns binary data now, so `getBytes` is mainly useful when you want to assert that a key holds binary content.
 
 ### `await ctx.runId(): string`
 

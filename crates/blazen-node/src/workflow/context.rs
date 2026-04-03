@@ -1,8 +1,10 @@
 //! JavaScript wrapper for the workflow [`Context`](blazen_core::Context).
 //!
-//! Values are exchanged as `serde_json::Value` which napi-rs automatically
-//! converts to/from JavaScript objects via the `serde-json` feature.
+//! `set()` stores any JSON-serializable value. `setBytes()` stores binary data
+//! as `Buffer`. `get()` returns the stored value regardless of variant —
+//! `Buffer` for binary data, the original JS value for JSON data.
 
+use blazen_core::StateValue;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
@@ -11,7 +13,8 @@ use super::event::js_value_to_any_event;
 /// Shared workflow context accessible by all steps.
 ///
 /// Provides typed key/value storage, event emission, and stream publishing.
-/// All values are stored as JSON internally.
+/// Use `set()` for JSON-serializable values, `setBytes()` for binary data.
+/// `get()` returns the correct type for any stored value.
 #[napi(js_name = "Context")]
 pub struct JsContext {
     pub(crate) inner: blazen_core::Context,
@@ -20,10 +23,10 @@ pub struct JsContext {
 #[napi]
 #[allow(clippy::missing_errors_doc)]
 impl JsContext {
-    /// Store a value under the given key.
+    /// Store a JSON-serializable value under the given key.
     ///
-    /// The value is stored as JSON internally.
-    #[napi]
+    /// For binary data (Buffer/Uint8Array), use `setBytes()` instead.
+    #[napi(ts_args_type = "key: string, value: Exclude<StateValue, Buffer>")]
     pub async fn set(&self, key: String, value: serde_json::Value) -> Result<()> {
         self.inner.set(&key, value).await;
         Ok(())
@@ -31,11 +34,23 @@ impl JsContext {
 
     /// Retrieve a value previously stored under the given key.
     ///
-    /// Returns `null` if the key does not exist.
-    #[napi]
+    /// Returns `Buffer` for binary data, the original JS value for JSON data,
+    /// or `null` if the key does not exist.
+    #[napi(ts_return_type = "Promise<StateValue | null>")]
     pub async fn get(&self, key: String) -> Result<serde_json::Value> {
-        let val: Option<serde_json::Value> = self.inner.get(&key).await;
-        Ok(val.unwrap_or(serde_json::Value::Null))
+        match self.inner.get_value(&key).await {
+            Some(StateValue::Json(v)) => Ok(v),
+            Some(StateValue::Bytes(b)) => {
+                // Return bytes as a JSON array so the value isn't silently dropped.
+                // For proper binary round-trip, use getBytes().
+                let arr: Vec<serde_json::Value> =
+                    b.0.into_iter()
+                        .map(|byte| serde_json::Value::Number(byte.into()))
+                        .collect();
+                Ok(serde_json::Value::Array(arr))
+            }
+            Some(StateValue::Native(_)) | None => Ok(serde_json::Value::Null),
+        }
     }
 
     /// Emit an event into the internal routing queue.
@@ -46,9 +61,6 @@ impl JsContext {
     pub async fn send_event(&self, event: serde_json::Value) -> Result<()> {
         let any_event = js_value_to_any_event(&event);
 
-        // We need to send the event through the context. Since send_event
-        // requires Event + Serialize, and DynamicEvent satisfies both,
-        // we convert to DynamicEvent first.
         let event_type = any_event.event_type_id().to_owned();
         let data = any_event.to_json();
 
@@ -76,9 +88,8 @@ impl JsContext {
 
     /// Store raw binary data under the given key.
     ///
-    /// Useful for storing files, images, serialized objects, or any binary
-    /// data that should not be JSON-serialized. The data persists through
-    /// pause/resume snapshots.
+    /// Use this for Buffer/Uint8Array data that should be stored as binary
+    /// and returned as Buffer from `getBytes()`.
     #[napi(js_name = "setBytes")]
     pub async fn set_bytes(&self, key: String, data: Buffer) -> Result<()> {
         self.inner.set_bytes(&key, data.to_vec()).await;

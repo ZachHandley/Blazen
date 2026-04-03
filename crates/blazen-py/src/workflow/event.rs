@@ -284,6 +284,63 @@ pub fn dict_to_json(dict: &Bound<'_, PyDict>) -> PyResult<serde_json::Value> {
     Ok(serde_json::Value::Object(map))
 }
 
+/// Strict conversion: convert a Python dict to JSON, returning `Err` if any
+/// value is not JSON-serializable (instead of falling back to `__str__`).
+fn try_dict_to_json(dict: &Bound<'_, PyDict>) -> PyResult<serde_json::Value> {
+    let py = dict.py();
+    let mut map = serde_json::Map::new();
+    for (key, value) in dict.iter() {
+        let key_str: String = key.extract()?;
+        let json_val = try_py_to_json(py, &value)?;
+        map.insert(key_str, json_val);
+    }
+    Ok(serde_json::Value::Object(map))
+}
+
+/// Like [`py_to_json`] but returns `Err` for non-JSON types instead of
+/// falling back to `__str__`. Used by `Context::set` to detect when
+/// pickle is needed.
+pub fn try_py_to_json(_py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<serde_json::Value> {
+    if obj.is_none() {
+        return Ok(serde_json::Value::Null);
+    }
+    if let Ok(b) = obj.extract::<bool>() {
+        return Ok(serde_json::Value::Bool(b));
+    }
+    if let Ok(i) = obj.extract::<i64>() {
+        return Ok(serde_json::Value::Number(i.into()));
+    }
+    if let Ok(f) = obj.extract::<f64>() {
+        return Ok(serde_json::Number::from_f64(f)
+            .map_or(serde_json::Value::Null, serde_json::Value::Number));
+    }
+    if let Ok(s) = obj.extract::<String>() {
+        return Ok(serde_json::Value::String(s));
+    }
+    if let Ok(list) = obj.cast::<pyo3::types::PyList>() {
+        let arr: PyResult<Vec<_>> = list.iter().map(|item| try_py_to_json(_py, &item)).collect();
+        return Ok(serde_json::Value::Array(arr?));
+    }
+    if let Ok(dict) = obj.cast::<PyDict>() {
+        return try_dict_to_json(dict);
+    }
+    // Tuple → JSON array (same as list)
+    if let Ok(tuple) = obj.cast::<pyo3::types::PyTuple>() {
+        let arr: PyResult<Vec<_>> = tuple
+            .iter()
+            .map(|item| try_py_to_json(_py, &item))
+            .collect();
+        return Ok(serde_json::Value::Array(arr?));
+    }
+    let type_name = obj
+        .get_type()
+        .name()
+        .map_or_else(|_| "<unknown>".to_owned(), |n| n.to_string());
+    Err(pyo3::exceptions::PyTypeError::new_err(format!(
+        "not JSON-serializable: {type_name}"
+    )))
+}
+
 /// Convert a Python object to a `serde_json::Value`.
 pub fn py_to_json(_py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<serde_json::Value> {
     // None
