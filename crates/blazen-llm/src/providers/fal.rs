@@ -23,7 +23,12 @@
 
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 
 use async_trait::async_trait;
 use chrono::Utc;
@@ -481,12 +486,7 @@ impl FalProvider {
         let mut in_progress_at: Option<Instant> = None;
 
         for _ in 0..MAX_POLL_ITERATIONS {
-            #[cfg(not(target_os = "wasi"))]
-            tokio::time::sleep(poll_interval).await;
-            #[cfg(target_os = "wasi")]
-            {
-                let _ = poll_interval;
-            }
+            crate::sleep::sleep(poll_interval).await;
 
             let status_body = if let Some(url) = status_url {
                 self.get_json_from_url(url).await?

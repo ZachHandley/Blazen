@@ -152,9 +152,11 @@ impl WasmWorkflow {
                     )));
                 };
 
-                // Call the handler with the shared context.
-                let ctx_ref: &JsValue = ctx.as_ref();
-                let result = handler.call2(&JsValue::NULL, &current_event, ctx_ref)
+                // Call the handler with a clone of the shared context.
+                // The clone bumps the Rc refcount — JS gets its own handle
+                // while the event loop retains access for drain_events().
+                let ctx_js: JsValue = ctx.clone().into();
+                let result = handler.call2(&JsValue::NULL, &current_event, &ctx_js)
                     .map_err(|e| JsValue::from_str(&format!("Step handler error: {e:?}")))?;
 
                 // If the result is a Promise, await it.

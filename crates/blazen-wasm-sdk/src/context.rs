@@ -1,14 +1,16 @@
 //! Lightweight WASM-compatible workflow context.
 //!
-//! [`WasmContext`] mirrors the API of [`blazen_core::Context`] but is designed
+//! [`WasmContext`] mirrors the API of `blazen_core::Context` but is designed
 //! for `wasm32-unknown-unknown` where there is no tokio runtime and no
 //! `Send + Sync` requirement.
 //!
-//! Interior mutability is provided by [`RefCell`] since the WASM target is
-//! single-threaded. All public `#[wasm_bindgen]` methods take `&self`.
+//! The struct uses `Rc<WasmContextInner>` so that cloning is cheap — the
+//! event loop keeps one handle while a clone is passed to JS via
+//! `JsValue::from(ctx.clone())`.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use wasm_bindgen::prelude::*;
 
@@ -34,9 +36,6 @@ export type StateValue =
 // ---------------------------------------------------------------------------
 
 /// Internal discriminated storage for context state values.
-///
-/// - `Value` stores an arbitrary JS value as-is (strings, numbers, objects, …).
-/// - `Bytes` stores raw binary data that round-trips as `Uint8Array`.
 enum WasmStateEntry {
     /// Any JS value stored as-is.
     Value(JsValue),
@@ -73,20 +72,36 @@ fn generate_uuid_v4() -> String {
 }
 
 // ---------------------------------------------------------------------------
+// WasmContextInner
+// ---------------------------------------------------------------------------
+
+/// Shared inner state behind `Rc`.
+struct WasmContextInner {
+    workflow_name: String,
+    run_id: String,
+    state: RefCell<HashMap<String, WasmStateEntry>>,
+    event_queue: RefCell<Vec<JsValue>>,
+}
+
+// ---------------------------------------------------------------------------
 // WasmContext
 // ---------------------------------------------------------------------------
 
 /// A lightweight workflow context for the WASM runtime.
 ///
-/// This struct mirrors [`blazen_core::Context`] but avoids all dependencies on
-/// tokio, `Send`, and `Sync`. It is intended for use in browser and Node.js
-/// environments where the WASM module runs on a single thread.
+/// Cheaply clonable via `Rc` — the event loop keeps one handle while
+/// a clone is converted to `JsValue` for the JS step handler.
 #[wasm_bindgen(js_name = "Context")]
 pub struct WasmContext {
-    workflow_name: String,
-    run_id: String,
-    state: RefCell<HashMap<String, WasmStateEntry>>,
-    event_queue: RefCell<Vec<JsValue>>,
+    inner: Rc<WasmContextInner>,
+}
+
+impl Clone for WasmContext {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Rc::clone(&self.inner),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -99,16 +114,18 @@ impl WasmContext {
     /// A UUID v4 `run_id` is generated automatically.
     pub(crate) fn new(workflow_name: String) -> Self {
         Self {
-            workflow_name,
-            run_id: generate_uuid_v4(),
-            state: RefCell::new(HashMap::new()),
-            event_queue: RefCell::new(Vec::new()),
+            inner: Rc::new(WasmContextInner {
+                workflow_name,
+                run_id: generate_uuid_v4(),
+                state: RefCell::new(HashMap::new()),
+                event_queue: RefCell::new(Vec::new()),
+            }),
         }
     }
 
     /// Drain all queued events, returning them and leaving the queue empty.
     pub(crate) fn drain_events(&self) -> Vec<JsValue> {
-        self.event_queue.borrow_mut().drain(..).collect()
+        self.inner.event_queue.borrow_mut().drain(..).collect()
     }
 }
 
@@ -130,7 +147,7 @@ impl WasmContext {
         } else {
             WasmStateEntry::Value(value)
         };
-        self.state.borrow_mut().insert(key, entry);
+        self.inner.state.borrow_mut().insert(key, entry);
     }
 
     /// Retrieve a value from the context state map.
@@ -140,7 +157,7 @@ impl WasmContext {
     /// - Missing keys return `JsValue::NULL`.
     #[wasm_bindgen]
     pub fn get(&self, key: String) -> JsValue {
-        let state = self.state.borrow();
+        let state = self.inner.state.borrow();
         match state.get(&key) {
             Some(WasmStateEntry::Value(v)) => v.clone(),
             Some(WasmStateEntry::Bytes(b)) => js_sys::Uint8Array::from(b.as_slice()).into(),
@@ -149,12 +166,10 @@ impl WasmContext {
     }
 
     /// Store raw binary data under the given key.
-    ///
-    /// This is an explicit binary storage method; use [`set`](Self::set) for
-    /// generic values.
     #[wasm_bindgen(js_name = "setBytes")]
     pub fn set_bytes(&self, key: String, data: js_sys::Uint8Array) {
-        self.state
+        self.inner
+            .state
             .borrow_mut()
             .insert(key, WasmStateEntry::Bytes(data.to_vec()));
     }
@@ -165,7 +180,7 @@ impl WasmContext {
     /// otherwise returns `null`.
     #[wasm_bindgen(js_name = "getBytes")]
     pub fn get_bytes(&self, key: String) -> JsValue {
-        let state = self.state.borrow();
+        let state = self.inner.state.borrow();
         match state.get(&key) {
             Some(WasmStateEntry::Bytes(b)) => js_sys::Uint8Array::from(b.as_slice()).into(),
             _ => JsValue::NULL,
@@ -173,33 +188,24 @@ impl WasmContext {
     }
 
     /// Push an event onto the internal event queue.
-    ///
-    /// Queued events can be drained by the workflow engine after step
-    /// execution via [`drain_events`](Self::drain_events).
     #[wasm_bindgen(js_name = "sendEvent")]
     pub fn send_event(&self, event: JsValue) {
-        self.event_queue.borrow_mut().push(event);
+        self.inner.event_queue.borrow_mut().push(event);
     }
 
-    /// No-op in the WASM runtime.
-    ///
-    /// In the native runtime this would publish an event to the external
-    /// broadcast stream. The WASM environment has no equivalent streaming
-    /// channel, so this method exists only for API compatibility.
+    /// No-op in the WASM runtime (API compatibility).
     #[wasm_bindgen(js_name = "writeEventToStream")]
-    pub fn write_event_to_stream(&self, _event: JsValue) {
-        // Intentionally empty -- no streaming channel in WASM.
-    }
+    pub fn write_event_to_stream(&self, _event: JsValue) {}
 
     /// Return the unique run ID for this workflow execution.
     #[wasm_bindgen(js_name = "runId")]
     pub fn run_id(&self) -> String {
-        self.run_id.clone()
+        self.inner.run_id.clone()
     }
 
     /// The workflow name.
     #[wasm_bindgen(getter, js_name = "workflowName")]
     pub fn workflow_name(&self) -> String {
-        self.workflow_name.clone()
+        self.inner.workflow_name.clone()
     }
 }
