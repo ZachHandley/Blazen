@@ -10,6 +10,7 @@
 //! - Workflow metadata (e.g. run ID)
 //! - State snapshotting and restoration for pause/resume/checkpoint
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -36,6 +37,10 @@ struct ContextInner {
     collected: HashMap<String, Vec<serde_json::Value>>,
     /// Arbitrary JSON metadata (e.g. `run_id`, workflow name).
     metadata: HashMap<String, serde_json::Value>,
+    /// Opaque in-process objects (DB connections, file handles, etc.).
+    /// NOT serialized — excluded from snapshots. Bindings store platform-specific
+    /// types here and downcast on retrieval.
+    objects: HashMap<String, Box<dyn Any + Send + Sync>>,
 }
 
 /// Shared workflow context.
@@ -70,6 +75,7 @@ impl Context {
                 stream_tx,
                 collected: HashMap::new(),
                 metadata: HashMap::new(),
+                objects: HashMap::new(),
             })),
         }
     }
@@ -128,6 +134,45 @@ impl Context {
     pub async fn get_value(&self, key: &str) -> Option<StateValue> {
         let inner = self.inner.read().await;
         inner.state.get(key).cloned()
+    }
+
+    // -----------------------------------------------------------------
+    // Opaque object storage (non-serializable, in-process only)
+    // -----------------------------------------------------------------
+
+    /// Store a live in-process object under `key`.
+    ///
+    /// The object is NOT serialized and will NOT survive snapshots or
+    /// pause/resume. Use this for DB connections, file handles, and other
+    /// resources that must be shared across steps within a single run.
+    pub async fn set_object<T: Any + Send + Sync + 'static>(&self, key: &str, value: T) {
+        let mut inner = self.inner.write().await;
+        inner.objects.insert(key.to_owned(), Box::new(value));
+    }
+
+    /// Retrieve a live in-process object previously stored under `key`.
+    ///
+    /// Returns `None` if the key does not exist or the stored type does
+    /// not match `T`.
+    pub async fn get_object<T: Any + Send + Sync + Clone + 'static>(&self, key: &str) -> Option<T> {
+        let inner = self.inner.read().await;
+        inner
+            .objects
+            .get(key)
+            .and_then(|v| v.downcast_ref::<T>())
+            .cloned()
+    }
+
+    /// Remove a live in-process object stored under `key`.
+    pub async fn remove_object(&self, key: &str) {
+        let mut inner = self.inner.write().await;
+        inner.objects.remove(key);
+    }
+
+    /// Check whether an opaque object exists under `key`.
+    pub async fn has_object(&self, key: &str) -> bool {
+        let inner = self.inner.read().await;
+        inner.objects.contains_key(key)
     }
 
     /// Store raw binary data under `key`.
@@ -500,5 +545,45 @@ mod tests {
         ctx.set_value("key", StateValue::native(vec![0x80, 0x04]))
             .await;
         assert_eq!(ctx.get_bytes("key").await, None);
+    }
+
+    #[tokio::test]
+    async fn set_and_get_object() {
+        let ctx = test_context();
+        ctx.set_object("counter", 42_i32).await;
+        assert_eq!(ctx.get_object::<i32>("counter").await, Some(42));
+    }
+
+    #[tokio::test]
+    async fn get_object_wrong_type_returns_none() {
+        let ctx = test_context();
+        ctx.set_object("counter", 42_i32).await;
+        assert_eq!(ctx.get_object::<String>("counter").await, None);
+    }
+
+    #[tokio::test]
+    async fn get_object_missing_key_returns_none() {
+        let ctx = test_context();
+        assert_eq!(ctx.get_object::<i32>("nope").await, None);
+    }
+
+    #[tokio::test]
+    async fn remove_object() {
+        let ctx = test_context();
+        ctx.set_object("key", "value".to_string()).await;
+        assert!(ctx.has_object("key").await);
+        ctx.remove_object("key").await;
+        assert!(!ctx.has_object("key").await);
+    }
+
+    #[tokio::test]
+    async fn objects_excluded_from_snapshot() {
+        let ctx = test_context();
+        ctx.set_object("live", 42_i32).await;
+        ctx.set("json_key", "hello".to_string()).await;
+        let snap = ctx.snapshot_state().await;
+        // Snapshot only contains state map entries, not objects
+        assert!(snap.contains_key("json_key"));
+        assert!(!snap.contains_key("live"));
     }
 }

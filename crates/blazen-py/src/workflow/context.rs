@@ -4,8 +4,7 @@
 //! as JSON, `bytes`/`bytearray` as raw binary, picklable objects via pickle,
 //! and unpicklable objects (DB connections, file handles) as live references.
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use pyo3::prelude::*;
 
@@ -42,9 +41,6 @@ fn block_on_context<F: std::future::Future>(fut: F) -> F::Output {
 #[derive(Clone)]
 pub struct PyContext {
     pub(crate) inner: blazen_core::Context,
-    /// Live Python object references for unpicklable values.
-    /// Shared across steps via Arc. NOT persisted through snapshots.
-    locals: Arc<Mutex<HashMap<String, Py<PyAny>>>>,
 }
 
 #[pymethods]
@@ -71,29 +67,23 @@ impl PyContext {
 
         if let Ok(bytes) = value.extract::<Vec<u8>>() {
             // Tier 1: bytes/bytearray → Bytes variant
-            self.locals.lock().unwrap().remove(&key);
             block_on_context(async { inner.set_bytes(&key, bytes).await });
         } else if let Ok(json_val) = super::event::try_py_to_json(py, value) {
             // Tier 2: JSON-serializable → Json variant
-            self.locals.lock().unwrap().remove(&key);
             block_on_context(async { inner.set(&key, json_val).await });
         } else {
             // Tier 3: try pickle → Native variant
             let pickle = py.import("pickle")?;
-            match pickle.call_method1("dumps", (value,)) {
-                Ok(pickled_obj) => {
-                    let pickled: Vec<u8> = pickled_obj.extract()?;
-                    let sv = blazen_core::StateValue::Native(blazen_core::BytesWrapper(pickled));
-                    self.locals.lock().unwrap().remove(&key);
-                    block_on_context(async { inner.set_value(&key, sv).await });
-                }
-                Err(_) => {
-                    // Tier 4: unpicklable → store live Python reference
-                    self.locals
-                        .lock()
-                        .unwrap()
-                        .insert(key, value.clone().unbind());
-                }
+            if let Ok(pickled_obj) = pickle.call_method1("dumps", (value,)) {
+                let pickled: Vec<u8> = pickled_obj.extract()?;
+                let sv = blazen_core::StateValue::Native(blazen_core::BytesWrapper(pickled));
+                block_on_context(async { inner.set_value(&key, sv).await });
+            } else {
+                // Tier 4: unpicklable → store as live object in core.
+                // Wrap in Arc because Py<PyAny> isn't Clone (needs GIL),
+                // but Arc<Py<PyAny>> is Clone + Send + Sync + 'static.
+                let obj: Arc<Py<PyAny>> = Arc::new(value.clone().unbind());
+                block_on_context(async { inner.set_object(&key, obj).await });
             }
         }
         Ok(())
@@ -123,15 +113,10 @@ impl PyContext {
             }
         }
 
-        // Check live object store first (tier 4 values).
-        if let Some(obj) = self.locals.lock().unwrap().get(key) {
-            return Ok(obj.clone_ref(py));
-        }
-
         // Fall through to Rust core (tiers 1-3).
         let inner = self.inner.clone();
-        let key = key.to_string();
-        let val = block_on_context(async { inner.get_value(&key).await });
+        let key_owned = key.to_string();
+        let val = block_on_context(async { inner.get_value(&key_owned).await });
         match val {
             Some(blazen_core::StateValue::Json(v)) => super::event::json_to_py(py, &v),
             Some(blazen_core::StateValue::Bytes(b)) => {
@@ -142,7 +127,18 @@ impl PyContext {
                 let obj = pickle.call_method1("loads", (&b.0[..],))?;
                 Ok(obj.unbind())
             }
-            None => Ok(py.None()),
+            None => {
+                // Check opaque object store (tier 4 values).
+                // Stored as Arc<Py<PyAny>> because Py<PyAny> isn't Clone.
+                let inner = self.inner.clone();
+                let key_owned = key.to_string();
+                if let Some(obj) =
+                    block_on_context(async { inner.get_object::<Arc<Py<PyAny>>>(&key_owned).await })
+                {
+                    return Ok(obj.clone_ref(py));
+                }
+                Ok(py.None())
+            }
         }
     }
 
@@ -197,7 +193,6 @@ impl PyContext {
         let inner = self.inner.clone();
         let key = key.to_string();
         let data = data.to_vec();
-        self.locals.lock().unwrap().remove(&key);
         block_on_context(async { inner.set_bytes(&key, data).await });
     }
 
@@ -235,10 +230,7 @@ impl PyContext {
 impl PyContext {
     /// Create a new `PyContext` wrapping a Rust `Context`.
     pub fn new(inner: blazen_core::Context) -> Self {
-        Self {
-            inner,
-            locals: Arc::new(Mutex::new(HashMap::new())),
-        }
+        Self { inner }
     }
 
     /// Store a [`BlazenState`](super::state::PyBlazenState) per-field.
