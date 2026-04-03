@@ -134,3 +134,65 @@ async fn branch(event: StartEvent, ctx: Context) -> Result<(), WorkflowError> {
 ```
 
 When using `send_event`, the step returns `()` since routing is handled explicitly rather than through the return type.
+
+## BlazenState
+
+`BlazenState` is primarily a Python, Node.js, and WASM concept. In those languages, you define a class that extends `BlazenState` to get automatic per-field persistence -- each field is individually stored and retrieved from the context without manual key management.
+
+In Rust, there is no `BlazenState` base class. Instead, you achieve the same per-field storage by calling `set_value()` and `get_value()` with explicit keys, using the `StateValue` variants described in the [StateValue and Direct Access](#statevalue-and-direct-access) section above. This approach is idiomatic Rust: explicit, zero-cost, and fully type-safe.
+
+### Per-Field Storage in Rust
+
+A common pattern is to store some fields as JSON (for structured, inspectable data) and others as raw bytes (for binary or pre-serialized data):
+
+```rust
+use blazen::prelude::*;
+use blazen::context::StateValue;
+
+/// A struct whose fields are stored individually in the context.
+struct PipelineState {
+    config: serde_json::Value,
+    embeddings: Vec<u8>,
+}
+
+impl PipelineState {
+    fn save(&self, ctx: &Context) {
+        ctx.set_value("pipeline:config", StateValue::Json(self.config.clone()));
+        ctx.set_value("pipeline:embeddings", StateValue::Bytes(self.embeddings.clone().into()));
+    }
+
+    fn load(ctx: &Context) -> Option<Self> {
+        let config = match ctx.get_value("pipeline:config")? {
+            StateValue::Json(v) => v,
+            _ => return None,
+        };
+        let embeddings = match ctx.get_value("pipeline:embeddings")? {
+            StateValue::Bytes(b) => b.to_vec(),
+            _ => return None,
+        };
+        Some(Self { config, embeddings })
+    }
+}
+```
+
+### Binding Authors: Using `StateValue::Native`
+
+If you are building a language binding (e.g., via PyO3 or napi-rs), the `Native(BytesWrapper)` variant lets you store platform-serialized objects that Rust steps can forward without deserializing:
+
+```rust
+use blazen::context::StateValue;
+
+// In a binding layer: serialize a Python/Node object to bytes and store it
+fn store_platform_object(ctx: &Context, key: &str, serialized: Vec<u8>) {
+    ctx.set_value(key, StateValue::Native(serialized.into()));
+}
+
+// A Rust step can forward the value without interpreting its contents
+fn forward_native(ctx: &Context, src_key: &str, dst_key: &str) {
+    if let Some(val @ StateValue::Native(_)) = ctx.get_value(src_key) {
+        ctx.set_value(dst_key, val);
+    }
+}
+```
+
+This is how the Python and Node.js `BlazenState` implementations persist fields that have no natural JSON representation -- they serialize to platform-native bytes and store them as `Native` values that survive round-trips through Rust workflow steps.

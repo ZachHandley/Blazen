@@ -91,3 +91,99 @@ return None  # Don't return an event when using send_event
 ```python
 ctx.write_event_to_stream(ProgressEvent(...))  # Synchronous, external broadcast
 ```
+
+## BlazenState
+
+`BlazenState` is a base class for typed workflow state with per-field context storage. Instead of manually calling `ctx.set()` for each piece of data, you define a `@dataclass` subclass and let Blazen store each field individually using the optimal storage tier.
+
+### Basic Example
+
+```python
+import sqlite3
+from dataclasses import dataclass, field
+from blazen import BlazenState, Context, Event, StartEvent, StopEvent, step, Workflow
+
+@dataclass
+class PipelineState(BlazenState):
+    input_path: str = ""
+    doc_count: int = 0
+    conn: sqlite3.Connection | None = None
+
+    class Meta:
+        transient = {"conn"}
+        store_by = {}
+
+    def restore(self):
+        if self.input_path:
+            self.conn = sqlite3.connect(self.input_path)
+
+class ProcessEvent(Event):
+    pass
+
+@step
+async def setup(ctx: Context, ev: Event):
+    state = PipelineState(input_path="/tmp/data.db", doc_count=0)
+    state.restore()  # Opens the sqlite3 connection
+    ctx.set("state", state)
+    return ProcessEvent()
+
+@step
+async def process(ctx: Context, ev: ProcessEvent):
+    state = ctx.get("state")          # PipelineState with all fields restored
+    cursor = state.conn.cursor()      # Transient field recreated by restore()
+    cursor.execute("SELECT count(*) FROM docs")
+    state.doc_count = cursor.fetchone()[0]
+    ctx.set("state", state)           # Persist updated state
+    return StopEvent(result={"docs": state.doc_count})
+```
+
+When you call `ctx.set("state", my_state)` with a `BlazenState` subclass, Blazen stores each field individually under the hood. When you call `ctx.get("state")`, it reconstructs the object field-by-field and then calls `restore()` to recreate any transient fields.
+
+### Storage Tiers
+
+Each field is automatically stored using the best tier based on its type:
+
+| Tier | When Used | Survives Snapshots |
+|---|---|---|
+| **JSON** | `str`, `int`, `float`, `bool`, `None`, `dict`, `list` | Yes |
+| **Bytes** | `bytes`, `bytearray` | Yes |
+| **Pickle** | Pydantic models, dataclasses, other serializable objects | Yes |
+| **Live reference** | Objects listed in `Meta.transient` | No |
+
+Transient fields (like database connections, file handles, sockets) are excluded from serialization entirely. They are set to `None` in the snapshot and recreated by your `restore()` method when the state is loaded back.
+
+### Custom Persistence with FieldStore
+
+For fields that need custom storage logic (e.g., writing large blobs to S3 instead of the context), implement the `FieldStore` protocol or use `CallbackFieldStore`:
+
+```python
+from blazen import BlazenState, CallbackFieldStore
+
+def save_to_s3(key: str, value: bytes) -> None:
+    s3.put_object(Bucket="my-bucket", Key=key, Body=value)
+
+def load_from_s3(key: str) -> bytes:
+    return s3.get_object(Bucket="my-bucket", Key=key)["Body"].read()
+
+@dataclass
+class ModelState(BlazenState):
+    name: str = ""
+    weights: bytes = b""
+
+    class Meta:
+        transient = set()
+        store_by = {
+            "weights": CallbackFieldStore(
+                save_fn=save_to_s3,
+                load_fn=load_from_s3,
+            ),
+        }
+```
+
+When Blazen stores `ModelState`, the `weights` field is routed through your `CallbackFieldStore` instead of the default context storage. All other fields use their automatic tier.
+
+### Key Points
+
+- **Transient fields** are excluded from serialization. They are `None` after a snapshot restore until `restore()` recreates them.
+- **`restore()`** is called automatically by `ctx.get()` after all serializable fields are populated. Override it to reconnect databases, reopen files, or rebuild caches.
+- **Per-field storage** means each field is an independent context entry. Updating one field and calling `ctx.set()` again only overwrites the changed fields, not the entire object.

@@ -668,6 +668,91 @@ Publish an event to the external broadcast stream. Consumers that subscribed via
 
 ---
 
+## BlazenState
+
+Base class for typed state objects with per-field context storage. Extend this class to define structured workflow state that is automatically serialized and deserialized field by field.
+
+### `static meta?: BlazenStateMeta`
+
+Optional static metadata that controls how fields are stored and which fields are transient.
+
+```typescript
+interface BlazenStateMeta {
+  transient?: Set<string> | string[];
+  storeBy?: Record<string, FieldStore>;
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `transient` | `Set<string> \| string[]` | Field names to exclude from persistence. These fields are not saved by `saveTo()` and will not be present after `loadFrom()`. |
+| `storeBy` | `Record<string, FieldStore>` | Per-field storage overrides. Fields not listed here use the default context `set`/`get` methods. |
+
+### `restore?(): void | Promise<void>`
+
+Optional instance method called by `loadFrom()` after all persisted fields have been restored. Use this to recreate transient fields (caches, connections, derived data) that were excluded from persistence.
+
+### `await state.saveTo(ctx: Context, key: string): Promise<void>`
+
+Persist every non-transient field of the state instance into the workflow context. Each field is stored individually under a namespaced key derived from `key`.
+
+### `static loadFrom<T>(ctx: Context, key: string): Promise<T>`
+
+Restore a state instance from the workflow context. Reads each persisted field, constructs a new instance, and calls `restore()` if defined.
+
+```typescript
+const state = await AgentState.loadFrom<AgentState>(ctx, "state");
+```
+
+---
+
+## FieldStore
+
+Interface for custom field persistence strategies.
+
+```typescript
+interface FieldStore {
+  save(key: string, value: any, ctx: Context): Promise<void>;
+  load(key: string, ctx: Context): Promise<any>;
+}
+```
+
+| Method | Description |
+|---|---|
+| `save(key, value, ctx)` | Persist a single field value into the context under the given key. |
+| `load(key, ctx)` | Retrieve a single field value from the context by key. Returns `null` if not found. |
+
+---
+
+## CallbackFieldStore
+
+Convenience class that constructs a `FieldStore` from a pair of callback functions.
+
+### Constructor
+
+```typescript
+new CallbackFieldStore({
+  saveFn: (key: string, value: any, ctx: Context) => Promise<void>,
+  loadFn: (key: string, ctx: Context) => Promise<any>,
+})
+```
+
+```typescript
+import { CallbackFieldStore } from "blazen";
+
+const binaryStore = new CallbackFieldStore({
+  saveFn: async (key, value, ctx) => {
+    await ctx.setBytes(key, Buffer.from(JSON.stringify(value)));
+  },
+  loadFn: async (key, ctx) => {
+    const buf = await ctx.getBytes(key);
+    return buf ? JSON.parse(buf.toString()) : null;
+  },
+});
+```
+
+---
+
 ## Compute Request Types
 
 Typed request interfaces for compute operations (image generation, video, speech, music, transcription, 3D models).

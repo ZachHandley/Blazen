@@ -157,6 +157,90 @@ Available as the first parameter of every step function. All methods are synchro
 
 ---
 
+## BlazenState
+
+Base class for typed workflow state with per-field context storage. Subclass with `@dataclass` to get automatic per-field serialization where each field is stored individually using its optimal tier.
+
+```python
+from dataclasses import dataclass
+from blazen import BlazenState
+
+@dataclass
+class MyState(BlazenState):
+    input_path: str = ""
+    conn: sqlite3.Connection | None = None
+
+    class Meta:
+        transient = {"conn"}
+        store_by = {}
+
+    def restore(self):
+        if self.input_path:
+            self.conn = sqlite3.connect(self.input_path)
+```
+
+Store and retrieve via context:
+
+```python
+ctx.set("state", my_state)   # Stores each field individually
+state = ctx.get("state")     # Reconstructs object, then calls restore()
+```
+
+### Meta inner class
+
+| Attribute | Type | Description |
+|---|---|---|
+| `transient` | `ClassVar[set[str]]` | Field names excluded from serialization. These fields are set to `None` in snapshots and recreated by `restore()`. |
+| `store_by` | `ClassVar[dict[str, FieldStore]]` | Custom persistence strategy per field. Fields not listed use the default automatic tier (JSON / bytes / pickle). |
+
+### Methods
+
+| Method | Signature | Description |
+|---|---|---|
+| `restore` | `def restore(self) -> None` | Override to recreate transient fields after deserialization. Called automatically by `ctx.get()` once all serializable fields are populated. Transient fields are `None` at call time. |
+
+---
+
+## FieldStore
+
+Protocol for custom per-field persistence. Implement this to route specific `BlazenState` fields through custom storage (e.g., S3, a database, Redis).
+
+| Method | Signature | Description |
+|---|---|---|
+| `save` | `def save(self, key: str, value: Any, ctx: Context) -> None` | Persist the field value under the given key. |
+| `load` | `def load(self, key: str, ctx: Context) -> Any` | Load and return the field value for the given key. |
+
+---
+
+## CallbackFieldStore
+
+Convenience implementation of `FieldStore` that delegates to plain callables.
+
+```python
+CallbackFieldStore(
+    save_fn: Callable[[str, Any], None],
+    load_fn: Callable[[str], Any],
+)
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `save_fn` | `Callable[[str, Any], None]` | Called with `(key, value)` to persist a field. |
+| `load_fn` | `Callable[[str], Any]` | Called with `(key)` to load a field value. |
+
+Also exposes `save(key, value, ctx)` and `load(key, ctx)` methods matching the `FieldStore` protocol.
+
+```python
+from blazen import CallbackFieldStore
+
+store = CallbackFieldStore(
+    save_fn=lambda k, v: s3.put_object(Bucket="b", Key=k, Body=v),
+    load_fn=lambda k: s3.get_object(Bucket="b", Key=k)["Body"].read(),
+)
+```
+
+---
+
 ## CompletionModel
 
 Use static constructor methods to create a model for a specific provider, then call `complete()` or `stream()` to generate responses.

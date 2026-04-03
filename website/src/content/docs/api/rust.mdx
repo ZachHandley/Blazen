@@ -750,6 +750,16 @@ ctx.restore_state(snapshot: ContextSnapshot)
 
 ---
 
+## BlazenState
+
+`BlazenState` is a binding-layer concept for Python, Node.js, and WASM. In those languages, extending a `BlazenState` base class gives you automatic per-field persistence in the workflow context. Rust has no equivalent base class.
+
+In Rust, per-field storage is achieved manually by calling `set_value()` / `get_value()` with the `StateValue` enum (see the [StateValue](#statevalue) section above). Each field is stored under an explicit key, giving you full control over serialization format and storage variant.
+
+The `Native(BytesWrapper)` variant exists specifically to support bindings: it lets platform-serialized objects (e.g., Python pickle bytes, Node.js `v8.serialize` output) round-trip through Rust steps without deserialization. Binding authors use `StateValue::Native` to store opaque platform objects, and Rust code can forward those values without interpreting their contents.
+
+---
+
 ## Compute Platform
 
 The compute module provides a unified trait system for async, job-based media generation providers (fal.ai, Replicate, RunPod, etc.) that model a submit-poll-retrieve workflow for GPU workloads.

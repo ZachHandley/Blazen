@@ -406,6 +406,86 @@ type StateValue = string | number | boolean | null | Uint8Array | StateValue[] |
 
 ---
 
+## BlazenState
+
+A protocol for structured per-field state storage in the WASM context. Objects carrying the `__blazen_state__: true` marker are automatically decomposed by `ctx.set()` and reconstructed by `ctx.get()`.
+
+### BlazenStateMeta
+
+Configuration is read from the object's constructor via a static `meta` property.
+
+```typescript
+interface BlazenStateMeta {
+  /** Field names excluded from serialization (recreated via restore). */
+  transient?: string[];
+  /** Custom persistence strategies per field. */
+  storeBy?: Record<string, FieldStore>;
+  /** Name of the method to call after reconstruction. */
+  restore?: string;
+}
+```
+
+### FieldStore
+
+A custom persistence strategy for individual fields. In WASM, both methods must be **synchronous** (no `Promise` return).
+
+```typescript
+interface FieldStore {
+  save(key: string, value: any, ctx: WasmContext): void;
+  load(key: string, ctx: WasmContext): any;
+}
+```
+
+### Detection
+
+Any JS object with the property `__blazen_state__` set to a truthy value is treated as a `BlazenState`:
+
+```typescript
+const state = new MyState();
+state.__blazen_state__ = true;  // enables the protocol
+```
+
+### Per-field storage
+
+When `ctx.set(key, state)` receives a `BlazenState` object:
+
+1. Each enumerable field is stored individually at `{key}.{fieldName}` (skipping the marker and transient fields).
+2. Fields listed in `meta.storeBy` are persisted via `store.save(fieldKey, value, ctx)` instead of the default context path.
+3. A metadata entry is written at `{key}.__blazen_meta__` recording the field list, class name, transient array, `storeBy` config, and restore method name.
+
+When `ctx.get(key)` finds a `{key}.__blazen_meta__` entry:
+
+1. Each recorded field is loaded individually (or via the custom `FieldStore.load()`).
+2. The fields are assembled into a new plain object.
+3. The `__blazen_state__` marker is set on the result.
+4. If a `restore` method name was recorded, that method is called on the reconstructed object.
+
+### restore()
+
+The `restore` entry in `meta` is a **string** naming the method on the instance to call after reconstruction. This method receives no arguments and is called synchronously:
+
+```typescript
+class MyState {
+  dbPath = '';
+  conn = null;
+
+  static meta = {
+    transient: ['conn'],
+    restore: 'reconnect',
+  };
+
+  reconnect() {
+    this.conn = openDb(this.dbPath);
+  }
+}
+```
+
+### Synchronous execution
+
+All `BlazenState` operations in WASM are synchronous. Unlike the Node.js SDK (where `saveTo()` / `loadFrom()` return `Promise`s), the WASM context processes `BlazenState` objects inline during `ctx.set()` and `ctx.get()` -- no `await` needed.
+
+---
+
 ## Events
 
 Events are plain objects with a `type` field.

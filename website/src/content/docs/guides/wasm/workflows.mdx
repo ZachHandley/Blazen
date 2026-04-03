@@ -143,6 +143,79 @@ console.log(ctx.workflowName); // 'summarizer'
 | `ctx.runId()` | `string` | Unique UUID v4 for the current run |
 | `ctx.workflowName` | `string` | Getter property for the workflow name |
 
+### BlazenState
+
+For structured state that mixes serializable fields with non-serializable ones (database connections, caches, handles), the WASM SDK supports a **BlazenState protocol**. Any plain object with the `__blazen_state__: true` marker is automatically decomposed by `ctx.set()` and reconstructed by `ctx.get()` -- no explicit `saveTo()`/`loadFrom()` calls needed.
+
+The protocol reads metadata from the object's **constructor** via a static `meta` property:
+
+```typescript
+class SessionState {
+  url = '';
+  token = '';
+  conn = null;       // non-serializable -- will be recreated
+  requestCount = 0;
+
+  static meta = {
+    transient: ['conn'],                // excluded from storage
+    storeBy: {},                        // custom FieldStore per field (optional)
+    restore: 'reconnect',               // method name called after reconstruction
+  };
+
+  reconnect() {
+    if (this.url && this.token) {
+      this.conn = createConnection(this.url, this.token);
+    }
+  }
+}
+```
+
+Mark instances with `__blazen_state__: true` before storing:
+
+```typescript
+wf.addStep('init', ['blazen::StartEvent'], async (event, ctx) => {
+  const state = new SessionState();
+  state.url = event.url;
+  state.token = event.token;
+  state.__blazen_state__ = true;
+
+  ctx.set('session', state);            // auto-decomposes per field
+  return { type: 'ProcessEvent' };
+});
+
+wf.addStep('process', ['ProcessEvent'], async (event, ctx) => {
+  const state = ctx.get('session');     // auto-reconstructs, calls reconnect()
+  console.log(state.url);              // preserved
+  console.log(state.conn);            // recreated by reconnect()
+  return { type: 'blazen::StopEvent', result: { requests: state.requestCount } };
+});
+```
+
+How it works:
+
+- **`ctx.set(key, state)`** -- iterates `Object.keys(state)`, skips `__blazen_state__` and any field listed in `meta.transient`, then stores each remaining field at `{key}.{fieldName}`. Fields with a custom `FieldStore` in `meta.storeBy` are persisted via `store.save(fieldKey, value, ctx)` instead of the default path. A metadata entry at `{key}.__blazen_meta__` records the field list, class name, and configuration.
+- **`ctx.get(key)`** -- checks for a `{key}.__blazen_meta__` entry. If found, it loads each field individually (or via the custom `FieldStore.load()`), reassembles the object, sets the `__blazen_state__` marker, and calls the `restore` method (if specified in the metadata).
+
+All operations are **synchronous** -- the `FieldStore.save()` and `FieldStore.load()` callbacks in WASM must return values directly (no `Promise`s).
+
+The `storeBy` option lets you route specific fields through a custom persistence strategy:
+
+```typescript
+const externalCache = {
+  save(key, value, ctx) { localStorage.setItem(key, JSON.stringify(value)); },
+  load(key, ctx) { return JSON.parse(localStorage.getItem(key) ?? 'null'); },
+};
+
+class AppState {
+  preferences = {};
+  activeTab = 'home';
+
+  static meta = {
+    storeBy: { preferences: externalCache },
+  };
+}
+```
+
 ## Streaming events
 
 In the WASM SDK, `ctx.writeEventToStream()` is a **no-op** -- it exists for API compatibility with the Node.js and Rust SDKs but does not emit events to an external stream. You can still use `wf.runStreaming()` to receive events routed via `ctx.sendEvent()`:

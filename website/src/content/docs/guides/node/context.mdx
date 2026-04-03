@@ -73,3 +73,98 @@ Use `ctx.sendEvent()` to emit an event manually instead of returning one from th
 await ctx.sendEvent({ type: "Continue" }); // Async
 return null; // Don't return an event when using sendEvent
 ```
+
+## BlazenState
+
+`BlazenState` is a base class for typed state objects that store each field individually in the workflow context. Instead of manually calling `ctx.set()` and `ctx.get()` for every piece of state, you define a class with typed fields and let Blazen handle serialization, storage tiers, and restoration automatically.
+
+### Defining a State Class
+
+Extend `BlazenState` and declare a static `meta` property to control how fields are stored:
+
+```typescript
+import { BlazenState, BlazenStateMeta, CallbackFieldStore } from "blazen";
+
+class AgentState extends BlazenState {
+  static meta: BlazenStateMeta = {
+    // Fields that should not survive pause/resume snapshots
+    transient: ["scratchpad"],
+
+    // Per-field storage overrides
+    storeBy: {
+      embeddings: new CallbackFieldStore({
+        saveFn: async (key, value, ctx) => {
+          await ctx.setBytes(key, Buffer.from(JSON.stringify(value)));
+        },
+        loadFn: async (key, ctx) => {
+          const buf = await ctx.getBytes(key);
+          return buf ? JSON.parse(buf.toString()) : null;
+        },
+      }),
+    },
+  };
+
+  conversationHistory: string[] = [];
+  embeddings: number[][] = [];
+  scratchpad: Map<string, string> = new Map();
+  retryCount: number = 0;
+
+  // Called after loadFrom() to recreate transient fields
+  restore(): void {
+    this.scratchpad = new Map();
+  }
+}
+```
+
+### Saving and Loading State
+
+Use `saveTo()` to persist the state into a workflow context under a given key, and the static `loadFrom()` to restore it:
+
+```typescript
+wf.addStep("init", ["blazen::StartEvent"], async (event, ctx) => {
+  const state = new AgentState();
+  state.conversationHistory.push("Hello");
+  state.retryCount = 1;
+
+  await state.saveTo(ctx, "state");
+  return { type: "ProcessEvent" };
+});
+
+wf.addStep("process", ["ProcessEvent"], async (event, ctx) => {
+  const state = await AgentState.loadFrom<AgentState>(ctx, "state");
+
+  console.log(state.conversationHistory); // ["Hello"]
+  console.log(state.retryCount);          // 1
+
+  state.conversationHistory.push("World");
+  await state.saveTo(ctx, "state");
+
+  return { type: "blazen::StopEvent", result: { history: state.conversationHistory } };
+});
+```
+
+### How Field Storage Works
+
+Each field on the state object is stored individually in the context. This means you can assign different storage strategies to different fields using the `storeBy` record. Any field listed in `storeBy` uses its corresponding `FieldStore` implementation; all other (non-transient) fields use the default context `set`/`get` methods.
+
+The `FieldStore` interface has two methods:
+
+```typescript
+interface FieldStore {
+  save(key: string, value: any, ctx: Context): Promise<void>;
+  load(key: string, ctx: Context): Promise<any>;
+}
+```
+
+`CallbackFieldStore` is a convenience class that constructs a `FieldStore` from a pair of callbacks:
+
+```typescript
+new CallbackFieldStore({
+  saveFn: async (key, value, ctx) => { /* custom save logic */ },
+  loadFn: async (key, ctx) => { /* custom load logic */ },
+});
+```
+
+### Transient Fields
+
+Fields listed in the `transient` array are excluded from `saveTo()` and will not be persisted. After `loadFrom()` restores the saved fields, it calls `restore()` on the instance, giving you a place to recreate transient state such as caches, open connections, or in-memory indexes. Transient fields do not survive pause/resume snapshots, but `restore()` ensures they are always initialized when the state is loaded.

@@ -21,6 +21,8 @@ A workflow is a collection of steps wired together by an event router that dispa
 
 The context is a shared key-value store available to all steps within a single workflow run. Use `ctx.set(key, value)` and `ctx.get(key)` to share state between steps without coupling them directly. Values can be structured data (strings, numbers, booleans, arrays, objects), raw binary data (`bytes` / `Uint8Array`), or platform-native objects -- each SDK handles serialization appropriate to its runtime. For raw binary data, use `ctx.set_bytes(key, data)` and `ctx.get_bytes(key)` -- these persist through pause/resume/checkpoint with no extra serialization. The context also provides `ctx.send_event()` for manually routing events to other steps and `ctx.write_event_to_stream()` for publishing events to external consumers.
 
+For structured state with mixed serializable and non-serializable fields, use `BlazenState` -- a protocol (or typed base class, depending on the SDK) that stores each field individually and provides a `restore()` hook to recreate transient fields (like database connections) after deserialization. Fields can be marked as transient to exclude them from storage, and custom persistence strategies can be assigned per field via `storeBy`. See the language-specific context guides for details.
+
 ## Streaming
 
 Steps can publish non-routing events to an external stream via `ctx.write_event_to_stream()`. External consumers subscribe to this stream to receive updates in real time without interfering with the workflow's internal event routing. This is useful for progress reporting, logging, and delivering incremental results to a user interface.
