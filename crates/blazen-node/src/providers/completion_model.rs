@@ -134,11 +134,14 @@ impl JsCompletionModel {
     }
 
     /// Create a fal.ai completion model.
+    ///
+    /// `model` sets the LLM model name used by the `any-llm` proxy
+    /// (e.g. `"anthropic/claude-sonnet-4.5"`, `"openai/gpt-4o"`).
     #[napi(factory)]
     pub fn fal(api_key: String, model: Option<String>) -> Self {
         let mut provider = blazen_llm::providers::fal::FalProvider::new(api_key);
         if let Some(m) = model {
-            provider = provider.with_model(m);
+            provider = provider.with_llm_model(m);
         }
         Self {
             inner: Arc::new(provider),

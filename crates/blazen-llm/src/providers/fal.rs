@@ -129,21 +129,23 @@ pub enum FalExecutionMode {
 /// use blazen_llm::providers::fal::FalProvider;
 ///
 /// let provider = FalProvider::new("fal-key-...")
-///     .with_model("fal-ai/any-llm");
+///     .with_endpoint("fal-ai/any-llm");
 /// ```
 pub struct FalProvider {
     client: Arc<dyn HttpClient>,
     api_key: String,
-    default_model: String,
+    endpoint: String,
     /// The underlying LLM model to use when proxying through `fal-ai/any-llm`.
     llm_model: String,
     execution_mode: FalExecutionMode,
+    base_queue_url: String,
+    base_sync_url: String,
 }
 
 impl std::fmt::Debug for FalProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FalProvider")
-            .field("default_model", &self.default_model)
+            .field("endpoint", &self.endpoint)
             .field("llm_model", &self.llm_model)
             .field("execution_mode", &self.execution_mode)
             .finish_non_exhaustive()
@@ -155,9 +157,11 @@ impl Clone for FalProvider {
         Self {
             client: Arc::clone(&self.client),
             api_key: self.api_key.clone(),
-            default_model: self.default_model.clone(),
+            endpoint: self.endpoint.clone(),
             llm_model: self.llm_model.clone(),
             execution_mode: self.execution_mode.clone(),
+            base_queue_url: self.base_queue_url.clone(),
+            base_sync_url: self.base_sync_url.clone(),
         }
     }
 }
@@ -173,11 +177,13 @@ impl FalProvider {
         Self {
             client: crate::default_http_client(),
             api_key: api_key.into(),
-            default_model: "fal-ai/any-llm".to_owned(),
+            endpoint: "fal-ai/any-llm".to_owned(),
             llm_model: "anthropic/claude-sonnet-4.5".to_owned(),
             execution_mode: FalExecutionMode::Queue {
                 poll_interval: DEFAULT_POLL_INTERVAL,
             },
+            base_queue_url: FAL_QUEUE_URL.to_owned(),
+            base_sync_url: FAL_SYNC_URL.to_owned(),
         }
     }
 
@@ -187,18 +193,34 @@ impl FalProvider {
         Self {
             client,
             api_key: api_key.into(),
-            default_model: "fal-ai/any-llm".to_owned(),
+            endpoint: "fal-ai/any-llm".to_owned(),
             llm_model: "anthropic/claude-sonnet-4.5".to_owned(),
             execution_mode: FalExecutionMode::Queue {
                 poll_interval: DEFAULT_POLL_INTERVAL,
             },
+            base_queue_url: FAL_QUEUE_URL.to_owned(),
+            base_sync_url: FAL_SYNC_URL.to_owned(),
         }
     }
 
-    /// Override the fal.ai model endpoint (e.g. `fal-ai/any-llm`).
+    /// Override the fal.ai endpoint path (e.g. `fal-ai/any-llm`).
     #[must_use]
-    pub fn with_model(mut self, model: impl Into<String>) -> Self {
-        self.default_model = model.into();
+    pub fn with_endpoint(mut self, endpoint: impl Into<String>) -> Self {
+        self.endpoint = endpoint.into();
+        self
+    }
+
+    /// Deprecated: use [`with_endpoint`](Self::with_endpoint) instead.
+    #[deprecated(since = "0.2.0", note = "renamed to `with_endpoint`")]
+    #[must_use]
+    pub fn with_model(self, model: impl Into<String>) -> Self {
+        self.with_endpoint(model)
+    }
+
+    /// Override the base queue URL (default: `https://queue.fal.run`).
+    #[must_use]
+    pub fn with_base_url(mut self, url: impl Into<String>) -> Self {
+        self.base_queue_url = url.into();
         self
     }
 
@@ -306,9 +328,9 @@ impl FalProvider {
         body
     }
 
-    /// Resolve the fal.ai model endpoint to use.
-    fn resolve_fal_model(&self) -> &str {
-        &self.default_model
+    /// Resolve the fal.ai endpoint path to use.
+    fn resolve_endpoint(&self) -> &str {
+        &self.endpoint
     }
 
     // -----------------------------------------------------------------------
@@ -333,8 +355,8 @@ impl FalProvider {
         &self,
         body: &serde_json::Value,
     ) -> Result<serde_json::Value, BlazenError> {
-        let model = self.resolve_fal_model();
-        let url = format!("{FAL_SYNC_URL}/{model}");
+        let model = self.resolve_endpoint();
+        let url = format!("{}/{model}", self.base_sync_url);
 
         let request = self.apply_auth(HttpRequest::post(&url).json_body(body)?);
         let response = self.client.send(request).await?;
@@ -364,8 +386,8 @@ impl FalProvider {
         body: &serde_json::Value,
         webhook_url: &str,
     ) -> Result<serde_json::Value, BlazenError> {
-        let model = self.resolve_fal_model();
-        let submit_url = format!("{FAL_QUEUE_URL}/{model}?fal_webhook={webhook_url}");
+        let model = self.resolve_endpoint();
+        let submit_url = format!("{}/{model}?fal_webhook={webhook_url}", self.base_queue_url);
 
         let request = self.apply_auth(HttpRequest::post(&submit_url).json_body(body)?);
         let response = self.client.send(request).await?;
@@ -396,7 +418,7 @@ impl FalProvider {
         body: &serde_json::Value,
         webhook: Option<&str>,
     ) -> Result<FalQueueSubmitResponse, BlazenError> {
-        let mut submit_url = format!("{FAL_QUEUE_URL}/{model}");
+        let mut submit_url = format!("{}/{model}", self.base_queue_url);
         if let Some(wh) = webhook {
             submit_url = format!("{submit_url}?fal_webhook={wh}");
         }
@@ -425,7 +447,10 @@ impl FalProvider {
         model: &str,
         request_id: &str,
     ) -> Result<FalStatusResponse, BlazenError> {
-        let status_url = format!("{FAL_QUEUE_URL}/{model}/requests/{request_id}/status");
+        let status_url = format!(
+            "{}/{model}/requests/{request_id}/status",
+            self.base_queue_url
+        );
 
         let request = self.apply_auth(HttpRequest::get(&status_url));
         let response = self.client.send(request).await?;
@@ -448,7 +473,7 @@ impl FalProvider {
         model: &str,
         request_id: &str,
     ) -> Result<serde_json::Value, BlazenError> {
-        let result_url = format!("{FAL_QUEUE_URL}/{model}/requests/{request_id}");
+        let result_url = format!("{}/{model}/requests/{request_id}", self.base_queue_url);
 
         let request = self.apply_auth(HttpRequest::get(&result_url));
         let response = self.client.send(request).await?;
@@ -578,7 +603,7 @@ impl FalProvider {
         body: &serde_json::Value,
         poll_interval: Duration,
     ) -> Result<(serde_json::Value, RequestTiming), BlazenError> {
-        let model = self.resolve_fal_model();
+        let model = self.resolve_endpoint();
 
         let submit_response = self.queue_submit(model, body, None).await?;
 
@@ -730,7 +755,7 @@ struct FalUpscaleOutput {
 #[async_trait]
 impl crate::traits::CompletionModel for FalProvider {
     fn model_id(&self) -> &str {
-        &self.default_model
+        &self.endpoint
     }
 
     async fn complete(
@@ -752,7 +777,7 @@ impl crate::traits::CompletionModel for FalProvider {
         let start = Instant::now();
 
         let body = self.build_llm_body(&request);
-        debug!(model = %self.default_model, "fal.ai completion request");
+        debug!(endpoint = %self.endpoint, "fal.ai completion request");
 
         let (result, timing) = match &self.execution_mode {
             FalExecutionMode::Sync => {
@@ -799,13 +824,13 @@ impl crate::traits::CompletionModel for FalProvider {
         let usage: Option<TokenUsage> = None;
         let cost = usage
             .as_ref()
-            .and_then(|u| crate::pricing::compute_cost(&self.default_model, u));
+            .and_then(|u| crate::pricing::compute_cost(&self.endpoint, u));
 
         Ok(CompletionResponse {
             content: fal_response.output,
             tool_calls: Vec::new(), // fal.ai/any-llm doesn't support tool calling.
             usage,
-            model: self.default_model.clone(),
+            model: self.endpoint.clone(),
             finish_reason: Some("stop".to_owned()),
             cost,
             timing: Some(timing),
@@ -993,7 +1018,10 @@ impl ComputeProvider for FalProvider {
     }
 
     async fn cancel(&self, job: &JobHandle) -> Result<(), BlazenError> {
-        let cancel_url = format!("{FAL_QUEUE_URL}/{}/requests/{}/cancel", job.model, job.id);
+        let cancel_url = format!(
+            "{}/{}/requests/{}/cancel",
+            self.base_queue_url, job.model, job.id
+        );
 
         let request = self.apply_auth(HttpRequest::put(&cancel_url));
         let response = self.client.send(request).await?;
@@ -1647,7 +1675,7 @@ impl crate::traits::ProviderInfo for FalProvider {
     }
 
     fn base_url(&self) -> &str {
-        FAL_QUEUE_URL
+        &self.base_queue_url
     }
 
     fn capabilities(&self) -> crate::traits::ProviderCapabilities {
@@ -1678,7 +1706,7 @@ mod tests {
     #[test]
     fn default_config() {
         let provider = FalProvider::new("fal-test");
-        assert_eq!(provider.default_model, "fal-ai/any-llm");
+        assert_eq!(provider.endpoint, "fal-ai/any-llm");
         assert_eq!(provider.llm_model, "anthropic/claude-sonnet-4.5");
         assert!(matches!(
             provider.execution_mode,
@@ -1687,9 +1715,22 @@ mod tests {
     }
 
     #[test]
-    fn with_model_override() {
+    fn with_endpoint_override() {
+        let provider = FalProvider::new("fal-test").with_endpoint("fal-ai/fast-sdxl");
+        assert_eq!(provider.endpoint, "fal-ai/fast-sdxl");
+    }
+
+    #[test]
+    fn with_base_url_override() {
+        let provider = FalProvider::new("fal-test").with_base_url("https://custom.fal.run");
+        assert_eq!(provider.base_queue_url, "https://custom.fal.run");
+    }
+
+    #[allow(deprecated)]
+    #[test]
+    fn with_model_deprecated_alias() {
         let provider = FalProvider::new("fal-test").with_model("fal-ai/fast-sdxl");
-        assert_eq!(provider.default_model, "fal-ai/fast-sdxl");
+        assert_eq!(provider.endpoint, "fal-ai/fast-sdxl");
     }
 
     #[test]

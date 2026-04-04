@@ -1116,7 +1116,21 @@ class FalProvider:
         response = await fal.complete([ChatMessage.user("Hello!")])
     """
 
-    def __init__(self, *, api_key: str, model: Optional[str] = None) -> None: ...
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        model: Optional[str] = None,
+        endpoint: Optional[str] = None,
+    ) -> None:
+        """Create a new fal.ai provider.
+
+        Args:
+            api_key: Your fal.ai API key.
+            model: Optional LLM model name (e.g. "anthropic/claude-sonnet-4.5").
+            endpoint: Optional fal.ai endpoint override (default: "fal-ai/any-llm").
+        """
+        ...
 
     @property
     def model_id(self) -> str:

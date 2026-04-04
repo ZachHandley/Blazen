@@ -344,13 +344,13 @@ impl PyCompletionModel {
     ///
     /// Args:
     ///     api_key: Your fal.ai API key.
-    ///     model: Optional model name.
+    ///     model: Optional LLM model name (e.g. "anthropic/claude-sonnet-4.5").
     #[staticmethod]
     #[pyo3(signature = (api_key, model=None))]
     fn fal(api_key: &str, model: Option<&str>) -> Self {
         let mut provider = blazen_llm::providers::fal::FalProvider::new(api_key);
         if let Some(m) = model {
-            provider = provider.with_model(m);
+            provider = provider.with_llm_model(m);
         }
         Self {
             inner: Arc::new(provider),

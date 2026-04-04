@@ -55,13 +55,17 @@ impl PyFalProvider {
     ///
     /// Args:
     ///     api_key: Your fal.ai API key.
-    ///     model: Optional default model override.
+    ///     model: Optional LLM model name (e.g. "anthropic/claude-sonnet-4.5").
+    ///     endpoint: Optional fal.ai endpoint override (default: "fal-ai/any-llm").
     #[new]
-    #[pyo3(signature = (*, api_key, model=None))]
-    fn new(api_key: &str, model: Option<&str>) -> Self {
+    #[pyo3(signature = (*, api_key, model=None, endpoint=None))]
+    fn new(api_key: &str, model: Option<&str>, endpoint: Option<&str>) -> Self {
         let mut provider = FalProvider::new(api_key);
         if let Some(m) = model {
-            provider = provider.with_model(m);
+            provider = provider.with_llm_model(m);
+        }
+        if let Some(e) = endpoint {
+            provider = provider.with_endpoint(e);
         }
         Self {
             inner: Arc::new(provider),

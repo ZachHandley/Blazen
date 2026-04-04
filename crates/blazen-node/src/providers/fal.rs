@@ -171,12 +171,19 @@ impl JsFalProvider {
 
     /// Create a new fal.ai provider.
     ///
-    /// `model` optionally overrides the default fal.ai model endpoint.
+    /// `model` optionally sets the LLM model name used by the `any-llm`
+    /// proxy (e.g. `"anthropic/claude-sonnet-4.5"`, `"openai/gpt-4o"`).
+    ///
+    /// `endpoint` optionally overrides the fal.ai endpoint path
+    /// (default: `fal-ai/any-llm`).
     #[napi(factory)]
-    pub fn create(api_key: String, model: Option<String>) -> Self {
+    pub fn create(api_key: String, model: Option<String>, endpoint: Option<String>) -> Self {
         let mut provider = FalProvider::new(api_key);
         if let Some(m) = model {
-            provider = provider.with_model(m);
+            provider = provider.with_llm_model(m);
+        }
+        if let Some(e) = endpoint {
+            provider = provider.with_endpoint(e);
         }
         Self {
             inner: Arc::new(provider),
