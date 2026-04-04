@@ -446,6 +446,7 @@ dependencies = [
  "blazen-llm",
  "blazen-memory",
  "blazen-memory-valkey",
+ "blazen-prompts",
  "chrono",
  "pyo3",
  "pyo3-async-runtimes",

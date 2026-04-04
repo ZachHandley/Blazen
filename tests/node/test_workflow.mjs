@@ -200,6 +200,117 @@ describe("step returns null", () => {
 });
 
 // =========================================================================
+// setBytes / getBytes roundtrip
+// =========================================================================
+
+describe("setBytes / getBytes roundtrip", () => {
+  it("stores and retrieves binary data as Buffer", async () => {
+    const wf = new Workflow("bytes-roundtrip");
+
+    wf.addStep("bytes", ["blazen::StartEvent"], async (event, ctx) => {
+      await ctx.setBytes("bin", Buffer.from([0xde, 0xad, 0xbe, 0xef]));
+      const buf = await ctx.getBytes("bin");
+      return {
+        type: "blazen::StopEvent",
+        result: { bytes: Array.from(buf) },
+      };
+    });
+
+    const result = await wf.run({});
+    assert.deepEqual(result.data.bytes, [0xde, 0xad, 0xbe, 0xef]);
+  });
+});
+
+// =========================================================================
+// get() on bytes key returns array
+// =========================================================================
+
+describe("get() on bytes key returns array", () => {
+  it("returns a JSON array of numbers instead of null", async () => {
+    const wf = new Workflow("bytes-get");
+
+    wf.addStep("bytes", ["blazen::StartEvent"], async (event, ctx) => {
+      await ctx.setBytes("bin", Buffer.from([0xde, 0xad, 0xbe, 0xef]));
+      const val = await ctx.get("bin");
+      return {
+        type: "blazen::StopEvent",
+        result: { val },
+      };
+    });
+
+    const result = await wf.run({});
+    assert.notEqual(result.data.val, null);
+    assert.deepEqual(result.data.val, [222, 173, 190, 239]);
+  });
+});
+
+// =========================================================================
+// Complex JSON roundtrip
+// =========================================================================
+
+describe("complex JSON roundtrip", () => {
+  it("stores and retrieves nested objects, arrays, and mixed types", async () => {
+    const wf = new Workflow("complex-json");
+    const payload = {
+      nested: { arr: [1, 2.5, null, true, "str"], obj: { a: 1 } },
+    };
+
+    wf.addStep("complex", ["blazen::StartEvent"], async (event, ctx) => {
+      await ctx.set("complex", payload);
+      const val = await ctx.get("complex");
+      return { type: "blazen::StopEvent", result: { val } };
+    });
+
+    const result = await wf.run({});
+    assert.deepEqual(result.data.val, payload);
+  });
+});
+
+// =========================================================================
+// Overwrite behavior
+// =========================================================================
+
+describe("overwrite behavior", () => {
+  it("overwrites a key with a value of a different type", async () => {
+    const wf = new Workflow("overwrite");
+
+    wf.addStep("overwrite", ["blazen::StartEvent"], async (event, ctx) => {
+      await ctx.set("k", 1);
+      await ctx.set("k", "hello");
+      const val = await ctx.get("k");
+      return { type: "blazen::StopEvent", result: { val } };
+    });
+
+    const result = await wf.run({});
+    assert.equal(result.data.val, "hello");
+  });
+});
+
+// =========================================================================
+// Null / undefined handling
+// =========================================================================
+
+describe("null / undefined handling", () => {
+  it("stores null and returns null for missing keys", async () => {
+    const wf = new Workflow("null-handling");
+
+    wf.addStep("nulls", ["blazen::StartEvent"], async (event, ctx) => {
+      await ctx.set("k", null);
+      const stored = await ctx.get("k");
+      const missing = await ctx.get("no_such_key");
+      return {
+        type: "blazen::StopEvent",
+        result: { stored, missing },
+      };
+    });
+
+    const result = await wf.run({});
+    assert.equal(result.data.stored, null);
+    assert.equal(result.data.missing, null);
+  });
+});
+
+// =========================================================================
 // Timeout
 // =========================================================================
 

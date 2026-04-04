@@ -467,6 +467,72 @@ class ChatMessage:
         ...
 
 
+class ChatWindow:
+    """A token-windowed conversation memory.
+
+    Holds a sequence of ChatMessage objects and automatically evicts the
+    oldest messages (preserving system messages) when the token count
+    exceeds the configured budget.
+
+    Example::
+
+        window = ChatWindow(max_tokens=4096)
+        window.add(ChatMessage.system("You are helpful."))
+        window.add(ChatMessage.user("Hello!"))
+        print(window.token_count())
+        print(window.remaining_tokens())
+    """
+
+    def __init__(self, max_tokens: int) -> None:
+        """Create a new chat window with the given token budget.
+
+        Args:
+            max_tokens: The maximum number of tokens to allow in the window.
+        """
+        ...
+
+    def add(self, message: ChatMessage) -> None:
+        """Append a message and trim oldest non-system messages if over budget.
+
+        System messages are never evicted.
+
+        Args:
+            message: A ChatMessage to add.
+        """
+        ...
+
+    def messages(self) -> list[ChatMessage]:
+        """Get the current messages in the window.
+
+        Returns:
+            A list of ChatMessage objects.
+        """
+        ...
+
+    def clear(self) -> None:
+        """Remove all messages from the window."""
+        ...
+
+    def token_count(self) -> int:
+        """Estimate the total token count of all messages in the window.
+
+        Returns:
+            The estimated number of tokens.
+        """
+        ...
+
+    def remaining_tokens(self) -> int:
+        """Return the number of tokens remaining before the budget is reached.
+
+        Returns:
+            The number of tokens remaining (0 if already at or over budget).
+        """
+        ...
+
+    def __len__(self) -> int: ...
+    def __repr__(self) -> str: ...
+
+
 class ToolCall:
     """A tool invocation requested by the model."""
 
@@ -1323,6 +1389,161 @@ class FalProvider:
             temperature: Optional sampling temperature (0.0-2.0).
             max_tokens: Optional maximum tokens to generate.
             model: Optional model override for this request.
+        """
+        ...
+
+
+# ---------------------------------------------------------------------------
+# Prompt template types
+# ---------------------------------------------------------------------------
+
+
+class PromptTemplate:
+    """A reusable prompt template with ``{{variable}}`` placeholders.
+
+    Templates are rendered by replacing ``{{var}}`` placeholders with the
+    provided keyword arguments.
+
+    Example::
+
+        t = PromptTemplate("Hello {{name}}!", role="user")
+        msg = t.render(name="Alice")
+        print(msg.content)  # "Hello Alice!"
+    """
+
+    template: str
+    """The raw template string."""
+    role: str
+    """The chat role ("system", "user", or "assistant")."""
+    name: str
+    """The template name."""
+    description: Optional[str]
+    """An optional description."""
+    version: str
+    """The version string."""
+    variables: list[str]
+    """Sorted list of variable names in this template."""
+
+    def __init__(
+        self,
+        template: str,
+        *,
+        role: Optional[str] = None,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        version: Optional[str] = None,
+    ) -> None:
+        """Create a new prompt template.
+
+        Args:
+            template: The template string with ``{{variable}}`` placeholders.
+            role: The chat role ("system", "user", or "assistant"). Defaults to "user".
+            name: A unique name for this template (defaults to "unnamed").
+            description: An optional description of this template.
+            version: The version string (defaults to "1.0").
+        """
+        ...
+
+    def render(self, **variables: str) -> ChatMessage:
+        """Render the template with the given keyword arguments.
+
+        Returns a ``ChatMessage`` with the rendered content and the
+        template's role.
+
+        Args:
+            **variables: Template variables as keyword arguments.
+
+        Raises:
+            ValueError: If a required variable is missing.
+        """
+        ...
+
+
+class PromptRegistry:
+    """A versioned registry for prompt templates.
+
+    Organises templates by name and version, with convenient lookup,
+    rendering, and file I/O.
+
+    Example::
+
+        registry = PromptRegistry()
+        registry.register("greet", PromptTemplate("Hello {{name}}!"))
+        msg = registry.render("greet", name="Alice")
+        print(msg.content)
+    """
+
+    def __init__(self) -> None:
+        """Create a new empty prompt registry."""
+        ...
+
+    def register(self, name: str, template: PromptTemplate) -> None:
+        """Register a template under the given name.
+
+        Args:
+            name: The name to register the template under.
+            template: The ``PromptTemplate`` to register.
+        """
+        ...
+
+    def get(self, name: str) -> Optional[PromptTemplate]:
+        """Get the latest version of a template by name.
+
+        Args:
+            name: The template name.
+
+        Returns:
+            The ``PromptTemplate`` or ``None`` if not found.
+        """
+        ...
+
+    def render(self, name: str, **variables: str) -> ChatMessage:
+        """Render the latest version of the named template.
+
+        Args:
+            name: The template name.
+            **variables: Template variables as keyword arguments.
+
+        Returns:
+            A ``ChatMessage`` with the rendered content.
+
+        Raises:
+            KeyError: If no template with that name exists.
+            ValueError: If a required variable is missing.
+        """
+        ...
+
+    def list(self) -> list[str]:
+        """List all registered template names (sorted).
+
+        Returns:
+            A list of template name strings.
+        """
+        ...
+
+    @staticmethod
+    def from_file(path: str) -> "PromptRegistry":
+        """Load a registry from a YAML or JSON file.
+
+        Args:
+            path: Path to the prompt file.
+
+        Raises:
+            IOError: If the file cannot be read.
+            ValueError: If the file format is unsupported or parsing fails.
+        """
+        ...
+
+    @staticmethod
+    def from_dir(path: str) -> "PromptRegistry":
+        """Load all prompt files from a directory.
+
+        Args:
+            path: Path to the directory.
+
+        Raises:
+            IOError: If the directory cannot be read.
+            ValueError: If any file fails to parse.
         """
         ...
 

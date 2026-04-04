@@ -120,6 +120,21 @@ impl Memory {
     // Internal helpers
     // -----------------------------------------------------------------------
 
+    /// Check whether `entry_meta` is a superset of `filter`.
+    ///
+    /// - For objects: every key in `filter` must exist in `entry_meta` with a
+    ///   recursively matching value.
+    /// - For arrays: exact equality.
+    /// - For scalars (string, number, bool, null): exact equality.
+    fn metadata_matches(entry_meta: &serde_json::Value, filter: &serde_json::Value) -> bool {
+        match (filter, entry_meta) {
+            (serde_json::Value::Object(f), serde_json::Value::Object(e)) => f
+                .iter()
+                .all(|(k, fv)| e.get(k).is_some_and(|ev| Self::metadata_matches(ev, fv))),
+            (f, e) => f == e,
+        }
+    }
+
     /// Embed a single text and return the raw f32 vector.
     async fn embed_text(&self, text: &str) -> Result<Vec<f32>> {
         let embedder = self.embedder.as_ref().ok_or(MemoryError::NoEmbedder)?;
@@ -207,8 +222,13 @@ impl MemoryStore for Memory {
         Ok(ids)
     }
 
-    #[instrument(skip(self))]
-    async fn search(&self, query: &str, limit: usize) -> Result<Vec<MemoryResult>> {
+    #[instrument(skip(self, metadata_filter))]
+    async fn search(
+        &self,
+        query: &str,
+        limit: usize,
+        metadata_filter: Option<&serde_json::Value>,
+    ) -> Result<Vec<MemoryResult>> {
         if limit == 0 {
             return Ok(Vec::new());
         }
@@ -233,9 +253,12 @@ impl MemoryStore for Memory {
             candidates
         };
 
-        // Step 4: Score each candidate.
+        // Step 4: Score each candidate, applying metadata filter.
         let mut scored: Vec<MemoryResult> = candidates
             .into_iter()
+            .filter(|entry| {
+                metadata_filter.is_none_or(|f| Self::metadata_matches(&entry.metadata, f))
+            })
             .map(|entry| {
                 // Prefer ELID-based similarity, fall back to embedding SimHash, then text SimHash.
                 let score = if let (Some(entry_elid), true) = (&entry.elid, !query_elid.is_empty())
@@ -277,8 +300,13 @@ impl MemoryStore for Memory {
         Ok(scored)
     }
 
-    #[instrument(skip(self))]
-    async fn search_local(&self, query: &str, limit: usize) -> Result<Vec<MemoryResult>> {
+    #[instrument(skip(self, metadata_filter))]
+    async fn search_local(
+        &self,
+        query: &str,
+        limit: usize,
+        metadata_filter: Option<&serde_json::Value>,
+    ) -> Result<Vec<MemoryResult>> {
         if limit == 0 {
             return Ok(Vec::new());
         }
@@ -288,6 +316,9 @@ impl MemoryStore for Memory {
         let all = self.backend.list().await?;
         let mut scored: Vec<MemoryResult> = all
             .into_iter()
+            .filter(|entry| {
+                metadata_filter.is_none_or(|f| Self::metadata_matches(&entry.metadata, f))
+            })
             .map(|entry| {
                 let score = compute_text_simhash_similarity(entry.text_simhash, query_hash);
                 MemoryResult {
@@ -408,7 +439,7 @@ mod tests {
 
         assert_eq!(ids.len(), 3);
 
-        let results = memory.search("cats sitting", 2).await.unwrap();
+        let results = memory.search("cats sitting", 2, None).await.unwrap();
         assert!(!results.is_empty());
         assert!(results.len() <= 2);
         // All scores should be in [0, 1].
@@ -437,11 +468,11 @@ mod tests {
         assert_eq!(ids.len(), 3);
 
         // search() should fail in local mode.
-        let err = memory.search("cats", 2).await;
+        let err = memory.search("cats", 2, None).await;
         assert!(err.is_err());
 
         // search_local() should work.
-        let results = memory.search_local("cat mat", 2).await.unwrap();
+        let results = memory.search_local("cat mat", 2, None).await.unwrap();
         assert!(!results.is_empty());
         assert!(results.len() <= 2);
         for r in &results {
@@ -512,7 +543,155 @@ mod tests {
 
         memory.add(vec![MemoryEntry::new("test")]).await.unwrap();
 
-        let results = memory.search_local("test", 0).await.unwrap();
+        let results = memory.search_local("test", 0, None).await.unwrap();
         assert!(results.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_metadata_filter_local() {
+        let memory = Memory::local(InMemoryBackend::new());
+
+        memory
+            .add(vec![
+                MemoryEntry::new("Paris is the capital of France")
+                    .with_metadata(serde_json::json!({"category": "geography", "lang": "en"})),
+                MemoryEntry::new("Berlin is the capital of Germany")
+                    .with_metadata(serde_json::json!({"category": "geography", "lang": "de"})),
+                MemoryEntry::new("Rust is a systems programming language")
+                    .with_metadata(serde_json::json!({"category": "tech", "lang": "en"})),
+            ])
+            .await
+            .unwrap();
+
+        // No filter — all 3 results.
+        let all = memory.search_local("capital", 10, None).await.unwrap();
+        assert_eq!(all.len(), 3);
+
+        // Filter by category=geography — 2 results.
+        let geo_filter = serde_json::json!({"category": "geography"});
+        let geo = memory
+            .search_local("capital", 10, Some(&geo_filter))
+            .await
+            .unwrap();
+        assert_eq!(geo.len(), 2);
+        for r in &geo {
+            assert!(
+                r.text.contains("capital"),
+                "expected geography entries, got: {}",
+                r.text
+            );
+        }
+
+        // Filter by lang=en — 2 results.
+        let en_filter = serde_json::json!({"lang": "en"});
+        let en = memory
+            .search_local("capital", 10, Some(&en_filter))
+            .await
+            .unwrap();
+        assert_eq!(en.len(), 2);
+
+        // Filter by category=geography AND lang=de — 1 result.
+        let de_geo_filter = serde_json::json!({"category": "geography", "lang": "de"});
+        let de_geo = memory
+            .search_local("capital", 10, Some(&de_geo_filter))
+            .await
+            .unwrap();
+        assert_eq!(de_geo.len(), 1);
+        assert!(de_geo[0].text.contains("Berlin"));
+
+        // Filter with no matches.
+        let none_filter = serde_json::json!({"category": "sports"});
+        let none = memory
+            .search_local("capital", 10, Some(&none_filter))
+            .await
+            .unwrap();
+        assert!(none.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_metadata_filter_nested() {
+        let memory = Memory::local(InMemoryBackend::new());
+
+        memory
+            .add(vec![
+                MemoryEntry::new("entry one")
+                    .with_metadata(serde_json::json!({"source": {"type": "web", "url": "a.com"}})),
+                MemoryEntry::new("entry two")
+                    .with_metadata(serde_json::json!({"source": {"type": "file", "path": "/tmp"}})),
+            ])
+            .await
+            .unwrap();
+
+        let filter = serde_json::json!({"source": {"type": "web"}});
+        let results = memory
+            .search_local("entry", 10, Some(&filter))
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(results[0].text.contains("one"));
+    }
+
+    #[tokio::test]
+    async fn test_metadata_filter_with_embedder() {
+        let memory = Memory::new(Arc::new(MockEmbedder), InMemoryBackend::new());
+
+        memory
+            .add(vec![
+                MemoryEntry::new("The cat sat on the mat")
+                    .with_metadata(serde_json::json!({"animal": "cat"})),
+                MemoryEntry::new("The dog played in the park")
+                    .with_metadata(serde_json::json!({"animal": "dog"})),
+            ])
+            .await
+            .unwrap();
+
+        let filter = serde_json::json!({"animal": "cat"});
+        let results = memory
+            .search("cat sitting", 5, Some(&filter))
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(results[0].text.contains("cat"));
+    }
+
+    #[test]
+    fn test_metadata_matches_basic() {
+        let entry = serde_json::json!({"a": 1, "b": "hello", "c": true});
+
+        // Subset match.
+        assert!(Memory::metadata_matches(
+            &entry,
+            &serde_json::json!({"a": 1})
+        ));
+        assert!(Memory::metadata_matches(
+            &entry,
+            &serde_json::json!({"a": 1, "b": "hello"})
+        ));
+
+        // Full match.
+        assert!(Memory::metadata_matches(
+            &entry,
+            &serde_json::json!({"a": 1, "b": "hello", "c": true})
+        ));
+
+        // Mismatch.
+        assert!(!Memory::metadata_matches(
+            &entry,
+            &serde_json::json!({"a": 2})
+        ));
+        assert!(!Memory::metadata_matches(
+            &entry,
+            &serde_json::json!({"missing": true})
+        ));
+
+        // Null entry metadata matches only null filter.
+        assert!(Memory::metadata_matches(
+            &serde_json::Value::Null,
+            &serde_json::Value::Null
+        ));
+        assert!(!Memory::metadata_matches(
+            &serde_json::Value::Null,
+            &serde_json::json!({"a": 1})
+        ));
     }
 }

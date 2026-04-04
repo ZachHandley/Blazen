@@ -586,4 +586,44 @@ mod tests {
         assert!(snap.contains_key("json_key"));
         assert!(!snap.contains_key("live"));
     }
+
+    #[tokio::test]
+    async fn snapshot_includes_bytes_and_native() {
+        let ctx = test_context();
+        ctx.set("json_key", "hello".to_string()).await;
+        ctx.set_bytes("bytes_key", vec![0xDE, 0xAD]).await;
+        ctx.set_value("native_key", StateValue::native(vec![0x80, 0x04]))
+            .await;
+
+        let snap = ctx.snapshot_state().await;
+        assert!(snap.get("json_key").unwrap().is_json());
+        assert!(snap.get("bytes_key").unwrap().is_bytes());
+        assert!(snap.get("native_key").unwrap().is_native());
+
+        // Restore into a fresh context and verify
+        let ctx2 = test_context();
+        ctx2.restore_state(snap).await;
+        assert_eq!(
+            ctx2.get::<String>("json_key").await,
+            Some("hello".to_string())
+        );
+        assert_eq!(ctx2.get_bytes("bytes_key").await, Some(vec![0xDE, 0xAD]));
+        assert_eq!(
+            ctx2.get_value("native_key").await.unwrap().as_native(),
+            Some([0x80, 0x04].as_slice())
+        );
+    }
+
+    #[tokio::test]
+    async fn set_overwrites_previous_value() {
+        let ctx = test_context();
+        ctx.set("key", 1_u64).await;
+        assert_eq!(ctx.get::<u64>("key").await, Some(1));
+        ctx.set("key", 2_u64).await;
+        assert_eq!(ctx.get::<u64>("key").await, Some(2));
+        // Overwrite JSON with bytes
+        ctx.set_bytes("key", vec![1, 2, 3]).await;
+        assert_eq!(ctx.get::<u64>("key").await, None);
+        assert_eq!(ctx.get_bytes("key").await, Some(vec![1, 2, 3]));
+    }
 }

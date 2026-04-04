@@ -250,3 +250,173 @@ async def test_step_returns_none():
     result = await handler.result()
 
     assert result.result["processed"] is True
+
+
+# =========================================================================
+# Context bytes roundtrip
+# =========================================================================
+
+
+@pytest.mark.asyncio
+async def test_context_bytes_roundtrip():
+    @step
+    def setter(ctx: Context, ev: Event):
+        ctx.set("k", b"\x00\x01\x02")
+        return Event("NextEvent")
+
+    @step(accepts=["NextEvent"])
+    def getter(ctx: Context, ev: Event):
+        val = ctx.get("k")
+        assert isinstance(val, bytes)
+        return StopEvent(result={"data": list(val)})
+
+    wf = Workflow("bytes-roundtrip", [setter, getter])
+    handler = await wf.run()
+    result = await handler.result()
+
+    assert result.result["data"] == [0, 1, 2]
+
+
+# =========================================================================
+# Context complex JSON roundtrip
+# =========================================================================
+
+
+@pytest.mark.asyncio
+async def test_context_complex_json():
+    @step
+    def setter(ctx: Context, ev: Event):
+        ctx.set("k", {"nested": [1, 2.5, None, True, "str"]})
+        return Event("NextEvent")
+
+    @step(accepts=["NextEvent"])
+    def getter(ctx: Context, ev: Event):
+        val = ctx.get("k")
+        return StopEvent(result=val)
+
+    wf = Workflow("complex-json", [setter, getter])
+    handler = await wf.run()
+    result = await handler.result()
+
+    assert result.result == {"nested": [1, 2.5, None, True, "str"]}
+
+
+# =========================================================================
+# Context pickle roundtrip
+# =========================================================================
+
+
+@pytest.mark.asyncio
+async def test_context_pickle_roundtrip():
+    from dataclasses import dataclass
+
+    @dataclass
+    class Payload:
+        name: str
+        score: float
+
+    @step
+    def setter(ctx: Context, ev: Event):
+        ctx.set("k", Payload(name="test", score=3.14))
+        return Event("NextEvent")
+
+    @step(accepts=["NextEvent"])
+    def getter(ctx: Context, ev: Event):
+        val = ctx.get("k")
+        return StopEvent(result={"name": val.name, "score": val.score})
+
+    wf = Workflow("pickle-roundtrip", [setter, getter])
+    handler = await wf.run()
+    result = await handler.result()
+
+    assert result.result["name"] == "test"
+    assert abs(result.result["score"] - 3.14) < 1e-9
+
+
+# =========================================================================
+# Context set_bytes / get_bytes
+# =========================================================================
+
+
+@pytest.mark.asyncio
+async def test_context_set_bytes_get_bytes():
+    @step
+    def setter(ctx: Context, ev: Event):
+        ctx.set_bytes("k", b"\xff\xfe")
+        return Event("NextEvent")
+
+    @step(accepts=["NextEvent"])
+    def getter(ctx: Context, ev: Event):
+        val = ctx.get_bytes("k")
+        return StopEvent(result={"data": list(val)})
+
+    wf = Workflow("set-bytes-get-bytes", [setter, getter])
+    handler = await wf.run()
+    result = await handler.result()
+
+    assert result.result["data"] == [0xFF, 0xFE]
+
+
+# =========================================================================
+# Context overwrite
+# =========================================================================
+
+
+@pytest.mark.asyncio
+async def test_context_overwrite():
+    @step
+    def setter(ctx: Context, ev: Event):
+        ctx.set("k", 1)
+        ctx.set("k", "hello")
+        return Event("NextEvent")
+
+    @step(accepts=["NextEvent"])
+    def getter(ctx: Context, ev: Event):
+        val = ctx.get("k")
+        return StopEvent(result={"value": val})
+
+    wf = Workflow("overwrite", [setter, getter])
+    handler = await wf.run()
+    result = await handler.result()
+
+    assert result.result["value"] == "hello"
+
+
+# =========================================================================
+# Context buffer not mangled (bytearray vs array.array)
+# =========================================================================
+
+
+@pytest.mark.asyncio
+async def test_context_buffer_not_mangled():
+    import array
+
+    @step
+    def setter(ctx: Context, ev: Event):
+        # bytearray should be stored as raw bytes (tier 1)
+        ctx.set("ba", bytearray(b"\xaa\xbb"))
+        # array.array is NOT bytes/bytearray, so it should pickle (tier 3)
+        ctx.set("arr", array.array("i", [1, 2, 3]))
+        return Event("NextEvent")
+
+    @step(accepts=["NextEvent"])
+    def getter(ctx: Context, ev: Event):
+        ba = ctx.get("ba")
+        arr = ctx.get("arr")
+        return StopEvent(
+            result={
+                "ba_is_bytes": isinstance(ba, bytes),
+                "ba_data": list(ba),
+                "arr_type": type(arr).__name__,
+                "arr_data": arr.tolist(),
+            }
+        )
+
+    wf = Workflow("buffer-not-mangled", [setter, getter])
+    handler = await wf.run()
+    result = await handler.result()
+
+    assert result.result["ba_is_bytes"] is True
+    assert result.result["ba_data"] == [0xAA, 0xBB]
+    assert result.result["arr_type"] == "array"
+    assert result.result["arr_data"] == [1, 2, 3]

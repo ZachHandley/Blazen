@@ -87,6 +87,9 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(types::estimate_tokens, m)?)?;
     m.add_function(wrap_pyfunction!(types::count_message_tokens, m)?)?;
 
+    // Chat window (token-windowed conversation memory)
+    m.add_class::<types::PyChatWindow>()?;
+
     // Agent
     m.add_class::<agent::PyToolDef>()?;
     m.add_class::<agent::PyAgentResult>()?;
@@ -123,6 +126,10 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::PyJsonlBackend>()?;
     m.add_class::<types::PyValkeyBackend>()?;
     m.add_class::<types::PyMemoryResult>()?;
+
+    // Prompts
+    m.add_class::<types::PyPromptTemplate>()?;
+    m.add_class::<types::PyPromptRegistry>()?;
 
     // Error exception types
     error::register_exceptions(m)?;

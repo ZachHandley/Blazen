@@ -21,12 +21,31 @@ pub trait MemoryStore: Send + Sync {
     ///
     /// Returns up to `limit` results sorted by descending similarity.
     /// Requires an embedding model to be configured (returns `MemoryError::NoEmbedder` otherwise).
-    async fn search(&self, query: &str, limit: usize) -> Result<Vec<MemoryResult>>;
+    ///
+    /// When `metadata_filter` is `Some`, only entries whose `metadata` is a
+    /// superset of the filter are returned. For example, a filter of
+    /// `{"category": "news"}` matches any entry whose metadata contains at
+    /// least `category: "news"`. Nested objects are matched recursively.
+    async fn search(
+        &self,
+        query: &str,
+        limit: usize,
+        metadata_filter: Option<&serde_json::Value>,
+    ) -> Result<Vec<MemoryResult>>;
 
     /// Search using only text-level `SimHash` (no embedding model required).
     ///
     /// This is a cheaper, lower-quality search that works in local-only mode.
-    async fn search_local(&self, query: &str, limit: usize) -> Result<Vec<MemoryResult>>;
+    ///
+    /// When `metadata_filter` is `Some`, only entries whose `metadata` is a
+    /// superset of the filter are returned. See [`search`](Self::search) for
+    /// filter semantics.
+    async fn search_local(
+        &self,
+        query: &str,
+        limit: usize,
+        metadata_filter: Option<&serde_json::Value>,
+    ) -> Result<Vec<MemoryResult>>;
 
     /// Retrieve a single entry by id.
     async fn get(&self, id: &str) -> Result<Option<StoredEntry>>;

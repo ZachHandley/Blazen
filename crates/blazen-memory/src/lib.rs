@@ -26,7 +26,7 @@
 //!     MemoryEntry::new("The dog played in the park"),
 //! ]).await?;
 //!
-//! let results = memory.search("animals sitting", 5).await?;
+//! let results = memory.search("animals sitting", 5, None).await?;
 //! for r in results {
 //!     println!("{:.3} — {}", r.score, r.text);
 //! }
@@ -45,7 +45,7 @@
 //! memory.add(vec![MemoryEntry::new("hello world")]).await?;
 //!
 //! // Use search_local instead of search — no embedding model needed.
-//! let results = memory.search_local("hello", 5).await?;
+//! let results = memory.search_local("hello", 5, None).await?;
 //! # Ok(())
 //! # }
 //! ```

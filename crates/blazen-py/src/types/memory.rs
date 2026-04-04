@@ -359,19 +359,31 @@ impl PyMemory {
     /// Args:
     ///     query: The search query string.
     ///     limit: Maximum number of results to return (default: 5).
+    ///     metadata_filter: Optional dict of key-value pairs to filter results.
+    ///         Only entries whose metadata is a superset of the filter are
+    ///         returned. For example, ``{"category": "news"}`` matches entries
+    ///         that have at least ``category: "news"`` in their metadata.
     ///
     /// Returns:
     ///     A list of MemoryResult objects sorted by descending similarity.
-    #[pyo3(signature = (query, limit=5))]
+    #[pyo3(signature = (query, limit=5, metadata_filter=None))]
     fn search<'py>(
         &self,
         py: Python<'py>,
         query: String,
         limit: usize,
+        metadata_filter: Option<Py<PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let memory = self.inner.clone();
+        let filter = match metadata_filter {
+            Some(obj) => Some(py_to_json_value(obj.bind(py))?),
+            None => None,
+        };
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let results = memory.search(&query, limit).await.map_err(memory_err)?;
+            let results = memory
+                .search(&query, limit, filter.as_ref())
+                .await
+                .map_err(memory_err)?;
             let py_results: Vec<PyMemoryResult> = results
                 .into_iter()
                 .map(|r| PyMemoryResult { inner: r })
@@ -388,20 +400,28 @@ impl PyMemory {
     /// Args:
     ///     query: The search query string.
     ///     limit: Maximum number of results to return (default: 5).
+    ///     metadata_filter: Optional dict of key-value pairs to filter results.
+    ///         Only entries whose metadata is a superset of the filter are
+    ///         returned. See ``search()`` for details.
     ///
     /// Returns:
     ///     A list of MemoryResult objects sorted by descending similarity.
-    #[pyo3(signature = (query, limit=5))]
+    #[pyo3(signature = (query, limit=5, metadata_filter=None))]
     fn search_local<'py>(
         &self,
         py: Python<'py>,
         query: String,
         limit: usize,
+        metadata_filter: Option<Py<PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let memory = self.inner.clone();
+        let filter = match metadata_filter {
+            Some(obj) => Some(py_to_json_value(obj.bind(py))?),
+            None => None,
+        };
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let results = memory
-                .search_local(&query, limit)
+                .search_local(&query, limit, filter.as_ref())
                 .await
                 .map_err(memory_err)?;
             let py_results: Vec<PyMemoryResult> = results

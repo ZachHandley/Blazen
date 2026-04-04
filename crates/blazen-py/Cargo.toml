@@ -19,6 +19,7 @@ blazen-events.workspace = true
 blazen-llm = { workspace = true, features = ["reqwest"] }
 blazen-memory.workspace = true
 blazen-memory-valkey.workspace = true
+blazen-prompts.workspace = true
 chrono.workspace = true
 pyo3 = { workspace = true, features = ["extension-module"] }
 pyo3-async-runtimes.workspace = true

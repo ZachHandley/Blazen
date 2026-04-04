@@ -5,7 +5,7 @@
 //! context state sharing, and macro integration.
 
 use std::any::Any;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use blazen_core::{
@@ -1352,4 +1352,103 @@ async fn test_pause_resume_via_json() {
     let result = resumed_handler.result().await.unwrap();
     let stop = result.downcast_ref::<StopEvent>().unwrap();
     assert_eq!(stop.result["done"], true);
+}
+
+// ===========================================================================
+// 14. Cross-step opaque object sharing
+// ===========================================================================
+
+#[tokio::test]
+async fn test_cross_step_object_sharing() {
+    // StartEvent -> obj_writer (stores Arc<Mutex<Vec<String>>>, pushes "step1")
+    //            -> StepAEvent
+    //            -> obj_reader (retrieves the same Arc, pushes "step2")
+    //            -> StopEvent
+    //
+    // After completion, the shared Vec should contain ["step1", "step2"].
+
+    let shared_log: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let log_for_writer = shared_log.clone();
+    let log_for_verification = shared_log.clone();
+
+    let obj_writer: StepRegistration = {
+        let handler: StepFn = Arc::new(move |event: Box<dyn AnyEvent>, ctx: Context| {
+            let log = log_for_writer.clone();
+            Box::pin(async move {
+                let _start = event
+                    .as_any()
+                    .downcast_ref::<StartEvent>()
+                    .ok_or(WorkflowError::EventDowncastFailed {
+                        expected: StartEvent::event_type(),
+                        got: event.event_type_id().to_string(),
+                    })?
+                    .clone();
+
+                // Store the live object in the context.
+                ctx.set_object("log", log.clone()).await;
+
+                // Push a value from step 1.
+                log.lock().unwrap().push("step1".to_string());
+
+                Ok(StepOutput::Single(Box::new(StepAEvent { value: 1 })))
+            })
+        });
+
+        StepRegistration {
+            name: "obj_writer".to_string(),
+            accepts: vec![StartEvent::event_type()],
+            emits: vec![StepAEvent::event_type()],
+            handler,
+            max_concurrency: 1,
+        }
+    };
+
+    let obj_reader: StepRegistration = {
+        let handler: StepFn = Arc::new(|_event: Box<dyn AnyEvent>, ctx: Context| {
+            Box::pin(async move {
+                // Retrieve the same live object from the context.
+                let log = ctx
+                    .get_object::<Arc<Mutex<Vec<String>>>>("log")
+                    .await
+                    .expect("shared log object should be present in context");
+
+                // Push a value from step 2.
+                log.lock().unwrap().push("step2".to_string());
+
+                Ok(StepOutput::Single(Box::new(StopEvent {
+                    result: serde_json::json!({"done": true}),
+                })))
+            })
+        });
+
+        StepRegistration {
+            name: "obj_reader".to_string(),
+            accepts: vec![StepAEvent::event_type()],
+            emits: vec![StopEvent::event_type()],
+            handler,
+            max_concurrency: 1,
+        }
+    };
+
+    let workflow = WorkflowBuilder::new("cross-step-object-sharing")
+        .step(obj_writer)
+        .step(obj_reader)
+        .build()
+        .unwrap();
+
+    let handler = workflow
+        .run(serde_json::json!({"trigger": true}))
+        .await
+        .unwrap();
+    let result = handler.result().await.unwrap();
+    let stop = result.downcast_ref::<StopEvent>().unwrap();
+    assert_eq!(stop.result["done"], true);
+
+    // Verify the shared object contains entries from both steps.
+    let final_log = log_for_verification.lock().unwrap();
+    assert_eq!(
+        *final_log,
+        vec!["step1".to_string(), "step2".to_string()],
+        "expected both steps to have written to the shared object"
+    );
 }

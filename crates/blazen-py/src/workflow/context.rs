@@ -65,8 +65,11 @@ impl PyContext {
         let inner = self.inner.clone();
         let key = key.to_string();
 
-        if let Ok(bytes) = value.extract::<Vec<u8>>() {
+        if value.is_instance_of::<pyo3::types::PyBytes>()
+            || value.is_instance_of::<pyo3::types::PyByteArray>()
+        {
             // Tier 1: bytes/bytearray → Bytes variant
+            let bytes: Vec<u8> = value.extract()?;
             block_on_context(async { inner.set_bytes(&key, bytes).await });
         } else if let Ok(json_val) = super::event::try_py_to_json(py, value) {
             // Tier 2: JSON-serializable → Json variant

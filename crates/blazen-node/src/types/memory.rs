@@ -340,12 +340,19 @@ impl JsMemory {
     ///
     /// @param query - The search query text.
     /// @param limit - Maximum number of results (default: 10).
+    /// @param `metadata_filter` - Optional JSON object to filter results. Only
+    ///   entries whose metadata is a superset of the filter are returned.
     #[napi]
-    pub async fn search(&self, query: String, limit: Option<u32>) -> Result<Vec<JsMemoryResult>> {
+    pub async fn search(
+        &self,
+        query: String,
+        limit: Option<u32>,
+        metadata_filter: Option<serde_json::Value>,
+    ) -> Result<Vec<JsMemoryResult>> {
         let limit = limit.unwrap_or(10) as usize;
         let results = self
             .inner
-            .search(&query, limit)
+            .search(&query, limit, metadata_filter.as_ref())
             .await
             .map_err(to_napi_error)?;
 
@@ -366,16 +373,19 @@ impl JsMemory {
     ///
     /// @param query - The search query text.
     /// @param limit - Maximum number of results (default: 10).
+    /// @param `metadata_filter` - Optional JSON object to filter results. Only
+    ///   entries whose metadata is a superset of the filter are returned.
     #[napi]
     pub async fn search_local(
         &self,
         query: String,
         limit: Option<u32>,
+        metadata_filter: Option<serde_json::Value>,
     ) -> Result<Vec<JsMemoryResult>> {
         let limit = limit.unwrap_or(10) as usize;
         let results = self
             .inner
-            .search_local(&query, limit)
+            .search_local(&query, limit, metadata_filter.as_ref())
             .await
             .map_err(to_napi_error)?;
 
