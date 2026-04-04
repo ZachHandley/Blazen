@@ -521,6 +521,41 @@ class CompletionResponse:
     def keys(self) -> list[str]: ...
 
 
+class CompletionOptions:
+    """Options for a chat completion request.
+
+    All fields are optional. Pass an instance to ``CompletionModel.complete()``
+    or ``CompletionModel.stream()`` to customise the request::
+
+        opts = CompletionOptions(temperature=0.7, max_tokens=1024)
+        response = await model.complete(messages, opts)
+    """
+
+    temperature: Optional[float]
+    """Sampling temperature (0.0-2.0)."""
+    max_tokens: Optional[int]
+    """Maximum tokens to generate."""
+    top_p: Optional[float]
+    """Nucleus sampling parameter (0.0-1.0)."""
+    model: Optional[str]
+    """Model override for this request."""
+    tools: Optional[Any]
+    """Tool definitions for function calling. Each tool is a dict with
+    ``name``, ``description``, and ``parameters`` keys."""
+    response_format: Optional[dict[str, Any]]
+    """JSON schema dict for structured output."""
+
+    def __init__(
+        self,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        top_p: Optional[float] = None,
+        model: Optional[str] = None,
+        tools: Optional[Any] = None,
+        response_format: Optional[dict[str, Any]] = None,
+    ) -> None: ...
+
+
 class CompletionModel:
     """A chat completion model with provider constructors.
 
@@ -571,12 +606,13 @@ class CompletionModel:
     async def complete(
         self,
         messages: list[ChatMessage],
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        model: Optional[str] = None,
-        response_format: Optional[dict[str, Any]] = None,
+        options: Optional[CompletionOptions] = None,
     ) -> CompletionResponse:
         """Perform a chat completion.
+
+        Args:
+            messages: A list of ChatMessage objects.
+            options: Optional CompletionOptions to customise the request.
 
         Returns a CompletionResponse with attributes: ``content``, ``model``,
         ``tool_calls``, ``usage``, ``finish_reason``.
@@ -587,10 +623,7 @@ class CompletionModel:
         self,
         messages: list[ChatMessage],
         on_chunk: Callable[[dict[str, Any]], Any],
-        *,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        model: Optional[str] = None,
+        options: Optional[CompletionOptions] = None,
     ) -> None:
         """Stream a chat completion, calling ``on_chunk`` for each chunk.
 

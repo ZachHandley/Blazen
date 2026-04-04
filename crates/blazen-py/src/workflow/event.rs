@@ -277,7 +277,7 @@ pub fn dict_to_json(dict: &Bound<'_, PyDict>) -> PyResult<serde_json::Value> {
     let py = dict.py();
     let mut map = serde_json::Map::new();
     for (key, value) in dict.iter() {
-        let key_str: String = key.extract()?;
+        let key_str: String = key.str()?.extract()?;
         let json_val = py_to_json(py, &value)?;
         map.insert(key_str, json_val);
     }
@@ -290,7 +290,7 @@ fn try_dict_to_json(dict: &Bound<'_, PyDict>) -> PyResult<serde_json::Value> {
     let py = dict.py();
     let mut map = serde_json::Map::new();
     for (key, value) in dict.iter() {
-        let key_str: String = key.extract()?;
+        let key_str: String = key.str()?.extract()?;
         let json_val = try_py_to_json(py, &value)?;
         map.insert(key_str, json_val);
     }
