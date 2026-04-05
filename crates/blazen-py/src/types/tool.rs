@@ -29,7 +29,7 @@ impl PyToolCall {
 
     #[getter]
     fn arguments(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        crate::workflow::event::json_to_py(py, &self.inner.arguments)
+        crate::convert::json_to_py(py, &self.inner.arguments)
     }
 
     fn __getitem__(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
@@ -42,7 +42,7 @@ impl PyToolCall {
                 .into_pyobject(py)?
                 .into_any()
                 .unbind()),
-            "arguments" => crate::workflow::event::json_to_py(py, &self.inner.arguments),
+            "arguments" => crate::convert::json_to_py(py, &self.inner.arguments),
             _ => Err(pyo3::exceptions::PyKeyError::new_err(key.to_owned())),
         }
     }

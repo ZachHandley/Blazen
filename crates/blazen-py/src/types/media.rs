@@ -129,7 +129,7 @@ impl PyMediaOutput {
     /// Provider-specific metadata as a dict.
     #[getter]
     fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        crate::workflow::event::json_to_py(py, &self.inner.metadata)
+        crate::convert::json_to_py(py, &self.inner.metadata)
     }
 
     fn __getitem__(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
@@ -155,7 +155,7 @@ impl PyMediaOutput {
                 .into_any()
                 .unbind()),
             "file_size" => Ok(self.inner.file_size.into_pyobject(py)?.into_any().unbind()),
-            "metadata" => crate::workflow::event::json_to_py(py, &self.inner.metadata),
+            "metadata" => crate::convert::json_to_py(py, &self.inner.metadata),
             _ => Err(pyo3::exceptions::PyKeyError::new_err(key.to_owned())),
         }
     }
@@ -213,7 +213,7 @@ impl PyGeneratedImage {
             "media" => {
                 let json = serde_json::to_value(&self.inner.media)
                     .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-                crate::workflow::event::json_to_py(py, &json)
+                crate::convert::json_to_py(py, &json)
             }
             _ => Err(pyo3::exceptions::PyKeyError::new_err(key.to_owned())),
         }
@@ -285,7 +285,7 @@ impl PyGeneratedVideo {
             "media" => {
                 let json = serde_json::to_value(&self.inner.media)
                     .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-                crate::workflow::event::json_to_py(py, &json)
+                crate::convert::json_to_py(py, &json)
             }
             _ => Err(pyo3::exceptions::PyKeyError::new_err(key.to_owned())),
         }
@@ -356,7 +356,7 @@ impl PyGeneratedAudio {
             "media" => {
                 let json = serde_json::to_value(&self.inner.media)
                     .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-                crate::workflow::event::json_to_py(py, &json)
+                crate::convert::json_to_py(py, &json)
             }
             _ => Err(pyo3::exceptions::PyKeyError::new_err(key.to_owned())),
         }
@@ -440,7 +440,7 @@ impl PyGenerated3DModel {
             "media" => {
                 let json = serde_json::to_value(&self.inner.media)
                     .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-                crate::workflow::event::json_to_py(py, &json)
+                crate::convert::json_to_py(py, &json)
             }
             _ => Err(pyo3::exceptions::PyKeyError::new_err(key.to_owned())),
         }

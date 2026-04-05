@@ -115,8 +115,12 @@ pub enum FalExecutionMode {
 
 /// A fal.ai compute platform provider.
 ///
-/// For LLM usage, this provider uses the `fal-ai/any-llm` model which
-/// proxies through `OpenRouter` and accepts a simple prompt-based format.
+/// By default the endpoint is set to the same value as the LLM model
+/// (e.g. `"anthropic/claude-sonnet-4.5"`). Use [`with_endpoint`](Self::with_endpoint)
+/// to explicitly override the endpoint (e.g. to `"fal-ai/any-llm"` for
+/// `OpenRouter` proxying). When the endpoint has not been explicitly set,
+/// calling [`with_llm_model`](Self::with_llm_model) updates both the model
+/// and the endpoint.
 ///
 /// For compute usage, this provider implements [`ComputeProvider`] with
 /// queue-based job submission, status polling, and result retrieval.
@@ -128,6 +132,7 @@ pub enum FalExecutionMode {
 /// ```rust,no_run
 /// use blazen_llm::providers::fal::FalProvider;
 ///
+/// // Use fal-ai/any-llm proxy explicitly:
 /// let provider = FalProvider::new("fal-key-...")
 ///     .with_endpoint("fal-ai/any-llm");
 /// ```
@@ -135,6 +140,9 @@ pub struct FalProvider {
     client: Arc<dyn HttpClient>,
     api_key: String,
     endpoint: String,
+    /// Whether `endpoint` was explicitly set by the user via [`with_endpoint`].
+    /// When `false`, changing the `llm_model` also updates `endpoint`.
+    endpoint_explicit: bool,
     /// The underlying LLM model to use when proxying through `fal-ai/any-llm`.
     llm_model: String,
     execution_mode: FalExecutionMode,
@@ -146,6 +154,7 @@ impl std::fmt::Debug for FalProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FalProvider")
             .field("endpoint", &self.endpoint)
+            .field("endpoint_explicit", &self.endpoint_explicit)
             .field("llm_model", &self.llm_model)
             .field("execution_mode", &self.execution_mode)
             .finish_non_exhaustive()
@@ -158,6 +167,7 @@ impl Clone for FalProvider {
             client: Arc::clone(&self.client),
             api_key: self.api_key.clone(),
             endpoint: self.endpoint.clone(),
+            endpoint_explicit: self.endpoint_explicit,
             llm_model: self.llm_model.clone(),
             execution_mode: self.execution_mode.clone(),
             base_queue_url: self.base_queue_url.clone(),
@@ -177,7 +187,8 @@ impl FalProvider {
         Self {
             client: crate::default_http_client(),
             api_key: api_key.into(),
-            endpoint: "fal-ai/any-llm".to_owned(),
+            endpoint: "anthropic/claude-sonnet-4.5".to_owned(),
+            endpoint_explicit: false,
             llm_model: "anthropic/claude-sonnet-4.5".to_owned(),
             execution_mode: FalExecutionMode::Queue {
                 poll_interval: DEFAULT_POLL_INTERVAL,
@@ -193,7 +204,8 @@ impl FalProvider {
         Self {
             client,
             api_key: api_key.into(),
-            endpoint: "fal-ai/any-llm".to_owned(),
+            endpoint: "anthropic/claude-sonnet-4.5".to_owned(),
+            endpoint_explicit: false,
             llm_model: "anthropic/claude-sonnet-4.5".to_owned(),
             execution_mode: FalExecutionMode::Queue {
                 poll_interval: DEFAULT_POLL_INTERVAL,
@@ -207,6 +219,7 @@ impl FalProvider {
     #[must_use]
     pub fn with_endpoint(mut self, endpoint: impl Into<String>) -> Self {
         self.endpoint = endpoint.into();
+        self.endpoint_explicit = true;
         self
     }
 
@@ -224,13 +237,20 @@ impl FalProvider {
         self
     }
 
-    /// Set the underlying LLM model used by `fal-ai/any-llm`.
+    /// Set the underlying LLM model.
     ///
     /// This is the model name passed in the request body (e.g.
     /// `"anthropic/claude-sonnet-4.5"`, `"openai/gpt-4o"`).
+    ///
+    /// When the endpoint has not been explicitly set via [`with_endpoint`],
+    /// changing the model also updates the endpoint to match.
     #[must_use]
     pub fn with_llm_model(mut self, model: impl Into<String>) -> Self {
-        self.llm_model = model.into();
+        let model = model.into();
+        if !self.endpoint_explicit {
+            self.endpoint.clone_from(&model);
+        }
+        self.llm_model = model;
         self
     }
 
@@ -1706,7 +1726,8 @@ mod tests {
     #[test]
     fn default_config() {
         let provider = FalProvider::new("fal-test");
-        assert_eq!(provider.endpoint, "fal-ai/any-llm");
+        assert_eq!(provider.endpoint, "anthropic/claude-sonnet-4.5");
+        assert!(!provider.endpoint_explicit);
         assert_eq!(provider.llm_model, "anthropic/claude-sonnet-4.5");
         assert!(matches!(
             provider.execution_mode,
@@ -1718,6 +1739,7 @@ mod tests {
     fn with_endpoint_override() {
         let provider = FalProvider::new("fal-test").with_endpoint("fal-ai/fast-sdxl");
         assert_eq!(provider.endpoint, "fal-ai/fast-sdxl");
+        assert!(provider.endpoint_explicit);
     }
 
     #[test]
@@ -1731,12 +1753,27 @@ mod tests {
     fn with_model_deprecated_alias() {
         let provider = FalProvider::new("fal-test").with_model("fal-ai/fast-sdxl");
         assert_eq!(provider.endpoint, "fal-ai/fast-sdxl");
+        assert!(provider.endpoint_explicit);
     }
 
     #[test]
     fn with_llm_model_override() {
         let provider = FalProvider::new("fal-test").with_llm_model("openai/gpt-4o");
         assert_eq!(provider.llm_model, "openai/gpt-4o");
+        // Endpoint should follow llm_model when not explicitly set.
+        assert_eq!(provider.endpoint, "openai/gpt-4o");
+        assert!(!provider.endpoint_explicit);
+    }
+
+    #[test]
+    fn with_llm_model_does_not_override_explicit_endpoint() {
+        let provider = FalProvider::new("fal-test")
+            .with_endpoint("fal-ai/any-llm")
+            .with_llm_model("openai/gpt-4o");
+        assert_eq!(provider.llm_model, "openai/gpt-4o");
+        // Endpoint was explicitly set, so it should NOT change.
+        assert_eq!(provider.endpoint, "fal-ai/any-llm");
+        assert!(provider.endpoint_explicit);
     }
 
     #[test]

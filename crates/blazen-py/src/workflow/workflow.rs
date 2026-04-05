@@ -8,9 +8,9 @@ use pyo3::types::PyDict;
 
 use blazen_core::snapshot::WorkflowSnapshot;
 
-use super::event::dict_to_json;
 use super::handler::PyWorkflowHandler;
 use super::step::PyStepWrapper;
+use crate::convert::dict_to_json;
 use crate::error::{BlazenPyError, to_py_result};
 
 /// A validated, ready-to-run workflow.

@@ -70,24 +70,24 @@ impl PyCompletionResponse {
     #[getter]
     fn images(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let val = serde_json::to_value(&self.inner.images).unwrap_or_default();
-        crate::workflow::event::json_to_py(py, &val)
+        crate::convert::json_to_py(py, &val)
     }
 
     #[getter]
     fn audio(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let val = serde_json::to_value(&self.inner.audio).unwrap_or_default();
-        crate::workflow::event::json_to_py(py, &val)
+        crate::convert::json_to_py(py, &val)
     }
 
     #[getter]
     fn videos(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let val = serde_json::to_value(&self.inner.videos).unwrap_or_default();
-        crate::workflow::event::json_to_py(py, &val)
+        crate::convert::json_to_py(py, &val)
     }
 
     #[getter]
     fn metadata_extra(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        crate::workflow::event::json_to_py(py, &self.inner.metadata)
+        crate::convert::json_to_py(py, &self.inner.metadata)
     }
 
     fn __getitem__(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
@@ -121,7 +121,7 @@ impl PyCompletionResponse {
                         })
                     })
                     .collect();
-                crate::workflow::event::json_to_py(py, &serde_json::Value::Array(tool_calls))
+                crate::convert::json_to_py(py, &serde_json::Value::Array(tool_calls))
             }
             "usage" => {
                 if let Some(usage) = &self.inner.usage {
@@ -130,7 +130,7 @@ impl PyCompletionResponse {
                         "completion_tokens": usage.completion_tokens,
                         "total_tokens": usage.total_tokens,
                     });
-                    crate::workflow::event::json_to_py(py, &val)
+                    crate::convert::json_to_py(py, &val)
                 } else {
                     Ok(py.None())
                 }
@@ -146,23 +146,23 @@ impl PyCompletionResponse {
                         "execution_ms": t.execution_ms,
                         "total_ms": t.total_ms,
                     });
-                    crate::workflow::event::json_to_py(py, &val)
+                    crate::convert::json_to_py(py, &val)
                 }
                 None => Ok(py.None()),
             },
             "images" => {
                 let val = serde_json::to_value(&self.inner.images).unwrap_or_default();
-                crate::workflow::event::json_to_py(py, &val)
+                crate::convert::json_to_py(py, &val)
             }
             "audio" => {
                 let val = serde_json::to_value(&self.inner.audio).unwrap_or_default();
-                crate::workflow::event::json_to_py(py, &val)
+                crate::convert::json_to_py(py, &val)
             }
             "videos" => {
                 let val = serde_json::to_value(&self.inner.videos).unwrap_or_default();
-                crate::workflow::event::json_to_py(py, &val)
+                crate::convert::json_to_py(py, &val)
             }
-            "metadata" => crate::workflow::event::json_to_py(py, &self.inner.metadata),
+            "metadata" => crate::convert::json_to_py(py, &self.inner.metadata),
             _ => Err(pyo3::exceptions::PyKeyError::new_err(key.to_owned())),
         }
     }

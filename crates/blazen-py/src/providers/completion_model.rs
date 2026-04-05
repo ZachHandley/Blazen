@@ -610,7 +610,7 @@ fn build_request(
             request = request.with_tools(rust_tools);
         }
         if let Some(ref fmt) = opts.response_format {
-            let schema = crate::workflow::event::py_to_json(py, fmt.bind(py))?;
+            let schema = crate::convert::py_to_json(py, fmt.bind(py))?;
             request = request.with_response_format(schema);
         }
     }
@@ -627,7 +627,7 @@ fn extract_tool_definitions(
     for tool in tool_list {
         let name: String = tool.get_item("name")?.extract()?;
         let description: String = tool.get_item("description")?.extract()?;
-        let parameters = crate::workflow::event::py_to_json(py, &tool.get_item("parameters")?)?;
+        let parameters = crate::convert::py_to_json(py, &tool.get_item("parameters")?)?;
         rust_tools.push(ToolDefinition {
             name,
             description,

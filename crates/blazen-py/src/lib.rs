@@ -28,6 +28,8 @@
 //!     print(result.to_dict())
 //! ```
 
+pub(crate) mod convert;
+
 pub mod agent;
 pub mod compute;
 pub mod error;

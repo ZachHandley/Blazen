@@ -21,9 +21,9 @@ use crate::compute::{
     PyImageRequest, PyMusicRequest, PySpeechRequest, PyTranscriptionRequest, PyUpscaleRequest,
     PyVideoRequest,
 };
+use crate::convert::JsonValue;
 use crate::error::blazen_error_to_pyerr;
 use crate::types::{PyChatMessage, PyCompletionResponse};
-use crate::workflow::event::JsonValue;
 
 // ---------------------------------------------------------------------------
 // PyFalProvider
@@ -299,7 +299,7 @@ impl PyFalProvider {
         model: String,
         input: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let input_json = crate::workflow::event::py_to_json(py, input)?;
+        let input_json = crate::convert::py_to_json(py, input)?;
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let request = ComputeRequest {
@@ -331,7 +331,7 @@ impl PyFalProvider {
         model: String,
         input: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let input_json = crate::workflow::event::py_to_json(py, input)?;
+        let input_json = crate::convert::py_to_json(py, input)?;
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let request = ComputeRequest {
@@ -450,7 +450,7 @@ impl PyFalProvider {
             request = request.with_model(m);
         }
         if let Some(fmt) = response_format {
-            let schema = crate::workflow::event::py_to_json(py, fmt)?;
+            let schema = crate::convert::py_to_json(py, fmt)?;
             request = request.with_response_format(schema);
         }
 
@@ -515,7 +515,7 @@ impl PyFalProvider {
 
                         tokio::task::block_in_place(|| {
                             Python::attach(|py| {
-                                let py_val = crate::workflow::event::json_to_py(py, &chunk_json)?;
+                                let py_val = crate::convert::json_to_py(py, &chunk_json)?;
                                 on_chunk.call1(py, (py_val,))?;
                                 Ok::<_, PyErr>(())
                             })

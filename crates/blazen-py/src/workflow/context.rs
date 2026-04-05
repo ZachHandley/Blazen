@@ -71,7 +71,7 @@ impl PyContext {
             // Tier 1: bytes/bytearray → Bytes variant
             let bytes: Vec<u8> = value.extract()?;
             block_on_context(async { inner.set_bytes(&key, bytes).await });
-        } else if let Ok(json_val) = super::event::try_py_to_json(py, value) {
+        } else if let Ok(json_val) = crate::convert::try_py_to_json(py, value) {
             // Tier 2: JSON-serializable → Json variant
             block_on_context(async { inner.set(&key, json_val).await });
         } else {
@@ -121,7 +121,7 @@ impl PyContext {
         let key_owned = key.to_string();
         let val = block_on_context(async { inner.get_value(&key_owned).await });
         match val {
-            Some(blazen_core::StateValue::Json(v)) => super::event::json_to_py(py, &v),
+            Some(blazen_core::StateValue::Json(v)) => crate::convert::json_to_py(py, &v),
             Some(blazen_core::StateValue::Bytes(b)) => {
                 Ok(pyo3::types::PyBytes::new(py, &b.0).into_any().unbind())
             }

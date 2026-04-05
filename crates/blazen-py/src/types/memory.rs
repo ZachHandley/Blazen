@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::PyDict;
 
 use blazen_memory::store::MemoryBackend;
 use blazen_memory::types::{MemoryEntry, MemoryResult};
@@ -203,7 +203,7 @@ impl PyMemoryResult {
     /// Arbitrary user metadata (returned as a Python dict/value).
     #[getter]
     fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        json_value_to_py(py, &self.inner.metadata)
+        crate::convert::json_to_py(py, &self.inner.metadata)
     }
 
     fn __repr__(&self) -> String {
@@ -289,7 +289,7 @@ impl PyMemory {
     ) -> PyResult<Bound<'py, PyAny>> {
         let memory = self.inner.clone();
         let meta = match metadata {
-            Some(obj) => py_to_json_value(obj.bind(py))?,
+            Some(obj) => crate::convert::py_to_json(py, obj.bind(py))?,
             None => serde_json::Value::Null,
         };
 
@@ -339,7 +339,7 @@ impl PyMemory {
 
             let metadata = dict
                 .get_item("metadata")?
-                .map(|v| py_to_json_value(&v))
+                .map(|v| crate::convert::py_to_json(py, &v))
                 .transpose()?
                 .unwrap_or(serde_json::Value::Null);
 
@@ -376,7 +376,7 @@ impl PyMemory {
     ) -> PyResult<Bound<'py, PyAny>> {
         let memory = self.inner.clone();
         let filter = match metadata_filter {
-            Some(obj) => Some(py_to_json_value(obj.bind(py))?),
+            Some(obj) => Some(crate::convert::py_to_json(py, obj.bind(py))?),
             None => None,
         };
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
@@ -416,7 +416,7 @@ impl PyMemory {
     ) -> PyResult<Bound<'py, PyAny>> {
         let memory = self.inner.clone();
         let filter = match metadata_filter {
-            Some(obj) => Some(py_to_json_value(obj.bind(py))?),
+            Some(obj) => Some(crate::convert::py_to_json(py, obj.bind(py))?),
             None => None,
         };
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
@@ -449,7 +449,7 @@ impl PyMemory {
                         let dict = PyDict::new(py);
                         dict.set_item("id", &e.id)?;
                         dict.set_item("text", &e.text)?;
-                        dict.set_item("metadata", json_value_to_py(py, &e.metadata)?)?;
+                        dict.set_item("metadata", crate::convert::json_to_py(py, &e.metadata)?)?;
                         Ok(dict.unbind().into_any())
                     })
                     .ok_or_else(|| {
@@ -494,79 +494,6 @@ impl PyMemory {
     fn __repr__(&self) -> &'static str {
         "Memory(...)"
     }
-}
-
-// ---------------------------------------------------------------------------
-// Conversion helpers
-// ---------------------------------------------------------------------------
-
-/// Convert a `serde_json::Value` to a Python object.
-fn json_value_to_py(py: Python<'_>, val: &serde_json::Value) -> PyResult<Py<PyAny>> {
-    match val {
-        serde_json::Value::Null => Ok(py.None()),
-        serde_json::Value::Bool(b) => Ok(b.into_pyobject(py)?.to_owned().into_any().unbind()),
-        serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                Ok(i.into_pyobject(py)?.into_any().unbind())
-            } else if let Some(f) = n.as_f64() {
-                Ok(f.into_pyobject(py)?.into_any().unbind())
-            } else {
-                Ok(py.None())
-            }
-        }
-        serde_json::Value::String(s) => Ok(s.into_pyobject(py)?.into_any().unbind()),
-        serde_json::Value::Array(arr) => {
-            let list = PyList::empty(py);
-            for item in arr {
-                list.append(json_value_to_py(py, item)?)?;
-            }
-            Ok(list.into_pyobject(py)?.into_any().unbind())
-        }
-        serde_json::Value::Object(map) => {
-            let dict = PyDict::new(py);
-            for (k, v) in map {
-                dict.set_item(k, json_value_to_py(py, v)?)?;
-            }
-            Ok(dict.into_pyobject(py)?.into_any().unbind())
-        }
-    }
-}
-
-/// Convert a Python object to a `serde_json::Value`.
-fn py_to_json_value(obj: &Bound<'_, PyAny>) -> PyResult<serde_json::Value> {
-    if obj.is_none() {
-        return Ok(serde_json::Value::Null);
-    }
-    if let Ok(b) = obj.extract::<bool>() {
-        return Ok(serde_json::Value::Bool(b));
-    }
-    if let Ok(i) = obj.extract::<i64>() {
-        return Ok(serde_json::json!(i));
-    }
-    if let Ok(f) = obj.extract::<f64>() {
-        return Ok(serde_json::json!(f));
-    }
-    if let Ok(s) = obj.extract::<String>() {
-        return Ok(serde_json::Value::String(s));
-    }
-    if let Ok(list) = obj.cast::<PyList>() {
-        let mut arr = Vec::new();
-        for item in list.iter() {
-            arr.push(py_to_json_value(&item)?);
-        }
-        return Ok(serde_json::Value::Array(arr));
-    }
-    if let Ok(dict) = obj.cast::<PyDict>() {
-        let mut map = serde_json::Map::new();
-        for (k, v) in dict.iter() {
-            let key: String = k.extract()?;
-            map.insert(key, py_to_json_value(&v)?);
-        }
-        return Ok(serde_json::Value::Object(map));
-    }
-    // Fallback: try to convert via str representation.
-    let s: String = obj.str()?.extract()?;
-    Ok(serde_json::Value::String(s))
 }
 
 /// Truncate text for display purposes.

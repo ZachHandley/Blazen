@@ -127,7 +127,7 @@ impl PyComputeRequest {
     #[new]
     #[pyo3(signature = (*, model, input))]
     fn new(py: Python<'_>, model: &str, input: &Bound<'_, PyAny>) -> PyResult<Self> {
-        let input_json = crate::workflow::event::py_to_json(py, input)?;
+        let input_json = crate::convert::py_to_json(py, input)?;
         Ok(Self {
             inner: compute_types::ComputeRequest {
                 model: model.to_owned(),
@@ -144,7 +144,7 @@ impl PyComputeRequest {
 
     #[getter]
     fn input(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        crate::workflow::event::json_to_py(py, &self.inner.input)
+        crate::convert::json_to_py(py, &self.inner.input)
     }
 
     fn __repr__(&self) -> String {

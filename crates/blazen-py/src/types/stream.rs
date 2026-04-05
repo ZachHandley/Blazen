@@ -76,7 +76,7 @@ impl PyStreamChunk {
                         })
                     })
                     .collect();
-                crate::workflow::event::json_to_py(py, &serde_json::Value::Array(tool_calls))
+                crate::convert::json_to_py(py, &serde_json::Value::Array(tool_calls))
             }
             _ => Err(pyo3::exceptions::PyKeyError::new_err(key.to_owned())),
         }
