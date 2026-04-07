@@ -134,12 +134,24 @@ fn main() {
 // Data types
 // ---------------------------------------------------------------------------
 
+/// Tracks `#[serde(default)]` vs `#[serde(default = "func")]`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum SerdeDefault {
+    /// No `#[serde(default)]` attribute.
+    None,
+    /// `#[serde(default)]` (uses `Default::default()`).
+    Default,
+    /// `#[serde(default = "some_func")]`.
+    Func(String),
+}
+
 /// A raw field as parsed from the source, before flatten resolution.
 #[derive(Clone, Debug)]
 struct RawField {
     name: String,
     ty: FieldType,
     is_flatten: bool,
+    serde_default: SerdeDefault,
 }
 
 /// A flat field for the napi mirror struct (flattens already resolved).
@@ -147,6 +159,7 @@ struct RawField {
 struct FlatField {
     name: String,
     ty: FieldType,
+    serde_default: SerdeDefault,
 }
 
 #[derive(Clone, Debug)]
@@ -238,15 +251,43 @@ fn extract_raw_fields(fields: &Fields) -> Vec<RawField> {
                 let name = f.ident.as_ref().unwrap().to_string();
                 let ty = parse_type(&f.ty);
                 let is_flatten = has_flatten_attr(&f.attrs);
+                let serde_default = parse_serde_default(&f.attrs);
                 RawField {
                     name,
                     ty,
                     is_flatten,
+                    serde_default,
                 }
             })
             .collect(),
         _ => Vec::new(),
     }
+}
+
+/// Check for `#[serde(default)]` or `#[serde(default = "func_name")]`.
+fn parse_serde_default(attrs: &[Attribute]) -> SerdeDefault {
+    for attr in attrs {
+        if attr.path().is_ident("serde") {
+            let mut result = SerdeDefault::None;
+            let _ = attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("default") {
+                    if let Ok(lit) = meta
+                        .value()
+                        .and_then(syn::parse::ParseBuffer::parse::<syn::LitStr>)
+                    {
+                        result = SerdeDefault::Func(lit.value());
+                    } else {
+                        result = SerdeDefault::Default;
+                    }
+                }
+                Ok(())
+            });
+            if result != SerdeDefault::None {
+                return result;
+            }
+        }
+    }
+    SerdeDefault::None
 }
 
 fn parse_type(ty: &Type) -> FieldType {
@@ -329,6 +370,7 @@ fn resolve_flat_fields(
             result.push(FlatField {
                 name: field.name.clone(),
                 ty: field.ty.clone(),
+                serde_default: field.serde_default.clone(),
             });
         }
     }
@@ -479,6 +521,12 @@ fn napi_to_core(ft: &FieldType, expr: TokenStream) -> TokenStream {
 // Struct mirror generation
 // ---------------------------------------------------------------------------
 
+/// Returns `true` when a serde-defaulted field needs wrapping in `Option` for napi.
+/// Fields that are already `Option<T>` do not need wrapping.
+fn needs_option_wrap(f: &FlatField) -> bool {
+    f.serde_default != SerdeDefault::None && !matches!(f.ty, FieldType::Option(_))
+}
+
 fn gen_struct_mirror(name: &str, flat_fields: &[FlatField]) -> TokenStream {
     let js_name = format_ident!("Js{name}");
 
@@ -486,7 +534,13 @@ fn gen_struct_mirror(name: &str, flat_fields: &[FlatField]) -> TokenStream {
         .iter()
         .map(|f| {
             let field_ident = format_ident!("{}", f.name);
-            let field_ty = napi_type_tokens(&f.ty);
+            let base_ty = napi_type_tokens(&f.ty);
+            // Wrap in Option if the field has a serde default but is not already Optional.
+            let field_ty = if needs_option_wrap(f) {
+                quote! { Option<#base_ty> }
+            } else {
+                base_ty
+            };
 
             if needs_js_name(&f.name) {
                 let js_field_name = to_camel_case(&f.name);
@@ -571,7 +625,15 @@ fn gen_core_to_js_fields(
         }
         let field_ident = format_ident!("{}", field.name);
         let conv = core_to_napi(&field.ty, quote! { #access_prefix.#field_ident });
-        result.push(quote! { #field_ident: #conv, });
+        // Wrap in Some() when the napi mirror uses Option for a serde-defaulted field.
+        let wrap =
+            field.serde_default != SerdeDefault::None && !matches!(field.ty, FieldType::Option(_));
+        let rhs = if wrap {
+            quote! { Some(#conv) }
+        } else {
+            conv
+        };
+        result.push(quote! { #field_ident: #rhs, });
     }
     result
 }
@@ -599,10 +661,89 @@ fn gen_js_to_core_fields(
             });
             continue;
         }
+        // For serde-defaulted, non-Option fields we unwrap the JS Option with
+        // the matching default value.
+        if field.serde_default != SerdeDefault::None && !matches!(field.ty, FieldType::Option(_)) {
+            let unwrap_suffix = unwrap_suffix_tokens(&field.ty, &field.serde_default);
+            if is_identity_conversion(&field.ty) {
+                // No conversion needed -- just unwrap with the default.
+                result.push(quote! {
+                    #field_ident: val.#field_ident #unwrap_suffix,
+                });
+            } else {
+                let default_val = explicit_default_tokens(&field.ty, &field.serde_default);
+                let inner_conv = napi_to_core(&field.ty, quote! { __v });
+                result.push(quote! {
+                    #field_ident: val.#field_ident.map_or(#default_val, |__v| #inner_conv),
+                });
+            }
+            continue;
+        }
         let conv = napi_to_core(&field.ty, quote! { val.#field_ident });
         result.push(quote! { #field_ident: #conv, });
     }
     result
+}
+
+/// Returns `true` when `napi_to_core` for this type is an identity (no conversion).
+fn is_identity_conversion(ty: &FieldType) -> bool {
+    matches!(
+        ty,
+        FieldType::String
+            | FieldType::Bool
+            | FieldType::U32
+            | FieldType::I32
+            | FieldType::I64
+            | FieldType::F64
+            | FieldType::JsonValue
+    )
+}
+
+/// Produce the `.unwrap_or(...)` / `.unwrap_or_default()` suffix for a
+/// serde-defaulted field (identity-conversion path).
+fn unwrap_suffix_tokens(ty: &FieldType, sd: &SerdeDefault) -> TokenStream {
+    // Only `default_true` needs an explicit value; everything else can use
+    // `unwrap_or_default()` which clippy prefers.
+    match (ty, sd) {
+        (FieldType::Bool, SerdeDefault::Func(f)) if f == "default_true" => {
+            quote! { .unwrap_or(true) }
+        }
+        _ => quote! { .unwrap_or_default() },
+    }
+}
+
+/// Produce an explicit default-value expression for the `map_or` path
+/// (non-identity conversions).
+fn explicit_default_tokens(ty: &FieldType, sd: &SerdeDefault) -> TokenStream {
+    match (ty, sd) {
+        (FieldType::Bool, SerdeDefault::Func(f)) if f == "default_true" => quote! { true },
+        (FieldType::Bool, _) => quote! { false },
+        _ => {
+            let core_ty = core_field_type_tokens(ty);
+            quote! { <#core_ty as Default>::default() }
+        }
+    }
+}
+
+/// Tokens for the core Rust type (used in `map_or` default expressions).
+fn core_field_type_tokens(ft: &FieldType) -> TokenStream {
+    match ft {
+        FieldType::String => quote! { String },
+        FieldType::Bool => quote! { bool },
+        FieldType::U8 => quote! { u8 },
+        FieldType::U32 => quote! { u32 },
+        FieldType::U64 => quote! { u64 },
+        FieldType::I32 => quote! { i32 },
+        FieldType::I64 => quote! { i64 },
+        FieldType::F32 => quote! { f32 },
+        FieldType::F64 => quote! { f64 },
+        FieldType::Usize => quote! { usize },
+        FieldType::JsonValue => quote! { serde_json::Value },
+        _ => {
+            // Fallback -- use the napi representation.
+            napi_type_tokens(ft)
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -71,7 +71,7 @@ impl JsFalProvider {
             if let Some(base_url) = opts.base_url {
                 provider = provider.with_base_url(base_url);
             }
-            let enterprise = opts.enterprise;
+            let enterprise = opts.enterprise.unwrap_or(false);
             if let Some(ep) = opts.endpoint {
                 let kind: FalLlmEndpointKind = ep.into();
                 let endpoint = match kind {
@@ -85,7 +85,7 @@ impl JsFalProvider {
             } else if enterprise {
                 provider = provider.with_enterprise();
             }
-            provider = provider.with_auto_route_modality(opts.auto_route_modality);
+            provider = provider.with_auto_route_modality(opts.auto_route_modality.unwrap_or(true));
         }
         Self {
             inner: Arc::new(provider),
