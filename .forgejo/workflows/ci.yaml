@@ -66,10 +66,14 @@ jobs:
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
       - name: Workspace tests (unit + integration)
-        run: cargo nextest run --workspace --all-features
+        # Exclude blazen-py: it hardcodes pyo3/extension-module (so the
+        # wheel doesn't link libpython), which means cargo can't build a
+        # standalone Rust test binary for it. blazen-py is exhaustively
+        # tested by the test-python job below via uv + maturin.
+        run: cargo nextest run --workspace --all-features --exclude blazen-py
 
       - name: Workspace tests (doc tests)
-        run: cargo test --workspace --doc --all-features
+        run: cargo test --workspace --doc --all-features --exclude blazen-py
 
   test-python:
     name: Test Python Bindings

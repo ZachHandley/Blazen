@@ -81,8 +81,15 @@ wf.addStep("query", ["QueryEvent"], async (event: Record<string, any>, ctx: Cont
   };
 });
 
-const result: JsWorkflowResult = await wf.run({});
+async function main(): Promise<void> {
+  const result: JsWorkflowResult = await wf.run({});
 
-console.log("\nWorkflow finished!");
-console.log("  type:", result.type);
-console.log("  data:", JSON.stringify(result.data, null, 2));
+  console.log("\nWorkflow finished!");
+  console.log("  type:", result.type);
+  console.log("  data:", JSON.stringify(result.data, null, 2));
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
