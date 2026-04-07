@@ -53,6 +53,7 @@ asyncio.run(main())
 - **`@step` with no type hint or `ev: Event`** -- defaults to accepting `StartEvent` (the event emitted by `wf.run()`).
 - **`ev.name`** -- Direct attribute access on events. No need for `ev.to_dict()["name"]`.
 - **`wf.run(name="Blazen")`** -- Keyword arguments become the `StartEvent` payload. Steps that accept `StartEvent` receive an event where `ev.name == "Blazen"`.
+- **`result.result`** -- preserves `is`-identity for non-JSON Python objects. You can pass class instances, Pydantic models, and even live DB connections through `StopEvent.result` and get the *same* object back on the other side.
 
 ## Multi-Step Workflows
 
@@ -301,9 +302,20 @@ handler = await Workflow.resume(snapshot_json, [step1, step2])
 result = await handler.result()
 ```
 
+> **Note on `ctx.session` and pause/resume.** Values in `ctx.session` are live references and are deliberately **excluded** from snapshots. If you store live objects there and then call `handler.pause()`, the workflow's `session_pause_policy` decides what happens: the default (`pickle_or_error`) attempts to pickle each entry into the snapshot and raises a clear error if any entry can't be serialised. For workflows that explicitly want ephemeral runs, use `ctx.state` for anything that must survive pause/resume, and `ctx.session` for everything else.
+
 ## Context API
 
-Steps share state through the `Context` object. All values must be JSON-serializable (for `set`/`get`) or raw bytes (for `set_bytes`/`get_bytes`). Every method on `Context` is **synchronous** -- no `await` needed.
+Steps share state through the `Context` object. Every method on `Context` is **synchronous** -- no `await` needed.
+
+Values are stored using a 4-tier dispatch:
+
+1. `bytes` / `bytearray` -- raw binary (survives snapshots)
+2. JSON-serializable (`dict`, `list`, `str`, `int`, `float`, `bool`, `None`) -- JSON (survives snapshots)
+3. Picklable objects (Pydantic models, dataclasses, etc.) -- pickled automatically (survives snapshots)
+4. Unpicklable objects (DB connections, file handles, sockets) -- live in-process reference (same-process only, excluded from snapshots)
+
+`ctx.get` returns the original Python type for all four tiers.
 
 | Method | Description |
 |---|---|
@@ -325,6 +337,35 @@ async def example(ctx: Context, ev: Event):
     ctx.write_event_to_stream(SomeEvent(x=1))  # synchronous, broadcasts externally
     return None
 ```
+
+### State vs Session namespaces
+
+Alongside the smart-routing `ctx.set` / `ctx.get` shortcuts, `Context` exposes two explicit namespaces so you can make intent clear at the call site:
+
+- **`ctx.state`** -- persistable values (survives `pause()` / `resume()` and checkpoint stores). Routes through the same 4-tier dispatch as `ctx.set`.
+- **`ctx.session`** -- live in-process references. Identity is preserved within a single workflow run -- `ctx.session["conn"]` returns the *same* Python object across steps. Deliberately excluded from snapshots.
+
+```python
+import sqlite3
+from blazen import step, Context, StartEvent, StopEvent
+
+@step
+async def setup(ctx: Context, ev: StartEvent) -> StopEvent:
+    # Persistable JSON state
+    ctx.state["input_path"] = "data.csv"
+    ctx.state["row_count"] = 0
+
+    # Live in-process references -- identity preserved
+    conn = sqlite3.connect(":memory:")
+    ctx.session["db"] = conn
+
+    # Same object on every access
+    assert ctx.session["db"] is conn
+
+    return StopEvent(result={"ok": True})
+```
+
+Both namespaces support the dict protocol (`__setitem__`, `__getitem__`, `__contains__`, `keys`).
 
 ### Binary Storage
 
@@ -354,7 +395,7 @@ async def load_model(ctx: Context, ev: NextEvent):
 | `Event(event_type, **kwargs)` | Base event class. Subclass it: `class MyEvent(Event)` auto-sets `event_type` to class name. Direct attribute access: `ev.name`. Also has `ev.to_dict()` and `ev.event_type`. |
 | `StartEvent(**kwargs)` | Emitted by `wf.run(**kwargs)`. Steps with `ev: Event` or no annotation accept this. |
 | `StopEvent(**kwargs)` | Terminates the workflow. Access the result via `result.result`. |
-| `Context` | Shared key/value store. Methods: `set`, `get`, `set_bytes`, `get_bytes`, `send_event`, `write_event_to_stream`, `run_id`. All synchronous. |
+| `Context` | Shared typed storage, event emission, and stream publishing. Use `ctx.state` for persistable values, `ctx.session` for live in-process references. Smart-routing `ctx.set` / `ctx.get` shortcuts still work. Methods: `set`, `get`, `set_bytes`, `get_bytes`, `send_event`, `write_event_to_stream`, `run_id`. All synchronous. |
 | `@step` | Decorator for workflow steps. Infers `accepts` from the `ev` parameter type annotation. Supports `async def` and plain `def`. May also be called as `@step(accepts=[...], emits=[...], max_concurrency=N)`. |
 | `Workflow(name, steps, timeout=None)` | Validated workflow graph. `timeout` is in seconds (default: 300). |
 | `await wf.run(**kwargs)` | Execute the workflow. Returns a `WorkflowHandler`. Kwargs become the `StartEvent` payload. |

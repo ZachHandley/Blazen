@@ -5,26 +5,71 @@
 //! implementations that previously lived in `workflow::event` and
 //! `types::memory`.
 //!
-//! ## Pickle round-trip
+//! ## Auto-routing through the session-ref registry
 //!
 //! When [`py_to_json`] encounters a Python object that cannot be
-//! represented as JSON (e.g., a dataclass, a set, a custom class), it
-//! pickles the object and stores it as a tagged JSON object:
+//! represented as JSON (e.g., a dataclass, a Pydantic model, a DB
+//! connection, a lambda) **and** the call originates from inside a
+//! workflow step, the value is auto-routed into the per-`Context`
+//! [`SessionRefRegistry`](blazen_core::session_ref::SessionRefRegistry).
+//! The JSON payload carries only a marker:
 //!
 //! ```json
-//! {"__blazen_pickled__": "<base64-encoded pickle bytes>"}
+//! {"__blazen_session_ref__": "<uuid>"}
 //! ```
 //!
-//! [`json_to_py`] detects this tag and unpickles the object back,
-//! providing lossless round-trip for arbitrary Python values.
+//! [`json_to_py`] detects this marker, looks the UUID up in the
+//! currently-active registry (installed via
+//! [`crate::workflow::session_ref::CURRENT_SESSION_REGISTRY`]), and returns
+//! the **same** Python object that was originally inserted. Identity
+//! (`is`) is preserved within a single workflow run.
+//!
+//! Outside an active step, [`py_to_json`] raises a clear `PyTypeError`
+//! instead of silently stringifying the value.
+//!
+//! ## Pickle round-trip (legacy reader)
+//!
+//! Older snapshots may contain pickle-tagged objects of the form
+//! `{"__blazen_pickled__": "<b64>"}`. [`json_to_py`] still recognises
+//! this legacy tag and unpickles transparently for backward compat.
+//! Nothing in the current code path *writes* this tag through
+//! [`py_to_json`] anymore — the writer side is exercised only by
+//! [`crate::workflow::context::PyContext::set`]'s Tier-3 fallback,
+//! which stores pickled bytes as
+//! [`StateValue::Native`](blazen_core::StateValue::Native) (not as a
+//! tagged JSON object).
+
+use std::any::Any;
+use std::sync::Arc;
 
 use base64::Engine as _;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 use serde::Serialize;
 
-/// The JSON key used to tag pickle-serialized Python objects.
+use blazen_core::RegistryKey;
+use blazen_core::session_ref::SESSION_REF_TAG;
+
+use crate::workflow::session_ref::current_session_registry;
+
+/// The JSON key used to tag legacy pickle-serialized Python objects.
+/// Only the *reader* side is exercised today; nothing writes this tag
+/// through [`py_to_json`] anymore.
 const PICKLE_TAG: &str = "__blazen_pickled__";
+
+/// Run a future to completion, handling both inside-tokio and outside-tokio
+/// contexts. Uses `block_in_place` when called from a tokio worker thread
+/// (e.g. from within a step handler), and falls back to the
+/// `pyo3-async-runtimes` runtime otherwise.
+pub(crate) fn block_on_context<F: std::future::Future>(fut: F) -> F::Output {
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        // We're inside a tokio runtime -- use block_in_place to avoid panics
+        tokio::task::block_in_place(|| handle.block_on(fut))
+    } else {
+        // No tokio runtime on this thread -- use the pyo3 runtime
+        pyo3_async_runtimes::tokio::get_runtime().block_on(fut)
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Python -> JSON
@@ -107,13 +152,27 @@ pub(crate) fn try_py_to_json(
 /// Convert a Python object to a [`serde_json::Value`].
 ///
 /// Handles `None`, `bool`, `int`, `float`, `str`, `list`, `dict`, and
-/// `tuple` natively. For any other type, falls back to:
+/// `tuple` natively. For any other type, the value is **auto-routed**
+/// into the active session-ref registry (when called from inside a
+/// workflow step) and returned as a marker JSON object:
 ///
-/// 1. **Pickle + base64** -- produces `{"__blazen_pickled__": "<b64>"}`.
-///    This is lossless and allows [`json_to_py`] to reconstruct the
-///    original object.
-/// 2. **`__str__`** -- absolute last resort if pickle itself fails
-///    (should be extremely rare).
+/// ```json
+/// {"__blazen_session_ref__": "<uuid>"}
+/// ```
+///
+/// Identity is preserved: a subsequent [`json_to_py`] call resolving the
+/// same marker returns the *same* Python object via
+/// `Arc<Py<PyAny>>::clone_ref`. There is no longer any silent pickling
+/// or stringification — values that escape this function intact are
+/// either pure JSON or live registry handles.
+///
+/// # Errors
+///
+/// Returns `PyTypeError` if a non-JSON value is encountered while no
+/// session registry is installed (i.e. the call originates outside an
+/// active workflow step). The fix in that case is to construct the
+/// event inside a `@step`-decorated function or convert the value to a
+/// JSON-serializable form first.
 pub(crate) fn py_to_json(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<serde_json::Value> {
     // None
     if obj.is_none() {
@@ -164,17 +223,29 @@ pub(crate) fn py_to_json(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<ser
         return Ok(serde_json::Value::Array(arr));
     }
 
-    // Fallback: pickle -> base64 tagged JSON object
-    let pickle = py.import("pickle")?;
-    if let Ok(pickled) = pickle.call_method1("dumps", (obj,)) {
-        let bytes: Vec<u8> = pickled.extract()?;
-        let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-        Ok(serde_json::json!({PICKLE_TAG: b64}))
-    } else {
-        // Truly unserializable -- still use __str__ as absolute last resort
-        let repr = obj.str()?.to_string();
-        Ok(serde_json::Value::String(repr))
+    // Non-JSON value. Try the active session-ref registry first.
+    if let Some(reg) = current_session_registry() {
+        // Wrap the live Py<PyAny> in an Arc and store in the registry.
+        // Py<PyAny> is Send + Sync + 'static so the trait coercion to
+        // Arc<dyn Any + Send + Sync> is direct.
+        let live: Arc<dyn Any + Send + Sync> = Arc::new(obj.clone().unbind());
+        let key = block_on_context(async move { reg.insert_arc(live).await })
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        return Ok(serde_json::json!({ SESSION_REF_TAG: key.to_string() }));
     }
+
+    // Outside a workflow step → loud error. Never silently stringify.
+    let type_name = obj
+        .get_type()
+        .name()
+        .map_or_else(|_| "<unknown>".to_owned(), |n| n.to_string());
+    let _ = py;
+    Err(pyo3::exceptions::PyTypeError::new_err(format!(
+        "cannot serialize `{type_name}` to JSON outside an active workflow step. \
+         Construct the event inside a `@step`-decorated function so non-JSON values \
+         can be auto-routed to the session registry, or convert the value to a \
+         JSON-serializable form first."
+    )))
 }
 
 // ---------------------------------------------------------------------------
@@ -183,8 +254,18 @@ pub(crate) fn py_to_json(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<ser
 
 /// Convert a [`serde_json::Value`] to a Python object.
 ///
-/// Recognizes the `{"__blazen_pickled__": "<b64>"}` tag produced by
-/// [`py_to_json`] and unpickles the original Python object.
+/// Recognises two tagged envelopes inside single-key JSON objects:
+///
+/// 1. `{"__blazen_session_ref__": "<uuid>"}` — looks the UUID up in the
+///    currently-active [`SessionRefRegistry`](blazen_core::session_ref::SessionRefRegistry)
+///    and returns the original `Py<PyAny>` (identity-preserving). Raises
+///    `RuntimeError` if no registry is installed or the entry has been
+///    dropped (e.g. after cross-process resume).
+/// 2. `{"__blazen_pickled__": "<b64>"}` — legacy reader for older
+///    snapshots. Decodes the base64 payload and calls `pickle.loads`.
+///
+/// All other JSON shapes are converted to their natural Python
+/// equivalents.
 pub(crate) fn json_to_py(py: Python<'_>, val: &serde_json::Value) -> PyResult<Py<PyAny>> {
     match val {
         serde_json::Value::Null => Ok(py.None()),
@@ -207,15 +288,47 @@ pub(crate) fn json_to_py(py: Python<'_>, val: &serde_json::Value) -> PyResult<Py
             Ok(list.into_any().unbind())
         }
         serde_json::Value::Object(map) => {
-            // Check for pickled object tag BEFORE building a dict
+            // Check for tagged envelopes BEFORE building a dict.
             if map.len() == 1 {
-                if let Some(serde_json::Value::String(b64)) = map.get(PICKLE_TAG) {
-                    if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64) {
-                        let pickle = py.import("pickle")?;
-                        let py_bytes = pyo3::types::PyBytes::new(py, &bytes);
-                        let obj = pickle.call_method1("loads", (py_bytes,))?;
-                        return Ok(obj.unbind());
-                    }
+                // Session-ref marker (preferred path).
+                if let Some(serde_json::Value::String(uuid_str)) = map.get(SESSION_REF_TAG) {
+                    let key = RegistryKey::parse(uuid_str).map_err(|e| {
+                        pyo3::exceptions::PyRuntimeError::new_err(format!(
+                            "malformed session ref uuid `{uuid_str}`: {e}"
+                        ))
+                    })?;
+                    let Some(reg) = current_session_registry() else {
+                        return Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                            "session ref `{uuid_str}` cannot be resolved: no registry is \
+                             installed (this value can only be read from inside an active \
+                             workflow step or the workflow handler that produced it)"
+                        )));
+                    };
+                    let arc_any = block_on_context(async move { reg.get_any(key).await });
+                    let Some(arc_any) = arc_any else {
+                        return Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                            "session ref `{uuid_str}` no longer available (the workflow may \
+                             have been resumed in a different process, or the registry was \
+                             cleared)"
+                        )));
+                    };
+                    let py_arc: Arc<Py<PyAny>> =
+                        Arc::downcast::<Py<PyAny>>(arc_any).map_err(|_| {
+                            pyo3::exceptions::PyRuntimeError::new_err(format!(
+                                "session ref `{uuid_str}` has unexpected runtime type \
+                                 (expected Python object, got cross-runtime entry)"
+                            ))
+                        })?;
+                    return Ok(py_arc.clone_ref(py));
+                }
+                // Legacy pickle tag (back-compat reader only).
+                if let Some(serde_json::Value::String(b64)) = map.get(PICKLE_TAG)
+                    && let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64)
+                {
+                    let pickle = py.import("pickle")?;
+                    let py_bytes = pyo3::types::PyBytes::new(py, &bytes);
+                    let obj = pickle.call_method1("loads", (py_bytes,))?;
+                    return Ok(obj.unbind());
                 }
             }
             // Normal dict conversion

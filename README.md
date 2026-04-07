@@ -23,6 +23,7 @@
 - **WebAssembly SDK** -- Run Blazen in the browser, edge workers, Deno, and embedded runtimes via `@blazen/sdk`. Same Rust core compiled to WASM
 - **Prompt management** -- Versioned prompt templates with `{{variable}}` interpolation, YAML/JSON registries, and multimodal attachments
 - **Persistence** -- Embedded persistence via redb, or bring-your-own via callbacks. Pause a workflow, serialize state to JSON, resume later
+- **Identity-preserving live state** -- Pass DB connections, Pydantic models, and other live objects through events and the new `ctx.state` / `ctx.session` namespaces. `StopEvent(result=obj)` round-trips non-JSON Python values with `is`-identity preserved -- the engine no longer silently stringifies unpicklable results
 - **Observability** -- OpenTelemetry, Prometheus metrics, and Langfuse integration via the telemetry crate
 
 ## Installation

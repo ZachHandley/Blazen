@@ -44,6 +44,30 @@ const result = await workflow.run({ name: "Zach" });
 console.log(result.data);
 ```
 
+## State vs Session
+
+The `Context` exposes two explicit namespaces:
+
+- **`ctx.state`** -- persistable values (survives snapshotting when the WASM runner gains snapshot support).
+- **`ctx.session`** -- live in-process JS references. **Identity IS preserved** within a run because the WASM runtime is single-threaded; this is a meaningful differentiator from the Node bindings, where session values are routed through `serde_json::Value` and identity is NOT preserved (due to napi-rs threading constraints).
+
+```typescript
+import init, { Workflow } from "@blazen/sdk";
+
+await init();
+
+const wf = new Workflow("example");
+wf.addStep("setup", ["blazen::StartEvent"], (event, ctx) => {
+  ctx.state.set("counter", 5);
+  const liveObj = { tag: "live" };
+  ctx.session.set("shared", liveObj);
+  console.log(ctx.session.get("shared") === liveObj); // true -- identity preserved
+  return { type: "blazen::StopEvent", result: {} };
+});
+```
+
+All `Context` methods are **synchronous** in WASM (no `async`/`await` needed -- WASM has no tokio runtime). Session values are deliberately excluded from any snapshot.
+
 ## Supported platforms
 
 - Browsers (Chrome, Firefox, Safari, Edge)

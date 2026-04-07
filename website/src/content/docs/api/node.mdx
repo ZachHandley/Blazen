@@ -642,6 +642,8 @@ type StateValue = string | number | boolean | null | Buffer | StateValue[] | { [
 
 Store a JSON-serializable value in the workflow context. Accepts strings, numbers, booleans, null, arrays, and nested objects. For binary data, use `ctx.setBytes()` instead.
 
+The legacy `ctx.set` / `ctx.get` shortcuts still work and route values through the same 4-tier dispatch. For new code, prefer the explicit `ctx.state` / `ctx.session` namespaces documented below.
+
 ### `await ctx.get(key: string): Promise<StateValue | null>`
 
 Retrieve a value from the workflow context. Returns `null` if not found. Returns data for **all** `StateValue` variants -- strings, numbers, booleans, arrays, objects, and `Buffer` (if the key was stored via `setBytes`). No data is silently dropped.
@@ -665,6 +667,89 @@ Manually route an event into the workflow event bus. The event will be delivered
 ### `await ctx.writeEventToStream(event: object): void`
 
 Publish an event to the external broadcast stream. Consumers that subscribed via `runStreaming` or `handler.streamEvents()` will receive this event. Unlike `sendEvent`, this does **not** route the event through the internal step registry.
+
+### `get state(): StateNamespace`
+
+Persistable workflow state. Survives `pause()` / `resume()`, checkpoints, and durable storage. See [StateNamespace](#statenamespace) below.
+
+### `get session(): SessionNamespace`
+
+In-process-only values, excluded from snapshots. Use this for things that should not survive `pause()` / `resume()`. **JS object identity is NOT preserved on Node** -- see the [SessionNamespace](#sessionnamespace) caveat below.
+
+---
+
+## StateNamespace
+
+Namespace for persistable workflow state. Values stored via `state.set` / `state.setBytes` go into the underlying `ContextInner.state` map and survive snapshots, `pause()` / `resume()`, and checkpoint stores.
+
+### `await state.set(key: string, value: Exclude<StateValue, Buffer>): Promise<void>`
+
+Store a JSON-serializable value under the given key.
+
+### `await state.get(key: string): Promise<StateValue | null>`
+
+Retrieve a value previously stored under the given key. Returns `null` if not found.
+
+### `await state.setBytes(key: string, data: Buffer): Promise<void>`
+
+Store raw binary data under the given key.
+
+### `await state.getBytes(key: string): Promise<Buffer | null>`
+
+Retrieve raw binary data previously stored under the given key. Returns `null` if not found.
+
+```typescript
+workflow.addStep("step", ["blazen::StartEvent"], async (event, ctx) => {
+  await ctx.state.set("counter", 5);
+  const count = await ctx.state.get("counter");
+  return { type: "blazen::StopEvent", result: { count } };
+});
+```
+
+---
+
+## SessionNamespace
+
+Namespace for in-process-only workflow values. Values stored via `session.set` are kept in the `ContextInner.objects` side-channel and are **excluded** from snapshots. Use this for state that should not survive a `pause()` / `resume()` round-trip (request IDs, rate-limit counters, ephemeral caches, ...).
+
+**Important -- napi-rs identity caveat:** **JS object identity is NOT preserved** through `ctx.session` on the Node bindings. Values are routed through `serde_json::Value` because napi-rs's `Reference<T>` is `!Send` -- its `Drop` must run on the v8 main thread, and tokio worker threads cannot safely cross the napi boundary with live JS object references. `await ctx.session.get(key)` returns a plain object equal to the one you passed in, **not** the same object instance. For true JS class identity preservation, use the Python or WASM bindings, or keep the work inside a single Rust step. Full identity through events is tracked as a follow-up architectural refactor.
+
+The `session` namespace is still functionally distinct from `state`: session values are excluded from snapshots, state values are not.
+
+### `await session.set(key: string, value: unknown): Promise<void>`
+
+Store a JSON-serializable value under the given key. The value is excluded from snapshots.
+
+### `await session.get(key: string): Promise<unknown>`
+
+Retrieve a value previously stored under the given key. Returns `null` if the key does not exist.
+
+### `await session.has(key: string): Promise<boolean>`
+
+Check whether a value exists under the given key.
+
+### `await session.remove(key: string): Promise<void>`
+
+Remove the value stored under the given key.
+
+```typescript
+workflow.addStep("step", ["blazen::StartEvent"], async (event, ctx) => {
+  await ctx.session.set("reqId", "abc123");
+  if (await ctx.session.has("reqId")) {
+    const id = await ctx.session.get("reqId");
+    console.log("request id:", id);
+  }
+  return { type: "blazen::StopEvent", result: {} };
+});
+```
+
+`state` and `session` use independent keyspaces -- the same key can exist in both namespaces without colliding:
+
+```typescript
+await ctx.state.set("k", "state-value");
+await ctx.session.set("k", "session-value");
+// Both are accessible; they don't collide.
+```
 
 ---
 

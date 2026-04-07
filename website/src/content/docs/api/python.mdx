@@ -58,7 +58,9 @@ Built-in event whose `event_type` is `"blazen::StopEvent"`.
 
 | Member | Type | Description |
 |---|---|---|
-| `.result` | `dict` | The value passed via the `result` keyword argument. |
+| `.result` | `Any` | The value passed via the `result` keyword argument. |
+
+`StopEvent(result=x)` preserves `is`-identity for non-JSON values. Pass class instances, Pydantic models, DB connections, or lambdas as the `result` and `await handler.result()` returns an event whose `.result` attribute is the *same* Python object — non-JSON values are routed through a per-`Context` session-ref registry and `__getattr__` on the returned event resolves the marker transparently.
 
 ---
 
@@ -143,17 +145,76 @@ result = await handler.result()
 
 Available as the first parameter of every step function. All methods are synchronous.
 
+Two explicit namespaces are exposed alongside the smart-routing shortcuts on `ctx` itself:
+
+| Field | Type | Description |
+|---|---|---|
+| `state` | `StateNamespace` | Persistable workflow state. Routes through the same 4-tier dispatch as `ctx.set` (bytes / JSON / pickle / live-ref). Survives `pause()` / `resume()` and checkpoint stores. |
+| `session` | `SessionNamespace` | Live in-process references. Identity is preserved within a single workflow run. Values are deliberately excluded from snapshots. |
+
 | Method | Signature | Description |
 |---|---|---|
-| `set` | `ctx.set(key: str, value: StateValue) -> None` | Store any Python value. `bytes`/`bytearray` are stored as raw binary; JSON-serializable types (`dict`, `list`, `str`, `int`, `float`, `bool`, `None`) are stored as JSON; all other objects (Pydantic models, dataclasses, custom classes) are pickled automatically. |
-| `get` | `ctx.get(key: str) -> StateValue \| None` | Retrieve a value by key, or `None` if absent. Returns the original type transparently: JSON values come back as their Python type, bytes come back as `bytes`, and pickled objects are unpickled to their original class. |
+| `set` | `ctx.set(key: str, value: StateValue) -> None` | Store any Python value via 4-tier dispatch: `bytes`/`bytearray` are stored as raw binary; JSON-serializable types (`dict`, `list`, `str`, `int`, `float`, `bool`, `None`) are stored as JSON; picklable objects (Pydantic models, dataclasses, custom classes) are pickled automatically; unpicklable objects (DB connections, file handles, lambdas) are stored as a live in-process reference (same-process only, excluded from snapshots). |
+| `get` | `ctx.get(key: str) -> StateValue \| None` | Retrieve a value by key, or `None` if absent. Returns the original type transparently: JSON values come back as their Python type, bytes come back as `bytes`, and both pickled and live-reference values round-trip to the original Python object. |
 | `set_bytes` | `ctx.set_bytes(key: str, data: bytes) -> None` | Convenience alias for storing raw binary data. Equivalent to `ctx.set(key, data)` when `data` is `bytes`. |
 | `get_bytes` | `ctx.get_bytes(key: str) -> bytes \| None` | Convenience alias for retrieving raw binary data, or `None` if absent. |
 | `run_id` | `ctx.run_id() -> str` | Return the UUID of the current workflow run. |
 | `send_event` | `ctx.send_event(event: Event) -> None` | Route an event to matching steps manually. |
 | `write_event_to_stream` | `ctx.write_event_to_stream(event: Event) -> None` | Publish an event to the stream visible via `WorkflowHandler.stream_events()`. |
 
-`StateValue = Any` — a type alias defined in the `.pyi` stubs indicating that any Python value is accepted. All stored values persist through pause/resume/checkpoint.
+`StateValue = Any` — a type alias defined in the `.pyi` stubs indicating that any Python value is accepted. The first three storage tiers (bytes / JSON / pickle) persist through pause/resume/checkpoint; the fourth tier (live in-process reference) is same-process only.
+
+---
+
+## StateNamespace
+
+Namespace for persistable workflow state, accessed via `ctx.state`. Routes values through the same 4-tier dispatch as `Context.set`: bytes → JSON → pickle → live-object. The first three tiers survive `pause()` / `resume()` and checkpoint stores; the fourth is in-process only.
+
+| Method | Signature | Description |
+|---|---|---|
+| `set` | `ctx.state.set(key: str, value: StateValue) -> None` | Store a value under `key` using 4-tier dispatch. |
+| `get` | `ctx.state.get(key: str) -> StateValue \| None` | Retrieve the value under `key`, deserialized to its original Python type, or `None` if absent. |
+| `set_bytes` | `ctx.state.set_bytes(key: str, data: bytes) -> None` | Store raw binary data under `key`. |
+| `get_bytes` | `ctx.state.get_bytes(key: str) -> bytes \| None` | Retrieve raw binary data under `key`, or `None` if absent. |
+
+**Dict protocol**
+
+Also supports `__setitem__`, `__getitem__`, and `__contains__` so it can be used like a `dict`:
+
+```python
+ctx.state.set("counter", 5)
+ctx.state["counter"] = 5         # equivalent
+count = ctx.state.get("counter")
+print("counter" in ctx.state)    # True
+```
+
+---
+
+## SessionNamespace
+
+Namespace for live in-process references, accessed via `ctx.session`. Identity is preserved within a single workflow run; values are deliberately excluded from snapshots, so they are the right place to stash database connections, open file handles, ML model objects, or any other resource that cannot (or should not) be serialized.
+
+| Method | Signature | Description |
+|---|---|---|
+| `set` | `ctx.session.set(key: str, value: Any) -> None` | Store a live reference to `value` under `key`. |
+| `get` | `ctx.session.get(key: str) -> Any \| None` | Retrieve the live reference under `key`, or `None` if absent. The returned object is the *same* Python object that was stored. |
+| `has` | `ctx.session.has(key: str) -> bool` | Return whether `key` is currently set. |
+| `remove` | `ctx.session.remove(key: str) -> None` | Drop the entry under `key`, if any. |
+
+**Dict protocol**
+
+Also supports `__setitem__`, `__getitem__`, and `__contains__`:
+
+```python
+import sqlite3
+conn = sqlite3.connect(":memory:")
+ctx.session.set("db", conn)
+assert ctx.session.get("db") is conn   # same object, always
+```
+
+**Pause/resume behavior**
+
+Session values are not serialized into workflow snapshots. What happens to them at pause time is governed by the workflow's `session_pause_policy` (default `"pickle_or_error"`). The policy exists at the workflow level — see the workflow configuration for details.
 
 ---
 

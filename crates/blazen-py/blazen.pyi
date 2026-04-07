@@ -208,18 +208,66 @@ class StopEvent(Event):
     def __init__(self, **kwargs: Any) -> None: ...
 
 
+class StateNamespace:
+    """Persistable workflow state.
+
+    Routes values through the same 4-tier dispatch as ``Context.set``:
+    bytes → JSON → pickle → live-object. The first three tiers survive
+    ``pause()`` / ``resume()`` and checkpoint stores; the fourth is
+    in-process only.
+    """
+
+    def set(self, key: str, value: StateValue) -> None: ...
+    def get(self, key: str) -> StateValue | None: ...
+    def set_bytes(self, key: str, data: bytes) -> None: ...
+    def get_bytes(self, key: str) -> bytes | None: ...
+    def __setitem__(self, key: str, value: StateValue) -> None: ...
+    def __getitem__(self, key: str) -> StateValue: ...
+    def __contains__(self, key: str) -> bool: ...
+
+
+class SessionNamespace:
+    """Live in-process references.
+
+    Identity is preserved within a single workflow run. Values are not
+    serialised into snapshots; what happens at pause time is governed
+    by the workflow's ``session_pause_policy`` (default
+    ``"pickle_or_error"``).
+    """
+
+    def set(self, key: str, value: Any) -> None: ...
+    def get(self, key: str) -> Any | None: ...
+    def remove(self, key: str) -> None: ...
+    def has(self, key: str) -> bool: ...
+    def __setitem__(self, key: str, value: Any) -> None: ...
+    def __getitem__(self, key: str) -> Any: ...
+    def __contains__(self, key: str) -> bool: ...
+
+
 class Context:
     """Shared workflow context accessible by all steps.
 
     Provides typed key/value storage, event emission, and stream
-    publishing.  Accepts any Python value — JSON-serializable types are
-    stored as JSON, ``bytes``/``bytearray`` as raw binary, and all other
-    objects (Pydantic models, custom classes, etc.) are pickled automatically.
+    publishing. Accepts any Python value — JSON-serializable types are
+    stored as JSON, ``bytes``/``bytearray`` as raw binary, picklable
+    objects via pickle, and unpicklable objects (DB connections, file
+    handles) as live in-process references.
+
+    Two explicit namespaces are exposed alongside the smart-routing
+    shortcuts:
+
+    - ``ctx.state`` — persistable values (JSON / bytes / pickle).
+      Survives ``pause()`` / ``resume()`` and checkpoint stores.
+    - ``ctx.session`` — live in-process references. Identity is
+      preserved within a single workflow run.
 
     All context methods are synchronous (they block on in-memory
     operations), so they can be called from both sync and async steps
     without ``await``.
     """
+
+    state: StateNamespace
+    session: SessionNamespace
 
     def set(self, key: str, value: StateValue) -> None:
         """Store any value under *key*.
@@ -231,7 +279,7 @@ class Context:
         """
         ...
 
-    def get(self, key: str) -> Optional[StateValue]:
+    def get(self, key: str) -> StateValue | None:
         """Retrieve the value stored under *key*, deserialized to its original type.
 
         Returns the original Python type for JSON values, ``bytes`` for
@@ -248,7 +296,7 @@ class Context:
         """
         ...
 
-    def get_bytes(self, key: str) -> Optional[bytes]:
+    def get_bytes(self, key: str) -> bytes | None:
         """Retrieve raw binary data previously stored under *key*.
 
         Returns ``None`` if the key does not exist or holds JSON data.

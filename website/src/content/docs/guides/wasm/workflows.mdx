@@ -80,6 +80,33 @@ Values can be any `StateValue`:
 type StateValue = string | number | boolean | null | Uint8Array | StateValue[] | { [key: string]: StateValue };
 ```
 
+### State vs Session namespaces
+
+`Context` exposes two explicit namespaces alongside the legacy smart-routing `ctx.set` / `ctx.get`:
+
+- **`ctx.state`** -- persistable values. Routes through the same dispatch as `ctx.set`, so anything that survives the `StateValue` round-trip belongs here.
+- **`ctx.session`** -- live in-process JS references. **Identity IS preserved** within a run.
+
+```typescript
+wf.addStep('share_live', ['blazen::StartEvent'], (event, ctx) => {
+  ctx.state.set('counter', 5);
+
+  const liveObj = { tag: 'live', count: 0 };
+  ctx.session.set('shared', liveObj);
+  console.log(ctx.session.get('shared') === liveObj); // true -- identity preserved
+  liveObj.count += 1;
+  console.log(ctx.session.get('shared').count);       // 1 -- same object reference
+
+  return { type: 'blazen::StopEvent', result: {} };
+});
+```
+
+Because the WASM runtime is single-threaded, session values are stored as raw `JsValue` in a dedicated map. This is a key differentiator from the Node bindings, where session values are routed through `serde_json::Value` and identity is NOT preserved (due to napi-rs threading constraints).
+
+Session values are deliberately excluded from any snapshot -- WASM does not currently support cross-process snapshot/resume of session entries. Use `ctx.state` for anything that needs to survive a snapshot, and `ctx.session` for live handles (open sockets, in-flight caches, framework instances) that only make sense within the current run.
+
+All namespace methods are **synchronous**, just like the rest of the WASM `Context` API.
+
 ### Binary data
 
 For explicit binary storage, use `ctx.setBytes()` and `ctx.getBytes()`:

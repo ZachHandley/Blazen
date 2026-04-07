@@ -77,6 +77,16 @@ pub enum WorkflowError {
         metadata: serde_json::Value,
     },
 
+    /// One or more live session references could not be serialized for a
+    /// snapshot. The `keys` vector contains the string-formatted UUIDs of
+    /// the offending entries.
+    #[error("session refs cannot be serialized for snapshot: {keys:?}")]
+    SessionRefsNotSerializable {
+        /// String-formatted UUIDs of the live session refs that could not
+        /// be persisted.
+        keys: Vec<String>,
+    },
+
     /// A catch-all for other errors.
     #[error("{0}")]
     Other(#[from] anyhow::Error),

@@ -10,15 +10,18 @@ order: 4
 
 A key-value store shared across all steps in a workflow run.
 
+Blazen exposes two explicit namespaces alongside the smart-routing `ctx.set` / `ctx.get` shortcuts: **`ctx.state`** for persistable values (survives pause/resume and checkpoints) and **`ctx.session`** for live in-process references (identity-preserving within a run, excluded from snapshots). See [State vs Session](#state-vs-session) below.
+
 ## Setting and Getting Values
 
-`ctx.set()` accepts **any Python value**. The binding automatically chooses the best storage format:
+`ctx.set(key, value)` stores any Python value using a 4-tier dispatch:
 
-- **`bytes` / `bytearray`** — stored as raw binary
-- **JSON-serializable types** (`dict`, `list`, `str`, `int`, `float`, `bool`, `None`) — stored as JSON
-- **Everything else** (Pydantic models, dataclasses, custom classes) — pickled automatically
+1. **`bytes` / `bytearray`** → raw binary (survives snapshots)
+2. **JSON-serializable** (`dict`, `list`, `str`, `int`, `float`, `bool`, `None`) → JSON (survives snapshots)
+3. **Picklable objects** (Pydantic models, dataclasses, custom classes) → pickled automatically (survives snapshots)
+4. **Unpicklable objects** (DB connections, file handles, sockets, lambdas) → live in-process reference (same-process only, excluded from snapshots)
 
-`ctx.get()` returns the original type transparently — no manual deserialization needed.
+`ctx.get` returns the original Python type for all four tiers.
 
 ```python
 from pydantic import BaseModel
@@ -92,7 +95,44 @@ return None  # Don't return an event when using send_event
 ctx.write_event_to_stream(ProgressEvent(...))  # Synchronous, external broadcast
 ```
 
+## State vs Session
+
+`Context` exposes two explicit namespaces that make your intent clear at the call site:
+
+| Namespace | Survives pause/resume | Use for |
+|---|---|---|
+| **`ctx.state`** | yes | persistable values (JSON, bytes, picklable objects) |
+| **`ctx.session`** | no (see pause policy) | live in-process references — identity-preserving |
+
+```python
+import sqlite3
+from blazen import step, Context, StartEvent, StopEvent
+
+@step
+async def setup(ctx: Context, ev: StartEvent) -> StopEvent:
+    # Persistable state — survives pause/resume and checkpoints.
+    ctx.state["input_path"] = "data.csv"
+    ctx.state["row_count"] = 0
+
+    # Live in-process references — identity is preserved.
+    conn = sqlite3.connect(":memory:")
+    ctx.session["db"] = conn
+    assert ctx.session["db"] is conn  # same object, always
+
+    return StopEvent(result={"ok": True})
+```
+
+Both namespaces support the Python dict protocol (`ctx.state["k"] = v`, `"k" in ctx.session`, etc.). `ctx.state` routes through the same 4-tier dispatch as `ctx.set` and exposes `set / get / set_bytes / get_bytes` plus the dict protocol. `ctx.session` exposes `set / get / has / remove` plus the dict protocol. The legacy `ctx.set` / `ctx.get` still work as smart-routing shortcuts.
+
+> `result.result` preserves `is`-identity for non-JSON values — you can pass class instances, Pydantic models, and live DB connections through `StopEvent.result` and get the *same* object back.
+
+### Pause policy for `ctx.session`
+
+Because session entries are live references, they are deliberately excluded from snapshots. When you call `handler.pause()`, the workflow's `session_pause_policy` governs what happens to them. The default (`pickle_or_error`) attempts to pickle each entry into the snapshot and raises a clear error if any entry can't be serialised. Other policies (`warn_drop`, `hard_error`) let workflows opt into ephemeral or strict behaviour. The practical rule: put anything that *must* survive `pause()` / `resume()` in `ctx.state`, and everything else in `ctx.session`.
+
 ## BlazenState
+
+For most cases prefer `ctx.state` and `ctx.session` directly — they're simpler and cover the common patterns. `BlazenState` is for codebases that want typed, structured state with per-field custom storage (e.g. mapping one field to a file on disk, another to a database row). If your state is just a bag of values, use the namespaces.
 
 `BlazenState` is a base class for typed workflow state with per-field context storage. Instead of manually calling `ctx.set()` for each piece of data, you define a `@dataclass` subclass and let Blazen store each field individually using the optimal storage tier.
 

@@ -734,6 +734,22 @@ ctx.write_event_to_stream(event: impl Event)
 
 Publish an event to the workflow's external event stream, observable by callers via `stream_events()`. Useful for progress reporting and live updates.
 
+### Session References
+
+```rust
+async fn session_refs_arc(&self) -> Arc<SessionRefRegistry>
+async fn clear_session_refs(&self) -> usize
+async fn session_pause_policy(&self) -> SessionPausePolicy
+```
+
+| Method | Description |
+|--------|-------------|
+| `session_refs_arc()` | Get a clone of the session-ref registry handle for use by language bindings. Bindings install it as a task-local for the duration of a step so platform-native objects (`Py<PyAny>`, `napi::Ref<JsObject>`, etc.) carried via event payloads can be resolved by UUID. |
+| `clear_session_refs()` | Drain the session-ref registry. Called on workflow termination by the language bindings to release platform-specific live refs back to their respective garbage collectors. Returns the number of entries removed. |
+| `session_pause_policy()` | Get the configured [`SessionPausePolicy`](#sessionpausepolicy). The policy is set by [`WorkflowBuilder::session_pause_policy`](#workflowbuildersession_pause_policy); there is no public setter on `Context`. |
+
+See the dedicated [Session Reference Registry](#session-reference-registry) section for background, key types, and the pause-time policy matrix.
+
 ### State Snapshot and Restore
 
 ```rust
@@ -748,6 +764,10 @@ ctx.restore_state(snapshot: ContextSnapshot)
 | `snapshot_state()` | Capture the entire context state as a serializable snapshot (for checkpointing / pause-resume). |
 | `restore_state(snapshot)` | Restore context from a previously captured snapshot. |
 
+:::caution[Session refs are not snapshotted]
+`Context::snapshot_state` intentionally excludes both the opaque `objects` map and the `session_refs` registry. Live in-process references cannot survive a cross-process snapshot round-trip. If your workflow may `pause()` and your bindings use session refs, configure [`WorkflowBuilder::session_pause_policy`](#workflowbuildersession_pause_policy) to control what happens (default: `PickleOrError`).
+:::
+
 ---
 
 ## BlazenState
@@ -757,6 +777,171 @@ ctx.restore_state(snapshot: ContextSnapshot)
 In Rust, per-field storage is achieved manually by calling `set_value()` / `get_value()` with the `StateValue` enum (see the [StateValue](#statevalue) section above). Each field is stored under an explicit key, giving you full control over serialization format and storage variant.
 
 The `Native(BytesWrapper)` variant exists specifically to support bindings: it lets platform-serialized objects (e.g., Python pickle bytes, Node.js `v8.serialize` output) round-trip through Rust steps without deserialization. Binding authors use `StateValue::Native` to store opaque platform objects, and Rust code can forward those values without interpreting their contents.
+
+---
+
+## Session Reference Registry
+
+`blazen_core::session_ref` provides a per-`Context` registry of **live in-process references** — values that cannot or should not be JSON-serialized, such as DB connections, file handles, large in-memory tensors, lambdas, locks, or platform-native objects like `Py<PyAny>` and `napi::Ref<JsObject>`.
+
+Each `Context` owns its own `SessionRefRegistry` with a lifetime tied to the workflow run. Event payloads carry only a JSON marker containing the key; the actual object lives in the registry until workflow completion. Bindings detect the marker and resolve it through the active registry to preserve object identity across step boundaries without serialisation.
+
+The JSON marker format is:
+
+```json
+{"__blazen_session_ref__": "<uuid>"}
+```
+
+The tag string is exposed as a constant:
+
+```rust
+pub const SESSION_REF_TAG: &str = "__blazen_session_ref__";
+```
+
+A defensive cap protects against runaway loops exhausting memory:
+
+```rust
+pub const MAX_SESSION_REFS_PER_RUN: usize = 10_000;
+```
+
+`insert_arc` / `insert` return [`SessionRefError::CapacityExceeded`](#sessionreferror) once the registry reaches this cap.
+
+### `RegistryKey`
+
+Strongly-typed wrapper around `Uuid` used as the registry key.
+
+```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct RegistryKey(pub Uuid);
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `new()` | `fn() -> Self` | Mint a fresh random key. |
+| `parse(s)` | `fn(&str) -> Result<Self, uuid::Error>` | Parse a key from a UUID string. |
+| `Display` | -- | Formats as the underlying UUID. |
+
+### `SessionRefRegistry`
+
+Per-context registry of live session references. Internally `Arc<dyn Any + Send + Sync>` keyed by `RegistryKey` and guarded by a `tokio::sync::RwLock`.
+
+```rust
+pub struct SessionRefRegistry { /* ... */ }
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `new()` | `fn() -> Self` | Create an empty registry. |
+| `insert_arc()` | `async fn(&self, Arc<dyn Any + Send + Sync>) -> Result<RegistryKey, SessionRefError>` | Insert a type-erased `Arc` directly. Returns the freshly minted key or `CapacityExceeded`. |
+| `insert::<T>()` | `async fn(&self, T) -> Result<RegistryKey, SessionRefError>` | Insert any `Any + Send + Sync + 'static` value, wrapping it in an `Arc` for you. |
+| `get_any()` | `async fn(&self, RegistryKey) -> Option<Arc<dyn Any + Send + Sync>>` | Look up the type-erased entry. Bindings call this and downcast. |
+| `get::<T>()` | `async fn(&self, RegistryKey) -> Option<Arc<T>>` | Look up and downcast to a concrete `Arc<T>`. |
+| `remove()` | `async fn(&self, RegistryKey) -> Option<Arc<dyn Any + Send + Sync>>` | Remove a single entry, returning the removed value if present. |
+| `drain()` | `async fn(&self) -> usize` | Drain all entries, returning the number removed. |
+| `len()` | `async fn(&self) -> usize` | Number of currently live entries. |
+| `is_empty()` | `async fn(&self) -> bool` | Whether the registry has any live entries. |
+| `keys()` | `async fn(&self) -> Vec<RegistryKey>` | Iterate every key currently in the registry. Used by the snapshot walker to apply [`SessionPausePolicy`](#sessionpausepolicy) uniformly. |
+
+### `SessionPausePolicy`
+
+Controls what happens to live session references when a workflow is paused or snapshotted.
+
+```rust
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionPausePolicy {
+    #[default]
+    PickleOrError,
+    WarnDrop,
+    HardError,
+}
+```
+
+| Variant | Behaviour |
+|---------|-----------|
+| `PickleOrError` (**default**) | Attempt to pickle each live ref into the snapshot. On any failure, raise [`WorkflowError::SessionRefsNotSerializable`](#workflowerror-variants) and abort the snapshot. Recommended. |
+| `WarnDrop` | Drop live refs from the snapshot, emit `tracing::warn!` per drop, and store a diagnostic report in snapshot metadata. On resume, accessing a dropped field raises a clear runtime error from the binding. |
+| `HardError` | Refuse to pause if any live refs are in flight. Raises `WorkflowError::SessionRefsNotSerializable` immediately. |
+
+### `SessionRefError`
+
+Error type for registry operations.
+
+```rust
+#[derive(Debug, thiserror::Error)]
+pub enum SessionRefError {
+    #[error("session ref registry capacity exceeded ({cap} entries) — too many live references in this workflow run")]
+    CapacityExceeded { cap: usize },
+}
+```
+
+| Variant | Description |
+|---------|-------------|
+| `CapacityExceeded { cap: usize }` | Returned when `SessionRefRegistry::insert_arc` is called while the registry already holds `MAX_SESSION_REFS_PER_RUN` entries. |
+
+### Snapshot exclusion
+
+Session-ref entries are **deliberately excluded from `Context::snapshot_state()`**, mirroring the existing `objects` exclusion. Live in-process references cannot meaningfully round-trip through a serialized snapshot, so the snapshot walker applies [`SessionPausePolicy`](#sessionpausepolicy) at pause time instead. See [State Snapshot and Restore](#state-snapshot-and-restore) for the callout.
+
+---
+
+## Workflow
+
+### `WorkflowBuilder`
+
+The builder exposes a fluent API for configuring a workflow before `build()`. The full set of builder methods is documented in the guides; the entry below covers the session-ref configuration knob added alongside the session reference registry.
+
+#### `WorkflowBuilder::session_pause_policy`
+
+```rust
+pub fn session_pause_policy(mut self, policy: SessionPausePolicy) -> Self
+```
+
+Configures the policy applied to live session references when the workflow is paused or snapshotted. Defaults to `PickleOrError`. See [`SessionPausePolicy`](#sessionpausepolicy) for the full variant matrix.
+
+**Usage:**
+
+```rust
+use blazen_core::{WorkflowBuilder, session_ref::SessionPausePolicy};
+
+let workflow = WorkflowBuilder::new("my-workflow")
+    .step(my_step)
+    .session_pause_policy(SessionPausePolicy::WarnDrop)
+    .build()?;
+```
+
+### `WorkflowHandler`
+
+The handle returned after starting a workflow. Provides await/stream/pause modes for consuming workflow results.
+
+#### `WorkflowHandler::session_refs`
+
+```rust
+#[must_use]
+pub fn session_refs(&self) -> Arc<SessionRefRegistry>
+```
+
+Returns a clone of the session-ref registry handle. Bindings call this after [`result()`](#workflowhandler) to resolve any `__blazen_session_ref__` markers carried by the final event, ensuring identity-preserving access to live Python / JS objects passed via event payloads.
+
+The returned `Arc` keeps the registry alive past the event loop's exit so the final result event can still resolve live-ref markers even after the original `Context` has been dropped.
+
+### `WorkflowError` variants
+
+`blazen_core::WorkflowError` is the unified workflow error type. The session-ref subsystem introduces one new variant; other variants (e.g. `Paused`, `InputRequired`, `Other`) are documented in the workflow guides.
+
+#### `SessionRefsNotSerializable`
+
+```rust
+#[error("session refs cannot be serialized for snapshot: {keys:?}")]
+SessionRefsNotSerializable {
+    /// String-formatted UUIDs of the live session refs that could not
+    /// be persisted.
+    keys: Vec<String>,
+}
+```
+
+One or more live session references could not be serialized for a snapshot. The `keys` vector contains the string-formatted UUIDs of the offending entries. Produced by the default `PickleOrError` pause policy when a live ref is not picklable, and by `HardError` whenever any live refs are in flight at pause time.
 
 ---
 

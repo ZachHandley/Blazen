@@ -47,6 +47,9 @@ pub struct Workflow {
     pub(crate) input_handler: Option<InputHandlerFn>,
     /// Whether to automatically publish lifecycle events to the broadcast stream.
     pub(crate) auto_publish_events: bool,
+    /// Policy applied to live session references when the workflow is
+    /// paused or snapshotted.
+    pub(crate) session_pause_policy: crate::session_ref::SessionPausePolicy,
     /// Checkpoint store for durable persistence (requires `persist` feature).
     #[cfg(feature = "persist")]
     pub(crate) checkpoint_store: Option<Arc<dyn blazen_persist::CheckpointStore>>,
@@ -107,6 +110,16 @@ impl Workflow {
 
         // Build the shared context.
         let ctx = Context::new(event_tx.clone(), stream_tx.clone());
+
+        // Apply the configured session pause policy.
+        ctx.set_session_pause_policy(self.session_pause_policy)
+            .await;
+
+        // Capture an Arc to the context's session-ref registry so the
+        // returned `WorkflowHandler` can resolve `__blazen_session_ref__`
+        // markers in the final result even after the event loop drops
+        // the original `Context`.
+        let session_refs = ctx.session_refs_arc().await;
 
         // Set metadata.
         let run_id = Uuid::new_v4();
@@ -171,6 +184,7 @@ impl Workflow {
             Some(pause_tx),
             Some(snapshot_rx),
             event_loop_handle,
+            session_refs,
             #[cfg(feature = "telemetry")]
             history_rx,
         ))
@@ -221,6 +235,12 @@ impl Workflow {
         ctx.restore_state(snapshot.context_state).await;
         ctx.restore_collected(snapshot.collected_events).await;
         ctx.restore_metadata(snapshot.metadata).await;
+
+        // Capture an Arc to the resumed context's session-ref registry
+        // (empty after a cross-process resume) so the handler can later
+        // surface a clear error if a marker references a now-missing
+        // entry.
+        let session_refs = ctx.session_refs_arc().await;
 
         // Reinject pending events into the channel.
         // Try to reconstruct concrete event types via the deserializer
@@ -280,6 +300,7 @@ impl Workflow {
             Some(pause_tx),
             Some(snapshot_rx),
             event_loop_handle,
+            session_refs,
             #[cfg(feature = "telemetry")]
             None, // No history receiver for resumed workflows.
         ))

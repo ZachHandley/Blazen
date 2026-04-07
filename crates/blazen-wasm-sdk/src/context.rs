@@ -88,6 +88,11 @@ struct WasmContextInner {
     workflow_name: String,
     run_id: String,
     state: RefCell<HashMap<String, WasmStateEntry>>,
+    /// Session-scoped live references. Since WASM is single-threaded
+    /// there is no `Send` / `Sync` concern and JS object identity is
+    /// preserved trivially across `set`/`get`. These values are NOT
+    /// included in any snapshot.
+    session: RefCell<HashMap<String, JsValue>>,
     event_queue: RefCell<Vec<JsValue>>,
 }
 
@@ -126,6 +131,7 @@ impl WasmContext {
                 workflow_name,
                 run_id: generate_uuid_v4(),
                 state: RefCell::new(HashMap::new()),
+                session: RefCell::new(HashMap::new()),
                 event_queue: RefCell::new(Vec::new()),
             }),
         }
@@ -516,5 +522,119 @@ impl WasmContext {
     #[wasm_bindgen(getter, js_name = "workflowName")]
     pub fn workflow_name(&self) -> String {
         self.inner.workflow_name.clone()
+    }
+
+    /// Persistable workflow state. Survives snapshotting (when the WASM
+    /// runner gains snapshot support); routes through the same JS / bytes
+    /// dispatch as the legacy `ctx.set` / `ctx.get`.
+    ///
+    /// ```javascript
+    /// ctx.state.set("counter", 5);
+    /// const count = ctx.state.get("counter");
+    /// ```
+    #[must_use]
+    #[wasm_bindgen(getter)]
+    pub fn state(&self) -> WasmStateNamespace {
+        WasmStateNamespace { ctx: self.clone() }
+    }
+
+    /// Live in-process references. Identity is preserved within a single
+    /// workflow run. WASM does **not** support cross-process snapshot/resume
+    /// of session entries.
+    ///
+    /// ```javascript
+    /// ctx.session.set("conn", openConnection());
+    /// const c = ctx.session.get("conn"); // same object
+    /// ```
+    #[must_use]
+    #[wasm_bindgen(getter)]
+    pub fn session(&self) -> WasmSessionNamespace {
+        WasmSessionNamespace { ctx: self.clone() }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WasmStateNamespace — persistable workflow state
+// ---------------------------------------------------------------------------
+
+/// Namespace for persistable workflow state.
+///
+/// Routes values through the same `set` / `get` / `setBytes` / `getBytes`
+/// dispatch as the legacy [`WasmContext::set`] / [`WasmContext::get`].
+#[wasm_bindgen(js_name = "StateNamespace")]
+pub struct WasmStateNamespace {
+    ctx: WasmContext,
+}
+
+#[wasm_bindgen(js_class = "StateNamespace")]
+impl WasmStateNamespace {
+    #[wasm_bindgen]
+    pub fn set(&self, key: String, value: JsValue) {
+        self.ctx.set(key, value);
+    }
+
+    #[wasm_bindgen]
+    pub fn get(&self, key: String) -> JsValue {
+        self.ctx.get(key)
+    }
+
+    #[wasm_bindgen(js_name = "setBytes")]
+    pub fn set_bytes(&self, key: String, data: js_sys::Uint8Array) {
+        self.ctx.set_bytes(key, data);
+    }
+
+    #[wasm_bindgen(js_name = "getBytes")]
+    pub fn get_bytes(&self, key: String) -> JsValue {
+        self.ctx.get_bytes(key)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WasmSessionNamespace — live in-process references
+// ---------------------------------------------------------------------------
+
+/// Namespace for live in-process JS references.
+///
+/// Values are stored as raw [`JsValue`]s in a separate map; identity is
+/// preserved within a single workflow run because the WASM runtime is
+/// single-threaded. These entries are deliberately excluded from any
+/// snapshot.
+#[wasm_bindgen(js_name = "SessionNamespace")]
+pub struct WasmSessionNamespace {
+    ctx: WasmContext,
+}
+
+#[wasm_bindgen(js_class = "SessionNamespace")]
+impl WasmSessionNamespace {
+    /// Store a live JS reference under the given key. The value is
+    /// kept as-is; subsequent `get` returns the same object.
+    #[wasm_bindgen]
+    pub fn set(&self, key: String, value: JsValue) {
+        self.ctx.inner.session.borrow_mut().insert(key, value);
+    }
+
+    /// Retrieve the value previously stored under the given key.
+    /// Returns `null` if the key does not exist.
+    #[wasm_bindgen]
+    pub fn get(&self, key: String) -> JsValue {
+        self.ctx
+            .inner
+            .session
+            .borrow()
+            .get(&key)
+            .cloned()
+            .unwrap_or(JsValue::NULL)
+    }
+
+    /// Check whether a value exists under the given key.
+    #[wasm_bindgen]
+    pub fn has(&self, key: String) -> bool {
+        self.ctx.inner.session.borrow().contains_key(&key)
+    }
+
+    /// Remove the value stored under the given key.
+    #[wasm_bindgen]
+    pub fn remove(&self, key: String) {
+        self.ctx.inner.session.borrow_mut().remove(&key);
     }
 }

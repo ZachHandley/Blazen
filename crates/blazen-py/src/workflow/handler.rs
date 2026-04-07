@@ -11,7 +11,10 @@ use pyo3::prelude::*;
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 
+use blazen_core::session_ref::SessionRefRegistry;
+
 use super::event::any_event_to_py_event;
+use super::session_ref::with_session_registry;
 use crate::error::BlazenPyError;
 
 /// Handle to a running workflow.
@@ -30,6 +33,10 @@ pub struct PyWorkflowHandler {
     /// Pre-subscribed stream created at handler construction time so that
     /// events published before `stream_events()` is called are not lost.
     pre_stream: Arc<Mutex<PinnedEventStream>>,
+    /// Live session-ref registry for this run, kept alive independently of
+    /// the inner handler so streamed events and the final result can both
+    /// resolve `__blazen_session_ref__` markers carried in event payloads.
+    session_refs: Arc<SessionRefRegistry>,
 }
 
 impl PyWorkflowHandler {
@@ -41,9 +48,11 @@ impl PyWorkflowHandler {
         // Subscribe immediately -- the returned stream is fully owned
         // (independent of &handler) thanks to `use<>` on the core method.
         let stream = handler.stream_events();
+        let session_refs = handler.session_refs();
         Self {
             inner: Arc::new(Mutex::new(Some(handler))),
             pre_stream: Arc::new(Mutex::new(Box::pin(stream))),
+            session_refs,
         }
     }
 }
@@ -60,6 +69,12 @@ impl PyWorkflowHandler {
     ///     The final Event produced by the workflow.
     fn result<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
+        // Cache the registry on `Self` so we can install the scope around
+        // `any_event_to_py_event` even after the inner handler has been
+        // taken and consumed. The Arc keeps the registry alive past the
+        // event loop's exit, so attribute access on the returned `PyEvent`
+        // continues to resolve `__blazen_session_ref__` markers.
+        let session_refs = Arc::clone(&self.session_refs);
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let handler = {
                 let mut guard = inner.lock().await;
@@ -70,7 +85,14 @@ impl PyWorkflowHandler {
 
             let result = handler.result().await.map_err(BlazenPyError::from)?;
 
-            let py_event = any_event_to_py_event(&*result);
+            // Install the registry as the current session-ref scope while we
+            // build the `PyEvent`. `any_event_to_py_event` calls
+            // `current_session_registry()` to capture the Arc into the
+            // returned `PyEvent`, so attribute access (`__getattr__`) keeps
+            // working even after this future resolves.
+            let py_event =
+                with_session_registry(session_refs, async move { any_event_to_py_event(&*result) })
+                    .await;
             Ok(py_event)
         })
     }
@@ -93,6 +115,7 @@ impl PyWorkflowHandler {
     fn stream_events(&self) -> PyEventStream {
         PyEventStream {
             stream: self.pre_stream.clone(),
+            session_refs: Arc::clone(&self.session_refs),
         }
     }
 
@@ -150,6 +173,10 @@ type PinnedEventStream = std::pin::Pin<
 #[pyclass(name = "_EventStream")]
 pub struct PyEventStream {
     stream: Arc<Mutex<PinnedEventStream>>,
+    /// Session-ref registry kept alive across iterations so each yielded
+    /// `PyEvent` can resolve `__blazen_session_ref__` markers carried in
+    /// its payload.
+    session_refs: Arc<SessionRefRegistry>,
 }
 
 #[pymethods]
@@ -160,6 +187,7 @@ impl PyEventStream {
 
     fn __anext__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let stream = self.stream.clone();
+        let session_refs = Arc::clone(&self.session_refs);
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let mut guard = stream.lock().await;
             match guard.next().await {
@@ -170,7 +198,10 @@ impl PyEventStream {
                             "stream exhausted",
                         ));
                     }
-                    let py_event = any_event_to_py_event(&*event);
+                    let py_event = with_session_registry(session_refs, async move {
+                        any_event_to_py_event(&*event)
+                    })
+                    .await;
                     Ok(Some(py_event))
                 }
                 None => {

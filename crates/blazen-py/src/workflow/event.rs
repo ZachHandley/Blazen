@@ -4,11 +4,27 @@
 //! type bridges them into the Rust [`Event`](blazen_events::Event) trait so
 //! the workflow engine can route them.
 
+use std::sync::Arc;
+
+use blazen_core::session_ref::SessionRefRegistry;
 use blazen_events::{AnyEvent, DynamicEvent};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use crate::convert::{dict_to_json, json_to_py};
+use crate::workflow::session_ref::{CURRENT_SESSION_REGISTRY, current_session_registry};
+
+/// Run `f` with the given session registry installed as the current
+/// `tokio::task_local!` (synchronously). Used by [`PyEvent::__getattr__`]
+/// and [`PyEvent::to_dict`] so a [`json_to_py`] call inside `f` can
+/// resolve `__blazen_session_ref__` markers carried by event payloads.
+fn with_event_registry<R>(reg: Option<&Arc<SessionRefRegistry>>, f: impl FnOnce() -> R) -> R {
+    if let Some(reg) = reg {
+        CURRENT_SESSION_REGISTRY.sync_scope(Arc::clone(reg), f)
+    } else {
+        f()
+    }
+}
 
 // ---------------------------------------------------------------------------
 // PyEvent -- Python side
@@ -30,6 +46,12 @@ pub struct PyEvent {
     pub event_type: String,
     /// The event data as a JSON object.
     pub data: serde_json::Value,
+    /// Active session-ref registry, captured at construction time so
+    /// that attribute access can resolve `__blazen_session_ref__`
+    /// markers carried by `data` even after the workflow's `Context`
+    /// has been dropped (e.g. when the user reads `result.result`
+    /// after `await handler.result()` returns).
+    pub(crate) session_refs: Option<Arc<SessionRefRegistry>>,
 }
 
 #[pymethods]
@@ -60,13 +82,19 @@ impl PyEvent {
         } else {
             serde_json::Value::Object(serde_json::Map::new())
         };
-        Ok(Self { event_type, data })
+        // Capture the active registry (if any) so subsequent attribute
+        // reads can resolve session-ref markers we just inserted.
+        Ok(Self {
+            event_type,
+            data,
+            session_refs: current_session_registry(),
+        })
     }
 
     /// Attribute access delegates to the underlying JSON data.
     fn __getattr__(&self, py: Python<'_>, name: &str) -> PyResult<Py<PyAny>> {
         if let Some(val) = self.data.get(name) {
-            json_to_py(py, val)
+            with_event_registry(self.session_refs.as_ref(), || json_to_py(py, val))
         } else {
             Err(pyo3::exceptions::PyAttributeError::new_err(format!(
                 "'Event' object has no attribute '{name}'"
@@ -76,7 +104,7 @@ impl PyEvent {
 
     /// Convert the event data to a Python dict.
     fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        json_to_py(py, &self.data)
+        with_event_registry(self.session_refs.as_ref(), || json_to_py(py, &self.data))
     }
 
     fn __repr__(&self) -> String {
@@ -165,6 +193,7 @@ impl PyStartEvent {
             PyEvent {
                 event_type: "blazen::StartEvent".to_owned(),
                 data,
+                session_refs: current_session_registry(),
             },
         ))
     }
@@ -196,6 +225,7 @@ impl PyStopEvent {
             PyEvent {
                 event_type: "blazen::StopEvent".to_owned(),
                 data,
+                session_refs: current_session_registry(),
             },
         ))
     }
@@ -206,14 +236,24 @@ impl PyStopEvent {
 // ---------------------------------------------------------------------------
 
 /// Convert a `Box<dyn AnyEvent>` to a [`PyEvent`].
+///
+/// The returned `PyEvent` captures whichever session-ref registry is
+/// active at call time (via [`current_session_registry`]) so that
+/// downstream attribute access can resolve `__blazen_session_ref__`
+/// markers carried by the event payload.
 pub fn any_event_to_py_event(event: &dyn AnyEvent) -> PyEvent {
     let event_type = event.event_type_id().to_owned();
     let json = event.to_json();
+    let session_refs = current_session_registry();
 
     // If the event is a StartEvent, extract the "data" field.
     if event_type == "blazen::StartEvent" {
         let data = json.get("data").cloned().unwrap_or(serde_json::Value::Null);
-        return PyEvent { event_type, data };
+        return PyEvent {
+            event_type,
+            data,
+            session_refs,
+        };
     }
 
     // If the event is a StopEvent, wrap "result" in the data.
@@ -227,6 +267,7 @@ pub fn any_event_to_py_event(event: &dyn AnyEvent) -> PyEvent {
         return PyEvent {
             event_type,
             data: serde_json::Value::Object(map),
+            session_refs,
         };
     }
 
@@ -235,6 +276,7 @@ pub fn any_event_to_py_event(event: &dyn AnyEvent) -> PyEvent {
         return PyEvent {
             event_type: dynamic.event_type.clone(),
             data: dynamic.data.clone(),
+            session_refs,
         };
     }
 
@@ -242,6 +284,7 @@ pub fn any_event_to_py_event(event: &dyn AnyEvent) -> PyEvent {
     PyEvent {
         event_type,
         data: json,
+        session_refs,
     }
 }
 

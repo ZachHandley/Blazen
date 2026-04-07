@@ -12,6 +12,9 @@ use pyo3::types::{PyCFunction, PyDict, PyTuple};
 use blazen_events::AnyEvent;
 
 use super::context::PyContext;
+use super::session_ref::{
+    PySessionRegistryHandle, step_runner, with_python_session_registry, with_session_registry,
+};
 use crate::error::BlazenPyError;
 use blazen_events::intern_event_type;
 
@@ -111,62 +114,96 @@ impl PyStepWrapper {
                 let locals = locals.clone();
 
                 Box::pin(async move {
-                    // Convert Rust event to PyEvent
-                    let py_event = any_event_to_py_event(&*event);
+                    // Pull the session-ref registry off the context. We need
+                    // to install it in two places: as a Tokio `task_local!`
+                    // (for the synchronous step path and the result/stream
+                    // futures) and as a Python `ContextVar` (for the async
+                    // step path, since `pyo3-async-runtimes` runs the user
+                    // coroutine on Python's asyncio loop thread).
+                    let registry = ctx.session_refs_arc().await;
+                    let registry_for_py = Arc::clone(&registry);
                     let py_ctx = PyContext::new(ctx);
 
-                    // Call the Python function
-                    let py_result: Py<PyAny> = if is_async {
-                        // Async path: call to get coroutine, then convert to future and await
-                        let coroutine: Py<PyAny> = Python::attach(|py| -> PyResult<Py<PyAny>> {
-                            let py_event_obj = Py::new(py, py_event)?;
-                            let py_ctx_obj = Py::new(py, py_ctx)?;
-                            func.call1(py, (py_ctx_obj, py_event_obj))
-                        })
-                        .map_err(|e: PyErr| {
-                            blazen_core::WorkflowError::StepFailed {
-                                step_name: step_name.clone(),
-                                source: Box::new(BlazenPyError::Workflow(e.to_string())),
-                            }
-                        })?;
+                    with_session_registry(registry, async move {
+                        // Convert Rust event to PyEvent (inside the Tokio
+                        // scope so input markers from prior steps resolve).
+                        let py_event = any_event_to_py_event(&*event);
 
-                        // Convert the Python coroutine to a Rust future and await it
-                        let future = Python::attach(|py| {
-                            pyo3_async_runtimes::into_future_with_locals(
-                                &locals,
-                                coroutine.into_bound(py),
-                            )
-                        })
-                        .map_err(|e: PyErr| {
-                            blazen_core::WorkflowError::StepFailed {
-                                step_name: step_name.clone(),
-                                source: Box::new(BlazenPyError::Workflow(e.to_string())),
-                            }
-                        })?;
+                        // Call the Python function
+                        let py_result: Py<PyAny> = if is_async {
+                            // Async path: build the user coroutine and wrap it
+                            // in `_blazen_run_step(handle, user_coro)` so the
+                            // session-registry contextvar is set inside the
+                            // asyncio Task before the user body runs.
+                            let coroutine: Py<PyAny> =
+                                Python::attach(|py| -> PyResult<Py<PyAny>> {
+                                    let py_event_obj = Py::new(py, py_event)?;
+                                    let py_ctx_obj = Py::new(py, py_ctx)?;
+                                    let user_coro = func.call1(py, (py_ctx_obj, py_event_obj))?;
+                                    let handle = Py::new(
+                                        py,
+                                        PySessionRegistryHandle::new(Arc::clone(&registry_for_py)),
+                                    )?;
+                                    let runner = step_runner(py)?;
+                                    let wrapped = runner.call1((handle, user_coro))?;
+                                    Ok(wrapped.unbind())
+                                })
+                                .map_err(|e: PyErr| {
+                                    blazen_core::WorkflowError::StepFailed {
+                                        step_name: step_name.clone(),
+                                        source: Box::new(BlazenPyError::Workflow(e.to_string())),
+                                    }
+                                })?;
 
-                        pyo3_async_runtimes::tokio::scope(locals.clone(), future)
-                            .await
-                            .map_err(|e: PyErr| blazen_core::WorkflowError::StepFailed {
-                                step_name: step_name.clone(),
-                                source: Box::new(BlazenPyError::Workflow(e.to_string())),
+                            // Convert the wrapped coroutine to a Rust future and await it.
+                            let future = Python::attach(|py| {
+                                pyo3_async_runtimes::into_future_with_locals(
+                                    &locals,
+                                    coroutine.into_bound(py),
+                                )
+                            })
+                            .map_err(|e: PyErr| {
+                                blazen_core::WorkflowError::StepFailed {
+                                    step_name: step_name.clone(),
+                                    source: Box::new(BlazenPyError::Workflow(e.to_string())),
+                                }
+                            })?;
+
+                            pyo3_async_runtimes::tokio::scope(locals.clone(), future)
+                                .await
+                                .map_err(|e: PyErr| blazen_core::WorkflowError::StepFailed {
+                                    step_name: step_name.clone(),
+                                    source: Box::new(BlazenPyError::Workflow(e.to_string())),
+                                })?
+                        } else {
+                            // Sync path: call the user function with the
+                            // contextvar installed so any event constructors
+                            // it builds see the session registry. The Tokio
+                            // task_local! is also live, but the contextvar
+                            // covers the case where the sync step itself
+                            // calls into more Python code that constructs
+                            // events.
+                            Python::attach(|py| -> PyResult<Py<PyAny>> {
+                                let py_event_obj = Py::new(py, py_event)?;
+                                let py_ctx_obj = Py::new(py, py_ctx)?;
+                                with_python_session_registry(
+                                    py,
+                                    Arc::clone(&registry_for_py),
+                                    |py| func.call1(py, (py_ctx_obj, py_event_obj)),
+                                )
+                            })
+                            .map_err(|e: PyErr| {
+                                blazen_core::WorkflowError::StepFailed {
+                                    step_name: step_name.clone(),
+                                    source: Box::new(BlazenPyError::Workflow(e.to_string())),
+                                }
                             })?
-                    } else {
-                        // Sync path: call directly, returns the result (not a coroutine)
-                        Python::attach(|py| -> PyResult<Py<PyAny>> {
-                            let py_event_obj = Py::new(py, py_event)?;
-                            let py_ctx_obj = Py::new(py, py_ctx)?;
-                            func.call1(py, (py_ctx_obj, py_event_obj))
-                        })
-                        .map_err(|e: PyErr| {
-                            blazen_core::WorkflowError::StepFailed {
-                                step_name: step_name.clone(),
-                                source: Box::new(BlazenPyError::Workflow(e.to_string())),
-                            }
-                        })?
-                    };
+                        };
 
-                    // Convert the Python return value back to a Rust event
-                    Python::attach(|py| py_result_to_step_output(py, &py_result, &step_name))
+                        // Convert the Python return value back to a Rust event
+                        Python::attach(|py| py_result_to_step_output(py, &py_result, &step_name))
+                    })
+                    .await
                 })
             },
         );

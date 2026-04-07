@@ -403,6 +403,57 @@ type StateValue = string | number | boolean | null | Uint8Array | StateValue[] |
 | Property | Type | Description |
 |---|---|---|
 | `ctx.workflowName` | `string` | Getter property returning the workflow name. |
+| `ctx.state` | `StateNamespace` | Getter returning the persistable workflow state namespace. Survives snapshotting when the WASM runner gains snapshot support. Routes through the same JS / bytes dispatch as `ctx.set` / `ctx.get`. |
+| `ctx.session` | `SessionNamespace` | Getter returning the live in-process JS reference namespace. **Identity IS preserved** within a single workflow run (unlike the Node bindings). Excluded from snapshots. |
+
+---
+
+## StateNamespace
+
+Persistable workflow state, accessed via `ctx.state`. Routes values through the same `set` / `get` / `setBytes` / `getBytes` dispatch as the legacy `ctx.set` / `ctx.get`, so anything stored here will survive snapshotting once the WASM runner gains snapshot support.
+
+All methods are **synchronous** -- the WASM runtime has no tokio.
+
+### Methods
+
+| Method | Signature | Description |
+|---|---|---|
+| `state.set(key, value)` | `(key: string, value: unknown) => void` | Store a value. Auto-detects `Uint8Array` and stores it as binary; everything else is stored as-is. |
+| `state.get(key)` | `(key: string) => unknown` | Retrieve a value. Returns `Uint8Array` for binary data, the original `JsValue` for everything else, or `null` if the key is missing. |
+| `state.setBytes(key, data)` | `(key: string, data: Uint8Array) => void` | Explicitly store binary data. |
+| `state.getBytes(key)` | `(key: string) => Uint8Array \| null` | Retrieve binary data. Returns `null` if the key is missing. |
+
+```typescript
+ctx.state.set("counter", 5);
+const count = ctx.state.get("counter");
+```
+
+---
+
+## SessionNamespace
+
+Live in-process JS references, accessed via `ctx.session`. Values are stored as raw `JsValue` in a separate map and are **excluded** from any snapshot.
+
+> **Identity IS preserved within a run on WASM.** Because the WASM runtime is single-threaded, session values are stored as raw `JsValue` and `ctx.session.get(key) === obj` holds after `ctx.session.set(key, obj)`. This is a meaningful differentiator from the Node bindings, where identity is **not** preserved due to napi-rs threading constraints (values are round-tripped through `serde_json::Value`).
+
+All methods are **synchronous**.
+
+### Methods
+
+| Method | Signature | Description |
+|---|---|---|
+| `session.set(key, value)` | `(key: string, value: unknown) => void` | Store a live JS reference under `key`. The value is kept as-is. |
+| `session.get(key)` | `(key: string) => unknown` | Retrieve the value previously stored under `key`. Returns `null` if missing. |
+| `session.has(key)` | `(key: string) => boolean` | Check whether a value exists under `key`. |
+| `session.remove(key)` | `(key: string) => void` | Remove the value stored under `key`. |
+
+```typescript
+const conn = openConnection();
+ctx.session.set("conn", conn);
+console.log(ctx.session.get("conn") === conn);   // true
+```
+
+> WASM does **not** currently support cross-process snapshot/resume of session entries. Session values exist only within a single workflow run.
 
 ---
 

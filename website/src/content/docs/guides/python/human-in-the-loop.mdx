@@ -35,3 +35,13 @@ snapshot = handler.pause()
 handler = await Workflow.resume(snapshot)
 result = await handler.result()
 ```
+
+:::caution[ctx.session and pause/resume]
+If you store live in-process objects in `ctx.session` (DB connections, file handles, sockets), they are deliberately **excluded** from snapshots. The workflow's `session_pause_policy` governs what happens at pause time:
+
+- **`pickle_or_error`** (default) -- attempt to pickle each live ref into the snapshot; raise a clear error if any entry can't be serialised.
+- **`warn_drop`** -- drop live refs from the snapshot and emit a warning. For ephemeral runs.
+- **`hard_error`** -- refuse to pause if any live refs are in flight.
+
+The practical rule: put anything that **must** survive `pause()` / `resume()` in `ctx.state`, and everything else in `ctx.session`.
+:::

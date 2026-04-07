@@ -39,6 +39,9 @@ pub struct WorkflowBuilder {
     input_handler: Option<InputHandlerFn>,
     /// Whether to automatically publish lifecycle events to the broadcast stream.
     auto_publish_events: bool,
+    /// Policy applied to live session references when the workflow is
+    /// paused or snapshotted.
+    session_pause_policy: crate::session_ref::SessionPausePolicy,
     /// Checkpoint store for durable persistence (requires `persist` feature).
     #[cfg(feature = "persist")]
     checkpoint_store: Option<Arc<dyn blazen_persist::CheckpointStore>>,
@@ -60,6 +63,7 @@ impl WorkflowBuilder {
             timeout: Some(Duration::from_secs(300)), // 5 min default
             input_handler: None,
             auto_publish_events: false,
+            session_pause_policy: crate::session_ref::SessionPausePolicy::default(),
             #[cfg(feature = "persist")]
             checkpoint_store: None,
             #[cfg(feature = "persist")]
@@ -115,6 +119,14 @@ impl WorkflowBuilder {
     #[must_use]
     pub fn auto_publish_events(mut self, enabled: bool) -> Self {
         self.auto_publish_events = enabled;
+        self
+    }
+
+    /// Configure the policy applied to live session references when the
+    /// workflow is paused or snapshotted. Defaults to `PickleOrError`.
+    #[must_use]
+    pub fn session_pause_policy(mut self, policy: crate::session_ref::SessionPausePolicy) -> Self {
+        self.session_pause_policy = policy;
         self
     }
 
@@ -194,6 +206,7 @@ impl WorkflowBuilder {
             timeout: self.timeout,
             input_handler: self.input_handler,
             auto_publish_events: self.auto_publish_events,
+            session_pause_policy: self.session_pause_policy,
             #[cfg(feature = "persist")]
             checkpoint_store: self.checkpoint_store,
             #[cfg(feature = "persist")]

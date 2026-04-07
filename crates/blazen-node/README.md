@@ -342,6 +342,8 @@ console.log(result.data); // { answer: 42 }
 
 **Important:** `handler.result()` and `handler.pause()` each consume the handler. You can only call one of them, and only once.
 
+> **Note:** Values stored via `ctx.session.set(...)` are **excluded** from snapshots. The workflow's `session_pause_policy` (default `pickle_or_error`; other policies: `warn_drop`, `hard_error`) governs what happens to session entries at pause time -- see the Rust docs for policy details. For anything that must survive pause/resume, use `ctx.state.set(...)` (or the legacy `ctx.set(...)` shortcut).
+
 ### Human-in-the-Loop
 
 Pause/resume is the foundation for human-in-the-loop workflows. Pause after a step to wait for human review, then resume when approved:
@@ -419,6 +421,35 @@ await ctx.setBytes("image-pixels", pixels);
 const restored = await ctx.getBytes("image-pixels");
 ```
 
+### State vs Session namespaces
+
+The `Context` class exposes two explicit namespaces alongside the legacy smart-routing shortcuts (`ctx.set` / `ctx.get` / `ctx.setBytes` / `ctx.getBytes`):
+
+- **`ctx.state`** -- persistable values. Routes through the same dispatch as `ctx.set` (bytes / JSON / pickle). Survives `pause()` / `resume()` and checkpoint stores.
+- **`ctx.session`** -- in-process-only values. **Excluded from snapshots.** Use this for request IDs, rate-limit counters, ephemeral caches, and anything that should not survive pause/resume.
+
+```typescript
+wf.addStep("step", ["blazen::StartEvent"], async (event, ctx) => {
+  // Persistable state
+  await ctx.state.set("counter", 5);
+  const count = await ctx.state.get("counter");
+
+  // Bytes also work on the state namespace
+  await ctx.state.setBytes("blob", Buffer.from([1, 2, 3]));
+  const blob = await ctx.state.getBytes("blob");
+
+  // In-process-only state
+  await ctx.session.set("reqId", "abc123");
+  const hasReq = await ctx.session.has("reqId");
+  const reqId = await ctx.session.get("reqId");
+  await ctx.session.remove("reqId");
+
+  return { type: "blazen::StopEvent", result: { count, hasReq } };
+});
+```
+
+**Important -- JS object identity is NOT preserved on Node.** Session values are routed through `serde_json::Value` because napi-rs's `Reference<T>` is `!Send` (its `Drop` must run on the v8 main thread). `await ctx.session.get("k")` returns a plain object equal to the one you passed in, not the same object. Session is still functionally distinct from state -- session values are excluded from snapshots, state values are not -- but for true identity preservation of live JS objects across steps you must use the Python or WASM bindings.
+
 ---
 
 ## Timeout
@@ -472,6 +503,10 @@ import type {
 | `Context.sendEvent(event)` | Route an event to matching steps (async) |
 | `Context.writeEventToStream(event)` | Publish to external stream consumers (async) |
 | `Context.runId()` | Get the workflow run ID (async) |
+| `Context.state` | `StateNamespace` getter -- persistable values (survives pause/resume) |
+| `Context.session` | `SessionNamespace` getter -- in-process-only values (excluded from snapshots) |
+| `StateNamespace.set / get / setBytes / getBytes` | Async persistable storage routed through the same dispatch as `ctx.set` |
+| `SessionNamespace.set / get / has / remove` | Async in-process-only storage; values are routed through `serde_json::Value` (no JS identity preservation) |
 | `CompletionModel` | Unified LLM client with 15 provider factory methods |
 | `CompletionModel.complete(messages)` | Chat completion with typed `ChatMessage[]` input, returns `CompletionResponse` (async) |
 | `CompletionModel.completeWithOptions(messages, opts)` | Chat completion with `CompletionOptions` (async) |

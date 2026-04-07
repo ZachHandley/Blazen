@@ -9,7 +9,7 @@ order: 3
 
 # Node.js Examples
 
-Five complete, runnable examples that demonstrate core Blazen workflow patterns.
+Six complete, runnable examples that demonstrate core Blazen workflow patterns.
 
 ---
 
@@ -95,4 +95,28 @@ return null;
 
 ```sh
 npx tsx examples/human_in_the_loop.ts
+```
+
+---
+
+## Stateful Workflow
+
+Demonstrates the two explicit context namespaces on the Node bindings:
+
+- `ctx.state` -- persistable values (survives `pause()`/`resume()`).
+- `ctx.session` -- in-process-only values (excluded from snapshots).
+
+**Important:** On the Node binding, `ctx.session` values are routed through `serde_json::Value` -- JS object identity is **NOT** preserved across `session.get(key)`. This is a napi-rs threading limitation (`Reference<T>` is `!Send` because its `Drop` must run on the v8 main thread). For true identity preservation of live JS objects, use the Python or WASM bindings.
+
+```javascript
+const wf = new Workflow("stateful-example");
+wf.addStep("setup", ["blazen::StartEvent"], async (event, ctx) => {
+  await ctx.state.set("counter", 5);              // persistable
+  await ctx.session.set("reqId", "abc123");       // in-process only
+  return { type: "blazen::StopEvent", result: {} };
+});
+```
+
+```sh
+npx tsx examples/stateful_workflow.ts
 ```

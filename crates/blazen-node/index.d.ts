@@ -221,6 +221,26 @@ export declare class Context {
   getBytes(key: string): Promise<Buffer | null>
   /** Get the workflow run ID. */
   runId(): Promise<string>
+  /**
+   * Persistable workflow state. Survives `pause()` / `resume()`,
+   * checkpoints, and durable storage.
+   *
+   * ```javascript
+   * await ctx.state.set("counter", 5);
+   * const count = await ctx.state.get("counter");
+   * ```
+   */
+  get state(): JsStateNamespace
+  /**
+   * In-process-only values. Excluded from snapshots — use this for
+   * things that should not survive `pause()` / `resume()`.
+   *
+   * ```javascript
+   * await ctx.session.set("reqId", 42);
+   * const n = await ctx.session.get("reqId");
+   * ```
+   */
+  get session(): JsSessionNamespace
 }
 export type JsContext = Context
 
@@ -502,6 +522,58 @@ export declare class Memory {
   count(): Promise<number>
 }
 export type JsMemory = Memory
+
+/**
+ * Namespace for in-process-only workflow values.
+ *
+ * Values stored via `session.set` are kept in the
+ * `ContextInner.objects` side-channel and are **excluded** from
+ * snapshots. Use this for state that should not survive a
+ * `pause()` / `resume()` round-trip (request IDs, rate-limit
+ * counters, ephemeral caches, …).
+ *
+ * For `session.set` values, identity preservation of JS class
+ * instances through this namespace is **not** supported on the Node
+ * bindings (see the module-level note on napi-rs threading). Values
+ * are serialised via `serde_json::Value`, so you will get a plain
+ * object back on `session.get`.
+ */
+export declare class SessionNamespace {
+  /**
+   * Store a JSON-serializable value under the given key. The value
+   * is excluded from snapshots.
+   */
+  set(key: string, value: unknown): Promise<void>
+  /**
+   * Retrieve a value previously stored under the given key. Returns
+   * `null` if the key does not exist.
+   */
+  get(key: string): Promise<unknown>
+  /** Check whether a value exists under the given key. */
+  has(key: string): Promise<boolean>
+  /** Remove the value stored under the given key. */
+  remove(key: string): Promise<void>
+}
+export type JsSessionNamespace = SessionNamespace
+
+/**
+ * Namespace for persistable workflow state.
+ *
+ * Values stored via `state.set` / `state.setBytes` go into the
+ * underlying `ContextInner.state` map and survive snapshots,
+ * `pause()` / `resume()`, and checkpoint stores.
+ */
+export declare class StateNamespace {
+  /** Store a JSON-serializable value under the given key. */
+  set(key: string, value: Exclude<StateValue, Buffer>): Promise<void>
+  /** Retrieve a value previously stored under the given key. */
+  get(key: string): Promise<StateValue | null>
+  /** Store raw binary data under the given key. */
+  setBytes(key: string, data: Buffer): Promise<void>
+  /** Retrieve raw binary data previously stored under the given key. */
+  getBytes(key: string): Promise<Buffer | null>
+}
+export type JsStateNamespace = StateNamespace
 
 /**
  * A Valkey/Redis-backed backend for the memory store.

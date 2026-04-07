@@ -9,7 +9,7 @@ order: 2
 
 # Python Examples
 
-Five complete, runnable examples that demonstrate core Blazen workflow patterns in Python using the subclass event model.
+Six complete, runnable examples that demonstrate core Blazen workflow patterns in Python using the subclass event model.
 
 ---
 
@@ -111,4 +111,33 @@ return None
 
 ```sh
 python examples/human_in_the_loop.py
+```
+
+---
+
+## Stateful Workflow
+
+Showcases the two explicit context namespaces and identity-preserving event payloads:
+
+- `ctx.state` for persistable values (counters, paths) -- survives `pause()`/`resume()`.
+- `ctx.session` for live in-process references (DB connections, handles) -- excluded from snapshots.
+- `StopEvent(result=conn)` preserves `is`-identity -- the caller gets back the same Python object.
+
+```python
+import sqlite3
+from blazen import Workflow, step, Context, StartEvent, StopEvent
+
+@step
+async def setup(ctx: Context, ev: StartEvent):
+    conn = sqlite3.connect(":memory:")
+    ctx.state["row_count"] = 0
+    ctx.session["db"] = conn  # identity preserved
+    return StopEvent(result=conn)
+
+# result = await handler.result()
+# assert result.result is conn  # same Python object
+```
+
+```sh
+python examples/stateful_workflow.py
 ```

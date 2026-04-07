@@ -50,8 +50,10 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<workflow::event::PyStartEvent>()?;
     m.add_class::<workflow::event::PyStopEvent>()?;
 
-    // Context
+    // Context + state/session namespaces
     m.add_class::<workflow::context::PyContext>()?;
+    m.add_class::<workflow::context::PyStateNamespace>()?;
+    m.add_class::<workflow::context::PySessionNamespace>()?;
 
     // State base class
     m.add_class::<workflow::state::PyBlazenState>()?;

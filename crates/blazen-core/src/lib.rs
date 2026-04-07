@@ -28,6 +28,7 @@ pub mod context;
 pub mod error;
 pub(crate) mod event_loop;
 pub mod handler;
+pub mod session_ref;
 pub mod snapshot;
 pub mod step;
 pub mod value;
@@ -37,6 +38,9 @@ pub use builder::{InputHandlerFn, WorkflowBuilder};
 pub use context::Context;
 pub use error::{Result, WorkflowError};
 pub use handler::WorkflowHandler;
+pub use session_ref::{
+    RegistryKey, SESSION_REF_TAG, SessionPausePolicy, SessionRefError, SessionRefRegistry,
+};
 pub use snapshot::{SerializedEvent, WorkflowSnapshot};
 pub use step::{StepFn, StepOutput, StepRegistration};
 pub use value::{BytesWrapper, StateValue};

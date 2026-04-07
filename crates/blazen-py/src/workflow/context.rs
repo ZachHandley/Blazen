@@ -3,26 +3,26 @@
 //! Accepts any Python value — JSON-serializable types are stored efficiently
 //! as JSON, `bytes`/`bytearray` as raw binary, picklable objects via pickle,
 //! and unpicklable objects (DB connections, file handles) as live references.
+//!
+//! ## Namespaces
+//!
+//! Two explicit namespaces are exposed alongside the smart-routing
+//! shortcuts (`ctx.set` / `ctx.get`):
+//!
+//! - **`ctx.state`** — persistable values: JSON, bytes, picklable
+//!   objects. Survives `pause()` / `resume()` and checkpoints.
+//! - **`ctx.session`** — live in-process references (DB connections,
+//!   file handles, sockets, sqlite cursors, …). Identity is preserved
+//!   within a single workflow run; subject to the workflow's
+//!   [`SessionPausePolicy`](blazen_core::session_ref::SessionPausePolicy)
+//!   on snapshot.
 
 use std::sync::Arc;
 
 use pyo3::prelude::*;
 
 use super::event::PyEvent;
-
-/// Run a future to completion, handling both inside-tokio and outside-tokio
-/// contexts. Uses `block_in_place` when called from a tokio worker thread
-/// (e.g. from within a step handler), and falls back to the pyo3-async-runtimes
-/// runtime otherwise.
-fn block_on_context<F: std::future::Future>(fut: F) -> F::Output {
-    if let Ok(handle) = tokio::runtime::Handle::try_current() {
-        // We're inside a tokio runtime -- use block_in_place to avoid panics
-        tokio::task::block_in_place(|| handle.block_on(fut))
-    } else {
-        // No tokio runtime on this thread -- use the pyo3 runtime
-        pyo3_async_runtimes::tokio::get_runtime().block_on(fut)
-    }
-}
+use crate::convert::block_on_context;
 
 /// Shared workflow context accessible by all steps.
 ///
@@ -225,8 +225,173 @@ impl PyContext {
         id.to_string()
     }
 
+    /// Persistable workflow state. Survives `pause()` / `resume()`,
+    /// checkpoints, and durable storage.
+    ///
+    /// ```python
+    /// ctx.state.set("counter", 5)
+    /// count = ctx.state.get("counter")
+    /// ```
+    #[getter]
+    fn state(&self) -> PyStateNamespace {
+        PyStateNamespace {
+            inner: self.inner.clone(),
+        }
+    }
+
+    /// Live in-process references. Identity is preserved within a
+    /// single workflow run; subject to the workflow's
+    /// `session_pause_policy` on snapshot.
+    ///
+    /// ```python
+    /// ctx.session.set("conn", sqlite3.connect(":memory:"))
+    /// conn = ctx.session.get("conn")  # same object as above
+    /// ```
+    #[getter]
+    fn session(&self) -> PySessionNamespace {
+        PySessionNamespace {
+            inner: self.inner.clone(),
+        }
+    }
+
     fn __repr__(&self) -> String {
         "Context()".to_owned()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PyStateNamespace — persistable workflow state
+// ---------------------------------------------------------------------------
+
+/// Namespace for persistable workflow state.
+///
+/// Routes through the same 4-tier dispatch as the legacy `ctx.set` /
+/// `ctx.get`: bytes/JSON/pickle/live-object. The first three tiers
+/// are durable across `pause()` / `resume()` and checkpoint stores;
+/// the live-object tier (used as a last resort for unpicklable values)
+/// is in-process only.
+#[pyclass(name = "StateNamespace", from_py_object)]
+#[derive(Clone)]
+pub struct PyStateNamespace {
+    inner: blazen_core::Context,
+}
+
+#[pymethods]
+impl PyStateNamespace {
+    /// Store a value under the given key. See `Context.set` for the
+    /// 4-tier dispatch order.
+    fn set(&self, py: Python<'_>, key: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        // Delegate through PyContext::set for the existing tier dispatch.
+        let ctx = PyContext::new(self.inner.clone());
+        ctx.set(py, key, value)
+    }
+
+    /// Retrieve a value previously stored under the given key.
+    fn get(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
+        let ctx = PyContext::new(self.inner.clone());
+        ctx.get(py, key)
+    }
+
+    /// Store raw binary data under the given key.
+    fn set_bytes(&self, py: Python<'_>, key: &str, data: &[u8]) {
+        let ctx = PyContext::new(self.inner.clone());
+        ctx.set_bytes(py, key, data);
+    }
+
+    /// Retrieve raw binary data previously stored under the given key.
+    fn get_bytes(&self, py: Python<'_>, key: &str) -> Option<Vec<u8>> {
+        let ctx = PyContext::new(self.inner.clone());
+        ctx.get_bytes(py, key)
+    }
+
+    fn __setitem__(&self, py: Python<'_>, key: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.set(py, key, value)
+    }
+
+    fn __getitem__(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
+        let val = self.get(py, key)?;
+        if val.bind(py).is_none() {
+            return Err(pyo3::exceptions::PyKeyError::new_err(key.to_owned()));
+        }
+        Ok(val)
+    }
+
+    fn __contains__(&self, py: Python<'_>, key: &str) -> PyResult<bool> {
+        let val = self.get(py, key)?;
+        Ok(!val.bind(py).is_none())
+    }
+
+    fn __repr__(&self) -> String {
+        "StateNamespace()".to_owned()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PySessionNamespace — live in-process references
+// ---------------------------------------------------------------------------
+
+/// Namespace for live in-process references.
+///
+/// Values are stored as `Arc<Py<PyAny>>` in the underlying
+/// `ContextInner.objects` map. Identity is preserved within a single
+/// workflow run; the entries are *not* serialised into snapshots
+/// (subject to the workflow's `session_pause_policy` for what happens
+/// at pause time).
+#[pyclass(name = "SessionNamespace", from_py_object)]
+#[derive(Clone)]
+pub struct PySessionNamespace {
+    inner: blazen_core::Context,
+}
+
+#[pymethods]
+impl PySessionNamespace {
+    /// Store a live reference under the given key. The value is *not*
+    /// serialised; identity is preserved within this run.
+    fn set(&self, _py: Python<'_>, key: &str, value: &Bound<'_, PyAny>) {
+        let inner = self.inner.clone();
+        let key = key.to_string();
+        let obj: Arc<Py<PyAny>> = Arc::new(value.clone().unbind());
+        block_on_context(async { inner.set_object(&key, obj).await });
+    }
+
+    /// Retrieve a live reference previously stored under the given key.
+    /// Returns `None` if the key does not exist.
+    fn get(&self, py: Python<'_>, key: &str) -> Option<Py<PyAny>> {
+        let inner = self.inner.clone();
+        let key = key.to_string();
+        let obj = block_on_context(async { inner.get_object::<Arc<Py<PyAny>>>(&key).await })?;
+        Some(obj.clone_ref(py))
+    }
+
+    /// Remove a live reference stored under the given key.
+    fn remove(&self, _py: Python<'_>, key: &str) {
+        let inner = self.inner.clone();
+        let key = key.to_string();
+        block_on_context(async { inner.remove_object(&key).await });
+    }
+
+    /// Check whether a live reference exists under the given key.
+    fn has(&self, _py: Python<'_>, key: &str) -> bool {
+        let inner = self.inner.clone();
+        let key = key.to_string();
+        block_on_context(async { inner.has_object(&key).await })
+    }
+
+    fn __setitem__(&self, py: Python<'_>, key: &str, value: &Bound<'_, PyAny>) {
+        self.set(py, key, value);
+    }
+
+    fn __getitem__(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
+        self.get(py, key)
+            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err(key.to_owned()))
+    }
+
+    fn __contains__(&self, _py: Python<'_>, key: &str) -> bool {
+        self.has(_py, key)
+    }
+
+    fn __repr__(&self) -> String {
+        "SessionNamespace()".to_owned()
     }
 }
 

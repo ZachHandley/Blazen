@@ -10,6 +10,13 @@ order: 4
 
 Context is a key-value store shared across all steps in a workflow run. Every step handler receives a `ctx` object as its second argument, giving each step access to the same shared state.
 
+`Context` exposes two explicit namespaces alongside the legacy smart-routing shortcuts (`ctx.set` / `ctx.get` / `ctx.setBytes` / `ctx.getBytes`):
+
+- **`ctx.state`** -- persistable values. Survives `pause()` / `resume()` and checkpoint stores.
+- **`ctx.session`** -- in-process-only values. Excluded from snapshots. Use for request IDs, rate-limit counters, ephemeral caches, and anything that should not survive pause/resume.
+
+The legacy `ctx.set` / `ctx.get` shortcuts still work and route into the state namespace under the hood.
+
 ## StateValue Type
 
 All context values are represented by the `StateValue` type:
@@ -73,6 +80,46 @@ Use `ctx.sendEvent()` to emit an event manually instead of returning one from th
 await ctx.sendEvent({ type: "Continue" }); // Async
 return null; // Don't return an event when using sendEvent
 ```
+
+## State vs Session
+
+`Context` exposes two explicit namespaces that make your intent clear at the call site:
+
+| Namespace | Survives pause/resume | Use for |
+|---|---|---|
+| **`ctx.state`** | yes | persistable values (JSON, bytes) |
+| **`ctx.session`** | no (see pause policy) | in-process-only values, request-scoped state |
+
+```typescript
+wf.addStep("setup", ["blazen::StartEvent"], async (event, ctx) => {
+  // Persistable state -- survives pause/resume and checkpoints.
+  await ctx.state.set("inputPath", "data.csv");
+  await ctx.state.set("rowCount", 0);
+  await ctx.state.setBytes("thumbnail", Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+
+  // In-process-only state -- excluded from snapshots.
+  await ctx.session.set("reqId", "abc123");
+  await ctx.session.set("rateLimitCount", 0);
+
+  const hasReq = await ctx.session.has("reqId");
+  const reqId = await ctx.session.get("reqId");
+  await ctx.session.remove("rateLimitCount");
+
+  return { type: "blazen::StopEvent", result: { ok: true } };
+});
+```
+
+`ctx.state` routes through the same dispatch as `ctx.set` and exposes `set / get / setBytes / getBytes`. `ctx.session` exposes `set / get / has / remove`. The legacy `ctx.set` / `ctx.get` still work as smart-routing shortcuts and target the state namespace under the hood.
+
+:::caution[JS object identity is NOT preserved on Node]
+Unlike the Python and WASM bindings, Node stores session values as `serde_json::Value` rather than as a live JS reference. The reason: napi-rs's `Reference<T>` is `!Send` (its `Drop` must run on the v8 main thread), and tokio worker threads cannot safely hold live JS references -- this is a documented architectural limitation.
+
+In practice, `await ctx.session.set("k", {name: "alice"})` followed by `await ctx.session.get("k")` returns a **plain object equal to** `{name: "alice"}`, not the same object. `ctx.session` is still functionally distinct from `ctx.state` -- session values are excluded from snapshots, state values are not -- but for true identity preservation of live JS objects across steps you must use the Python or WASM bindings.
+:::
+
+### Pause policy for `ctx.session`
+
+Session entries are deliberately excluded from snapshots. When you call `handler.pause()`, the workflow's `session_pause_policy` (default `pickle_or_error`; other policies: `warn_drop`, `hard_error`) governs what happens to them. The practical rule: put anything that **must** survive `pause()` / `resume()` in `ctx.state`, and everything else in `ctx.session`.
 
 ## BlazenState
 

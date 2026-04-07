@@ -41,6 +41,12 @@ struct ContextInner {
     /// NOT serialized — excluded from snapshots. Bindings store platform-specific
     /// types here and downcast on retrieval.
     objects: HashMap<String, Box<dyn Any + Send + Sync>>,
+    /// Session-scoped live reference registry. Auto-routed values from
+    /// event payloads land here, keyed by Uuid. Excluded from snapshots
+    /// in the same way `objects` is.
+    session_refs: Arc<crate::session_ref::SessionRefRegistry>,
+    /// Per-workflow snapshot policy for session refs.
+    session_pause_policy: crate::session_ref::SessionPausePolicy,
 }
 
 /// Shared workflow context.
@@ -76,6 +82,8 @@ impl Context {
                 collected: HashMap::new(),
                 metadata: HashMap::new(),
                 objects: HashMap::new(),
+                session_refs: Arc::new(crate::session_ref::SessionRefRegistry::new()),
+                session_pause_policy: crate::session_ref::SessionPausePolicy::default(),
             })),
         }
     }
@@ -173,6 +181,39 @@ impl Context {
     pub async fn has_object(&self, key: &str) -> bool {
         let inner = self.inner.read().await;
         inner.objects.contains_key(key)
+    }
+
+    // -----------------------------------------------------------------
+    // Session ref registry
+    // -----------------------------------------------------------------
+
+    /// Get a clone of the session ref registry handle for use by language bindings.
+    pub async fn session_refs_arc(&self) -> Arc<crate::session_ref::SessionRefRegistry> {
+        let inner = self.inner.read().await;
+        inner.session_refs.clone()
+    }
+
+    /// Drain the session ref registry. Called on workflow termination by the
+    /// language bindings to release platform-specific live refs (`Py<PyAny>`,
+    /// `napi::Ref<JsObject>`, etc.) back to their respective garbage collectors.
+    pub async fn clear_session_refs(&self) -> usize {
+        let inner = self.inner.read().await;
+        inner.session_refs.drain().await
+    }
+
+    /// Get the configured session pause policy.
+    pub async fn session_pause_policy(&self) -> crate::session_ref::SessionPausePolicy {
+        let inner = self.inner.read().await;
+        inner.session_pause_policy
+    }
+
+    /// Set the session pause policy. Called by the workflow builder.
+    pub(crate) async fn set_session_pause_policy(
+        &self,
+        policy: crate::session_ref::SessionPausePolicy,
+    ) {
+        let mut inner = self.inner.write().await;
+        inner.session_pause_policy = policy;
     }
 
     /// Store raw binary data under `key`.
@@ -625,5 +666,49 @@ mod tests {
         ctx.set_bytes("key", vec![1, 2, 3]).await;
         assert_eq!(ctx.get::<u64>("key").await, None);
         assert_eq!(ctx.get_bytes("key").await, Some(vec![1, 2, 3]));
+    }
+
+    #[tokio::test]
+    async fn session_refs_excluded_from_snapshot() {
+        let ctx = test_context();
+        let reg = ctx.session_refs_arc().await;
+        let _ = reg.insert(42_i32).await.unwrap();
+        let _ = reg.insert("hello".to_owned()).await.unwrap();
+        assert_eq!(reg.len().await, 2);
+
+        // snapshot_state only clones the JSON state map; session_refs are
+        // deliberately excluded.
+        let snap = ctx.snapshot_state().await;
+        assert!(snap.is_empty());
+
+        // The registry itself still has the entries.
+        assert_eq!(reg.len().await, 2);
+    }
+
+    #[tokio::test]
+    async fn clear_session_refs_drains_registry() {
+        let ctx = test_context();
+        let reg = ctx.session_refs_arc().await;
+        let _ = reg.insert(1_i32).await.unwrap();
+        let _ = reg.insert(2_i32).await.unwrap();
+        let dropped = ctx.clear_session_refs().await;
+        assert_eq!(dropped, 2);
+        assert_eq!(reg.len().await, 0);
+    }
+
+    #[tokio::test]
+    async fn session_pause_policy_default_and_set() {
+        use crate::session_ref::SessionPausePolicy;
+        let ctx = test_context();
+        assert_eq!(
+            ctx.session_pause_policy().await,
+            SessionPausePolicy::PickleOrError
+        );
+        ctx.set_session_pause_policy(SessionPausePolicy::WarnDrop)
+            .await;
+        assert_eq!(
+            ctx.session_pause_policy().await,
+            SessionPausePolicy::WarnDrop
+        );
     }
 }

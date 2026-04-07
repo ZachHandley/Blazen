@@ -15,6 +15,7 @@
 
 use std::future::{Future, IntoFuture};
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{self, Poll};
 
 use blazen_events::AnyEvent;
@@ -27,6 +28,7 @@ use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::error::WorkflowError;
+use crate::session_ref::SessionRefRegistry;
 use crate::snapshot::WorkflowSnapshot;
 
 /// Handle to a running workflow.
@@ -48,6 +50,11 @@ pub struct WorkflowHandler {
     /// prevents orphaned Tokio tasks from keeping runtimes alive (important
     /// for napi-rs / Node.js bindings).
     event_loop_handle: Option<JoinHandle<()>>,
+    /// Live session-ref registry for this run. Cloned from the workflow's
+    /// `Context` so that bindings can resolve `__blazen_session_ref__`
+    /// markers carried by the final result *after* the event loop has
+    /// exited and the original `Context` has been dropped.
+    session_refs: Arc<SessionRefRegistry>,
     /// Receives history events from the event loop (requires `telemetry` feature).
     #[cfg(feature = "telemetry")]
     history_rx: Option<mpsc::UnboundedReceiver<blazen_telemetry::HistoryEvent>>,
@@ -55,12 +62,14 @@ pub struct WorkflowHandler {
 
 impl WorkflowHandler {
     /// Create a new handler (crate-internal).
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         result_rx: oneshot::Receiver<Result<Box<dyn AnyEvent>, WorkflowError>>,
         stream_tx: broadcast::Sender<Box<dyn AnyEvent>>,
         pause_tx: Option<oneshot::Sender<()>>,
         snapshot_rx: Option<oneshot::Receiver<WorkflowSnapshot>>,
         event_loop_handle: JoinHandle<()>,
+        session_refs: Arc<SessionRefRegistry>,
         #[cfg(feature = "telemetry")] history_rx: Option<
             mpsc::UnboundedReceiver<blazen_telemetry::HistoryEvent>,
         >,
@@ -71,9 +80,21 @@ impl WorkflowHandler {
             pause_tx,
             snapshot_rx,
             event_loop_handle: Some(event_loop_handle),
+            session_refs,
             #[cfg(feature = "telemetry")]
             history_rx,
         }
+    }
+
+    /// Get a clone of the session-ref registry handle.
+    ///
+    /// Bindings call this after [`result`](Self::result) to resolve any
+    /// `__blazen_session_ref__` markers carried by the final event,
+    /// ensuring identity-preserving access to live Python / JS objects
+    /// passed via event payloads.
+    #[must_use]
+    pub fn session_refs(&self) -> Arc<SessionRefRegistry> {
+        Arc::clone(&self.session_refs)
     }
 
     /// Await the final workflow result.

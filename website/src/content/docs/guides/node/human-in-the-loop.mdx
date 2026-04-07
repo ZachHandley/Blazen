@@ -37,3 +37,15 @@ const result = await handler2.result();
 ```
 
 This lets you persist the snapshot to a database or message queue and pick the workflow back up in a separate process or after a deployment.
+
+:::caution[ctx.session and pause/resume]
+Values stored via `ctx.session.set(...)` are deliberately **excluded** from snapshots. Use `ctx.state.set(...)` for anything that must survive `pause()` / `resume()`, and `ctx.session.set(...)` for ephemeral values (request IDs, rate-limit counters, caches).
+
+The workflow's `session_pause_policy` governs what happens to session entries at pause time:
+
+- **`pickle_or_error`** (default) -- attempt to pickle each session entry into the snapshot; raise a clear error if any entry can't be serialised.
+- **`warn_drop`** -- drop session entries from the snapshot and emit a warning. For ephemeral runs.
+- **`hard_error`** -- refuse to pause if any session entries are in flight.
+
+**Also note:** on Node, JS object identity through `ctx.session` is **not** preserved -- session values are routed through `serde_json::Value` because napi-rs's `Reference<T>` is `!Send` (its `Drop` must run on the v8 main thread). `await ctx.session.get("k")` returns a plain object equal to the one you passed in, not the same object. For true identity preservation of live JS objects across steps, use the Python or WASM bindings.
+:::

@@ -9,6 +9,8 @@ order: 3
 
 Events are the fundamental data units that flow between steps in a workflow. Blazen provides several built-in event types: `StartEvent` triggers a workflow, `StopEvent` terminates it with a result, and `InputRequestEvent`/`InputResponseEvent` enable human-in-the-loop interactions. You can also define custom events to carry domain-specific data between steps. Events fall into two categories: **routing events** that control flow between steps, and **stream events** that are observed externally by consumers without affecting the workflow's execution path.
 
+`StopEvent(result=x)` preserves identity for non-JSON values. You can pass class instances, Pydantic models, and live DB connections through the result event and read them back unchanged on the other side (in the Python and WASM bindings).
+
 ## Steps
 
 Steps are async functions that receive an event and a context, then return one or more events. Each step declares which event types it accepts, allowing the workflow router to dispatch events correctly. A step can return a single event to continue the flow, a list of events to fan out to multiple downstream steps, or null/None to perform a side-effect without emitting further events.
@@ -20,6 +22,13 @@ A workflow is a collection of steps wired together by an event router that dispa
 ## Context
 
 The context is a shared key-value store available to all steps within a single workflow run. Use `ctx.set(key, value)` and `ctx.get(key)` to share state between steps without coupling them directly. Values can be structured data (strings, numbers, booleans, arrays, objects), raw binary data (`bytes` / `Uint8Array`), or platform-native objects -- each SDK handles serialization appropriate to its runtime. For raw binary data, use `ctx.set_bytes(key, data)` and `ctx.get_bytes(key)` -- these persist through pause/resume/checkpoint with no extra serialization. The context also provides `ctx.send_event()` for manually routing events to other steps and `ctx.write_event_to_stream()` for publishing events to external consumers.
+
+`Context` exposes two explicit namespaces alongside the smart-routing `ctx.set` / `ctx.get` shortcuts:
+
+- **`ctx.state`** -- persistable values. Survives `pause()` / `resume()` and checkpoint stores. Use this for anything that must outlive the current run (counters, input paths, intermediate JSON results).
+- **`ctx.session`** -- live in-process references. Identity is preserved within a single workflow run -- `ctx.session["conn"]` returns the *same* Python object (or WASM JS value) on every access. Values in `ctx.session` are deliberately excluded from snapshots; what happens to them at pause time is governed by the workflow-level `session_pause_policy`.
+
+The mental model: anything that **must** survive pause/resume goes in `ctx.state`; anything that **won't** survive (live DB connections, file handles, in-memory caches) goes in `ctx.session`. Identity preservation through `ctx.session` works in the Python and WASM bindings; in Node, session values are routed through JSON, so object identity is not preserved (a napi-rs threading constraint).
 
 For structured state with mixed serializable and non-serializable fields, use `BlazenState` -- a protocol (or typed base class, depending on the SDK) that stores each field individually and provides a `restore()` hook to recreate transient fields (like database connections) after deserialization. Fields can be marked as transient to exclude them from storage, and custom persistence strategies can be assigned per field via `storeBy`. See the language-specific context guides for details.
 
