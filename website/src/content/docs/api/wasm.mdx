@@ -26,30 +26,30 @@ A chat completion model. Created via static factory methods for each provider.
 
 ### Provider Factory Methods
 
-All providers accept an API key and an optional model override. If `model` is omitted, the provider's default model is used.
+All providers accept an API key and an optional options object. If `model` is omitted, the provider's default model is used.
 
 | Method | Signature |
 |---|---|
-| `CompletionModel.openai` | `(apiKey: string, model?: string)` |
-| `CompletionModel.anthropic` | `(apiKey: string, model?: string)` |
-| `CompletionModel.gemini` | `(apiKey: string, model?: string)` |
-| `CompletionModel.azure` | `(apiKey: string, resourceName: string, deploymentName: string)` |
-| `CompletionModel.fal` | `(apiKey: string, model?: string)` |
-| `CompletionModel.openrouter` | `(apiKey: string, model?: string)` |
-| `CompletionModel.groq` | `(apiKey: string, model?: string)` |
-| `CompletionModel.together` | `(apiKey: string, model?: string)` |
-| `CompletionModel.mistral` | `(apiKey: string, model?: string)` |
-| `CompletionModel.deepseek` | `(apiKey: string, model?: string)` |
-| `CompletionModel.fireworks` | `(apiKey: string, model?: string)` |
-| `CompletionModel.perplexity` | `(apiKey: string, model?: string)` |
-| `CompletionModel.xai` | `(apiKey: string, model?: string)` |
-| `CompletionModel.cohere` | `(apiKey: string, model?: string)` |
-| `CompletionModel.bedrock` | `(apiKey: string, region: string, model?: string)` |
+| `CompletionModel.openai` | `(apiKey: string, options?: ProviderOptions)` |
+| `CompletionModel.anthropic` | `(apiKey: string, options?: ProviderOptions)` |
+| `CompletionModel.gemini` | `(apiKey: string, options?: ProviderOptions)` |
+| `CompletionModel.azure` | `(apiKey: string, options: AzureOptions)` |
+| `CompletionModel.fal` | `(apiKey: string, options?: ProviderOptions)` |
+| `CompletionModel.openrouter` | `(apiKey: string, options?: ProviderOptions)` |
+| `CompletionModel.groq` | `(apiKey: string, options?: ProviderOptions)` |
+| `CompletionModel.together` | `(apiKey: string, options?: ProviderOptions)` |
+| `CompletionModel.mistral` | `(apiKey: string, options?: ProviderOptions)` |
+| `CompletionModel.deepseek` | `(apiKey: string, options?: ProviderOptions)` |
+| `CompletionModel.fireworks` | `(apiKey: string, options?: ProviderOptions)` |
+| `CompletionModel.perplexity` | `(apiKey: string, options?: ProviderOptions)` |
+| `CompletionModel.xai` | `(apiKey: string, options?: ProviderOptions)` |
+| `CompletionModel.cohere` | `(apiKey: string, options?: ProviderOptions)` |
+| `CompletionModel.bedrock` | `(apiKey: string, options: BedrockOptions)` |
 
 ```typescript
 const model = CompletionModel.openai('sk-...');
-const claude = CompletionModel.anthropic('sk-ant-...', 'claude-sonnet-4-20250514');
-const gemini = CompletionModel.gemini('AIza...', 'gemini-2.5-flash');
+const claude = CompletionModel.anthropic('sk-ant-...', { model: 'claude-sonnet-4-20250514' });
+const gemini = CompletionModel.gemini('AIza...', { model: 'gemini-2.5-flash' });
 ```
 
 ### Properties

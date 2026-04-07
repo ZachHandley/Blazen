@@ -165,7 +165,7 @@ export async function summarize(text: string, apiKey: string): Promise<string> {
   const wf = new Workflow('summarizer');
 
   wf.addStep('summarize', ['blazen::StartEvent'], async (event, ctx) => {
-    const model = CompletionModel.anthropic(apiKey, 'claude-sonnet-4-20250514');
+    const model = CompletionModel.anthropic(apiKey, { model: 'claude-sonnet-4-20250514' });
     const response = await model.complete([
       ChatMessage.system('Summarize the following text concisely.'),
       ChatMessage.user(event.text),

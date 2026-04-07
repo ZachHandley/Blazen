@@ -100,9 +100,22 @@ async def test_fal_transcribe():
 async def test_fal_text_to_video():
     """Generate a video from text (slow, ~30-60s)."""
     provider = FalProvider(api_key=FAL_API_KEY)
-    result = await provider.text_to_video(
-        {"prompt": "a cat walking"}
-    )
+    try:
+        result = await provider.text_to_video(
+            {"prompt": "a cat walking"}
+        )
+    except Exception as e:
+        err = str(e).lower()
+        if any(
+            marker in err
+            for marker in (
+                "downstream_service_unavailable",
+                "service unavailable",
+                "service_unavailable",
+            )
+        ):
+            pytest.skip(f"fal.ai video service transiently unavailable: {e}")
+        raise
 
     assert "videos" in result
     assert len(result["videos"]) > 0

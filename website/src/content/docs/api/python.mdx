@@ -309,28 +309,28 @@ Use static constructor methods to create a model for a specific provider, then c
 ```python
 model = CompletionModel.openai("sk-...")
 model = CompletionModel.anthropic("sk-ant-...")
-model = CompletionModel.openrouter("sk-or-...", model="meta-llama/llama-3-70b")
+model = CompletionModel.openrouter("sk-or-...", options={"model": "meta-llama/llama-3-70b"})
 ```
 
 **Provider constructors**
 
 | Constructor | Signature |
 |---|---|
-| `openai` | `CompletionModel.openai(api_key: str, model: str = None)` |
-| `anthropic` | `CompletionModel.anthropic(api_key: str, model: str = None)` |
-| `gemini` | `CompletionModel.gemini(api_key: str, model: str = None)` |
-| `azure` | `CompletionModel.azure(api_key: str, resource_name: str, deployment_name: str)` |
-| `openrouter` | `CompletionModel.openrouter(api_key: str, model: str = None)` |
-| `groq` | `CompletionModel.groq(api_key: str, model: str = None)` |
-| `together` | `CompletionModel.together(api_key: str, model: str = None)` |
-| `mistral` | `CompletionModel.mistral(api_key: str, model: str = None)` |
-| `deepseek` | `CompletionModel.deepseek(api_key: str, model: str = None)` |
-| `fireworks` | `CompletionModel.fireworks(api_key: str, model: str = None)` |
-| `perplexity` | `CompletionModel.perplexity(api_key: str, model: str = None)` |
-| `xai` | `CompletionModel.xai(api_key: str, model: str = None)` |
-| `cohere` | `CompletionModel.cohere(api_key: str, model: str = None)` |
-| `bedrock` | `CompletionModel.bedrock(api_key: str, region: str, model: str = None)` |
-| `fal` | `CompletionModel.fal(api_key: str, model: str = None)` |
+| `openai` | `CompletionModel.openai(api_key: str, *, options: dict = None)` |
+| `anthropic` | `CompletionModel.anthropic(api_key: str, *, options: dict = None)` |
+| `gemini` | `CompletionModel.gemini(api_key: str, *, options: dict = None)` |
+| `azure` | `CompletionModel.azure(api_key: str, *, options: dict)` |
+| `openrouter` | `CompletionModel.openrouter(api_key: str, *, options: dict = None)` |
+| `groq` | `CompletionModel.groq(api_key: str, *, options: dict = None)` |
+| `together` | `CompletionModel.together(api_key: str, *, options: dict = None)` |
+| `mistral` | `CompletionModel.mistral(api_key: str, *, options: dict = None)` |
+| `deepseek` | `CompletionModel.deepseek(api_key: str, *, options: dict = None)` |
+| `fireworks` | `CompletionModel.fireworks(api_key: str, *, options: dict = None)` |
+| `perplexity` | `CompletionModel.perplexity(api_key: str, *, options: dict = None)` |
+| `xai` | `CompletionModel.xai(api_key: str, *, options: dict = None)` |
+| `cohere` | `CompletionModel.cohere(api_key: str, *, options: dict = None)` |
+| `bedrock` | `CompletionModel.bedrock(api_key: str, *, options: dict)` |
+| `fal` | `CompletionModel.fal(api_key: str, *, options: dict = None)` |
 
 **Properties**
 
@@ -744,195 +744,188 @@ MediaType.GLB   # "model/gltf-binary"
 
 ## Compute Request Types
 
-Compute requests define jobs for media generation and processing. All constructors use keyword-only arguments.
+Compute requests define jobs for media generation and processing. All requests are plain `dict` objects.
 
 ### ImageRequest
 
-Generate images from a text prompt.
+Generate images from a text prompt. Passed as a plain `dict`.
 
 ```python
-ImageRequest(
-    *,
-    prompt: str,
-    negative_prompt: str = None,
-    width: int = None,
-    height: int = None,
-    num_images: int = None,
-    model: str = None,
-)
+{
+    "prompt": str,                # required
+    "negative_prompt": str,       # optional
+    "width": int,                 # optional
+    "height": int,                # optional
+    "num_images": int,            # optional
+    "model": str,                 # optional
+}
 ```
 
-| Parameter | Type | Default | Description |
+| Key | Type | Required | Description |
 |---|---|---|---|
-| `prompt` | `str` | required | Text description of the image to generate. |
-| `negative_prompt` | `str \| None` | `None` | What to avoid in the generated image. |
-| `width` | `int \| None` | `None` | Image width in pixels. |
-| `height` | `int \| None` | `None` | Image height in pixels. |
-| `num_images` | `int \| None` | `None` | Number of images to generate. |
-| `model` | `str \| None` | `None` | Specific model to use (provider-dependent). |
+| `"prompt"` | `str` | yes | Text description of the image to generate. |
+| `"negative_prompt"` | `str` | no | What to avoid in the generated image. |
+| `"width"` | `int` | no | Image width in pixels. |
+| `"height"` | `int` | no | Image height in pixels. |
+| `"num_images"` | `int` | no | Number of images to generate. |
+| `"model"` | `str` | no | Specific model to use (provider-dependent). |
 
 ```python
-req = ImageRequest(prompt="a cat in space", width=1024, height=1024, num_images=2)
+req = {"prompt": "a cat in space", "width": 1024, "height": 1024, "num_images": 2}
 ```
 
 ### UpscaleRequest
 
-Upscale an existing image to a higher resolution.
+Upscale an existing image to a higher resolution. Passed as a plain `dict`.
 
 ```python
-UpscaleRequest(
-    *,
-    image_url: str,
-    scale: float,
-    model: str = None,
-)
+{
+    "image_url": str,   # required
+    "scale": float,     # required
+    "model": str,       # optional
+}
 ```
 
-| Parameter | Type | Default | Description |
+| Key | Type | Required | Description |
 |---|---|---|---|
-| `image_url` | `str` | required | URL of the image to upscale. |
-| `scale` | `float` | required | Upscale factor (e.g. `2.0`, `4.0`). |
-| `model` | `str \| None` | `None` | Specific model to use. |
+| `"image_url"` | `str` | yes | URL of the image to upscale. |
+| `"scale"` | `float` | yes | Upscale factor (e.g. `2.0`, `4.0`). |
+| `"model"` | `str` | no | Specific model to use. |
 
 ```python
-req = UpscaleRequest(image_url="https://example.com/photo.jpg", scale=4.0)
+req = {"image_url": "https://example.com/photo.jpg", "scale": 4.0}
 ```
 
 ### VideoRequest
 
-Generate a video from a text prompt, optionally with an input image.
+Generate a video from a text prompt, optionally with an input image. Passed as a plain `dict`.
 
 ```python
-VideoRequest(
-    *,
-    prompt: str,
-    image_url: str = None,
-    duration_seconds: float = None,
-    negative_prompt: str = None,
-    width: int = None,
-    height: int = None,
-    model: str = None,
-)
+{
+    "prompt": str,                # required
+    "image_url": str,             # optional
+    "duration_seconds": float,    # optional
+    "negative_prompt": str,       # optional
+    "width": int,                 # optional
+    "height": int,                # optional
+    "model": str,                 # optional
+}
 ```
 
-| Parameter | Type | Default | Description |
+| Key | Type | Required | Description |
 |---|---|---|---|
-| `prompt` | `str` | required | Text description of the video to generate. |
-| `image_url` | `str \| None` | `None` | Optional starting image to animate. |
-| `duration_seconds` | `float \| None` | `None` | Desired video length in seconds. |
-| `negative_prompt` | `str \| None` | `None` | What to avoid in the generated video. |
-| `width` | `int \| None` | `None` | Video width in pixels. |
-| `height` | `int \| None` | `None` | Video height in pixels. |
-| `model` | `str \| None` | `None` | Specific model to use. |
+| `"prompt"` | `str` | yes | Text description of the video to generate. |
+| `"image_url"` | `str` | no | Optional starting image to animate. |
+| `"duration_seconds"` | `float` | no | Desired video length in seconds. |
+| `"negative_prompt"` | `str` | no | What to avoid in the generated video. |
+| `"width"` | `int` | no | Video width in pixels. |
+| `"height"` | `int` | no | Video height in pixels. |
+| `"model"` | `str` | no | Specific model to use. |
 
 ```python
-req = VideoRequest(prompt="a sunset timelapse", duration_seconds=5.0)
-req = VideoRequest(prompt="animate this scene", image_url="https://example.com/frame.jpg")
+req = {"prompt": "a sunset timelapse", "duration_seconds": 5.0}
+req = {"prompt": "animate this scene", "image_url": "https://example.com/frame.jpg"}
 ```
 
 ### SpeechRequest
 
-Generate speech audio from text.
+Generate speech audio from text. Passed as a plain `dict`.
 
 ```python
-SpeechRequest(
-    *,
-    text: str,
-    voice: str = None,
-    voice_url: str = None,
-    language: str = None,
-    speed: float = None,
-    model: str = None,
-)
+{
+    "text": str,          # required
+    "voice": str,         # optional
+    "voice_url": str,     # optional
+    "language": str,      # optional
+    "speed": float,       # optional
+    "model": str,         # optional
+}
 ```
 
-| Parameter | Type | Default | Description |
+| Key | Type | Required | Description |
 |---|---|---|---|
-| `text` | `str` | required | The text to convert to speech. |
-| `voice` | `str \| None` | `None` | Voice preset name (e.g. `"alloy"`, `"nova"`). |
-| `voice_url` | `str \| None` | `None` | URL to a custom voice sample for cloning. |
-| `language` | `str \| None` | `None` | Language code (e.g. `"en"`, `"fr"`). |
-| `speed` | `float \| None` | `None` | Playback speed multiplier (e.g. `1.2` for 20% faster). |
-| `model` | `str \| None` | `None` | Specific model to use. |
+| `"text"` | `str` | yes | The text to convert to speech. |
+| `"voice"` | `str` | no | Voice preset name (e.g. `"alloy"`, `"nova"`). |
+| `"voice_url"` | `str` | no | URL to a custom voice sample for cloning. |
+| `"language"` | `str` | no | Language code (e.g. `"en"`, `"fr"`). |
+| `"speed"` | `float` | no | Playback speed multiplier (e.g. `1.2` for 20% faster). |
+| `"model"` | `str` | no | Specific model to use. |
 
 ```python
-req = SpeechRequest(text="Hello world", voice="alloy", speed=1.2)
+req = {"text": "Hello world", "voice": "alloy", "speed": 1.2}
 ```
 
 ### MusicRequest
 
-Generate music or sound effects from a text prompt.
+Generate music or sound effects from a text prompt. Passed as a plain `dict`.
 
 ```python
-MusicRequest(
-    *,
-    prompt: str,
-    duration_seconds: float = None,
-    model: str = None,
-)
+{
+    "prompt": str,                # required
+    "duration_seconds": float,    # optional
+    "model": str,                 # optional
+}
 ```
 
-| Parameter | Type | Default | Description |
+| Key | Type | Required | Description |
 |---|---|---|---|
-| `prompt` | `str` | required | Description of the music to generate. |
-| `duration_seconds` | `float \| None` | `None` | Desired duration in seconds. |
-| `model` | `str \| None` | `None` | Specific model to use. |
+| `"prompt"` | `str` | yes | Description of the music to generate. |
+| `"duration_seconds"` | `float` | no | Desired duration in seconds. |
+| `"model"` | `str` | no | Specific model to use. |
 
 ```python
-req = MusicRequest(prompt="upbeat jazz", duration_seconds=30.0)
+req = {"prompt": "upbeat jazz", "duration_seconds": 30.0}
 ```
 
 ### TranscriptionRequest
 
-Transcribe audio to text.
+Transcribe audio to text. Passed as a plain `dict`.
 
 ```python
-TranscriptionRequest(
-    *,
-    audio_url: str,
-    language: str = None,
-    diarize: bool = None,
-    model: str = None,
-)
+{
+    "audio_url": str,    # required
+    "language": str,     # optional
+    "diarize": bool,     # optional
+    "model": str,        # optional
+}
 ```
 
-| Parameter | Type | Default | Description |
+| Key | Type | Required | Description |
 |---|---|---|---|
-| `audio_url` | `str` | required | URL of the audio file to transcribe. |
-| `language` | `str \| None` | `None` | Language hint (e.g. `"en"`). |
-| `diarize` | `bool \| None` | `None` | If `True`, identify and label different speakers. |
-| `model` | `str \| None` | `None` | Specific model to use. |
+| `"audio_url"` | `str` | yes | URL of the audio file to transcribe. |
+| `"language"` | `str` | no | Language hint (e.g. `"en"`). |
+| `"diarize"` | `bool` | no | If `True`, identify and label different speakers. |
+| `"model"` | `str` | no | Specific model to use. |
 
 ```python
-req = TranscriptionRequest(audio_url="https://example.com/audio.mp3", language="en", diarize=True)
+req = {"audio_url": "https://example.com/audio.mp3", "language": "en", "diarize": True}
 ```
 
 ### ThreeDRequest
 
-Generate a 3D model from a text prompt or image.
+Generate a 3D model from a text prompt or image. Passed as a plain `dict`.
 
 ```python
-ThreeDRequest(
-    *,
-    prompt: str = None,
-    image_url: str = None,
-    format: str = None,
-    model: str = None,
-)
+{
+    "prompt": str,       # optional (provide at least one of prompt or image_url)
+    "image_url": str,    # optional
+    "format": str,       # optional
+    "model": str,        # optional
+}
 ```
 
-| Parameter | Type | Default | Description |
+| Key | Type | Required | Description |
 |---|---|---|---|
-| `prompt` | `str \| None` | `None` | Text description of the 3D object to generate. |
-| `image_url` | `str \| None` | `None` | Image to use as reference for 3D generation. |
-| `format` | `str \| None` | `None` | Output format (e.g. `"glb"`, `"obj"`, `"usdz"`). |
-| `model` | `str \| None` | `None` | Specific model to use. |
+| `"prompt"` | `str` | no | Text description of the 3D object to generate. |
+| `"image_url"` | `str` | no | Image to use as reference for 3D generation. |
+| `"format"` | `str` | no | Output format (e.g. `"glb"`, `"obj"`, `"usdz"`). |
+| `"model"` | `str` | no | Specific model to use. |
 
-Provide at least one of `prompt` or `image_url`.
+Provide at least one of `"prompt"` or `"image_url"`.
 
 ```python
-req = ThreeDRequest(prompt="a 3D cat", format="glb")
-req = ThreeDRequest(image_url="https://example.com/photo.jpg", format="obj")
+req = {"prompt": "a 3D cat", "format": "glb"}
+req = {"image_url": "https://example.com/photo.jpg", "format": "obj"}
 ```
 
 ---

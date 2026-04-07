@@ -14,7 +14,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct ProviderOptions {
     /// Override the default model.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -32,7 +31,6 @@ pub struct ProviderOptions {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct FalOptions {
     /// Common provider options (`model`, `base_url`).
     #[serde(flatten)]
@@ -92,7 +90,6 @@ pub enum FalLlmEndpointKind {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct AzureOptions {
     /// Common provider options (`model`, `base_url`).
     #[serde(flatten)]
@@ -114,7 +111,6 @@ pub struct AzureOptions {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct BedrockOptions {
     /// Common provider options (`model`, `base_url`).
     #[serde(flatten)]

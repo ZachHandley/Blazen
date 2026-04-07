@@ -13,7 +13,6 @@ use crate::types::RequestTiming;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct ImageResult {
     /// The generated or upscaled images.
     pub images: Vec<GeneratedImage>,
@@ -34,7 +33,6 @@ pub struct ImageResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct VideoResult {
     /// The generated videos.
     pub videos: Vec<GeneratedVideo>,
@@ -55,7 +53,6 @@ pub struct VideoResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct AudioResult {
     /// The generated audio clips.
     pub audio: Vec<GeneratedAudio>,
@@ -76,7 +73,6 @@ pub struct AudioResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct ThreeDResult {
     /// The generated 3D models.
     pub models: Vec<Generated3DModel>,
@@ -97,7 +93,6 @@ pub struct ThreeDResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct TranscriptionSegment {
     /// The transcribed text for this segment.
     pub text: String,
@@ -114,7 +109,6 @@ pub struct TranscriptionSegment {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct TranscriptionResult {
     /// The full transcribed text.
     pub text: String,

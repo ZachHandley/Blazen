@@ -13,7 +13,6 @@ import {
   CompletionModel,
   ChatMessage,
   FalProvider,
-  FalLlmEndpoint,
 } from "../../crates/blazen-node/index.js";
 
 const FAL_API_KEY = process.env.FAL_API_KEY;
@@ -48,7 +47,7 @@ describe("fal.ai LLM smoke tests", { skip: !FAL_API_KEY }, () => {
 
   it("completes a basic prompt via OpenAiResponses endpoint", async () => {
     const model = CompletionModel.fal(FAL_API_KEY, {
-      endpoint: FalLlmEndpoint.OpenAiResponses,
+      endpoint: "open_ai_responses",
     });
     const response = await model.complete([
       ChatMessage.user("What is 5+5? Reply with just the number."),
@@ -114,7 +113,7 @@ describe("fal.ai LLM smoke tests", { skip: !FAL_API_KEY }, () => {
 describe("fal.ai modality auto-routing tests", { skip: !FAL_API_KEY }, () => {
   it("auto-routes to vision when AnyLlm and image part present", async () => {
     const model = CompletionModel.fal(FAL_API_KEY, {
-      endpoint: FalLlmEndpoint.AnyLlm,
+      endpoint: "any_llm",
       autoRouteModality: true,
     });
     const response = await model.complete([
@@ -127,7 +126,7 @@ describe("fal.ai modality auto-routing tests", { skip: !FAL_API_KEY }, () => {
 
   it("auto-routes to audio when OpenRouter and audio part present", async () => {
     const model = CompletionModel.fal(FAL_API_KEY, {
-      endpoint: FalLlmEndpoint.OpenRouter,
+      endpoint: "open_router",
       autoRouteModality: true,
     });
     const msg = ChatMessage.userAudio("Transcribe or describe this audio briefly.", AUDIO_URL);
@@ -148,7 +147,7 @@ describe("fal.ai modality auto-routing tests", { skip: !FAL_API_KEY }, () => {
 
   it("auto-routes to video when OpenRouter and video part present", async () => {
     const model = CompletionModel.fal(FAL_API_KEY, {
-      endpoint: FalLlmEndpoint.OpenRouter,
+      endpoint: "open_router",
       autoRouteModality: true,
     });
     const msg = ChatMessage.userVideo("Describe this video in one short sentence.", VIDEO_URL);

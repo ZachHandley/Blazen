@@ -16,7 +16,6 @@ use crate::types::RequestTiming;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct JobHandle {
     /// Provider-assigned job/request identifier.
     pub id: String,
@@ -32,7 +31,6 @@ pub struct JobHandle {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 #[serde(tag = "status", content = "error")]
 pub enum JobStatus {
     /// Job is waiting in the provider's queue.
@@ -54,7 +52,6 @@ pub enum JobStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct ComputeRequest {
     /// The model/endpoint to run (e.g., "fal-ai/flux/dev", "stability-ai/sdxl").
     pub model: String,
@@ -69,7 +66,6 @@ pub struct ComputeRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct ComputeResult {
     /// The job handle that produced this result, if available.
     #[serde(skip_serializing_if = "Option::is_none")]

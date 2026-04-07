@@ -59,7 +59,7 @@ async def test_fal_responses_api_endpoint():
     """OpenAiResponses endpoint targets openrouter/router/openai/v1/responses."""
     model = CompletionModel.fal(
         FAL_API_KEY,
-        options={"endpoint": "OpenAiResponses"},
+        options={"endpoint": "open_ai_responses"},
     )
     response = await model.complete(
         [ChatMessage.user("Say hi.")],
@@ -108,7 +108,7 @@ async def test_fal_vision_auto_routes_when_anyllm_and_image_present():
     the request should auto-route to fal-ai/any-llm/vision."""
     model = CompletionModel.fal(
         FAL_API_KEY,
-        options={"endpoint": "AnyLlm"},
+        options={"endpoint": "any_llm"},
     )
     msg = ChatMessage.user_image_url(
         text="What is in this image? One word.",
@@ -131,7 +131,7 @@ async def test_fal_audio_auto_routes_when_openrouter_and_audio_present():
     """
     model = CompletionModel.fal(
         FAL_API_KEY,
-        options={"endpoint": "OpenRouter"},
+        options={"endpoint": "open_router"},
     )
     msg = ChatMessage.user_audio(
         text="What does this clip say?",
@@ -165,7 +165,7 @@ async def test_fal_video_auto_routes_when_openrouter_and_video_present():
     """
     model = CompletionModel.fal(
         FAL_API_KEY,
-        options={"endpoint": "OpenRouter"},
+        options={"endpoint": "open_router"},
     )
     msg = ChatMessage.user_video(
         text="What is happening in this video? One sentence.",
@@ -211,15 +211,8 @@ async def test_fal_embeddings():
     provider = FalProvider(api_key=FAL_API_KEY)
     em = provider.embedding_model()
     response = await em.embed(["hello", "world"])
-    # Response shape may be a list of vectors or a wrapping object — check what em.embed returns
-    # If it returns an EmbeddingResponse object: response.embeddings has len 2
-    # If it returns a raw list: response has len 2
-    if hasattr(response, "embeddings"):
-        assert len(response.embeddings) == 2
-        assert len(response.embeddings[0]) == 1536
-    else:
-        assert len(response) == 2
-        assert len(response[0]) == 1536
+    assert len(response["embeddings"]) == 2
+    assert len(response["embeddings"][0]) == 1536
 
 
 @skip_without_key

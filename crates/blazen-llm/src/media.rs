@@ -451,7 +451,6 @@ impl std::fmt::Display for MediaType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct MediaOutput {
     /// URL where the media can be downloaded.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -507,7 +506,6 @@ impl MediaOutput {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct GeneratedImage {
     /// The image media output.
     pub media: MediaOutput,
@@ -523,7 +521,6 @@ pub struct GeneratedImage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct GeneratedVideo {
     /// The video media output.
     pub media: MediaOutput,
@@ -545,7 +542,6 @@ pub struct GeneratedVideo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct GeneratedAudio {
     /// The audio media output.
     pub media: MediaOutput,
@@ -564,7 +560,6 @@ pub struct GeneratedAudio {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct Generated3DModel {
     /// The 3D model media output.
     pub media: MediaOutput,

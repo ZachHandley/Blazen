@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct ImageRequest {
     /// The text prompt describing the desired image.
     pub prompt: String,
@@ -87,7 +86,6 @@ impl ImageRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct UpscaleRequest {
     /// URL of the image to upscale.
     pub image_url: String,
@@ -129,7 +127,6 @@ impl UpscaleRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct VideoRequest {
     /// Text prompt describing the desired video.
     pub prompt: String,
@@ -218,7 +215,6 @@ impl VideoRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct SpeechRequest {
     /// The text to synthesize into speech.
     pub text: String,
@@ -301,7 +297,6 @@ impl SpeechRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct MusicRequest {
     /// Text prompt describing the desired audio.
     pub prompt: String,
@@ -351,7 +346,6 @@ impl MusicRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct TranscriptionRequest {
     /// URL of the audio file to transcribe.
     pub audio_url: String,
@@ -359,6 +353,7 @@ pub struct TranscriptionRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
     /// Whether to perform speaker diarization.
+    #[serde(default)]
     pub diarize: bool,
     /// Model override.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -411,7 +406,6 @@ impl TranscriptionRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct ThreeDRequest {
     /// Text prompt describing the desired 3D model.
     pub prompt: String,
@@ -477,7 +471,6 @@ impl ThreeDRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct BackgroundRemovalRequest {
     /// URL of the source image.
     pub image_url: String,

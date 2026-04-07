@@ -98,10 +98,12 @@ const apiKey = JSON.parse(config).openaiKey;
 
 ### Proxy
 
-Route all LLM requests through a central proxy that injects keys server-side. The edge function never sees the raw key:
+Route all LLM requests through a central proxy that injects keys server-side. The edge function never sees the raw key. Configure your proxy to accept requests on an OpenAI-compatible `/v1` endpoint, then use the `openai` factory with your proxy token:
 
 ```typescript
-const model = CompletionModel.custom('https://proxy.yourcompany.com/v1', 'edge-token');
+// The proxy at proxy.yourcompany.com intercepts requests,
+// swaps 'edge-token' for the real API key, and forwards upstream.
+const model = CompletionModel.openai('edge-token');
 ```
 
 ### Runtime injection

@@ -16,7 +16,6 @@ use super::usage::{RequestTiming, TokenUsage};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct ReasoningTrace {
     /// Plain-text rendering of the reasoning content.
     pub text: String,
@@ -34,7 +33,6 @@ pub struct ReasoningTrace {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct Citation {
     pub url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -198,7 +196,6 @@ impl From<ResponseFormat> for serde_json::Value {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct CompletionRequest {
     /// The conversation history.
     pub messages: Vec<ChatMessage>,
@@ -320,7 +317,6 @@ impl CompletionRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct CompletionResponse {
     /// The text content of the assistant's reply, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -401,7 +397,6 @@ pub struct StructuredResponse<T> {
 
 /// Response from an embedding operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct EmbeddingResponse {
     /// The embedding vectors.
     pub embeddings: Vec<Vec<f32>>,
@@ -425,7 +420,6 @@ pub struct EmbeddingResponse {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-#[serde(rename_all = "camelCase")]
 pub struct StreamChunk {
     /// Incremental text content, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
