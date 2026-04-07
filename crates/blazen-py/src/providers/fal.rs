@@ -10,20 +10,129 @@ use tokio_stream::StreamExt;
 
 use blazen_llm::ChatMessage;
 use blazen_llm::compute::{
-    AudioGeneration, ComputeProvider, ComputeRequest, ImageGeneration, Transcription,
-    VideoGeneration,
+    AudioGeneration, BackgroundRemoval, BackgroundRemovalRequest, ComputeProvider, ComputeRequest,
+    ImageGeneration, ThreeDGeneration, Transcription, VideoGeneration,
 };
-use blazen_llm::providers::fal::FalProvider;
-use blazen_llm::traits::CompletionModel;
+use blazen_llm::providers::fal::{FalEmbeddingModel, FalProvider};
+use blazen_llm::traits::{CompletionModel, EmbeddingModel};
 use blazen_llm::types::CompletionRequest;
 
 use crate::compute::{
-    PyImageRequest, PyMusicRequest, PySpeechRequest, PyTranscriptionRequest, PyUpscaleRequest,
-    PyVideoRequest,
+    PyImageRequest, PyMusicRequest, PySpeechRequest, PyThreeDRequest, PyTranscriptionRequest,
+    PyUpscaleRequest, PyVideoRequest,
 };
 use crate::convert::JsonValue;
-use crate::error::blazen_error_to_pyerr;
-use crate::types::{PyChatMessage, PyCompletionResponse};
+use crate::error::{BlazenPyError, blazen_error_to_pyerr};
+use crate::types::{PyChatMessage, PyCompletionResponse, PyEmbeddingResponse};
+
+// ---------------------------------------------------------------------------
+// PyFalLlmEndpoint
+// ---------------------------------------------------------------------------
+
+/// The fal.ai LLM endpoint family.
+///
+/// Selects which fal LLM URL/body schema to use. Defaults to ``OPENAI_CHAT``
+/// (the OpenAI-compatible chat-completions surface on fal).
+#[pyclass(name = "FalLlmEndpoint", eq, eq_int, from_py_object)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PyFalLlmEndpoint {
+    OpenAiChat,
+    OpenAiResponses,
+    OpenAiEmbeddings,
+    OpenRouter,
+    OpenRouterEnterprise,
+    AnyLlm,
+    AnyLlmEnterprise,
+}
+
+impl From<PyFalLlmEndpoint> for blazen_llm::providers::fal::FalLlmEndpoint {
+    fn from(p: PyFalLlmEndpoint) -> Self {
+        use blazen_llm::providers::fal::FalLlmEndpoint as F;
+        match p {
+            PyFalLlmEndpoint::OpenAiChat => F::OpenAiChat,
+            PyFalLlmEndpoint::OpenAiResponses => F::OpenAiResponses,
+            PyFalLlmEndpoint::OpenAiEmbeddings => F::OpenAiEmbeddings,
+            PyFalLlmEndpoint::OpenRouter => F::OpenRouter { enterprise: false },
+            PyFalLlmEndpoint::OpenRouterEnterprise => F::OpenRouter { enterprise: true },
+            PyFalLlmEndpoint::AnyLlm => F::AnyLlm { enterprise: false },
+            PyFalLlmEndpoint::AnyLlmEnterprise => F::AnyLlm { enterprise: true },
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PyFalOptions
+// ---------------------------------------------------------------------------
+
+/// Configuration options for [`FalProvider`].
+///
+/// Example:
+///     >>> opts = FalOptions(model="anthropic/claude-sonnet-4.5",
+///     ...                   endpoint=FalLlmEndpoint.OPENAI_CHAT)
+///     >>> fal = FalProvider(api_key="fal-...", options=opts)
+#[pyclass(name = "FalOptions", from_py_object)]
+#[derive(Debug, Clone, Default)]
+pub struct PyFalOptions {
+    /// Underlying LLM model name (e.g. ``"anthropic/claude-sonnet-4.5"``).
+    #[pyo3(get, set)]
+    pub model: Option<String>,
+    /// The fal endpoint family to target. Defaults to ``OPENAI_CHAT``.
+    #[pyo3(get, set)]
+    pub endpoint: Option<PyFalLlmEndpoint>,
+    /// Promote the endpoint to its enterprise / SOC2-eligible variant.
+    #[pyo3(get, set)]
+    pub enterprise: bool,
+    /// Auto-route the request to the matching vision/audio/video variant
+    /// when the message content contains media. Defaults to ``True``.
+    #[pyo3(get, set)]
+    pub auto_route_modality: bool,
+}
+
+#[pymethods]
+impl PyFalOptions {
+    #[new]
+    #[pyo3(signature = (*, model=None, endpoint=None, enterprise=false, auto_route_modality=true))]
+    fn new(
+        model: Option<String>,
+        endpoint: Option<PyFalLlmEndpoint>,
+        enterprise: bool,
+        auto_route_modality: bool,
+    ) -> Self {
+        Self {
+            model,
+            endpoint,
+            enterprise,
+            auto_route_modality,
+        }
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "FalOptions(model={:?}, endpoint={:?}, enterprise={}, auto_route_modality={})",
+            self.model, self.endpoint, self.enterprise, self.auto_route_modality,
+        )
+    }
+}
+
+/// Apply [`PyFalOptions`] to a [`FalProvider`] builder.
+pub(crate) fn apply_fal_options(
+    mut provider: FalProvider,
+    options: Option<PyFalOptions>,
+) -> FalProvider {
+    if let Some(opts) = options {
+        if let Some(model) = opts.model {
+            provider = provider.with_llm_model(model);
+        }
+        if let Some(ep) = opts.endpoint {
+            provider = provider.with_llm_endpoint(ep.into());
+        }
+        if opts.enterprise {
+            provider = provider.with_enterprise();
+        }
+        provider = provider.with_auto_route_modality(opts.auto_route_modality);
+    }
+    provider
+}
 
 // ---------------------------------------------------------------------------
 // PyFalProvider
@@ -32,12 +141,15 @@ use crate::types::{PyChatMessage, PyCompletionResponse};
 /// A fal.ai provider that supports LLM completions AND compute operations.
 ///
 /// This is the unified entry point for all fal.ai capabilities:
-/// - Image generation and upscaling
+/// - Image generation, upscaling, and background removal
 /// - Video generation (text-to-video, image-to-video)
 /// - Audio generation (TTS, music, sound effects)
 /// - Audio transcription
+/// - 3D model generation
+/// - Text embeddings (via the OpenAI-compatible router)
 /// - Raw compute job submission
-/// - LLM chat completions (via fal-ai/any-llm)
+/// - LLM chat completions (default endpoint:
+///   ``openrouter/router/openai/v1/chat/completions`` -- ``OpenAiChat``)
 ///
 /// Example:
 ///     >>> fal = FalProvider(api_key="fal-key-...")
@@ -55,18 +167,12 @@ impl PyFalProvider {
     ///
     /// Args:
     ///     api_key: Your fal.ai API key.
-    ///     model: Optional LLM model name (e.g. "anthropic/claude-sonnet-4.5").
-    ///     endpoint: Optional fal.ai endpoint override (default: "fal-ai/any-llm").
+    ///     options: Optional [`FalOptions`] for selecting the model,
+    ///         endpoint, enterprise tier, and auto-routing.
     #[new]
-    #[pyo3(signature = (*, api_key, model=None, endpoint=None))]
-    fn new(api_key: &str, model: Option<&str>, endpoint: Option<&str>) -> Self {
-        let mut provider = FalProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_llm_model(m);
-        }
-        if let Some(e) = endpoint {
-            provider = provider.with_endpoint(e);
-        }
+    #[pyo3(signature = (*, api_key, options=None))]
+    fn new(api_key: &str, options: Option<PyFalOptions>) -> Self {
+        let provider = apply_fal_options(FalProvider::new(api_key), options);
         Self {
             inner: Arc::new(provider),
         }
@@ -122,6 +228,137 @@ impl PyFalProvider {
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
             Ok(JsonValue(json))
         })
+    }
+
+    /// Upscale an image via the aura-sr model.
+    fn upscale_image_aura<'py>(
+        &self,
+        py: Python<'py>,
+        request: PyRef<'py, PyUpscaleRequest>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let rust_req = request.inner.clone();
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let result = inner
+                .upscale_image_aura(rust_req)
+                .await
+                .map_err(blazen_error_to_pyerr)?;
+            let json = serde_json::to_value(&result)
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            Ok(JsonValue(json))
+        })
+    }
+
+    /// Upscale an image via the clarity-upscaler model.
+    fn upscale_image_clarity<'py>(
+        &self,
+        py: Python<'py>,
+        request: PyRef<'py, PyUpscaleRequest>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let rust_req = request.inner.clone();
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let result = inner
+                .upscale_image_clarity(rust_req)
+                .await
+                .map_err(blazen_error_to_pyerr)?;
+            let json = serde_json::to_value(&result)
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            Ok(JsonValue(json))
+        })
+    }
+
+    /// Upscale an image via the creative-upscaler model.
+    fn upscale_image_creative<'py>(
+        &self,
+        py: Python<'py>,
+        request: PyRef<'py, PyUpscaleRequest>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let rust_req = request.inner.clone();
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let result = inner
+                .upscale_image_creative(rust_req)
+                .await
+                .map_err(blazen_error_to_pyerr)?;
+            let json = serde_json::to_value(&result)
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            Ok(JsonValue(json))
+        })
+    }
+
+    /// Remove the background from an image.
+    ///
+    /// Args:
+    ///     image_url: URL of the source image.
+    ///     model: Optional model id override.
+    ///
+    /// Returns:
+    ///     A dict with the matted image, timing, cost, and metadata.
+    #[pyo3(signature = (*, image_url, model=None))]
+    fn remove_background<'py>(
+        &self,
+        py: Python<'py>,
+        image_url: String,
+        model: Option<String>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let request = BackgroundRemovalRequest {
+                image_url,
+                model,
+                parameters: serde_json::Value::Null,
+            };
+            let result = BackgroundRemoval::remove_background(inner.as_ref(), request)
+                .await
+                .map_err(blazen_error_to_pyerr)?;
+            let json = serde_json::to_value(&result)
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            Ok(JsonValue(json))
+        })
+    }
+
+    // -----------------------------------------------------------------
+    // 3D generation
+    // -----------------------------------------------------------------
+
+    /// Generate a 3D model from a text prompt or source image.
+    ///
+    /// Args:
+    ///     request: A ThreeDRequest with prompt and/or image_url.
+    ///
+    /// Returns:
+    ///     A dict with the generated 3D model, timing, cost, and metadata.
+    fn generate_3d<'py>(
+        &self,
+        py: Python<'py>,
+        request: PyRef<'py, PyThreeDRequest>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let rust_req = request.inner.clone();
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let result = ThreeDGeneration::generate_3d(inner.as_ref(), rust_req)
+                .await
+                .map_err(blazen_error_to_pyerr)?;
+            let json = serde_json::to_value(&result)
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            Ok(JsonValue(json))
+        })
+    }
+
+    // -----------------------------------------------------------------
+    // Embeddings
+    // -----------------------------------------------------------------
+
+    /// Build a [`FalEmbeddingModel`] sharing this provider's HTTP client and API key.
+    ///
+    /// Returns:
+    ///     A FalEmbeddingModel that can be used to embed text via fal's
+    ///     OpenAI-compatible router.
+    fn embedding_model(&self) -> PyFalEmbeddingModel {
+        PyFalEmbeddingModel {
+            inner: Arc::new(self.inner.embedding_model()),
+        }
     }
 
     // -----------------------------------------------------------------
@@ -544,6 +781,67 @@ impl PyFalProvider {
         format!(
             "FalProvider(model_id='{}')",
             CompletionModel::model_id(self.inner.as_ref())
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PyFalEmbeddingModel
+// ---------------------------------------------------------------------------
+
+/// A fal.ai embedding model.
+///
+/// Wraps [`FalEmbeddingModel`] and exposes the
+/// [`EmbeddingModel`](blazen_llm::traits::EmbeddingModel) interface to
+/// Python. Constructed via [`FalProvider::embedding_model`].
+///
+/// Example:
+///     >>> fal = FalProvider(api_key="fal-...")
+///     >>> em = fal.embedding_model()
+///     >>> resp = await em.embed(["hello", "world"])
+///     >>> print(len(resp.embeddings))  # 2
+#[pyclass(name = "FalEmbeddingModel", from_py_object)]
+#[derive(Clone)]
+pub struct PyFalEmbeddingModel {
+    inner: Arc<FalEmbeddingModel>,
+}
+
+#[pymethods]
+impl PyFalEmbeddingModel {
+    /// Get the underlying embedding model id.
+    #[getter]
+    fn model_id(&self) -> &str {
+        EmbeddingModel::model_id(self.inner.as_ref())
+    }
+
+    /// Get the dimensionality of the produced embedding vectors.
+    #[getter]
+    fn dimensions(&self) -> usize {
+        EmbeddingModel::dimensions(self.inner.as_ref())
+    }
+
+    /// Embed one or more texts.
+    ///
+    /// Args:
+    ///     texts: A list of strings to embed.
+    ///
+    /// Returns:
+    ///     An EmbeddingResponse with embeddings, model, usage, and cost.
+    fn embed<'py>(&self, py: Python<'py>, texts: Vec<String>) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let response = EmbeddingModel::embed(inner.as_ref(), &texts)
+                .await
+                .map_err(BlazenPyError::from)?;
+            Ok(PyEmbeddingResponse { inner: response })
+        })
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "FalEmbeddingModel(model_id='{}', dimensions={})",
+            EmbeddingModel::model_id(self.inner.as_ref()),
+            EmbeddingModel::dimensions(self.inner.as_ref()),
         )
     }
 }

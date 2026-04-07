@@ -2,6 +2,8 @@
 
 use napi_derive::napi;
 
+use super::artifact::JsArtifact;
+use super::citation::JsCitation;
 use super::tool::JsToolCall;
 
 // ---------------------------------------------------------------------------
@@ -32,6 +34,14 @@ pub struct JsStreamChunk {
     /// Tool invocations completed in this chunk.
     #[napi(js_name = "toolCalls")]
     pub tool_calls: Vec<JsToolCall>,
+    /// Reasoning text delta from models that stream a chain-of-thought trace
+    /// (Anthropic extended thinking, `DeepSeek` R1, `OpenAI` o-series).
+    #[napi(js_name = "reasoningDelta")]
+    pub reasoning_delta: Option<String>,
+    /// Citations completed in this chunk.
+    pub citations: Vec<JsCitation>,
+    /// Artifacts completed in this chunk.
+    pub artifacts: Vec<JsArtifact>,
 }
 
 /// Build a [`JsStreamChunk`] from the internal [`blazen_llm::StreamChunk`].
@@ -48,5 +58,8 @@ pub(crate) fn build_stream_chunk(chunk: blazen_llm::StreamChunk) -> JsStreamChun
                 arguments: tc.arguments,
             })
             .collect(),
+        reasoning_delta: chunk.reasoning_delta,
+        citations: chunk.citations.iter().map(JsCitation::from).collect(),
+        artifacts: chunk.artifacts.iter().map(JsArtifact::from).collect(),
     }
 }

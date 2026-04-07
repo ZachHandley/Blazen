@@ -39,6 +39,12 @@ pub(crate) struct OaiMessage {
     pub content: Option<String>,
     #[serde(default)]
     pub tool_calls: Vec<OaiToolCall>,
+    #[serde(default)]
+    pub reasoning_content: Option<String>,
+    #[serde(default)]
+    pub reasoning: Option<String>,
+    #[serde(default)]
+    pub citations: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -59,6 +65,14 @@ pub(crate) struct OaiUsage {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
     pub total_tokens: u32,
+    #[serde(default)]
+    pub completion_tokens_details: Option<OaiCompletionTokensDetails>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct OaiCompletionTokensDetails {
+    #[serde(default)]
+    pub reasoning_tokens: u32,
 }
 
 // Streaming wire types
@@ -82,6 +96,20 @@ pub(crate) struct OaiStreamDelta {
     pub content: Option<String>,
     #[serde(default)]
     pub tool_calls: Vec<OaiStreamToolCall>,
+    /// Present in the wire format (`DeepSeek` R1 etc.); not yet surfaced in
+    /// streaming chunks.
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub reasoning_content: Option<String>,
+    /// Present in the wire format (Grok); not yet surfaced in streaming chunks.
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub reasoning: Option<String>,
+    /// Present in the wire format (Perplexity); not yet surfaced in streaming
+    /// chunks.
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub citations: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -188,6 +216,7 @@ pub(crate) fn parse_next_event(buffer: &mut String) -> Option<Result<StreamChunk
                     delta: None,
                     tool_calls: Vec::new(),
                     finish_reason: Some("stop".to_owned()),
+                    ..Default::default()
                 }));
             }
 
@@ -219,6 +248,7 @@ pub(crate) fn parse_next_event(buffer: &mut String) -> Option<Result<StreamChunk
                         delta: choice.delta.content,
                         tool_calls,
                         finish_reason: choice.finish_reason,
+                        ..Default::default()
                     }));
                 }
                 Err(e) => {

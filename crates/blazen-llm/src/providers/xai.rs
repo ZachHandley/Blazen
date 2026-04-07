@@ -177,3 +177,38 @@ impl ProviderInfo for XaiProvider {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::providers::sse::OaiResponse;
+
+    #[test]
+    fn test_grok_reasoning_passes_through() {
+        let json_body = r#"{
+            "id": "x",
+            "object": "chat.completion",
+            "created": 1234567890,
+            "model": "grok-2",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "the answer is 42",
+                    "reasoning": "step 1: consider...; step 2: calculate..."
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+                "total_tokens": 15
+            }
+        }"#;
+        let parsed: OaiResponse = serde_json::from_str(json_body).unwrap();
+        let msg = &parsed.choices[0].message;
+        assert_eq!(
+            msg.reasoning.as_deref(),
+            Some("step 1: consider...; step 2: calculate...")
+        );
+    }
+}

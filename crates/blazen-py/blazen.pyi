@@ -4,7 +4,8 @@ Provides IDE support (auto-completion, type checking) for the Blazen
 Python bindings.
 """
 
-from typing import Any, AsyncIterator, Callable, ClassVar, Coroutine, Optional, Protocol, Union
+from enum import Enum
+from typing import Any, AsyncIterator, Callable, ClassVar, Coroutine, Optional, Protocol, Union, overload
 
 StateValue = Any
 """Any Python value that can be stored in the workflow context.
@@ -411,6 +412,26 @@ class ContentPart:
         """Create an image content part from base64 data."""
         ...
 
+    @staticmethod
+    def audio_url(*, url: str) -> "ContentPart":
+        """Create an audio content part from a URL."""
+        ...
+
+    @staticmethod
+    def audio_base64(*, data: str, media_type: str) -> "ContentPart":
+        """Create an audio content part from base64-encoded data."""
+        ...
+
+    @staticmethod
+    def video_url(*, url: str) -> "ContentPart":
+        """Create a video content part from a URL."""
+        ...
+
+    @staticmethod
+    def video_base64(*, data: str, media_type: str) -> "ContentPart":
+        """Create a video content part from base64-encoded data."""
+        ...
+
 
 class ChatMessage:
     """A single message in a chat conversation.
@@ -464,6 +485,26 @@ class ChatMessage:
     @staticmethod
     def user_parts(*, parts: list[ContentPart]) -> "ChatMessage":
         """Create a user message from a list of ContentPart objects."""
+        ...
+
+    @staticmethod
+    def user_audio(*, text: str, url: str) -> "ChatMessage":
+        """Create a user message with text and an audio URL."""
+        ...
+
+    @staticmethod
+    def user_audio_base64(*, text: str, data: str, media_type: str) -> "ChatMessage":
+        """Create a user message with text and base64-encoded audio."""
+        ...
+
+    @staticmethod
+    def user_video(*, text: str, url: str) -> "ChatMessage":
+        """Create a user message with text and a video URL."""
+        ...
+
+    @staticmethod
+    def user_video_base64(*, text: str, data: str, media_type: str) -> "ChatMessage":
+        """Create a user message with text and base64-encoded video."""
         ...
 
 
@@ -563,6 +604,169 @@ class RequestTiming:
     def __getitem__(self, key: str) -> Any: ...
 
 
+class ReasoningTrace:
+    """Chain-of-thought / extended-thinking trace from a model that exposes one.
+
+    Populated by Anthropic extended thinking, DeepSeek R1 reasoning_content,
+    OpenAI o-series, xAI Grok reasoning, and Gemini thoughts.
+    """
+    text: str
+    signature: str | None
+    redacted: bool
+    effort: str | None
+
+    def __repr__(self) -> str: ...
+
+
+class Citation:
+    """A web/document citation backing a model statement.
+
+    Populated by Perplexity, Gemini grounding, and any retrieval-augmented
+    citation provider.
+    """
+    url: str
+    title: str | None
+    snippet: str | None
+    start: int | None
+    end: int | None
+    document_id: str | None
+    metadata: dict[str, Any]
+
+    def __repr__(self) -> str: ...
+
+
+class Artifact:
+    """A typed artifact extracted from or returned by a model.
+
+    SVG / code blocks / markdown / mermaid / html / latex / json / custom
+    payloads can be returned inline as text by an LLM. Use ``kind`` to
+    discriminate, then read the variant-specific fields. Fields not relevant
+    to the variant return ``None``.
+    """
+    @property
+    def kind(self) -> str: ...
+    @property
+    def content(self) -> str | dict[str, Any] | list[Any]: ...
+    @property
+    def title(self) -> str | None: ...
+    @property
+    def language(self) -> str | None: ...
+    @property
+    def filename(self) -> str | None: ...
+    @property
+    def metadata(self) -> dict[str, Any]: ...
+    @property
+    def custom_kind(self) -> str | None: ...
+
+    @staticmethod
+    def svg(content: str, title: str | None = None) -> "Artifact": ...
+    @staticmethod
+    def code_block(content: str, language: str | None = None, filename: str | None = None) -> "Artifact": ...
+    @staticmethod
+    def markdown(content: str) -> "Artifact": ...
+    @staticmethod
+    def mermaid(content: str) -> "Artifact": ...
+    @staticmethod
+    def html(content: str) -> "Artifact": ...
+    @staticmethod
+    def latex(content: str) -> "Artifact": ...
+    @staticmethod
+    def json(content: dict[str, Any] | list[Any]) -> "Artifact": ...
+    @staticmethod
+    def custom(kind: str, content: str, metadata: dict[str, Any] | None = None) -> "Artifact": ...
+
+    def __repr__(self) -> str: ...
+
+
+class FinishReason:
+    """Normalized finish reason across providers.
+
+    Use ``kind`` for the canonical category and ``value`` for the original
+    provider string.
+    """
+    @property
+    def kind(self) -> str: ...
+    @property
+    def value(self) -> str: ...
+
+    @staticmethod
+    def from_provider_string(s: str) -> "FinishReason": ...
+
+    def __repr__(self) -> str: ...
+    def __eq__(self, other: object) -> bool: ...
+
+
+class ResponseFormat:
+    """Typed response-format hint for structured output."""
+    @property
+    def kind(self) -> str: ...
+    @property
+    def schema_name(self) -> str | None: ...
+    @property
+    def schema(self) -> dict[str, Any] | None: ...
+    @property
+    def strict(self) -> bool: ...
+
+    def to_dict(self) -> dict[str, Any]: ...
+
+    @staticmethod
+    def text() -> "ResponseFormat": ...
+    @staticmethod
+    def json_object() -> "ResponseFormat": ...
+    @staticmethod
+    def json_schema(name: str, schema: dict[str, Any], strict: bool = True) -> "ResponseFormat": ...
+
+    def __repr__(self) -> str: ...
+
+
+class EmbeddingResponse:
+    """Response from an embedding model."""
+    embeddings: list[list[float]]
+    model: str
+    usage: TokenUsage | None
+    cost: float | None
+    timing: RequestTiming | None
+
+
+class StreamChunk:
+    """A single chunk from a streaming completion response.
+
+    Attributes:
+        delta: Incremental text content, or None.
+        finish_reason: Present only in the final chunk.
+        tool_calls: Tool invocations completed in this chunk.
+        reasoning_delta: Reasoning text delta from models that stream a
+            chain-of-thought trace (Anthropic extended thinking, DeepSeek R1,
+            OpenAI o-series).
+        citations: Citations completed in this chunk.
+        artifacts: Artifacts completed in this chunk.
+    """
+
+    delta: str | None
+    finish_reason: str | None
+    tool_calls: list[ToolCall]
+    reasoning_delta: str | None
+    citations: list[Citation]
+    artifacts: list[Artifact]
+
+    def __getitem__(self, key: str) -> Any: ...
+    def __repr__(self) -> str: ...
+
+
+class CompletionStream:
+    """Async iterator over streaming completion chunks.
+
+    Returned by ``CompletionModel.stream(messages)`` and ``FalProvider.stream(messages)``
+    when no ``on_chunk`` callback is provided.
+
+    Example:
+        >>> async for chunk in model.stream([ChatMessage.user("Hi")]):
+        ...     print(chunk.delta or "", end="", flush=True)
+    """
+    def __aiter__(self) -> "CompletionStream": ...
+    async def __anext__(self) -> StreamChunk: ...
+
+
 class CompletionResponse:
     """The result of a chat completion.
 
@@ -582,7 +786,11 @@ class CompletionResponse:
     images: list[dict[str, Any]]
     audio: list[dict[str, Any]]
     videos: list[dict[str, Any]]
+    reasoning: ReasoningTrace | None
+    citations: list[Citation]
+    artifacts: list[Artifact]
 
+    def finish_reason_normalized(self) -> FinishReason | None: ...
     def __getitem__(self, key: str) -> Any: ...
     def keys(self) -> list[str]: ...
 
@@ -667,7 +875,21 @@ class CompletionModel:
         api_key: str, region: str, model: Optional[str] = None
     ) -> "CompletionModel": ...
     @staticmethod
-    def fal(api_key: str, model: Optional[str] = None) -> "CompletionModel": ...
+    def fal(
+        api_key: str,
+        *,
+        options: Optional["FalOptions"] = None,
+    ) -> "CompletionModel":
+        """Create a fal.ai completion model.
+
+        Args:
+            api_key: Your fal.ai API key.
+            options: Optional ``FalOptions`` to configure the model,
+                endpoint, enterprise tier, and auto-routing. Defaults to
+                the ``OpenAiChat`` endpoint
+                (``openrouter/router/openai/v1/chat/completions``).
+        """
+        ...
 
     async def complete(
         self,
@@ -685,25 +907,24 @@ class CompletionModel:
         """
         ...
 
+    @overload
     async def stream(
         self,
         messages: list[ChatMessage],
         on_chunk: Callable[[dict[str, Any]], Any],
-        options: Optional[CompletionOptions] = None,
+        options: CompletionOptions | None = None,
     ) -> None:
-        """Stream a chat completion, calling ``on_chunk`` for each chunk.
+        """Stream a chat completion, calling ``on_chunk`` for each chunk."""
+        ...
 
-        Each chunk is a dict with keys: ``delta`` (optional str),
-        ``finish_reason`` (optional str), ``tool_calls`` (list of dicts).
-
-        Example::
-
-            def handle(chunk):
-                if chunk["delta"]:
-                    print(chunk["delta"], end="")
-
-            await model.stream([ChatMessage.user("Hi!")], handle)
-        """
+    @overload
+    async def stream(
+        self,
+        messages: list[ChatMessage],
+        *,
+        options: CompletionOptions | None = None,
+    ) -> CompletionStream:
+        """Stream a chat completion as an async iterator (when no callback is provided)."""
         ...
 
 
@@ -1166,14 +1387,94 @@ class Generated3DModel:
 # ---------------------------------------------------------------------------
 
 
+class FalLlmEndpoint(Enum):
+    """fal.ai LLM endpoint family. Default: OpenAiChat."""
+
+    OpenAiChat = "OpenAiChat"
+    OpenAiResponses = "OpenAiResponses"
+    OpenAiEmbeddings = "OpenAiEmbeddings"
+    OpenRouter = "OpenRouter"
+    OpenRouterEnterprise = "OpenRouterEnterprise"
+    AnyLlm = "AnyLlm"
+    AnyLlmEnterprise = "AnyLlmEnterprise"
+
+
+class FalOptions:
+    """Configuration options for ``FalProvider``.
+
+    Example::
+
+        opts = FalOptions(
+            model="anthropic/claude-sonnet-4.5",
+            endpoint=FalLlmEndpoint.OpenAiChat,
+        )
+        fal = FalProvider(api_key="fal-...", options=opts)
+    """
+
+    model: Optional[str]
+    endpoint: Optional[FalLlmEndpoint]
+    enterprise: bool
+    auto_route_modality: bool
+
+    def __init__(
+        self,
+        *,
+        model: Optional[str] = None,
+        endpoint: Optional[FalLlmEndpoint] = None,
+        enterprise: bool = False,
+        auto_route_modality: bool = True,
+    ) -> None:
+        """Create a new fal options object.
+
+        Args:
+            model: Underlying LLM model id (e.g. ``"anthropic/claude-sonnet-4.5"``).
+            endpoint: The fal endpoint family. Defaults to ``OpenAiChat``.
+            enterprise: Promote the endpoint to its enterprise / SOC2-eligible
+                variant.
+            auto_route_modality: Auto-route to the matching vision/audio/video
+                variant when message content includes media (default: True).
+        """
+        ...
+
+
+class FalEmbeddingModel:
+    """A fal.ai text embedding model.
+
+    Construct via ``FalProvider.embedding_model()``.
+
+    Example::
+
+        fal = FalProvider(api_key="fal-...")
+        em = fal.embedding_model()
+        resp = await em.embed(["hello", "world"])
+        print(len(resp.embeddings))  # 2
+    """
+
+    model_id: str
+    dimensions: int
+
+    async def embed(self, texts: list[str]) -> EmbeddingResponse:
+        """Embed one or more texts.
+
+        Args:
+            texts: A list of strings to embed.
+
+        Returns:
+            An EmbeddingResponse with embeddings, model, usage, and cost.
+        """
+        ...
+
+
 class FalProvider:
-    """A fal.ai provider for image gen, video, audio, TTS, transcription, and LLM.
+    """A fal.ai provider for image, video, audio, 3D, embeddings, and LLM.
 
     This is the unified entry point for all fal.ai capabilities:
-    image generation and upscaling, video generation (text-to-video,
-    image-to-video), audio generation (TTS, music, sound effects),
-    audio transcription, raw compute job submission, and LLM chat
-    completions (via fal-ai/any-llm).
+    image generation, upscaling, and background removal; video
+    generation (text-to-video, image-to-video); audio generation
+    (TTS, music, sound effects); audio transcription; 3D model
+    generation; text embeddings; raw compute job submission; and
+    LLM chat completions (default endpoint:
+    ``openrouter/router/openai/v1/chat/completions`` -- ``OpenAiChat``).
 
     Example::
 
@@ -1186,15 +1487,14 @@ class FalProvider:
         self,
         *,
         api_key: str,
-        model: Optional[str] = None,
-        endpoint: Optional[str] = None,
+        options: Optional[FalOptions] = None,
     ) -> None:
         """Create a new fal.ai provider.
 
         Args:
             api_key: Your fal.ai API key.
-            model: Optional LLM model name (e.g. "anthropic/claude-sonnet-4.5").
-            endpoint: Optional fal.ai endpoint override (default: "fal-ai/any-llm").
+            options: Optional ``FalOptions`` to configure the model,
+                endpoint, enterprise tier, and auto-routing.
         """
         ...
 
@@ -1224,6 +1524,58 @@ class FalProvider:
 
         Returns:
             A dict with the upscaled image, timing, cost, and metadata.
+        """
+        ...
+
+    async def upscale_image_aura(self, request: UpscaleRequest) -> dict[str, Any]:
+        """Upscale an image via the aura-sr model."""
+        ...
+
+    async def upscale_image_clarity(self, request: UpscaleRequest) -> dict[str, Any]:
+        """Upscale an image via the clarity-upscaler model."""
+        ...
+
+    async def upscale_image_creative(self, request: UpscaleRequest) -> dict[str, Any]:
+        """Upscale an image via the creative-upscaler model."""
+        ...
+
+    async def remove_background(
+        self,
+        *,
+        image_url: str,
+        model: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Remove the background from an image.
+
+        Args:
+            image_url: URL of the source image.
+            model: Optional model id override.
+
+        Returns:
+            A dict with the matted image, timing, cost, and metadata.
+        """
+        ...
+
+    # -- 3D --------------------------------------------------------------------
+
+    async def generate_3d(self, request: ThreeDRequest) -> dict[str, Any]:
+        """Generate a 3D model from a text prompt or source image.
+
+        Args:
+            request: A ThreeDRequest with prompt and/or image_url.
+
+        Returns:
+            A dict with the generated 3D model, timing, cost, and metadata.
+        """
+        ...
+
+    # -- Embeddings ------------------------------------------------------------
+
+    def embedding_model(self) -> FalEmbeddingModel:
+        """Build a ``FalEmbeddingModel`` sharing this provider's HTTP client and API key.
+
+        Returns:
+            A ``FalEmbeddingModel`` you can call ``.embed([...])`` on.
         """
         ...
 
@@ -1358,17 +1710,9 @@ class FalProvider:
         model: Optional[str] = None,
         response_format: Optional[dict[str, Any]] = None,
     ) -> CompletionResponse:
-        """Perform a chat completion via fal-ai/any-llm.
+        """Perform a chat completion via the configured fal endpoint family.
 
-        Args:
-            messages: A list of ChatMessage objects.
-            temperature: Optional sampling temperature (0.0-2.0).
-            max_tokens: Optional maximum tokens to generate.
-            model: Optional model override for this request.
-            response_format: Optional JSON schema dict for structured output.
-
-        Returns:
-            A CompletionResponse with content, model, tool_calls, usage, etc.
+        Defaults to ``FalLlmEndpoint.OpenAiChat`` (openrouter/router/openai/v1/chat/completions).
         """
         ...
 

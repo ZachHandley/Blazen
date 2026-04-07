@@ -90,6 +90,35 @@ impl PyCompletionResponse {
         crate::convert::json_to_py(py, &self.inner.metadata)
     }
 
+    /// Reasoning trace from models that expose one (Anthropic extended thinking,
+    /// DeepSeek R1, OpenAI o-series, xAI Grok, Gemini thoughts).
+    #[getter]
+    fn reasoning(&self) -> Option<crate::types::PyReasoningTrace> {
+        self.inner.reasoning.as_ref().map(Into::into)
+    }
+
+    /// Web/document citations backing the model's statement (Perplexity,
+    /// Gemini grounding, Anthropic web search).
+    #[getter]
+    fn citations(&self) -> Vec<crate::types::PyCitation> {
+        self.inner.citations.iter().map(Into::into).collect()
+    }
+
+    /// Typed inline artifacts extracted from the response (SVG, code blocks,
+    /// markdown, mermaid, html, latex, json, custom).
+    #[getter]
+    fn artifacts(&self) -> Vec<crate::types::PyArtifact> {
+        self.inner.artifacts.iter().map(Into::into).collect()
+    }
+
+    /// Lazily map the raw provider finish-reason string into a normalized
+    /// [`FinishReason`].
+    fn finish_reason_normalized(&self) -> Option<crate::types::PyFinishReason> {
+        self.inner
+            .finish_reason_normalized()
+            .map(crate::types::PyFinishReason::from)
+    }
+
     fn __getitem__(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
         match key {
             "content" => match &self.inner.content {
@@ -163,6 +192,21 @@ impl PyCompletionResponse {
                 crate::convert::json_to_py(py, &val)
             }
             "metadata" => crate::convert::json_to_py(py, &self.inner.metadata),
+            "reasoning" => match &self.inner.reasoning {
+                Some(r) => {
+                    let val = serde_json::to_value(r).unwrap_or_default();
+                    crate::convert::json_to_py(py, &val)
+                }
+                None => Ok(py.None()),
+            },
+            "citations" => {
+                let val = serde_json::to_value(&self.inner.citations).unwrap_or_default();
+                crate::convert::json_to_py(py, &val)
+            }
+            "artifacts" => {
+                let val = serde_json::to_value(&self.inner.artifacts).unwrap_or_default();
+                crate::convert::json_to_py(py, &val)
+            }
             _ => Err(pyo3::exceptions::PyKeyError::new_err(key.to_owned())),
         }
     }
@@ -180,6 +224,9 @@ impl PyCompletionResponse {
             "audio",
             "videos",
             "metadata",
+            "reasoning",
+            "citations",
+            "artifacts",
         ]
     }
 

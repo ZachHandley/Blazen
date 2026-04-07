@@ -1,19 +1,25 @@
 //! Python wrapper for the CompletionModel type with all provider constructors.
 
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
 use pyo3::prelude::*;
-use tokio_stream::StreamExt;
+use tokio::sync::Mutex;
+use tokio_stream::{Stream, StreamExt};
 
 use blazen_llm::cache::{CacheConfig, CacheStrategy, CachedCompletionModel};
 use blazen_llm::fallback::FallbackModel;
 use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
 use blazen_llm::types::ToolDefinition;
-use blazen_llm::{ChatMessage, CompletionModel, CompletionRequest};
+use blazen_llm::{BlazenError, ChatMessage, CompletionModel, CompletionRequest, StreamChunk};
 
 use crate::error::BlazenPyError;
+use crate::providers::fal::{PyFalOptions, apply_fal_options};
 use crate::types::{PyChatMessage, PyCompletionResponse, PyStreamChunk};
+
+/// Type alias for the pinned boxed stream returned by `CompletionModel::stream`.
+type PinnedChunkStream = Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>;
 
 // ---------------------------------------------------------------------------
 // PyCompletionOptions
@@ -344,14 +350,17 @@ impl PyCompletionModel {
     ///
     /// Args:
     ///     api_key: Your fal.ai API key.
-    ///     model: Optional LLM model name (e.g. "anthropic/claude-sonnet-4.5").
+    ///     options: Optional [`FalOptions`] for selecting the model,
+    ///         endpoint, enterprise tier, and auto-routing. Defaults to
+    ///         the OpenAI-chat endpoint
+    ///         (``openrouter/router/openai/v1/chat/completions``).
     #[staticmethod]
-    #[pyo3(signature = (api_key, model=None))]
-    fn fal(api_key: &str, model: Option<&str>) -> Self {
-        let mut provider = blazen_llm::providers::fal::FalProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_llm_model(m);
-        }
+    #[pyo3(signature = (api_key, *, options=None))]
+    fn fal(api_key: &str, options: Option<PyFalOptions>) -> Self {
+        let provider = apply_fal_options(
+            blazen_llm::providers::fal::FalProvider::new(api_key),
+            options,
+        );
         Self {
             inner: Arc::new(provider),
         }
@@ -511,31 +520,39 @@ impl PyCompletionModel {
         })
     }
 
-    /// Stream a chat completion, calling a callback for each chunk.
+    /// Stream a chat completion.
+    ///
+    /// Two usage modes are supported:
+    ///
+    /// 1. **Async iterator** (``on_chunk`` omitted) -- returns a
+    ///    [`CompletionStream`] which can be consumed with ``async for``.
+    /// 2. **Callback** (``on_chunk`` provided) -- returns a coroutine that
+    ///    resolves once the stream is exhausted, invoking ``on_chunk`` once
+    ///    per [`StreamChunk`].
     ///
     /// Args:
     ///     messages: A list of ChatMessage objects.
-    ///     on_chunk: Callback function receiving each chunk as a dict with
-    ///         keys: ``delta``, ``finish_reason``, ``tool_calls``.
-    ///     temperature: Optional sampling temperature (0.0-2.0).
-    ///     max_tokens: Optional maximum tokens to generate.
-    ///     top_p: Optional nucleus sampling parameter (0.0-1.0).
-    ///     model: Optional model override for this request.
-    ///     tools: Optional list of dicts with ``name``, ``description``, and
-    ///         ``parameters`` keys for function calling.
-    ///     response_format: Optional JSON schema dict for structured output.
+    ///     on_chunk: Optional callback function receiving each chunk. If
+    ///         omitted, the method returns an async iterator.
+    ///     options: Optional [`CompletionOptions`] for sampling parameters,
+    ///         tools, and response format.
     ///
-    /// Example:
-    ///     >>> async def handle_chunk(chunk):
-    ///     ...     if chunk["delta"]:
-    ///     ...         print(chunk["delta"], end="")
+    /// Example (async iterator):
+    ///     >>> async for chunk in model.stream([ChatMessage.user("Hi!")]):
+    ///     ...     if chunk.delta:
+    ///     ...         print(chunk.delta, end="")
+    ///
+    /// Example (callback):
+    ///     >>> def handle_chunk(chunk):
+    ///     ...     if chunk.delta:
+    ///     ...         print(chunk.delta, end="")
     ///     >>> await model.stream([ChatMessage.user("Hi!")], handle_chunk)
-    #[pyo3(signature = (messages, on_chunk, options=None))]
+    #[pyo3(signature = (messages, on_chunk=None, options=None))]
     fn stream<'py>(
         &self,
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
-        on_chunk: Py<PyAny>,
+        on_chunk: Option<Py<PyAny>>,
         options: Option<PyRef<'py, PyCompletionOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
@@ -543,37 +560,159 @@ impl PyCompletionModel {
 
         let inner = self.inner.clone();
 
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let stream = inner
-                .stream(request)
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        // Callback mode: return a coroutine that drives the stream and
+        // invokes the callback once per chunk.
+        //
+        // Async iterator mode (`on_chunk` is `None`): return a
+        // [`PyLazyCompletionStream`] directly. We intentionally do NOT wrap
+        // this in a coroutine because `async for` calls `__aiter__`
+        // synchronously on the expression. By deferring stream initialization
+        // until the first `__anext__` call, the one-liner form works
+        // naturally:
+        //
+        //     async for chunk in model.stream([ChatMessage.user("Hi!")]):
+        //         ...
+        if let Some(callback) = on_chunk {
+            pyo3_async_runtimes::tokio::future_into_py(py, async move {
+                let stream = inner
+                    .stream(request)
+                    .await
+                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
-            let mut stream = std::pin::pin!(stream);
-            while let Some(result) = stream.next().await {
-                match result {
-                    Ok(chunk) => {
-                        let py_chunk = PyStreamChunk { inner: chunk };
+                let mut stream = std::pin::pin!(stream);
+                while let Some(result) = stream.next().await {
+                    match result {
+                        Ok(chunk) => {
+                            let py_chunk = PyStreamChunk { inner: chunk };
 
-                        // Call the Python callback
-                        tokio::task::block_in_place(|| {
-                            Python::attach(|py| {
-                                on_chunk.call1(py, (py_chunk,))?;
-                                Ok::<_, PyErr>(())
-                            })
-                        })?;
-                    }
-                    Err(e) => {
-                        return Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string()));
+                            // Call the Python callback
+                            tokio::task::block_in_place(|| {
+                                Python::attach(|py| {
+                                    callback.call1(py, (py_chunk,))?;
+                                    Ok::<_, PyErr>(())
+                                })
+                            })?;
+                        }
+                        Err(e) => {
+                            return Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string()));
+                        }
                     }
                 }
-            }
-            Ok(())
-        })
+                Ok(())
+            })
+        } else {
+            let lazy = PyLazyCompletionStream {
+                state: Arc::new(Mutex::new(LazyStreamState::NotStarted(Box::new(
+                    PendingStream {
+                        model: inner,
+                        request: Some(request),
+                    },
+                )))),
+            };
+            Ok(lazy.into_pyobject(py)?.into_any())
+        }
     }
 
     fn __repr__(&self) -> String {
         format!("CompletionModel(model_id='{}')", self.inner.model_id())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PyLazyCompletionStream -- async iterator over streamed chunks
+// ---------------------------------------------------------------------------
+
+/// Pending stream initialization data for [`LazyStreamState::NotStarted`].
+///
+/// Boxed to keep the enum variant sizes balanced (avoids
+/// `clippy::large_enum_variant`).
+struct PendingStream {
+    model: Arc<dyn CompletionModel>,
+    request: Option<CompletionRequest>,
+}
+
+/// Internal state for [`PyLazyCompletionStream`].
+///
+/// The stream is lazily initialized on the first `__anext__` call so that the
+/// Python caller can use the natural `async for chunk in model.stream(...)`
+/// form without having to `await` the method first.
+enum LazyStreamState {
+    /// The underlying stream has not yet been requested.
+    NotStarted(Box<PendingStream>),
+    /// The stream is active and yielding chunks.
+    Active(PinnedChunkStream),
+    /// The stream has been fully consumed or errored out.
+    Exhausted,
+}
+
+/// Async iterator over streamed completion chunks.
+///
+/// Implements the Python `__aiter__` / `__anext__` protocol so it can be used
+/// with `async for`. The underlying HTTP stream is lazily initialized on the
+/// first `__anext__` call, allowing the natural one-liner form:
+///
+///     async for chunk in model.stream([ChatMessage.user("Hi!")]):
+///         ...
+#[pyclass(name = "CompletionStream")]
+pub struct PyLazyCompletionStream {
+    state: Arc<Mutex<LazyStreamState>>,
+}
+
+#[pymethods]
+impl PyLazyCompletionStream {
+    fn __aiter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __anext__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let state = self.state.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut guard = state.lock().await;
+
+            // Lazily initialize the stream on the first call.
+            if let LazyStreamState::NotStarted(pending) = &mut *guard {
+                let request = pending
+                    .request
+                    .take()
+                    .ok_or_else(|| BlazenPyError::Llm("stream request already consumed".into()))?;
+                match pending.model.stream(request).await {
+                    Ok(stream) => {
+                        *guard = LazyStreamState::Active(stream);
+                    }
+                    Err(e) => {
+                        *guard = LazyStreamState::Exhausted;
+                        return Err(crate::error::blazen_error_to_pyerr(e));
+                    }
+                }
+            }
+
+            match &mut *guard {
+                LazyStreamState::Active(stream) => match stream.next().await {
+                    Some(Ok(chunk)) => Ok(PyStreamChunk { inner: chunk }),
+                    Some(Err(e)) => {
+                        *guard = LazyStreamState::Exhausted;
+                        Err(crate::error::blazen_error_to_pyerr(e))
+                    }
+                    None => {
+                        *guard = LazyStreamState::Exhausted;
+                        Err(pyo3::exceptions::PyStopAsyncIteration::new_err(
+                            "stream exhausted",
+                        ))
+                    }
+                },
+                LazyStreamState::Exhausted => Err(pyo3::exceptions::PyStopAsyncIteration::new_err(
+                    "stream exhausted",
+                )),
+                // Unreachable: we just initialized above.
+                LazyStreamState::NotStarted(_) => Err(pyo3::exceptions::PyRuntimeError::new_err(
+                    "stream in inconsistent state",
+                )),
+            }
+        })
+    }
+
+    fn __repr__(&self) -> String {
+        "CompletionStream(...)".to_owned()
     }
 }
 

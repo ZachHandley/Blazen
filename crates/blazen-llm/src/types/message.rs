@@ -22,15 +22,26 @@ pub enum Role {
     Tool,
 }
 
-/// How an image or file is provided.
+/// How a piece of media is provided.
+///
+/// Used by [`ImageContent`], [`AudioContent`], [`VideoContent`], and
+/// [`FileContent`] — all media kinds share this URL-or-base64 envelope.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ImageSource {
-    /// An image provided via URL.
+    /// Media provided via URL.
     Url { url: String },
-    /// An image provided as base64-encoded data.
+    /// Media provided as base64-encoded data.
     Base64 { data: String },
 }
+
+/// Generic media source alias used by audio, video, and document content.
+///
+/// `MediaSource` is a re-export of [`ImageSource`] under a more inclusive
+/// name. Adopt `MediaSource` in new code that handles non-image modalities;
+/// existing image code can keep using `ImageSource` indefinitely — they are
+/// the same type.
+pub type MediaSource = ImageSource;
 
 /// Image content for multimodal messages.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -41,19 +52,106 @@ pub struct ImageContent {
     pub media_type: Option<String>,
 }
 
-/// File/document content (PDF, video, audio, etc.).
+/// File/document content (PDF, generic file, etc.).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileContent {
     /// The source of the file data.
-    pub source: ImageSource,
-    /// The MIME type of the file (e.g. `"application/pdf"`, `"video/mp4"`).
+    pub source: MediaSource,
+    /// The MIME type of the file (e.g. `"application/pdf"`).
     pub media_type: String,
     /// An optional filename for display purposes.
     pub filename: Option<String>,
 }
 
+/// Audio content for chat-message input (multimodal models, ASR feeds).
+///
+/// Audio chat input is supported natively by Gemini (via `inlineData`/`fileData`)
+/// and `OpenAI`'s `gpt-4o-audio-preview` (via `input_audio` blocks). Providers
+/// that do not support audio input drop the content with a warning.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AudioContent {
+    /// The source of the audio data.
+    pub source: MediaSource,
+    /// MIME type, e.g. `"audio/mp3"`, `"audio/wav"`, `"audio/ogg"`, `"audio/flac"`.
+    pub media_type: Option<String>,
+    /// Optional duration in seconds, populated when known.
+    pub duration_seconds: Option<f32>,
+}
+
+impl AudioContent {
+    /// Build an audio content from a public URL.
+    #[must_use]
+    pub fn from_url(url: impl Into<String>) -> Self {
+        Self {
+            source: MediaSource::Url { url: url.into() },
+            media_type: None,
+            duration_seconds: None,
+        }
+    }
+
+    /// Build an audio content from base64-encoded data with an explicit MIME.
+    #[must_use]
+    pub fn from_base64(data: impl Into<String>, media_type: impl Into<String>) -> Self {
+        Self {
+            source: MediaSource::Base64 { data: data.into() },
+            media_type: Some(media_type.into()),
+            duration_seconds: None,
+        }
+    }
+
+    /// Builder: attach a known duration in seconds.
+    #[must_use]
+    pub fn with_duration(mut self, seconds: f32) -> Self {
+        self.duration_seconds = Some(seconds);
+        self
+    }
+}
+
+/// Video content for chat-message input (multimodal models).
+///
+/// Video chat input is supported natively by Gemini. Providers that do not
+/// support video input drop the content with a warning.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VideoContent {
+    /// The source of the video data.
+    pub source: MediaSource,
+    /// MIME type, e.g. `"video/mp4"`, `"video/mov"`, `"video/webm"`.
+    pub media_type: Option<String>,
+    /// Optional duration in seconds, populated when known.
+    pub duration_seconds: Option<f32>,
+}
+
+impl VideoContent {
+    /// Build a video content from a public URL.
+    #[must_use]
+    pub fn from_url(url: impl Into<String>) -> Self {
+        Self {
+            source: MediaSource::Url { url: url.into() },
+            media_type: None,
+            duration_seconds: None,
+        }
+    }
+
+    /// Build a video content from base64-encoded data with an explicit MIME.
+    #[must_use]
+    pub fn from_base64(data: impl Into<String>, media_type: impl Into<String>) -> Self {
+        Self {
+            source: MediaSource::Base64 { data: data.into() },
+            media_type: Some(media_type.into()),
+            duration_seconds: None,
+        }
+    }
+
+    /// Builder: attach a known duration in seconds.
+    #[must_use]
+    pub fn with_duration(mut self, seconds: f32) -> Self {
+        self.duration_seconds = Some(seconds);
+        self
+    }
+}
+
 /// A single part in a multi-part message.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentPart {
     /// A text segment.
@@ -62,10 +160,92 @@ pub enum ContentPart {
     Image(ImageContent),
     /// A file/document segment.
     File(FileContent),
+    /// An audio segment.
+    Audio(AudioContent),
+    /// A video segment.
+    Video(VideoContent),
+}
+
+impl ContentPart {
+    /// Build a text content part.
+    #[must_use]
+    pub fn text(text: impl Into<String>) -> Self {
+        Self::Text { text: text.into() }
+    }
+
+    /// Build an image content part from a URL.
+    #[must_use]
+    pub fn image_url(url: impl Into<String>, media_type: Option<String>) -> Self {
+        Self::Image(ImageContent {
+            source: ImageSource::Url { url: url.into() },
+            media_type,
+        })
+    }
+
+    /// Build an image content part from base64-encoded data.
+    #[must_use]
+    pub fn image_base64(data: impl Into<String>, media_type: impl Into<String>) -> Self {
+        Self::Image(ImageContent {
+            source: ImageSource::Base64 { data: data.into() },
+            media_type: Some(media_type.into()),
+        })
+    }
+
+    /// Build an audio content part from a URL.
+    #[must_use]
+    pub fn audio_url(url: impl Into<String>) -> Self {
+        Self::Audio(AudioContent::from_url(url))
+    }
+
+    /// Build an audio content part from base64-encoded data.
+    #[must_use]
+    pub fn audio_base64(data: impl Into<String>, media_type: impl Into<String>) -> Self {
+        Self::Audio(AudioContent::from_base64(data, media_type))
+    }
+
+    /// Build a video content part from a URL.
+    #[must_use]
+    pub fn video_url(url: impl Into<String>) -> Self {
+        Self::Video(VideoContent::from_url(url))
+    }
+
+    /// Build a video content part from base64-encoded data.
+    #[must_use]
+    pub fn video_base64(data: impl Into<String>, media_type: impl Into<String>) -> Self {
+        Self::Video(VideoContent::from_base64(data, media_type))
+    }
+
+    /// Build a file content part from a URL with an explicit MIME type.
+    #[must_use]
+    pub fn file_url(
+        url: impl Into<String>,
+        media_type: impl Into<String>,
+        filename: Option<String>,
+    ) -> Self {
+        Self::File(FileContent {
+            source: MediaSource::Url { url: url.into() },
+            media_type: media_type.into(),
+            filename,
+        })
+    }
+
+    /// Build a file content part from base64-encoded data.
+    #[must_use]
+    pub fn file_base64(
+        data: impl Into<String>,
+        media_type: impl Into<String>,
+        filename: Option<String>,
+    ) -> Self {
+        Self::File(FileContent {
+            source: MediaSource::Base64 { data: data.into() },
+            media_type: media_type.into(),
+            filename,
+        })
+    }
 }
 
 /// The content payload of a [`ChatMessage`].
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum MessageContent {
     /// Plain text content.
@@ -131,6 +311,94 @@ impl MessageContent {
                 }
             }
         }
+    }
+
+    /// Borrow every image part inside this message.
+    ///
+    /// Walks both the top-level [`MessageContent::Image`] shorthand and any
+    /// [`ContentPart::Image`] parts inside [`MessageContent::Parts`].
+    #[must_use]
+    pub fn image_parts(&self) -> Vec<&ImageContent> {
+        match self {
+            Self::Text(_) => Vec::new(),
+            Self::Image(img) => vec![img],
+            Self::Parts(parts) => parts
+                .iter()
+                .filter_map(|p| match p {
+                    ContentPart::Image(img) => Some(img),
+                    _ => None,
+                })
+                .collect(),
+        }
+    }
+
+    /// Borrow every audio part inside this message.
+    #[must_use]
+    pub fn audio_parts(&self) -> Vec<&AudioContent> {
+        match self {
+            Self::Parts(parts) => parts
+                .iter()
+                .filter_map(|p| match p {
+                    ContentPart::Audio(a) => Some(a),
+                    _ => None,
+                })
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Borrow every video part inside this message.
+    #[must_use]
+    pub fn video_parts(&self) -> Vec<&VideoContent> {
+        match self {
+            Self::Parts(parts) => parts
+                .iter()
+                .filter_map(|p| match p {
+                    ContentPart::Video(v) => Some(v),
+                    _ => None,
+                })
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Borrow every file part inside this message.
+    #[must_use]
+    pub fn file_parts(&self) -> Vec<&FileContent> {
+        match self {
+            Self::Parts(parts) => parts
+                .iter()
+                .filter_map(|p| match p {
+                    ContentPart::File(f) => Some(f),
+                    _ => None,
+                })
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Whether this message carries any image content.
+    #[must_use]
+    pub fn has_images(&self) -> bool {
+        !self.image_parts().is_empty()
+    }
+
+    /// Whether this message carries any audio content.
+    #[must_use]
+    pub fn has_audio(&self) -> bool {
+        !self.audio_parts().is_empty()
+    }
+
+    /// Whether this message carries any video content.
+    #[must_use]
+    pub fn has_video(&self) -> bool {
+        !self.video_parts().is_empty()
+    }
+
+    /// Whether this message carries any file/document content.
+    #[must_use]
+    pub fn has_files(&self) -> bool {
+        !self.file_parts().is_empty()
     }
 }
 
@@ -298,6 +566,50 @@ impl ChatMessage {
             name: None,
             tool_calls: Vec::new(),
         }
+    }
+
+    /// Create a user message containing text and an audio clip from a URL.
+    #[must_use]
+    pub fn user_audio(prompt: impl Into<String>, audio_url: impl Into<String>) -> Self {
+        Self::user_parts(vec![
+            ContentPart::text(prompt),
+            ContentPart::audio_url(audio_url),
+        ])
+    }
+
+    /// Create a user message containing text and a base64-encoded audio clip.
+    #[must_use]
+    pub fn user_audio_base64(
+        prompt: impl Into<String>,
+        data: impl Into<String>,
+        media_type: impl Into<String>,
+    ) -> Self {
+        Self::user_parts(vec![
+            ContentPart::text(prompt),
+            ContentPart::audio_base64(data, media_type),
+        ])
+    }
+
+    /// Create a user message containing text and a video from a URL.
+    #[must_use]
+    pub fn user_video(prompt: impl Into<String>, video_url: impl Into<String>) -> Self {
+        Self::user_parts(vec![
+            ContentPart::text(prompt),
+            ContentPart::video_url(video_url),
+        ])
+    }
+
+    /// Create a user message containing text and a base64-encoded video.
+    #[must_use]
+    pub fn user_video_base64(
+        prompt: impl Into<String>,
+        data: impl Into<String>,
+        media_type: impl Into<String>,
+    ) -> Self {
+        Self::user_parts(vec![
+            ContentPart::text(prompt),
+            ContentPart::video_base64(data, media_type),
+        ])
     }
 }
 
@@ -518,5 +830,115 @@ mod tests {
     fn from_string_still_works() {
         let content: MessageContent = String::from("hello").into();
         assert_eq!(content.as_text(), Some("hello"));
+    }
+
+    // -----------------------------------------------------------------------
+    // Audio / Video content variants
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn audio_content_from_url() {
+        let audio = AudioContent::from_url("https://example.com/clip.mp3").with_duration(12.5);
+        assert!(
+            matches!(&audio.source, MediaSource::Url { url } if url == "https://example.com/clip.mp3")
+        );
+        assert_eq!(audio.duration_seconds, Some(12.5));
+    }
+
+    #[test]
+    fn audio_content_from_base64() {
+        let audio = AudioContent::from_base64("YWJjMTIz", "audio/wav");
+        assert!(matches!(&audio.source, MediaSource::Base64 { data } if data == "YWJjMTIz"));
+        assert_eq!(audio.media_type.as_deref(), Some("audio/wav"));
+    }
+
+    #[test]
+    fn video_content_from_url() {
+        let video = VideoContent::from_url("https://example.com/clip.mp4");
+        assert!(
+            matches!(&video.source, MediaSource::Url { url } if url == "https://example.com/clip.mp4")
+        );
+    }
+
+    #[test]
+    fn content_part_constructors() {
+        let text = ContentPart::text("hi");
+        assert!(matches!(&text, ContentPart::Text { text } if text == "hi"));
+
+        let img = ContentPart::image_url("https://i.com/a.png", Some("image/png".into()));
+        assert!(matches!(&img, ContentPart::Image(_)));
+
+        let aud = ContentPart::audio_url("https://a.com/c.mp3");
+        assert!(matches!(&aud, ContentPart::Audio(_)));
+
+        let vid = ContentPart::video_url("https://v.com/c.mp4");
+        assert!(matches!(&vid, ContentPart::Video(_)));
+
+        let file = ContentPart::file_url("https://f.com/d.pdf", "application/pdf", None);
+        assert!(matches!(&file, ContentPart::File(_)));
+    }
+
+    #[test]
+    fn user_audio_constructor() {
+        let msg = ChatMessage::user_audio("Transcribe this", "https://a.com/c.mp3");
+        assert_eq!(msg.role, Role::User);
+        let parts = msg.content.as_parts();
+        assert_eq!(parts.len(), 2);
+        assert!(matches!(&parts[0], ContentPart::Text { text } if text == "Transcribe this"));
+        assert!(matches!(&parts[1], ContentPart::Audio(_)));
+    }
+
+    #[test]
+    fn user_video_constructor() {
+        let msg = ChatMessage::user_video("Describe this", "https://v.com/c.mp4");
+        assert_eq!(msg.role, Role::User);
+        let parts = msg.content.as_parts();
+        assert_eq!(parts.len(), 2);
+        assert!(matches!(&parts[1], ContentPart::Video(_)));
+    }
+
+    #[test]
+    fn message_content_helpers_image() {
+        let img = ImageContent {
+            source: ImageSource::Url { url: "u".into() },
+            media_type: None,
+        };
+        let content = MessageContent::Image(img.clone());
+        assert!(content.has_images());
+        assert_eq!(content.image_parts().len(), 1);
+        assert!(!content.has_audio());
+        assert!(!content.has_video());
+    }
+
+    #[test]
+    fn message_content_helpers_parts_audio_video() {
+        let content = MessageContent::Parts(vec![
+            ContentPart::text("describe"),
+            ContentPart::audio_url("https://a.com/c.mp3"),
+            ContentPart::video_url("https://v.com/c.mp4"),
+        ]);
+        assert!(content.has_audio());
+        assert!(content.has_video());
+        assert!(!content.has_images());
+        assert_eq!(content.audio_parts().len(), 1);
+        assert_eq!(content.video_parts().len(), 1);
+    }
+
+    #[test]
+    fn audio_part_serialization_roundtrip() {
+        let part = ContentPart::audio_url("https://a.com/c.mp3");
+        let json = serde_json::to_string(&part).unwrap();
+        assert!(json.contains("\"type\":\"audio\""));
+        let back: ContentPart = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, part);
+    }
+
+    #[test]
+    fn video_part_serialization_roundtrip() {
+        let part = ContentPart::video_base64("YWJj", "video/mp4");
+        let json = serde_json::to_string(&part).unwrap();
+        assert!(json.contains("\"type\":\"video\""));
+        let back: ContentPart = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, part);
     }
 }

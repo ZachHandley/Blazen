@@ -2,7 +2,10 @@
 
 use pyo3::prelude::*;
 
-use blazen_llm::{ChatMessage, ContentPart, ImageContent, ImageSource, MessageContent, Role};
+use blazen_llm::{
+    AudioContent, ChatMessage, ContentPart, ImageContent, ImageSource, MessageContent, Role,
+    VideoContent,
+};
 
 use crate::error::BlazenPyError;
 
@@ -81,11 +84,49 @@ impl PyContentPart {
         }
     }
 
+    /// Create an audio content part from a URL.
+    #[staticmethod]
+    #[pyo3(signature = (*, url))]
+    fn audio_url(url: &str) -> Self {
+        Self {
+            inner: ContentPart::Audio(AudioContent::from_url(url)),
+        }
+    }
+
+    /// Create an audio content part from base64-encoded data.
+    #[staticmethod]
+    #[pyo3(signature = (*, data, media_type))]
+    fn audio_base64(data: &str, media_type: &str) -> Self {
+        Self {
+            inner: ContentPart::Audio(AudioContent::from_base64(data, media_type)),
+        }
+    }
+
+    /// Create a video content part from a URL.
+    #[staticmethod]
+    #[pyo3(signature = (*, url))]
+    fn video_url(url: &str) -> Self {
+        Self {
+            inner: ContentPart::Video(VideoContent::from_url(url)),
+        }
+    }
+
+    /// Create a video content part from base64-encoded data.
+    #[staticmethod]
+    #[pyo3(signature = (*, data, media_type))]
+    fn video_base64(data: &str, media_type: &str) -> Self {
+        Self {
+            inner: ContentPart::Video(VideoContent::from_base64(data, media_type)),
+        }
+    }
+
     fn __repr__(&self) -> String {
         match &self.inner {
             ContentPart::Text { text } => format!("ContentPart.text(text='{text}')"),
             ContentPart::Image(_) => "ContentPart(image)".to_owned(),
             ContentPart::File(_) => "ContentPart(file)".to_owned(),
+            ContentPart::Audio(_) => "ContentPart(audio)".to_owned(),
+            ContentPart::Video(_) => "ContentPart(video)".to_owned(),
         }
     }
 }
@@ -198,6 +239,42 @@ impl PyChatMessage {
     fn user_image_base64(text: &str, data: &str, media_type: &str) -> Self {
         Self {
             inner: ChatMessage::user_image_base64(text, data, media_type),
+        }
+    }
+
+    /// Create a user message with text and an audio URL.
+    #[staticmethod]
+    #[pyo3(signature = (*, text, url))]
+    fn user_audio(text: &str, url: &str) -> Self {
+        Self {
+            inner: ChatMessage::user_audio(text, url),
+        }
+    }
+
+    /// Create a user message with text and base64-encoded audio.
+    #[staticmethod]
+    #[pyo3(signature = (*, text, data, media_type))]
+    fn user_audio_base64(text: &str, data: &str, media_type: &str) -> Self {
+        Self {
+            inner: ChatMessage::user_audio_base64(text, data, media_type),
+        }
+    }
+
+    /// Create a user message with text and a video URL.
+    #[staticmethod]
+    #[pyo3(signature = (*, text, url))]
+    fn user_video(text: &str, url: &str) -> Self {
+        Self {
+            inner: ChatMessage::user_video(text, url),
+        }
+    }
+
+    /// Create a user message with text and base64-encoded video.
+    #[staticmethod]
+    #[pyo3(signature = (*, text, data, media_type))]
+    fn user_video_base64(text: &str, data: &str, media_type: &str) -> Self {
+        Self {
+            inner: ChatMessage::user_video_base64(text, data, media_type),
         }
     }
 

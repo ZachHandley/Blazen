@@ -16,11 +16,15 @@ This queue-based architecture means:
     - Latency is inherently higher than direct HTTP providers (extra round-trips).
     - There is no native SSE streaming -- Blazen simulates it by returning the
       complete response as a single chunk.
-    - Tool calling is NOT supported (fal-ai/any-llm is text-in, text-out).
-    - Image inputs are NOT supported (text-only; non-text content is dropped).
-    - The LLM endpoint (fal-ai/any-llm) proxies through OpenRouter, so you
-      can access many models (OpenAI, Anthropic, Meta, etc.) via a single key.
     - Authentication uses "Key <token>" format, not "Bearer <token>".
+    - The default LLM endpoint is fal's OpenAI-compatible chat-completions
+      surface (``FalLlmEndpoint.OPENAI_CHAT``). Other variants include
+      ``OPENAI_RESPONSES``, ``OPENROUTER``, and ``ANY_LLM``, each with an
+      ``_ENTERPRISE`` cousin for SOC2-eligible traffic.
+
+Beyond LLM completions, ``FalProvider`` exposes the full fal.ai compute API:
+image / video / audio / 3D generation, transcription, background removal,
+and text embeddings. The tail of this file demonstrates each of these.
 
 Run with: FAL_KEY=... python llm_fal.py
 """
@@ -34,7 +38,11 @@ from blazen import (
     CompletionModel,
     Context,
     Event,
+    FalLlmEndpoint,
+    FalOptions,
+    FalProvider,
     StopEvent,
+    ThreeDRequest,
     Workflow,
     step,
 )
@@ -48,13 +56,11 @@ MODEL: CompletionModel | None = None
 # ---------------------------------------------------------------------------
 # Step 1: Generate a response using fal.ai
 #
-# fal.ai uses the fal-ai/any-llm endpoint, which is powered by OpenRouter.
-# Under the hood, Blazen submits to the fal.ai job queue, then polls until
-# the result is ready. This means:
+# fal.ai's default LLM endpoint is the OpenAI-compatible chat-completions
+# surface. Under the hood, Blazen submits to the fal.ai job queue, then
+# polls until the result is ready. This means:
 #   - Expect higher latency than direct providers (queue + poll overhead)
-#   - No streaming support (Blazen simulates it with a single chunk)
-#   - No tool calling support (tool_calls will always be an empty list)
-#   - Text-only input (no image URLs or base64 images)
+#   - No native streaming support (Blazen simulates it with a single chunk)
 # ---------------------------------------------------------------------------
 @step
 async def generate(ctx: Context, ev: Event) -> Event:
@@ -80,10 +86,6 @@ async def generate(ctx: Context, ev: Event) -> Event:
     model_name = response["model"]
     usage = response["usage"]
     finish_reason = response["finish_reason"]
-
-    # tool_calls is always empty for fal.ai -- no tool calling support
-    tool_calls = response["tool_calls"]
-    assert len(tool_calls) == 0, "fal.ai does not support tool calling"
 
     print(f"[generate] Response received in {elapsed:.2f}s (includes queue + poll time)")
     print(f"[generate] Model: {model_name}")
@@ -153,6 +155,89 @@ async def analyze(ctx: Context, ev: Event) -> StopEvent:
 
 
 # ---------------------------------------------------------------------------
+# Vision / audio / video extras
+#
+# fal.ai auto-routes multimodal chat requests to the matching vision, audio,
+# or video-capable variant of the underlying router (controlled by
+# ``FalOptions(auto_route_modality=True)``, the default). The helpers below
+# demonstrate each modality using the same ``CompletionModel.fal`` instance.
+# ---------------------------------------------------------------------------
+async def demo_vision(model: CompletionModel) -> None:
+    """Send a text + image-URL message through fal.ai (vision input)."""
+    print("\n[vision] Describing an image via fal.ai...")
+    response = await model.complete([
+        ChatMessage.user_image_url(
+            text="What is in this picture? Answer in one sentence.",
+            url="https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png",
+        ),
+    ])
+    print(f"[vision] {response['content']}")
+
+
+async def demo_audio(model: CompletionModel) -> None:
+    """Send a text + audio-URL message through fal.ai (audio input)."""
+    print("\n[audio] Transcribing/analysing a clip via fal.ai...")
+    response = await model.complete([
+        ChatMessage.user_audio(
+            text="Summarise what you hear in one sentence.",
+            url="https://storage.googleapis.com/falserverless/model_tests/whisper/dinner_conversation.mp3",
+        ),
+    ])
+    print(f"[audio] {response['content']}")
+
+
+async def demo_video(model: CompletionModel) -> None:
+    """Send a text + video-URL message through fal.ai (video input)."""
+    print("\n[video] Describing a video clip via fal.ai...")
+    response = await model.complete([
+        ChatMessage.user_video(
+            text="What is happening in this video? Answer in one sentence.",
+            url="https://storage.googleapis.com/falserverless/model_tests/video_models/robot.mp4",
+        ),
+    ])
+    print(f"[video] {response['content']}")
+
+
+# ---------------------------------------------------------------------------
+# Non-LLM compute extras (embeddings, 3D, background removal)
+#
+# These live on ``FalProvider`` directly. ``FalProvider`` exposes the full
+# fal.ai compute surface (image / video / audio / 3D / transcription /
+# embeddings / background removal) in addition to the ``CompletionModel``
+# interface.
+# ---------------------------------------------------------------------------
+async def demo_embeddings(provider: FalProvider) -> None:
+    """Embed two short strings via fal's OpenAI-compatible embeddings endpoint."""
+    print("\n[embeddings] Embedding via fal.ai...")
+    em = provider.embedding_model()
+    response = await em.embed(["hi", "hello world"])
+    print(f"[embeddings] model={em.model_id} dims={em.dimensions} "
+          f"n_vectors={len(response.embeddings)}")
+
+
+async def demo_generate_3d(provider: FalProvider) -> None:
+    """Generate a 3D model from a text prompt via fal.ai."""
+    print("\n[3d] Generating a 3D model via fal.ai...")
+    result = await provider.generate_3d(ThreeDRequest(
+        prompt="a low-poly wooden treasure chest",
+        format="glb",
+    ))
+    models = result.get("models", [])
+    print(f"[3d] generated {len(models)} model(s); "
+          f"elapsed={result.get('elapsed_ms', '?')}ms")
+
+
+async def demo_remove_background(provider: FalProvider) -> None:
+    """Run background removal on a sample image URL via fal.ai."""
+    print("\n[bg-remove] Removing background via fal.ai...")
+    result = await provider.remove_background(
+        image_url="https://storage.googleapis.com/falserverless/model_tests/remove_bg/elephant.jpg",
+    )
+    image = result.get("image") or {}
+    print(f"[bg-remove] got matted image url={image.get('url', '?')}")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 async def main() -> None:
@@ -163,15 +248,26 @@ async def main() -> None:
         print("  FAL_KEY=fal-... python llm_fal.py")
         return
 
-    # Create the fal.ai model. By default this uses the fal-ai/any-llm
-    # endpoint, which proxies through OpenRouter to access many LLM providers.
+    # Create the fal.ai model. By default this uses the OpenAiChat endpoint
+    # (openrouter/router/openai/v1/chat/completions), which provides full
+    # OpenAI chat-completions semantics: messages array, tool calls, structured
+    # outputs, native streaming.
     # CompletionModel is a native Rust object (not JSON-serializable), so we
     # store it as a module-level variable rather than in ctx.set().
     global MODEL
     MODEL = CompletionModel.fal(fal_key)
 
-    # You can also specify a different fal.ai model endpoint:
-    #   MODEL = CompletionModel.fal(fal_key, model="fal-ai/any-llm")
+    # You can also pin a specific model, endpoint, or the enterprise tier
+    # by constructing a ``FalOptions`` and passing it as ``options=``. The
+    # example below is built but not used -- uncomment the reassignment to
+    # switch ``MODEL`` over to the SOC2-eligible variant.
+    enterprise_opts = FalOptions(
+        model="anthropic/claude-sonnet-4.5",
+        endpoint=FalLlmEndpoint.OPENAI_CHAT,
+        enterprise=True,
+    )
+    _ = enterprise_opts  # silence "unused" lint
+    # MODEL = CompletionModel.fal(fal_key, options=enterprise_opts)
 
     print(f"Using model: {MODEL.model_id}")
     print("NOTE: fal.ai uses a queue-based architecture. Each call involves")
@@ -197,7 +293,7 @@ async def main() -> None:
     print(f"  Total:         {timing['total_seconds']}s")
 
     # Usage info may be None for fal.ai -- it depends on the underlying
-    # model and whether OpenRouter returns token counts.
+    # model and whether the router returns token counts.
     usage = output["usage"]
     if usage["generate"]:
         u = usage["generate"]
@@ -214,6 +310,30 @@ async def main() -> None:
               f"{u.get('total_tokens', '?')} total tokens")
     else:
         print("Usage (analyze):  not available")
+
+    # -------------------------------------------------------------------
+    # Optional multimodal / compute demos.
+    #
+    # Each demo block is wrapped in try/except so that a failure in one
+    # (e.g. an unavailable sample URL or a restricted endpoint) does not
+    # stop the rest of the example from running.
+    # -------------------------------------------------------------------
+    print("\n" + "=" * 60)
+    print("MULTIMODAL + COMPUTE DEMOS")
+    print("=" * 60)
+
+    for demo in (demo_vision, demo_audio, demo_video):
+        try:
+            await demo(MODEL)
+        except Exception as exc:
+            print(f"[{demo.__name__}] skipped: {exc}")
+
+    provider = FalProvider(api_key=fal_key)
+    for demo in (demo_embeddings, demo_generate_3d, demo_remove_background):
+        try:
+            await demo(provider)
+        except Exception as exc:
+            print(f"[{demo.__name__}] skipped: {exc}")
 
 
 if __name__ == "__main__":

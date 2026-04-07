@@ -128,6 +128,7 @@ fn default_pricing() -> HashMap<String, PricingEntry> {
 ///     prompt_tokens: 1000,
 ///     completion_tokens: 500,
 ///     total_tokens: 1500,
+///     ..Default::default()
 /// };
 ///
 /// let cost = compute_cost("gpt-4.1", &usage).unwrap();
@@ -271,6 +272,7 @@ mod tests {
             prompt_tokens: 1_000_000,
             completion_tokens: 1_000_000,
             total_tokens: 2_000_000,
+            ..Default::default()
         };
 
         // gpt-4.1: $2 in + $8 out = $10
@@ -315,6 +317,7 @@ mod tests {
             prompt_tokens: 100,
             completion_tokens: 50,
             total_tokens: 150,
+            ..Default::default()
         };
 
         assert!(compute_cost("totally-unknown-model-xyz", &usage).is_none());
@@ -327,6 +330,7 @@ mod tests {
             prompt_tokens: 1_000_000,
             completion_tokens: 1_000_000,
             total_tokens: 2_000_000,
+            ..Default::default()
         };
 
         // Anthropic date suffix: claude-sonnet-4-20250514 -> claude-sonnet-4
@@ -373,6 +377,7 @@ mod tests {
             prompt_tokens: 0,
             completion_tokens: 0,
             total_tokens: 0,
+            ..Default::default()
         };
 
         let cost = compute_cost("gpt-4.1", &usage).unwrap();
@@ -388,6 +393,7 @@ mod tests {
             prompt_tokens: 100,
             completion_tokens: 50,
             total_tokens: 150,
+            ..Default::default()
         };
 
         // gpt-4.1: 100 * 2.0/1M + 50 * 8.0/1M = 0.0002 + 0.0004 = 0.0006

@@ -4,6 +4,9 @@ use napi_derive::napi;
 
 use blazen_llm::types::CompletionResponse;
 
+use super::artifact::JsArtifact;
+use super::citation::JsCitation;
+use super::reasoning::JsReasoningTrace;
 use super::tool::{JsToolCall, JsToolDefinition};
 use super::usage::{JsRequestTiming, JsTokenUsage};
 
@@ -22,6 +25,9 @@ pub struct JsCompletionResponse {
     pub images: Vec<serde_json::Value>,
     pub audio: Vec<serde_json::Value>,
     pub videos: Vec<serde_json::Value>,
+    pub reasoning: Option<JsReasoningTrace>,
+    pub citations: Vec<JsCitation>,
+    pub artifacts: Vec<JsArtifact>,
     pub metadata: serde_json::Value,
 }
 
@@ -85,6 +91,9 @@ pub(crate) fn build_response(response: CompletionResponse) -> JsCompletionRespon
             .iter()
             .map(|v| serde_json::to_value(v).unwrap_or_default())
             .collect(),
+        reasoning: response.reasoning.as_ref().map(JsReasoningTrace::from),
+        citations: response.citations.iter().map(JsCitation::from).collect(),
+        artifacts: response.artifacts.iter().map(JsArtifact::from).collect(),
         metadata: response.metadata,
     }
 }

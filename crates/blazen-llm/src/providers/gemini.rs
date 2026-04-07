@@ -25,8 +25,8 @@ use crate::error::BlazenError;
 use crate::http::{ByteStream, HttpClient, HttpRequest, HttpResponse};
 use crate::traits::{ModelCapabilities, ModelInfo, ModelRegistry};
 use crate::types::{
-    CompletionRequest, CompletionResponse, ContentPart, ImageContent, ImageSource, MessageContent,
-    Role, StreamChunk, TokenUsage, ToolCall,
+    Citation, CompletionRequest, CompletionResponse, ContentPart, ImageContent, ImageSource,
+    MessageContent, ReasoningTrace, Role, StreamChunk, TokenUsage, ToolCall,
 };
 
 // ---------------------------------------------------------------------------
@@ -86,6 +86,32 @@ fn content_part_to_gemini(part: &ContentPart) -> serde_json::Value {
                 })
             }
         },
+        ContentPart::Audio(audio) => {
+            // Gemini natively accepts audio via the same inlineData/fileData
+            // shape used for images and files. Default mime: audio/mp3.
+            let mime = audio.media_type.as_deref().unwrap_or("audio/mp3");
+            match &audio.source {
+                ImageSource::Base64 { data } => serde_json::json!({
+                    "inlineData": { "mimeType": mime, "data": data }
+                }),
+                ImageSource::Url { url } => serde_json::json!({
+                    "fileData": { "mimeType": mime, "fileUri": url }
+                }),
+            }
+        }
+        ContentPart::Video(video) => {
+            // Gemini natively accepts video via the same inlineData/fileData
+            // shape. Default mime: video/mp4.
+            let mime = video.media_type.as_deref().unwrap_or("video/mp4");
+            match &video.source {
+                ImageSource::Base64 { data } => serde_json::json!({
+                    "inlineData": { "mimeType": mime, "data": data }
+                }),
+                ImageSource::Url { url } => serde_json::json!({
+                    "fileData": { "mimeType": mime, "fileUri": url }
+                }),
+            }
+        }
     }
 }
 
@@ -372,6 +398,8 @@ struct GeminiResponse {
 struct GeminiCandidate {
     content: Option<GeminiContent>,
     finish_reason: Option<String>,
+    #[serde(default, rename = "groundingMetadata")]
+    grounding_metadata: Option<GroundingMetadata>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -386,6 +414,33 @@ struct GeminiContent {
 struct GeminiPart {
     text: Option<String>,
     function_call: Option<GeminiFunctionCall>,
+    #[serde(default)]
+    thought: bool,
+    #[serde(default, rename = "thoughtSignature")]
+    thought_signature: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct GroundingMetadata {
+    #[serde(default)]
+    pub web_search_queries: Vec<String>,
+    #[serde(default)]
+    pub grounding_chunks: Vec<GroundingChunk>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct GroundingChunk {
+    #[serde(default)]
+    pub web: Option<GroundingWeb>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub(super) struct GroundingWeb {
+    pub uri: String,
+    #[serde(default)]
+    pub title: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -439,20 +494,33 @@ fn parse_gemini_response(response: GeminiResponse) -> Result<CompletionResponse,
         .ok_or_else(|| BlazenError::invalid_response("empty candidates array"))?;
 
     let mut text_parts: Vec<String> = Vec::new();
+    let mut reasoning_parts: Vec<String> = Vec::new();
+    let mut last_thought_signature: Option<String> = None;
     let mut tool_calls: Vec<ToolCall> = Vec::new();
 
-    if let Some(content) = candidate.content
-        && let Some(parts) = content.parts
+    if let Some(content) = candidate.content.as_ref()
+        && let Some(parts) = content.parts.as_ref()
     {
-        for (i, part) in parts.into_iter().enumerate() {
-            if let Some(text) = part.text {
-                text_parts.push(text);
+        for (i, part) in parts.iter().enumerate() {
+            if let Some(text) = part.text.as_ref() {
+                if part.thought {
+                    reasoning_parts.push(text.clone());
+                    if let Some(sig) = part.thought_signature.as_ref() {
+                        last_thought_signature = Some(sig.clone());
+                    }
+                } else {
+                    text_parts.push(text.clone());
+                }
+            } else if part.thought
+                && let Some(sig) = part.thought_signature.as_ref()
+            {
+                last_thought_signature = Some(sig.clone());
             }
-            if let Some(fc) = part.function_call {
+            if let Some(fc) = part.function_call.as_ref() {
                 tool_calls.push(ToolCall {
                     id: format!("gemini_call_{i}"),
-                    name: fc.name,
-                    arguments: fc.args.unwrap_or(serde_json::Value::Null),
+                    name: fc.name.clone(),
+                    arguments: fc.args.clone().unwrap_or(serde_json::Value::Null),
                 });
             }
         }
@@ -464,10 +532,41 @@ fn parse_gemini_response(response: GeminiResponse) -> Result<CompletionResponse,
         Some(text_parts.join(""))
     };
 
+    let reasoning = if reasoning_parts.is_empty() {
+        None
+    } else {
+        Some(ReasoningTrace {
+            text: reasoning_parts.join("\n"),
+            signature: last_thought_signature,
+            redacted: false,
+            effort: None,
+        })
+    };
+
+    let mut citations: Vec<Citation> = Vec::new();
+    if let Some(gm) = candidate.grounding_metadata.as_ref() {
+        for chunk in &gm.grounding_chunks {
+            if let Some(web) = chunk.web.as_ref() {
+                citations.push(Citation {
+                    url: web.uri.clone(),
+                    title: web.title.clone(),
+                    snippet: None,
+                    start: None,
+                    end: None,
+                    document_id: None,
+                    metadata: serde_json::json!({
+                        "web_search_queries": gm.web_search_queries,
+                    }),
+                });
+            }
+        }
+    }
+
     let usage = response.usage_metadata.map(|u| TokenUsage {
         prompt_tokens: u.prompt_token_count.unwrap_or(0),
         completion_tokens: u.candidates_token_count.unwrap_or(0),
         total_tokens: u.total_token_count.unwrap_or(0),
+        ..Default::default()
     });
 
     let model = response
@@ -477,6 +576,9 @@ fn parse_gemini_response(response: GeminiResponse) -> Result<CompletionResponse,
     Ok(CompletionResponse {
         content,
         tool_calls,
+        reasoning,
+        citations,
+        artifacts: vec![],
         usage,
         model,
         finish_reason: candidate.finish_reason,
@@ -748,6 +850,7 @@ fn parse_gemini_sse_event(buffer: &mut String) -> Option<Result<StreamChunk, Bla
                     delta: None,
                     tool_calls: Vec::new(),
                     finish_reason: Some("stop".to_owned()),
+                    ..Default::default()
                 }));
             }
 
@@ -785,6 +888,7 @@ fn parse_gemini_sse_event(buffer: &mut String) -> Option<Result<StreamChunk, Bla
                         delta: text_delta,
                         tool_calls,
                         finish_reason: candidate.finish_reason,
+                        ..Default::default()
                     }));
                 }
                 Err(e) => {
@@ -1084,5 +1188,87 @@ mod tests {
                 .supported_generation_methods
                 .contains(&"generateContent".to_owned())
         );
+    }
+
+    #[test]
+    fn test_parse_grounding_metadata_to_citations() {
+        let json_body = r#"{
+            "candidates": [{
+                "content": {
+                    "parts": [{"text": "answer based on sources"}],
+                    "role": "model"
+                },
+                "finishReason": "STOP",
+                "groundingMetadata": {
+                    "webSearchQueries": ["query1"],
+                    "groundingChunks": [
+                        {"web": {"uri": "https://example.com/a", "title": "Source A"}},
+                        {"web": {"uri": "https://example.com/b"}}
+                    ]
+                }
+            }],
+            "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 5, "totalTokenCount": 15}
+        }"#;
+        let parsed: GeminiResponse = serde_json::from_str(json_body).unwrap();
+        let candidates = parsed.candidates.as_ref().unwrap();
+        let candidate = &candidates[0];
+        assert!(candidate.grounding_metadata.is_some());
+        let gm = candidate.grounding_metadata.as_ref().unwrap();
+        assert_eq!(gm.grounding_chunks.len(), 2);
+        assert_eq!(
+            gm.grounding_chunks[0].web.as_ref().unwrap().uri,
+            "https://example.com/a"
+        );
+
+        // Also exercise the full parser to ensure citations are populated.
+        let result = parse_gemini_response(parsed).unwrap();
+        assert_eq!(result.citations.len(), 2);
+        assert_eq!(result.citations[0].url, "https://example.com/a");
+        assert_eq!(result.citations[0].title.as_deref(), Some("Source A"));
+        assert_eq!(result.citations[1].url, "https://example.com/b");
+        assert!(result.citations[1].title.is_none());
+        assert_eq!(
+            result.citations[0].metadata["web_search_queries"][0],
+            "query1"
+        );
+    }
+
+    #[test]
+    fn test_parse_thoughts_to_reasoning_trace() {
+        let json_body = r#"{
+            "candidates": [{
+                "content": {
+                    "parts": [
+                        {"text": "Let me think about this", "thought": true, "thoughtSignature": "sig123"},
+                        {"text": "The answer is 42"}
+                    ],
+                    "role": "model"
+                },
+                "finishReason": "STOP"
+            }],
+            "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 5, "totalTokenCount": 15}
+        }"#;
+        let parsed: GeminiResponse = serde_json::from_str(json_body).unwrap();
+        let candidates = parsed.candidates.as_ref().unwrap();
+        let parts = candidates[0]
+            .content
+            .as_ref()
+            .unwrap()
+            .parts
+            .as_ref()
+            .unwrap();
+        assert_eq!(parts.len(), 2);
+        assert!(parts[0].thought);
+        assert!(!parts[1].thought);
+        assert_eq!(parts[0].thought_signature.as_deref(), Some("sig123"));
+
+        // Exercise the full parser to ensure ReasoningTrace is built.
+        let result = parse_gemini_response(parsed).unwrap();
+        assert_eq!(result.content.as_deref(), Some("The answer is 42"));
+        let reasoning = result.reasoning.expect("reasoning trace should be set");
+        assert_eq!(reasoning.text, "Let me think about this");
+        assert_eq!(reasoning.signature.as_deref(), Some("sig123"));
+        assert!(!reasoning.redacted);
+        assert!(reasoning.effort.is_none());
     }
 }

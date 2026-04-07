@@ -72,6 +72,57 @@ impl WasmChatMessage {
         }
     }
 
+    // TODO: expose userParts (multi-modal mixed content) once JsContentPart equivalents are
+    // defined for the WASM SDK. Today only the dedicated single-modality factories are available.
+
+    /// Create a user message with text plus an image referenced by URL.
+    #[wasm_bindgen(js_name = "userImageUrl")]
+    pub fn user_image_url(text: &str, url: &str, media_type: Option<String>) -> Self {
+        Self {
+            inner: InnerChatMessage::user_image_url(text, url, media_type.as_deref()),
+        }
+    }
+
+    /// Create a user message with text plus a base64-encoded image.
+    #[wasm_bindgen(js_name = "userImageBase64")]
+    pub fn user_image_base64(text: &str, data: &str, media_type: &str) -> Self {
+        Self {
+            inner: InnerChatMessage::user_image_base64(text, data, media_type),
+        }
+    }
+
+    /// Create a user message with text plus an audio clip referenced by URL.
+    #[wasm_bindgen(js_name = "userAudio")]
+    pub fn user_audio(text: &str, url: &str) -> Self {
+        Self {
+            inner: InnerChatMessage::user_audio(text, url),
+        }
+    }
+
+    /// Create a user message with text plus a base64-encoded audio clip.
+    #[wasm_bindgen(js_name = "userAudioBase64")]
+    pub fn user_audio_base64(text: &str, data: &str, media_type: &str) -> Self {
+        Self {
+            inner: InnerChatMessage::user_audio_base64(text, data, media_type),
+        }
+    }
+
+    /// Create a user message with text plus a video clip referenced by URL.
+    #[wasm_bindgen(js_name = "userVideo")]
+    pub fn user_video(text: &str, url: &str) -> Self {
+        Self {
+            inner: InnerChatMessage::user_video(text, url),
+        }
+    }
+
+    /// Create a user message with text plus a base64-encoded video clip.
+    #[wasm_bindgen(js_name = "userVideoBase64")]
+    pub fn user_video_base64(text: &str, data: &str, media_type: &str) -> Self {
+        Self {
+            inner: InnerChatMessage::user_video_base64(text, data, media_type),
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Getters
     // -----------------------------------------------------------------------

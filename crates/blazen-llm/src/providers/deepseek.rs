@@ -177,3 +177,45 @@ impl ProviderInfo for DeepSeekProvider {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use crate::providers::sse::OaiResponse;
+
+    #[test]
+    fn test_r1_reasoning_content_passes_through() {
+        let json_body = r#"{
+            "id": "chatcmpl-x",
+            "object": "chat.completion",
+            "created": 1234567890,
+            "model": "deepseek-reasoner",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "the answer is 42",
+                    "reasoning_content": "first I considered..."
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+                "total_tokens": 15,
+                "completion_tokens_details": { "reasoning_tokens": 3 }
+            }
+        }"#;
+        let parsed: OaiResponse = serde_json::from_str(json_body).unwrap();
+        let msg = &parsed.choices[0].message;
+        assert_eq!(
+            msg.reasoning_content.as_deref(),
+            Some("first I considered...")
+        );
+        let usage = parsed.usage.unwrap();
+        assert_eq!(usage.completion_tokens_details.unwrap().reasoning_tokens, 3);
+    }
+}

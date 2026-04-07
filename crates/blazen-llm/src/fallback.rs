@@ -248,6 +248,9 @@ mod tests {
         CompletionResponse {
             content: Some(content.to_owned()),
             tool_calls: vec![],
+            reasoning: None,
+            citations: vec![],
+            artifacts: vec![],
             usage: None,
             model: "mock".to_owned(),
             finish_reason: Some("stop".to_owned()),

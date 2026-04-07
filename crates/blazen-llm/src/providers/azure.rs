@@ -333,6 +333,7 @@ impl crate::traits::CompletionModel for AzureOpenAiProvider {
             prompt_tokens: u.prompt_tokens,
             completion_tokens: u.completion_tokens,
             total_tokens: u.total_tokens,
+            ..Default::default()
         });
 
         span.record(
@@ -355,6 +356,9 @@ impl crate::traits::CompletionModel for AzureOpenAiProvider {
         Ok(CompletionResponse {
             content: choice.message.content,
             tool_calls,
+            reasoning: None,
+            citations: vec![],
+            artifacts: vec![],
             usage,
             model: oai.model,
             finish_reason: choice.finish_reason,

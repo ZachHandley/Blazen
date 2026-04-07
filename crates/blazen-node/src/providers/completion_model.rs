@@ -19,6 +19,7 @@ use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
 use blazen_llm::types::{ChatMessage, CompletionRequest, ToolDefinition};
 
 use crate::error::llm_error_to_napi;
+use crate::providers::fal::{JsFalOptions, apply_fal_options};
 use crate::types::{
     JsChatMessage, JsCompletionOptions, JsCompletionResponse, JsStreamChunk, build_response,
     build_stream_chunk,
@@ -135,14 +136,15 @@ impl JsCompletionModel {
 
     /// Create a fal.ai completion model.
     ///
-    /// `model` sets the LLM model name used by the `any-llm` proxy
-    /// (e.g. `"anthropic/claude-sonnet-4.5"`, `"openai/gpt-4o"`).
+    /// `options` optionally configures the LLM model, endpoint family,
+    /// enterprise tier, and modality auto-routing. Defaults to the
+    /// OpenAI-compatible chat-completions endpoint.
     #[napi(factory)]
-    pub fn fal(api_key: String, model: Option<String>) -> Self {
-        let mut provider = blazen_llm::providers::fal::FalProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_llm_model(m);
-        }
+    pub fn fal(api_key: String, options: Option<JsFalOptions>) -> Self {
+        let provider = apply_fal_options(
+            blazen_llm::providers::fal::FalProvider::new(api_key),
+            options,
+        );
         Self {
             inner: Arc::new(provider),
         }

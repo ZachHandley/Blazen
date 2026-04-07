@@ -36,8 +36,8 @@ use async_trait::async_trait;
 
 use super::job::{ComputeRequest, ComputeResult, JobHandle, JobStatus};
 use super::requests::{
-    ImageRequest, MusicRequest, SpeechRequest, ThreeDRequest, TranscriptionRequest, UpscaleRequest,
-    VideoRequest,
+    BackgroundRemovalRequest, ImageRequest, MusicRequest, SpeechRequest, ThreeDRequest,
+    TranscriptionRequest, UpscaleRequest, VideoRequest,
 };
 use super::results::{AudioResult, ImageResult, ThreeDResult, TranscriptionResult, VideoResult};
 use crate::error::BlazenError;
@@ -156,6 +156,16 @@ pub trait Transcription: ComputeProvider {
 pub trait ThreeDGeneration: ComputeProvider {
     /// Generate a 3D model from a text prompt or source image.
     async fn generate_3d(&self, request: ThreeDRequest) -> Result<ThreeDResult, BlazenError>;
+}
+
+/// A compute provider that supports background removal on existing images.
+#[async_trait]
+pub trait BackgroundRemoval: ComputeProvider {
+    /// Remove the background from an image and return the result.
+    async fn remove_background(
+        &self,
+        request: BackgroundRemovalRequest,
+    ) -> Result<ImageResult, BlazenError>;
 }
 
 // Backwards-compatible type alias for the old trait name.

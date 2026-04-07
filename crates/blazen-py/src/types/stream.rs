@@ -53,6 +53,25 @@ impl PyStreamChunk {
             .collect()
     }
 
+    /// Reasoning text delta from models that stream a chain-of-thought trace
+    /// (Anthropic extended thinking, DeepSeek R1, OpenAI o-series).
+    #[getter]
+    fn reasoning_delta(&self) -> Option<&str> {
+        self.inner.reasoning_delta.as_deref()
+    }
+
+    /// Citations completed in this chunk.
+    #[getter]
+    fn citations(&self) -> Vec<crate::types::PyCitation> {
+        self.inner.citations.iter().map(Into::into).collect()
+    }
+
+    /// Artifacts completed in this chunk.
+    #[getter]
+    fn artifacts(&self) -> Vec<crate::types::PyArtifact> {
+        self.inner.artifacts.iter().map(Into::into).collect()
+    }
+
     fn __getitem__(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
         match key {
             "delta" => match &self.inner.delta {
@@ -77,6 +96,18 @@ impl PyStreamChunk {
                     })
                     .collect();
                 crate::convert::json_to_py(py, &serde_json::Value::Array(tool_calls))
+            }
+            "reasoning_delta" => match &self.inner.reasoning_delta {
+                Some(s) => Ok(s.clone().into_pyobject(py)?.into_any().unbind()),
+                None => Ok(py.None()),
+            },
+            "citations" => {
+                let val = serde_json::to_value(&self.inner.citations).unwrap_or_default();
+                crate::convert::json_to_py(py, &val)
+            }
+            "artifacts" => {
+                let val = serde_json::to_value(&self.inner.artifacts).unwrap_or_default();
+                crate::convert::json_to_py(py, &val)
             }
             _ => Err(pyo3::exceptions::PyKeyError::new_err(key.to_owned())),
         }

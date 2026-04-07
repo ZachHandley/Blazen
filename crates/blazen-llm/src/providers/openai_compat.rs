@@ -24,8 +24,8 @@ use crate::error::BlazenError;
 use crate::http::{HttpClient, HttpRequest, HttpResponse};
 use crate::traits::{ModelCapabilities, ModelInfo, ModelPricing, ModelRegistry};
 use crate::types::{
-    CompletionRequest, CompletionResponse, EmbeddingResponse, Role, StreamChunk, TokenUsage,
-    ToolCall,
+    Citation, CompletionRequest, CompletionResponse, EmbeddingResponse, ReasoningTrace, Role,
+    StreamChunk, TokenUsage, ToolCall,
 };
 
 // ---------------------------------------------------------------------------
@@ -347,6 +347,68 @@ impl OpenAiCompatProvider {
 }
 
 // ---------------------------------------------------------------------------
+// Response parsing helpers
+// ---------------------------------------------------------------------------
+
+/// Build a [`ReasoningTrace`] from the two possible OpenAI-compat fields.
+///
+/// Prefers `reasoning_content` (`DeepSeek` R1 family) over `reasoning` (Grok).
+fn build_reasoning_trace(
+    reasoning_content: Option<String>,
+    reasoning: Option<String>,
+) -> Option<ReasoningTrace> {
+    match (reasoning_content, reasoning) {
+        (Some(text), _) | (None, Some(text)) => Some(ReasoningTrace {
+            text,
+            signature: None,
+            redacted: false,
+            effort: None,
+        }),
+        (None, None) => None,
+    }
+}
+
+/// Convert a wire-format `citations` array (used by Perplexity and friends)
+/// into typed [`Citation`] values. Each entry's original JSON is preserved in
+/// `Citation::metadata`.
+fn parse_citations(entries: Vec<serde_json::Value>) -> Vec<Citation> {
+    entries
+        .into_iter()
+        .map(|entry| {
+            let (url, title, snippet) = if let Some(obj) = entry.as_object() {
+                let url = obj
+                    .get("url")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned)
+                    .unwrap_or_default();
+                let title = obj
+                    .get("title")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned);
+                let snippet = obj
+                    .get("snippet")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned);
+                (url, title, snippet)
+            } else if let Some(s) = entry.as_str() {
+                (s.to_owned(), None, None)
+            } else {
+                (entry.to_string(), None, None)
+            };
+            Citation {
+                url,
+                title,
+                snippet,
+                start: None,
+                end: None,
+                document_id: None,
+                metadata: entry,
+            }
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
 // CompletionModel implementation
 // ---------------------------------------------------------------------------
 
@@ -396,8 +458,10 @@ impl crate::traits::CompletionModel for OpenAiCompatProvider {
             .next()
             .ok_or_else(|| BlazenError::invalid_response("empty choices array"))?;
 
-        let tool_calls = choice
-            .message
+        let message = choice.message;
+        let finish_reason = choice.finish_reason;
+
+        let tool_calls = message
             .tool_calls
             .into_iter()
             .map(|tc| {
@@ -410,10 +474,18 @@ impl crate::traits::CompletionModel for OpenAiCompatProvider {
             })
             .collect();
 
+        let reasoning = build_reasoning_trace(message.reasoning_content, message.reasoning);
+        let citations = parse_citations(message.citations);
+
         let usage = oai.usage.map(|u| TokenUsage {
             prompt_tokens: u.prompt_tokens,
             completion_tokens: u.completion_tokens,
             total_tokens: u.total_tokens,
+            reasoning_tokens: u
+                .completion_tokens_details
+                .as_ref()
+                .map_or(0, |d| d.reasoning_tokens),
+            ..Default::default()
         });
 
         span.record(
@@ -425,7 +497,7 @@ impl crate::traits::CompletionModel for OpenAiCompatProvider {
             span.record("completion_tokens", u.completion_tokens);
             span.record("total_tokens", u.total_tokens);
         }
-        if let Some(ref reason) = choice.finish_reason {
+        if let Some(ref reason) = finish_reason {
             span.record("finish_reason", reason.as_str());
         }
 
@@ -434,11 +506,14 @@ impl crate::traits::CompletionModel for OpenAiCompatProvider {
             .and_then(|u| crate::pricing::compute_cost(&oai.model, u));
 
         Ok(CompletionResponse {
-            content: choice.message.content,
+            content: message.content,
             tool_calls,
+            reasoning,
+            citations,
+            artifacts: vec![],
             usage,
             model: oai.model,
-            finish_reason: choice.finish_reason,
+            finish_reason,
             cost,
             timing: None,
             images: vec![],
@@ -890,6 +965,7 @@ impl crate::traits::EmbeddingModel for OpenAiCompatEmbeddingModel {
             prompt_tokens: u.prompt_tokens,
             completion_tokens: 0,
             total_tokens: u.total_tokens,
+            ..Default::default()
         });
 
         Ok(EmbeddingResponse {
@@ -1111,6 +1187,81 @@ mod tests {
         assert_eq!(content[0]["text"], "First");
         assert_eq!(content[1]["type"], "image_url");
         assert_eq!(content[2]["text"], "Second");
+    }
+
+    #[test]
+    fn test_parse_response_with_reasoning_content() {
+        let json_body = r#"{
+            "id": "x",
+            "model": "test-r1",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "The answer is 42",
+                    "reasoning_content": "I considered..."
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": { "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15 }
+        }"#;
+        let parsed: OaiResponse = serde_json::from_str(json_body).unwrap();
+        let msg = &parsed.choices[0].message;
+        assert_eq!(msg.reasoning_content.as_deref(), Some("I considered..."));
+    }
+
+    #[test]
+    fn test_parse_response_with_citations() {
+        let json_body = r#"{
+            "id": "x",
+            "model": "test-perplexity",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "Per source A...",
+                    "citations": [
+                        {"url": "https://example.com/a", "title": "Source A"},
+                        {"url": "https://example.com/b"}
+                    ]
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": { "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15 }
+        }"#;
+        let parsed: OaiResponse = serde_json::from_str(json_body).unwrap();
+        let msg = &parsed.choices[0].message;
+        assert_eq!(msg.citations.len(), 2);
+        assert_eq!(msg.citations[0]["url"], "https://example.com/a");
+    }
+
+    #[test]
+    fn test_parse_response_with_completion_tokens_details() {
+        let json_body = r#"{
+            "id": "x",
+            "model": "test-o1",
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": "answer"},
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 100,
+                "total_tokens": 110,
+                "completion_tokens_details": { "reasoning_tokens": 80 }
+            }
+        }"#;
+        let parsed: OaiResponse = serde_json::from_str(json_body).unwrap();
+        assert_eq!(
+            parsed
+                .usage
+                .unwrap()
+                .completion_tokens_details
+                .unwrap()
+                .reasoning_tokens,
+            80
+        );
     }
 
     #[test]

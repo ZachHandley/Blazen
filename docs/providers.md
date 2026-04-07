@@ -110,21 +110,115 @@ let model = AzureOpenAiProvider::new("key", "my-resource", "gpt-4o-deployment");
 ### fal.ai
 
 ```rust
-use blazen_llm::providers::fal::FalProvider;
+use blazen_llm::providers::fal::{FalProvider, FalLlmEndpoint};
 
+// Default: OpenAI-compatible chat at
+// `openrouter/router/openai/v1/chat/completions`.
 let model = FalProvider::new("fal-...")
-    .with_llm_model("anthropic/claude-sonnet-4.5");
+    .with_llm_model("openai/gpt-4o");
 ```
+
+`FalProvider` is a native provider with its own endpoint matrix. The
+LLM surface is controlled by [`FalLlmEndpoint`](#fal-llm-endpoints) and
+an independently-chosen `llm_model`. Setting a model does **not** change
+the URL path — endpoint and model are fully orthogonal.
 
 | | |
 |---|---|
 | **Module** | `blazen_llm::providers::fal` |
-| **Base URL** | `https://queue.fal.run` |
+| **Default LLM endpoint** | `FalLlmEndpoint::OpenAiChat` (`openrouter/router/openai/v1/chat/completions`) |
+| **Default LLM execution** | Sync (`https://fal.run/...`) for OpenAI-compat endpoints; queue (`https://queue.fal.run/...`) for prompt-string endpoints |
 | **Auth** | `Authorization: Key <key>` |
-| **Execution** | Queue-based (submit → poll → result) |
-| **Compute traits** | `ImageGeneration`, `VideoGeneration`, `AudioGeneration`, `Transcription` |
+| **Streaming** | Real SSE for OpenAI-compat endpoints; cumulative-output SSE deltas for prompt-string endpoints |
+| **Compute traits** | `ImageGeneration`, `VideoGeneration`, `AudioGeneration`, `Transcription`, `ThreeDGeneration`, `EmbeddingModel` |
 
-See [fal.ai API Reference](./fal-ai-api-reference.md) for detailed endpoint documentation.
+#### fal LLM endpoints
+
+`FalLlmEndpoint` selects the URL path and wire format. Model selection
+is a **separate** field (`llm_model`) and is passed through in the body
+of the request.
+
+| Variant | URL path | Body format |
+|---|---|---|
+| `OpenAiChat` (default) | `openrouter/router/openai/v1/chat/completions` | OpenAI messages |
+| `OpenAiResponses` | `openrouter/router/openai/v1/responses` | OpenAI Responses |
+| `OpenAiEmbeddings` | `openrouter/router/openai/v1/embeddings` | OpenAI embeddings |
+| `OpenRouter { enterprise: false }` | `openrouter/router` | Prompt string |
+| `OpenRouter { enterprise: true }` | `openrouter/router/enterprise` | Prompt string |
+| `AnyLlm { enterprise: false }` | `fal-ai/any-llm` | Prompt string |
+| `AnyLlm { enterprise: true }` | `fal-ai/any-llm/enterprise` | Prompt string |
+| `Vision { family, enterprise }` | `{openrouter\|fal-ai/any-llm}/.../vision[/enterprise]` | Prompt string + images |
+| `Audio { family, enterprise }` | `{openrouter\|fal-ai/any-llm}/.../audio[/enterprise]` | Prompt string + audio |
+| `Video { family, enterprise }` | `{openrouter\|fal-ai/any-llm}/.../video[/enterprise]` | Prompt string + video |
+| `Custom { path, body_format }` | caller-supplied path | caller-selected format |
+
+See [fal.ai API Reference](./fal-ai-api-reference.md) for the full
+endpoint matrix, the 4800-char prompt-format budget, and auto-routing
+rules.
+
+#### Enterprise mode
+
+```rust
+use blazen_llm::providers::fal::{FalProvider, FalLlmEndpoint};
+
+// Start on OpenRouter, promote to the enterprise variant.
+let model = FalProvider::new("fal-...")
+    .with_llm_endpoint(FalLlmEndpoint::OpenRouter { enterprise: false })
+    .with_enterprise();
+```
+
+`with_enterprise()` promotes the current endpoint to its enterprise
+variant (`openrouter/router/enterprise`, `fal-ai/any-llm/enterprise`,
+`.../vision/enterprise`, etc.). The OpenAI-compat endpoints
+(`OpenAiChat`, `OpenAiResponses`) have no enterprise variant, so
+`with_enterprise()` on those promotes to
+`AnyLlm { enterprise: true }` (the body format switches from OpenAI
+messages to prompt-string — a log warning is emitted).
+
+#### Auto-routing vision / audio / video
+
+When the configured endpoint is `OpenRouter` or `AnyLlm` and a request
+contains image, audio, or video content parts, `FalProvider`
+transparently switches to the matching `Vision` / `Audio` / `Video`
+sub-endpoint for the duration of that call. This is on by default;
+disable with `.with_auto_route_modality(false)`.
+
+```rust
+use blazen_llm::{CompletionModel, CompletionRequest, ContentPart};
+use blazen_llm::providers::fal::{FalProvider, FalLlmEndpoint};
+
+let model = FalProvider::new("fal-...")
+    .with_llm_endpoint(FalLlmEndpoint::OpenRouter { enterprise: false });
+
+// A request with an image content part routes to
+// `openrouter/router/vision` automatically.
+```
+
+#### Embeddings
+
+```rust
+use blazen_llm::providers::fal::FalProvider;
+use blazen_llm::EmbeddingModel;
+
+let provider = FalProvider::new("fal-...");
+let em = provider.embedding_model();
+let resp = em.embed(&["hello".into(), "world".into()]).await?;
+```
+
+`FalEmbeddingModel` implements the `EmbeddingModel` trait and posts to
+`openrouter/router/openai/v1/embeddings` (the `OpenAiEmbeddings`
+endpoint).
+
+#### Extra compute methods
+
+In addition to the standard image/video/audio traits, `FalProvider`
+exposes:
+
+- `generate_3d(...)` — 3D asset generation
+- `remove_background(...)` — background removal
+- `upscale_image_aura(...)` — Aura-SR upscaler
+- `upscale_image_clarity(...)` — Clarity upscaler
+- `upscale_image_creative(...)` — Creative upscaler
 
 ---
 
@@ -335,6 +429,38 @@ response = await model.complete(
     top_p=0.9,
     tools=[{"name": "get_weather", "description": "...", "parameters": {...}}],
 )
+```
+
+For `fal.ai`, pass a `FalOptions` instead of loose kwargs:
+
+```python
+from blazen import CompletionModel, FalOptions, FalLlmEndpoint, FalProvider
+
+# LLM completion model via CompletionModel.fal():
+model = CompletionModel.fal(
+    "fal-...",
+    options=FalOptions(
+        model="openai/gpt-4o",
+        endpoint=FalLlmEndpoint.OPENAI_CHAT,  # default
+        enterprise=False,
+        auto_route_modality=True,
+    ),
+)
+
+# Or build a full FalProvider for compute + embeddings:
+fal = FalProvider(
+    api_key="fal-...",
+    options=FalOptions(enterprise=True),
+)
+embeddings = fal.embedding_model()
+resp = await embeddings.embed(["hello", "world"])
+
+# Extra compute methods
+await fal.generate_3d(request)
+await fal.remove_background(image_url="https://...")
+await fal.upscale_image_aura(request)
+await fal.upscale_image_clarity(request)
+await fal.upscale_image_creative(request)
 ```
 
 ### Node.js / TypeScript

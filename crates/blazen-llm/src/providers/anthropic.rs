@@ -26,7 +26,7 @@ use crate::http::{ByteStream, HttpClient, HttpRequest, HttpResponse};
 use crate::traits::{ModelCapabilities, ModelInfo, ModelRegistry};
 use crate::types::{
     CompletionRequest, CompletionResponse, ContentPart, ImageContent, ImageSource, MessageContent,
-    Role, StreamChunk, TokenUsage, ToolCall,
+    ReasoningTrace, Role, StreamChunk, TokenUsage, ToolCall,
 };
 
 // ---------------------------------------------------------------------------
@@ -100,6 +100,14 @@ fn content_part_to_anthropic(part: &ContentPart) -> serde_json::Value {
                 }
             }
         }
+        ContentPart::Audio(_) => {
+            tracing::warn!("anthropic: audio chat input is not supported; audio content dropped.");
+            serde_json::Value::Null
+        }
+        ContentPart::Video(_) => {
+            tracing::warn!("anthropic: video chat input is not supported; video content dropped.");
+            serde_json::Value::Null
+        }
     }
 }
 
@@ -115,10 +123,55 @@ fn content_to_anthropic_value(content: &MessageContent) -> serde_json::Value {
             serde_json::json!([image_content_to_anthropic(img)])
         }
         MessageContent::Parts(parts) => {
-            let arr: Vec<serde_json::Value> = parts.iter().map(content_part_to_anthropic).collect();
+            // Drop `Null` entries that the part converter emits for content
+            // Anthropic does not natively support (audio, video).
+            let arr: Vec<serde_json::Value> = parts
+                .iter()
+                .map(content_part_to_anthropic)
+                .filter(|v| !v.is_null())
+                .collect();
             serde_json::json!(arr)
         }
     }
+}
+
+/// Combine extracted system messages with an optional response-format
+/// instruction into a single `system` field value.
+fn resolve_system_text(
+    system_parts: &[String],
+    response_format: Option<&serde_json::Value>,
+) -> Option<String> {
+    let base = (!system_parts.is_empty()).then(|| system_parts.join("\n\n"));
+    match (base, response_format) {
+        (Some(sys), Some(rf)) => Some(format!(
+            "{}\n\n{sys}",
+            build_json_schema_system_instruction(rf)
+        )),
+        (None, Some(rf)) => Some(build_json_schema_system_instruction(rf)),
+        (sys, None) => sys,
+    }
+}
+
+/// Build a synthetic system instruction asking the model to emit JSON matching
+/// a given schema. Supports both a raw JSON Schema value and an OpenAI-style
+/// `{"type":"json_schema","json_schema":{"schema":...}}` envelope.
+fn build_json_schema_system_instruction(response_format: &serde_json::Value) -> String {
+    let schema = if response_format
+        .get("type")
+        .and_then(serde_json::Value::as_str)
+        == Some("json_schema")
+    {
+        response_format
+            .get("json_schema")
+            .and_then(|js| js.get("schema"))
+            .unwrap_or(response_format)
+    } else {
+        response_format
+    };
+    let pretty = serde_json::to_string_pretty(schema).unwrap_or_else(|_| schema.to_string());
+    format!(
+        "You must respond with a JSON object that matches this exact JSON Schema:\n\n{pretty}\n\nRespond with ONLY the JSON object — no other text, no markdown, no code fences."
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -301,8 +354,8 @@ impl AnthropicProvider {
             "stream": stream,
         });
 
-        if !system_parts.is_empty() {
-            body["system"] = serde_json::Value::String(system_parts.join("\n\n"));
+        if let Some(text) = resolve_system_text(&system_parts, request.response_format.as_ref()) {
+            body["system"] = serde_json::Value::String(text);
         }
 
         if let Some(temp) = request.temperature {
@@ -384,6 +437,19 @@ enum ContentBlock {
         name: String,
         input: serde_json::Value,
     },
+    /// Extended-thinking block emitted by Anthropic models with reasoning enabled.
+    #[serde(rename = "thinking")]
+    Thinking {
+        thinking: String,
+        signature: Option<String>,
+    },
+    /// Redacted reasoning block: the model produced reasoning but the provider
+    /// withheld the plain text and returned an opaque `data` handle instead.
+    #[serde(rename = "redacted_thinking")]
+    RedactedThinking {
+        #[allow(dead_code)]
+        data: String,
+    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -451,15 +517,41 @@ enum ContentBlockStartPayload {
     Text { text: String },
     #[serde(rename = "tool_use")]
     ToolUse { id: String, name: String },
+    #[serde(rename = "thinking")]
+    Thinking {
+        #[serde(default)]
+        thinking: String,
+    },
+    #[serde(rename = "redacted_thinking")]
+    RedactedThinking {
+        #[serde(default)]
+        data: String,
+    },
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
+// Every variant maps to an Anthropic SSE `*_delta` payload type, so the
+// shared "Delta" suffix is intentional and matches the wire vocabulary.
+#[allow(clippy::enum_variant_names)]
 enum ContentBlockDeltaPayload {
     #[serde(rename = "text_delta")]
     TextDelta { text: String },
     #[serde(rename = "input_json_delta")]
     InputJsonDelta { partial_json: String },
+    /// Streaming chunk of an extended-thinking block.
+    #[serde(rename = "thinking_delta")]
+    ThinkingDelta { thinking: String },
+    /// Streaming signature attached to a thinking block. We discard this in
+    /// streaming mode (the non-streaming `complete()` path is the only place
+    /// signatures are exposed today), but we must accept the variant so the
+    /// SSE parser does not error on it.
+    #[serde(rename = "signature_delta")]
+    #[allow(dead_code)]
+    SignatureDelta {
+        #[allow(dead_code)]
+        signature: String,
+    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -476,6 +568,84 @@ struct MessageDeltaUsage {
 #[derive(Debug, Deserialize)]
 struct StreamErrorPayload {
     message: String,
+}
+
+// ---------------------------------------------------------------------------
+// Content block parsing helpers
+// ---------------------------------------------------------------------------
+
+/// Output of [`parse_content_blocks`]: the assistant text, any tool calls,
+/// and any extended-thinking trace recovered from the response.
+struct ParsedContent {
+    content: Option<String>,
+    tool_calls: Vec<ToolCall>,
+    reasoning: Option<ReasoningTrace>,
+}
+
+/// Walk a list of Anthropic content blocks and split them into the
+/// provider-agnostic pieces consumed by [`CompletionResponse`].
+///
+/// Anthropic returns the assistant turn as an array of typed blocks. This
+/// helper concatenates `text` blocks, lifts `tool_use` blocks into
+/// [`ToolCall`]s, and accumulates `thinking` / `redacted_thinking` blocks
+/// into a single [`ReasoningTrace`]. Multiple thinking blocks in one
+/// response are concatenated; the last non-`None` signature wins.
+fn parse_content_blocks(blocks: Vec<ContentBlock>) -> ParsedContent {
+    let mut text_parts: Vec<String> = Vec::new();
+    let mut tool_calls: Vec<ToolCall> = Vec::new();
+    let mut thinking_text = String::new();
+    let mut last_signature: Option<String> = None;
+    let mut had_redacted = false;
+
+    for block in blocks {
+        match block {
+            ContentBlock::Text { text } => {
+                text_parts.push(text);
+            }
+            ContentBlock::ToolUse { id, name, input } => {
+                tool_calls.push(ToolCall {
+                    id,
+                    name,
+                    arguments: input,
+                });
+            }
+            ContentBlock::Thinking {
+                thinking,
+                signature,
+            } => {
+                thinking_text.push_str(&thinking);
+                if signature.is_some() {
+                    last_signature = signature;
+                }
+            }
+            ContentBlock::RedactedThinking { .. } => {
+                had_redacted = true;
+            }
+        }
+    }
+
+    let content = if text_parts.is_empty() {
+        None
+    } else {
+        Some(text_parts.join(""))
+    };
+
+    let reasoning = if thinking_text.is_empty() && !had_redacted {
+        None
+    } else {
+        Some(ReasoningTrace {
+            text: thinking_text,
+            signature: last_signature,
+            redacted: had_redacted,
+            effort: None,
+        })
+    };
+
+    ParsedContent {
+        content,
+        tool_calls,
+        reasoning,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -514,35 +684,17 @@ impl crate::traits::CompletionModel for AnthropicProvider {
             .json()
             .map_err(|e| BlazenError::invalid_response(e.to_string()))?;
 
-        // Extract text content and tool calls from content blocks.
-        let mut text_parts: Vec<String> = Vec::new();
-        let mut tool_calls: Vec<ToolCall> = Vec::new();
-
-        for block in anthropic.content {
-            match block {
-                ContentBlock::Text { text } => {
-                    text_parts.push(text);
-                }
-                ContentBlock::ToolUse { id, name, input } => {
-                    tool_calls.push(ToolCall {
-                        id,
-                        name,
-                        arguments: input,
-                    });
-                }
-            }
-        }
-
-        let content = if text_parts.is_empty() {
-            None
-        } else {
-            Some(text_parts.join(""))
-        };
+        let ParsedContent {
+            content,
+            tool_calls,
+            reasoning,
+        } = parse_content_blocks(anthropic.content);
 
         let usage = anthropic.usage.map(|u| TokenUsage {
             prompt_tokens: u.input_tokens,
             completion_tokens: u.output_tokens,
             total_tokens: u.input_tokens + u.output_tokens,
+            ..Default::default()
         });
 
         span.record(
@@ -565,6 +717,9 @@ impl crate::traits::CompletionModel for AnthropicProvider {
         Ok(CompletionResponse {
             content,
             tool_calls,
+            reasoning,
+            citations: vec![],
+            artifacts: vec![],
             usage,
             model: anthropic.model,
             finish_reason: anthropic.stop_reason,
@@ -840,8 +995,7 @@ fn parse_anthropic_event(
                 ContentBlockDeltaPayload::TextDelta { text } => {
                     return Some(Ok(StreamChunk {
                         delta: Some(text),
-                        tool_calls: Vec::new(),
-                        finish_reason: None,
+                        ..Default::default()
                     }));
                 }
                 ContentBlockDeltaPayload::InputJsonDelta { partial_json } => {
@@ -850,6 +1004,18 @@ fn parse_anthropic_event(
                         block.json_buf.push_str(&partial_json);
                     }
                     // Don't emit a chunk yet; wait for content_block_stop.
+                }
+                ContentBlockDeltaPayload::ThinkingDelta { thinking } => {
+                    // Surface extended-thinking text as a reasoning delta.
+                    return Some(Ok(StreamChunk {
+                        reasoning_delta: Some(thinking),
+                        ..Default::default()
+                    }));
+                }
+                ContentBlockDeltaPayload::SignatureDelta { .. } => {
+                    // Signature deltas are not surfaced through StreamChunk;
+                    // they only matter for the non-streaming `complete()`
+                    // path, which captures them off the final content block.
                 }
             },
             StreamEvent::ContentBlockStart {
@@ -867,6 +1033,28 @@ fn parse_anthropic_event(
                             json_buf: String::new(),
                         });
                     }
+                    ContentBlockStartPayload::Thinking { thinking } => {
+                        // Thinking blocks usually start empty and stream their
+                        // text via `thinking_delta` events. If the start frame
+                        // already carries text, emit it immediately so callers
+                        // never lose it.
+                        if !thinking.is_empty() {
+                            return Some(Ok(StreamChunk {
+                                reasoning_delta: Some(thinking),
+                                ..Default::default()
+                            }));
+                        }
+                    }
+                    ContentBlockStartPayload::RedactedThinking { .. } => {
+                        // The provider withheld the thinking text. Emit a
+                        // single sentinel chunk so downstream consumers know
+                        // a redacted reasoning block was present without
+                        // having to special-case the absence of deltas.
+                        return Some(Ok(StreamChunk {
+                            reasoning_delta: Some("[redacted]".to_owned()),
+                            ..Default::default()
+                        }));
+                    }
                 }
             }
             StreamEvent::ContentBlockStop { index: _ } => {
@@ -882,6 +1070,7 @@ fn parse_anthropic_event(
                             arguments,
                         }],
                         finish_reason: None,
+                        ..Default::default()
                     }));
                 }
             }
@@ -891,6 +1080,7 @@ fn parse_anthropic_event(
                         delta: None,
                         tool_calls: Vec::new(),
                         finish_reason: delta.stop_reason,
+                        ..Default::default()
                     }));
                 }
             }
@@ -899,6 +1089,7 @@ fn parse_anthropic_event(
                     delta: None,
                     tool_calls: Vec::new(),
                     finish_reason: Some("end_turn".to_owned()),
+                    ..Default::default()
                 }));
             }
             StreamEvent::Error { error } => {
@@ -978,6 +1169,31 @@ mod tests {
 
         let body = provider.build_body(&request, false);
         assert_eq!(body["max_tokens"], DEFAULT_MAX_TOKENS);
+    }
+
+    #[test]
+    fn test_response_format_injects_schema_into_system_prompt() {
+        let provider = AnthropicProvider::new("test-key");
+        let request = CompletionRequest {
+            model: None,
+            messages: vec![ChatMessage::user("hi")],
+            tools: vec![],
+            temperature: None,
+            max_tokens: None,
+            top_p: None,
+            response_format: Some(serde_json::json!({
+                "type": "object",
+                "properties": {"answer": {"type": "string"}},
+                "required": ["answer"]
+            })),
+            modalities: None,
+            image_config: None,
+            audio_config: None,
+        };
+        let body = provider.build_body(&request, false);
+        let system = body["system"].as_str().expect("system field should be set");
+        assert!(system.contains("You must respond with a JSON object"));
+        assert!(system.contains("answer"));
     }
 
     #[test]
@@ -1192,5 +1408,68 @@ mod tests {
 
         let result = parse_anthropic_event(&mut buf, &mut tool_blocks);
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_parse_thinking_block() {
+        // Fixture mirrors a real Anthropic `messages.create` response with
+        // extended thinking enabled: a `thinking` block followed by a `text`
+        // block. We deserialize via the same `AnthropicResponse` wire type
+        // the live HTTP path uses, then run the shared `parse_content_blocks`
+        // helper that `complete()` invokes.
+        let body = serde_json::json!({
+            "id": "msg_test",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-opus-4-5-20250101",
+            "content": [
+                {
+                    "type": "thinking",
+                    "thinking": "step 1: consider...",
+                    "signature": "sig123"
+                },
+                {
+                    "type": "text",
+                    "text": "the answer is 42"
+                }
+            ],
+            "stop_reason": "end_turn",
+            "usage": { "input_tokens": 10, "output_tokens": 20 }
+        });
+
+        let anthropic: AnthropicResponse = serde_json::from_value(body).unwrap();
+
+        // Build a CompletionResponse the same way `complete()` does, minus
+        // the HTTP / span / pricing plumbing.
+        let ParsedContent {
+            content,
+            tool_calls,
+            reasoning,
+        } = parse_content_blocks(anthropic.content);
+
+        let response = CompletionResponse {
+            content,
+            tool_calls,
+            reasoning,
+            citations: vec![],
+            artifacts: vec![],
+            usage: None,
+            model: anthropic.model,
+            finish_reason: anthropic.stop_reason,
+            cost: None,
+            timing: None,
+            images: vec![],
+            audio: vec![],
+            videos: vec![],
+            metadata: serde_json::Value::Null,
+        };
+
+        assert_eq!(response.content.as_deref(), Some("the answer is 42"));
+        assert!(response.reasoning.is_some());
+        let trace = response.reasoning.as_ref().unwrap();
+        assert_eq!(trace.text, "step 1: consider...");
+        assert_eq!(trace.signature.as_deref(), Some("sig123"));
+        assert!(!trace.redacted);
+        assert!(trace.effort.is_none());
     }
 }

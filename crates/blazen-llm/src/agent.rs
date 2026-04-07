@@ -369,6 +369,9 @@ fn check_finish_tool(
     let final_response = CompletionResponse {
         content: Some(answer),
         tool_calls: vec![],
+        reasoning: None,
+        citations: vec![],
+        artifacts: vec![],
         usage: response.usage.clone(),
         model: response.model.clone(),
         finish_reason: Some("finish_tool".to_owned()),

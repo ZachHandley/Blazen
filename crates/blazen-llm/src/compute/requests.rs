@@ -418,6 +418,22 @@ impl ThreeDRequest {
 }
 
 // ---------------------------------------------------------------------------
+// Background removal
+// ---------------------------------------------------------------------------
+
+/// Request for background removal on an existing image.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackgroundRemovalRequest {
+    /// URL of the source image.
+    pub image_url: String,
+    /// Optional model id override.
+    pub model: Option<String>,
+    /// Provider-specific parameters merged into the request body.
+    #[serde(default)]
+    pub parameters: serde_json::Value,
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 

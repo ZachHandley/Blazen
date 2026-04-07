@@ -9,6 +9,7 @@
 
 ## Table of Contents
 
+0. [Blazen fal Integration (LLM endpoint matrix, auto-routing, compute)](#0-blazen-fal-integration)
 1. [Authentication](#1-authentication)
 2. [Base URLs & Domains](#2-base-urls--domains)
 3. [Model Addressing](#3-model-addressing)
@@ -28,6 +29,145 @@
 17. [File Storage & Media URLs](#17-file-storage--media-urls)
 18. [Request Headers Reference](#18-request-headers-reference)
 19. [Implementation Notes for Rust](#19-implementation-notes-for-rust)
+
+---
+
+## 0. Blazen fal Integration
+
+This section describes how Blazen's `FalProvider` maps onto the fal.ai
+platform. Everything below is a property of Blazen's implementation,
+not of fal.ai itself.
+
+### 0.1 LLM Endpoint Matrix
+
+`blazen_llm::providers::fal::FalLlmEndpoint` selects the URL path and
+wire format used for LLM completions. The Blazen default is
+`FalLlmEndpoint::OpenAiChat` which targets the OpenAI-compatible chat
+router at `openrouter/router/openai/v1/chat/completions`. The model
+string (e.g. `openai/gpt-4o`) is an **independent** field and is
+passed in the request body — changing the model does not change the
+URL path.
+
+| `FalLlmEndpoint` variant | URL path | Body format | Execution |
+|---|---|---|---|
+| `OpenAiChat` (default) | `openrouter/router/openai/v1/chat/completions` | OpenAI messages | Sync (`fal.run`) |
+| `OpenAiResponses` | `openrouter/router/openai/v1/responses` | OpenAI Responses | Sync (`fal.run`) |
+| `OpenAiEmbeddings` | `openrouter/router/openai/v1/embeddings` | OpenAI embeddings | Sync (`fal.run`) |
+| `OpenRouter { enterprise: false }` | `openrouter/router` | Prompt string | Queue |
+| `OpenRouter { enterprise: true }` | `openrouter/router/enterprise` | Prompt string | Queue |
+| `AnyLlm { enterprise: false }` | `fal-ai/any-llm` | Prompt string | Queue |
+| `AnyLlm { enterprise: true }` | `fal-ai/any-llm/enterprise` | Prompt string | Queue |
+| `Vision { family: OpenRouter, enterprise: false }` | `openrouter/router/vision` | Prompt + images | Queue |
+| `Vision { family: OpenRouter, enterprise: true }` | `openrouter/router/vision/enterprise` | Prompt + images | Queue |
+| `Vision { family: AnyLlm, enterprise: false }` | `fal-ai/any-llm/vision` | Prompt + images | Queue |
+| `Vision { family: AnyLlm, enterprise: true }` | `fal-ai/any-llm/vision/enterprise` | Prompt + images | Queue |
+| `Audio { family: OpenRouter, enterprise: false }` | `openrouter/router/audio` | Prompt + audio | Queue |
+| `Audio { family: OpenRouter, enterprise: true }` | `openrouter/router/audio/enterprise` | Prompt + audio | Queue |
+| `Audio { family: AnyLlm, enterprise: false }` | `fal-ai/any-llm/audio` | Prompt + audio | Queue |
+| `Audio { family: AnyLlm, enterprise: true }` | `fal-ai/any-llm/audio/enterprise` | Prompt + audio | Queue |
+| `Video { family: OpenRouter, enterprise: false }` | `openrouter/router/video` | Prompt + video | Queue |
+| `Video { family: OpenRouter, enterprise: true }` | `openrouter/router/video/enterprise` | Prompt + video | Queue |
+| `Video { family: AnyLlm, enterprise: false }` | `fal-ai/any-llm/video` | Prompt + video | Queue |
+| `Video { family: AnyLlm, enterprise: true }` | `fal-ai/any-llm/video/enterprise` | Prompt + video | Queue |
+| `Custom { path, body_format }` | caller-supplied | caller-selected | inferred from format |
+
+Notes:
+
+- `with_llm_model("...")` sets the request-body model field but does
+  **not** change the URL path. Endpoint and model are orthogonal.
+- `with_enterprise()` promotes the current endpoint to its enterprise
+  variant. `OpenAiChat` and `OpenAiResponses` have no enterprise
+  variant — calling `with_enterprise()` on them promotes to
+  `AnyLlm { enterprise: true }` (the body format changes from OpenAI
+  messages to prompt-string; a warning is logged).
+- `OpenAiChat` is the Blazen default because the previous default
+  (`anthropic/claude-sonnet-4.5` on a non-existent path) returned 404.
+
+### 0.2 Auto-routing (Vision / Audio / Video)
+
+When `auto_route_modality` is `true` (the default), Blazen inspects
+each `CompletionRequest` before sending it. If the request contains
+any image, audio, or video content parts **and** the configured
+`FalLlmEndpoint` is `OpenRouter` or `AnyLlm`, the provider transparently
+substitutes the matching `Vision` / `Audio` / `Video` sub-endpoint for
+the duration of that call. The configured endpoint is unchanged for
+future calls.
+
+The modality precedence when a request mixes media types is:
+
+1. Video (if any video content is present)
+2. Audio (if any audio content is present)
+3. Vision (if any image content is present)
+4. Text-only — no switch, the configured endpoint is used as-is.
+
+Auto-routing does not trigger for `OpenAiChat`, `OpenAiResponses`,
+`OpenAiEmbeddings`, or `Custom` endpoints — those already accept
+multimodal content via their own body format. Disable auto-routing
+explicitly with `.with_auto_route_modality(false)`.
+
+### 0.3 4800-char Prompt / System-prompt Budget
+
+For all prompt-string endpoints (`OpenRouter`, `AnyLlm`, `Vision`,
+`Audio`, `Video`), fal expects flat string fields (`prompt` and
+`system_prompt`) rather than an OpenAI-style `messages` array. Blazen's
+body builder collapses the incoming chat history into these fields and
+enforces a per-field character budget:
+
+| Field | Limit |
+|---|---|
+| `prompt` | 4800 chars |
+| `system_prompt` | 4800 chars |
+
+Eviction policy:
+
+- If the collapsed `prompt` exceeds 4800 chars, the **oldest
+  non-system** message is dropped and the remainder is re-joined;
+  repeat until the limit fits.
+- If the collapsed `system_prompt` exceeds 4800 chars, it is truncated
+  from the front (earliest content dropped first).
+- The most recent user turn is always preserved — if a single message
+  would exceed the budget on its own, it is kept in full and eviction
+  stops there.
+
+This budgeting does **not** apply to `OpenAiChat`, `OpenAiResponses`,
+or `OpenAiEmbeddings`, which use proper OpenAI message arrays and have
+no per-field char limit in Blazen.
+
+### 0.4 Streaming
+
+`stream()` is real SSE — the earlier behaviour of buffering a full
+response and fake-chunking it is gone.
+
+- `OpenAiChat` / `OpenAiResponses` stream native OpenAI SSE events
+  inline (`data: {...}` chunks with `choices[0].delta.content`).
+- `OpenRouter` / `AnyLlm` / `Vision` / `Audio` / `Video` use fal's
+  queue streaming surface. The runner emits cumulative output snapshots
+  (each event contains the full output so far); Blazen computes the
+  per-chunk delta by diffing against the previous snapshot and emits
+  it as a `delta` chunk. The stream closes when the queue transitions
+  to `COMPLETED`.
+
+### 0.5 Embeddings
+
+`FalProvider::embedding_model()` returns a `FalEmbeddingModel` that
+implements the `EmbeddingModel` trait. It always posts to the
+`OpenAiEmbeddings` endpoint (`openrouter/router/openai/v1/embeddings`),
+regardless of the `llm_endpoint` configured on the provider.
+
+### 0.6 Additional Compute Methods
+
+Beyond the standard `ImageGeneration` / `VideoGeneration` /
+`AudioGeneration` / `Transcription` traits, `FalProvider` exposes:
+
+| Method | Description |
+|---|---|
+| `generate_3d(...)` | 3D asset generation (implements the `ThreeDGeneration` trait) |
+| `remove_background(...)` | Background removal (e.g. `fal-ai/bria/background/remove`) |
+| `upscale_image_aura(...)` | Aura-SR upscaler |
+| `upscale_image_clarity(...)` | Clarity upscaler |
+| `upscale_image_creative(...)` | Creative upscaler |
+
+The pre-existing `upscale_image(...)` (ESRGAN) is unchanged.
 
 ---
 

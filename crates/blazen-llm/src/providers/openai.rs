@@ -324,6 +324,7 @@ impl crate::traits::CompletionModel for OpenAiProvider {
             prompt_tokens: u.prompt_tokens,
             completion_tokens: u.completion_tokens,
             total_tokens: u.total_tokens,
+            ..Default::default()
         });
 
         span.record(
@@ -343,9 +344,18 @@ impl crate::traits::CompletionModel for OpenAiProvider {
             .as_ref()
             .and_then(|u| crate::pricing::compute_cost(&oai.model, u));
 
+        // TODO(phase-4.2): OpenAI o-series exposes `reasoning_summary` only via the
+        // Responses API (`/v1/responses`), not chat completions. Once the fal.rs
+        // Responses-API body builder lands in Phase 4.2, the parser there will
+        // populate `CompletionResponse.reasoning` for o-series models. This direct
+        // chat-completions code path can stay as-is — o-series users should call the
+        // Responses endpoint via fal.
         Ok(CompletionResponse {
             content: choice.message.content,
             tool_calls,
+            reasoning: None,
+            citations: vec![],
+            artifacts: vec![],
             usage,
             model: oai.model,
             finish_reason: choice.finish_reason,
@@ -653,6 +663,7 @@ impl crate::traits::EmbeddingModel for OpenAiEmbeddingModel {
             prompt_tokens: u.prompt_tokens,
             completion_tokens: 0,
             total_tokens: u.total_tokens,
+            ..Default::default()
         });
 
         Ok(EmbeddingResponse {

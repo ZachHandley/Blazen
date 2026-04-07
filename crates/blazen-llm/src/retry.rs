@@ -265,6 +265,9 @@ mod tests {
         CompletionResponse {
             content: Some("hello".to_string()),
             tool_calls: vec![],
+            reasoning: None,
+            citations: vec![],
+            artifacts: vec![],
             usage: None,
             model: "mock-model".to_string(),
             finish_reason: Some("stop".to_string()),

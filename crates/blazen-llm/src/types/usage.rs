@@ -15,6 +15,18 @@ pub struct TokenUsage {
     pub completion_tokens: u32,
     /// Total tokens consumed (prompt + completion).
     pub total_tokens: u32,
+    /// Tokens spent on hidden reasoning (o-series, R1, Anthropic thinking).
+    #[serde(default)]
+    pub reasoning_tokens: u32,
+    /// Tokens served from a prompt cache, if the provider reports them.
+    #[serde(default)]
+    pub cached_input_tokens: u32,
+    /// Tokens consumed by audio input.
+    #[serde(default)]
+    pub audio_input_tokens: u32,
+    /// Tokens consumed by audio output.
+    #[serde(default)]
+    pub audio_output_tokens: u32,
 }
 
 // ---------------------------------------------------------------------------

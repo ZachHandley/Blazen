@@ -86,6 +86,39 @@ pub(crate) fn content_part_to_openai(part: &ContentPart) -> serde_json::Value {
                 "image_url": { "url": url }
             })
         }
+        ContentPart::Audio(audio) => {
+            // OpenAI's `gpt-4o-audio-preview` accepts `input_audio` blocks
+            // with base64 data and a short format hint. URL-sourced audio is
+            // not natively supported -- drop with a warning.
+            match &audio.source {
+                ImageSource::Base64 { data } => {
+                    let format = audio
+                        .media_type
+                        .as_deref()
+                        .and_then(|m| m.strip_prefix("audio/"))
+                        .unwrap_or("mp3");
+                    serde_json::json!({
+                        "type": "input_audio",
+                        "input_audio": { "data": data, "format": format }
+                    })
+                }
+                ImageSource::Url { .. } => {
+                    tracing::warn!(
+                        "openai-compat: audio URL inputs are not supported; \
+                         pass base64 data via AudioContent::from_base64 instead. \
+                         Audio content dropped."
+                    );
+                    serde_json::Value::Null
+                }
+            }
+        }
+        ContentPart::Video(_) => {
+            tracing::warn!(
+                "openai-compat: video chat input is not supported by this provider; \
+                 video content dropped."
+            );
+            serde_json::Value::Null
+        }
     }
 }
 
@@ -101,7 +134,14 @@ pub(crate) fn content_to_openai_value(content: &MessageContent) -> serde_json::V
             serde_json::json!([image_content_to_openai(img)])
         }
         MessageContent::Parts(parts) => {
-            let arr: Vec<serde_json::Value> = parts.iter().map(content_part_to_openai).collect();
+            // Drop `Null` entries that the part converter emits for unsupported
+            // content (e.g. video parts on a text-only model). Keeps the wire
+            // body clean.
+            let arr: Vec<serde_json::Value> = parts
+                .iter()
+                .map(content_part_to_openai)
+                .filter(|v| !v.is_null())
+                .collect();
             serde_json::json!(arr)
         }
     }

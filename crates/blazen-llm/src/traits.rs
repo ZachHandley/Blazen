@@ -118,6 +118,9 @@ pub trait StructuredOutput: CompletionModel {
             cost: response.cost,
             timing: response.timing,
             metadata: response.metadata,
+            reasoning: response.reasoning,
+            citations: response.citations,
+            artifacts: response.artifacts,
         })
     }
 }

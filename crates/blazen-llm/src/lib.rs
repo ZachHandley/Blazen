@@ -54,6 +54,7 @@
 //! ```
 
 pub mod agent;
+pub mod artifacts;
 pub mod cache;
 pub mod chat_window;
 pub mod compute;
@@ -94,12 +95,16 @@ pub mod types;
 
 // Re-export primary types at crate root for ergonomic imports.
 pub use agent::{AgentConfig, AgentEvent, AgentResult, run_agent, run_agent_with_callback};
+pub use artifacts::extract_inline_artifacts;
 pub use cache::{CacheConfig, CacheStrategy, CachedCompletionModel};
 pub use chat_window::ChatWindow;
 pub use compute::{
     // Audio
     AudioGeneration,
     AudioResult,
+    // Background removal
+    BackgroundRemoval,
+    BackgroundRemovalRequest,
     // Core compute
     ComputeProvider,
     ComputeRequest,
@@ -146,7 +151,8 @@ pub use traits::{
     ProviderCapabilities, ProviderInfo, StructuredOutput, Tool,
 };
 pub use types::{
-    ChatMessage, CompletionRequest, CompletionResponse, ContentPart, EmbeddingResponse,
-    FileContent, ImageContent, ImageSource, MessageContent, RequestTiming, Role, StreamChunk,
-    StructuredResponse, TokenUsage, ToolCall, ToolDefinition,
+    Artifact, AudioContent, ChatMessage, Citation, CompletionRequest, CompletionResponse,
+    ContentPart, EmbeddingResponse, FileContent, FinishReason, ImageContent, ImageSource,
+    MediaSource, MessageContent, ReasoningTrace, RequestTiming, ResponseFormat, Role, StreamChunk,
+    StructuredResponse, TokenUsage, ToolCall, ToolDefinition, VideoContent,
 };

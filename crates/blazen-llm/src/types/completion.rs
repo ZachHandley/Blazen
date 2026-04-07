@@ -1,10 +1,175 @@
 //! Completion request/response types, structured output, embeddings, and streaming.
 
+use serde::{Deserialize, Serialize};
+
 use crate::media::{GeneratedAudio, GeneratedImage, GeneratedVideo};
 
 use super::message::ChatMessage;
 use super::tool::{ToolCall, ToolDefinition};
 use super::usage::{RequestTiming, TokenUsage};
+
+// ---------------------------------------------------------------------------
+// Reasoning trace
+// ---------------------------------------------------------------------------
+
+/// Chain-of-thought / extended-thinking trace from a model that exposes one.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReasoningTrace {
+    /// Plain-text rendering of the reasoning content.
+    pub text: String,
+    /// Provider-specific signature/redaction handle, if any (Anthropic).
+    pub signature: Option<String>,
+    /// Whether the trace was redacted by the provider.
+    pub redacted: bool,
+    /// Reasoning effort level if the provider exposes one ("low"/"medium"/"high"/"max"/...).
+    pub effort: Option<String>,
+}
+
+/// A web/document citation backing a model statement.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Citation {
+    pub url: String,
+    pub title: Option<String>,
+    pub snippet: Option<String>,
+    /// Byte offsets in the response text that this citation backs.
+    pub start: Option<usize>,
+    pub end: Option<usize>,
+    /// Optional document id (for retrieval-augmented citations).
+    pub document_id: Option<String>,
+    /// Provider-specific extra fields preserved as JSON.
+    #[serde(default)]
+    pub metadata: serde_json::Value,
+}
+
+/// A typed artifact extracted from or returned by a model.
+///
+/// SVG / code blocks / markdown documents / mermaid diagrams / latex / html
+/// can be returned inline as text by an LLM. The artifact surface lets
+/// providers (or post-processors) lift them into typed values that callers
+/// can dispatch on without re-parsing the assistant content string.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Artifact {
+    Svg {
+        content: String,
+        title: Option<String>,
+    },
+    CodeBlock {
+        language: Option<String>,
+        content: String,
+        filename: Option<String>,
+    },
+    Markdown {
+        content: String,
+    },
+    Mermaid {
+        content: String,
+    },
+    Html {
+        content: String,
+    },
+    Latex {
+        content: String,
+    },
+    Json {
+        content: serde_json::Value,
+    },
+    /// Escape hatch: unknown artifact kind.
+    Custom {
+        #[serde(rename = "name")]
+        kind: String,
+        content: String,
+        #[serde(default)]
+        metadata: serde_json::Value,
+    },
+}
+
+/// Normalized finish reason across providers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FinishReason {
+    Stop,
+    Length,
+    ToolCalls,
+    ContentFilter,
+    Safety,
+    EndTurn,
+    StopSequence,
+    MaxTokens,
+    Error,
+    /// Provider returned a value not in the canonical set.
+    Other(String),
+}
+
+impl FinishReason {
+    /// Map a provider-specific finish-reason string into the canonical enum.
+    ///
+    /// Recognizes both `OpenAI` (`"stop"`, `"length"`, `"tool_calls"`, `"content_filter"`,
+    /// `"function_call"`), Anthropic (`"end_turn"`, `"stop_sequence"`, `"max_tokens"`,
+    /// `"tool_use"`), and Gemini (`"STOP"`, `"MAX_TOKENS"`, `"SAFETY"`, `"RECITATION"`)
+    /// variants. Unknown values fall through to [`FinishReason::Other`].
+    #[must_use]
+    pub fn from_provider_string(s: &str) -> Self {
+        match s.to_ascii_lowercase().as_str() {
+            "stop" => Self::Stop,
+            "length" => Self::Length,
+            "tool_calls" | "tool_use" | "function_call" => Self::ToolCalls,
+            "content_filter" => Self::ContentFilter,
+            "safety" | "recitation" => Self::Safety,
+            "end_turn" => Self::EndTurn,
+            "stop_sequence" => Self::StopSequence,
+            "max_tokens" => Self::MaxTokens,
+            "error" => Self::Error,
+            other => Self::Other(other.to_owned()),
+        }
+    }
+}
+
+/// Typed response-format hint passed to providers that support structured output.
+///
+/// The on-the-wire JSON shape (returned by `From<ResponseFormat> for serde_json::Value`)
+/// matches `OpenAI`'s chat completions `response_format` field. The existing
+/// `CompletionRequest::response_format: Option<serde_json::Value>` keeps
+/// raw JSON for backwards compatibility; the typed enum is opt-in.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ResponseFormat {
+    /// Plain text — no structural constraint.
+    Text,
+    /// JSON object mode (any valid JSON object).
+    JsonObject,
+    /// JSON Schema mode with a named schema.
+    JsonSchema {
+        name: String,
+        schema: serde_json::Value,
+        #[serde(default)]
+        strict: bool,
+    },
+}
+
+impl ResponseFormat {
+    /// Build a [`ResponseFormat::JsonSchema`] from a Rust type that implements
+    /// [`schemars::JsonSchema`]. The schema name is derived from the type name.
+    #[must_use]
+    pub fn json_schema<T: schemars::JsonSchema>() -> Self {
+        let schema = schemars::schema_for!(T);
+        Self::JsonSchema {
+            name: std::any::type_name::<T>()
+                .split("::")
+                .last()
+                .unwrap_or("Schema")
+                .to_owned(),
+            schema: serde_json::to_value(&schema).unwrap_or(serde_json::Value::Null),
+            strict: true,
+        }
+    }
+}
+
+impl From<ResponseFormat> for serde_json::Value {
+    fn from(rf: ResponseFormat) -> Self {
+        serde_json::to_value(rf).unwrap_or(serde_json::Value::Null)
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Completion request
@@ -128,6 +293,10 @@ pub struct CompletionResponse {
     pub content: Option<String>,
     /// Tool invocations requested by the model.
     pub tool_calls: Vec<ToolCall>,
+    /// Chain-of-thought / extended-thinking trace, if exposed by the provider.
+    pub reasoning: Option<ReasoningTrace>,
+    pub citations: Vec<Citation>,
+    pub artifacts: Vec<Artifact>,
     /// Token usage statistics, if provided by the API.
     pub usage: Option<TokenUsage>,
     /// The model that produced this response.
@@ -146,6 +315,18 @@ pub struct CompletionResponse {
     pub videos: Vec<GeneratedVideo>,
     /// Provider-specific metadata.
     pub metadata: serde_json::Value,
+}
+
+impl CompletionResponse {
+    /// Lazily map the raw `finish_reason` string into a normalized [`FinishReason`].
+    ///
+    /// Returns `None` if the response carries no finish reason.
+    #[must_use]
+    pub fn finish_reason_normalized(&self) -> Option<FinishReason> {
+        self.finish_reason
+            .as_deref()
+            .map(FinishReason::from_provider_string)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -167,6 +348,12 @@ pub struct StructuredResponse<T> {
     pub timing: Option<RequestTiming>,
     /// Provider-specific metadata.
     pub metadata: serde_json::Value,
+    /// Chain-of-thought / extended-thinking trace, if exposed by the provider.
+    pub reasoning: Option<ReasoningTrace>,
+    /// Citations backing the model's response.
+    pub citations: Vec<Citation>,
+    /// Typed artifacts extracted from or returned by the model.
+    pub artifacts: Vec<Artifact>,
 }
 
 // ---------------------------------------------------------------------------
@@ -195,7 +382,7 @@ pub struct EmbeddingResponse {
 // ---------------------------------------------------------------------------
 
 /// A single chunk from a streaming completion response.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct StreamChunk {
     /// Incremental text content, if any.
     pub delta: Option<String>,
@@ -203,4 +390,85 @@ pub struct StreamChunk {
     pub tool_calls: Vec<ToolCall>,
     /// Present in the final chunk to indicate why generation stopped.
     pub finish_reason: Option<String>,
+    /// Reasoning text delta (Anthropic thinking, R1 `reasoning_content`, o-series).
+    pub reasoning_delta: Option<String>,
+    /// Citations completed in this chunk.
+    pub citations: Vec<Citation>,
+    /// Artifacts completed in this chunk.
+    pub artifacts: Vec<Artifact>,
+}
+
+#[cfg(test)]
+mod finish_reason_tests {
+    use super::*;
+
+    #[test]
+    fn from_provider_string_handles_anthropic_end_turn() {
+        assert_eq!(
+            FinishReason::from_provider_string("end_turn"),
+            FinishReason::EndTurn
+        );
+    }
+
+    #[test]
+    fn from_provider_string_handles_gemini_uppercase_stop() {
+        assert_eq!(
+            FinishReason::from_provider_string("STOP"),
+            FinishReason::Stop
+        );
+    }
+
+    #[test]
+    fn from_provider_string_normalizes_tool_call_aliases() {
+        assert_eq!(
+            FinishReason::from_provider_string("tool_calls"),
+            FinishReason::ToolCalls
+        );
+        assert_eq!(
+            FinishReason::from_provider_string("tool_use"),
+            FinishReason::ToolCalls
+        );
+        assert_eq!(
+            FinishReason::from_provider_string("function_call"),
+            FinishReason::ToolCalls
+        );
+    }
+
+    #[test]
+    fn unknown_value_falls_through_to_other() {
+        let result = FinishReason::from_provider_string("xyz_unknown");
+        assert!(matches!(result, FinishReason::Other(s) if s == "xyz_unknown"));
+    }
+}
+
+#[cfg(test)]
+mod response_format_tests {
+    use super::*;
+
+    #[test]
+    fn text_serializes_with_type_tag() {
+        let rf = ResponseFormat::Text;
+        let v: serde_json::Value = rf.into();
+        assert_eq!(v["type"], "text");
+    }
+
+    #[test]
+    fn json_object_serializes_with_type_tag() {
+        let rf = ResponseFormat::JsonObject;
+        let v: serde_json::Value = rf.into();
+        assert_eq!(v["type"], "json_object");
+    }
+
+    #[test]
+    fn json_schema_round_trip() {
+        let rf = ResponseFormat::JsonSchema {
+            name: "MyType".into(),
+            schema: serde_json::json!({"type":"object"}),
+            strict: true,
+        };
+        let v: serde_json::Value = rf.into();
+        assert_eq!(v["type"], "json_schema");
+        assert_eq!(v["name"], "MyType");
+        assert_eq!(v["strict"], true);
+    }
 }

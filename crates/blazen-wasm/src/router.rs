@@ -562,6 +562,10 @@ fn resolve_provider(
                 http_client,
             )))
         }
+        // model_id sets the request body `model` field; the URL path is the
+        // default OpenAiChat endpoint (openrouter/router/openai/v1/chat/completions).
+        // To target a non-default fal endpoint family, use the FalProvider builder
+        // directly with `with_llm_endpoint(...)` or `with_enterprise()`.
         "fal" => Ok(Box::new(
             FalProvider::new_with_client(api_key, http_client).with_llm_model(model_id),
         )),

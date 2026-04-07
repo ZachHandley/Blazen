@@ -4,7 +4,8 @@ use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
 use blazen_llm::types::{
-    ChatMessage, ContentPart, ImageContent, ImageSource, MessageContent, Role,
+    AudioContent, ChatMessage, ContentPart, ImageContent, ImageSource, MediaSource, MessageContent,
+    Role, VideoContent,
 };
 
 // ---------------------------------------------------------------------------
@@ -45,13 +46,38 @@ pub struct JsImageContent {
     pub media_type: Option<String>,
 }
 
+/// Audio content for multimodal messages.
+#[napi(object)]
+pub struct JsAudioContent {
+    pub source: JsImageSource,
+    #[napi(js_name = "mediaType")]
+    pub media_type: Option<String>,
+    #[napi(js_name = "durationSeconds")]
+    pub duration_seconds: Option<f64>,
+}
+
+/// Video content for multimodal messages.
+#[napi(object)]
+pub struct JsVideoContent {
+    pub source: JsImageSource,
+    #[napi(js_name = "mediaType")]
+    pub media_type: Option<String>,
+    #[napi(js_name = "durationSeconds")]
+    pub duration_seconds: Option<f64>,
+}
+
 /// A single part in a multi-part message.
+///
+/// `partType` is one of `"text"`, `"image"`, `"audio"`, `"video"`. Set the
+/// matching field (`text`, `image`, `audio`, `video`) accordingly.
 #[napi(object)]
 pub struct JsContentPart {
     #[napi(js_name = "partType")]
     pub part_type: String,
     pub text: Option<String>,
     pub image: Option<JsImageContent>,
+    pub audio: Option<JsAudioContent>,
+    pub video: Option<JsVideoContent>,
 }
 
 // ---------------------------------------------------------------------------
@@ -157,6 +183,38 @@ impl JsChatMessage {
         }
     }
 
+    /// Create a user message containing text and an audio clip from a URL.
+    #[napi(factory, js_name = "userAudio")]
+    pub fn user_audio(text: String, url: String) -> Self {
+        Self {
+            inner: ChatMessage::user_audio(text, url),
+        }
+    }
+
+    /// Create a user message containing text and base64-encoded audio data.
+    #[napi(factory, js_name = "userAudioBase64")]
+    pub fn user_audio_base64(text: String, data: String, media_type: String) -> Self {
+        Self {
+            inner: ChatMessage::user_audio_base64(text, data, media_type),
+        }
+    }
+
+    /// Create a user message containing text and a video clip from a URL.
+    #[napi(factory, js_name = "userVideo")]
+    pub fn user_video(text: String, url: String) -> Self {
+        Self {
+            inner: ChatMessage::user_video(text, url),
+        }
+    }
+
+    /// Create a user message containing text and base64-encoded video data.
+    #[napi(factory, js_name = "userVideoBase64")]
+    pub fn user_video_base64(text: String, data: String, media_type: String) -> Self {
+        Self {
+            inner: ChatMessage::user_video_base64(text, data, media_type),
+        }
+    }
+
     /// Create a user message from an explicit list of content parts.
     #[napi(factory, js_name = "userParts")]
     pub fn user_parts(parts: Vec<JsContentPart>) -> Result<Self> {
@@ -203,6 +261,7 @@ pub(crate) fn parse_role(role_str: &str) -> Result<Role> {
 }
 
 /// Convert a `Vec<JsContentPart>` into `Vec<ContentPart>`.
+#[allow(clippy::too_many_lines)]
 pub(crate) fn convert_js_parts(parts: Vec<JsContentPart>) -> Result<Vec<ContentPart>> {
     parts
         .into_iter()
@@ -238,9 +297,71 @@ pub(crate) fn convert_js_parts(parts: Vec<JsContentPart>) -> Result<Vec<ContentP
                     media_type: img.media_type,
                 }))
             }
+            "audio" => {
+                let audio = part.audio.ok_or_else(|| {
+                    napi::Error::new(
+                        napi::Status::InvalidArg,
+                        "Content part with partType \"audio\" must include an `audio` field",
+                    )
+                })?;
+                let source = match audio.source.source_type.as_str() {
+                    "url" => MediaSource::Url {
+                        url: audio.source.url.unwrap_or_default(),
+                    },
+                    "base64" => MediaSource::Base64 {
+                        data: audio.source.data.unwrap_or_default(),
+                    },
+                    other => {
+                        return Err(napi::Error::new(
+                            napi::Status::InvalidArg,
+                            format!(
+                                "Invalid audio source type: \"{other}\". Must be \"url\" or \"base64\""
+                            ),
+                        ));
+                    }
+                };
+                #[allow(clippy::cast_possible_truncation)]
+                let duration = audio.duration_seconds.map(|d| d as f32);
+                Ok(ContentPart::Audio(AudioContent {
+                    source,
+                    media_type: audio.media_type,
+                    duration_seconds: duration,
+                }))
+            }
+            "video" => {
+                let video = part.video.ok_or_else(|| {
+                    napi::Error::new(
+                        napi::Status::InvalidArg,
+                        "Content part with partType \"video\" must include a `video` field",
+                    )
+                })?;
+                let source = match video.source.source_type.as_str() {
+                    "url" => MediaSource::Url {
+                        url: video.source.url.unwrap_or_default(),
+                    },
+                    "base64" => MediaSource::Base64 {
+                        data: video.source.data.unwrap_or_default(),
+                    },
+                    other => {
+                        return Err(napi::Error::new(
+                            napi::Status::InvalidArg,
+                            format!(
+                                "Invalid video source type: \"{other}\". Must be \"url\" or \"base64\""
+                            ),
+                        ));
+                    }
+                };
+                #[allow(clippy::cast_possible_truncation)]
+                let duration = video.duration_seconds.map(|d| d as f32);
+                Ok(ContentPart::Video(VideoContent {
+                    source,
+                    media_type: video.media_type,
+                    duration_seconds: duration,
+                }))
+            }
             other => Err(napi::Error::new(
                 napi::Status::InvalidArg,
-                format!("Invalid content part type: \"{other}\". Must be \"text\" or \"image\""),
+                format!("Invalid content part type: \"{other}\". Must be \"text\", \"image\", \"audio\", or \"video\""),
             )),
         })
         .collect()

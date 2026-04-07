@@ -17,17 +17,27 @@
  *     - Latency is inherently higher than direct HTTP providers (extra round-trips).
  *     - There is no native SSE streaming -- Blazen simulates it by returning the
  *       complete response as a single chunk.
- *     - Tool calling is NOT supported (fal-ai/any-llm is text-in, text-out).
- *     - Image inputs are NOT supported (text-only; non-text content is dropped).
- *     - The LLM endpoint (fal-ai/any-llm) proxies through OpenRouter, so you
- *       can access many models (OpenAI, Anthropic, Meta, etc.) via a single key.
  *     - Authentication uses "Key <token>" format, not "Bearer <token>".
+ *     - The default LLM endpoint is fal's OpenAI-compatible chat-completions
+ *       surface (`FalLlmEndpoint.OpenAiChat`). Other variants include
+ *       `OpenAiResponses`, `OpenRouter`, and `AnyLlm`, each with an
+ *       `*Enterprise` cousin for SOC2-eligible traffic.
+ *
+ * Beyond LLM completions, `FalProvider` exposes the full fal.ai compute API:
+ * image / video / audio / 3D generation, transcription, background removal,
+ * and text embeddings. The tail of this file demonstrates each of these.
  *
  * Run with: FAL_KEY=... npx tsx llm_fal.ts
  */
 
-import { Workflow, CompletionModel } from "blazen";
-import type { Context, JsWorkflowResult } from "blazen";
+import {
+  Workflow,
+  CompletionModel,
+  ChatMessage,
+  FalProvider,
+  FalLlmEndpoint,
+} from "blazen";
+import type { Context, JsWorkflowResult, JsFalOptions } from "blazen";
 
 // Module-level model instance. CompletionModel is a native Rust object and
 // is NOT JSON-serializable, so it cannot be stored via ctx.set(). We create
@@ -37,13 +47,11 @@ let MODEL: CompletionModel | null = null;
 // ---------------------------------------------------------------------------
 // Step 1: Generate a response using fal.ai
 //
-// fal.ai uses the fal-ai/any-llm endpoint, which is powered by OpenRouter.
-// Under the hood, Blazen submits to the fal.ai job queue, then polls until
-// the result is ready. This means:
+// fal.ai's default LLM endpoint is the OpenAI-compatible chat-completions
+// surface. Under the hood, Blazen submits to the fal.ai job queue, then polls
+// until the result is ready. This means:
 //   - Expect higher latency than direct providers (queue + poll overhead)
-//   - No streaming support (Blazen simulates it with a single chunk)
-//   - No tool calling support (tool_calls will always be an empty list)
-//   - Text-only input (no image URLs or base64 images)
+//   - No native streaming support (Blazen simulates it with a single chunk)
 // ---------------------------------------------------------------------------
 
 const wf = new Workflow("fal-demo");
@@ -67,10 +75,6 @@ wf.addStep("generate", ["blazen::StartEvent"], async (event: Record<string, any>
   const modelName: string = response.model;
   const usage: Record<string, any> | null = response.usage;
   const finishReason: string = response.finishReason;
-
-  // toolCalls is always empty for fal.ai -- no tool calling support
-  const toolCalls: any[] = response.toolCalls;
-  if (toolCalls.length !== 0) throw new Error("fal.ai does not support tool calling");
 
   console.log(`[generate] Response received in ${elapsed.toFixed(2)}s (includes queue + poll time)`);
   console.log(`[generate] Model: ${modelName}`);
@@ -147,6 +151,88 @@ wf.addStep("analyze", ["GenerateComplete"], async (event: Record<string, any>, c
 });
 
 // ---------------------------------------------------------------------------
+// Vision / audio / video extras
+//
+// fal.ai auto-routes multimodal chat requests to the matching vision, audio,
+// or video-capable variant of the underlying router (controlled by
+// `FalOptions.autoRouteModality`, which defaults to `true`). The helpers
+// below demonstrate each modality using the same `CompletionModel.fal`
+// instance.
+// ---------------------------------------------------------------------------
+
+async function demoVision(model: CompletionModel): Promise<void> {
+  console.log("\n[vision] Describing an image via fal.ai...");
+  const response: Record<string, any> = await model.complete([
+    ChatMessage.userImageUrl(
+      "What is in this picture? Answer in one sentence.",
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png",
+    ),
+  ]);
+  console.log(`[vision] ${response.content}`);
+}
+
+async function demoAudio(model: CompletionModel): Promise<void> {
+  console.log("\n[audio] Transcribing/analysing a clip via fal.ai...");
+  const response: Record<string, any> = await model.complete([
+    ChatMessage.userAudio(
+      "Summarise what you hear in one sentence.",
+      "https://storage.googleapis.com/falserverless/model_tests/whisper/dinner_conversation.mp3",
+    ),
+  ]);
+  console.log(`[audio] ${response.content}`);
+}
+
+async function demoVideo(model: CompletionModel): Promise<void> {
+  console.log("\n[video] Describing a video clip via fal.ai...");
+  const response: Record<string, any> = await model.complete([
+    ChatMessage.userVideo(
+      "What is happening in this video? Answer in one sentence.",
+      "https://storage.googleapis.com/falserverless/model_tests/video_models/robot.mp4",
+    ),
+  ]);
+  console.log(`[video] ${response.content}`);
+}
+
+// ---------------------------------------------------------------------------
+// Non-LLM compute extras (embeddings, 3D, background removal)
+//
+// These live on `FalProvider` directly. `FalProvider` exposes the full
+// fal.ai compute surface (image / video / audio / 3D / transcription /
+// embeddings / background removal) in addition to the `CompletionModel`
+// interface.
+// ---------------------------------------------------------------------------
+
+async function demoEmbeddings(provider: FalProvider): Promise<void> {
+  console.log("\n[embeddings] Embedding via fal.ai...");
+  const em = provider.embeddingModel();
+  const vectors: number[][] = await em.embed(["hi", "hello world"]);
+  console.log(
+    `[embeddings] model=${em.modelId} dims=${em.dimensions} n_vectors=${vectors.length}`,
+  );
+}
+
+async function demoGenerate3d(provider: FalProvider): Promise<void> {
+  console.log("\n[3d] Generating a 3D model via fal.ai...");
+  const result: Record<string, any> = await provider.generate3d({
+    prompt: "a low-poly wooden treasure chest",
+    format: "glb",
+  });
+  const models: any[] = result.models ?? [];
+  console.log(
+    `[3d] generated ${models.length} model(s); elapsed=${result.elapsed_ms ?? "?"}ms`,
+  );
+}
+
+async function demoRemoveBackground(provider: FalProvider): Promise<void> {
+  console.log("\n[bg-remove] Removing background via fal.ai...");
+  const result: Record<string, any> = await provider.removeBackground(
+    "https://storage.googleapis.com/falserverless/model_tests/remove_bg/elephant.jpg",
+  );
+  const image: Record<string, any> = result.image ?? {};
+  console.log(`[bg-remove] got matted image url=${image.url ?? "?"}`);
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -157,14 +243,25 @@ if (!falKey) {
   process.exit(1);
 }
 
-// Create the fal.ai model. By default this uses the fal-ai/any-llm
-// endpoint, which proxies through OpenRouter to access many LLM providers.
+// Create the fal.ai model. By default this uses the OpenAiChat endpoint
+// (openrouter/router/openai/v1/chat/completions), which provides full
+// OpenAI chat-completions semantics: messages array, tool calls, structured
+// outputs, native streaming.
 // CompletionModel is a native Rust object (not JSON-serializable), so we
 // store it as a module-level variable rather than in ctx.set().
 MODEL = CompletionModel.fal(falKey);
 
-// You can also specify a different fal.ai model endpoint:
-//   MODEL = CompletionModel.fal(falKey, "fal-ai/any-llm");
+// You can also pin a specific model, endpoint, or the enterprise tier
+// by passing a `JsFalOptions` as the second argument. The object below is
+// built but not used -- uncomment the reassignment to switch `MODEL` over
+// to the SOC2-eligible variant.
+const enterpriseOpts: JsFalOptions = {
+  model: "anthropic/claude-sonnet-4.5",
+  endpoint: FalLlmEndpoint.OpenAiChat,
+  enterprise: true,
+};
+void enterpriseOpts; // silence "unused" lint
+// MODEL = CompletionModel.fal(falKey, enterpriseOpts);
 
 console.log(`Using model: ${MODEL.modelId}`);
 console.log("NOTE: fal.ai uses a queue-based architecture. Each call involves");
@@ -187,7 +284,7 @@ console.log(`  Analyze step:  ${timing.analyze_seconds}s`);
 console.log(`  Total:         ${timing.total_seconds}s`);
 
 // Usage info may be null for fal.ai -- it depends on the underlying
-// model and whether OpenRouter returns token counts.
+// model and whether the router returns token counts.
 const usage: Record<string, any> = output.usage;
 if (usage.generate) {
   const u: Record<string, any> = usage.generate;
@@ -209,4 +306,42 @@ if (usage.analyze) {
   );
 } else {
   console.log("Usage (analyze):  not available");
+}
+
+// ---------------------------------------------------------------------------
+// Optional multimodal / compute demos.
+//
+// Each demo block is wrapped in try/catch so that a failure in one
+// (e.g. an unavailable sample URL or a restricted endpoint) does not
+// stop the rest of the example from running.
+// ---------------------------------------------------------------------------
+
+console.log("\n" + "=".repeat(60));
+console.log("MULTIMODAL + COMPUTE DEMOS");
+console.log("=".repeat(60));
+
+const chatModel: CompletionModel = MODEL!;
+for (const [name, demo] of [
+  ["demoVision", demoVision],
+  ["demoAudio", demoAudio],
+  ["demoVideo", demoVideo],
+] as const) {
+  try {
+    await demo(chatModel);
+  } catch (exc) {
+    console.log(`[${name}] skipped: ${(exc as Error).message ?? exc}`);
+  }
+}
+
+const provider = FalProvider.create(falKey);
+for (const [name, demo] of [
+  ["demoEmbeddings", demoEmbeddings],
+  ["demoGenerate3d", demoGenerate3d],
+  ["demoRemoveBackground", demoRemoveBackground],
+] as const) {
+  try {
+    await demo(provider);
+  } catch (exc) {
+    console.log(`[${name}] skipped: ${(exc as Error).message ?? exc}`);
+  }
 }

@@ -76,10 +76,16 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::PyRequestTiming>()?;
     m.add_class::<types::PyCompletionResponse>()?;
     m.add_class::<types::PyStreamChunk>()?;
+    m.add_class::<types::PyReasoningTrace>()?;
+    m.add_class::<types::PyCitation>()?;
+    m.add_class::<types::PyArtifact>()?;
+    m.add_class::<types::PyFinishReason>()?;
+    m.add_class::<types::PyResponseFormat>()?;
 
     // Completion model (provider)
     m.add_class::<providers::PyCompletionModel>()?;
     m.add_class::<providers::completion_model::PyCompletionOptions>()?;
+    m.add_class::<providers::completion_model::PyLazyCompletionStream>()?;
 
     // Embedding model
     m.add_class::<types::PyEmbeddingModel>()?;
@@ -121,6 +127,9 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Fal provider
     m.add_class::<providers::fal::PyFalProvider>()?;
+    m.add_class::<providers::fal::PyFalLlmEndpoint>()?;
+    m.add_class::<providers::fal::PyFalOptions>()?;
+    m.add_class::<providers::fal::PyFalEmbeddingModel>()?;
 
     // Memory
     m.add_class::<types::PyMemory>()?;

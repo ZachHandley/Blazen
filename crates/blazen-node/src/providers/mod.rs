@@ -5,4 +5,4 @@ pub mod fal;
 
 // Re-export the main types.
 pub use completion_model::JsCompletionModel;
-pub use fal::JsFalProvider;
+pub use fal::{JsFalEmbeddingModel, JsFalLlmEndpoint, JsFalOptions, JsFalProvider};

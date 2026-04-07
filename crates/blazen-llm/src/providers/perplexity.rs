@@ -177,3 +177,44 @@ impl ProviderInfo for PerplexityProvider {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use crate::providers::sse::OaiResponse;
+
+    #[test]
+    fn test_perplexity_citations_pass_through() {
+        let json_body = r#"{
+            "id": "x",
+            "object": "chat.completion",
+            "created": 1234567890,
+            "model": "sonar",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "the answer per source A",
+                    "citations": [
+                        {"url": "https://example.com/a", "title": "Source A"},
+                        {"url": "https://example.com/b"}
+                    ]
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+                "total_tokens": 15
+            }
+        }"#;
+        let parsed: OaiResponse = serde_json::from_str(json_body).unwrap();
+        let msg = &parsed.choices[0].message;
+        assert_eq!(msg.citations.len(), 2);
+        assert_eq!(msg.citations[0]["url"], "https://example.com/a");
+        assert_eq!(msg.citations[0]["title"], "Source A");
+    }
+}

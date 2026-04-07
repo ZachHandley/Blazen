@@ -32,6 +32,9 @@ pub(crate) mod sse;
 // Shared multimodal content helpers and HTTP utilities.
 pub(crate) mod openai_format;
 
+// OpenAI Responses API body conversion (used by fal "openai-responses" route).
+pub(crate) mod responses_format;
+
 // Native providers
 pub mod anthropic;
 pub mod azure;

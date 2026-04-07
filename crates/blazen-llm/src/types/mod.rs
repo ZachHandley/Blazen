@@ -9,10 +9,12 @@ mod tool;
 mod usage;
 
 pub use completion::{
-    CompletionRequest, CompletionResponse, EmbeddingResponse, StreamChunk, StructuredResponse,
+    Artifact, Citation, CompletionRequest, CompletionResponse, EmbeddingResponse, FinishReason,
+    ReasoningTrace, ResponseFormat, StreamChunk, StructuredResponse,
 };
 pub use message::{
-    ChatMessage, ContentPart, FileContent, ImageContent, ImageSource, MessageContent, Role,
+    AudioContent, ChatMessage, ContentPart, FileContent, ImageContent, ImageSource, MediaSource,
+    MessageContent, Role, VideoContent,
 };
 pub use tool::{ToolCall, ToolDefinition};
 pub use usage::{RequestTiming, TokenUsage};

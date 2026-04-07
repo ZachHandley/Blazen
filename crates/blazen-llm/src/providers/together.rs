@@ -177,3 +177,42 @@ impl ProviderInfo for TogetherProvider {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::providers::sse::OaiResponse;
+
+    #[test]
+    fn test_together_reasoning_or_citations_pass_through_compat() {
+        // Verify the shared OaiMessage parses reasoning_content + citations in a single
+        // fixture, exercising the openai_compat -> Together delegation path's wire types.
+        let json_body = r#"{
+            "id": "x",
+            "object": "chat.completion",
+            "created": 1234567890,
+            "model": "deepseek-ai/DeepSeek-R1",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "answer",
+                    "reasoning_content": "thinking...",
+                    "citations": [{"url": "https://together.ai", "title": "Together"}]
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+                "total_tokens": 15,
+                "completion_tokens_details": {"reasoning_tokens": 3}
+            }
+        }"#;
+        let parsed: OaiResponse = serde_json::from_str(json_body).unwrap();
+        let msg = &parsed.choices[0].message;
+        assert_eq!(msg.reasoning_content.as_deref(), Some("thinking..."));
+        assert_eq!(msg.citations.len(), 1);
+        let usage = parsed.usage.unwrap();
+        assert_eq!(usage.completion_tokens_details.unwrap().reasoning_tokens, 3);
+    }
+}
