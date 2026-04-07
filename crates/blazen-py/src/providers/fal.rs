@@ -6,133 +6,22 @@
 use std::sync::Arc;
 
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
+use pythonize::depythonize;
 use tokio_stream::StreamExt;
 
+use crate::convert::JsonValue;
+use crate::error::{BlazenPyError, blazen_error_to_pyerr};
+use crate::types::{PyChatMessage, PyCompletionResponse};
 use blazen_llm::ChatMessage;
 use blazen_llm::compute::{
     AudioGeneration, BackgroundRemoval, BackgroundRemovalRequest, ComputeProvider, ComputeRequest,
-    ImageGeneration, ThreeDGeneration, Transcription, VideoGeneration,
+    ImageGeneration, ImageRequest, MusicRequest, SpeechRequest, ThreeDGeneration, ThreeDRequest,
+    Transcription, TranscriptionRequest, UpscaleRequest, VideoGeneration, VideoRequest,
 };
 use blazen_llm::providers::fal::{FalEmbeddingModel, FalProvider};
 use blazen_llm::traits::{CompletionModel, EmbeddingModel};
 use blazen_llm::types::CompletionRequest;
-
-use crate::compute::{
-    PyImageRequest, PyMusicRequest, PySpeechRequest, PyThreeDRequest, PyTranscriptionRequest,
-    PyUpscaleRequest, PyVideoRequest,
-};
-use crate::convert::JsonValue;
-use crate::error::{BlazenPyError, blazen_error_to_pyerr};
-use crate::types::{PyChatMessage, PyCompletionResponse, PyEmbeddingResponse};
-
-// ---------------------------------------------------------------------------
-// PyFalLlmEndpoint
-// ---------------------------------------------------------------------------
-
-/// The fal.ai LLM endpoint family.
-///
-/// Selects which fal LLM URL/body schema to use. Defaults to ``OPENAI_CHAT``
-/// (the OpenAI-compatible chat-completions surface on fal).
-#[pyclass(name = "FalLlmEndpoint", eq, eq_int, from_py_object)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PyFalLlmEndpoint {
-    OpenAiChat,
-    OpenAiResponses,
-    OpenAiEmbeddings,
-    OpenRouter,
-    OpenRouterEnterprise,
-    AnyLlm,
-    AnyLlmEnterprise,
-}
-
-impl From<PyFalLlmEndpoint> for blazen_llm::providers::fal::FalLlmEndpoint {
-    fn from(p: PyFalLlmEndpoint) -> Self {
-        use blazen_llm::providers::fal::FalLlmEndpoint as F;
-        match p {
-            PyFalLlmEndpoint::OpenAiChat => F::OpenAiChat,
-            PyFalLlmEndpoint::OpenAiResponses => F::OpenAiResponses,
-            PyFalLlmEndpoint::OpenAiEmbeddings => F::OpenAiEmbeddings,
-            PyFalLlmEndpoint::OpenRouter => F::OpenRouter { enterprise: false },
-            PyFalLlmEndpoint::OpenRouterEnterprise => F::OpenRouter { enterprise: true },
-            PyFalLlmEndpoint::AnyLlm => F::AnyLlm { enterprise: false },
-            PyFalLlmEndpoint::AnyLlmEnterprise => F::AnyLlm { enterprise: true },
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// PyFalOptions
-// ---------------------------------------------------------------------------
-
-/// Configuration options for [`FalProvider`].
-///
-/// Example:
-///     >>> opts = FalOptions(model="anthropic/claude-sonnet-4.5",
-///     ...                   endpoint=FalLlmEndpoint.OPENAI_CHAT)
-///     >>> fal = FalProvider(api_key="fal-...", options=opts)
-#[pyclass(name = "FalOptions", from_py_object)]
-#[derive(Debug, Clone, Default)]
-pub struct PyFalOptions {
-    /// Underlying LLM model name (e.g. ``"anthropic/claude-sonnet-4.5"``).
-    #[pyo3(get, set)]
-    pub model: Option<String>,
-    /// The fal endpoint family to target. Defaults to ``OPENAI_CHAT``.
-    #[pyo3(get, set)]
-    pub endpoint: Option<PyFalLlmEndpoint>,
-    /// Promote the endpoint to its enterprise / SOC2-eligible variant.
-    #[pyo3(get, set)]
-    pub enterprise: bool,
-    /// Auto-route the request to the matching vision/audio/video variant
-    /// when the message content contains media. Defaults to ``True``.
-    #[pyo3(get, set)]
-    pub auto_route_modality: bool,
-}
-
-#[pymethods]
-impl PyFalOptions {
-    #[new]
-    #[pyo3(signature = (*, model=None, endpoint=None, enterprise=false, auto_route_modality=true))]
-    fn new(
-        model: Option<String>,
-        endpoint: Option<PyFalLlmEndpoint>,
-        enterprise: bool,
-        auto_route_modality: bool,
-    ) -> Self {
-        Self {
-            model,
-            endpoint,
-            enterprise,
-            auto_route_modality,
-        }
-    }
-
-    fn __repr__(&self) -> String {
-        format!(
-            "FalOptions(model={:?}, endpoint={:?}, enterprise={}, auto_route_modality={})",
-            self.model, self.endpoint, self.enterprise, self.auto_route_modality,
-        )
-    }
-}
-
-/// Apply [`PyFalOptions`] to a [`FalProvider`] builder.
-pub(crate) fn apply_fal_options(
-    mut provider: FalProvider,
-    options: Option<PyFalOptions>,
-) -> FalProvider {
-    if let Some(opts) = options {
-        if let Some(model) = opts.model {
-            provider = provider.with_llm_model(model);
-        }
-        if let Some(ep) = opts.endpoint {
-            provider = provider.with_llm_endpoint(ep.into());
-        }
-        if opts.enterprise {
-            provider = provider.with_enterprise();
-        }
-        provider = provider.with_auto_route_modality(opts.auto_route_modality);
-    }
-    provider
-}
 
 // ---------------------------------------------------------------------------
 // PyFalProvider
@@ -155,27 +44,54 @@ pub(crate) fn apply_fal_options(
 ///     >>> fal = FalProvider(api_key="fal-key-...")
 ///     >>> result = await fal.generate_image(ImageRequest(prompt="a cat in space"))
 ///     >>> response = await fal.complete([ChatMessage.user("Hello!")])
+#[gen_stub_pyclass]
 #[pyclass(name = "FalProvider", from_py_object)]
 #[derive(Clone)]
 pub struct PyFalProvider {
     inner: Arc<FalProvider>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyFalProvider {
     /// Create a new fal.ai provider.
     ///
     /// Args:
     ///     api_key: Your fal.ai API key.
-    ///     options: Optional [`FalOptions`] for selecting the model,
-    ///         endpoint, enterprise tier, and auto-routing.
+    ///     options: Optional dict of options (model, endpoint, enterprise,
+    ///         auto_route_modality) -- deserialized into core ``FalOptions``.
     #[new]
     #[pyo3(signature = (*, api_key, options=None))]
-    fn new(api_key: &str, options: Option<PyFalOptions>) -> Self {
-        let provider = apply_fal_options(FalProvider::new(api_key), options);
-        Self {
-            inner: Arc::new(provider),
+    fn new(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        let mut provider = FalProvider::new(api_key);
+        if let Some(opts_raw) = options {
+            let opts: blazen_llm::types::provider_options::FalOptions = depythonize(opts_raw)?;
+            if let Some(m) = opts.base.model {
+                provider = provider.with_llm_model(m);
+            }
+            if let Some(ep) = opts.endpoint {
+                use blazen_llm::providers::fal::FalLlmEndpoint;
+                use blazen_llm::types::provider_options::FalLlmEndpointKind;
+                let endpoint = match ep {
+                    FalLlmEndpointKind::OpenAiChat => FalLlmEndpoint::OpenAiChat,
+                    FalLlmEndpointKind::OpenAiResponses => FalLlmEndpoint::OpenAiResponses,
+                    FalLlmEndpointKind::OpenAiEmbeddings => FalLlmEndpoint::OpenAiEmbeddings,
+                    FalLlmEndpointKind::OpenRouter => FalLlmEndpoint::OpenRouter {
+                        enterprise: opts.enterprise,
+                    },
+                    FalLlmEndpointKind::AnyLlm => FalLlmEndpoint::AnyLlm {
+                        enterprise: opts.enterprise,
+                    },
+                };
+                provider = provider.with_llm_endpoint(endpoint);
+            } else if opts.enterprise {
+                provider = provider.with_enterprise();
+            }
+            provider = provider.with_auto_route_modality(opts.auto_route_modality);
         }
+        Ok(Self {
+            inner: Arc::new(provider),
+        })
     }
 
     // -----------------------------------------------------------------
@@ -192,9 +108,9 @@ impl PyFalProvider {
     fn generate_image<'py>(
         &self,
         py: Python<'py>,
-        request: PyRef<'py, PyImageRequest>,
+        request: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+        let rust_req: ImageRequest = depythonize(request)?;
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = ImageGeneration::generate_image(inner.as_ref(), rust_req)
@@ -216,9 +132,9 @@ impl PyFalProvider {
     fn upscale_image<'py>(
         &self,
         py: Python<'py>,
-        request: PyRef<'py, PyUpscaleRequest>,
+        request: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+        let rust_req: UpscaleRequest = depythonize(request)?;
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = ImageGeneration::upscale_image(inner.as_ref(), rust_req)
@@ -234,9 +150,9 @@ impl PyFalProvider {
     fn upscale_image_aura<'py>(
         &self,
         py: Python<'py>,
-        request: PyRef<'py, PyUpscaleRequest>,
+        request: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+        let rust_req: UpscaleRequest = depythonize(request)?;
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = inner
@@ -253,9 +169,9 @@ impl PyFalProvider {
     fn upscale_image_clarity<'py>(
         &self,
         py: Python<'py>,
-        request: PyRef<'py, PyUpscaleRequest>,
+        request: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+        let rust_req: UpscaleRequest = depythonize(request)?;
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = inner
@@ -272,9 +188,9 @@ impl PyFalProvider {
     fn upscale_image_creative<'py>(
         &self,
         py: Python<'py>,
-        request: PyRef<'py, PyUpscaleRequest>,
+        request: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+        let rust_req: UpscaleRequest = depythonize(request)?;
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = inner
@@ -332,9 +248,9 @@ impl PyFalProvider {
     fn generate_3d<'py>(
         &self,
         py: Python<'py>,
-        request: PyRef<'py, PyThreeDRequest>,
+        request: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+        let rust_req: ThreeDRequest = depythonize(request)?;
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = ThreeDGeneration::generate_3d(inner.as_ref(), rust_req)
@@ -375,9 +291,9 @@ impl PyFalProvider {
     fn text_to_video<'py>(
         &self,
         py: Python<'py>,
-        request: PyRef<'py, PyVideoRequest>,
+        request: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+        let rust_req: VideoRequest = depythonize(request)?;
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = VideoGeneration::text_to_video(inner.as_ref(), rust_req)
@@ -399,9 +315,9 @@ impl PyFalProvider {
     fn image_to_video<'py>(
         &self,
         py: Python<'py>,
-        request: PyRef<'py, PyVideoRequest>,
+        request: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+        let rust_req: VideoRequest = depythonize(request)?;
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = VideoGeneration::image_to_video(inner.as_ref(), rust_req)
@@ -427,9 +343,9 @@ impl PyFalProvider {
     fn text_to_speech<'py>(
         &self,
         py: Python<'py>,
-        request: PyRef<'py, PySpeechRequest>,
+        request: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+        let rust_req: SpeechRequest = depythonize(request)?;
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = AudioGeneration::text_to_speech(inner.as_ref(), rust_req)
@@ -451,9 +367,9 @@ impl PyFalProvider {
     fn generate_music<'py>(
         &self,
         py: Python<'py>,
-        request: PyRef<'py, PyMusicRequest>,
+        request: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+        let rust_req: MusicRequest = depythonize(request)?;
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = AudioGeneration::generate_music(inner.as_ref(), rust_req)
@@ -475,9 +391,9 @@ impl PyFalProvider {
     fn generate_sfx<'py>(
         &self,
         py: Python<'py>,
-        request: PyRef<'py, PyMusicRequest>,
+        request: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+        let rust_req: MusicRequest = depythonize(request)?;
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = AudioGeneration::generate_sfx(inner.as_ref(), rust_req)
@@ -503,9 +419,9 @@ impl PyFalProvider {
     fn transcribe<'py>(
         &self,
         py: Python<'py>,
-        request: PyRef<'py, PyTranscriptionRequest>,
+        request: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+        let rust_req: TranscriptionRequest = depythonize(request)?;
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = Transcription::transcribe(inner.as_ref(), rust_req)
@@ -800,12 +716,14 @@ impl PyFalProvider {
 ///     >>> em = fal.embedding_model()
 ///     >>> resp = await em.embed(["hello", "world"])
 ///     >>> print(len(resp.embeddings))  # 2
+#[gen_stub_pyclass]
 #[pyclass(name = "FalEmbeddingModel", from_py_object)]
 #[derive(Clone)]
 pub struct PyFalEmbeddingModel {
     inner: Arc<FalEmbeddingModel>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyFalEmbeddingModel {
     /// Get the underlying embedding model id.
@@ -833,7 +751,11 @@ impl PyFalEmbeddingModel {
             let response = EmbeddingModel::embed(inner.as_ref(), &texts)
                 .await
                 .map_err(BlazenPyError::from)?;
-            Ok(PyEmbeddingResponse { inner: response })
+            Python::attach(|py| -> PyResult<Py<PyAny>> {
+                let obj = pythonize::pythonize(py, &response)
+                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+                Ok(obj.unbind())
+            })
         })
     }
 

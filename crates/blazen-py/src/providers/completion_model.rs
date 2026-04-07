@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use tokio::sync::Mutex;
 use tokio_stream::{Stream, StreamExt};
 
@@ -15,8 +16,7 @@ use blazen_llm::types::ToolDefinition;
 use blazen_llm::{BlazenError, ChatMessage, CompletionModel, CompletionRequest, StreamChunk};
 
 use crate::error::BlazenPyError;
-use crate::providers::fal::{PyFalOptions, apply_fal_options};
-use crate::types::{PyChatMessage, PyCompletionResponse, PyStreamChunk};
+use crate::types::{PyChatMessage, PyCompletionResponse};
 
 /// Type alias for the pinned boxed stream returned by `CompletionModel::stream`.
 type PinnedChunkStream = Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>;
@@ -30,6 +30,7 @@ type PinnedChunkStream = Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenErr
 /// Example:
 ///     >>> opts = CompletionOptions(temperature=0.7, max_tokens=1000)
 ///     >>> response = await model.complete(messages, opts)
+#[gen_stub_pyclass]
 #[pyclass(name = "CompletionOptions")]
 #[derive(Debug, Default)]
 pub struct PyCompletionOptions {
@@ -54,6 +55,7 @@ pub struct PyCompletionOptions {
     pub response_format: Option<Py<PyAny>>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyCompletionOptions {
     #[new]
@@ -94,12 +96,14 @@ impl PyCompletionOptions {
 ///     >>> response = await model.complete([
 ///     ...     ChatMessage.user("What is 2+2?")
 ///     ... ])
+#[gen_stub_pyclass]
 #[pyclass(name = "CompletionModel", from_py_object)]
 #[derive(Clone)]
 pub struct PyCompletionModel {
     pub(crate) inner: Arc<dyn CompletionModel>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyCompletionModel {
     // -----------------------------------------------------------------
@@ -110,260 +114,348 @@ impl PyCompletionModel {
     ///
     /// Args:
     ///     api_key: Your OpenAI API key.
-    ///     model: Optional model name (default: "gpt-4o").
+    ///     options: Optional dict with ``model`` and ``baseUrl`` overrides.
     #[staticmethod]
-    #[pyo3(signature = (api_key, model=None))]
-    fn openai(api_key: &str, model: Option<&str>) -> Self {
+    #[pyo3(signature = (api_key, *, options=None))]
+    fn openai(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
         let mut provider = blazen_llm::providers::openai::OpenAiProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            let opts: blazen_llm::types::provider_options::ProviderOptions =
+                pythonize::depythonize(opts)?;
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
+            if let Some(url) = opts.base_url {
+                provider = provider.with_base_url(url);
+            }
         }
-        Self {
+        Ok(Self {
             inner: Arc::new(provider),
-        }
+        })
     }
 
     /// Create an Anthropic provider.
     ///
     /// Args:
     ///     api_key: Your Anthropic API key.
-    ///     model: Optional model name (default: "claude-sonnet-4-20250514").
+    ///     options: Optional dict with ``model`` and ``baseUrl`` overrides.
     #[staticmethod]
-    #[pyo3(signature = (api_key, model=None))]
-    fn anthropic(api_key: &str, model: Option<&str>) -> Self {
+    #[pyo3(signature = (api_key, *, options=None))]
+    fn anthropic(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
         let mut provider = blazen_llm::providers::anthropic::AnthropicProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            let opts: blazen_llm::types::provider_options::ProviderOptions =
+                pythonize::depythonize(opts)?;
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
+            if let Some(url) = opts.base_url {
+                provider = provider.with_base_url(url);
+            }
         }
-        Self {
+        Ok(Self {
             inner: Arc::new(provider),
-        }
+        })
     }
 
     /// Create a Google Gemini provider.
     ///
     /// Args:
     ///     api_key: Your Google API key.
-    ///     model: Optional model name (default: "gemini-2.0-flash").
+    ///     options: Optional dict with ``model`` and ``baseUrl`` overrides.
     #[staticmethod]
-    #[pyo3(signature = (api_key, model=None))]
-    fn gemini(api_key: &str, model: Option<&str>) -> Self {
+    #[pyo3(signature = (api_key, *, options=None))]
+    fn gemini(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
         let mut provider = blazen_llm::providers::gemini::GeminiProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            let opts: blazen_llm::types::provider_options::ProviderOptions =
+                pythonize::depythonize(opts)?;
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
+            if let Some(url) = opts.base_url {
+                provider = provider.with_base_url(url);
+            }
         }
-        Self {
+        Ok(Self {
             inner: Arc::new(provider),
-        }
+        })
     }
 
     /// Create an Azure OpenAI provider.
     ///
     /// Args:
     ///     api_key: Your Azure API key.
-    ///     resource_name: The Azure resource name (subdomain).
-    ///     deployment_name: The model deployment name.
+    ///     options: Dict with required ``resourceName`` and ``deploymentName``,
+    ///         plus optional ``apiVersion``.
     #[staticmethod]
-    fn azure(api_key: &str, resource_name: &str, deployment_name: &str) -> Self {
-        let provider = blazen_llm::providers::azure::AzureOpenAiProvider::new(
+    #[pyo3(signature = (api_key, *, options))]
+    fn azure(api_key: &str, options: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let opts: blazen_llm::types::provider_options::AzureOptions =
+            pythonize::depythonize(options)?;
+        let mut provider = blazen_llm::providers::azure::AzureOpenAiProvider::new(
             api_key,
-            resource_name,
-            deployment_name,
+            &opts.resource_name,
+            &opts.deployment_name,
         );
-        Self {
-            inner: Arc::new(provider),
+        if let Some(version) = opts.api_version {
+            provider = provider.with_api_version(version);
         }
+        Ok(Self {
+            inner: Arc::new(provider),
+        })
     }
 
     /// Create an OpenRouter provider.
     ///
     /// Args:
     ///     api_key: Your OpenRouter API key.
-    ///     model: Optional model name.
+    ///     options: Optional dict with ``model`` override.
     #[staticmethod]
-    #[pyo3(signature = (api_key, model=None))]
-    fn openrouter(api_key: &str, model: Option<&str>) -> Self {
+    #[pyo3(signature = (api_key, *, options=None))]
+    fn openrouter(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
         let mut provider = blazen_llm::providers::openrouter::OpenRouterProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            let opts: blazen_llm::types::provider_options::ProviderOptions =
+                pythonize::depythonize(opts)?;
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
         }
-        Self {
+        Ok(Self {
             inner: Arc::new(provider),
-        }
+        })
     }
 
     /// Create a Groq provider.
     ///
     /// Args:
     ///     api_key: Your Groq API key.
-    ///     model: Optional model name.
+    ///     options: Optional dict with ``model`` override.
     #[staticmethod]
-    #[pyo3(signature = (api_key, model=None))]
-    fn groq(api_key: &str, model: Option<&str>) -> Self {
+    #[pyo3(signature = (api_key, *, options=None))]
+    fn groq(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
         let mut provider = blazen_llm::providers::groq::GroqProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            let opts: blazen_llm::types::provider_options::ProviderOptions =
+                pythonize::depythonize(opts)?;
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
         }
-        Self {
+        Ok(Self {
             inner: Arc::new(provider),
-        }
+        })
     }
 
     /// Create a Together AI provider.
     ///
     /// Args:
     ///     api_key: Your Together API key.
-    ///     model: Optional model name.
+    ///     options: Optional dict with ``model`` override.
     #[staticmethod]
-    #[pyo3(signature = (api_key, model=None))]
-    fn together(api_key: &str, model: Option<&str>) -> Self {
+    #[pyo3(signature = (api_key, *, options=None))]
+    fn together(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
         let mut provider = blazen_llm::providers::together::TogetherProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            let opts: blazen_llm::types::provider_options::ProviderOptions =
+                pythonize::depythonize(opts)?;
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
         }
-        Self {
+        Ok(Self {
             inner: Arc::new(provider),
-        }
+        })
     }
 
     /// Create a Mistral provider.
     ///
     /// Args:
     ///     api_key: Your Mistral API key.
-    ///     model: Optional model name.
+    ///     options: Optional dict with ``model`` override.
     #[staticmethod]
-    #[pyo3(signature = (api_key, model=None))]
-    fn mistral(api_key: &str, model: Option<&str>) -> Self {
+    #[pyo3(signature = (api_key, *, options=None))]
+    fn mistral(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
         let mut provider = blazen_llm::providers::mistral::MistralProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            let opts: blazen_llm::types::provider_options::ProviderOptions =
+                pythonize::depythonize(opts)?;
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
         }
-        Self {
+        Ok(Self {
             inner: Arc::new(provider),
-        }
+        })
     }
 
     /// Create a DeepSeek provider.
     ///
     /// Args:
     ///     api_key: Your DeepSeek API key.
-    ///     model: Optional model name.
+    ///     options: Optional dict with ``model`` override.
     #[staticmethod]
-    #[pyo3(signature = (api_key, model=None))]
-    fn deepseek(api_key: &str, model: Option<&str>) -> Self {
+    #[pyo3(signature = (api_key, *, options=None))]
+    fn deepseek(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
         let mut provider = blazen_llm::providers::deepseek::DeepSeekProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            let opts: blazen_llm::types::provider_options::ProviderOptions =
+                pythonize::depythonize(opts)?;
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
         }
-        Self {
+        Ok(Self {
             inner: Arc::new(provider),
-        }
+        })
     }
 
     /// Create a Fireworks AI provider.
     ///
     /// Args:
     ///     api_key: Your Fireworks API key.
-    ///     model: Optional model name.
+    ///     options: Optional dict with ``model`` override.
     #[staticmethod]
-    #[pyo3(signature = (api_key, model=None))]
-    fn fireworks(api_key: &str, model: Option<&str>) -> Self {
+    #[pyo3(signature = (api_key, *, options=None))]
+    fn fireworks(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
         let mut provider = blazen_llm::providers::fireworks::FireworksProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            let opts: blazen_llm::types::provider_options::ProviderOptions =
+                pythonize::depythonize(opts)?;
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
         }
-        Self {
+        Ok(Self {
             inner: Arc::new(provider),
-        }
+        })
     }
 
     /// Create a Perplexity provider.
     ///
     /// Args:
     ///     api_key: Your Perplexity API key.
-    ///     model: Optional model name.
+    ///     options: Optional dict with ``model`` override.
     #[staticmethod]
-    #[pyo3(signature = (api_key, model=None))]
-    fn perplexity(api_key: &str, model: Option<&str>) -> Self {
+    #[pyo3(signature = (api_key, *, options=None))]
+    fn perplexity(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
         let mut provider = blazen_llm::providers::perplexity::PerplexityProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            let opts: blazen_llm::types::provider_options::ProviderOptions =
+                pythonize::depythonize(opts)?;
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
         }
-        Self {
+        Ok(Self {
             inner: Arc::new(provider),
-        }
+        })
     }
 
     /// Create an xAI (Grok) provider.
     ///
     /// Args:
     ///     api_key: Your xAI API key.
-    ///     model: Optional model name.
+    ///     options: Optional dict with ``model`` override.
     #[staticmethod]
-    #[pyo3(signature = (api_key, model=None))]
-    fn xai(api_key: &str, model: Option<&str>) -> Self {
+    #[pyo3(signature = (api_key, *, options=None))]
+    fn xai(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
         let mut provider = blazen_llm::providers::xai::XaiProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            let opts: blazen_llm::types::provider_options::ProviderOptions =
+                pythonize::depythonize(opts)?;
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
         }
-        Self {
+        Ok(Self {
             inner: Arc::new(provider),
-        }
+        })
     }
 
     /// Create a Cohere provider.
     ///
     /// Args:
     ///     api_key: Your Cohere API key.
-    ///     model: Optional model name.
+    ///     options: Optional dict with ``model`` override.
     #[staticmethod]
-    #[pyo3(signature = (api_key, model=None))]
-    fn cohere(api_key: &str, model: Option<&str>) -> Self {
+    #[pyo3(signature = (api_key, *, options=None))]
+    fn cohere(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
         let mut provider = blazen_llm::providers::cohere::CohereProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            let opts: blazen_llm::types::provider_options::ProviderOptions =
+                pythonize::depythonize(opts)?;
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
         }
-        Self {
+        Ok(Self {
             inner: Arc::new(provider),
-        }
+        })
     }
 
     /// Create an AWS Bedrock provider.
     ///
     /// Args:
     ///     api_key: Your Bedrock API key.
-    ///     region: The AWS region.
-    ///     model: Optional model name.
+    ///     options: Dict with required ``region`` and optional ``model``.
     #[staticmethod]
-    #[pyo3(signature = (api_key, region, model=None))]
-    fn bedrock(api_key: &str, region: &str, model: Option<&str>) -> Self {
-        let mut provider = blazen_llm::providers::bedrock::BedrockProvider::new(api_key, region);
-        if let Some(m) = model {
+    #[pyo3(signature = (api_key, *, options))]
+    fn bedrock(api_key: &str, options: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let opts: blazen_llm::types::provider_options::BedrockOptions =
+            pythonize::depythonize(options)?;
+        let mut provider =
+            blazen_llm::providers::bedrock::BedrockProvider::new(api_key, &opts.region);
+        if let Some(m) = opts.base.model {
             provider = provider.with_model(m);
         }
-        Self {
+        Ok(Self {
             inner: Arc::new(provider),
-        }
+        })
     }
 
     /// Create a fal.ai provider.
     ///
     /// Args:
     ///     api_key: Your fal.ai API key.
-    ///     options: Optional [`FalOptions`] for selecting the model,
+    ///     options: Optional dict for selecting the model,
     ///         endpoint, enterprise tier, and auto-routing. Defaults to
     ///         the OpenAI-chat endpoint
     ///         (``openrouter/router/openai/v1/chat/completions``).
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
-    fn fal(api_key: &str, options: Option<PyFalOptions>) -> Self {
-        let provider = apply_fal_options(
-            blazen_llm::providers::fal::FalProvider::new(api_key),
-            options,
-        );
-        Self {
-            inner: Arc::new(provider),
+    fn fal(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        let mut provider = blazen_llm::providers::fal::FalProvider::new(api_key);
+        if let Some(opts_raw) = options {
+            let opts: blazen_llm::types::provider_options::FalOptions =
+                pythonize::depythonize(opts_raw)?;
+            if let Some(m) = opts.base.model {
+                provider = provider.with_llm_model(m);
+            }
+            if let Some(ep) = opts.endpoint {
+                use blazen_llm::providers::fal::FalLlmEndpoint;
+                use blazen_llm::types::provider_options::FalLlmEndpointKind;
+                let endpoint = match ep {
+                    FalLlmEndpointKind::OpenAiChat => FalLlmEndpoint::OpenAiChat,
+                    FalLlmEndpointKind::OpenAiResponses => FalLlmEndpoint::OpenAiResponses,
+                    FalLlmEndpointKind::OpenAiEmbeddings => FalLlmEndpoint::OpenAiEmbeddings,
+                    FalLlmEndpointKind::OpenRouter => FalLlmEndpoint::OpenRouter {
+                        enterprise: opts.enterprise,
+                    },
+                    FalLlmEndpointKind::AnyLlm => FalLlmEndpoint::AnyLlm {
+                        enterprise: opts.enterprise,
+                    },
+                };
+                provider = provider.with_llm_endpoint(endpoint);
+            } else if opts.enterprise {
+                provider = provider.with_enterprise();
+            }
+            provider = provider.with_auto_route_modality(opts.auto_route_modality);
         }
+        Ok(Self {
+            inner: Arc::new(provider),
+        })
     }
 
     // -----------------------------------------------------------------
@@ -583,11 +675,13 @@ impl PyCompletionModel {
                 while let Some(result) = stream.next().await {
                     match result {
                         Ok(chunk) => {
-                            let py_chunk = PyStreamChunk { inner: chunk };
-
                             // Call the Python callback
                             tokio::task::block_in_place(|| {
                                 Python::attach(|py| {
+                                    let py_chunk =
+                                        pythonize::pythonize(py, &chunk).map_err(|e| {
+                                            pyo3::exceptions::PyRuntimeError::new_err(e.to_string())
+                                        })?;
                                     callback.call1(py, (py_chunk,))?;
                                     Ok::<_, PyErr>(())
                                 })
@@ -653,11 +747,13 @@ enum LazyStreamState {
 ///
 ///     async for chunk in model.stream([ChatMessage.user("Hi!")]):
 ///         ...
+#[gen_stub_pyclass]
 #[pyclass(name = "CompletionStream")]
 pub struct PyLazyCompletionStream {
     state: Arc<Mutex<LazyStreamState>>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyLazyCompletionStream {
     fn __aiter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
@@ -688,7 +784,11 @@ impl PyLazyCompletionStream {
 
             match &mut *guard {
                 LazyStreamState::Active(stream) => match stream.next().await {
-                    Some(Ok(chunk)) => Ok(PyStreamChunk { inner: chunk }),
+                    Some(Ok(chunk)) => Python::attach(|py| {
+                        pythonize::pythonize(py, &chunk)
+                            .map(Bound::unbind)
+                            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+                    }),
                     Some(Err(e)) => {
                         *guard = LazyStreamState::Exhausted;
                         Err(crate::error::blazen_error_to_pyerr(e))

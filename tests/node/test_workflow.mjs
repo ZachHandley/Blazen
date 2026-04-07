@@ -18,7 +18,7 @@ import { Workflow, Context, version } from "../../crates/blazen-node/index.js";
 describe("version", () => {
   it("returns a string", () => {
     const v = version();
-    assert.equal(typeof v, "string");
+    assert.strictEqual(typeof v, "string");
     assert.ok(v.length > 0);
   });
 });
@@ -35,8 +35,8 @@ describe("single step echo", () => {
     });
 
     const result = await wf.run({ message: "hello e2e" });
-    assert.equal(result.type, "blazen::StopEvent");
-    assert.equal(result.data.message, "hello e2e");
+    assert.strictEqual(result.type, "blazen::StopEvent");
+    assert.strictEqual(result.data.message, "hello e2e");
   });
 });
 
@@ -64,8 +64,8 @@ describe("multi-step pipeline", () => {
     });
 
     const result = await wf.run({ message: "hello world" });
-    assert.equal(result.data.text, "hello world");
-    assert.equal(result.data.length, 11);
+    assert.strictEqual(result.data.text, "hello world");
+    assert.strictEqual(result.data.length, 11);
   });
 });
 
@@ -88,7 +88,7 @@ describe("context sharing", () => {
     });
 
     const result = await wf.run({});
-    assert.equal(result.data.counter, 42);
+    assert.strictEqual(result.data.counter, 42);
   });
 });
 
@@ -107,10 +107,10 @@ describe("context runId", () => {
 
     const result = await wf.run({});
     const rid = result.data.run_id;
-    assert.equal(typeof rid, "string");
+    assert.strictEqual(typeof rid, "string");
     assert.ok(rid.length > 0);
     // UUID format: 8-4-4-4-12
-    assert.equal(rid.split("-").length, 5);
+    assert.strictEqual(rid.split("-").length, 5);
   });
 });
 
@@ -134,7 +134,7 @@ describe("streaming", () => {
       collected.push(event);
     });
 
-    assert.equal(result.data.done, true);
+    assert.strictEqual(result.data.done, true);
 
     const progress = collected.filter((e) => e.type === "Progress");
     assert.ok(
@@ -195,7 +195,7 @@ describe("step returns null", () => {
     });
 
     const result = await wf.run({});
-    assert.equal(result.data.processed, true);
+    assert.strictEqual(result.data.processed, true);
   });
 });
 
@@ -282,7 +282,7 @@ describe("overwrite behavior", () => {
     });
 
     const result = await wf.run({});
-    assert.equal(result.data.val, "hello");
+    assert.strictEqual(result.data.val, "hello");
   });
 });
 
@@ -305,8 +305,8 @@ describe("null / undefined handling", () => {
     });
 
     const result = await wf.run({});
-    assert.equal(result.data.stored, null);
-    assert.equal(result.data.missing, null);
+    assert.strictEqual(result.data.stored, null);
+    assert.strictEqual(result.data.missing, null);
   });
 });
 

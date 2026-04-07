@@ -17,6 +17,8 @@ use serde::{Deserialize, Serialize};
 /// Covers images, video, audio, 3D models, documents, and a catch-all
 /// `Other` variant for MIME types not explicitly listed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum MediaType {
     // -- Images -------------------------------------------------------------
@@ -447,16 +449,23 @@ impl std::fmt::Display for MediaType {
 /// At least one of `url`, `base64`, or `raw_content` will be populated.
 /// `raw_content` is used for text-based formats like SVG, OBJ, and GLTF.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct MediaOutput {
     /// URL where the media can be downloaded.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
     /// Base64-encoded media data.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub base64: Option<String>,
     /// Raw text content for text-based formats (SVG, OBJ, GLTF JSON).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub raw_content: Option<String>,
     /// The format of the media.
     pub media_type: MediaType,
     /// File size in bytes, if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub file_size: Option<u64>,
     /// Arbitrary provider-specific metadata.
     pub metadata: serde_json::Value,
@@ -496,51 +505,74 @@ impl MediaOutput {
 
 /// A single generated image with optional dimension metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct GeneratedImage {
     /// The image media output.
     pub media: MediaOutput,
     /// Image width in pixels, if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub width: Option<u32>,
     /// Image height in pixels, if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub height: Option<u32>,
 }
 
 /// A single generated video with optional metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct GeneratedVideo {
     /// The video media output.
     pub media: MediaOutput,
     /// Video width in pixels, if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub width: Option<u32>,
     /// Video height in pixels, if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub height: Option<u32>,
     /// Duration in seconds, if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub duration_seconds: Option<f32>,
     /// Frames per second, if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub fps: Option<f32>,
 }
 
 /// A single generated audio clip with optional metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct GeneratedAudio {
     /// The audio media output.
     pub media: MediaOutput,
     /// Duration in seconds, if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub duration_seconds: Option<f32>,
     /// Sample rate in Hz, if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sample_rate: Option<u32>,
     /// Number of audio channels, if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub channels: Option<u8>,
 }
 
 /// A single generated 3D model with optional mesh metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct Generated3DModel {
     /// The 3D model media output.
     pub media: MediaOutput,
     /// Total vertex count, if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub vertex_count: Option<u64>,
     /// Total face/triangle count, if known.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub face_count: Option<u64>,
     /// Whether the model includes texture data.
     pub has_textures: bool,

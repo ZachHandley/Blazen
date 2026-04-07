@@ -14,27 +14,40 @@ use super::usage::{RequestTiming, TokenUsage};
 
 /// Chain-of-thought / extended-thinking trace from a model that exposes one.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct ReasoningTrace {
     /// Plain-text rendering of the reasoning content.
     pub text: String,
     /// Provider-specific signature/redaction handle, if any (Anthropic).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
     /// Whether the trace was redacted by the provider.
     pub redacted: bool,
     /// Reasoning effort level if the provider exposes one ("low"/"medium"/"high"/"max"/...).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub effort: Option<String>,
 }
 
 /// A web/document citation backing a model statement.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct Citation {
     pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub snippet: Option<String>,
     /// Byte offsets in the response text that this citation backs.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub start: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub end: Option<usize>,
     /// Optional document id (for retrieval-augmented citations).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub document_id: Option<String>,
     /// Provider-specific extra fields preserved as JSON.
     #[serde(default)]
@@ -48,6 +61,8 @@ pub struct Citation {
 /// providers (or post-processors) lift them into typed values that callers
 /// can dispatch on without re-parsing the assistant content string.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Artifact {
     Svg {
@@ -86,6 +101,8 @@ pub enum Artifact {
 
 /// Normalized finish reason across providers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(rename_all = "snake_case")]
 pub enum FinishReason {
     Stop,
@@ -132,6 +149,8 @@ impl FinishReason {
 /// `CompletionRequest::response_format: Option<serde_json::Value>` keeps
 /// raw JSON for backwards compatibility; the typed enum is opt-in.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ResponseFormat {
     /// Plain text — no structural constraint.
@@ -176,27 +195,38 @@ impl From<ResponseFormat> for serde_json::Value {
 // ---------------------------------------------------------------------------
 
 /// A provider-agnostic request for a chat completion.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct CompletionRequest {
     /// The conversation history.
     pub messages: Vec<ChatMessage>,
     /// Tools available for the model to invoke.
     pub tools: Vec<ToolDefinition>,
     /// Sampling temperature (0.0 = deterministic, 2.0 = very random).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f32>,
     /// Maximum number of tokens to generate.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_tokens: Option<u32>,
     /// Nucleus sampling parameter.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub top_p: Option<f32>,
     /// A JSON Schema that the model's output should conform to.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub response_format: Option<serde_json::Value>,
     /// Override the provider's default model for this request.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     /// Output modalities to request (e.g., \["text"\], \["image", "text"\]).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub modalities: Option<Vec<String>>,
     /// Image generation configuration (model-specific).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub image_config: Option<serde_json::Value>,
     /// Audio output configuration (voice, format, etc.).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_config: Option<serde_json::Value>,
 }
 
@@ -287,25 +317,34 @@ impl CompletionRequest {
 // ---------------------------------------------------------------------------
 
 /// The result of a non-streaming chat completion.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct CompletionResponse {
     /// The text content of the assistant's reply, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
     /// Tool invocations requested by the model.
     pub tool_calls: Vec<ToolCall>,
     /// Chain-of-thought / extended-thinking trace, if exposed by the provider.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<ReasoningTrace>,
     pub citations: Vec<Citation>,
     pub artifacts: Vec<Artifact>,
     /// Token usage statistics, if provided by the API.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub usage: Option<TokenUsage>,
     /// The model that produced this response.
     pub model: String,
     /// The reason the model stopped generating (e.g. "stop", "`tool_use`").
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub finish_reason: Option<String>,
     /// Estimated cost for this request in USD, if available.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cost: Option<f64>,
     /// Request timing breakdown, if available.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timing: Option<RequestTiming>,
     /// Generated images (for multimodal models).
     pub images: Vec<GeneratedImage>,
@@ -361,7 +400,8 @@ pub struct StructuredResponse<T> {
 // ---------------------------------------------------------------------------
 
 /// Response from an embedding operation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EmbeddingResponse {
     /// The embedding vectors.
     pub embeddings: Vec<Vec<f32>>,
@@ -382,15 +422,21 @@ pub struct EmbeddingResponse {
 // ---------------------------------------------------------------------------
 
 /// A single chunk from a streaming completion response.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct StreamChunk {
     /// Incremental text content, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub delta: Option<String>,
     /// Tool invocations completed in this chunk.
     pub tool_calls: Vec<ToolCall>,
     /// Present in the final chunk to indicate why generation stopped.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub finish_reason: Option<String>,
     /// Reasoning text delta (Anthropic thinking, R1 `reasoning_content`, o-series).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_delta: Option<String>,
     /// Citations completed in this chunk.
     pub citations: Vec<Citation>,

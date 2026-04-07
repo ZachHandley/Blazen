@@ -4,13 +4,12 @@ pub mod job;
 pub mod requests;
 pub mod results;
 
-// Re-export all public types for convenient access.
-pub use job::{JsComputeRequest, JsComputeResult, JsComputeTiming, JsJobHandle, JsJobStatus};
-pub use requests::{
-    JsImageRequest, JsMusicRequest, JsSpeechRequest, JsThreeDRequest, JsTranscriptionRequest,
-    JsUpscaleRequest, JsVideoRequest,
+// Re-export generated Js* mirror types (produced by build.rs from blazen-llm).
+pub use crate::generated::{
+    JsAudioResult, JsBackgroundRemovalRequest, JsComputeRequest, JsComputeResult, JsImageRequest,
+    JsImageResult, JsJobHandle, JsMusicRequest, JsRequestTiming, JsSpeechRequest, JsThreeDRequest,
+    JsThreeDResult, JsTranscriptionRequest, JsTranscriptionResult, JsTranscriptionSegment,
+    JsUpscaleRequest, JsVideoRequest, JsVideoResult,
 };
-pub use results::{
-    JsAudioResult, JsImageResult, JsThreeDResult, JsTranscriptionResult, JsTranscriptionSegment,
-    JsVideoResult,
-};
+// JsJobStatus is hand-written (tagged enum with data variant, not auto-generated).
+pub use job::JsJobStatus;

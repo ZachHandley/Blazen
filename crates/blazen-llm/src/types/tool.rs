@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 
 /// Describes a tool that the model may invoke during a conversation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct ToolDefinition {
     /// The unique name of the tool.
     pub name: String,
@@ -19,6 +22,9 @@ pub struct ToolDefinition {
 
 /// A tool invocation requested by the model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct ToolCall {
     /// Provider-assigned identifier for this specific invocation.
     pub id: String,

@@ -8,20 +8,29 @@ use serde::{Deserialize, Serialize};
 
 /// Request to generate images from a text prompt.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct ImageRequest {
     /// The text prompt describing the desired image.
     pub prompt: String,
     /// Negative prompt (things to avoid in the image).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub negative_prompt: Option<String>,
     /// Desired image width in pixels.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub width: Option<u32>,
     /// Desired image height in pixels.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub height: Option<u32>,
     /// Number of images to generate.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub num_images: Option<u32>,
     /// Model override (provider-specific model identifier).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     /// Additional provider-specific parameters.
+    #[serde(default)]
     pub parameters: serde_json::Value,
 }
 
@@ -76,14 +85,19 @@ impl ImageRequest {
 
 /// Request to upscale an image.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct UpscaleRequest {
     /// URL of the image to upscale.
     pub image_url: String,
     /// Scale factor (e.g., 2.0 for 2x, 4.0 for 4x).
     pub scale: f32,
     /// Model override.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     /// Additional provider-specific parameters.
+    #[serde(default)]
     pub parameters: serde_json::Value,
 }
 
@@ -113,22 +127,32 @@ impl UpscaleRequest {
 
 /// Request to generate a video.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct VideoRequest {
     /// Text prompt describing the desired video.
     pub prompt: String,
     /// Source image URL for image-to-video generation.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub image_url: Option<String>,
     /// Desired duration in seconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub duration_seconds: Option<f32>,
     /// Negative prompt (things to avoid).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub negative_prompt: Option<String>,
     /// Desired video width in pixels.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub width: Option<u32>,
     /// Desired video height in pixels.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub height: Option<u32>,
     /// Model override.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     /// Additional provider-specific parameters.
+    #[serde(default)]
     pub parameters: serde_json::Value,
 }
 
@@ -192,20 +216,29 @@ impl VideoRequest {
 
 /// Request to generate speech from text.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct SpeechRequest {
     /// The text to synthesize into speech.
     pub text: String,
     /// Voice identifier (provider-specific).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub voice: Option<String>,
     /// URL to a reference voice sample for voice cloning.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub voice_url: Option<String>,
     /// Language code (e.g. "en", "fr", "ja").
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
     /// Speech speed multiplier (1.0 = normal).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub speed: Option<f32>,
     /// Model override.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     /// Additional provider-specific parameters.
+    #[serde(default)]
     pub parameters: serde_json::Value,
 }
 
@@ -266,14 +299,20 @@ impl SpeechRequest {
 
 /// Request to generate music or sound effects.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct MusicRequest {
     /// Text prompt describing the desired audio.
     pub prompt: String,
     /// Desired duration in seconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub duration_seconds: Option<f32>,
     /// Model override.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     /// Additional provider-specific parameters.
+    #[serde(default)]
     pub parameters: serde_json::Value,
 }
 
@@ -310,16 +349,22 @@ impl MusicRequest {
 
 /// Request to transcribe audio to text.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct TranscriptionRequest {
     /// URL of the audio file to transcribe.
     pub audio_url: String,
     /// Language hint (e.g. "en", "fr").
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
     /// Whether to perform speaker diarization.
     pub diarize: bool,
     /// Model override.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     /// Additional provider-specific parameters.
+    #[serde(default)]
     pub parameters: serde_json::Value,
 }
 
@@ -364,16 +409,23 @@ impl TranscriptionRequest {
 
 /// Request to generate a 3D model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct ThreeDRequest {
     /// Text prompt describing the desired 3D model.
     pub prompt: String,
     /// Source image URL for image-to-3D generation.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub image_url: Option<String>,
     /// Desired output format (e.g. "glb", "obj", "usdz").
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub format: Option<String>,
     /// Model override.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     /// Additional provider-specific parameters.
+    #[serde(default)]
     pub parameters: serde_json::Value,
 }
 
@@ -423,10 +475,14 @@ impl ThreeDRequest {
 
 /// Request for background removal on an existing image.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct BackgroundRemovalRequest {
     /// URL of the source image.
     pub image_url: String,
     /// Optional model id override.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     /// Provider-specific parameters merged into the request body.
     #[serde(default)]

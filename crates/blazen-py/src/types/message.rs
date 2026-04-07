@@ -1,6 +1,7 @@
 //! Python wrappers for chat message types.
 
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_llm::{
     AudioContent, ChatMessage, ContentPart, ImageContent, ImageSource, MessageContent, Role,
@@ -18,9 +19,11 @@ use crate::error::BlazenPyError;
 /// Example:
 ///     >>> ChatMessage(role=Role.USER, content="Hello!")
 ///     >>> ChatMessage(role=Role.SYSTEM, content="You are helpful.")
+#[gen_stub_pyclass]
 #[pyclass(name = "Role", frozen)]
 pub struct PyRole;
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyRole {
     #[classattr]
@@ -37,12 +40,14 @@ impl PyRole {
 // PyContentPart
 // ---------------------------------------------------------------------------
 
+#[gen_stub_pyclass]
 #[pyclass(name = "ContentPart", from_py_object)]
 #[derive(Clone)]
 pub struct PyContentPart {
     pub(crate) inner: ContentPart,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyContentPart {
     /// Create a text content part.
@@ -141,12 +146,14 @@ impl PyContentPart {
 ///     >>> msg = ChatMessage(content="Hello, world!")
 ///     >>> msg = ChatMessage(role="system", content="You are a helpful assistant.")
 ///     >>> msg = ChatMessage.user("What is 2+2?")
+#[gen_stub_pyclass]
 #[pyclass(name = "ChatMessage", from_py_object)]
 #[derive(Clone)]
 pub struct PyChatMessage {
     pub(crate) inner: ChatMessage,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyChatMessage {
     /// Create a new chat message.

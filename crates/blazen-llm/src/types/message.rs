@@ -10,6 +10,8 @@ use super::tool::ToolCall;
 
 /// The role of a participant in a chat conversation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
     /// A system-level instruction that guides assistant behaviour.
@@ -27,6 +29,8 @@ pub enum Role {
 /// Used by [`ImageContent`], [`AudioContent`], [`VideoContent`], and
 /// [`FileContent`] — all media kinds share this URL-or-base64 envelope.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ImageSource {
     /// Media provided via URL.
@@ -45,21 +49,29 @@ pub type MediaSource = ImageSource;
 
 /// Image content for multimodal messages.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct ImageContent {
     /// The source of the image data.
     pub source: ImageSource,
     /// The MIME type of the image (e.g. `"image/jpeg"`, `"image/png"`).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub media_type: Option<String>,
 }
 
 /// File/document content (PDF, generic file, etc.).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct FileContent {
     /// The source of the file data.
     pub source: MediaSource,
     /// The MIME type of the file (e.g. `"application/pdf"`).
     pub media_type: String,
     /// An optional filename for display purposes.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub filename: Option<String>,
 }
 
@@ -69,12 +81,17 @@ pub struct FileContent {
 /// and `OpenAI`'s `gpt-4o-audio-preview` (via `input_audio` blocks). Providers
 /// that do not support audio input drop the content with a warning.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct AudioContent {
     /// The source of the audio data.
     pub source: MediaSource,
     /// MIME type, e.g. `"audio/mp3"`, `"audio/wav"`, `"audio/ogg"`, `"audio/flac"`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub media_type: Option<String>,
     /// Optional duration in seconds, populated when known.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub duration_seconds: Option<f32>,
 }
 
@@ -112,12 +129,17 @@ impl AudioContent {
 /// Video chat input is supported natively by Gemini. Providers that do not
 /// support video input drop the content with a warning.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct VideoContent {
     /// The source of the video data.
     pub source: MediaSource,
     /// MIME type, e.g. `"video/mp4"`, `"video/mov"`, `"video/webm"`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub media_type: Option<String>,
     /// Optional duration in seconds, populated when known.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub duration_seconds: Option<f32>,
 }
 
@@ -152,6 +174,8 @@ impl VideoContent {
 
 /// A single part in a multi-part message.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentPart {
     /// A text segment.
@@ -246,6 +270,8 @@ impl ContentPart {
 
 /// The content payload of a [`ChatMessage`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(untagged)]
 pub enum MessageContent {
     /// Plain text content.
@@ -408,6 +434,9 @@ impl MessageContent {
 
 /// A single message in a chat conversation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct ChatMessage {
     /// Who produced this message.
     pub role: Role,

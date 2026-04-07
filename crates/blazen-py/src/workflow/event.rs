@@ -10,6 +10,7 @@ use blazen_core::session_ref::SessionRefRegistry;
 use blazen_events::{AnyEvent, DynamicEvent};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use crate::convert::{dict_to_json, json_to_py};
 use crate::workflow::session_ref::{CURRENT_SESSION_REGISTRY, current_session_registry};
@@ -38,6 +39,7 @@ fn with_event_registry<R>(reg: Option<&Arc<SessionRefRegistry>>, f: impl FnOnce(
 /// print(ev.text)       # "hello"
 /// print(ev.to_dict())  # {"text": "hello", "score": 0.9}
 /// ```
+#[gen_stub_pyclass]
 #[pyclass(name = "Event", subclass, from_py_object)]
 #[derive(Debug, Clone)]
 pub struct PyEvent {
@@ -54,6 +56,7 @@ pub struct PyEvent {
     pub(crate) session_refs: Option<Arc<SessionRefRegistry>>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyEvent {
     /// Create a new event.
@@ -173,13 +176,16 @@ impl PyEvent {
 /// ```python
 /// ev = StartEvent(text="hello", count=5)
 /// ```
+#[gen_stub_pyclass]
 #[pyclass(name = "StartEvent", extends = PyEvent, from_py_object)]
 #[derive(Debug, Clone)]
 pub struct PyStartEvent;
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyStartEvent {
     /// Create a new `StartEvent` with keyword data.
+    #[gen_stub(skip)]
     #[new]
     #[pyo3(signature = (**kwargs))]
     fn new(kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<(Self, PyEvent)> {
@@ -205,13 +211,16 @@ impl PyStartEvent {
 /// ```python
 /// ev = StopEvent(result={"answer": 42})
 /// ```
+#[gen_stub_pyclass]
 #[pyclass(name = "StopEvent", extends = PyEvent, from_py_object)]
 #[derive(Debug, Clone)]
 pub struct PyStopEvent;
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyStopEvent {
     /// Create a new `StopEvent` with a result value.
+    #[gen_stub(skip)]
     #[new]
     #[pyo3(signature = (**kwargs))]
     fn new(kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<(Self, PyEvent)> {

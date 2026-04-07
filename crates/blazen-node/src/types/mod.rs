@@ -22,10 +22,7 @@ pub(crate) use completion::build_response;
 pub use completion::{JsCompletionOptions, JsCompletionResponse};
 pub use embedding::{JsEmbeddingModel, JsEmbeddingResponse};
 pub use finish_reason::JsFinishReason;
-pub use media::{
-    JsGenerated3DModel, JsGeneratedAudio, JsGeneratedImage, JsGeneratedVideo, JsMediaOutput,
-    JsMediaTypeMap, media_types,
-};
+pub use media::{Generated3DModel, GeneratedAudio, GeneratedImage, GeneratedVideo, MediaOutput};
 pub use memory::{
     JsAddEntry, JsInMemoryBackend, JsJsonlBackend, JsMemory, JsMemoryEntry, JsMemoryResult,
     JsValkeyBackend,
@@ -38,5 +35,5 @@ pub use response_format::JsResponseFormat;
 pub use stream::JsStreamChunk;
 pub(crate) use stream::build_stream_chunk;
 pub use tokens::{count_message_tokens, estimate_tokens};
-pub use tool::{JsToolCall, JsToolDefinition};
-pub use usage::{JsRequestTiming, JsTokenUsage};
+pub use tool::{ToolCall, ToolDefinition};
+pub use usage::{RequestTiming, TokenUsage};

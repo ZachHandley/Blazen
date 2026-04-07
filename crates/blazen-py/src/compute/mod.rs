@@ -5,6 +5,6 @@ pub mod requests;
 
 pub use job::{PyComputeRequest, PyJobHandle, PyJobStatus};
 pub use requests::{
-    PyImageRequest, PyMusicRequest, PySpeechRequest, PyThreeDRequest, PyTranscriptionRequest,
-    PyUpscaleRequest, PyVideoRequest,
+    BackgroundRemovalRequest, ImageRequest, MusicRequest, SpeechRequest, ThreeDRequest,
+    TranscriptionRequest, UpscaleRequest, VideoRequest,
 };

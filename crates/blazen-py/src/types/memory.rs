@@ -5,6 +5,7 @@ use std::sync::Arc;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_memory::store::MemoryBackend;
 use blazen_memory::types::{MemoryEntry, MemoryResult};
@@ -54,12 +55,14 @@ fn memory_err(e: blazen_memory::MemoryError) -> PyErr {
 /// Example:
 ///     >>> backend = InMemoryBackend()
 ///     >>> memory = Memory(embedder, backend)
+#[gen_stub_pyclass]
 #[pyclass(name = "InMemoryBackend", from_py_object)]
 #[derive(Clone)]
 pub struct PyInMemoryBackend {
     inner: Arc<InMemoryBackend>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyInMemoryBackend {
     /// Create a new, empty in-memory backend.
@@ -87,12 +90,14 @@ impl PyInMemoryBackend {
 /// Example:
 ///     >>> backend = await JsonlBackend.create("memories.jsonl")
 ///     >>> memory = Memory(embedder, backend)
+#[gen_stub_pyclass]
 #[pyclass(name = "JsonlBackend", from_py_object)]
 #[derive(Clone)]
 pub struct PyJsonlBackend {
     inner: Arc<JsonlBackend>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyJsonlBackend {
     /// Create a new JSONL backend at the given file path.
@@ -130,12 +135,14 @@ impl PyJsonlBackend {
 /// Example:
 ///     >>> backend = ValkeyBackend("redis://localhost:6379")
 ///     >>> memory = Memory(embedder, backend)
+#[gen_stub_pyclass]
 #[pyclass(name = "ValkeyBackend", from_py_object)]
 #[derive(Clone)]
 pub struct PyValkeyBackend {
     inner: Arc<ValkeyBackend>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyValkeyBackend {
     /// Create a new Valkey backend connected to the given URL.
@@ -175,11 +182,13 @@ impl PyValkeyBackend {
 ///     'Paris is the capital of France'
 ///     >>> results[0].score
 ///     0.85
+#[gen_stub_pyclass]
 #[pyclass(name = "MemoryResult", frozen)]
 pub struct PyMemoryResult {
     inner: MemoryResult,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyMemoryResult {
     /// The entry's unique identifier.
@@ -234,11 +243,13 @@ impl PyMemoryResult {
 ///     >>> await memory.add("doc1", "Paris is the capital of France")
 ///     >>> results = await memory.search("France capital", limit=5)
 ///     >>> print(results[0].text)
+#[gen_stub_pyclass]
 #[pyclass(name = "Memory")]
 pub struct PyMemory {
     inner: Arc<Memory>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyMemory {
     /// Create a Memory with an embedding model for full semantic search.

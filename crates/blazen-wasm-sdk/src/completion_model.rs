@@ -19,7 +19,6 @@ use blazen_llm::types::CompletionRequest;
 
 use crate::chat_message::js_messages_to_vec;
 use blazen_llm::FetchHttpClient;
-use crate::types::WasmCompletionResponse;
 
 // ---------------------------------------------------------------------------
 // WasmCompletionModel
@@ -390,8 +389,9 @@ impl WasmCompletionModel {
                 .complete(request)
                 .await
                 .map_err(|e| JsValue::from_str(&e.to_string()))?;
-            let wasm_resp = WasmCompletionResponse::from(response);
-            Ok(wasm_resp.into())
+            let js_resp = serde_wasm_bindgen::to_value(&response)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            Ok(js_resp)
         })
     }
 
@@ -458,8 +458,9 @@ impl WasmCompletionModel {
                 .complete(request)
                 .await
                 .map_err(|e| JsValue::from_str(&e.to_string()))?;
-            let wasm_resp = WasmCompletionResponse::from(response);
-            Ok(wasm_resp.into())
+            let js_resp = serde_wasm_bindgen::to_value(&response)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            Ok(js_resp)
         })
     }
 
@@ -490,8 +491,8 @@ impl WasmCompletionModel {
             while let Some(chunk_result) = stream.next().await {
                 let chunk = chunk_result
                     .map_err(|e| JsValue::from_str(&e.to_string()))?;
-                let wasm_chunk = crate::types::WasmStreamChunk::from(chunk);
-                let js_chunk: JsValue = wasm_chunk.into();
+                let js_chunk = serde_wasm_bindgen::to_value(&chunk)
+                    .map_err(|e| JsValue::from_str(&e.to_string()))?;
                 // Invoke the JS callback with the chunk.
                 let _ = callback.call1(&JsValue::NULL, &js_chunk);
             }

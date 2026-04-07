@@ -20,6 +20,7 @@
 use std::sync::Arc;
 
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use super::event::PyEvent;
 use crate::convert::block_on_context;
@@ -37,12 +38,14 @@ use crate::convert::block_on_context;
 ///     ...     ctx.set("db", sqlite3.connect(":memory:"))
 ///     ...     val = ctx.get("counter")  # returns 42
 ///     ...     db = ctx.get("db")        # returns the same connection
+#[gen_stub_pyclass]
 #[pyclass(name = "Context", from_py_object)]
 #[derive(Clone)]
 pub struct PyContext {
     pub(crate) inner: blazen_core::Context,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyContext {
     /// Store any value under the given key.
@@ -192,6 +195,7 @@ impl PyContext {
     /// Args:
     ///     key: The storage key.
     ///     data: Raw bytes to store.
+    #[gen_stub(skip)]
     fn set_bytes(&self, _py: Python<'_>, key: &str, data: &[u8]) {
         let inner = self.inner.clone();
         let key = key.to_string();
@@ -270,12 +274,14 @@ impl PyContext {
 /// are durable across `pause()` / `resume()` and checkpoint stores;
 /// the live-object tier (used as a last resort for unpicklable values)
 /// is in-process only.
+#[gen_stub_pyclass]
 #[pyclass(name = "StateNamespace", from_py_object)]
 #[derive(Clone)]
 pub struct PyStateNamespace {
     inner: blazen_core::Context,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyStateNamespace {
     /// Store a value under the given key. See `Context.set` for the
@@ -293,6 +299,7 @@ impl PyStateNamespace {
     }
 
     /// Store raw binary data under the given key.
+    #[gen_stub(skip)]
     fn set_bytes(&self, py: Python<'_>, key: &str, data: &[u8]) {
         let ctx = PyContext::new(self.inner.clone());
         ctx.set_bytes(py, key, data);
@@ -337,12 +344,14 @@ impl PyStateNamespace {
 /// workflow run; the entries are *not* serialised into snapshots
 /// (subject to the workflow's `session_pause_policy` for what happens
 /// at pause time).
+#[gen_stub_pyclass]
 #[pyclass(name = "SessionNamespace", from_py_object)]
 #[derive(Clone)]
 pub struct PySessionNamespace {
     inner: blazen_core::Context,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PySessionNamespace {
     /// Store a live reference under the given key. The value is *not*

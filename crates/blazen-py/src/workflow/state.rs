@@ -5,6 +5,7 @@
 //! context with its optimal storage tier.
 
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 /// Base class for typed workflow state objects.
 ///
@@ -26,9 +27,11 @@ use pyo3::prelude::*;
 ///         if self.input_path:
 ///             self.conn = sqlite3.connect(self.input_path)
 /// ```
+#[gen_stub_pyclass]
 #[pyclass(name = "BlazenState", subclass, dict)]
 pub struct PyBlazenState {}
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyBlazenState {
     #[new]

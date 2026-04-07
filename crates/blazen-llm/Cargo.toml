@@ -12,6 +12,8 @@ description = "LLM provider abstraction layer for the Blazen workflow engine"
 default = []
 reqwest = ["dep:reqwest"]
 tiktoken = ["dep:tiktoken-rs"]
+tsify = ["dep:tsify-next", "dep:wasm-bindgen"]
+pyo3-serde = ["dep:pythonize", "dep:pyo3"]
 
 [dependencies]
 blazen-events.workspace = true
@@ -27,6 +29,10 @@ bytes.workspace = true
 chrono.workspace = true
 reqwest = { workspace = true, optional = true }
 tiktoken-rs = { version = "0.9", optional = true }
+tsify-next = { version = "0.5", features = ["js", "json"], optional = true }
+wasm-bindgen = { version = "0.2", optional = true }
+pythonize = { version = "0.28", optional = true }
+pyo3 = { version = "0.28", optional = true }
 
 # Timer/runtime features only on native targets (mio doesn't support any wasm32 target)
 [target.'cfg(not(any(target_os = "wasi", target_arch = "wasm32")))'.dependencies]

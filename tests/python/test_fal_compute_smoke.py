@@ -7,14 +7,7 @@ import os
 
 import pytest
 
-from blazen import (
-    FalProvider,
-    ImageRequest,
-    MusicRequest,
-    SpeechRequest,
-    TranscriptionRequest,
-    VideoRequest,
-)
+from blazen import FalProvider
 
 FAL_API_KEY = os.environ.get("FAL_API_KEY")
 
@@ -35,7 +28,7 @@ async def test_fal_generate_image():
     """Generate an image and verify the response contains image data."""
     provider = FalProvider(api_key=FAL_API_KEY)
     result = await provider.generate_image(
-        ImageRequest(prompt="a red circle on white background")
+        {"prompt": "a red circle on white background"}
     )
 
     assert "images" in result
@@ -53,7 +46,7 @@ async def test_fal_text_to_speech():
     """Synthesize speech and verify the response contains audio data."""
     provider = FalProvider(api_key=FAL_API_KEY)
     result = await provider.text_to_speech(
-        SpeechRequest(text="Hello world.")
+        {"text": "Hello world."}
     )
 
     assert "audio" in result
@@ -71,7 +64,7 @@ async def test_fal_generate_music():
     """Generate music and verify the response contains audio data."""
     provider = FalProvider(api_key=FAL_API_KEY)
     result = await provider.generate_music(
-        MusicRequest(prompt="happy upbeat jingle", duration_seconds=5.0)
+        {"prompt": "happy upbeat jingle", "duration_seconds": 5.0}
     )
 
     assert "audio" in result
@@ -89,9 +82,7 @@ async def test_fal_transcribe():
     """Transcribe a short audio clip and verify text is returned."""
     provider = FalProvider(api_key=FAL_API_KEY)
     result = await provider.transcribe(
-        TranscriptionRequest(
-            audio_url="https://cdn.openai.com/API/docs/audio/alloy.wav"
-        )
+        {"audio_url": "https://cdn.openai.com/API/docs/audio/alloy.wav"}
     )
 
     assert "text" in result
@@ -110,7 +101,7 @@ async def test_fal_text_to_video():
     """Generate a video from text (slow, ~30-60s)."""
     provider = FalProvider(api_key=FAL_API_KEY)
     result = await provider.text_to_video(
-        VideoRequest(prompt="a cat walking")
+        {"prompt": "a cat walking"}
     )
 
     assert "videos" in result

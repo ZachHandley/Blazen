@@ -12,7 +12,8 @@ description = "Blazen SDK for TypeScript/JavaScript via WebAssembly"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-blazen-llm = { version = "0.0.0-dev", path = "../blazen-llm", default-features = false }
+blazen-llm = { version = "0.0.0-dev", path = "../blazen-llm", default-features = false, features = ["tsify"] }
+tsify-next = { version = "0.5", features = ["js", "json"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"

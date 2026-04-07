@@ -8,6 +8,7 @@
 use std::sync::Arc;
 
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 
@@ -26,6 +27,7 @@ use crate::error::BlazenPyError;
 ///     >>> handler = await wf.run(prompt="Hello")
 ///     >>> result = await handler.result()
 ///     >>> print(result.to_dict())
+#[gen_stub_pyclass]
 #[pyclass(name = "WorkflowHandler")]
 pub struct PyWorkflowHandler {
     /// The inner handler is wrapped in `Option` because `result()` consumes it.
@@ -57,6 +59,7 @@ impl PyWorkflowHandler {
     }
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyWorkflowHandler {
     /// Await the final workflow result.
@@ -170,6 +173,7 @@ type PinnedEventStream = std::pin::Pin<
 ///
 /// The stream terminates when it receives a `"blazen::StreamEnd"` sentinel
 /// event from the event loop, or when the underlying broadcast channel closes.
+#[gen_stub_pyclass]
 #[pyclass(name = "_EventStream")]
 pub struct PyEventStream {
     stream: Arc<Mutex<PinnedEventStream>>,
@@ -179,6 +183,7 @@ pub struct PyEventStream {
     session_refs: Arc<SessionRefRegistry>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyEventStream {
     fn __aiter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {

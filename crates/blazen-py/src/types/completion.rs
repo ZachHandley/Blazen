@@ -1,11 +1,9 @@
 //! Python wrapper for completion response types.
 
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_llm::CompletionResponse;
-
-use crate::types::tool::PyToolCall;
-use crate::types::usage::{PyRequestTiming, PyTokenUsage};
 
 // ---------------------------------------------------------------------------
 // PyCompletionResponse
@@ -17,12 +15,14 @@ use crate::types::usage::{PyRequestTiming, PyTokenUsage};
 /// compatibility:
 ///     >>> response.content        # attribute
 ///     >>> response["content"]     # dict-style
+#[gen_stub_pyclass]
 #[pyclass(name = "CompletionResponse", from_py_object)]
 #[derive(Clone)]
 pub struct PyCompletionResponse {
     pub(crate) inner: CompletionResponse,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyCompletionResponse {
     #[getter]
@@ -41,17 +41,16 @@ impl PyCompletionResponse {
     }
 
     #[getter]
-    fn tool_calls(&self) -> Vec<PyToolCall> {
-        self.inner
-            .tool_calls
-            .iter()
-            .map(|tc| PyToolCall { inner: tc.clone() })
-            .collect()
+    fn tool_calls(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        Ok(pythonize::pythonize(py, &self.inner.tool_calls)?.into())
     }
 
     #[getter]
-    fn usage(&self) -> Option<PyTokenUsage> {
-        self.inner.usage.clone().map(|u| PyTokenUsage { inner: u })
+    fn usage(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
+        match &self.inner.usage {
+            Some(u) => Ok(Some(pythonize::pythonize(py, u)?.into())),
+            None => Ok(None),
+        }
     }
 
     #[getter]
@@ -60,11 +59,11 @@ impl PyCompletionResponse {
     }
 
     #[getter]
-    fn timing(&self) -> Option<PyRequestTiming> {
-        self.inner
-            .timing
-            .clone()
-            .map(|t| PyRequestTiming { inner: t })
+    fn timing(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
+        match &self.inner.timing {
+            Some(t) => Ok(Some(pythonize::pythonize(py, t)?.into())),
+            None => Ok(None),
+        }
     }
 
     #[getter]
@@ -93,22 +92,25 @@ impl PyCompletionResponse {
     /// Reasoning trace from models that expose one (Anthropic extended thinking,
     /// DeepSeek R1, OpenAI o-series, xAI Grok, Gemini thoughts).
     #[getter]
-    fn reasoning(&self) -> Option<crate::types::PyReasoningTrace> {
-        self.inner.reasoning.as_ref().map(Into::into)
+    fn reasoning(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
+        match &self.inner.reasoning {
+            Some(r) => Ok(Some(pythonize::pythonize(py, r)?.into())),
+            None => Ok(None),
+        }
     }
 
     /// Web/document citations backing the model's statement (Perplexity,
     /// Gemini grounding, Anthropic web search).
     #[getter]
-    fn citations(&self) -> Vec<crate::types::PyCitation> {
-        self.inner.citations.iter().map(Into::into).collect()
+    fn citations(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        Ok(pythonize::pythonize(py, &self.inner.citations)?.into())
     }
 
     /// Typed inline artifacts extracted from the response (SVG, code blocks,
     /// markdown, mermaid, html, latex, json, custom).
     #[getter]
-    fn artifacts(&self) -> Vec<crate::types::PyArtifact> {
-        self.inner.artifacts.iter().map(Into::into).collect()
+    fn artifacts(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        Ok(pythonize::pythonize(py, &self.inner.artifacts)?.into())
     }
 
     /// Lazily map the raw provider finish-reason string into a normalized

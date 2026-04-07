@@ -69,7 +69,7 @@ describe("Structured output smoke tests", { skip: !OPENROUTER_API_KEY }, () => {
     assert.ok(response.content, "expected content in response");
 
     const parsed = JSON.parse(response.content);
-    assert.equal(parsed.answer, 4, `expected answer=4, got ${parsed.answer}`);
+    assert.strictEqual(parsed.answer, 4, `expected answer=4, got ${parsed.answer}`);
   });
 });
 

@@ -10,6 +10,7 @@
 use std::sync::Arc;
 
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_llm::agent::{AgentConfig, AgentResult as RustAgentResult, run_agent as rust_run_agent};
 use blazen_llm::error::BlazenError;
@@ -110,6 +111,7 @@ impl Tool for PyToolWrapper {
 ///     ...     parameters={"type": "object", "properties": {"query": {"type": "string"}}},
 ///     ...     handler=lambda args: {"results": []}
 ///     ... )
+#[gen_stub_pyclass]
 #[pyclass(name = "ToolDef")]
 pub struct PyToolDef {
     pub(crate) name: String,
@@ -118,6 +120,7 @@ pub struct PyToolDef {
     pub(crate) handler: Py<PyAny>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyToolDef {
     #[new]
@@ -154,11 +157,13 @@ impl PyToolDef {
 ///     >>> print(result.response.content)
 ///     >>> print(result.iterations)
 ///     >>> print(result.total_cost)
+#[gen_stub_pyclass]
 #[pyclass(name = "AgentResult")]
 pub struct PyAgentResult {
     inner: RustAgentResult,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyAgentResult {
     /// The final completion response from the model.

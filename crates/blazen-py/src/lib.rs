@@ -73,13 +73,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::PyRole>()?;
     m.add_class::<types::PyContentPart>()?;
     m.add_class::<types::PyChatMessage>()?;
-    m.add_class::<types::PyToolCall>()?;
-    m.add_class::<types::PyTokenUsage>()?;
-    m.add_class::<types::PyRequestTiming>()?;
     m.add_class::<types::PyCompletionResponse>()?;
-    m.add_class::<types::PyStreamChunk>()?;
-    m.add_class::<types::PyReasoningTrace>()?;
-    m.add_class::<types::PyCitation>()?;
     m.add_class::<types::PyArtifact>()?;
     m.add_class::<types::PyFinishReason>()?;
     m.add_class::<types::PyResponseFormat>()?;
@@ -91,7 +85,6 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Embedding model
     m.add_class::<types::PyEmbeddingModel>()?;
-    m.add_class::<types::PyEmbeddingResponse>()?;
 
     // Token counting utilities
     m.add_function(wrap_pyfunction!(types::estimate_tokens, m)?)?;
@@ -107,30 +100,13 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Compute / Media -- Request types
     m.add_class::<types::PyMediaType>()?;
-    m.add_class::<compute::PyImageRequest>()?;
-    m.add_class::<compute::PyUpscaleRequest>()?;
-    m.add_class::<compute::PyVideoRequest>()?;
-    m.add_class::<compute::PySpeechRequest>()?;
-    m.add_class::<compute::PyMusicRequest>()?;
-    m.add_class::<compute::PyTranscriptionRequest>()?;
-    m.add_class::<compute::PyThreeDRequest>()?;
 
     // Compute / Media -- Job types
     m.add_class::<compute::PyJobStatus>()?;
-    m.add_class::<compute::PyJobHandle>()?;
     m.add_class::<compute::PyComputeRequest>()?;
-
-    // Compute / Media -- Generated media types
-    m.add_class::<types::PyMediaOutput>()?;
-    m.add_class::<types::PyGeneratedImage>()?;
-    m.add_class::<types::PyGeneratedVideo>()?;
-    m.add_class::<types::PyGeneratedAudio>()?;
-    m.add_class::<types::PyGenerated3DModel>()?;
 
     // Fal provider
     m.add_class::<providers::fal::PyFalProvider>()?;
-    m.add_class::<providers::fal::PyFalLlmEndpoint>()?;
-    m.add_class::<providers::fal::PyFalOptions>()?;
     m.add_class::<providers::fal::PyFalEmbeddingModel>()?;
 
     // Memory

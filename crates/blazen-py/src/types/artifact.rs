@@ -2,6 +2,7 @@
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_llm::Artifact;
 
@@ -21,12 +22,14 @@ use blazen_llm::Artifact;
 ///     ...         render_svg(art.content)
 ///     ...     elif art.kind == "code_block":
 ///     ...         print(f"{art.language}: {art.content}")
+#[gen_stub_pyclass]
 #[pyclass(name = "Artifact", frozen, from_py_object)]
 #[derive(Clone)]
 pub struct PyArtifact {
     pub(crate) inner: Artifact,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyArtifact {
     /// Discriminator string. One of: ``"svg"``, ``"code_block"``, ``"markdown"``,

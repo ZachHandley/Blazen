@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_core::snapshot::WorkflowSnapshot;
 
@@ -26,6 +27,7 @@ use crate::error::{BlazenPyError, to_py_result};
 ///     >>> wf = Workflow("echo-wf", [echo])
 ///     >>> handler = await wf.run({"message": "hello"})
 ///     >>> result = await handler.result()
+#[gen_stub_pyclass]
 #[pyclass(name = "Workflow")]
 pub struct PyWorkflow {
     name: String,
@@ -33,6 +35,7 @@ pub struct PyWorkflow {
     timeout: Option<f64>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyWorkflow {
     /// Create a new workflow.

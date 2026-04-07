@@ -14,6 +14,7 @@
 pub mod agent;
 pub mod compute;
 pub mod error;
+pub mod generated;
 pub mod providers;
 pub mod types;
 pub mod workflow;

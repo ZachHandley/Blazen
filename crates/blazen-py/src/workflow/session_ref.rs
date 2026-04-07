@@ -33,6 +33,7 @@ use std::sync::Arc;
 
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
+use pyo3_stub_gen::derive::gen_stub_pyclass;
 
 use blazen_core::session_ref::SessionRefRegistry;
 
@@ -47,6 +48,7 @@ tokio::task_local! {
 /// inside the Python `ContextVar` so the user-side asyncio Task can
 /// carry the registry across `await` points without exposing the inner
 /// type to user code.
+#[gen_stub_pyclass]
 #[pyclass(name = "_SessionRegistryHandle", frozen)]
 pub(crate) struct PySessionRegistryHandle {
     pub(crate) inner: Arc<SessionRefRegistry>,

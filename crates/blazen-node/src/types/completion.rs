@@ -7,8 +7,7 @@ use blazen_llm::types::CompletionResponse;
 use super::artifact::JsArtifact;
 use super::citation::JsCitation;
 use super::reasoning::JsReasoningTrace;
-use super::tool::{JsToolCall, JsToolDefinition};
-use super::usage::{JsRequestTiming, JsTokenUsage};
+use crate::generated::{JsRequestTiming, JsTokenUsage, JsToolCall, JsToolDefinition};
 
 /// The result of a chat completion.
 #[napi(object)]
@@ -53,29 +52,12 @@ pub struct JsCompletionOptions {
 pub(crate) fn build_response(response: CompletionResponse) -> JsCompletionResponse {
     JsCompletionResponse {
         content: response.content,
-        tool_calls: response
-            .tool_calls
-            .into_iter()
-            .map(|tc| JsToolCall {
-                id: tc.id,
-                name: tc.name,
-                arguments: tc.arguments,
-            })
-            .collect(),
-        usage: response.usage.map(|u| JsTokenUsage {
-            prompt_tokens: u.prompt_tokens,
-            completion_tokens: u.completion_tokens,
-            total_tokens: u.total_tokens,
-        }),
+        tool_calls: response.tool_calls.into_iter().map(Into::into).collect(),
+        usage: response.usage.map(Into::into),
         model: response.model,
         finish_reason: response.finish_reason,
         cost: response.cost,
-        #[allow(clippy::cast_possible_wrap)]
-        timing: response.timing.map(|t| JsRequestTiming {
-            queue_ms: t.queue_ms.map(|v| v as i64),
-            execution_ms: t.execution_ms.map(|v| v as i64),
-            total_ms: t.total_ms.map(|v| v as i64),
-        }),
+        timing: response.timing.map(Into::into),
         images: response
             .images
             .iter()

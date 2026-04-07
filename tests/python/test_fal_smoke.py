@@ -12,8 +12,6 @@ from blazen import (
     ChatMessage,
     CompletionModel,
     CompletionOptions,
-    FalLlmEndpoint,
-    FalOptions,
     FalProvider,
 )
 
@@ -47,7 +45,7 @@ async def test_fal_basic_completion_openai_chat():
 @pytest.mark.asyncio
 async def test_fal_basic_completion_enterprise():
     """Enterprise mode promotes OpenAiChat -> AnyLlm{enterprise:true}."""
-    model = CompletionModel.fal(FAL_API_KEY, options=FalOptions(enterprise=True))
+    model = CompletionModel.fal(FAL_API_KEY, options={"enterprise": True})
     response = await model.complete(
         [ChatMessage.user("Say hello.")],
         CompletionOptions(max_tokens=10),
@@ -61,7 +59,7 @@ async def test_fal_responses_api_endpoint():
     """OpenAiResponses endpoint targets openrouter/router/openai/v1/responses."""
     model = CompletionModel.fal(
         FAL_API_KEY,
-        options=FalOptions(endpoint=FalLlmEndpoint.OpenAiResponses),
+        options={"endpoint": "OpenAiResponses"},
     )
     response = await model.complete(
         [ChatMessage.user("Say hi.")],
@@ -110,7 +108,7 @@ async def test_fal_vision_auto_routes_when_anyllm_and_image_present():
     the request should auto-route to fal-ai/any-llm/vision."""
     model = CompletionModel.fal(
         FAL_API_KEY,
-        options=FalOptions(endpoint=FalLlmEndpoint.AnyLlm),
+        options={"endpoint": "AnyLlm"},
     )
     msg = ChatMessage.user_image_url(
         text="What is in this image? One word.",
@@ -133,7 +131,7 @@ async def test_fal_audio_auto_routes_when_openrouter_and_audio_present():
     """
     model = CompletionModel.fal(
         FAL_API_KEY,
-        options=FalOptions(endpoint=FalLlmEndpoint.OpenRouter),
+        options={"endpoint": "OpenRouter"},
     )
     msg = ChatMessage.user_audio(
         text="What does this clip say?",
@@ -167,7 +165,7 @@ async def test_fal_video_auto_routes_when_openrouter_and_video_present():
     """
     model = CompletionModel.fal(
         FAL_API_KEY,
-        options=FalOptions(endpoint=FalLlmEndpoint.OpenRouter),
+        options={"endpoint": "OpenRouter"},
     )
     msg = ChatMessage.user_video(
         text="What is happening in this video? One sentence.",
@@ -234,15 +232,11 @@ async def test_fal_3d_generation():
     the error is specifically a fal file-download failure (which proves
     routing landed at the 3D endpoint correctly).
     """
-    try:
-        from blazen import ThreeDRequest
-    except ImportError:
-        pytest.skip("ThreeDRequest not exposed in Python bindings")
     provider = FalProvider(api_key=FAL_API_KEY)
-    request = ThreeDRequest(
-        prompt="a wooden chair",
-        image_url="https://storage.googleapis.com/falserverless/example_inputs/triposr_input.jpg",
-    )
+    request = {
+        "prompt": "a wooden chair",
+        "image_url": "https://storage.googleapis.com/falserverless/example_inputs/triposr_input.jpg",
+    }
     try:
         result = await provider.generate_3d(request)
         assert result is not None
@@ -294,11 +288,9 @@ async def test_fal_background_removal():
 @skip_without_key
 @pytest.mark.asyncio
 async def test_fal_image_generation():
-    from blazen import ImageRequest
-
     provider = FalProvider(api_key=FAL_API_KEY)
     result = await provider.generate_image(
-        ImageRequest(prompt="a simple red circle on white background")
+        {"prompt": "a simple red circle on white background"}
     )
     assert "images" in result
     assert len(result["images"]) > 0
@@ -307,11 +299,9 @@ async def test_fal_image_generation():
 @skip_without_key
 @pytest.mark.asyncio
 async def test_fal_text_to_speech():
-    from blazen import SpeechRequest
-
     provider = FalProvider(api_key=FAL_API_KEY)
     result = await provider.text_to_speech(
-        SpeechRequest(text="Hello world, this is a test.")
+        {"text": "Hello world, this is a test."}
     )
     assert "audio" in result
     assert len(result["audio"]) > 0

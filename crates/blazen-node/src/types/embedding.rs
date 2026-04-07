@@ -8,8 +8,8 @@ use napi_derive::napi;
 use blazen_llm::providers::openai_compat::{AuthMethod, OpenAiCompatConfig};
 use blazen_llm::traits::EmbeddingModel;
 
-use super::usage::{JsRequestTiming, JsTokenUsage};
 use crate::error::llm_error_to_napi;
+use crate::generated::{JsRequestTiming, JsTokenUsage};
 
 // ---------------------------------------------------------------------------
 // EmbeddingResponse
@@ -187,18 +187,9 @@ impl JsEmbeddingModel {
                 .map(|v| v.into_iter().map(f64::from).collect())
                 .collect(),
             model: response.model,
-            usage: response.usage.map(|u| JsTokenUsage {
-                prompt_tokens: u.prompt_tokens,
-                completion_tokens: u.completion_tokens,
-                total_tokens: u.total_tokens,
-            }),
+            usage: response.usage.map(Into::into),
             cost: response.cost,
-            #[allow(clippy::cast_possible_wrap)]
-            timing: response.timing.map(|t| JsRequestTiming {
-                queue_ms: t.queue_ms.map(|v| v as i64),
-                execution_ms: t.execution_ms.map(|v| v as i64),
-                total_ms: t.total_ms.map(|v| v as i64),
-            }),
+            timing: response.timing.map(Into::into),
             metadata: response.metadata,
         })
     }

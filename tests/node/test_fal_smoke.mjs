@@ -189,9 +189,9 @@ describe("fal.ai streaming + embeddings + utilities", { skip: !FAL_API_KEY }, ()
     const vectors = await embedder.embed(["hi", "hello"]);
 
     assert.ok(Array.isArray(vectors), "expected an array of vectors");
-    assert.equal(vectors.length, 2, "expected 2 vectors");
-    assert.equal(vectors[0].length, 1536, "expected vector dim 1536");
-    assert.equal(vectors[1].length, 1536, "expected vector dim 1536");
+    assert.strictEqual(vectors.length, 2, "expected 2 vectors");
+    assert.strictEqual(vectors[0].length, 1536, "expected vector dim 1536");
+    assert.strictEqual(vectors[1].length, 1536, "expected vector dim 1536");
   });
 
   it("generates a 3D model", async () => {

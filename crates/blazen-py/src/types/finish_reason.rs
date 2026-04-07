@@ -1,6 +1,7 @@
 //! Python wrapper for `FinishReason`.
 
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_llm::FinishReason;
 
@@ -17,12 +18,14 @@ use blazen_llm::FinishReason;
 ///     >>> normalized = response.finish_reason_normalized()
 ///     >>> if normalized is not None and normalized.kind == "tool_calls":
 ///     ...     handle_tool_calls(response.tool_calls)
+#[gen_stub_pyclass]
 #[pyclass(name = "FinishReason", frozen, from_py_object)]
 #[derive(Clone)]
 pub struct PyFinishReason {
     pub(crate) inner: FinishReason,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyFinishReason {
     /// Canonical category.

@@ -137,7 +137,7 @@ Blazen includes a built-in multi-provider LLM client. All providers share the sa
 import os
 from blazen import CompletionModel, ChatMessage, Role, CompletionResponse
 
-model = CompletionModel.openrouter(os.environ["OPENROUTER_API_KEY"])
+model = CompletionModel.openrouter(os.environ["OPENROUTER_API_KEY"], options={"model": "openai/gpt-4o"})
 response: CompletionResponse = await model.complete([
     ChatMessage.system("You are helpful."),
     ChatMessage.user("What is 2+2?"),
@@ -193,21 +193,21 @@ msg = ChatMessage.user_parts([
 
 | Provider | Constructor | Default Model |
 |---|---|---|
-| OpenAI | `CompletionModel.openai(api_key, model=None)` | `gpt-4o` |
-| Anthropic | `CompletionModel.anthropic(api_key, model=None)` | `claude-sonnet-4-20250514` |
-| Google Gemini | `CompletionModel.gemini(api_key, model=None)` | `gemini-2.0-flash` |
-| Azure OpenAI | `CompletionModel.azure(api_key, resource_name, deployment_name)` | (deployment) |
-| OpenRouter | `CompletionModel.openrouter(api_key, model=None)` | -- |
-| Groq | `CompletionModel.groq(api_key, model=None)` | -- |
-| Together AI | `CompletionModel.together(api_key, model=None)` | -- |
-| Mistral | `CompletionModel.mistral(api_key, model=None)` | -- |
-| DeepSeek | `CompletionModel.deepseek(api_key, model=None)` | -- |
-| Fireworks | `CompletionModel.fireworks(api_key, model=None)` | -- |
-| Perplexity | `CompletionModel.perplexity(api_key, model=None)` | -- |
-| xAI (Grok) | `CompletionModel.xai(api_key, model=None)` | -- |
-| Cohere | `CompletionModel.cohere(api_key, model=None)` | -- |
-| AWS Bedrock | `CompletionModel.bedrock(api_key, region, model=None)` | -- |
-| fal.ai | `CompletionModel.fal(api_key, model=None)` | -- |
+| OpenAI | `CompletionModel.openai(api_key, options={"model": "gpt-4o"})` | `gpt-4o` |
+| Anthropic | `CompletionModel.anthropic(api_key, options={"model": "claude-sonnet-4-20250514"})` | `claude-sonnet-4-20250514` |
+| Google Gemini | `CompletionModel.gemini(api_key, options={"model": "gemini-2.0-flash"})` | `gemini-2.0-flash` |
+| Azure OpenAI | `CompletionModel.azure(api_key, options={"resource_name": "...", "deployment_name": "..."})` | (deployment) |
+| OpenRouter | `CompletionModel.openrouter(api_key, options={"model": "..."})` | -- |
+| Groq | `CompletionModel.groq(api_key, options={"model": "..."})` | -- |
+| Together AI | `CompletionModel.together(api_key, options={"model": "..."})` | -- |
+| Mistral | `CompletionModel.mistral(api_key, options={"model": "..."})` | -- |
+| DeepSeek | `CompletionModel.deepseek(api_key, options={"model": "..."})` | -- |
+| Fireworks | `CompletionModel.fireworks(api_key, options={"model": "..."})` | -- |
+| Perplexity | `CompletionModel.perplexity(api_key, options={"model": "..."})` | -- |
+| xAI (Grok) | `CompletionModel.xai(api_key, options={"model": "..."})` | -- |
+| Cohere | `CompletionModel.cohere(api_key, options={"model": "..."})` | -- |
+| AWS Bedrock | `CompletionModel.bedrock(api_key, options={"region": "...", "model": "..."})` | -- |
+| fal.ai | `CompletionModel.fal(api_key, options={"model": "..."})` | -- |
 
 ### Using LLMs in Workflows
 
@@ -220,7 +220,7 @@ class AnswerEvent(Event):
 
 @step
 async def ask_llm(ctx: Context, ev: Event):
-    model = CompletionModel.anthropic(os.environ["ANTHROPIC_API_KEY"])
+    model = CompletionModel.anthropic(os.environ["ANTHROPIC_API_KEY"], options={"model": "claude-sonnet-4-20250514"})
     response = await model.complete([
         ChatMessage.system("Answer concisely."),
         ChatMessage.user(ev.prompt),
@@ -401,7 +401,7 @@ async def load_model(ctx: Context, ev: NextEvent):
 | `await wf.run(**kwargs)` | Execute the workflow. Returns a `WorkflowHandler`. Kwargs become the `StartEvent` payload. |
 | `WorkflowHandler` | Handle to a running workflow: `await handler.result()`, `async for ev in handler.stream_events()`, `await handler.pause()`. |
 | `await Workflow.resume(snapshot_json, steps, timeout=None)` | Resume a paused workflow from a JSON snapshot. Returns a `WorkflowHandler`. |
-| `CompletionModel.<provider>(api_key, ...)` | LLM provider. Providers: `openai`, `anthropic`, `gemini`, `azure`, `openrouter`, `groq`, `together`, `mistral`, `deepseek`, `fireworks`, `perplexity`, `xai`, `cohere`, `bedrock`, `fal`. |
+| `CompletionModel.<provider>(api_key, options={...})` | LLM provider. Pass provider-specific options (model, region, etc.) as a plain dict via `options=`. Providers: `openai`, `anthropic`, `gemini`, `azure`, `openrouter`, `groq`, `together`, `mistral`, `deepseek`, `fireworks`, `perplexity`, `xai`, `cohere`, `bedrock`, `fal`. |
 | `await model.complete(messages, ...)` | Chat completion. Returns a typed `CompletionResponse`. |
 | `ChatMessage(role=, content=, parts=)` | Chat message. Constructor with keyword args (role defaults to `"user"`). Static factories: `.system()`, `.user()`, `.assistant()`, `.tool()`, `.user_image_url()`, `.user_image_base64()`, `.user_parts()`. |
 | `Role` | Role enum: `Role.SYSTEM`, `Role.USER`, `Role.ASSISTANT`, `Role.TOOL`. |

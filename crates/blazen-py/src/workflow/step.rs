@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use pyo3::prelude::*;
 use pyo3::types::{PyCFunction, PyDict, PyTuple};
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_events::AnyEvent;
 
@@ -29,6 +30,7 @@ use super::event::{PyEvent, any_event_to_py_event, py_event_to_any_event};
 ///     >>> @step
 ///     ... async def analyze(ctx: Context, ev: Event) -> Event:
 ///     ...     return Event("ResultEvent", answer=42)
+#[gen_stub_pyclass]
 #[pyclass(name = "_StepWrapper")]
 pub struct PyStepWrapper {
     /// The wrapped Python async function.
@@ -56,6 +58,7 @@ impl PyStepWrapper {
     }
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyStepWrapper {
     /// Call the underlying function (makes the wrapper callable like the

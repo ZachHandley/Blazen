@@ -19,7 +19,7 @@ use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
 use blazen_llm::types::{ChatMessage, CompletionRequest, ToolDefinition};
 
 use crate::error::llm_error_to_napi;
-use crate::providers::fal::{JsFalOptions, apply_fal_options};
+use crate::generated::JsFalOptions;
 use crate::types::{
     JsChatMessage, JsCompletionOptions, JsCompletionResponse, JsStreamChunk, build_response,
     build_stream_chunk,
@@ -88,10 +88,15 @@ impl JsCompletionModel {
 
     /// Create an `OpenAI` completion model.
     #[napi(factory)]
-    pub fn openai(api_key: String, model: Option<String>) -> Self {
+    pub fn openai(api_key: String, options: Option<crate::generated::JsProviderOptions>) -> Self {
         let mut provider = blazen_llm::providers::openai::OpenAiProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
+            if let Some(url) = opts.base_url {
+                provider = provider.with_base_url(url);
+            }
         }
         Self {
             inner: Arc::new(provider),
@@ -100,10 +105,18 @@ impl JsCompletionModel {
 
     /// Create an Anthropic completion model.
     #[napi(factory)]
-    pub fn anthropic(api_key: String, model: Option<String>) -> Self {
+    pub fn anthropic(
+        api_key: String,
+        options: Option<crate::generated::JsProviderOptions>,
+    ) -> Self {
         let mut provider = blazen_llm::providers::anthropic::AnthropicProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
+            if let Some(url) = opts.base_url {
+                provider = provider.with_base_url(url);
+            }
         }
         Self {
             inner: Arc::new(provider),
@@ -112,10 +125,15 @@ impl JsCompletionModel {
 
     /// Create a Google Gemini completion model.
     #[napi(factory)]
-    pub fn gemini(api_key: String, model: Option<String>) -> Self {
+    pub fn gemini(api_key: String, options: Option<crate::generated::JsProviderOptions>) -> Self {
         let mut provider = blazen_llm::providers::gemini::GeminiProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
+            if let Some(url) = opts.base_url {
+                provider = provider.with_base_url(url);
+            }
         }
         Self {
             inner: Arc::new(provider),
@@ -124,13 +142,17 @@ impl JsCompletionModel {
 
     /// Create an Azure `OpenAI` completion model.
     #[napi(factory)]
-    pub fn azure(api_key: String, resource_name: String, deployment_name: String) -> Self {
+    pub fn azure(api_key: String, options: crate::generated::JsAzureOptions) -> Self {
+        let mut provider = blazen_llm::providers::azure::AzureOpenAiProvider::new(
+            api_key,
+            options.resource_name,
+            options.deployment_name,
+        );
+        if let Some(v) = options.api_version {
+            provider = provider.with_api_version(v);
+        }
         Self {
-            inner: Arc::new(blazen_llm::providers::azure::AzureOpenAiProvider::new(
-                api_key,
-                resource_name,
-                deployment_name,
-            )),
+            inner: Arc::new(provider),
         }
     }
 
@@ -141,10 +163,33 @@ impl JsCompletionModel {
     /// OpenAI-compatible chat-completions endpoint.
     #[napi(factory)]
     pub fn fal(api_key: String, options: Option<JsFalOptions>) -> Self {
-        let provider = apply_fal_options(
-            blazen_llm::providers::fal::FalProvider::new(api_key),
-            options,
-        );
+        use blazen_llm::providers::fal::FalLlmEndpoint;
+        use blazen_llm::types::provider_options::FalLlmEndpointKind;
+
+        let mut provider = blazen_llm::providers::fal::FalProvider::new(api_key);
+        if let Some(opts) = options {
+            if let Some(model) = opts.model {
+                provider = provider.with_llm_model(model);
+            }
+            if let Some(base_url) = opts.base_url {
+                provider = provider.with_base_url(base_url);
+            }
+            let enterprise = opts.enterprise;
+            if let Some(ep) = opts.endpoint {
+                let kind: FalLlmEndpointKind = ep.into();
+                let endpoint = match kind {
+                    FalLlmEndpointKind::OpenAiChat => FalLlmEndpoint::OpenAiChat,
+                    FalLlmEndpointKind::OpenAiResponses => FalLlmEndpoint::OpenAiResponses,
+                    FalLlmEndpointKind::OpenAiEmbeddings => FalLlmEndpoint::OpenAiEmbeddings,
+                    FalLlmEndpointKind::OpenRouter => FalLlmEndpoint::OpenRouter { enterprise },
+                    FalLlmEndpointKind::AnyLlm => FalLlmEndpoint::AnyLlm { enterprise },
+                };
+                provider = provider.with_llm_endpoint(endpoint);
+            } else if enterprise {
+                provider = provider.with_enterprise();
+            }
+            provider = provider.with_auto_route_modality(opts.auto_route_modality);
+        }
         Self {
             inner: Arc::new(provider),
         }
@@ -152,10 +197,15 @@ impl JsCompletionModel {
 
     /// Create an `OpenRouter` completion model.
     #[napi(factory)]
-    pub fn openrouter(api_key: String, model: Option<String>) -> Self {
+    pub fn openrouter(
+        api_key: String,
+        options: Option<crate::generated::JsProviderOptions>,
+    ) -> Self {
         let mut provider = blazen_llm::providers::openrouter::OpenRouterProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
         }
         Self {
             inner: Arc::new(provider),
@@ -164,10 +214,12 @@ impl JsCompletionModel {
 
     /// Create a Groq completion model.
     #[napi(factory)]
-    pub fn groq(api_key: String, model: Option<String>) -> Self {
+    pub fn groq(api_key: String, options: Option<crate::generated::JsProviderOptions>) -> Self {
         let mut provider = blazen_llm::providers::groq::GroqProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
         }
         Self {
             inner: Arc::new(provider),
@@ -176,10 +228,12 @@ impl JsCompletionModel {
 
     /// Create a Together AI completion model.
     #[napi(factory)]
-    pub fn together(api_key: String, model: Option<String>) -> Self {
+    pub fn together(api_key: String, options: Option<crate::generated::JsProviderOptions>) -> Self {
         let mut provider = blazen_llm::providers::together::TogetherProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
         }
         Self {
             inner: Arc::new(provider),
@@ -188,10 +242,12 @@ impl JsCompletionModel {
 
     /// Create a Mistral AI completion model.
     #[napi(factory)]
-    pub fn mistral(api_key: String, model: Option<String>) -> Self {
+    pub fn mistral(api_key: String, options: Option<crate::generated::JsProviderOptions>) -> Self {
         let mut provider = blazen_llm::providers::mistral::MistralProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
         }
         Self {
             inner: Arc::new(provider),
@@ -200,10 +256,12 @@ impl JsCompletionModel {
 
     /// Create a `DeepSeek` completion model.
     #[napi(factory)]
-    pub fn deepseek(api_key: String, model: Option<String>) -> Self {
+    pub fn deepseek(api_key: String, options: Option<crate::generated::JsProviderOptions>) -> Self {
         let mut provider = blazen_llm::providers::deepseek::DeepSeekProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
         }
         Self {
             inner: Arc::new(provider),
@@ -212,10 +270,15 @@ impl JsCompletionModel {
 
     /// Create a Fireworks AI completion model.
     #[napi(factory)]
-    pub fn fireworks(api_key: String, model: Option<String>) -> Self {
+    pub fn fireworks(
+        api_key: String,
+        options: Option<crate::generated::JsProviderOptions>,
+    ) -> Self {
         let mut provider = blazen_llm::providers::fireworks::FireworksProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
         }
         Self {
             inner: Arc::new(provider),
@@ -224,10 +287,15 @@ impl JsCompletionModel {
 
     /// Create a Perplexity completion model.
     #[napi(factory)]
-    pub fn perplexity(api_key: String, model: Option<String>) -> Self {
+    pub fn perplexity(
+        api_key: String,
+        options: Option<crate::generated::JsProviderOptions>,
+    ) -> Self {
         let mut provider = blazen_llm::providers::perplexity::PerplexityProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
         }
         Self {
             inner: Arc::new(provider),
@@ -236,10 +304,12 @@ impl JsCompletionModel {
 
     /// Create an xAI (Grok) completion model.
     #[napi(factory)]
-    pub fn xai(api_key: String, model: Option<String>) -> Self {
+    pub fn xai(api_key: String, options: Option<crate::generated::JsProviderOptions>) -> Self {
         let mut provider = blazen_llm::providers::xai::XaiProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
         }
         Self {
             inner: Arc::new(provider),
@@ -248,10 +318,12 @@ impl JsCompletionModel {
 
     /// Create a Cohere completion model.
     #[napi(factory)]
-    pub fn cohere(api_key: String, model: Option<String>) -> Self {
+    pub fn cohere(api_key: String, options: Option<crate::generated::JsProviderOptions>) -> Self {
         let mut provider = blazen_llm::providers::cohere::CohereProvider::new(api_key);
-        if let Some(m) = model {
-            provider = provider.with_model(m);
+        if let Some(opts) = options {
+            if let Some(m) = opts.model {
+                provider = provider.with_model(m);
+            }
         }
         Self {
             inner: Arc::new(provider),
@@ -260,9 +332,10 @@ impl JsCompletionModel {
 
     /// Create an AWS Bedrock completion model.
     #[napi(factory)]
-    pub fn bedrock(api_key: String, region: String, model: Option<String>) -> Self {
-        let mut provider = blazen_llm::providers::bedrock::BedrockProvider::new(api_key, region);
-        if let Some(m) = model {
+    pub fn bedrock(api_key: String, options: crate::generated::JsBedrockOptions) -> Self {
+        let mut provider =
+            blazen_llm::providers::bedrock::BedrockProvider::new(api_key, &options.region);
+        if let Some(m) = options.model {
             provider = provider.with_model(m);
         }
         Self {

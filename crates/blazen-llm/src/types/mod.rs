@@ -5,6 +5,7 @@
 
 mod completion;
 mod message;
+pub mod provider_options;
 mod tool;
 mod usage;
 

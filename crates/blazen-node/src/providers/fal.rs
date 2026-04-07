@@ -18,248 +18,12 @@ use blazen_llm::compute::{
 use blazen_llm::providers::fal::{FalEmbeddingModel, FalProvider};
 use blazen_llm::types::{ChatMessage, CompletionRequest};
 
-use crate::compute::{
-    JsImageRequest, JsMusicRequest, JsSpeechRequest, JsThreeDRequest, JsTranscriptionRequest,
-    JsUpscaleRequest, JsVideoRequest,
-};
 use crate::error::blazen_error_to_napi;
+use crate::generated::{
+    JsFalOptions, JsImageRequest, JsMusicRequest, JsSpeechRequest, JsThreeDRequest,
+    JsTranscriptionRequest, JsUpscaleRequest, JsVideoRequest,
+};
 use crate::types::{JsChatMessage, JsCompletionResponse, build_response};
-
-// ---------------------------------------------------------------------------
-// JsFalLlmEndpoint
-// ---------------------------------------------------------------------------
-
-/// The fal.ai LLM endpoint family.
-///
-/// Selects which fal LLM URL/body schema to use. Defaults to `OpenAiChat`
-/// (the OpenAI-compatible chat-completions surface on fal).
-#[napi(string_enum, js_name = "FalLlmEndpoint")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum JsFalLlmEndpoint {
-    /// OpenAI-compatible chat-completions endpoint (default).
-    #[napi(value = "openai_chat")]
-    OpenAiChat,
-    /// OpenAI-compatible Responses endpoint.
-    #[napi(value = "openai_responses")]
-    OpenAiResponses,
-    /// OpenAI-compatible embeddings endpoint.
-    #[napi(value = "openai_embeddings")]
-    OpenAiEmbeddings,
-    /// `OpenRouter` proxy via fal.
-    #[napi(value = "openrouter")]
-    OpenRouter,
-    /// `OpenRouter` proxy via fal (enterprise/SOC2 tier).
-    #[napi(value = "openrouter_enterprise")]
-    OpenRouterEnterprise,
-    /// fal-ai/any-llm proxy.
-    #[napi(value = "any_llm")]
-    AnyLlm,
-    /// fal-ai/any-llm proxy (enterprise/SOC2 tier).
-    #[napi(value = "any_llm_enterprise")]
-    AnyLlmEnterprise,
-}
-
-impl From<JsFalLlmEndpoint> for blazen_llm::providers::fal::FalLlmEndpoint {
-    fn from(j: JsFalLlmEndpoint) -> Self {
-        use blazen_llm::providers::fal::FalLlmEndpoint as F;
-        match j {
-            JsFalLlmEndpoint::OpenAiChat => F::OpenAiChat,
-            JsFalLlmEndpoint::OpenAiResponses => F::OpenAiResponses,
-            JsFalLlmEndpoint::OpenAiEmbeddings => F::OpenAiEmbeddings,
-            JsFalLlmEndpoint::OpenRouter => F::OpenRouter { enterprise: false },
-            JsFalLlmEndpoint::OpenRouterEnterprise => F::OpenRouter { enterprise: true },
-            JsFalLlmEndpoint::AnyLlm => F::AnyLlm { enterprise: false },
-            JsFalLlmEndpoint::AnyLlmEnterprise => F::AnyLlm { enterprise: true },
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// JsFalOptions
-// ---------------------------------------------------------------------------
-
-/// Configuration options for [`JsFalProvider`].
-///
-/// ```typescript
-/// const fal = FalProvider.create("fal-key-...", {
-///   model: "anthropic/claude-sonnet-4.5",
-///   endpoint: "openai_chat",
-///   enterprise: false,
-///   autoRouteModality: true,
-/// });
-/// ```
-#[napi(object)]
-pub struct JsFalOptions {
-    /// Underlying LLM model name (e.g. `"anthropic/claude-sonnet-4.5"`).
-    pub model: Option<String>,
-    /// The fal endpoint family to target. Defaults to `OpenAiChat`.
-    pub endpoint: Option<JsFalLlmEndpoint>,
-    /// Promote the endpoint to its enterprise / SOC2-eligible variant.
-    pub enterprise: Option<bool>,
-    /// Auto-route the request to the matching vision/audio/video variant
-    /// when the message content contains media. Defaults to `true`.
-    #[napi(js_name = "autoRouteModality")]
-    pub auto_route_modality: Option<bool>,
-}
-
-/// Apply [`JsFalOptions`] to a [`FalProvider`] builder.
-pub(crate) fn apply_fal_options(
-    mut provider: FalProvider,
-    options: Option<JsFalOptions>,
-) -> FalProvider {
-    if let Some(opts) = options {
-        if let Some(model) = opts.model {
-            provider = provider.with_llm_model(model);
-        }
-        if let Some(ep) = opts.endpoint {
-            provider = provider.with_llm_endpoint(ep.into());
-        }
-        if opts.enterprise.unwrap_or(false) {
-            provider = provider.with_enterprise();
-        }
-        if let Some(arm) = opts.auto_route_modality {
-            provider = provider.with_auto_route_modality(arm);
-        }
-    }
-    provider
-}
-
-// ---------------------------------------------------------------------------
-// Converters: Js*Request -> Rust request types
-// ---------------------------------------------------------------------------
-
-fn js_to_image_request(req: JsImageRequest) -> blazen_llm::compute::ImageRequest {
-    let mut r = blazen_llm::compute::ImageRequest::new(&req.prompt);
-    if let (Some(w), Some(h)) = (req.width, req.height) {
-        r = r.with_size(w, h);
-    }
-    if let Some(n) = req.num_images {
-        r = r.with_count(n);
-    }
-    if let Some(np) = req.negative_prompt {
-        r = r.with_negative_prompt(np);
-    }
-    if let Some(m) = req.model {
-        r = r.with_model(m);
-    }
-    if let Some(p) = req.parameters {
-        r.parameters = p;
-    }
-    r
-}
-
-fn js_to_upscale_request(req: JsUpscaleRequest) -> blazen_llm::compute::UpscaleRequest {
-    #[allow(clippy::cast_possible_truncation)]
-    let mut r = blazen_llm::compute::UpscaleRequest::new(&req.image_url, req.scale as f32);
-    if let Some(m) = req.model {
-        r = r.with_model(m);
-    }
-    if let Some(p) = req.parameters {
-        r.parameters = p;
-    }
-    r
-}
-
-fn js_to_video_request(req: JsVideoRequest) -> blazen_llm::compute::VideoRequest {
-    let mut r = if let Some(ref image_url) = req.image_url {
-        blazen_llm::compute::VideoRequest::for_image(image_url, &req.prompt)
-    } else {
-        blazen_llm::compute::VideoRequest::new(&req.prompt)
-    };
-    #[allow(clippy::cast_possible_truncation)]
-    if let Some(d) = req.duration_seconds {
-        r = r.with_duration(d as f32);
-    }
-    if let (Some(w), Some(h)) = (req.width, req.height) {
-        r = r.with_size(w, h);
-    }
-    if let Some(m) = req.model {
-        r = r.with_model(m);
-    }
-    if let Some(p) = req.parameters {
-        r.parameters = p;
-    }
-    r
-}
-
-fn js_to_speech_request(req: JsSpeechRequest) -> blazen_llm::compute::SpeechRequest {
-    let mut r = blazen_llm::compute::SpeechRequest::new(&req.text);
-    if let Some(v) = req.voice {
-        r = r.with_voice(v);
-    }
-    if let Some(vu) = req.voice_url {
-        r = r.with_voice_url(vu);
-    }
-    if let Some(l) = req.language {
-        r = r.with_language(l);
-    }
-    #[allow(clippy::cast_possible_truncation)]
-    if let Some(s) = req.speed {
-        r = r.with_speed(s as f32);
-    }
-    if let Some(m) = req.model {
-        r = r.with_model(m);
-    }
-    if let Some(p) = req.parameters {
-        r.parameters = p;
-    }
-    r
-}
-
-fn js_to_music_request(req: JsMusicRequest) -> blazen_llm::compute::MusicRequest {
-    let mut r = blazen_llm::compute::MusicRequest::new(&req.prompt);
-    #[allow(clippy::cast_possible_truncation)]
-    if let Some(d) = req.duration_seconds {
-        r = r.with_duration(d as f32);
-    }
-    if let Some(m) = req.model {
-        r = r.with_model(m);
-    }
-    if let Some(p) = req.parameters {
-        r.parameters = p;
-    }
-    r
-}
-
-fn js_to_three_d_request(req: JsThreeDRequest) -> blazen_llm::compute::ThreeDRequest {
-    let mut r = if let Some(ref prompt) = req.prompt {
-        blazen_llm::compute::ThreeDRequest::new(prompt)
-    } else {
-        blazen_llm::compute::ThreeDRequest::new("")
-    };
-    if let Some(image_url) = req.image_url {
-        r.image_url = Some(image_url);
-    }
-    if let Some(format) = req.format {
-        r.format = Some(format);
-    }
-    if let Some(m) = req.model {
-        r.model = Some(m);
-    }
-    if let Some(p) = req.parameters {
-        r.parameters = p;
-    }
-    r
-}
-
-fn js_to_transcription_request(
-    req: JsTranscriptionRequest,
-) -> blazen_llm::compute::TranscriptionRequest {
-    let mut r = blazen_llm::compute::TranscriptionRequest::new(&req.audio_url);
-    if let Some(l) = req.language {
-        r = r.with_language(l);
-    }
-    if let Some(d) = req.diarize {
-        r = r.with_diarize(d);
-    }
-    if let Some(m) = req.model {
-        r = r.with_model(m);
-    }
-    if let Some(p) = req.parameters {
-        r.parameters = p;
-    }
-    r
-}
 
 // ---------------------------------------------------------------------------
 // FalProvider NAPI class
@@ -296,7 +60,33 @@ impl JsFalProvider {
     /// OpenAI-compatible chat-completions endpoint (`OpenAiChat`).
     #[napi(factory)]
     pub fn create(api_key: String, options: Option<JsFalOptions>) -> Self {
-        let provider = apply_fal_options(FalProvider::new(api_key), options);
+        use blazen_llm::providers::fal::FalLlmEndpoint;
+        use blazen_llm::types::provider_options::FalLlmEndpointKind;
+
+        let mut provider = FalProvider::new(api_key);
+        if let Some(opts) = options {
+            if let Some(model) = opts.model {
+                provider = provider.with_llm_model(model);
+            }
+            if let Some(base_url) = opts.base_url {
+                provider = provider.with_base_url(base_url);
+            }
+            let enterprise = opts.enterprise;
+            if let Some(ep) = opts.endpoint {
+                let kind: FalLlmEndpointKind = ep.into();
+                let endpoint = match kind {
+                    FalLlmEndpointKind::OpenAiChat => FalLlmEndpoint::OpenAiChat,
+                    FalLlmEndpointKind::OpenAiResponses => FalLlmEndpoint::OpenAiResponses,
+                    FalLlmEndpointKind::OpenAiEmbeddings => FalLlmEndpoint::OpenAiEmbeddings,
+                    FalLlmEndpointKind::OpenRouter => FalLlmEndpoint::OpenRouter { enterprise },
+                    FalLlmEndpointKind::AnyLlm => FalLlmEndpoint::AnyLlm { enterprise },
+                };
+                provider = provider.with_llm_endpoint(endpoint);
+            } else if enterprise {
+                provider = provider.with_enterprise();
+            }
+            provider = provider.with_auto_route_modality(opts.auto_route_modality);
+        }
         Self {
             inner: Arc::new(provider),
         }
@@ -319,7 +109,7 @@ impl JsFalProvider {
     /// Generate images from a text prompt.
     #[napi(js_name = "generateImage")]
     pub async fn generate_image(&self, request: JsImageRequest) -> Result<serde_json::Value> {
-        let rust_req = js_to_image_request(request);
+        let rust_req: blazen_llm::compute::ImageRequest = request.into();
         let result = self
             .inner
             .generate_image(rust_req)
@@ -331,7 +121,7 @@ impl JsFalProvider {
     /// Upscale an image.
     #[napi(js_name = "upscaleImage")]
     pub async fn upscale_image(&self, request: JsUpscaleRequest) -> Result<serde_json::Value> {
-        let rust_req = js_to_upscale_request(request);
+        let rust_req: blazen_llm::compute::UpscaleRequest = request.into();
         let result = self
             .inner
             .upscale_image(rust_req)
@@ -343,7 +133,7 @@ impl JsFalProvider {
     /// Upscale an image via the aura-sr model.
     #[napi(js_name = "upscaleImageAura")]
     pub async fn upscale_image_aura(&self, request: JsUpscaleRequest) -> Result<serde_json::Value> {
-        let rust_req = js_to_upscale_request(request);
+        let rust_req: blazen_llm::compute::UpscaleRequest = request.into();
         let result = self
             .inner
             .upscale_image_aura(rust_req)
@@ -358,7 +148,7 @@ impl JsFalProvider {
         &self,
         request: JsUpscaleRequest,
     ) -> Result<serde_json::Value> {
-        let rust_req = js_to_upscale_request(request);
+        let rust_req: blazen_llm::compute::UpscaleRequest = request.into();
         let result = self
             .inner
             .upscale_image_clarity(rust_req)
@@ -373,7 +163,7 @@ impl JsFalProvider {
         &self,
         request: JsUpscaleRequest,
     ) -> Result<serde_json::Value> {
-        let rust_req = js_to_upscale_request(request);
+        let rust_req: blazen_llm::compute::UpscaleRequest = request.into();
         let result = self
             .inner
             .upscale_image_creative(rust_req)
@@ -410,7 +200,7 @@ impl JsFalProvider {
     /// Generate a 3D model from a text prompt or source image.
     #[napi(js_name = "generate3d")]
     pub async fn generate_3d(&self, request: JsThreeDRequest) -> Result<serde_json::Value> {
-        let rust_req = js_to_three_d_request(request);
+        let rust_req: blazen_llm::compute::ThreeDRequest = request.into();
         let result = ThreeDGeneration::generate_3d(self.inner.as_ref(), rust_req)
             .await
             .map_err(blazen_error_to_napi)?;
@@ -437,7 +227,7 @@ impl JsFalProvider {
     /// Generate a video from a text prompt.
     #[napi(js_name = "textToVideo")]
     pub async fn text_to_video(&self, request: JsVideoRequest) -> Result<serde_json::Value> {
-        let rust_req = js_to_video_request(request);
+        let rust_req: blazen_llm::compute::VideoRequest = request.into();
         let result = self
             .inner
             .text_to_video(rust_req)
@@ -449,7 +239,7 @@ impl JsFalProvider {
     /// Generate a video from a source image and prompt.
     #[napi(js_name = "imageToVideo")]
     pub async fn image_to_video(&self, request: JsVideoRequest) -> Result<serde_json::Value> {
-        let rust_req = js_to_video_request(request);
+        let rust_req: blazen_llm::compute::VideoRequest = request.into();
         let result = self
             .inner
             .image_to_video(rust_req)
@@ -465,7 +255,7 @@ impl JsFalProvider {
     /// Synthesize speech from text.
     #[napi(js_name = "textToSpeech")]
     pub async fn text_to_speech(&self, request: JsSpeechRequest) -> Result<serde_json::Value> {
-        let rust_req = js_to_speech_request(request);
+        let rust_req: blazen_llm::compute::SpeechRequest = request.into();
         let result = self
             .inner
             .text_to_speech(rust_req)
@@ -477,7 +267,7 @@ impl JsFalProvider {
     /// Generate music from a prompt.
     #[napi(js_name = "generateMusic")]
     pub async fn generate_music(&self, request: JsMusicRequest) -> Result<serde_json::Value> {
-        let rust_req = js_to_music_request(request);
+        let rust_req: blazen_llm::compute::MusicRequest = request.into();
         let result = self
             .inner
             .generate_music(rust_req)
@@ -489,7 +279,7 @@ impl JsFalProvider {
     /// Generate sound effects from a prompt.
     #[napi(js_name = "generateSfx")]
     pub async fn generate_sfx(&self, request: JsMusicRequest) -> Result<serde_json::Value> {
-        let rust_req = js_to_music_request(request);
+        let rust_req: blazen_llm::compute::MusicRequest = request.into();
         let result = self
             .inner
             .generate_sfx(rust_req)
@@ -505,7 +295,7 @@ impl JsFalProvider {
     /// Transcribe audio to text.
     #[napi]
     pub async fn transcribe(&self, request: JsTranscriptionRequest) -> Result<serde_json::Value> {
-        let rust_req = js_to_transcription_request(request);
+        let rust_req: blazen_llm::compute::TranscriptionRequest = request.into();
         let result = self
             .inner
             .transcribe(rust_req)

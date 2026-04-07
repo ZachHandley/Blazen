@@ -1,6 +1,7 @@
 //! Python wrapper for the token-windowed conversation memory.
 
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_llm::chat_window::ChatWindow;
 
@@ -22,11 +23,13 @@ use crate::types::message::PyChatMessage;
 ///     >>> window.add(ChatMessage.user("Hello!"))
 ///     >>> print(window.token_count())
 ///     >>> print(window.remaining_tokens())
+#[gen_stub_pyclass]
 #[pyclass(name = "ChatWindow")]
 pub struct PyChatWindow {
     inner: ChatWindow,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyChatWindow {
     /// Create a new chat window with the given token budget.

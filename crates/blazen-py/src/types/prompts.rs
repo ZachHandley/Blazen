@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_prompts::{PromptRegistry, PromptTemplate, TemplateRole};
 
@@ -76,12 +77,14 @@ fn prompt_err(err: blazen_prompts::PromptError) -> PyErr {
 ///     t = PromptTemplate("Hello {{name}}!", role="user")
 ///     msg = t.render(name="Alice")
 ///     print(msg.content)  # "Hello Alice!"
+#[gen_stub_pyclass]
 #[pyclass(name = "PromptTemplate", from_py_object)]
 #[derive(Clone)]
 pub struct PyPromptTemplate {
     pub(crate) inner: PromptTemplate,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyPromptTemplate {
     /// Create a new prompt template.
@@ -198,12 +201,14 @@ impl PyPromptTemplate {
 ///     registry.register("greet", PromptTemplate("Hello {{name}}!"))
 ///     msg = registry.render("greet", name="Alice")
 ///     print(msg.content)
+#[gen_stub_pyclass]
 #[pyclass(name = "PromptRegistry", from_py_object)]
 #[derive(Clone)]
 pub struct PyPromptRegistry {
     inner: PromptRegistry,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyPromptRegistry {
     /// Create a new empty prompt registry.

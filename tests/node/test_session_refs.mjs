@@ -40,8 +40,8 @@ describe("ctx.state namespace", () => {
     });
 
     const result = await wf.run({});
-    assert.equal(result.data.counter, 5);
-    assert.equal(result.data.name, "alice");
+    assert.strictEqual(result.data.counter, 5);
+    assert.strictEqual(result.data.name, "alice");
     assert.deepEqual(result.data.nested, { a: 1, b: [2, 3] });
   });
 
@@ -70,7 +70,7 @@ describe("ctx.state namespace", () => {
     });
 
     const result = await wf.run({});
-    assert.equal(result.data.missing, null);
+    assert.strictEqual(result.data.missing, null);
   });
 });
 
@@ -90,7 +90,7 @@ describe("ctx.session namespace", () => {
 
     const result = await wf.run({});
     assert.deepEqual(result.data.value, { tag: "ephemeral", n: 42 });
-    assert.equal(result.data.has, true);
+    assert.strictEqual(result.data.has, true);
   });
 
   it("returns null for missing keys", async () => {
@@ -106,8 +106,8 @@ describe("ctx.session namespace", () => {
     });
 
     const result = await wf.run({});
-    assert.equal(result.data.value, null);
-    assert.equal(result.data.has, false);
+    assert.strictEqual(result.data.value, null);
+    assert.strictEqual(result.data.has, false);
   });
 
   it("remove() drops the key", async () => {
@@ -121,8 +121,8 @@ describe("ctx.session namespace", () => {
     });
 
     const result = await wf.run({});
-    assert.equal(result.data.before, true);
-    assert.equal(result.data.after, false);
+    assert.strictEqual(result.data.before, true);
+    assert.strictEqual(result.data.after, false);
   });
 });
 
@@ -147,8 +147,8 @@ describe("state vs session independence", () => {
     });
 
     const result = await wf.run({});
-    assert.equal(result.data.fromState, "state-value");
-    assert.equal(result.data.fromSession, "session-value");
+    assert.strictEqual(result.data.fromState, "state-value");
+    assert.strictEqual(result.data.fromSession, "session-value");
   });
 
   it("session values survive across steps within a run", async () => {

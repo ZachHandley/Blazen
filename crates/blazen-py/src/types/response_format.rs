@@ -1,6 +1,7 @@
 //! Python wrapper for `ResponseFormat`.
 
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_llm::ResponseFormat;
 
@@ -13,12 +14,14 @@ use blazen_llm::ResponseFormat;
 /// Example:
 ///     >>> rf = ResponseFormat.json_schema("Person", {"type": "object", ...})
 ///     >>> options = CompletionOptions(response_format=rf.to_dict())
+#[gen_stub_pyclass]
 #[pyclass(name = "ResponseFormat", frozen, from_py_object)]
 #[derive(Clone)]
 pub struct PyResponseFormat {
     pub(crate) inner: ResponseFormat,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyResponseFormat {
     /// Discriminator. One of ``"text"``, ``"json_object"``, ``"json_schema"``.

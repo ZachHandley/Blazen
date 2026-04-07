@@ -4,7 +4,7 @@ use napi_derive::napi;
 
 use super::artifact::JsArtifact;
 use super::citation::JsCitation;
-use super::tool::JsToolCall;
+use crate::generated::JsToolCall;
 
 // ---------------------------------------------------------------------------
 // StreamChunk

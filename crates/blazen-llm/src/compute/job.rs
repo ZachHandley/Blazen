@@ -14,6 +14,9 @@ use crate::types::RequestTiming;
 /// Returned by [`super::ComputeProvider::submit`] and used to poll status,
 /// retrieve results, or cancel the job.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct JobHandle {
     /// Provider-assigned job/request identifier.
     pub id: String,
@@ -27,6 +30,10 @@ pub struct JobHandle {
 
 /// Status of a compute job.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
+#[serde(tag = "status", content = "error")]
 pub enum JobStatus {
     /// Job is waiting in the provider's queue.
     Queued,
@@ -45,25 +52,34 @@ pub enum JobStatus {
 
 /// Input for a compute job.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct ComputeRequest {
     /// The model/endpoint to run (e.g., "fal-ai/flux/dev", "stability-ai/sdxl").
     pub model: String,
     /// Input parameters as JSON (model-specific).
     pub input: serde_json::Value,
     /// Optional webhook URL for async completion notification.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub webhook: Option<String>,
 }
 
 /// Result of a completed compute job.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "camelCase")]
 pub struct ComputeResult {
     /// The job handle that produced this result, if available.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub job: Option<JobHandle>,
     /// Output data (model-specific JSON).
     pub output: serde_json::Value,
     /// Request timing breakdown.
     pub timing: RequestTiming,
     /// Cost in USD, if reported by the provider.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cost: Option<f64>,
     /// Raw provider-specific metadata.
     pub metadata: serde_json::Value,

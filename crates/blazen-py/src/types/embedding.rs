@@ -3,12 +3,12 @@
 use std::sync::Arc;
 
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_llm::EmbeddingModel;
 use blazen_llm::providers::openai_compat::{AuthMethod, OpenAiCompatConfig};
 
 use crate::error::BlazenPyError;
-use crate::types::usage::{PyRequestTiming, PyTokenUsage};
 
 // ---------------------------------------------------------------------------
 // PyEmbeddingModel
@@ -23,12 +23,14 @@ use crate::types::usage::{PyRequestTiming, PyTokenUsage};
 ///     >>> model = EmbeddingModel.openai("sk-...")
 ///     >>> response = await model.embed(["Hello", "World"])
 ///     >>> print(response.embeddings)
+#[gen_stub_pyclass]
 #[pyclass(name = "EmbeddingModel", from_py_object)]
 #[derive(Clone)]
 pub struct PyEmbeddingModel {
     pub(crate) inner: Arc<dyn EmbeddingModel>,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyEmbeddingModel {
     // -----------------------------------------------------------------
@@ -171,8 +173,14 @@ impl PyEmbeddingModel {
     fn embed<'py>(&self, py: Python<'py>, texts: Vec<String>) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let response = inner.embed(&texts).await.map_err(BlazenPyError::from)?;
-            Ok(PyEmbeddingResponse { inner: response })
+            let response = EmbeddingModel::embed(inner.as_ref(), &texts)
+                .await
+                .map_err(BlazenPyError::from)?;
+            Python::attach(|py| -> PyResult<Py<PyAny>> {
+                let obj = pythonize::pythonize(py, &response)
+                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+                Ok(obj.unbind())
+            })
         })
     }
 
@@ -185,64 +193,4 @@ impl PyEmbeddingModel {
     }
 }
 
-// ---------------------------------------------------------------------------
-// PyEmbeddingResponse
-// ---------------------------------------------------------------------------
-
-/// The result of an embedding operation.
-///
-/// Example:
-///     >>> response = await model.embed(["Hello", "World"])
-///     >>> response.embeddings  # [[0.1, 0.2, ...], [0.3, 0.4, ...]]
-///     >>> response.model       # "text-embedding-3-small"
-///     >>> response.usage       # TokenUsage(...)
-///     >>> response.cost        # 0.0001
-#[pyclass(name = "EmbeddingResponse", frozen, from_py_object)]
-#[derive(Clone)]
-pub struct PyEmbeddingResponse {
-    pub(crate) inner: blazen_llm::EmbeddingResponse,
-}
-
-#[pymethods]
-impl PyEmbeddingResponse {
-    /// The embedding vectors -- one per input text.
-    #[getter]
-    fn embeddings(&self) -> Vec<Vec<f32>> {
-        self.inner.embeddings.clone()
-    }
-
-    /// The model that produced this response.
-    #[getter]
-    fn model(&self) -> &str {
-        &self.inner.model
-    }
-
-    /// Token usage statistics, if provided by the API.
-    #[getter]
-    fn usage(&self) -> Option<PyTokenUsage> {
-        self.inner.usage.clone().map(|u| PyTokenUsage { inner: u })
-    }
-
-    /// Estimated cost for this request in USD, if available.
-    #[getter]
-    fn cost(&self) -> Option<f64> {
-        self.inner.cost
-    }
-
-    /// Request timing breakdown, if available.
-    #[getter]
-    fn timing(&self) -> Option<PyRequestTiming> {
-        self.inner
-            .timing
-            .clone()
-            .map(|t| PyRequestTiming { inner: t })
-    }
-
-    fn __repr__(&self) -> String {
-        format!(
-            "EmbeddingResponse(model='{}', num_embeddings={})",
-            self.inner.model,
-            self.inner.embeddings.len()
-        )
-    }
-}
+pub use blazen_llm::types::EmbeddingResponse;
