@@ -52,13 +52,13 @@ export type JsChatMessage = ChatMessage
  */
 export declare class CompletionModel {
   /** Create an `OpenAI` completion model. */
-  static openai(apiKey: string, model?: string | undefined | null): CompletionModel
+  static openai(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create an Anthropic completion model. */
-  static anthropic(apiKey: string, model?: string | undefined | null): CompletionModel
+  static anthropic(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create a Google Gemini completion model. */
-  static gemini(apiKey: string, model?: string | undefined | null): CompletionModel
+  static gemini(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create an Azure `OpenAI` completion model. */
-  static azure(apiKey: string, resourceName: string, deploymentName: string): CompletionModel
+  static azure(apiKey: string, options: JsAzureOptions): CompletionModel
   /**
    * Create a fal.ai completion model.
    *
@@ -68,25 +68,25 @@ export declare class CompletionModel {
    */
   static fal(apiKey: string, options?: JsFalOptions | undefined | null): CompletionModel
   /** Create an `OpenRouter` completion model. */
-  static openrouter(apiKey: string, model?: string | undefined | null): CompletionModel
+  static openrouter(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create a Groq completion model. */
-  static groq(apiKey: string, model?: string | undefined | null): CompletionModel
+  static groq(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create a Together AI completion model. */
-  static together(apiKey: string, model?: string | undefined | null): CompletionModel
+  static together(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create a Mistral AI completion model. */
-  static mistral(apiKey: string, model?: string | undefined | null): CompletionModel
+  static mistral(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create a `DeepSeek` completion model. */
-  static deepseek(apiKey: string, model?: string | undefined | null): CompletionModel
+  static deepseek(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create a Fireworks AI completion model. */
-  static fireworks(apiKey: string, model?: string | undefined | null): CompletionModel
+  static fireworks(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create a Perplexity completion model. */
-  static perplexity(apiKey: string, model?: string | undefined | null): CompletionModel
+  static perplexity(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create an xAI (Grok) completion model. */
-  static xai(apiKey: string, model?: string | undefined | null): CompletionModel
+  static xai(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create a Cohere completion model. */
-  static cohere(apiKey: string, model?: string | undefined | null): CompletionModel
+  static cohere(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create an AWS Bedrock completion model. */
-  static bedrock(apiKey: string, region: string, model?: string | undefined | null): CompletionModel
+  static bedrock(apiKey: string, options: JsBedrockOptions): CompletionModel
   /** Get the model ID. */
   get modelId(): string
   /**
@@ -783,29 +783,6 @@ export declare function countMessageTokens(messages: Array<ChatMessage>, context
  */
 export declare function estimateTokens(text: string, contextSize?: number | undefined | null): number
 
-/**
- * The fal.ai LLM endpoint family.
- *
- * Selects which fal LLM URL/body schema to use. Defaults to `OpenAiChat`
- * (the OpenAI-compatible chat-completions surface on fal).
- */
-export declare const enum FalLlmEndpoint {
-  /** OpenAI-compatible chat-completions endpoint (default). */
-  OpenAiChat = 'openai_chat',
-  /** OpenAI-compatible Responses endpoint. */
-  OpenAiResponses = 'openai_responses',
-  /** OpenAI-compatible embeddings endpoint. */
-  OpenAiEmbeddings = 'openai_embeddings',
-  /** `OpenRouter` proxy via fal. */
-  OpenRouter = 'openrouter',
-  /** `OpenRouter` proxy via fal (enterprise/SOC2 tier). */
-  OpenRouterEnterprise = 'openrouter_enterprise',
-  /** fal-ai/any-llm proxy. */
-  AnyLlm = 'any_llm',
-  /** fal-ai/any-llm proxy (enterprise/SOC2 tier). */
-  AnyLlmEnterprise = 'any_llm_enterprise'
-}
-
 /** An entry to add to the memory store (used by `addMany`). */
 export interface JsAddEntry {
   /** Unique identifier. If empty, one will be generated. */
@@ -900,16 +877,31 @@ export interface JsAudioContent {
   durationSeconds?: number
 }
 
-/** Result of an audio generation or TTS operation. */
 export interface JsAudioResult {
-  /** The generated audio clips. */
   audio: Array<JsGeneratedAudio>
-  /** Request timing breakdown. */
-  timing?: JsComputeTiming
-  /** Cost in USD, if reported by the provider. */
+  timing: JsRequestTiming
   cost?: number
-  /** Arbitrary provider-specific metadata. */
   metadata: any
+}
+
+export interface JsAzureOptions {
+  model?: string
+  baseUrl?: string
+  resourceName: string
+  deploymentName: string
+  apiVersion?: string
+}
+
+export interface JsBackgroundRemovalRequest {
+  imageUrl: string
+  model?: string
+  parameters?: any
+}
+
+export interface JsBedrockOptions {
+  model?: string
+  baseUrl?: string
+  region: string
 }
 
 /** Configuration for the `withCache` decorator. */
@@ -972,38 +964,18 @@ export interface JsCompletionResponse {
   metadata: any
 }
 
-/** Input for a generic compute job. */
 export interface JsComputeRequest {
-  /** The model/endpoint to run (e.g., "fal-ai/flux/dev"). */
   model: string
-  /** Input parameters as JSON (model-specific). */
   input: any
-  /** Optional webhook URL for async completion notification. */
   webhook?: string
 }
 
-/** Result of a completed compute job. */
 export interface JsComputeResult {
-  /** The job handle that produced this result, if available. */
   job?: JsJobHandle
-  /** Output data (model-specific JSON). */
   output: any
-  /** Request timing breakdown. */
-  timing?: JsComputeTiming
-  /** Cost in USD, if reported by the provider. */
+  timing: JsRequestTiming
   cost?: number
-  /** Raw provider-specific metadata. */
   metadata: any
-}
-
-/** Timing breakdown for a compute request. */
-export interface JsComputeTiming {
-  /** Time spent waiting in queue, in milliseconds. */
-  queueMs?: number
-  /** Time spent executing, in milliseconds. */
-  executionMs?: number
-  /** Total wall-clock time, in milliseconds. */
-  totalMs?: number
 }
 
 /**
@@ -1036,29 +1008,19 @@ export interface JsEmbeddingResponse {
   metadata: any
 }
 
-/**
- * Configuration options for [`JsFalProvider`].
- *
- * ```typescript
- * const fal = FalProvider.create("fal-key-...", {
- *   model: "anthropic/claude-sonnet-4.5",
- *   endpoint: "openai_chat",
- *   enterprise: false,
- *   autoRouteModality: true,
- * });
- * ```
- */
+export declare const enum JsFalLlmEndpointKind {
+  OpenAiChat = 'open_ai_chat',
+  OpenAiResponses = 'open_ai_responses',
+  OpenAiEmbeddings = 'open_ai_embeddings',
+  OpenRouter = 'open_router',
+  AnyLlm = 'any_llm'
+}
+
 export interface JsFalOptions {
-  /** Underlying LLM model name (e.g. `"anthropic/claude-sonnet-4.5"`). */
   model?: string
-  /** The fal endpoint family to target. Defaults to `OpenAiChat`. */
-  endpoint?: FalLlmEndpoint
-  /** Promote the endpoint to its enterprise / SOC2-eligible variant. */
+  baseUrl?: string
+  endpoint?: JsFalLlmEndpointKind
   enterprise?: boolean
-  /**
-   * Auto-route the request to the matching vision/audio/video variant
-   * when the message content contains media. Defaults to `true`.
-   */
   autoRouteModality?: boolean
 }
 
@@ -1086,53 +1048,32 @@ export interface JsFinishReason {
   value: string
 }
 
-/** A single generated 3D model with optional mesh metadata. */
 export interface JsGenerated3DModel {
-  /** The 3D model media output. */
   media: JsMediaOutput
-  /** Total vertex count, if known. */
   vertexCount?: number
-  /** Total face/triangle count, if known. */
   faceCount?: number
-  /** Whether the model includes texture data. */
   hasTextures: boolean
-  /** Whether the model includes animation data. */
   hasAnimations: boolean
 }
 
-/** A single generated audio clip with optional metadata. */
 export interface JsGeneratedAudio {
-  /** The audio media output. */
   media: JsMediaOutput
-  /** Duration in seconds, if known. */
   durationSeconds?: number
-  /** Sample rate in Hz, if known. */
   sampleRate?: number
-  /** Number of audio channels, if known. */
   channels?: number
 }
 
-/** A single generated image with optional dimension metadata. */
 export interface JsGeneratedImage {
-  /** The image media output. */
   media: JsMediaOutput
-  /** Image width in pixels, if known. */
   width?: number
-  /** Image height in pixels, if known. */
   height?: number
 }
 
-/** A single generated video with optional metadata. */
 export interface JsGeneratedVideo {
-  /** The video media output. */
   media: JsMediaOutput
-  /** Video width in pixels, if known. */
   width?: number
-  /** Video height in pixels, if known. */
   height?: number
-  /** Duration in seconds, if known. */
   durationSeconds?: number
-  /** Frames per second, if known. */
   fps?: number
 }
 
@@ -1142,33 +1083,20 @@ export interface JsImageContent {
   mediaType?: string
 }
 
-/** Request to generate images from a text prompt. */
 export interface JsImageRequest {
-  /** The text prompt describing the desired image. */
   prompt: string
-  /** Negative prompt (things to avoid in the image). */
   negativePrompt?: string
-  /** Desired image width in pixels. */
   width?: number
-  /** Desired image height in pixels. */
   height?: number
-  /** Number of images to generate. */
   numImages?: number
-  /** Model override (provider-specific model identifier). */
   model?: string
-  /** Additional provider-specific parameters. */
   parameters?: any
 }
 
-/** Result of an image generation or upscale operation. */
 export interface JsImageResult {
-  /** The generated or upscaled images. */
   images: Array<JsGeneratedImage>
-  /** Request timing breakdown. */
-  timing?: JsComputeTiming
-  /** Cost in USD, if reported by the provider. */
+  timing: JsRequestTiming
   cost?: number
-  /** Arbitrary provider-specific metadata. */
   metadata: any
 }
 
@@ -1179,15 +1107,10 @@ export interface JsImageSource {
   data?: string
 }
 
-/** A handle to a submitted compute job. */
 export interface JsJobHandle {
-  /** Provider-assigned job/request identifier. */
   id: string
-  /** Provider name (e.g., "fal", "replicate", "runpod"). */
   provider: string
-  /** The model/endpoint that was invoked. */
   model: string
-  /** When the job was submitted (ISO 8601). */
   submittedAt: string
 }
 
@@ -1205,52 +1128,13 @@ export declare const enum JsJobStatus {
   Cancelled = 'cancelled'
 }
 
-/** A single piece of generated media content. */
 export interface JsMediaOutput {
-  /** URL where the media can be downloaded. */
   url?: string
-  /** Base64-encoded media data. */
   base64?: string
-  /** Raw text content for text-based formats (SVG, OBJ, GLTF JSON). */
   rawContent?: string
-  /** The MIME type of the media (e.g. "image/png", "video/mp4"). */
   mediaType: string
-  /** File size in bytes, if known. */
   fileSize?: number
-  /** Arbitrary provider-specific metadata. */
   metadata: any
-}
-
-/** Map of friendly format names to their MIME type strings. */
-export interface JsMediaTypeMap {
-  png: string
-  jpeg: string
-  webp: string
-  gif: string
-  svg: string
-  bmp: string
-  tiff: string
-  avif: string
-  ico: string
-  mp4: string
-  webm: string
-  mov: string
-  avi: string
-  mkv: string
-  mp3: string
-  wav: string
-  ogg: string
-  flac: string
-  aac: string
-  m4A: string
-  glb: string
-  gltf: string
-  obj: string
-  fbx: string
-  usdz: string
-  stl: string
-  ply: string
-  pdf: string
 }
 
 /** A stored entry retrieved from the memory store. */
@@ -1275,16 +1159,16 @@ export interface JsMemoryResult {
   metadata: any
 }
 
-/** Request to generate music or sound effects. */
 export interface JsMusicRequest {
-  /** Text prompt describing the desired audio. */
   prompt: string
-  /** Desired duration in seconds. */
   durationSeconds?: number
-  /** Model override. */
   model?: string
-  /** Additional provider-specific parameters. */
   parameters?: any
+}
+
+export interface JsProviderOptions {
+  model?: string
+  baseUrl?: string
 }
 
 /**
@@ -1307,7 +1191,6 @@ export interface JsReasoningTrace {
   effort?: string
 }
 
-/** Timing metadata for a completion request. */
 export interface JsRequestTiming {
   queueMs?: number
   executionMs?: number
@@ -1350,21 +1233,13 @@ export declare const enum JsRole {
   Tool = 'tool'
 }
 
-/** Request to generate speech from text (TTS). */
 export interface JsSpeechRequest {
-  /** The text to synthesize into speech. */
   text: string
-  /** Voice identifier (provider-specific). */
   voice?: string
-  /** URL to a reference voice sample for voice cloning. */
   voiceUrl?: string
-  /** Language code (e.g. "en", "fr", "ja"). */
   language?: string
-  /** Speech speed multiplier (1.0 = normal). */
   speed?: number
-  /** Model override. */
   model?: string
-  /** Additional provider-specific parameters. */
   parameters?: any
 }
 
@@ -1404,40 +1279,31 @@ export interface JsStreamChunk {
   artifacts: Array<JsArtifact>
 }
 
-/** Request to generate a 3D model. */
 export interface JsThreeDRequest {
-  /** Text prompt describing the desired 3D model. */
   prompt?: string
-  /** Source image URL for image-to-3D generation. */
   imageUrl?: string
-  /** Desired output format (e.g. "glb", "obj", "usdz"). */
   format?: string
-  /** Model override. */
   model?: string
-  /** Additional provider-specific parameters. */
   parameters?: any
 }
 
-/** Result of a 3D model generation operation. */
 export interface JsThreeDResult {
-  /** The generated 3D models. */
   models: Array<JsGenerated3DModel>
-  /** Request timing breakdown. */
-  timing?: JsComputeTiming
-  /** Cost in USD, if reported by the provider. */
+  timing: JsRequestTiming
   cost?: number
-  /** Arbitrary provider-specific metadata. */
   metadata: any
 }
 
-/** Token usage statistics for a completion request. */
 export interface JsTokenUsage {
   promptTokens: number
   completionTokens: number
   totalTokens: number
+  reasoningTokens?: number
+  cachedInputTokens?: number
+  audioInputTokens?: number
+  audioOutputTokens?: number
 }
 
-/** A tool invocation requested by the model. */
 export interface JsToolCall {
   id: string
   name: string
@@ -1454,64 +1320,40 @@ export interface JsToolDef {
   parameters: any
 }
 
-/** Describes a tool that the model may invoke during a conversation. */
 export interface JsToolDefinition {
   name: string
   description: string
   parameters: any
 }
 
-/** Request to transcribe audio to text. */
 export interface JsTranscriptionRequest {
-  /** URL of the audio file to transcribe. */
   audioUrl: string
-  /** Language hint (e.g. "en", "fr"). */
   language?: string
-  /** Whether to perform speaker diarization. */
   diarize?: boolean
-  /** Model override. */
   model?: string
-  /** Additional provider-specific parameters. */
   parameters?: any
 }
 
-/** Result of a transcription operation. */
 export interface JsTranscriptionResult {
-  /** The full transcribed text. */
   text: string
-  /** Time-aligned segments, if available. */
   segments: Array<JsTranscriptionSegment>
-  /** Detected or specified language code (e.g. "en", "fr"). */
   language?: string
-  /** Request timing breakdown. */
-  timing?: JsComputeTiming
-  /** Cost in USD, if reported by the provider. */
+  timing: JsRequestTiming
   cost?: number
-  /** Arbitrary provider-specific metadata. */
   metadata: any
 }
 
-/** A single segment within a transcription. */
 export interface JsTranscriptionSegment {
-  /** The transcribed text for this segment. */
   text: string
-  /** Start time in seconds. */
   start: number
-  /** End time in seconds. */
   end: number
-  /** Speaker label, if diarization was enabled. */
   speaker?: string
 }
 
-/** Request to upscale an image. */
 export interface JsUpscaleRequest {
-  /** URL of the image to upscale. */
   imageUrl: string
-  /** Scale factor (e.g., 2.0 for 2x, 4.0 for 4x). */
   scale: number
-  /** Model override. */
   model?: string
-  /** Additional provider-specific parameters. */
   parameters?: any
 }
 
@@ -1522,35 +1364,21 @@ export interface JsVideoContent {
   durationSeconds?: number
 }
 
-/** Request to generate a video. */
 export interface JsVideoRequest {
-  /** Text prompt describing the desired video. */
   prompt: string
-  /** Source image URL for image-to-video generation. */
   imageUrl?: string
-  /** Desired duration in seconds. */
   durationSeconds?: number
-  /** Negative prompt (things to avoid). */
   negativePrompt?: string
-  /** Desired video width in pixels. */
   width?: number
-  /** Desired video height in pixels. */
   height?: number
-  /** Model override. */
   model?: string
-  /** Additional provider-specific parameters. */
   parameters?: any
 }
 
-/** Result of a video generation operation. */
 export interface JsVideoResult {
-  /** The generated videos. */
   videos: Array<JsGeneratedVideo>
-  /** Request timing breakdown. */
-  timing?: JsComputeTiming
-  /** Cost in USD, if reported by the provider. */
+  timing: JsRequestTiming
   cost?: number
-  /** Arbitrary provider-specific metadata. */
   metadata: any
 }
 
@@ -1561,19 +1389,6 @@ export interface JsWorkflowResult {
   /** The result data as a JSON object. */
   data: any
 }
-
-/**
- * Returns an object mapping friendly names to MIME type strings.
- *
- * ```typescript
- * import { mediaTypes } from 'blazen';
- *
- * const types = mediaTypes();
- * console.log(types.png);  // "image/png"
- * console.log(types.mp4);  // "video/mp4"
- * ```
- */
-export declare function mediaTypes(): JsMediaTypeMap
 
 /**
  * Run an agentic tool execution loop.

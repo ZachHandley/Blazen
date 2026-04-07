@@ -408,6 +408,7 @@ impl TranscriptionRequest {
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct ThreeDRequest {
     /// Text prompt describing the desired 3D model.
+    #[serde(default)]
     pub prompt: String,
     /// Source image URL for image-to-3D generation.
     #[serde(skip_serializing_if = "Option::is_none")]
