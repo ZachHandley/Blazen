@@ -314,10 +314,10 @@ impl AnthropicProvider {
                 } else {
                     let mut content_blocks: Vec<serde_json::Value> = Vec::new();
                     // Include text content if present.
-                    if let Some(text) = msg.content.text_content() {
-                        if !text.is_empty() {
-                            content_blocks.push(serde_json::json!({"type": "text", "text": text}));
-                        }
+                    if let Some(text) = msg.content.text_content()
+                        && !text.is_empty()
+                    {
+                        content_blocks.push(serde_json::json!({"type": "text", "text": text}));
                     }
                     for tc in &msg.tool_calls {
                         content_blocks.push(serde_json::json!({

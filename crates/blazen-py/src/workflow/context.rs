@@ -446,13 +446,13 @@ impl PyContext {
             let field_key = format!("{key}.{field_name}");
 
             // Check store_by first.
-            if let Some(ref sb) = store_by {
-                if let Ok(Some(store)) = sb.get_item(&field_name) {
-                    // Call FieldStore.save(key, value, ctx)
-                    let self_py = Py::new(py, self.clone())?;
-                    store.call_method1("save", (&field_key, &v, self_py))?;
-                    continue;
-                }
+            if let Some(ref sb) = store_by
+                && let Ok(Some(store)) = sb.get_item(&field_name)
+            {
+                // Call FieldStore.save(key, value, ctx)
+                let self_py = Py::new(py, self.clone())?;
+                store.call_method1("save", (&field_key, &v, self_py))?;
+                continue;
             }
 
             // Normal per-field storage via the 4-tier dispatch.
@@ -515,13 +515,13 @@ impl PyContext {
             let field_key = format!("{key}.{field_name}");
 
             // Check store_by first.
-            if let Some(ref sb) = store_by {
-                if let Ok(Some(store)) = sb.get_item(field_name) {
-                    let self_py = Py::new(py, self.clone())?;
-                    let value = store.call_method1("load", (&field_key, self_py))?;
-                    obj.setattr(field_name, value)?;
-                    continue;
-                }
+            if let Some(ref sb) = store_by
+                && let Ok(Some(store)) = sb.get_item(field_name)
+            {
+                let self_py = Py::new(py, self.clone())?;
+                let value = store.call_method1("load", (&field_key, self_py))?;
+                obj.setattr(field_name, value)?;
+                continue;
             }
 
             // Normal get.

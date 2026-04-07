@@ -202,10 +202,10 @@ impl JsCompletionModel {
         options: Option<crate::generated::JsProviderOptions>,
     ) -> Self {
         let mut provider = blazen_llm::providers::openrouter::OpenRouterProvider::new(api_key);
-        if let Some(opts) = options {
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
+        if let Some(opts) = options
+            && let Some(m) = opts.model
+        {
+            provider = provider.with_model(m);
         }
         Self {
             inner: Arc::new(provider),
@@ -216,10 +216,10 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn groq(api_key: String, options: Option<crate::generated::JsProviderOptions>) -> Self {
         let mut provider = blazen_llm::providers::groq::GroqProvider::new(api_key);
-        if let Some(opts) = options {
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
+        if let Some(opts) = options
+            && let Some(m) = opts.model
+        {
+            provider = provider.with_model(m);
         }
         Self {
             inner: Arc::new(provider),
@@ -230,10 +230,10 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn together(api_key: String, options: Option<crate::generated::JsProviderOptions>) -> Self {
         let mut provider = blazen_llm::providers::together::TogetherProvider::new(api_key);
-        if let Some(opts) = options {
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
+        if let Some(opts) = options
+            && let Some(m) = opts.model
+        {
+            provider = provider.with_model(m);
         }
         Self {
             inner: Arc::new(provider),
@@ -244,10 +244,10 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn mistral(api_key: String, options: Option<crate::generated::JsProviderOptions>) -> Self {
         let mut provider = blazen_llm::providers::mistral::MistralProvider::new(api_key);
-        if let Some(opts) = options {
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
+        if let Some(opts) = options
+            && let Some(m) = opts.model
+        {
+            provider = provider.with_model(m);
         }
         Self {
             inner: Arc::new(provider),
@@ -258,10 +258,10 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn deepseek(api_key: String, options: Option<crate::generated::JsProviderOptions>) -> Self {
         let mut provider = blazen_llm::providers::deepseek::DeepSeekProvider::new(api_key);
-        if let Some(opts) = options {
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
+        if let Some(opts) = options
+            && let Some(m) = opts.model
+        {
+            provider = provider.with_model(m);
         }
         Self {
             inner: Arc::new(provider),
@@ -275,10 +275,10 @@ impl JsCompletionModel {
         options: Option<crate::generated::JsProviderOptions>,
     ) -> Self {
         let mut provider = blazen_llm::providers::fireworks::FireworksProvider::new(api_key);
-        if let Some(opts) = options {
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
+        if let Some(opts) = options
+            && let Some(m) = opts.model
+        {
+            provider = provider.with_model(m);
         }
         Self {
             inner: Arc::new(provider),
@@ -292,10 +292,10 @@ impl JsCompletionModel {
         options: Option<crate::generated::JsProviderOptions>,
     ) -> Self {
         let mut provider = blazen_llm::providers::perplexity::PerplexityProvider::new(api_key);
-        if let Some(opts) = options {
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
+        if let Some(opts) = options
+            && let Some(m) = opts.model
+        {
+            provider = provider.with_model(m);
         }
         Self {
             inner: Arc::new(provider),
@@ -306,10 +306,10 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn xai(api_key: String, options: Option<crate::generated::JsProviderOptions>) -> Self {
         let mut provider = blazen_llm::providers::xai::XaiProvider::new(api_key);
-        if let Some(opts) = options {
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
+        if let Some(opts) = options
+            && let Some(m) = opts.model
+        {
+            provider = provider.with_model(m);
         }
         Self {
             inner: Arc::new(provider),
@@ -320,10 +320,10 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn cohere(api_key: String, options: Option<crate::generated::JsProviderOptions>) -> Self {
         let mut provider = blazen_llm::providers::cohere::CohereProvider::new(api_key);
-        if let Some(opts) = options {
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
+        if let Some(opts) = options
+            && let Some(m) = opts.model
+        {
+            provider = provider.with_model(m);
         }
         Self {
             inner: Arc::new(provider),

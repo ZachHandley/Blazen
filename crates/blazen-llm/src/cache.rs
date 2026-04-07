@@ -196,17 +196,17 @@ impl CachedCompletionModel {
 
         // Tools -- serialise definitions so different tool sets produce
         // different keys.
-        if !request.tools.is_empty() {
-            if let Ok(json) = serde_json::to_string(&request.tools) {
-                json.hash(&mut hasher);
-            }
+        if !request.tools.is_empty()
+            && let Ok(json) = serde_json::to_string(&request.tools)
+        {
+            json.hash(&mut hasher);
         }
 
         // Response format / JSON schema constraint.
-        if let Some(ref fmt) = request.response_format {
-            if let Ok(json) = serde_json::to_string(fmt) {
-                json.hash(&mut hasher);
-            }
+        if let Some(ref fmt) = request.response_format
+            && let Ok(json) = serde_json::to_string(fmt)
+        {
+            json.hash(&mut hasher);
         }
 
         // Modalities.
@@ -236,10 +236,11 @@ impl CachedCompletionModel {
         let mut cache = self.cache.write().expect("cache lock poisoned");
 
         // Evict oldest if at capacity.
-        if cache.len() >= self.config.max_entries && !cache.contains_key(&key) {
-            if let Some((&oldest_key, _)) = cache.iter().min_by_key(|(_, e)| e.created_at) {
-                cache.remove(&oldest_key);
-            }
+        if cache.len() >= self.config.max_entries
+            && !cache.contains_key(&key)
+            && let Some((&oldest_key, _)) = cache.iter().min_by_key(|(_, e)| e.created_at)
+        {
+            cache.remove(&oldest_key);
         }
 
         cache.insert(

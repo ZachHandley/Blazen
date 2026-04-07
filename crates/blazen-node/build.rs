@@ -299,10 +299,10 @@ fn parse_type(ty: &Type) -> FieldType {
 }
 
 fn extract_generic_arg(segment: &syn::PathSegment) -> FieldType {
-    if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-        if let Some(syn::GenericArgument::Type(ty)) = args.args.first() {
-            return parse_type(ty);
-        }
+    if let syn::PathArguments::AngleBracketed(args) = &segment.arguments
+        && let Some(syn::GenericArgument::Type(ty)) = args.args.first()
+    {
+        return parse_type(ty);
     }
     FieldType::Named("Unknown".to_owned())
 }
@@ -318,20 +318,14 @@ fn resolve_flat_fields(
 ) -> Vec<FlatField> {
     let mut result = Vec::new();
     for field in fields {
-        if field.is_flatten {
-            if let FieldType::Named(ref type_name) = field.ty {
-                if let Some(inner_fields) = all_structs.get(type_name) {
-                    let resolved = resolve_flat_fields(inner_fields, all_structs);
-                    result.extend(resolved);
-                    continue;
-                }
-            }
-            // Can't resolve -- keep it as a regular field.
-            result.push(FlatField {
-                name: field.name.clone(),
-                ty: field.ty.clone(),
-            });
+        if field.is_flatten
+            && let FieldType::Named(ref type_name) = field.ty
+            && let Some(inner_fields) = all_structs.get(type_name)
+        {
+            let resolved = resolve_flat_fields(inner_fields, all_structs);
+            result.extend(resolved);
         } else {
+            // Can't resolve flatten or not flattened -- keep it as a regular field.
             result.push(FlatField {
                 name: field.name.clone(),
                 ty: field.ty.clone(),
@@ -565,16 +559,15 @@ fn gen_core_to_js_fields(
 ) -> Vec<TokenStream> {
     let mut result = Vec::new();
     for field in raw_fields {
-        if field.is_flatten {
-            if let FieldType::Named(ref type_name) = field.ty {
-                if let Some(inner_fields) = all_structs.get(type_name) {
-                    let field_ident = format_ident!("{}", field.name);
-                    let new_prefix = quote! { #access_prefix.#field_ident };
-                    let inner = gen_core_to_js_fields(inner_fields, &new_prefix, all_structs);
-                    result.extend(inner);
-                    continue;
-                }
-            }
+        if field.is_flatten
+            && let FieldType::Named(ref type_name) = field.ty
+            && let Some(inner_fields) = all_structs.get(type_name)
+        {
+            let field_ident = format_ident!("{}", field.name);
+            let new_prefix = quote! { #access_prefix.#field_ident };
+            let inner = gen_core_to_js_fields(inner_fields, &new_prefix, all_structs);
+            result.extend(inner);
+            continue;
         }
         let field_ident = format_ident!("{}", field.name);
         let conv = core_to_napi(&field.ty, quote! { #access_prefix.#field_ident });
@@ -592,20 +585,19 @@ fn gen_js_to_core_fields(
     let mut result = Vec::new();
     for field in raw_fields {
         let field_ident = format_ident!("{}", field.name);
-        if field.is_flatten {
-            if let FieldType::Named(ref type_name) = field.ty {
-                if let Some(inner_fields) = all_structs.get(type_name) {
-                    // Recursively build the nested struct.
-                    let inner_assignments = gen_js_to_core_fields(inner_fields, all_structs);
-                    let inner_path = core_type_path(type_name);
-                    result.push(quote! {
-                        #field_ident: #inner_path {
-                            #(#inner_assignments)*
-                        },
-                    });
-                    continue;
-                }
-            }
+        if field.is_flatten
+            && let FieldType::Named(ref type_name) = field.ty
+            && let Some(inner_fields) = all_structs.get(type_name)
+        {
+            // Recursively build the nested struct.
+            let inner_assignments = gen_js_to_core_fields(inner_fields, all_structs);
+            let inner_path = core_type_path(type_name);
+            result.push(quote! {
+                #field_ident: #inner_path {
+                    #(#inner_assignments)*
+                },
+            });
+            continue;
         }
         let conv = napi_to_core(&field.ty, quote! { val.#field_ident });
         result.push(quote! { #field_ident: #conv, });

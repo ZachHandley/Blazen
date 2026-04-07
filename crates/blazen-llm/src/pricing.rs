@@ -165,10 +165,10 @@ pub fn register_pricing(model_id: &str, entry: PricingEntry) {
 ///
 /// Does nothing if the model info has no pricing data.
 pub fn register_from_model_info(info: &ModelInfo) {
-    if let Some(ref pricing) = info.pricing {
-        if let Some(entry) = model_pricing_to_entry(pricing) {
-            register_pricing(&info.id, entry);
-        }
+    if let Some(ref pricing) = info.pricing
+        && let Some(entry) = model_pricing_to_entry(pricing)
+    {
+        register_pricing(&info.id, entry);
     }
 }
 

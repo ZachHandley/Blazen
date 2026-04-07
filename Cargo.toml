@@ -27,7 +27,7 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 authors = ["Zach Handley <zachhandley@gmail.com>"]
 repository = "https://github.com/ZachHandley/Blazen"
-rust-version = "1.85"
+rust-version = "1.91"
 
 [workspace.dependencies]
 # Serialization

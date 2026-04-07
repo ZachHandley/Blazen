@@ -259,17 +259,17 @@ pub async fn run_agent_with_callback(
         }
 
         // Check for finish tool.
-        if config.add_finish_tool {
-            if let Some(result) = check_finish_tool(
+        if config.add_finish_tool
+            && let Some(result) = check_finish_tool(
                 &response,
                 &messages,
                 iteration,
                 total_usage.as_ref(),
                 total_cost.as_ref(),
                 &start,
-            ) {
-                return Ok(result);
-            }
+            )
+        {
+            return Ok(result);
         }
 
         // Append the assistant's response including any tool calls so that

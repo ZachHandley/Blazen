@@ -5,7 +5,7 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 authors = ["Zach Handley <zachhandley@gmail.com>"]
 description = "Blazen WASM component for ZLayer deployment"
-rust-version = "1.85"
+rust-version = "1.91"
 
 [lib]
 crate-type = ["cdylib"]

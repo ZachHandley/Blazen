@@ -1950,13 +1950,13 @@ fn parse_openai_responses_response(
             "message" => {
                 if let Some(content) = block.get("content").and_then(|c| c.as_array()) {
                     for part in content {
-                        if part.get("type").and_then(|v| v.as_str()) == Some("output_text") {
-                            if let Some(t) = part.get("text").and_then(|v| v.as_str()) {
-                                if !content_text.is_empty() {
-                                    content_text.push('\n');
-                                }
-                                content_text.push_str(t);
+                        if part.get("type").and_then(|v| v.as_str()) == Some("output_text")
+                            && let Some(t) = part.get("text").and_then(|v| v.as_str())
+                        {
+                            if !content_text.is_empty() {
+                                content_text.push('\n');
                             }
+                            content_text.push_str(t);
                         }
                     }
                 }
