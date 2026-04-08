@@ -195,6 +195,7 @@ async def test_fal_streaming_yields_multiple_chunks():
 
 @skip_without_key
 @pytest.mark.asyncio
+@pytest.mark.timeout(300)
 async def test_fal_embeddings():
     provider = FalProvider(api_key=FAL_API_KEY)
     em = provider.embedding_model()
@@ -205,6 +206,7 @@ async def test_fal_embeddings():
 
 @skip_without_key
 @pytest.mark.asyncio
+@pytest.mark.timeout(300)
 async def test_fal_3d_generation():
     """3D generation routes to the correct fal endpoint.
 
@@ -235,6 +237,7 @@ async def test_fal_3d_generation():
 
 @skip_without_key
 @pytest.mark.asyncio
+@pytest.mark.timeout(300)
 async def test_fal_background_removal():
     """Background removal routes to the correct fal endpoint.
 
@@ -268,6 +271,7 @@ async def test_fal_background_removal():
 
 @skip_without_key
 @pytest.mark.asyncio
+@pytest.mark.timeout(300)
 async def test_fal_image_generation():
     provider = FalProvider(api_key=FAL_API_KEY)
     result = await _fal_or_skip(provider.generate_image(
@@ -279,6 +283,7 @@ async def test_fal_image_generation():
 
 @skip_without_key
 @pytest.mark.asyncio
+@pytest.mark.timeout(300)
 async def test_fal_text_to_speech():
     provider = FalProvider(api_key=FAL_API_KEY)
     result = await _fal_or_skip(provider.text_to_speech(
@@ -308,6 +313,7 @@ async def test_fal_generate_music():
 
 @skip_without_key
 @pytest.mark.asyncio
+@pytest.mark.timeout(300)
 async def test_fal_transcribe():
     """Transcribe a short audio clip and verify text is returned."""
     provider = FalProvider(api_key=FAL_API_KEY)
@@ -346,6 +352,7 @@ async def test_fal_text_to_video():
 
 @skip_without_key
 @pytest.mark.asyncio
+@pytest.mark.timeout(300)
 async def test_fal_raw_compute_run():
     """Run a raw compute job via the generic run() method."""
     provider = FalProvider(api_key=FAL_API_KEY)
@@ -359,6 +366,7 @@ async def test_fal_raw_compute_run():
 
 @skip_without_key
 @pytest.mark.asyncio
+@pytest.mark.timeout(300)
 async def test_fal_job_submit():
     """Submit a job and verify a job handle is returned."""
     provider = FalProvider(api_key=FAL_API_KEY)
