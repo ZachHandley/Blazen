@@ -52,6 +52,7 @@ while let Some(event) = stream.next().await {
 }
 
 let result = handler.result().await?;
+println!("{}", result.event.to_json());
 ```
 
 The stream completes automatically when the workflow finishes. You can consume stream events and await the final result independently.

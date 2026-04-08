@@ -112,6 +112,8 @@ impl CohereProvider {
     }
 }
 
+super::impl_simple_from_options!(CohereProvider, no_base_url);
+
 // ---------------------------------------------------------------------------
 // CompletionModel implementation
 // ---------------------------------------------------------------------------

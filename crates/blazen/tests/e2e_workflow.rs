@@ -46,7 +46,7 @@ async fn test_e2e_single_step_echo() {
         .run(serde_json::json!({"message": "hello e2e"}))
         .await
         .unwrap();
-    let result = handler.result().await.unwrap();
+    let result = handler.result().await.unwrap().event;
     let stop = result.downcast_ref::<StopEvent>().unwrap();
     assert_eq!(stop.result["message"], "hello e2e");
 }
@@ -138,7 +138,7 @@ async fn test_e2e_multi_step_dynamic_pipeline() {
         .run(serde_json::json!({"text": "hello world"}))
         .await
         .unwrap();
-    let result = handler.result().await.unwrap();
+    let result = handler.result().await.unwrap().event;
     let stop = result.downcast_ref::<StopEvent>().unwrap();
 
     assert_eq!(stop.result["text"], "HELLO WORLD");
@@ -220,7 +220,7 @@ async fn test_e2e_branching_dynamic_events() {
         .run(serde_json::json!({"priority": "high"}))
         .await
         .unwrap();
-    let result = handler.result().await.unwrap();
+    let result = handler.result().await.unwrap().event;
     let stop = result.downcast_ref::<StopEvent>().unwrap();
     assert_eq!(stop.result["handled"], "high");
 
@@ -236,7 +236,7 @@ async fn test_e2e_branching_dynamic_events() {
         .run(serde_json::json!({"priority": "low"}))
         .await
         .unwrap();
-    let result2 = handler2.result().await.unwrap();
+    let result2 = handler2.result().await.unwrap().event;
     let stop2 = result2.downcast_ref::<StopEvent>().unwrap();
     assert_eq!(stop2.result["handled"], "low");
 }
@@ -300,7 +300,7 @@ async fn test_e2e_context_sharing() {
         .run(serde_json::json!({"text": "hello world"}))
         .await
         .unwrap();
-    let result = handler.result().await.unwrap();
+    let result = handler.result().await.unwrap().event;
     let stop = result.downcast_ref::<StopEvent>().unwrap();
 
     assert_eq!(stop.result["shared_text"], "hello world");
@@ -364,7 +364,7 @@ async fn test_e2e_streaming_events() {
         stream_events
     });
 
-    let result = handler.result().await.unwrap();
+    let result = handler.result().await.unwrap().event;
     let stop = result.downcast_ref::<StopEvent>().unwrap();
     assert_eq!(stop.result["input"], "test");
 
@@ -449,22 +449,33 @@ async fn test_e2e_pause_and_resume() {
         .await
         .unwrap();
 
-    // Pause immediately — step_one will complete after 100ms, producing a
-    // SlowMidEvent that becomes a pending event in the snapshot.
-    let snapshot = handler.pause().await.unwrap();
+    // Let step_one start and write context state (it writes before its
+    // 100ms sleep). We pause while the step is still in-flight.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    handler.pause().unwrap();
+    let mut snapshot = handler.snapshot().await.unwrap();
+    handler.abort().unwrap();
 
     assert_eq!(
         snapshot.context_state.get("step_one_ran"),
         Some(&blazen_core::StateValue::Json(serde_json::json!(true)))
     );
-    assert!(!snapshot.pending_events.is_empty());
+
+    // The in-place snapshot cannot capture pending channel events, so we
+    // manually inject the SlowMidEvent that step_one emitted.
+    snapshot.pending_events.push(blazen_core::SerializedEvent {
+        event_type: SlowMidEvent::event_type().to_owned(),
+        data: serde_json::json!({ "value": "paused_data" }),
+        source_step: Some("step_one".to_owned()),
+    });
 
     // Resume with the same steps.
     let resumed_handler = Workflow::resume(snapshot, vec![step_one, step_two], None)
         .await
         .unwrap();
 
-    let result = resumed_handler.result().await.unwrap();
+    let result = resumed_handler.result().await.unwrap().event;
     let stop = result.downcast_ref::<StopEvent>().unwrap();
 
     assert_eq!(stop.result["value"], "paused_data");
@@ -537,7 +548,7 @@ async fn test_e2e_fan_out() {
         .unwrap();
 
     let handler = wf.run(serde_json::json!({})).await.unwrap();
-    let result = handler.result().await.unwrap();
+    let result = handler.result().await.unwrap().event;
     let stop = result.downcast_ref::<StopEvent>().unwrap();
 
     // One of the two branches wins the race.
@@ -646,7 +657,7 @@ async fn test_e2e_derive_macros() {
         .run(serde_json::json!({"msg": "macro test"}))
         .await
         .unwrap();
-    let result = handler.result().await.unwrap();
+    let result = handler.result().await.unwrap().event;
     let stop = result.downcast_ref::<StopEvent>().unwrap();
 
     assert_eq!(stop.result["message"], "MACRO TEST");

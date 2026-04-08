@@ -1,9 +1,17 @@
 //! Python wrapper for [`WorkflowHandler`](blazen_core::WorkflowHandler).
 //!
-//! Provides three consumption modes:
+//! Provides two consumption modes plus several control methods:
+//!
+//! **Consumption (consumes the handler):**
 //! 1. `await handler.result()` -- get the final workflow result.
 //! 2. `async for event in handler.stream_events()` -- stream intermediate events.
-//! 3. `await handler.pause()` -- pause the workflow and get a JSON snapshot for later resumption.
+//!
+//! **Control (borrow the handler, can be called multiple times):**
+//! 3. `await handler.pause()` -- pause the workflow.
+//! 4. `await handler.resume_in_place()` -- resume a paused workflow.
+//! 5. `await handler.snapshot()` -- capture the current state as a JSON string.
+//! 6. `await handler.respond_to_input(request_id, response)` -- respond to an input request.
+//! 7. `await handler.abort()` -- abort the workflow.
 
 use std::sync::Arc;
 
@@ -72,12 +80,6 @@ impl PyWorkflowHandler {
     ///     The final Event produced by the workflow.
     fn result<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
-        // Cache the registry on `Self` so we can install the scope around
-        // `any_event_to_py_event` even after the inner handler has been
-        // taken and consumed. The Arc keeps the registry alive past the
-        // event loop's exit, so attribute access on the returned `PyEvent`
-        // continues to resolve `__blazen_session_ref__` markers.
-        let session_refs = Arc::clone(&self.session_refs);
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let handler = {
                 let mut guard = inner.lock().await;
@@ -86,7 +88,9 @@ impl PyWorkflowHandler {
                     .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?
             };
 
-            let result = handler.result().await.map_err(BlazenPyError::from)?;
+            let wf_result = handler.result().await.map_err(BlazenPyError::from)?;
+            let session_refs = wf_result.session_refs;
+            let event = wf_result.event;
 
             // Install the registry as the current session-ref scope while we
             // build the `PyEvent`. `any_event_to_py_event` calls
@@ -94,7 +98,7 @@ impl PyWorkflowHandler {
             // returned `PyEvent`, so attribute access (`__getattr__`) keeps
             // working even after this future resolves.
             let py_event =
-                with_session_registry(session_refs, async move { any_event_to_py_event(&*result) })
+                with_session_registry(session_refs, async move { any_event_to_py_event(&*event) })
                     .await;
             Ok(py_event)
         })
@@ -122,34 +126,113 @@ impl PyWorkflowHandler {
         }
     }
 
-    /// Pause the running workflow and return a JSON snapshot.
+    /// Pause the running workflow.
     ///
-    /// Consumes the handler. The returned JSON string contains the full
-    /// workflow state and can be passed to `Workflow.resume()` to continue
-    /// execution later.
+    /// Sends a pause signal to the workflow event loop. The workflow will
+    /// park after the current step completes. Does **not** consume the
+    /// handler -- you can later call `resume_in_place()`, `snapshot()`,
+    /// or `abort()`.
+    ///
+    /// Raises `RuntimeError` if the handler was already consumed.
+    fn pause<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let guard = inner.lock().await;
+            let handler = guard
+                .as_ref()
+                .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
+            handler.pause().map_err(BlazenPyError::from)?;
+            Ok(())
+        })
+    }
+
+    /// Resume a paused workflow in place.
+    ///
+    /// Sends a resume signal so the workflow continues from where it was
+    /// paused.
+    ///
+    /// Raises `RuntimeError` if the handler was already consumed.
+    fn resume_in_place<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let guard = inner.lock().await;
+            let handler = guard
+                .as_ref()
+                .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
+            handler.resume_in_place().map_err(BlazenPyError::from)?;
+            Ok(())
+        })
+    }
+
+    /// Capture a snapshot of the current workflow state.
+    ///
+    /// Returns a JSON string that can be passed to `Workflow.resume()` to
+    /// continue execution later.
     ///
     /// Raises `RuntimeError` if the handler was already consumed.
     ///
     /// Returns:
     ///     A JSON string representing the workflow snapshot.
-    ///
-    /// Example:
-    ///     >>> snapshot_json = await handler.pause()
-    ///     >>> # ... save snapshot_json to disk / database ...
-    ///     >>> handler = await Workflow.resume(snapshot_json, [step1, step2])
-    fn pause<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    fn snapshot<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let handler = {
-                let mut guard = inner.lock().await;
-                guard
-                    .take()
-                    .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?
-            };
-
-            let snapshot = handler.pause().await.map_err(BlazenPyError::from)?;
-            let json = snapshot.to_json().map_err(BlazenPyError::from)?;
+            let guard = inner.lock().await;
+            let handler = guard
+                .as_ref()
+                .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
+            let snap = handler.snapshot().await.map_err(BlazenPyError::from)?;
+            let json = snap.to_json().map_err(BlazenPyError::from)?;
             Ok(json)
+        })
+    }
+
+    /// Respond to an input request from a workflow step.
+    ///
+    /// Args:
+    ///     request_id: The ID from the `InputRequestEvent`.
+    ///     response: A Python dict/value that will be converted to JSON and
+    ///               delivered to the waiting step.
+    ///
+    /// Raises `RuntimeError` if the handler was already consumed.
+    fn respond_to_input<'py>(
+        &self,
+        py: Python<'py>,
+        request_id: String,
+        response: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let response_json = crate::convert::py_to_json(py, response)?;
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let guard = inner.lock().await;
+            let handler = guard
+                .as_ref()
+                .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
+            let input_response = blazen_events::InputResponseEvent {
+                request_id,
+                response: response_json,
+            };
+            handler
+                .respond_to_input(input_response)
+                .map_err(BlazenPyError::from)?;
+            Ok(())
+        })
+    }
+
+    /// Abort the running workflow.
+    ///
+    /// Sends an abort signal. The workflow will terminate as soon as
+    /// possible. Does **not** consume the handler.
+    ///
+    /// Raises `RuntimeError` if the handler was already consumed.
+    fn abort<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let guard = inner.lock().await;
+            let handler = guard
+                .as_ref()
+                .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
+            handler.abort().map_err(BlazenPyError::from)?;
+            Ok(())
         })
     }
 

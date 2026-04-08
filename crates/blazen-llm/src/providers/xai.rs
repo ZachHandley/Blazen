@@ -112,6 +112,8 @@ impl XaiProvider {
     }
 }
 
+super::impl_simple_from_options!(XaiProvider, no_base_url);
+
 // ---------------------------------------------------------------------------
 // CompletionModel implementation
 // ---------------------------------------------------------------------------

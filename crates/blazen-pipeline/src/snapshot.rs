@@ -5,12 +5,18 @@
 //! active workflow snapshots, and the shared state.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
+use blazen_core::SessionRefRegistry;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::error::PipelineError;
+
+fn fresh_empty_registry() -> Arc<SessionRefRegistry> {
+    Arc::new(SessionRefRegistry::new())
+}
 
 /// The outcome of a single completed stage.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -107,4 +113,9 @@ pub struct PipelineResult {
     pub stage_results: Vec<StageResult>,
     /// The shared key/value state at completion time.
     pub shared_state: HashMap<String, serde_json::Value>,
+    /// Shared session-ref registry for this pipeline run. Skipped during
+    /// serialization; deserialized snapshots get a fresh empty registry
+    /// since live refs can't survive cross-process resume.
+    #[serde(skip, default = "fresh_empty_registry")]
+    pub session_refs: Arc<SessionRefRegistry>,
 }

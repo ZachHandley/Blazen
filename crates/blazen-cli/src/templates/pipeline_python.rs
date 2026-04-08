@@ -132,7 +132,8 @@ async def main():
 import json
 
 handler = await pipeline.run_with_handler(text="hello")
-snapshot = await handler.pause()
+handler.pause()
+snapshot = await handler.snapshot()
 
 with open("paused.json", "w") as f:
     f.write(snapshot)
@@ -142,6 +143,7 @@ with open("paused.json") as f:
     snapshot = f.read()
 
 handler = await rebuilt_pipeline.resume(snapshot)
+await handler.resume_in_place()
 result = await handler.result()
 ```
 "#;

@@ -162,7 +162,8 @@ async fn main() -> anyhow::Result<()> {
         }))
         .await?
         .result()
-        .await?;
+        .await?
+        .event;
 
     if let Some(stop) = result.downcast_ref::<StopEvent>() {
         println!("\n=== Result ===");

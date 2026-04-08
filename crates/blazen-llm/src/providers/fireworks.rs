@@ -112,6 +112,8 @@ impl FireworksProvider {
     }
 }
 
+super::impl_simple_from_options!(FireworksProvider, no_base_url);
+
 // ---------------------------------------------------------------------------
 // CompletionModel implementation
 // ---------------------------------------------------------------------------

@@ -414,6 +414,8 @@ impl AnthropicProvider {
     }
 }
 
+super::impl_simple_from_options!(AnthropicProvider);
+
 // ---------------------------------------------------------------------------
 // Wire types (response deserialization)
 // ---------------------------------------------------------------------------

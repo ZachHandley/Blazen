@@ -27,13 +27,19 @@ type StreamCallbackTsfn =
 ///
 /// Returned by `Workflow.runWithHandler()`. Provides methods to:
 ///
-/// - **`result()`** -- await the final workflow result.
-/// - **`pause()`** -- pause the workflow and get a snapshot JSON string.
+/// - **`result()`** -- await the final workflow result (consumes the handler).
+/// - **`pause()`** -- signal the workflow to pause.
+/// - **`snapshot()`** -- get a serializable snapshot as a JSON string.
+/// - **`resumeInPlace()`** -- resume a paused workflow without creating a new one.
+/// - **`respondToInput(requestId, response)`** -- respond to an input request.
+/// - **`abort()`** -- abort the running workflow.
 /// - **`streamEvents(callback)`** -- subscribe to intermediate events
 ///   published via `ctx.writeEventToStream()`.
 ///
-/// **Important:** `result()` and `pause()` each consume the handler
-/// internally. You can only call one of them, and only once.
+/// **Important:** `result()` consumes the handler internally. You can only
+/// call it once. The other control methods (`pause`, `resumeInPlace`,
+/// `abort`, `respondToInput`, `snapshot`) borrow the handler and can be
+/// called multiple times.
 ///
 /// ```javascript
 /// const handler = await workflow.runWithHandler({ message: "hello" });
@@ -41,9 +47,12 @@ type StreamCallbackTsfn =
 /// // Option A: just get the result
 /// const result = await handler.result();
 ///
-/// // Option B: pause and get a snapshot
-/// const snapshot = await handler.pause();
-/// fs.writeFileSync("snapshot.json", snapshot);
+/// // Option B: pause, snapshot, then resume
+/// await handler.pause();
+/// const snap = await handler.snapshot();
+/// fs.writeFileSync("snapshot.json", snap);
+/// await handler.resumeInPlace();
+/// const result = await handler.result();
 ///
 /// // Option C: stream events, then get the result
 /// handler.streamEvents((event) => console.log(event));
@@ -55,8 +64,7 @@ pub struct JsWorkflowHandler {
     ///
     /// - `Arc` makes it `Clone` + `Send` + `Sync` for napi.
     /// - `Mutex` provides interior mutability for `&self` methods.
-    /// - `Option` allows `take()` since `result()` and `pause()` consume
-    ///   the Rust handler.
+    /// - `Option` allows `take()` since `result()` consumes the Rust handler.
     inner: Arc<Mutex<Option<blazen_core::WorkflowHandler>>>,
 }
 
@@ -68,7 +76,7 @@ impl JsWorkflowHandler {
     /// Returns the result when the workflow completes via a `StopEvent`.
     ///
     /// This method consumes the handler internally -- it can only be called
-    /// once, and cannot be called after `pause()`.
+    /// once.
     #[napi]
     pub async fn result(&self) -> Result<JsWorkflowResult> {
         let handler = {
@@ -83,31 +91,96 @@ impl JsWorkflowHandler {
         };
 
         let result = handler.result().await.map_err(workflow_error_to_napi)?;
-        Ok(make_result(&*result))
+        Ok(make_result(&*result.event))
     }
 
-    /// Pause the running workflow and return a snapshot as a JSON string.
+    /// Signal the running workflow to pause.
+    ///
+    /// After pausing, use `snapshot()` to get a serializable snapshot, or
+    /// `resumeInPlace()` to continue execution.
+    #[napi]
+    pub async fn pause(&self) -> Result<()> {
+        let guard = self.inner.lock().await;
+        let handler = guard.as_ref().ok_or_else(|| {
+            napi::Error::new(
+                napi::Status::GenericFailure,
+                "WorkflowHandler already consumed".to_string(),
+            )
+        })?;
+        handler.pause().map_err(workflow_error_to_napi)?;
+        Ok(())
+    }
+
+    /// Resume a paused workflow in place without creating a new handler.
+    #[napi(js_name = "resumeInPlace")]
+    pub async fn resume_in_place(&self) -> Result<()> {
+        let guard = self.inner.lock().await;
+        let handler = guard.as_ref().ok_or_else(|| {
+            napi::Error::new(
+                napi::Status::GenericFailure,
+                "WorkflowHandler already consumed".to_string(),
+            )
+        })?;
+        handler.resume_in_place().map_err(workflow_error_to_napi)?;
+        Ok(())
+    }
+
+    /// Get a serializable snapshot of the workflow as a JSON string.
     ///
     /// The snapshot contains all workflow state and can be saved to a file
     /// or database. Use `Workflow.resume(snapshotJson)` to resume later.
-    ///
-    /// This method consumes the handler internally -- it can only be called
-    /// once, and cannot be called after `result()`.
     #[napi]
-    pub async fn pause(&self) -> Result<String> {
-        let handler = {
-            let mut guard = self.inner.lock().await;
-            guard.take().ok_or_else(|| {
-                napi::Error::new(
-                    napi::Status::GenericFailure,
-                    "WorkflowHandler already consumed (result() or pause() was already called)"
-                        .to_string(),
-                )
-            })?
-        };
+    pub async fn snapshot(&self) -> Result<String> {
+        let guard = self.inner.lock().await;
+        let handler = guard.as_ref().ok_or_else(|| {
+            napi::Error::new(
+                napi::Status::GenericFailure,
+                "WorkflowHandler already consumed".to_string(),
+            )
+        })?;
+        let snap = handler.snapshot().await.map_err(workflow_error_to_napi)?;
+        snap.to_json().map_err(workflow_error_to_napi)
+    }
 
-        let snapshot = handler.pause().await.map_err(workflow_error_to_napi)?;
-        snapshot.to_json().map_err(workflow_error_to_napi)
+    /// Respond to an input request from a paused workflow.
+    ///
+    /// The `request_id` must match the `InputRequestEvent.request_id` that
+    /// was published by the workflow step.
+    #[napi(js_name = "respondToInput")]
+    pub async fn respond_to_input(
+        &self,
+        request_id: String,
+        response: serde_json::Value,
+    ) -> Result<()> {
+        let guard = self.inner.lock().await;
+        let handler = guard.as_ref().ok_or_else(|| {
+            napi::Error::new(
+                napi::Status::GenericFailure,
+                "WorkflowHandler already consumed".to_string(),
+            )
+        })?;
+        let input_response = blazen_events::InputResponseEvent {
+            request_id,
+            response,
+        };
+        handler
+            .respond_to_input(input_response)
+            .map_err(workflow_error_to_napi)?;
+        Ok(())
+    }
+
+    /// Abort the running workflow.
+    #[napi]
+    pub async fn abort(&self) -> Result<()> {
+        let guard = self.inner.lock().await;
+        let handler = guard.as_ref().ok_or_else(|| {
+            napi::Error::new(
+                napi::Status::GenericFailure,
+                "WorkflowHandler already consumed".to_string(),
+            )
+        })?;
+        handler.abort().map_err(workflow_error_to_napi)?;
+        Ok(())
     }
 
     /// Subscribe to intermediate events published by steps via

@@ -330,17 +330,19 @@ wf.addStep("work", ["blazen::StartEvent"], async (event, ctx) => {
 const handler = await wf.runWithHandler({ input: "data" });
 
 // Pause and serialize the snapshot
-const snapshot = await handler.pause();
+handler.pause();
+const snapshot = await handler.snapshot();
 writeFileSync("snapshot.json", snapshot);
 
 // Later: resume from the snapshot
 const saved = readFileSync("snapshot.json", "utf-8");
 const resumedHandler = await wf.resume(saved);
+await resumedHandler.resumeInPlace();
 const result = await resumedHandler.result();
 console.log(result.data); // { answer: 42 }
 ```
 
-**Important:** `handler.result()` and `handler.pause()` each consume the handler. You can only call one of them, and only once.
+**Note:** `pause()` is synchronous and non-consuming. Call `snapshot()` afterwards to get the serialized state, or `resumeInPlace()` to continue execution.
 
 > **Note:** Values stored via `ctx.session.set(...)` are **excluded** from snapshots. The workflow's `session_pause_policy` (default `pickle_or_error`; other policies: `warn_drop`, `hard_error`) governs what happens to session entries at pause time -- see the Rust docs for policy details. For anything that must survive pause/resume, use `ctx.state.set(...)` (or the legacy `ctx.set(...)` shortcut).
 
@@ -352,7 +354,8 @@ Pause/resume is the foundation for human-in-the-loop workflows. Pause after a st
 const handler = await wf.runWithHandler({ document: rawText });
 
 // Pause and persist until a human reviews
-const snapshot = await handler.pause();
+handler.pause();
+const snapshot = await handler.snapshot();
 await db.saveSnapshot(jobId, snapshot);
 
 // ... human reviews via UI ...
@@ -370,7 +373,7 @@ Use `handler.streamEvents()` to subscribe to intermediate events before calling 
 ```typescript
 const handler = await wf.runWithHandler({ prompt: "Tell me a story." });
 
-// Subscribe to stream events (must be called before result() or pause())
+// Subscribe to stream events (must be called before result())
 await handler.streamEvents((event) => {
   console.log("[stream]", event);
 });
@@ -493,7 +496,11 @@ import type {
 | `Workflow.setTimeout(seconds)` | Set workflow timeout in seconds |
 | `WorkflowHandler` | Control handle for a running workflow |
 | `WorkflowHandler.result()` | Await the final workflow result |
-| `WorkflowHandler.pause()` | Pause and get a serialized snapshot string |
+| `WorkflowHandler.pause()` | Signal the workflow to pause (synchronous) |
+| `WorkflowHandler.snapshot()` | Get the serialized workflow state after pausing |
+| `WorkflowHandler.resumeInPlace()` | Resume a paused workflow in-place |
+| `WorkflowHandler.respondToInput(requestId, response)` | Supply a response to a pending input request |
+| `WorkflowHandler.abort()` | Abort the running workflow |
 | `WorkflowHandler.streamEvents(callback)` | Subscribe to intermediate stream events |
 | `Context` | Per-run shared state, event routing, and stream output |
 | `Context.set(key, value)` | Store a JSON-serializable value (async) |

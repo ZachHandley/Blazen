@@ -54,3 +54,59 @@ pub mod openrouter;
 pub mod perplexity;
 pub mod together;
 pub mod xai;
+
+// ---------------------------------------------------------------------------
+// Shared `from_options` macro
+// ---------------------------------------------------------------------------
+
+/// Generate a `from_options(api_key, ProviderOptions) -> Self` constructor for
+/// a "simple" provider that has `Self::new(api_key)`, `with_model(m)`, and
+/// (optionally) `with_base_url(url)` builders.
+///
+/// Bindings should deserialize their native options dict into
+/// [`ProviderOptions`](crate::types::provider_options::ProviderOptions) and
+/// call this method instead of manually destructuring fields.
+///
+/// Use the `, no_base_url` variant for providers that don't expose
+/// `with_base_url` (the OpenAI-compatible wrappers).
+macro_rules! impl_simple_from_options {
+    ($provider:ty) => {
+        impl $provider {
+            /// Construct from typed [`ProviderOptions`](crate::types::provider_options::ProviderOptions).
+            #[must_use]
+            pub fn from_options(
+                api_key: impl Into<String>,
+                opts: $crate::types::provider_options::ProviderOptions,
+            ) -> Self {
+                let mut p = Self::new(api_key);
+                if let Some(m) = opts.model {
+                    p = p.with_model(m);
+                }
+                if let Some(url) = opts.base_url {
+                    p = p.with_base_url(url);
+                }
+                p
+            }
+        }
+    };
+    ($provider:ty, no_base_url) => {
+        impl $provider {
+            /// Construct from typed [`ProviderOptions`](crate::types::provider_options::ProviderOptions).
+            ///
+            /// `base_url` is ignored — this provider's endpoint is fixed.
+            #[must_use]
+            pub fn from_options(
+                api_key: impl Into<String>,
+                opts: $crate::types::provider_options::ProviderOptions,
+            ) -> Self {
+                let mut p = Self::new(api_key);
+                if let Some(m) = opts.model {
+                    p = p.with_model(m);
+                }
+                p
+            }
+        }
+    };
+}
+
+pub(crate) use impl_simple_from_options;

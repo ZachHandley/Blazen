@@ -926,6 +926,54 @@ Returns a clone of the session-ref registry handle. Bindings call this after [`r
 
 The returned `Arc` keeps the registry alive past the event loop's exit so the final result event can still resolve live-ref markers even after the original `Context` has been dropped.
 
+#### `WorkflowHandler::result`
+
+```rust
+pub async fn result(&self) -> Result<WorkflowResult>
+```
+
+Await the final workflow result. The returned `WorkflowResult` has an `.event` field containing the final event (typically a `StopEvent`). Use `result.event.downcast_ref::<StopEvent>()` to access typed data, or `result.event.to_json()` for a JSON representation.
+
+#### `WorkflowHandler::pause`
+
+```rust
+pub fn pause(&self) -> Result<()>
+```
+
+Signal the workflow to pause. This is a synchronous, non-consuming call -- it does not return a snapshot. After pausing, call [`snapshot()`](#workflowhandlersnapshot) to obtain the serialized state.
+
+#### `WorkflowHandler::snapshot`
+
+```rust
+pub async fn snapshot(&self) -> Result<String>
+```
+
+Capture the workflow's current state as a JSON string. Typically called after [`pause()`](#workflowhandlerpause). The snapshot can be persisted and later passed to `Workflow::resume()`.
+
+#### `WorkflowHandler::resume_in_place`
+
+```rust
+pub fn resume_in_place(&self)
+```
+
+Resume a paused workflow in-place, continuing execution from where it left off.
+
+#### `WorkflowHandler::respond_to_input`
+
+```rust
+pub fn respond_to_input(&self, request_id: String, response: serde_json::Value)
+```
+
+Supply a response to a pending `InputRequestEvent`. The `request_id` must match the ID from the original request. The workflow will route the response to the appropriate step and continue.
+
+#### `WorkflowHandler::abort`
+
+```rust
+pub async fn abort(&self) -> Result<()>
+```
+
+Abort the running workflow. Any pending steps are cancelled and the workflow terminates with an error.
+
 ### `WorkflowError` variants
 
 `blazen_core::WorkflowError` is the unified workflow error type. The session-ref subsystem introduces one new variant; other variants (e.g. `Paused`, `InputRequired`, `Other`) are documented in the workflow guides.

@@ -20,7 +20,9 @@ use tracing::Instrument;
 use crate::builder::InputHandlerFn;
 use crate::context::Context;
 use crate::error::WorkflowError;
-use crate::snapshot::{SerializedEvent, WorkflowSnapshot};
+use crate::handler::WorkflowControl;
+use crate::session_ref::SessionPausePolicy;
+use crate::snapshot::WorkflowSnapshot;
 use crate::step::{StepOutput, StepRegistration};
 
 // ---------------------------------------------------------------------------
@@ -44,10 +46,14 @@ async fn save_checkpoint(
     ctx: &Context,
     workflow_name: &str,
     run_id: Uuid,
+    #[cfg(feature = "telemetry")] history_buffer: &[blazen_telemetry::HistoryEvent],
 ) {
     let context_state = ctx.snapshot_state().await;
     let collected_events = ctx.snapshot_collected().await;
     let metadata = ctx.snapshot_metadata().await;
+
+    #[cfg(feature = "telemetry")]
+    let history = history_buffer.to_vec();
 
     let snapshot = WorkflowSnapshot {
         workflow_name: workflow_name.to_owned(),
@@ -58,7 +64,7 @@ async fn save_checkpoint(
         pending_events: Vec::new(), // Cannot peek at the channel non-destructively.
         metadata,
         #[cfg(feature = "telemetry")]
-        history: Vec::new(),
+        history,
     };
 
     let checkpoint: blazen_persist::WorkflowCheckpoint = snapshot.into();
@@ -95,8 +101,7 @@ pub(crate) async fn event_loop(
     ctx: Context,
     result_tx: oneshot::Sender<Result<Box<dyn AnyEvent>, WorkflowError>>,
     timeout: Option<Duration>,
-    pause_rx: oneshot::Receiver<()>,
-    snapshot_tx: oneshot::Sender<WorkflowSnapshot>,
+    control_rx: mpsc::UnboundedReceiver<WorkflowControl>,
     workflow_name: String,
     run_id: Uuid,
     input_handler: Option<InputHandlerFn>,
@@ -119,8 +124,7 @@ pub(crate) async fn event_loop(
         ctx,
         result_tx,
         timeout,
-        pause_rx,
-        snapshot_tx,
+        control_rx,
         workflow_name,
         run_id,
         input_handler,
@@ -135,6 +139,21 @@ pub(crate) async fn event_loop(
     stream_ctx.signal_stream_end().await;
 }
 
+/// Record a telemetry history event: send it through the channel for external
+/// consumers AND push a clone into the local buffer so snapshots capture the
+/// full history without draining the channel.
+#[cfg(feature = "telemetry")]
+fn emit_history(
+    tx: Option<&mpsc::UnboundedSender<blazen_telemetry::HistoryEvent>>,
+    buffer: &mut Vec<blazen_telemetry::HistoryEvent>,
+    event: blazen_telemetry::HistoryEvent,
+) {
+    if let Some(tx) = tx {
+        let _ = tx.send(event.clone());
+    }
+    buffer.push(event);
+}
+
 /// Inner event loop implementation. See [`event_loop`] for the public wrapper
 /// that guarantees stream-end signaling.
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -145,8 +164,7 @@ async fn event_loop_inner(
     ctx: Context,
     result_tx: oneshot::Sender<Result<Box<dyn AnyEvent>, WorkflowError>>,
     timeout: Option<Duration>,
-    mut pause_rx: oneshot::Receiver<()>,
-    snapshot_tx: oneshot::Sender<WorkflowSnapshot>,
+    mut control_rx: mpsc::UnboundedReceiver<WorkflowControl>,
     workflow_name: String,
     run_id: Uuid,
     input_handler: Option<InputHandlerFn>,
@@ -158,17 +176,25 @@ async fn event_loop_inner(
 ) {
     let start = Instant::now();
 
+    // Local buffer that mirrors every history event sent through `history_tx`.
+    // `build_snapshot_in_place` clones this buffer into the snapshot so callers
+    // get the full history without draining the channel.
+    #[cfg(feature = "telemetry")]
+    let mut history_buffer: Vec<blazen_telemetry::HistoryEvent> = Vec::new();
+
     // Emit WorkflowStarted history event.
     #[cfg(feature = "telemetry")]
-    if let Some(ref tx) = history_tx {
-        let _ = tx.send(blazen_telemetry::HistoryEvent {
+    emit_history(
+        history_tx.as_ref(),
+        &mut history_buffer,
+        blazen_telemetry::HistoryEvent {
             timestamp: Utc::now(),
             sequence: 0,
             kind: blazen_telemetry::HistoryEventKind::WorkflowStarted {
                 input: serde_json::json!({}),
             },
-        });
-    }
+        },
+    );
 
     // Channel for step errors -- steps run in spawned tasks and report
     // failures back here so the event loop can terminate.
@@ -179,6 +205,10 @@ async fn event_loop_inner(
 
     // Counter for in-flight tasks (used for logging/diagnostics).
     let in_flight_count = Arc::new(AtomicUsize::new(0));
+
+    // When `true`, the event dispatch arm is disabled so the loop only
+    // listens for control commands (pause/resume/snapshot/abort/input).
+    let mut parked = false;
 
     // Helper closure for auto-publishing lifecycle events to the broadcast stream.
     let publish_lifecycle = |ctx: &Context,
@@ -221,143 +251,199 @@ async fn event_loop_inner(
             let remaining = timeout_dur.saturating_sub(start.elapsed());
             if remaining.is_zero() {
                 #[cfg(feature = "telemetry")]
-                if let Some(ref tx) = history_tx {
-                    let _ = tx.send(blazen_telemetry::HistoryEvent {
+                emit_history(
+                    history_tx.as_ref(),
+                    &mut history_buffer,
+                    blazen_telemetry::HistoryEvent {
                         timestamp: Utc::now(),
                         sequence: 0,
                         kind: blazen_telemetry::HistoryEventKind::WorkflowTimedOut {
                             elapsed_ms: u64::try_from(start.elapsed().as_millis())
                                 .unwrap_or(u64::MAX),
                         },
-                    });
-                }
+                    },
+                );
                 let _ = result_tx.send(Err(WorkflowError::Timeout {
                     elapsed: start.elapsed(),
                 }));
                 return;
             }
-            // Select between event channel, error channel, timeout, and pause.
-            // Pause is checked last (lowest priority) so the loop processes
-            // all ready events/errors before honouring a pause request.
+            // Select between event channel, error channel, timeout, and control.
+            // Control is checked last (lowest priority) so the loop processes
+            // all ready events/errors before honouring a control command.
             tokio::select! {
                 biased;
 
                 err = error_rx.recv() => {
                     if let Some(workflow_err) = err {
                         #[cfg(feature = "telemetry")]
-                        if let Some(ref tx) = history_tx {
-                            let _ = tx.send(blazen_telemetry::HistoryEvent {
+                        emit_history(
+                            history_tx.as_ref(),
+                            &mut history_buffer,
+                            blazen_telemetry::HistoryEvent {
                                 timestamp: Utc::now(),
                                 sequence: 0,
                                 kind: blazen_telemetry::HistoryEventKind::WorkflowFailed {
                                     error: workflow_err.to_string(),
                                     duration_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
                                 },
-                            });
-                        }
+                            },
+                        );
                         let _ = result_tx.send(Err(workflow_err));
                         return;
                     }
                     continue;
                 }
-                maybe_envelope = event_rx.recv() => {
+                maybe_envelope = event_rx.recv(), if !parked => {
                     maybe_envelope.ok_or(())
                 }
                 () = tokio::time::sleep(remaining) => {
                     #[cfg(feature = "telemetry")]
-                    if let Some(ref tx) = history_tx {
-                        let _ = tx.send(blazen_telemetry::HistoryEvent {
+                    emit_history(
+                        history_tx.as_ref(),
+                        &mut history_buffer,
+                        blazen_telemetry::HistoryEvent {
                             timestamp: Utc::now(),
                             sequence: 0,
                             kind: blazen_telemetry::HistoryEventKind::WorkflowTimedOut {
                                 elapsed_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
                             },
-                        });
-                    }
+                        },
+                    );
                     let _ = result_tx.send(Err(WorkflowError::Timeout {
                         elapsed: start.elapsed(),
                     }));
                     return;
                 }
-                // Pause signal -- lowest priority so events are drained first.
-                _ = &mut pause_rx => {
-                    #[cfg(feature = "telemetry")]
-                    if let Some(ref tx) = history_tx {
-                        let _ = tx.send(blazen_telemetry::HistoryEvent {
-                            timestamp: Utc::now(),
-                            sequence: 0,
-                            kind: blazen_telemetry::HistoryEventKind::WorkflowPaused {
-                                reason: blazen_telemetry::PauseReason::Manual,
-                                pending_count: 0,
-                            },
-                        });
+                // Control channel -- lowest priority so events are drained first.
+                Some(control) = control_rx.recv() => {
+                    match control {
+                        WorkflowControl::Pause => {
+                            parked = true;
+                            #[cfg(feature = "telemetry")]
+                            emit_history(
+                                history_tx.as_ref(),
+                                &mut history_buffer,
+                                blazen_telemetry::HistoryEvent {
+                                    timestamp: Utc::now(),
+                                    sequence: 0,
+                                    kind: blazen_telemetry::HistoryEventKind::WorkflowPaused {
+                                        reason: blazen_telemetry::PauseReason::Manual,
+                                        pending_count: 0,
+                                    },
+                                },
+                            );
+                            continue;
+                        }
+                        WorkflowControl::Resume => {
+                            parked = false;
+                            continue;
+                        }
+                        WorkflowControl::Snapshot { reply } => {
+                            let snap = build_snapshot_in_place(
+                                &ctx,
+                                &workflow_name,
+                                run_id,
+                                #[cfg(feature = "telemetry")]
+                                &history_buffer,
+                            ).await;
+                            let _ = reply.send(snap);
+                            continue;
+                        }
+                        WorkflowControl::Abort => {
+                            let _ = result_tx.send(Err(WorkflowError::Paused));
+                            return;
+                        }
+                        WorkflowControl::InputResponse(response) => {
+                            parked = false;
+                            let envelope = EventEnvelope::new(
+                                Box::new(response),
+                                Some("__human_input".into()),
+                            );
+                            let _ = event_tx.send(envelope);
+                            continue;
+                        }
                     }
-                    handle_pause(
-                        &mut in_flight,
-                        &mut event_rx,
-                        &ctx,
-                        result_tx,
-                        snapshot_tx,
-                        &workflow_name,
-                        run_id,
-                    )
-                    .instrument(tracing::info_span!("workflow.pause", pause_type = "manual"))
-                    .await;
-                    return;
                 }
             }
         } else {
-            // No timeout -- select between events, errors, and pause.
-            // Pause is checked last so the loop drains ready events first.
+            // No timeout -- select between events, errors, and control.
+            // Control is checked last so the loop drains ready events first.
             tokio::select! {
                 biased;
 
                 err = error_rx.recv() => {
                     if let Some(workflow_err) = err {
                         #[cfg(feature = "telemetry")]
-                        if let Some(ref tx) = history_tx {
-                            let _ = tx.send(blazen_telemetry::HistoryEvent {
+                        emit_history(
+                            history_tx.as_ref(),
+                            &mut history_buffer,
+                            blazen_telemetry::HistoryEvent {
                                 timestamp: Utc::now(),
                                 sequence: 0,
                                 kind: blazen_telemetry::HistoryEventKind::WorkflowFailed {
                                     error: workflow_err.to_string(),
                                     duration_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
                                 },
-                            });
-                        }
+                            },
+                        );
                         let _ = result_tx.send(Err(workflow_err));
                         return;
                     }
                     continue;
                 }
-                maybe_envelope = event_rx.recv() => {
+                maybe_envelope = event_rx.recv(), if !parked => {
                     maybe_envelope.ok_or(())
                 }
-                // Pause signal -- lowest priority.
-                _ = &mut pause_rx => {
-                    #[cfg(feature = "telemetry")]
-                    if let Some(ref tx) = history_tx {
-                        let _ = tx.send(blazen_telemetry::HistoryEvent {
-                            timestamp: Utc::now(),
-                            sequence: 0,
-                            kind: blazen_telemetry::HistoryEventKind::WorkflowPaused {
-                                reason: blazen_telemetry::PauseReason::Manual,
-                                pending_count: 0,
-                            },
-                        });
+                // Control channel -- lowest priority.
+                Some(control) = control_rx.recv() => {
+                    match control {
+                        WorkflowControl::Pause => {
+                            parked = true;
+                            #[cfg(feature = "telemetry")]
+                            emit_history(
+                                history_tx.as_ref(),
+                                &mut history_buffer,
+                                blazen_telemetry::HistoryEvent {
+                                    timestamp: Utc::now(),
+                                    sequence: 0,
+                                    kind: blazen_telemetry::HistoryEventKind::WorkflowPaused {
+                                        reason: blazen_telemetry::PauseReason::Manual,
+                                        pending_count: 0,
+                                    },
+                                },
+                            );
+                            continue;
+                        }
+                        WorkflowControl::Resume => {
+                            parked = false;
+                            continue;
+                        }
+                        WorkflowControl::Snapshot { reply } => {
+                            let snap = build_snapshot_in_place(
+                                &ctx,
+                                &workflow_name,
+                                run_id,
+                                #[cfg(feature = "telemetry")]
+                                &history_buffer,
+                            ).await;
+                            let _ = reply.send(snap);
+                            continue;
+                        }
+                        WorkflowControl::Abort => {
+                            let _ = result_tx.send(Err(WorkflowError::Paused));
+                            return;
+                        }
+                        WorkflowControl::InputResponse(response) => {
+                            parked = false;
+                            let envelope = EventEnvelope::new(
+                                Box::new(response),
+                                Some("__human_input".into()),
+                            );
+                            let _ = event_tx.send(envelope);
+                            continue;
+                        }
                     }
-                    handle_pause(
-                        &mut in_flight,
-                        &mut event_rx,
-                        &ctx,
-                        result_tx,
-                        snapshot_tx,
-                        &workflow_name,
-                        run_id,
-                    )
-                    .instrument(tracing::info_span!("workflow.pause", pause_type = "manual"))
-                    .await;
-                    return;
                 }
             }
         };
@@ -372,16 +458,18 @@ async fn event_loop_inner(
 
         // Emit EventReceived history event.
         #[cfg(feature = "telemetry")]
-        if let Some(ref tx) = history_tx {
-            let _ = tx.send(blazen_telemetry::HistoryEvent {
+        emit_history(
+            history_tx.as_ref(),
+            &mut history_buffer,
+            blazen_telemetry::HistoryEvent {
                 timestamp: Utc::now(),
                 sequence: 0,
                 kind: blazen_telemetry::HistoryEventKind::EventReceived {
                     event_type: event_type.to_string(),
                     source_step: envelope.source_step.clone(),
                 },
-            });
-        }
+            },
+        );
 
         // Auto-publish event_routed lifecycle event.
         if auto_publish_events {
@@ -409,15 +497,17 @@ async fn event_loop_inner(
 
             // Emit WorkflowCompleted history event.
             #[cfg(feature = "telemetry")]
-            if let Some(ref tx) = history_tx {
-                let _ = tx.send(blazen_telemetry::HistoryEvent {
+            emit_history(
+                history_tx.as_ref(),
+                &mut history_buffer,
+                blazen_telemetry::HistoryEvent {
                     timestamp: Utc::now(),
                     sequence: 0,
                     kind: blazen_telemetry::HistoryEventKind::WorkflowCompleted {
                         duration_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
                     },
-                });
-            }
+                },
+            );
 
             // If this is a DynamicEvent (e.g. reinjected after resume),
             // reconstruct a real StopEvent so callers can downcast.
@@ -468,16 +558,18 @@ async fn event_loop_inner(
 
             // Emit InputRequested history event.
             #[cfg(feature = "telemetry")]
-            if let Some(ref tx) = history_tx {
-                let _ = tx.send(blazen_telemetry::HistoryEvent {
+            emit_history(
+                history_tx.as_ref(),
+                &mut history_buffer,
+                blazen_telemetry::HistoryEvent {
                     timestamp: Utc::now(),
                     sequence: 0,
                     kind: blazen_telemetry::HistoryEventKind::InputRequested {
                         request_id: request.request_id.clone(),
                         prompt: request.prompt.clone(),
                     },
-                });
-            }
+                },
+            );
 
             // If an input handler callback is registered, call it inline.
             if let Some(ref handler) = input_handler {
@@ -497,47 +589,47 @@ async fn event_loop_inner(
 
             // Emit WorkflowPaused history event (input required).
             #[cfg(feature = "telemetry")]
-            if let Some(ref tx) = history_tx {
-                let _ = tx.send(blazen_telemetry::HistoryEvent {
+            emit_history(
+                history_tx.as_ref(),
+                &mut history_buffer,
+                blazen_telemetry::HistoryEvent {
                     timestamp: Utc::now(),
                     sequence: 0,
                     kind: blazen_telemetry::HistoryEventKind::WorkflowPaused {
                         reason: blazen_telemetry::PauseReason::InputRequired,
                         pending_count: 0,
                     },
-                });
-            }
+                },
+            );
 
-            // No callback -- auto-pause with request attached to snapshot.
-            handle_input_pause(
-                &mut in_flight,
-                &mut event_rx,
-                &ctx,
-                result_tx,
-                snapshot_tx,
-                &workflow_name,
-                run_id,
-                &request,
+            // No callback -- park the loop and let the handler deliver
+            // the response via WorkflowControl::InputResponse.
+            ctx.set_metadata(
+                "__input_request",
+                serde_json::to_value(&request)
+                    .expect("InputRequestEvent serialization should never fail"),
             )
-            .instrument(tracing::info_span!("workflow.pause", pause_type = "input"))
             .await;
-            return;
+            parked = true;
+            continue;
         }
 
         // Look up step handlers for this event type.
         let Some(handlers) = registry.get(event_type) else {
             tracing::warn!(event_type, "no handler registered for event type");
             #[cfg(feature = "telemetry")]
-            if let Some(ref tx) = history_tx {
-                let _ = tx.send(blazen_telemetry::HistoryEvent {
+            emit_history(
+                history_tx.as_ref(),
+                &mut history_buffer,
+                blazen_telemetry::HistoryEvent {
                     timestamp: Utc::now(),
                     sequence: 0,
                     kind: blazen_telemetry::HistoryEventKind::WorkflowFailed {
                         error: format!("no handler registered for event type: {event_type}"),
                         duration_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
                     },
-                });
-            }
+                },
+            );
             let _ = result_tx.send(Err(WorkflowError::NoHandler {
                 event_type: event_type.to_owned(),
             }));
@@ -567,145 +659,114 @@ async fn event_loop_inner(
         if checkpoint_config.after_step
             && let Some(ref store) = checkpoint_config.store
         {
-            save_checkpoint(&**store, &ctx, &workflow_name, run_id).await;
+            save_checkpoint(
+                &**store,
+                &ctx,
+                &workflow_name,
+                run_id,
+                #[cfg(feature = "telemetry")]
+                &history_buffer,
+            )
+            .await;
         }
     }
 }
 
-/// Handle the pause sequence:
+/// Build a snapshot from the current context state without draining
+/// channels or waiting for in-flight steps. The event loop continues
+/// running after this returns.
 ///
-/// 1. Wait for all in-flight step tasks to finish.
-/// 2. Drain remaining events from the channel.
-/// 3. Snapshot context state.
-/// 4. Send the snapshot back to the handler.
-/// 5. Signal the result channel with `Paused`.
-async fn handle_pause(
-    in_flight: &mut JoinSet<()>,
-    event_rx: &mut mpsc::UnboundedReceiver<EventEnvelope>,
+/// Enforces the [`SessionPausePolicy`] configured on the context:
+/// - **`HardError`**: returns an error if any live session refs exist.
+/// - **`WarnDrop`** / **`PickleOrError`** (without a pickler): logs a
+///   warning and stores the dropped keys in snapshot metadata under
+///   `"__blazen_dropped_session_refs"`.
+///
+/// The `history_buffer` (telemetry feature only) is cloned into the
+/// snapshot so callers receive the full event history. The buffer itself
+/// is not drained — the event loop keeps accumulating.
+async fn build_snapshot_in_place(
     ctx: &Context,
-    result_tx: oneshot::Sender<Result<Box<dyn AnyEvent>, WorkflowError>>,
-    snapshot_tx: oneshot::Sender<WorkflowSnapshot>,
     workflow_name: &str,
     run_id: Uuid,
-) {
-    tracing::info!("pause requested -- waiting for in-flight steps to complete");
-
-    // 1. Wait for all in-flight step tasks to finish.
-    while in_flight.join_next().await.is_some() {}
-
-    tracing::debug!("all in-flight steps completed");
-
-    // 2. Drain remaining events from the channel.
-    let mut pending_events = Vec::new();
-    while let Ok(envelope) = event_rx.try_recv() {
-        let serialized = SerializedEvent {
-            event_type: envelope.event.event_type_id().to_owned(),
-            data: envelope.event.to_json(),
-            source_step: envelope.source_step,
-        };
-        pending_events.push(serialized);
-    }
-
-    tracing::debug!(
-        pending_count = pending_events.len(),
-        "drained pending events"
-    );
-
-    // 3. Snapshot context state.
+    #[cfg(feature = "telemetry")] history_buffer: &[blazen_telemetry::HistoryEvent],
+) -> Result<WorkflowSnapshot, WorkflowError> {
     let context_state = ctx.snapshot_state().await;
     let collected_events = ctx.snapshot_collected().await;
-    let metadata = ctx.snapshot_metadata().await;
+    let mut metadata = ctx.snapshot_metadata().await;
 
-    let snapshot = WorkflowSnapshot {
+    // ---------------------------------------------------------------
+    // SessionPausePolicy enforcement
+    // ---------------------------------------------------------------
+    let policy = ctx.session_pause_policy().await;
+    let registry = ctx.session_refs_arc().await;
+
+    if !registry.is_empty().await {
+        match policy {
+            SessionPausePolicy::HardError => {
+                let keys: Vec<String> = registry
+                    .keys()
+                    .await
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect();
+                return Err(WorkflowError::SessionRefsNotSerializable { keys });
+            }
+            SessionPausePolicy::WarnDrop => {
+                let keys = registry.keys().await;
+                if !keys.is_empty() {
+                    let key_strs: Vec<String> =
+                        keys.iter().map(std::string::ToString::to_string).collect();
+                    tracing::warn!(
+                        count = keys.len(),
+                        keys = ?key_strs,
+                        "dropping live session refs from snapshot (WarnDrop policy)"
+                    );
+                    metadata.insert(
+                        "__blazen_dropped_session_refs".to_owned(),
+                        serde_json::to_value(&key_strs).unwrap_or_default(),
+                    );
+                }
+            }
+            SessionPausePolicy::PickleOrError => {
+                // Without a binding-provided pickle hook, behave like WarnDrop.
+                // Future: add a session_pickler callback to WorkflowBuilder.
+                let keys = registry.keys().await;
+                if !keys.is_empty() {
+                    let key_strs: Vec<String> =
+                        keys.iter().map(std::string::ToString::to_string).collect();
+                    tracing::warn!(
+                        count = keys.len(),
+                        keys = ?key_strs,
+                        "dropping live session refs from snapshot \
+                         (PickleOrError policy, no pickler registered)"
+                    );
+                    metadata.insert(
+                        "__blazen_dropped_session_refs".to_owned(),
+                        serde_json::to_value(&key_strs).unwrap_or_default(),
+                    );
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Build the snapshot
+    // ---------------------------------------------------------------
+    #[cfg(feature = "telemetry")]
+    let history = history_buffer.to_vec();
+
+    Ok(WorkflowSnapshot {
         workflow_name: workflow_name.to_owned(),
         run_id,
         timestamp: Utc::now(),
         context_state,
         collected_events,
-        pending_events,
+        pending_events: Vec::new(), // Cannot peek at mpsc non-destructively
         metadata,
         #[cfg(feature = "telemetry")]
-        history: Vec::new(),
-    };
-
-    // 4. Send the snapshot back to the handler.
-    let _ = snapshot_tx.send(snapshot);
-
-    // 5. Signal the result channel with Paused.
-    let _ = result_tx.send(Err(WorkflowError::Paused));
-}
-
-/// Handle the input-pause sequence (similar to [`handle_pause`]):
-///
-/// 1. Wait for all in-flight step tasks to finish.
-/// 2. Drain remaining events from the channel.
-/// 3. Store the input request in context metadata.
-/// 4. Snapshot context state.
-/// 5. Send the snapshot back to the handler.
-/// 6. Signal the result channel with `InputRequired`.
-#[allow(clippy::too_many_arguments)]
-async fn handle_input_pause(
-    in_flight: &mut JoinSet<()>,
-    event_rx: &mut mpsc::UnboundedReceiver<EventEnvelope>,
-    ctx: &Context,
-    result_tx: oneshot::Sender<Result<Box<dyn AnyEvent>, WorkflowError>>,
-    snapshot_tx: oneshot::Sender<WorkflowSnapshot>,
-    workflow_name: &str,
-    run_id: Uuid,
-    request: &InputRequestEvent,
-) {
-    tracing::info!(
-        request_id = %request.request_id,
-        "input requested -- pausing for human input"
-    );
-
-    // 1. Wait for all in-flight step tasks to finish.
-    while in_flight.join_next().await.is_some() {}
-
-    // 2. Drain remaining events from the channel.
-    let mut pending_events = Vec::new();
-    while let Ok(envelope) = event_rx.try_recv() {
-        let serialized = SerializedEvent {
-            event_type: envelope.event.event_type_id().to_owned(),
-            data: envelope.event.to_json(),
-            source_step: envelope.source_step,
-        };
-        pending_events.push(serialized);
-    }
-
-    // 3. Store the input request in metadata.
-    ctx.set_metadata(
-        "__input_request",
-        serde_json::to_value(request).expect("InputRequestEvent serialization should never fail"),
-    )
-    .await;
-
-    // 4. Snapshot context state.
-    let context_state = ctx.snapshot_state().await;
-    let collected_events = ctx.snapshot_collected().await;
-    let metadata = ctx.snapshot_metadata().await;
-
-    let snapshot = WorkflowSnapshot {
-        workflow_name: workflow_name.to_owned(),
-        run_id,
-        timestamp: Utc::now(),
-        context_state,
-        collected_events,
-        pending_events,
-        metadata,
-        #[cfg(feature = "telemetry")]
-        history: Vec::new(),
-    };
-
-    // 5. Send the snapshot back to the handler.
-    let _ = snapshot_tx.send(snapshot);
-
-    // 6. Signal InputRequired.
-    let _ = result_tx.send(Err(WorkflowError::InputRequired {
-        request_id: request.request_id.clone(),
-        prompt: request.prompt.clone(),
-        metadata: request.metadata.clone(),
-    }));
+        history,
+    })
 }
 
 /// Spawn step handler tasks for each matching step registration.

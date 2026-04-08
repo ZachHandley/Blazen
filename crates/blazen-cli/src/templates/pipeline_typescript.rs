@@ -125,12 +125,14 @@ const result = await handler.result();
 import { readFileSync, writeFileSync } from "fs";
 
 const handler = await pipeline.runWithHandler({ text: "hello" });
-const snapshot = await handler.pause();
+handler.pause();
+const snapshot = await handler.snapshot();
 writeFileSync("paused.json", snapshot);
 
 // Later: resume
 const saved = readFileSync("paused.json", "utf-8");
 const resumed = await rebuiltPipeline.resume(saved);
+await resumed.resumeInPlace();
 const result = await resumed.result();
 ```
 "#;

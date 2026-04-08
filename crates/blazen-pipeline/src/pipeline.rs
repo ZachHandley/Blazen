@@ -4,12 +4,14 @@
 //! parallel stages. It handles input mapping, conditional execution,
 //! event streaming, pause/resume, and persistence callbacks.
 
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use blazen_core::SessionRefRegistry;
 use blazen_events::{AnyEvent, StopEvent};
 use chrono::Utc;
-use tokio::sync::{broadcast, oneshot};
-use tokio::task::JoinSet;
+use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::task::{JoinHandle, JoinSet};
 use tokio_stream::StreamExt;
 use uuid::Uuid;
 
@@ -17,7 +19,7 @@ use tracing::Instrument;
 
 use crate::builder::{PersistFn, PersistJsonFn};
 use crate::error::PipelineError;
-use crate::handler::{PipelineEvent, PipelineHandler};
+use crate::handler::{PipelineControl, PipelineEvent, PipelineHandler};
 use crate::snapshot::{PipelineResult, PipelineSnapshot, StageResult};
 use crate::stage::{JoinStrategy, ParallelStage, Stage, StageKind};
 use crate::state::PipelineState;
@@ -56,7 +58,15 @@ impl Pipeline {
     #[must_use]
     pub fn start(self, input: serde_json::Value) -> PipelineHandler {
         let run_id = Uuid::new_v4();
-        self.start_with_id(input, run_id, 0, Vec::new())
+        let session_refs = Arc::new(SessionRefRegistry::new());
+        self.start_with_id(
+            input,
+            run_id,
+            0,
+            Vec::new(),
+            std::collections::HashMap::new(),
+            session_refs,
+        )
     }
 
     /// Internal: start execution from a specific stage index (used for resume).
@@ -67,6 +77,8 @@ impl Pipeline {
         run_id: Uuid,
         start_index: usize,
         completed: Vec<StageResult>,
+        shared_state: std::collections::HashMap<String, serde_json::Value>,
+        session_refs: Arc<SessionRefRegistry>,
     ) -> PipelineHandler {
         // Result channel.
         let (result_tx, result_rx) = oneshot::channel();
@@ -74,11 +86,19 @@ impl Pipeline {
         // Broadcast channel for streaming events.
         let (stream_tx, _) = broadcast::channel::<PipelineEvent>(256);
 
-        // Pause/snapshot channels.
-        let (pause_tx, pause_rx) = oneshot::channel::<()>();
+        // Control channel (replaces the old oneshot pause channel).
+        let (control_tx, control_rx) = mpsc::unbounded_channel::<PipelineControl>();
+
+        // Snapshot channel (still a oneshot -- sent once on pause).
         let (snapshot_tx, snapshot_rx) = oneshot::channel::<PipelineSnapshot>();
 
-        let handler = PipelineHandler::new(result_rx, stream_tx.clone(), pause_tx, snapshot_rx);
+        let handler = PipelineHandler::new(
+            result_rx,
+            stream_tx.clone(),
+            control_tx,
+            snapshot_rx,
+            Arc::clone(&session_refs),
+        );
 
         tokio::spawn(execute_pipeline(
             self.name,
@@ -87,13 +107,15 @@ impl Pipeline {
             run_id,
             start_index,
             completed,
+            shared_state,
             self.timeout_per_stage,
             self.persist_fn,
             self.persist_json_fn,
             result_tx,
             stream_tx,
-            pause_rx,
+            control_rx,
             snapshot_tx,
+            session_refs,
         ));
 
         handler
@@ -117,11 +139,34 @@ impl Pipeline {
             )));
         }
 
+        // Verify the snapshot came from the same pipeline.
+        if snapshot.pipeline_name != self.name {
+            return Err(PipelineError::ValidationFailed(format!(
+                "snapshot pipeline name '{}' does not match this pipeline '{}'",
+                snapshot.pipeline_name, self.name,
+            )));
+        }
+
+        // Cross-reference completed stage names against the current pipeline
+        // definition to detect configuration drift.
+        for (i, sr) in snapshot.completed_stages.iter().enumerate() {
+            let expected = self.stages[i].name();
+            if sr.name != expected {
+                return Err(PipelineError::ValidationFailed(format!(
+                    "completed stage {} name '{}' does not match pipeline stage '{}'",
+                    i, sr.name, expected,
+                )));
+            }
+        }
+
+        let session_refs = Arc::new(SessionRefRegistry::new());
         Ok(self.start_with_id(
             snapshot.input,
             snapshot.run_id,
             snapshot.current_stage_index,
             snapshot.completed_stages,
+            snapshot.shared_state,
+            session_refs,
         ))
     }
 }
@@ -133,8 +178,8 @@ impl Pipeline {
 /// Core execution loop for the pipeline.
 ///
 /// Runs in a spawned task. Iterates through stages sequentially, running
-/// each stage's workflow and collecting results. Checks for pause signals
-/// between stages.
+/// each stage's workflow and collecting results. Checks for control signals
+/// (pause/resume/abort) between and during stages.
 #[allow(
     clippy::too_many_arguments,
     clippy::too_many_lines,
@@ -147,13 +192,15 @@ async fn execute_pipeline(
     run_id: Uuid,
     start_index: usize,
     completed: Vec<StageResult>,
+    shared_state: std::collections::HashMap<String, serde_json::Value>,
     timeout_per_stage: Option<Duration>,
     persist_fn: Option<PersistFn>,
     persist_json_fn: Option<PersistJsonFn>,
     result_tx: oneshot::Sender<Result<PipelineResult, PipelineError>>,
     stream_tx: broadcast::Sender<PipelineEvent>,
-    mut pause_rx: oneshot::Receiver<()>,
+    mut control_rx: mpsc::UnboundedReceiver<PipelineControl>,
     snapshot_tx: oneshot::Sender<PipelineSnapshot>,
+    session_refs: Arc<SessionRefRegistry>,
 ) {
     let span = tracing::info_span!(
         "pipeline.run",
@@ -162,28 +209,48 @@ async fn execute_pipeline(
     );
     let _enter = span.enter();
 
-    let mut state = PipelineState::new(input.clone());
     let mut stage_results: Vec<StageResult> = completed;
 
-    // Restore state from completed stages.
-    for sr in &stage_results {
-        state.record_stage_result(&sr.name, sr.output.clone());
-    }
+    // Build the stage_results IndexMap from completed stages.
+    let stage_results_map: indexmap::IndexMap<String, serde_json::Value> = stage_results
+        .iter()
+        .map(|sr| (sr.name.clone(), sr.output.clone()))
+        .collect();
+
+    // When resuming, restore both shared_state and stage_results from the
+    // snapshot. For a fresh start both maps are empty and we fall through
+    // to `PipelineState::new`.
+    let mut state = if shared_state.is_empty() && stage_results_map.is_empty() {
+        PipelineState::new(input.clone())
+    } else {
+        PipelineState::restore(input.clone(), shared_state, stage_results_map)
+    };
 
     for (stage_idx, stage) in stages.iter().enumerate().skip(start_index) {
-        // Check for pause signal between stages (non-blocking).
-        if let Ok(()) | Err(oneshot::error::TryRecvError::Closed) = pause_rx.try_recv() {
-            let snapshot = build_snapshot(
-                &pipeline_name,
-                run_id,
-                stage_idx,
-                &stage_results,
-                &state,
-                &input,
-            );
-            let _ = snapshot_tx.send(snapshot);
-            let _ = result_tx.send(Err(PipelineError::Paused));
-            return;
+        // Check for control signals between stages (non-blocking).
+        if let Ok(control) = control_rx.try_recv() {
+            match control {
+                PipelineControl::Pause => {
+                    let snapshot = build_snapshot(
+                        &pipeline_name,
+                        run_id,
+                        stage_idx,
+                        &stage_results,
+                        &state,
+                        &input,
+                    );
+                    let _ = snapshot_tx.send(snapshot);
+                    let _ = result_tx.send(Err(PipelineError::Paused));
+                    return;
+                }
+                PipelineControl::Resume => {
+                    // No-op between stages -- we're already running.
+                }
+                PipelineControl::Abort => {
+                    let _ = result_tx.send(Err(PipelineError::Aborted));
+                    return;
+                }
+            }
         }
 
         let stage_span = tracing::info_span!(
@@ -204,19 +271,19 @@ async fn execute_pipeline(
 
         let stage_start = Instant::now();
 
-        // Race stage execution against the pause signal so pause can
+        // Race stage execution against control signals so pause/abort can
         // interrupt a running stage.
         let stage_future = async {
             match stage {
                 StageKind::Sequential(s) => {
-                    run_sequential_stage(s, &state, &stream_tx, timeout_per_stage)
+                    run_sequential_stage(s, &state, &stream_tx, timeout_per_stage, &session_refs)
                         .instrument(
                             tracing::info_span!("pipeline.stage.sequential", stage_name = %s.name),
                         )
                         .await
                 }
                 StageKind::Parallel(p) => {
-                    run_parallel_stage(p, &state, &stream_tx, timeout_per_stage)
+                    run_parallel_stage(p, &state, &stream_tx, timeout_per_stage, &session_refs)
                         .instrument(tracing::info_span!(
                             "pipeline.stage.parallel",
                             branch_count = p.branches.len()
@@ -229,19 +296,38 @@ async fn execute_pipeline(
         let result = tokio::select! {
             biased;
 
-            // Pause signal -- takes priority when both are ready.
-            _ = &mut pause_rx => {
-                let snapshot = build_snapshot(
-                    &pipeline_name,
-                    run_id,
-                    stage_idx,
-                    &stage_results,
-                    &state,
-                    &input,
-                );
-                let _ = snapshot_tx.send(snapshot);
-                let _ = result_tx.send(Err(PipelineError::Paused));
-                return;
+            // Control signal -- takes priority when both are ready.
+            Some(control) = control_rx.recv() => {
+                match control {
+                    PipelineControl::Pause => {
+                        // The stage future is dropped here, which drops any
+                        // inner WorkflowHandlers. Their Drop impls send Abort
+                        // to the inner workflow event loops, giving clean shutdown.
+                        let snapshot = build_snapshot(
+                            &pipeline_name,
+                            run_id,
+                            stage_idx,
+                            &stage_results,
+                            &state,
+                            &input,
+                        );
+                        let _ = snapshot_tx.send(snapshot);
+                        let _ = result_tx.send(Err(PipelineError::Paused));
+                        return;
+                    }
+                    PipelineControl::Resume => {
+                        // No-op during stage execution. True in-place resume
+                        // requires keeping the stage future alive, which is
+                        // deferred to a future task.
+                        continue;
+                    }
+                    PipelineControl::Abort => {
+                        // The stage future is dropped here, which drops any
+                        // inner WorkflowHandlers. Their Drop impls send Abort.
+                        let _ = result_tx.send(Err(PipelineError::Aborted));
+                        return;
+                    }
+                }
             }
 
             result = stage_future => result,
@@ -310,6 +396,7 @@ async fn execute_pipeline(
         final_output,
         stage_results,
         shared_state: state.shared_clone(),
+        session_refs: Arc::clone(&session_refs),
     };
     let _ = result_tx.send(Ok(pipeline_result));
 }
@@ -331,6 +418,7 @@ async fn run_sequential_stage(
     state: &PipelineState,
     stream_tx: &broadcast::Sender<PipelineEvent>,
     timeout: Option<Duration>,
+    session_refs: &Arc<SessionRefRegistry>,
 ) -> Result<serde_json::Value, StageOutcome> {
     // Check condition.
     if let Some(condition) = &stage.condition
@@ -347,10 +435,10 @@ async fn run_sequential_stage(
         state.last_result().clone()
     };
 
-    // Run the workflow.
+    // Run the workflow with the shared session-ref registry.
     let handler = stage
         .workflow
-        .run(workflow_input)
+        .run_with_registry(workflow_input, Arc::clone(session_refs))
         .await
         .map_err(|e| StageOutcome::Failed(PipelineError::Workflow(e)))?;
 
@@ -394,18 +482,22 @@ async fn run_sequential_stage(
         handler.result().await
     };
 
-    // Wait for the forwarding task to finish.
-    let _ = forward_handle.await;
-
     match wf_result {
-        Ok(event) => {
-            let output = extract_stop_result(&*event);
+        Ok(wf_res) => {
+            // Wait for the forwarding task to finish cleanly.
+            let _ = forward_handle.await;
+            let output = extract_stop_result(&*wf_res.event);
             Ok(output)
         }
-        Err(e) => Err(StageOutcome::Failed(PipelineError::StageFailed {
-            stage_name,
-            source: Box::new(e),
-        })),
+        Err(e) => {
+            // Abort the forward handle on error -- it may still be running
+            // if the workflow errored before the stream closed.
+            forward_handle.abort();
+            Err(StageOutcome::Failed(PipelineError::StageFailed {
+                stage_name,
+                source: Box::new(e),
+            }))
+        }
     }
 }
 
@@ -415,11 +507,14 @@ async fn run_parallel_stage(
     state: &PipelineState,
     stream_tx: &broadcast::Sender<PipelineEvent>,
     timeout: Option<Duration>,
+    session_refs: &Arc<SessionRefRegistry>,
 ) -> Result<serde_json::Value, StageOutcome> {
     match parallel.join_strategy {
-        JoinStrategy::WaitAll => run_parallel_wait_all(parallel, state, stream_tx, timeout).await,
+        JoinStrategy::WaitAll => {
+            run_parallel_wait_all(parallel, state, stream_tx, timeout, session_refs).await
+        }
         JoinStrategy::FirstCompletes => {
-            run_parallel_first_completes(parallel, state, stream_tx, timeout).await
+            run_parallel_first_completes(parallel, state, stream_tx, timeout, session_refs).await
         }
     }
 }
@@ -430,8 +525,10 @@ async fn run_parallel_wait_all(
     state: &PipelineState,
     stream_tx: &broadcast::Sender<PipelineEvent>,
     timeout: Option<Duration>,
+    session_refs: &Arc<SessionRefRegistry>,
 ) -> Result<serde_json::Value, StageOutcome> {
     let mut set = JoinSet::new();
+    let mut forward_handles: Vec<JoinHandle<()>> = Vec::new();
 
     for branch in &parallel.branches {
         if let Some(condition) = &branch.condition
@@ -449,9 +546,17 @@ async fn run_parallel_wait_all(
         let branch_name = branch.name.clone();
         let stage_name = parallel.name.clone();
 
-        let handler = match branch.workflow.run(workflow_input).await {
+        let handler = match branch
+            .workflow
+            .run_with_registry(workflow_input, Arc::clone(session_refs))
+            .await
+        {
             Ok(h) => h,
             Err(e) => {
+                // Abort all forward handles before returning.
+                for fh in &forward_handles {
+                    fh.abort();
+                }
                 return Err(StageOutcome::Failed(PipelineError::StageFailed {
                     stage_name: format!("{}::{}", parallel.name, branch_name),
                     source: Box::new(e),
@@ -464,7 +569,7 @@ async fn run_parallel_wait_all(
         let fwd_stage = stage_name;
         let fwd_branch = branch_name.clone();
         let fwd_tx = stream_tx.clone();
-        tokio::spawn(async move {
+        let fh = tokio::spawn(async move {
             while let Some(event) = wf_stream.next().await {
                 let pipeline_event = PipelineEvent {
                     stage_name: fwd_stage.clone(),
@@ -475,6 +580,7 @@ async fn run_parallel_wait_all(
                 let _ = fwd_tx.send(pipeline_event);
             }
         });
+        forward_handles.push(fh);
 
         set.spawn(async move {
             let result = if let Some(t) = timeout {
@@ -493,23 +599,37 @@ async fn run_parallel_wait_all(
     let mut results = serde_json::Map::new();
     while let Some(join_result) = set.join_next().await {
         match join_result {
-            Ok((branch_name, Ok(event))) => {
-                let output = extract_stop_result(&*event);
+            Ok((branch_name, Ok(wf_res))) => {
+                let output = extract_stop_result(&*wf_res.event);
                 results.insert(branch_name, output);
             }
             Ok((branch_name, Err(e))) => {
+                // Abort all forward handles on error.
+                for fh in &forward_handles {
+                    fh.abort();
+                }
                 return Err(StageOutcome::Failed(PipelineError::StageFailed {
                     stage_name: format!("{}::{}", parallel.name, branch_name),
                     source: Box::new(e),
                 }));
             }
             Err(e) => {
+                // Abort all forward handles on error.
+                for fh in &forward_handles {
+                    fh.abort();
+                }
                 return Err(StageOutcome::Failed(PipelineError::StageFailed {
                     stage_name: parallel.name.clone(),
                     source: Box::new(e),
                 }));
             }
         }
+    }
+
+    // Abort all forward handles now that results are collected.
+    // (They should have already finished, but abort to be safe.)
+    for fh in &forward_handles {
+        fh.abort();
     }
 
     Ok(serde_json::Value::Object(results))
@@ -521,8 +641,10 @@ async fn run_parallel_first_completes(
     state: &PipelineState,
     stream_tx: &broadcast::Sender<PipelineEvent>,
     timeout: Option<Duration>,
+    session_refs: &Arc<SessionRefRegistry>,
 ) -> Result<serde_json::Value, StageOutcome> {
     let mut set = JoinSet::new();
+    let mut forward_handles: Vec<JoinHandle<()>> = Vec::new();
 
     for branch in &parallel.branches {
         if let Some(condition) = &branch.condition
@@ -540,9 +662,17 @@ async fn run_parallel_first_completes(
         let branch_name = branch.name.clone();
         let stage_name = parallel.name.clone();
 
-        let handler = match branch.workflow.run(workflow_input).await {
+        let handler = match branch
+            .workflow
+            .run_with_registry(workflow_input, Arc::clone(session_refs))
+            .await
+        {
             Ok(h) => h,
             Err(e) => {
+                // Abort all forward handles before returning.
+                for fh in &forward_handles {
+                    fh.abort();
+                }
                 return Err(StageOutcome::Failed(PipelineError::StageFailed {
                     stage_name: format!("{}::{}", parallel.name, branch_name),
                     source: Box::new(e),
@@ -554,7 +684,7 @@ async fn run_parallel_first_completes(
         let fwd_stage = stage_name;
         let fwd_branch = branch_name.clone();
         let fwd_tx = stream_tx.clone();
-        tokio::spawn(async move {
+        let fh = tokio::spawn(async move {
             while let Some(event) = wf_stream.next().await {
                 let pipeline_event = PipelineEvent {
                     stage_name: fwd_stage.clone(),
@@ -565,6 +695,7 @@ async fn run_parallel_first_completes(
                 let _ = fwd_tx.send(pipeline_event);
             }
         });
+        forward_handles.push(fh);
 
         set.spawn(async move {
             let result = if let Some(t) = timeout {
@@ -580,13 +711,13 @@ async fn run_parallel_first_completes(
     }
 
     // Return the first successful result.
-    if let Some(join_result) = set.join_next().await {
+    let outcome = if let Some(join_result) = set.join_next().await {
         // Abort remaining branches.
         set.abort_all();
 
         match join_result {
-            Ok((branch_name, Ok(event))) => {
-                let output = extract_stop_result(&*event);
+            Ok((branch_name, Ok(wf_res))) => {
+                let output = extract_stop_result(&*wf_res.event);
                 let mut result_map = serde_json::Map::new();
                 result_map.insert(branch_name, output);
                 Ok(serde_json::Value::Object(result_map))
@@ -603,7 +734,14 @@ async fn run_parallel_first_completes(
     } else {
         // No branches to run (all skipped by conditions).
         Ok(serde_json::Value::Null)
+    };
+
+    // Abort all forward handles -- remaining branches are cancelled.
+    for fh in &forward_handles {
+        fh.abort();
     }
+
+    outcome
 }
 
 // ---------------------------------------------------------------------------

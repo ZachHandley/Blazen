@@ -366,10 +366,41 @@ class WorkflowHandler:
         handler = await wf.run(prompt="Hello")
         result = await handler.result()
         print(result.to_dict())
+
+    Pause / resume::
+
+        handler.pause()
+        snapshot = await handler.snapshot()
+        # ... later ...
+        handler.resume_in_place()
     """
 
     async def result(self) -> Event:
-        """Await the final workflow result (consumes the handler)."""
+        """Await the final workflow result."""
+        ...
+
+    def pause(self) -> None:
+        """Signal the workflow to pause.
+
+        This is synchronous and non-consuming. Call ``snapshot()``
+        afterwards to obtain the serialized state.
+        """
+        ...
+
+    async def snapshot(self) -> str:
+        """Capture the paused workflow state as a JSON string."""
+        ...
+
+    async def resume_in_place(self) -> None:
+        """Resume a paused workflow in-place."""
+        ...
+
+    async def respond_to_input(self, request_id: str, response: Any) -> None:
+        """Supply a response to a pending ``InputRequestEvent``."""
+        ...
+
+    async def abort(self) -> None:
+        """Abort the running workflow."""
         ...
 
     def stream_events(self) -> "_EventStream":

@@ -109,7 +109,8 @@ async fn main() -> anyhow::Result<()> {
         .run(serde_json::json!({ "text": "This is a great day!" }))
         .await?
         .result()
-        .await?;
+        .await?
+        .event;
     println!("Result: {}\n", result.to_json());
 
     // Test 2: negative input.
@@ -118,7 +119,8 @@ async fn main() -> anyhow::Result<()> {
         .run(serde_json::json!({ "text": "This is terrible" }))
         .await?
         .result()
-        .await?;
+        .await?
+        .event;
     println!("Result: {}", result.to_json());
 
     Ok(())

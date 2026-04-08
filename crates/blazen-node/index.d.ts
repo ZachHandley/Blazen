@@ -651,13 +651,14 @@ export declare class Workflow {
    * running workflow:
    *
    * - Call `handler.result()` to await the final result.
-   * - Call `handler.pause()` to pause and get a snapshot JSON string.
+   * - Call `handler.pause()` then `handler.snapshot()` to pause and serialize.
    * - Call `handler.streamEvents(cb)` to subscribe to intermediate events.
    *
    * ```javascript
    * const handler = await workflow.runWithHandler({ message: "hello" });
    * // ... later ...
-   * const snapshot = await handler.pause();
+   * handler.pause();
+   * const snapshot = await handler.snapshot();
    * ```
    */
   runWithHandler(input: any): Promise<WorkflowHandler>
@@ -665,7 +666,7 @@ export declare class Workflow {
    * Resume a previously paused workflow from a snapshot.
    *
    * The snapshot JSON string should have been obtained from a prior
-   * call to `handler.pause()`. The workflow will resume with the same
+   * call to `handler.snapshot()`. The workflow will resume with the same
    * steps that were registered on this `Workflow` instance.
    *
    * Returns a new `WorkflowHandler` for the resumed workflow.
@@ -686,12 +687,13 @@ export type JsWorkflow = Workflow
  * Returned by `Workflow.runWithHandler()`. Provides methods to:
  *
  * - **`result()`** -- await the final workflow result.
- * - **`pause()`** -- pause the workflow and get a snapshot JSON string.
+ * - **`pause()`** -- signal the workflow to pause.
+ * - **`snapshot()`** -- get the serialized workflow state after pausing.
+ * - **`resumeInPlace()`** -- resume a paused workflow.
+ * - **`respondToInput(requestId, response)`** -- supply a response to a pending input request.
+ * - **`abort()`** -- abort the running workflow.
  * - **`streamEvents(callback)`** -- subscribe to intermediate events
  *   published via `ctx.writeEventToStream()`.
- *
- * **Important:** `result()` and `pause()` each consume the handler
- * internally. You can only call one of them, and only once.
  *
  * ```javascript
  * const handler = await workflow.runWithHandler({ message: "hello" });
@@ -699,9 +701,12 @@ export type JsWorkflow = Workflow
  * // Option A: just get the result
  * const result = await handler.result();
  *
- * // Option B: pause and get a snapshot
- * const snapshot = await handler.pause();
+ * // Option B: pause, snapshot, then resume later
+ * handler.pause();
+ * const snapshot = await handler.snapshot();
  * fs.writeFileSync("snapshot.json", snapshot);
+ * // ... later ...
+ * handler.resumeInPlace();
  *
  * // Option C: stream events, then get the result
  * handler.streamEvents((event) => console.log(event));
@@ -713,27 +718,45 @@ export declare class WorkflowHandler {
    * Await the final workflow result.
    *
    * Returns the result when the workflow completes via a `StopEvent`.
-   *
-   * This method consumes the handler internally -- it can only be called
-   * once, and cannot be called after `pause()`.
    */
   result(): Promise<JsWorkflowResult>
   /**
-   * Pause the running workflow and return a snapshot as a JSON string.
+   * Signal the workflow to pause.
    *
-   * The snapshot contains all workflow state and can be saved to a file
-   * or database. Use `Workflow.resume(snapshotJson)` to resume later.
-   *
-   * This method consumes the handler internally -- it can only be called
-   * once, and cannot be called after `result()`.
+   * This is a synchronous, non-consuming call. After pausing, call
+   * `snapshot()` to obtain the serialized state, or `resumeInPlace()`
+   * to continue execution.
    */
-  pause(): Promise<string>
+  pause(): void
+  /**
+   * Capture the paused workflow state as a JSON string.
+   *
+   * The snapshot can be saved to a file or database. Use
+   * `Workflow.resume(snapshotJson)` to resume later.
+   */
+  snapshot(): Promise<string>
+  /**
+   * Resume a paused workflow in-place, continuing execution
+   * from where it left off.
+   */
+  resumeInPlace(): Promise<void>
+  /**
+   * Supply a response to a pending `InputRequestEvent`.
+   *
+   * @param requestId - The request ID from the original `InputRequestEvent`.
+   * @param response - The response value to send.
+   */
+  respondToInput(requestId: string, response: any): Promise<void>
+  /**
+   * Abort the running workflow.
+   */
+  abort(): Promise<void>
   /**
    * Subscribe to intermediate events published by steps via
    * `ctx.writeEventToStream()`.
    *
    * The `onEvent` callback receives each event as a plain object.
-   * This must be called **before** `result()` or `pause()`.
+   * This must be called **before** `result()`.
    *
    * Events published before this call are not replayed.
    */

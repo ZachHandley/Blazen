@@ -122,6 +122,26 @@ impl BedrockProvider {
         self.inner = self.inner.with_http_client(client);
         self
     }
+
+    /// Construct from typed [`BedrockOptions`](crate::types::provider_options::BedrockOptions).
+    ///
+    /// `opts.base.base_url` is ignored — the Bedrock URL is derived from
+    /// `region`.
+    #[cfg(any(
+        all(target_arch = "wasm32", not(target_os = "wasi")),
+        feature = "reqwest"
+    ))]
+    #[must_use]
+    pub fn from_options(
+        api_key: impl Into<String>,
+        opts: crate::types::provider_options::BedrockOptions,
+    ) -> Self {
+        let mut provider = Self::new(api_key, &opts.region);
+        if let Some(m) = opts.base.model {
+            provider = provider.with_model(m);
+        }
+        provider
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -112,6 +112,8 @@ impl PerplexityProvider {
     }
 }
 
+super::impl_simple_from_options!(PerplexityProvider, no_base_url);
+
 // ---------------------------------------------------------------------------
 // CompletionModel implementation
 // ---------------------------------------------------------------------------

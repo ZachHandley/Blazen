@@ -112,6 +112,8 @@ impl GroqProvider {
     }
 }
 
+super::impl_simple_from_options!(GroqProvider, no_base_url);
+
 // ---------------------------------------------------------------------------
 // CompletionModel implementation
 // ---------------------------------------------------------------------------

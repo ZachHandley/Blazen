@@ -51,16 +51,15 @@ For long-running approvals, workflows support durable pause and resume via snaps
 ```rust
 let handler = workflow.run(input).await?;
 
-// Workflow auto-pauses when InputRequestEvent is emitted
+// Pause the workflow, then take a snapshot
+handler.pause()?;
 let snapshot = handler.snapshot().await?;
 save_to_database(&snapshot).await?;
 
 // Later -- restore and supply the response
 let handler = Workflow::resume(snapshot)?;
-handler.send_input(InputResponseEvent {
-    request_id: pending_request_id,
-    response: serde_json::json!({ "approved": true }),
-}).await?;
+handler.respond_to_input(pending_request_id, serde_json::json!({ "approved": true }));
+handler.resume_in_place();
 
 let result = handler.result().await?;
 ```

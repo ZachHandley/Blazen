@@ -678,6 +678,50 @@ impl FalProvider {
         }
     }
 
+    /// Create a new fal.ai provider from a [`FalOptions`] struct.
+    ///
+    /// This is the canonical construction path — bindings should deserialize
+    /// their native options type into [`FalOptions`] and call this method
+    /// instead of manually destructuring fields and calling individual
+    /// builder methods.
+    #[cfg(any(
+        all(target_arch = "wasm32", not(target_os = "wasi")),
+        feature = "reqwest"
+    ))]
+    #[must_use]
+    pub fn from_options(
+        api_key: impl Into<String>,
+        opts: crate::types::provider_options::FalOptions,
+    ) -> Self {
+        use crate::types::provider_options::FalLlmEndpointKind;
+
+        let mut provider = Self::new(api_key);
+        if let Some(m) = opts.base.model {
+            provider = provider.with_llm_model(m);
+        }
+        if let Some(url) = opts.base.base_url {
+            provider = provider.with_base_url(url);
+        }
+        if let Some(ep) = opts.endpoint {
+            let endpoint = match ep {
+                FalLlmEndpointKind::OpenAiChat => FalLlmEndpoint::OpenAiChat,
+                FalLlmEndpointKind::OpenAiResponses => FalLlmEndpoint::OpenAiResponses,
+                FalLlmEndpointKind::OpenAiEmbeddings => FalLlmEndpoint::OpenAiEmbeddings,
+                FalLlmEndpointKind::OpenRouter => FalLlmEndpoint::OpenRouter {
+                    enterprise: opts.enterprise,
+                },
+                FalLlmEndpointKind::AnyLlm => FalLlmEndpoint::AnyLlm {
+                    enterprise: opts.enterprise,
+                },
+            };
+            provider = provider.with_llm_endpoint(endpoint);
+        } else if opts.enterprise {
+            provider = provider.with_enterprise();
+        }
+        provider = provider.with_auto_route_modality(opts.auto_route_modality);
+        provider
+    }
+
     /// Build a [`FalEmbeddingModel`] sharing this provider's HTTP client and
     /// API key. Uses the default `openai/text-embedding-3-small` model and
     /// 1536 dimensions.

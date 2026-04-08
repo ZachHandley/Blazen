@@ -168,7 +168,7 @@ impl JsWorkflow {
 
         let result = handler.result().await.map_err(workflow_error_to_napi)?;
 
-        Ok(make_result(&*result))
+        Ok(make_result(&*result.event))
     }
 
     /// Run the workflow with streaming.
@@ -213,7 +213,7 @@ impl JsWorkflow {
         // Wait for the stream consumer to finish.
         let _ = stream_handle.await;
 
-        Ok(make_result(&*result))
+        Ok(make_result(&*result.event))
     }
 
     /// Run the workflow and return a handler object.

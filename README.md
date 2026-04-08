@@ -88,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
     let handler = workflow.run(serde_json::json!({ "name": "Zach" })).await?;
     let result = handler.result().await?;
 
-    if let Some(stop) = result.downcast_ref::<StopEvent>() {
+    if let Some(stop) = result.event.downcast_ref::<StopEvent>() {
         println!("{}", stop.result); // {"greeting": "Hello, Zach!"}
     }
     Ok(())

@@ -70,9 +70,30 @@ impl Context {
     // -----------------------------------------------------------------
 
     /// Create a new context wired to the given channels.
+    ///
+    /// Internally delegates to [`Context::new_with_session_refs`] with a
+    /// freshly-created empty registry.
     pub(crate) fn new(
         event_tx: mpsc::UnboundedSender<EventEnvelope>,
         stream_tx: broadcast::Sender<Box<dyn AnyEvent>>,
+    ) -> Self {
+        Self::new_with_session_refs(
+            event_tx,
+            stream_tx,
+            Arc::new(crate::session_ref::SessionRefRegistry::new()),
+        )
+    }
+
+    /// Create a new context wired to the given channels with an
+    /// externally-supplied session-ref registry.
+    ///
+    /// Used by the pipeline crate to share one registry across multiple
+    /// workflow runs so cross-workflow `__blazen_session_ref__` markers
+    /// remain resolvable.
+    pub(crate) fn new_with_session_refs(
+        event_tx: mpsc::UnboundedSender<EventEnvelope>,
+        stream_tx: broadcast::Sender<Box<dyn AnyEvent>>,
+        session_refs: Arc<crate::session_ref::SessionRefRegistry>,
     ) -> Self {
         Self {
             inner: Arc::new(RwLock::new(ContextInner {
@@ -82,7 +103,7 @@ impl Context {
                 collected: HashMap::new(),
                 metadata: HashMap::new(),
                 objects: HashMap::new(),
-                session_refs: Arc::new(crate::session_ref::SessionRefRegistry::new()),
+                session_refs,
                 session_pause_policy: crate::session_ref::SessionPausePolicy::default(),
             })),
         }

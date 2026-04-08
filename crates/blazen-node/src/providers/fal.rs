@@ -60,35 +60,10 @@ impl JsFalProvider {
     /// OpenAI-compatible chat-completions endpoint (`OpenAiChat`).
     #[napi(factory)]
     pub fn create(api_key: String, options: Option<JsFalOptions>) -> Self {
-        use blazen_llm::providers::fal::FalLlmEndpoint;
-        use blazen_llm::types::provider_options::FalLlmEndpointKind;
-
-        let mut provider = FalProvider::new(api_key);
-        if let Some(opts) = options {
-            if let Some(model) = opts.model {
-                provider = provider.with_llm_model(model);
-            }
-            if let Some(base_url) = opts.base_url {
-                provider = provider.with_base_url(base_url);
-            }
-            let enterprise = opts.enterprise.unwrap_or(false);
-            if let Some(ep) = opts.endpoint {
-                let kind: FalLlmEndpointKind = ep.into();
-                let endpoint = match kind {
-                    FalLlmEndpointKind::OpenAiChat => FalLlmEndpoint::OpenAiChat,
-                    FalLlmEndpointKind::OpenAiResponses => FalLlmEndpoint::OpenAiResponses,
-                    FalLlmEndpointKind::OpenAiEmbeddings => FalLlmEndpoint::OpenAiEmbeddings,
-                    FalLlmEndpointKind::OpenRouter => FalLlmEndpoint::OpenRouter { enterprise },
-                    FalLlmEndpointKind::AnyLlm => FalLlmEndpoint::AnyLlm { enterprise },
-                };
-                provider = provider.with_llm_endpoint(endpoint);
-            } else if enterprise {
-                provider = provider.with_enterprise();
-            }
-            provider = provider.with_auto_route_modality(opts.auto_route_modality.unwrap_or(true));
-        }
+        let opts: blazen_llm::types::provider_options::FalOptions =
+            options.map(Into::into).unwrap_or_default();
         Self {
-            inner: Arc::new(provider),
+            inner: Arc::new(FalProvider::from_options(api_key, opts)),
         }
     }
 

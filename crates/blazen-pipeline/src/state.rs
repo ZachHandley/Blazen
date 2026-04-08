@@ -38,7 +38,6 @@ impl PipelineState {
 
     /// Restore pipeline state from a snapshot's shared state and completed
     /// stage results.
-    #[allow(dead_code)]
     pub(crate) fn restore(
         input: Value,
         shared: HashMap<String, Value>,

@@ -381,6 +381,8 @@ impl GeminiProvider {
     }
 }
 
+super::impl_simple_from_options!(GeminiProvider);
+
 // ---------------------------------------------------------------------------
 // Wire types (response deserialization)
 // ---------------------------------------------------------------------------

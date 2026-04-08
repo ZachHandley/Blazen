@@ -646,3 +646,188 @@ async fn test_empty_pipeline_fails_validation() {
         other => panic!("expected ValidationFailed, got: {other}"),
     }
 }
+
+// ---------------------------------------------------------------------------
+// Resume validation: pipeline name mismatch
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_pipeline_resume_validates_pipeline_name() {
+    // Build pipeline "A", start it, pause, get snapshot.
+    let pipeline_a = PipelineBuilder::new("pipeline-A")
+        .stage(Stage {
+            name: "stage-1".into(),
+            workflow: delayed_echo_workflow(200),
+            input_mapper: None,
+            condition: None,
+        })
+        .build()
+        .unwrap();
+
+    let handler_a = pipeline_a.start(serde_json::json!({"v": 1}));
+
+    // Give stage-1 time to start then pause.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let snapshot = handler_a.pause().await.unwrap();
+    assert_eq!(snapshot.pipeline_name, "pipeline-A");
+
+    // Build a DIFFERENT pipeline "B" and try to resume with snapshot from "A".
+    let pipeline_b = PipelineBuilder::new("pipeline-B")
+        .stage(Stage {
+            name: "stage-1".into(),
+            workflow: echo_workflow(),
+            input_mapper: None,
+            condition: None,
+        })
+        .build()
+        .unwrap();
+
+    let result = pipeline_b.resume(snapshot);
+    assert!(
+        result.is_err(),
+        "resume should fail for mismatched pipeline name"
+    );
+    match result.err().unwrap() {
+        PipelineError::ValidationFailed(msg) => {
+            assert!(
+                msg.contains("pipeline-A") && msg.contains("pipeline-B"),
+                "error should mention both pipeline names, got: {msg}"
+            );
+        }
+        other => panic!("expected ValidationFailed, got: {other}"),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Resume validation: stage names mismatch
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_pipeline_resume_validates_stage_names() {
+    // Build a pipeline with stages "step1" and "step2".
+    let pipeline = PipelineBuilder::new("stage-validation")
+        .stage(Stage {
+            name: "step1".into(),
+            workflow: echo_workflow(),
+            input_mapper: None,
+            condition: None,
+        })
+        .stage(Stage {
+            name: "step2".into(),
+            workflow: delayed_echo_workflow(200),
+            input_mapper: None,
+            condition: None,
+        })
+        .build()
+        .unwrap();
+
+    let handler = pipeline.start(serde_json::json!({"data": "test"}));
+
+    // Let step1 complete and step2 start, then pause.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let snapshot = handler.pause().await.unwrap();
+
+    // step1 should be in completed_stages.
+    assert!(!snapshot.completed_stages.is_empty());
+    assert_eq!(snapshot.completed_stages[0].name, "step1");
+
+    // Build a new pipeline with a DIFFERENT first stage name.
+    let pipeline_new = PipelineBuilder::new("stage-validation")
+        .stage(Stage {
+            name: "different_name".into(),
+            workflow: echo_workflow(),
+            input_mapper: None,
+            condition: None,
+        })
+        .stage(Stage {
+            name: "step2".into(),
+            workflow: echo_workflow(),
+            input_mapper: None,
+            condition: None,
+        })
+        .build()
+        .unwrap();
+
+    let result = pipeline_new.resume(snapshot);
+    assert!(
+        result.is_err(),
+        "resume should fail when completed stage names don't match"
+    );
+    match result.err().unwrap() {
+        PipelineError::ValidationFailed(msg) => {
+            assert!(
+                msg.contains("step1") && msg.contains("different_name"),
+                "error should mention both stage names, got: {msg}"
+            );
+        }
+        other => panic!("expected ValidationFailed, got: {other}"),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Resume restores shared state
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_pipeline_resume_restores_shared_state() {
+    // Stage 1: produces output with a "text" field.
+    // Stage 2: uses input_mapper to read from shared state, then echoes.
+    let pipeline = PipelineBuilder::new("shared-state-restore")
+        .stage(Stage {
+            name: "producer".into(),
+            workflow: prefix_workflow("hello-"),
+            input_mapper: None,
+            condition: None,
+        })
+        .stage(Stage {
+            name: "consumer".into(),
+            workflow: delayed_echo_workflow(200),
+            input_mapper: None,
+            condition: None,
+        })
+        .build()
+        .unwrap();
+
+    let handler = pipeline.start(serde_json::json!({"text": "world"}));
+
+    // Let stage 1 complete and stage 2 start, then pause.
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let snapshot = handler.pause().await.unwrap();
+
+    // Verify the snapshot captured the output from stage 1.
+    assert!(!snapshot.completed_stages.is_empty());
+    assert_eq!(snapshot.completed_stages[0].name, "producer");
+    assert_eq!(
+        snapshot.completed_stages[0].output,
+        serde_json::json!({"text": "hello-world"})
+    );
+
+    // Resume from the snapshot with a new pipeline (same stage names).
+    let pipeline2 = PipelineBuilder::new("shared-state-restore")
+        .stage(Stage {
+            name: "producer".into(),
+            workflow: echo_workflow(), // Won't re-run (already completed)
+            input_mapper: None,
+            condition: None,
+        })
+        .stage(Stage {
+            name: "consumer".into(),
+            workflow: echo_workflow(), // Fast this time
+            input_mapper: None,
+            condition: None,
+        })
+        .build()
+        .unwrap();
+
+    let handler2 = pipeline2.resume(snapshot).unwrap();
+    let result = handler2.result().await.unwrap();
+
+    // Stage 2 should have received the output from stage 1 as its input.
+    // The echo workflow returns whatever it gets, so the final output should
+    // be the output from the completed stage 1.
+    assert_eq!(result.stage_results.len(), 2);
+    assert_eq!(
+        result.final_output,
+        serde_json::json!({"text": "hello-world"})
+    );
+}

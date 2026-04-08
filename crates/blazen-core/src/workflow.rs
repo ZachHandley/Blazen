@@ -19,11 +19,10 @@
 //! later be resumed from the snapshot via [`Workflow::resume`].
 
 use std::collections::HashMap;
-#[cfg(feature = "persist")]
 use std::sync::Arc;
 use std::time::Duration;
 
-use blazen_events::{AnyEvent, DynamicEvent, Event, EventEnvelope, InputResponseEvent, StartEvent};
+use blazen_events::{AnyEvent, DynamicEvent, Event, EventEnvelope, StartEvent};
 use serde::Serialize;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use uuid::Uuid;
@@ -34,8 +33,9 @@ use crate::error::WorkflowError;
 #[cfg(feature = "persist")]
 use crate::event_loop::CheckpointConfig;
 use crate::event_loop::event_loop;
-use crate::handler::WorkflowHandler;
-use crate::snapshot::{SerializedEvent, WorkflowSnapshot};
+use crate::handler::{WorkflowControl, WorkflowHandler};
+use crate::session_ref::SessionRefRegistry;
+use crate::snapshot::WorkflowSnapshot;
 use crate::step::StepRegistration;
 
 /// A validated, ready-to-run workflow.
@@ -95,6 +95,40 @@ impl Workflow {
         &self,
         start_event: E,
     ) -> crate::error::Result<WorkflowHandler> {
+        self.run_with_event_and_session_refs(start_event, None)
+            .await
+    }
+
+    /// Run this workflow with an externally-supplied session-ref registry.
+    ///
+    /// Used by the pipeline crate to share one registry across stages so
+    /// `__blazen_session_ref__` markers produced in one stage can be
+    /// resolved in subsequent stages.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the initial event cannot be enqueued.
+    pub async fn run_with_registry(
+        &self,
+        input: serde_json::Value,
+        session_refs: Arc<SessionRefRegistry>,
+    ) -> crate::error::Result<WorkflowHandler> {
+        let start_event = StartEvent { data: input };
+        self.run_with_event_and_session_refs(start_event, Some(session_refs))
+            .await
+    }
+
+    /// Internal helper that runs the workflow with an optional
+    /// externally-supplied session-ref registry.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the initial event cannot be enqueued.
+    pub(crate) async fn run_with_event_and_session_refs<E: Event + Serialize>(
+        &self,
+        start_event: E,
+        session_refs: Option<Arc<SessionRefRegistry>>,
+    ) -> crate::error::Result<WorkflowHandler> {
         // Internal routing channel (unbounded so steps never block).
         let (event_tx, event_rx) = mpsc::unbounded_channel::<EventEnvelope>();
 
@@ -104,12 +138,16 @@ impl Workflow {
         // Oneshot for the final result.
         let (result_tx, result_rx) = oneshot::channel();
 
-        // Pause/snapshot channels.
-        let (pause_tx, pause_rx) = oneshot::channel::<()>();
-        let (snapshot_tx, snapshot_rx) = oneshot::channel::<WorkflowSnapshot>();
+        // Control channel (handler → event loop).
+        let (control_tx, control_rx) = mpsc::unbounded_channel::<WorkflowControl>();
 
-        // Build the shared context.
-        let ctx = Context::new(event_tx.clone(), stream_tx.clone());
+        // Build the shared context, optionally reusing an externally-supplied
+        // session-ref registry so cross-workflow `__blazen_session_ref__`
+        // markers remain resolvable.
+        let ctx = match session_refs {
+            Some(refs) => Context::new_with_session_refs(event_tx.clone(), stream_tx.clone(), refs),
+            None => Context::new(event_tx.clone(), stream_tx.clone()),
+        };
 
         // Apply the configured session pause policy.
         ctx.set_session_pause_policy(self.session_pause_policy)
@@ -166,8 +204,7 @@ impl Workflow {
             ctx,
             result_tx,
             timeout,
-            pause_rx,
-            snapshot_tx,
+            control_rx,
             workflow_name,
             run_id,
             input_handler,
@@ -181,8 +218,7 @@ impl Workflow {
         Ok(WorkflowHandler::new(
             result_rx,
             stream_tx,
-            Some(pause_tx),
-            Some(snapshot_rx),
+            control_tx,
             event_loop_handle,
             session_refs,
             #[cfg(feature = "telemetry")]
@@ -226,9 +262,8 @@ impl Workflow {
         // Result channel.
         let (result_tx, result_rx) = oneshot::channel();
 
-        // Pause/snapshot channels for the resumed workflow.
-        let (pause_tx, pause_rx) = oneshot::channel::<()>();
-        let (snapshot_tx, snapshot_rx) = oneshot::channel::<WorkflowSnapshot>();
+        // Control channel (handler → event loop).
+        let (control_tx, control_rx) = mpsc::unbounded_channel::<WorkflowControl>();
 
         // Build context and restore state.
         let ctx = Context::new(event_tx.clone(), stream_tx.clone());
@@ -282,8 +317,7 @@ impl Workflow {
             ctx,
             result_tx,
             timeout,
-            pause_rx,
-            snapshot_tx,
+            control_rx,
             workflow_name,
             run_id,
             None,  // No inline input handler for resumed workflows.
@@ -297,8 +331,7 @@ impl Workflow {
         Ok(WorkflowHandler::new(
             result_rx,
             stream_tx,
-            Some(pause_tx),
-            Some(snapshot_rx),
+            control_tx,
             event_loop_handle,
             session_refs,
             #[cfg(feature = "telemetry")]
@@ -316,9 +349,9 @@ impl Workflow {
     ///
     /// # Errors
     ///
-    /// Returns [`WorkflowError::SnapshotNotFound`] if no checkpoint exists
-    /// for the given `run_id`, or propagates any storage error from the
-    /// checkpoint store.
+    /// Returns [`WorkflowError::Context`] if no checkpoint exists for the
+    /// given `run_id`, or propagates any storage error from the checkpoint
+    /// store.
     #[cfg(feature = "persist")]
     pub async fn resume_from(
         store: Arc<dyn blazen_persist::CheckpointStore>,
@@ -337,43 +370,6 @@ impl Workflow {
 
         // Use a default 5-minute timeout for resumed workflows.
         Self::resume(snapshot, steps, Some(Duration::from_secs(300))).await
-    }
-
-    /// Resume a paused workflow, injecting a human's response.
-    ///
-    /// This is a convenience method for workflows that auto-paused due to an
-    /// [`InputRequestEvent`]. It injects the [`InputResponseEvent`] into the
-    /// snapshot's pending events and resumes execution.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the snapshot's pending events cannot be
-    /// reinjected into the event channel.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `InputResponseEvent` cannot be serialized to JSON, which
-    /// should never happen for a well-formed serde type.
-    pub async fn resume_with_input(
-        snapshot: WorkflowSnapshot,
-        response: InputResponseEvent,
-        steps: Vec<StepRegistration>,
-        timeout: Option<Duration>,
-    ) -> crate::error::Result<WorkflowHandler> {
-        let mut snapshot = snapshot;
-
-        // Inject the response as a pending event.
-        snapshot.pending_events.push(SerializedEvent {
-            event_type: "blazen::InputResponseEvent".to_owned(),
-            data: serde_json::to_value(&response)
-                .expect("InputResponseEvent serialization should never fail"),
-            source_step: Some("__human_input".to_owned()),
-        });
-
-        // Clear the input request from metadata.
-        snapshot.metadata.remove("__input_request");
-
-        Self::resume(snapshot, steps, timeout).await
     }
 }
 
@@ -426,7 +422,7 @@ mod tests {
             .run(serde_json::json!({"hello": "world"}))
             .await
             .unwrap();
-        let result = handler.result().await.unwrap();
+        let result = handler.result().await.unwrap().event;
         assert_eq!(result.event_type_id(), StopEvent::event_type());
 
         let stop = result.downcast_ref::<StopEvent>().unwrap();

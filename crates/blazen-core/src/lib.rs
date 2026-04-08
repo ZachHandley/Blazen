@@ -37,7 +37,7 @@ pub mod workflow;
 pub use builder::{InputHandlerFn, WorkflowBuilder};
 pub use context::Context;
 pub use error::{Result, WorkflowError};
-pub use handler::WorkflowHandler;
+pub use handler::{WorkflowHandler, WorkflowResult};
 pub use session_ref::{
     RegistryKey, SESSION_REF_TAG, SessionPausePolicy, SessionRefError, SessionRefRegistry,
 };

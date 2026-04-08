@@ -26,7 +26,7 @@
 //!     let workflow = WorkflowBuilder::new("greeter")
 //!         .step(greet_registration())
 //!         .build()?;
-//!     let result = workflow.run(serde_json::json!({ "name": "Zach" })).await?.result().await?;
+//!     let result = workflow.run(serde_json::json!({ "name": "Zach" })).await?.result().await?.event;
 //!     println!("{}", result.to_json());
 //!     Ok(())
 //! }

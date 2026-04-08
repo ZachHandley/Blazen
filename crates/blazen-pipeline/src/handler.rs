@@ -6,19 +6,36 @@
 //! 2. **Stream intermediate events** via [`PipelineHandler::stream_events`],
 //!    which emits [`PipelineEvent`] wrappers tagging each event with its
 //!    stage and branch name.
-//! 3. **Pause the pipeline** via [`PipelineHandler::pause`], which returns
-//!    a serializable [`PipelineSnapshot`].
+//! 3. **Control the pipeline** via [`PipelineHandler::pause`],
+//!    [`PipelineHandler::resume_in_place`], [`PipelineHandler::snapshot`],
+//!    and [`PipelineHandler::abort`].
 
 use std::fmt;
+use std::sync::Arc;
 
+use blazen_core::SessionRefRegistry;
 use blazen_events::AnyEvent;
-use tokio::sync::{broadcast, oneshot};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 use uuid::Uuid;
 
 use crate::error::PipelineError;
 use crate::snapshot::{PipelineResult, PipelineSnapshot};
+
+/// Commands sent from the handler to the execution loop via the control channel.
+pub(crate) enum PipelineControl {
+    /// Pause the pipeline. Inner workflow handlers are aborted (via Drop) when
+    /// the stage future is cancelled, and a snapshot is sent back.
+    Pause,
+    /// Resume a paused pipeline in place. Currently a no-op at the pipeline
+    /// level -- true in-place resume requires keeping stage futures alive,
+    /// which is deferred to a future task.
+    Resume,
+    /// Abort the pipeline. Inner workflow handlers are aborted (via Drop) when
+    /// the stage future is cancelled.
+    Abort,
+}
 
 /// An event from a pipeline stage, tagged with provenance metadata.
 ///
@@ -61,16 +78,21 @@ impl Clone for PipelineEvent {
 /// Handle to a running pipeline.
 ///
 /// Created by [`Pipeline::run`](crate::Pipeline::run). Allows awaiting
-/// the final result, streaming events, or pausing the pipeline.
+/// the final result, streaming events, pausing, resuming, or aborting
+/// the pipeline.
 pub struct PipelineHandler {
     /// Receives the final result when the pipeline completes.
     result_rx: Option<oneshot::Receiver<Result<PipelineResult, PipelineError>>>,
     /// Sender side of the broadcast channel for streaming events.
     stream_tx: broadcast::Sender<PipelineEvent>,
-    /// Sends the pause signal to the pipeline execution loop.
-    pause_tx: Option<oneshot::Sender<()>>,
+    /// Control channel to the execution loop (pause/resume/abort).
+    control_tx: mpsc::UnboundedSender<PipelineControl>,
     /// Receives the snapshot from the pipeline after a pause.
     snapshot_rx: Option<oneshot::Receiver<PipelineSnapshot>>,
+    /// Shared session-ref registry for this pipeline run. Cloned from the
+    /// pipeline at construction so the handler outlives the `execute_pipeline`
+    /// task and consumers can resolve session-ref markers in stage outputs.
+    session_refs: Arc<SessionRefRegistry>,
 }
 
 impl PipelineHandler {
@@ -78,15 +100,23 @@ impl PipelineHandler {
     pub(crate) fn new(
         result_rx: oneshot::Receiver<Result<PipelineResult, PipelineError>>,
         stream_tx: broadcast::Sender<PipelineEvent>,
-        pause_tx: oneshot::Sender<()>,
+        control_tx: mpsc::UnboundedSender<PipelineControl>,
         snapshot_rx: oneshot::Receiver<PipelineSnapshot>,
+        session_refs: Arc<SessionRefRegistry>,
     ) -> Self {
         Self {
             result_rx: Some(result_rx),
             stream_tx,
-            pause_tx: Some(pause_tx),
+            control_tx,
             snapshot_rx: Some(snapshot_rx),
+            session_refs,
         }
+    }
+
+    /// Returns a clone of the shared session-ref registry handle.
+    #[must_use]
+    pub fn session_refs(&self) -> Arc<SessionRefRegistry> {
+        Arc::clone(&self.session_refs)
     }
 
     /// Await the final pipeline result.
@@ -133,20 +163,64 @@ impl PipelineHandler {
     /// Returns [`PipelineError::ChannelClosed`] if the pipeline has
     /// already terminated.
     pub async fn pause(mut self) -> Result<PipelineSnapshot, PipelineError> {
-        let pause_tx = self.pause_tx.take().ok_or(PipelineError::ChannelClosed)?;
+        self.control_tx
+            .send(PipelineControl::Pause)
+            .map_err(|_| PipelineError::ChannelClosed)?;
 
         let snapshot_rx = self
             .snapshot_rx
             .take()
             .ok_or(PipelineError::ChannelClosed)?;
 
-        // Send the pause signal.
-        pause_tx
-            .send(())
-            .map_err(|()| PipelineError::ChannelClosed)?;
-
         // Await the snapshot from the execution loop.
         snapshot_rx.await.map_err(|_| PipelineError::ChannelClosed)
+    }
+
+    /// Resume a paused pipeline in place.
+    ///
+    /// Currently a no-op at the pipeline level. True in-place resume
+    /// (parking inner workflows without dropping them) requires significant
+    /// restructuring of the stage execution model and is deferred to a
+    /// future task.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PipelineError::ChannelClosed`] if the pipeline has
+    /// already terminated.
+    pub fn resume_in_place(&self) -> Result<(), PipelineError> {
+        self.control_tx
+            .send(PipelineControl::Resume)
+            .map_err(|_| PipelineError::ChannelClosed)
+    }
+
+    /// Capture a [`PipelineSnapshot`] without stopping the pipeline.
+    ///
+    /// Not yet implemented -- returns [`PipelineError::ChannelClosed`].
+    /// A full implementation requires a request/reply oneshot pattern
+    /// similar to `WorkflowHandler::snapshot`.
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`PipelineError::ChannelClosed`] (stub).
+    #[allow(clippy::unused_async)]
+    pub async fn snapshot(&self) -> Result<PipelineSnapshot, PipelineError> {
+        Err(PipelineError::ChannelClosed)
+    }
+
+    /// Abort the running pipeline.
+    ///
+    /// Sends an abort signal to the execution loop. The loop tears down the
+    /// current stage (inner workflow handlers are aborted via `Drop`) and
+    /// exits.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PipelineError::ChannelClosed`] if the pipeline has
+    /// already terminated.
+    pub fn abort(&self) -> Result<(), PipelineError> {
+        self.control_tx
+            .send(PipelineControl::Abort)
+            .map_err(|_| PipelineError::ChannelClosed)
     }
 
     /// Returns a reference to the broadcast sender for forwarding events
@@ -154,5 +228,13 @@ impl PipelineHandler {
     #[allow(dead_code)]
     pub(crate) fn stream_sender(&self) -> &broadcast::Sender<PipelineEvent> {
         &self.stream_tx
+    }
+}
+
+impl Drop for PipelineHandler {
+    fn drop(&mut self) {
+        // Best-effort abort so the spawned execution task doesn't leak.
+        // Ignore errors -- the loop may have already exited.
+        let _ = self.control_tx.send(PipelineControl::Abort);
     }
 }

@@ -100,7 +100,7 @@ async fn main() -> anyhow::Result<()> {
         .build()?;
 
     let result = workflow.run(serde_json::json!({ "name": "Blazen" })).await?.result().await?;
-    println!("{}", result.to_json());
+    println!("{}", result.event.to_json());
     Ok(())
 }`,
   },

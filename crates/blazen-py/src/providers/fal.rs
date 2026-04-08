@@ -63,34 +63,12 @@ impl PyFalProvider {
     #[new]
     #[pyo3(signature = (*, api_key, options=None))]
     fn new(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let mut provider = FalProvider::new(api_key);
-        if let Some(opts_raw) = options {
-            let opts: blazen_llm::types::provider_options::FalOptions = depythonize(opts_raw)?;
-            if let Some(m) = opts.base.model {
-                provider = provider.with_llm_model(m);
-            }
-            if let Some(ep) = opts.endpoint {
-                use blazen_llm::providers::fal::FalLlmEndpoint;
-                use blazen_llm::types::provider_options::FalLlmEndpointKind;
-                let endpoint = match ep {
-                    FalLlmEndpointKind::OpenAiChat => FalLlmEndpoint::OpenAiChat,
-                    FalLlmEndpointKind::OpenAiResponses => FalLlmEndpoint::OpenAiResponses,
-                    FalLlmEndpointKind::OpenAiEmbeddings => FalLlmEndpoint::OpenAiEmbeddings,
-                    FalLlmEndpointKind::OpenRouter => FalLlmEndpoint::OpenRouter {
-                        enterprise: opts.enterprise,
-                    },
-                    FalLlmEndpointKind::AnyLlm => FalLlmEndpoint::AnyLlm {
-                        enterprise: opts.enterprise,
-                    },
-                };
-                provider = provider.with_llm_endpoint(endpoint);
-            } else if opts.enterprise {
-                provider = provider.with_enterprise();
-            }
-            provider = provider.with_auto_route_modality(opts.auto_route_modality);
-        }
+        let opts: blazen_llm::types::provider_options::FalOptions = match options {
+            Some(o) => depythonize(o)?,
+            None => blazen_llm::types::provider_options::FalOptions::default(),
+        };
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Arc::new(FalProvider::from_options(api_key, opts)),
         })
     }
 

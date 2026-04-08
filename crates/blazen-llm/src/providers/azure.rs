@@ -122,6 +122,27 @@ impl AzureOpenAiProvider {
         }
     }
 
+    /// Construct from typed [`AzureOptions`](crate::types::provider_options::AzureOptions).
+    ///
+    /// `opts.base.model` and `opts.base.base_url` are ignored — Azure
+    /// determines the model from `deployment_name` and the URL from
+    /// `resource_name` + `deployment_name`.
+    #[cfg(any(
+        all(target_arch = "wasm32", not(target_os = "wasi")),
+        feature = "reqwest"
+    ))]
+    #[must_use]
+    pub fn from_options(
+        api_key: impl Into<String>,
+        opts: crate::types::provider_options::AzureOptions,
+    ) -> Self {
+        let mut provider = Self::new(api_key, &opts.resource_name, &opts.deployment_name);
+        if let Some(version) = opts.api_version {
+            provider = provider.with_api_version(version);
+        }
+        provider
+    }
+
     /// Override the API version.
     #[must_use]
     pub fn with_api_version(mut self, version: impl Into<String>) -> Self {

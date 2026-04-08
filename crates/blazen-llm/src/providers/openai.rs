@@ -264,6 +264,8 @@ impl OpenAiProvider {
     }
 }
 
+super::impl_simple_from_options!(OpenAiProvider);
+
 // ---------------------------------------------------------------------------
 // CompletionModel implementation
 // ---------------------------------------------------------------------------

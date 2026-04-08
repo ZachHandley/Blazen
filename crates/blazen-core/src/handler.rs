@@ -2,34 +2,58 @@
 //!
 //! Provides three consumption modes:
 //!
-//! 1. **Await the final result** -- either via [`WorkflowHandler::result`] or
-//!    by using the [`IntoFuture`] implementation (`handler.await`).
+//! 1. **Await the final result** -- via [`WorkflowHandler::result`].
 //! 2. **Stream intermediate events** -- via [`WorkflowHandler::stream_events`]
 //!    which subscribes to the broadcast channel that steps can publish to.
-//! 3. **Pause the workflow** -- via [`WorkflowHandler::pause`] which sends a
-//!    pause signal to the event loop and returns a serializable
-//!    [`WorkflowSnapshot`](crate::snapshot::WorkflowSnapshot).
+//! 3. **Control the workflow** -- via [`WorkflowHandler::pause`],
+//!    [`WorkflowHandler::resume_in_place`], [`WorkflowHandler::snapshot`],
+//!    [`WorkflowHandler::respond_to_input`], and [`WorkflowHandler::abort`].
 //!
 //! Modes 1 and 2 are composable: you can subscribe a stream first, then await
-//! the final result. Mode 3 consumes the handler (the workflow is stopped).
+//! the final result. Mode 3 can be used alongside modes 1 and 2.
 
-use std::future::{Future, IntoFuture};
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{self, Poll};
 
-use blazen_events::AnyEvent;
-use tokio::sync::{broadcast, oneshot};
+use blazen_events::{AnyEvent, InputResponseEvent};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinHandle;
-
-#[cfg(feature = "telemetry")]
-use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::error::WorkflowError;
 use crate::session_ref::SessionRefRegistry;
 use crate::snapshot::WorkflowSnapshot;
+
+/// The result of a completed workflow run.
+///
+/// Owns both the terminal event AND the session-ref registry that backs
+/// any `__blazen_session_ref__` markers carried by the event payload, so
+/// markers remain resolvable for as long as the caller holds the result.
+#[derive(Debug)]
+pub struct WorkflowResult {
+    pub event: Box<dyn AnyEvent>,
+    pub session_refs: Arc<SessionRefRegistry>,
+}
+
+/// Commands sent from the handler to the event loop via the control channel.
+pub(crate) enum WorkflowControl {
+    /// Park the event loop. Events stop being dispatched to steps but
+    /// the loop stays alive and responsive to further control commands.
+    Pause,
+    /// Resume a parked event loop.
+    Resume,
+    /// Capture a [`WorkflowSnapshot`] without stopping the loop.
+    /// The snapshot is sent back via the enclosed oneshot.
+    Snapshot {
+        reply: oneshot::Sender<Result<WorkflowSnapshot, WorkflowError>>,
+    },
+    /// Tear down the event loop. The loop exits and the spawned task completes.
+    Abort,
+    /// Deliver a human-in-the-loop response to a workflow that auto-parked
+    /// on an [`InputRequestEvent`]. The loop unparks and injects the response
+    /// as a routable event.
+    InputResponse(InputResponseEvent),
+}
 
 /// Handle to a running workflow.
 ///
@@ -41,19 +65,11 @@ pub struct WorkflowHandler {
     /// Sender side of the broadcast channel -- kept alive so we can create
     /// new subscriber receivers via `subscribe()`.
     stream_tx: broadcast::Sender<Box<dyn AnyEvent>>,
-    /// Sends the pause signal to the event loop (one-shot trigger).
-    pause_tx: Option<oneshot::Sender<()>>,
-    /// Receives the snapshot from the event loop after a pause.
-    snapshot_rx: Option<oneshot::Receiver<WorkflowSnapshot>>,
-    /// Handle to the spawned event loop task. Awaited during `result()` and
-    /// `pause()` to ensure the task fully exits before returning, which
-    /// prevents orphaned Tokio tasks from keeping runtimes alive (important
-    /// for napi-rs / Node.js bindings).
+    /// Control channel to the event loop (pause/resume/snapshot/abort/input).
+    control_tx: mpsc::UnboundedSender<WorkflowControl>,
+    /// Handle to the spawned event loop task.
     event_loop_handle: Option<JoinHandle<()>>,
-    /// Live session-ref registry for this run. Cloned from the workflow's
-    /// `Context` so that bindings can resolve `__blazen_session_ref__`
-    /// markers carried by the final result *after* the event loop has
-    /// exited and the original `Context` has been dropped.
+    /// Live session-ref registry for this run.
     session_refs: Arc<SessionRefRegistry>,
     /// Receives history events from the event loop (requires `telemetry` feature).
     #[cfg(feature = "telemetry")]
@@ -66,8 +82,7 @@ impl WorkflowHandler {
     pub(crate) fn new(
         result_rx: oneshot::Receiver<Result<Box<dyn AnyEvent>, WorkflowError>>,
         stream_tx: broadcast::Sender<Box<dyn AnyEvent>>,
-        pause_tx: Option<oneshot::Sender<()>>,
-        snapshot_rx: Option<oneshot::Receiver<WorkflowSnapshot>>,
+        control_tx: mpsc::UnboundedSender<WorkflowControl>,
         event_loop_handle: JoinHandle<()>,
         session_refs: Arc<SessionRefRegistry>,
         #[cfg(feature = "telemetry")] history_rx: Option<
@@ -77,8 +92,7 @@ impl WorkflowHandler {
         Self {
             result_rx: Some(result_rx),
             stream_tx,
-            pause_tx,
-            snapshot_rx,
+            control_tx,
             event_loop_handle: Some(event_loop_handle),
             session_refs,
             #[cfg(feature = "telemetry")]
@@ -109,14 +123,14 @@ impl WorkflowHandler {
     ///
     /// # Panics
     ///
-    /// Panics if `result()` or `into_future()` was already called on this
-    /// handler (the result receiver can only be consumed once).
-    pub async fn result(mut self) -> Result<Box<dyn AnyEvent>, WorkflowError> {
+    /// Panics if `result()` was already called on this handler (the result
+    /// receiver can only be consumed once).
+    pub async fn result(mut self) -> Result<WorkflowResult, WorkflowError> {
         let rx = self
             .result_rx
             .take()
             .expect("result() called after result was already consumed");
-        let result = rx.await.unwrap_or(Err(WorkflowError::ChannelClosed));
+        let event = rx.await.unwrap_or(Err(WorkflowError::ChannelClosed))?;
 
         // Wait for the event loop task to fully exit so there are no orphaned
         // Tokio tasks keeping runtimes alive (critical for napi-rs / Node.js).
@@ -124,7 +138,11 @@ impl WorkflowHandler {
             let _ = handle.await;
         }
 
-        result
+        let session_refs = Arc::clone(&self.session_refs);
+        Ok(WorkflowResult {
+            event,
+            session_refs,
+        })
     }
 
     /// Subscribe to intermediate events published by steps via
@@ -142,50 +160,71 @@ impl WorkflowHandler {
         BroadcastStream::new(rx).filter_map(std::result::Result::ok)
     }
 
-    /// Pause the running workflow and return a snapshot of its state.
+    /// Park the event loop in place.
     ///
-    /// This method:
-    ///
-    /// 1. Sends a pause signal to the event loop.
-    /// 2. Waits for all in-flight step tasks to complete.
-    /// 3. Drains pending events from the internal channel.
-    /// 4. Captures a full snapshot of context state, collected events,
-    ///    pending events, and metadata.
-    /// 5. Returns the [`WorkflowSnapshot`] which can be serialized and
-    ///    later used with [`Workflow::resume`](crate::Workflow::resume).
-    ///
-    /// Consumes the handler since the workflow is no longer running after
-    /// a pause.
+    /// The loop stops dispatching events to steps but stays alive and
+    /// responsive to [`resume_in_place`](Self::resume_in_place),
+    /// [`snapshot`](Self::snapshot), [`respond_to_input`](Self::respond_to_input),
+    /// and [`abort`](Self::abort) calls.
     ///
     /// # Errors
+    /// Returns [`WorkflowError::ChannelClosed`] if the event loop has already exited.
+    pub fn pause(&self) -> Result<(), WorkflowError> {
+        self.control_tx
+            .send(WorkflowControl::Pause)
+            .map_err(|_| WorkflowError::ChannelClosed)
+    }
+
+    /// Resume a parked event loop.
     ///
-    /// Returns [`WorkflowError::ChannelClosed`] if the event loop has
-    /// already terminated (e.g. the workflow completed before pause was
-    /// received) or if the pause/snapshot channels are unavailable.
-    pub async fn pause(mut self) -> Result<WorkflowSnapshot, WorkflowError> {
-        let pause_tx = self.pause_tx.take().ok_or(WorkflowError::ChannelClosed)?;
+    /// # Errors
+    /// Returns [`WorkflowError::ChannelClosed`] if the event loop has already exited.
+    pub fn resume_in_place(&self) -> Result<(), WorkflowError> {
+        self.control_tx
+            .send(WorkflowControl::Resume)
+            .map_err(|_| WorkflowError::ChannelClosed)
+    }
 
-        let snapshot_rx = self
-            .snapshot_rx
-            .take()
-            .ok_or(WorkflowError::ChannelClosed)?;
-
-        // Send the pause signal.
-        pause_tx
-            .send(())
-            .map_err(|()| WorkflowError::ChannelClosed)?;
-
-        // Await the snapshot from the event loop.
-        let snapshot = snapshot_rx
-            .await
+    /// Capture a [`WorkflowSnapshot`] without stopping the loop.
+    ///
+    /// For a quiescent snapshot (no in-flight steps), call [`pause`](Self::pause)
+    /// first, then `snapshot()`, then optionally [`resume_in_place`](Self::resume_in_place)
+    /// or [`abort`](Self::abort).
+    ///
+    /// # Errors
+    /// Returns [`WorkflowError::ChannelClosed`] if the event loop has already exited.
+    pub async fn snapshot(&self) -> Result<WorkflowSnapshot, WorkflowError> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.control_tx
+            .send(WorkflowControl::Snapshot { reply: reply_tx })
             .map_err(|_| WorkflowError::ChannelClosed)?;
+        reply_rx.await.unwrap_or(Err(WorkflowError::ChannelClosed))
+    }
 
-        // Wait for the event loop task to fully exit.
-        if let Some(handle) = self.event_loop_handle.take() {
-            let _ = handle.await;
-        }
+    /// Deliver a human-in-the-loop response to a workflow that auto-parked
+    /// on an [`InputRequestEvent`].
+    ///
+    /// The event loop unparks and injects the response as a routable event.
+    ///
+    /// # Errors
+    /// Returns [`WorkflowError::ChannelClosed`] if the event loop has already exited.
+    pub fn respond_to_input(&self, response: InputResponseEvent) -> Result<(), WorkflowError> {
+        self.control_tx
+            .send(WorkflowControl::InputResponse(response))
+            .map_err(|_| WorkflowError::ChannelClosed)
+    }
 
-        Ok(snapshot)
+    /// Tear down the event loop.
+    ///
+    /// After this call the loop exits and any pending [`result`](Self::result)
+    /// will resolve with [`WorkflowError::ChannelClosed`].
+    ///
+    /// # Errors
+    /// Returns [`WorkflowError::ChannelClosed`] if the event loop has already exited.
+    pub fn abort(&self) -> Result<(), WorkflowError> {
+        self.control_tx
+            .send(WorkflowControl::Abort)
+            .map_err(|_| WorkflowError::ChannelClosed)
     }
 
     /// Collect the workflow execution history after the workflow completes.
@@ -224,61 +263,10 @@ impl WorkflowHandler {
     }
 }
 
-// ---------------------------------------------------------------------------
-// IntoFuture -- allows `handler.await`
-// ---------------------------------------------------------------------------
-
-/// Future type backing the `IntoFuture` implementation for `WorkflowHandler`.
-pub struct WorkflowHandlerFuture {
-    rx: oneshot::Receiver<Result<Box<dyn AnyEvent>, WorkflowError>>,
-    event_loop_handle: Option<JoinHandle<()>>,
-    result: Option<Result<Box<dyn AnyEvent>, WorkflowError>>,
-}
-
-impl Future for WorkflowHandlerFuture {
-    type Output = Result<Box<dyn AnyEvent>, WorkflowError>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
-        // Phase 1: await the result from the oneshot channel.
-        if self.result.is_none() {
-            match Pin::new(&mut self.rx).poll(cx) {
-                Poll::Ready(Ok(result)) => {
-                    self.result = Some(result);
-                }
-                Poll::Ready(Err(_)) => {
-                    self.result = Some(Err(WorkflowError::ChannelClosed));
-                }
-                Poll::Pending => return Poll::Pending,
-            }
-        }
-
-        // Phase 2: await the event loop task to ensure clean shutdown.
-        if let Some(handle) = &mut self.event_loop_handle {
-            match Pin::new(handle).poll(cx) {
-                Poll::Ready(_) => {
-                    self.event_loop_handle = None;
-                }
-                Poll::Pending => return Poll::Pending,
-            }
-        }
-
-        Poll::Ready(self.result.take().expect("result was already consumed"))
-    }
-}
-
-impl IntoFuture for WorkflowHandler {
-    type Output = Result<Box<dyn AnyEvent>, WorkflowError>;
-    type IntoFuture = WorkflowHandlerFuture;
-
-    fn into_future(mut self) -> Self::IntoFuture {
-        let rx = self
-            .result_rx
-            .take()
-            .expect("IntoFuture: result was already consumed");
-        WorkflowHandlerFuture {
-            rx,
-            event_loop_handle: self.event_loop_handle.take(),
-            result: None,
-        }
+impl Drop for WorkflowHandler {
+    fn drop(&mut self) {
+        // Best-effort abort so the spawned event-loop task doesn't leak.
+        // Ignore errors — the loop may have already exited.
+        let _ = self.control_tx.send(WorkflowControl::Abort);
     }
 }

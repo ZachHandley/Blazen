@@ -28,6 +28,10 @@ pub enum PipelineError {
     #[error("pipeline was paused")]
     Paused,
 
+    /// The pipeline was aborted.
+    #[error("pipeline was aborted")]
+    Aborted,
+
     /// An internal channel was closed unexpectedly.
     #[error("channel closed")]
     ChannelClosed,

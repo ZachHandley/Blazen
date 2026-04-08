@@ -112,6 +112,8 @@ impl MistralProvider {
     }
 }
 
+super::impl_simple_from_options!(MistralProvider, no_base_url);
+
 // ---------------------------------------------------------------------------
 // CompletionModel implementation
 // ---------------------------------------------------------------------------

@@ -112,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // Await the final result (consumes the handler).
-    let result = handler.result().await?;
+    let result = handler.result().await?.event;
 
     // Give the stream task a moment to finish processing buffered events.
     let _ = tokio::time::timeout(std::time::Duration::from_millis(100), stream_task).await;

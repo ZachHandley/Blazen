@@ -292,17 +292,19 @@ async def finish(ctx: Context, ev: ProcessedEvent):
 Snapshot a running workflow and resume it later -- useful for long-running processes, human-in-the-loop patterns, or persisting state across restarts.
 
 ```python
-# Pause: capture workflow state as JSON
+# Pause: signal pause, then capture workflow state as JSON
 handler = await wf.run(prompt="Hello")
-snapshot_json = await handler.pause()
+handler.pause()
+snapshot_json = await handler.snapshot()
 # Save snapshot_json to disk, database, etc.
 
 # Resume: restore from snapshot with the same steps
 handler = await Workflow.resume(snapshot_json, [step1, step2])
+await handler.resume_in_place()
 result = await handler.result()
 ```
 
-> **Note on `ctx.session` and pause/resume.** Values in `ctx.session` are live references and are deliberately **excluded** from snapshots. If you store live objects there and then call `handler.pause()`, the workflow's `session_pause_policy` decides what happens: the default (`pickle_or_error`) attempts to pickle each entry into the snapshot and raises a clear error if any entry can't be serialised. For workflows that explicitly want ephemeral runs, use `ctx.state` for anything that must survive pause/resume, and `ctx.session` for everything else.
+> **Note on `ctx.session` and pause/resume.** Values in `ctx.session` are live references and are deliberately **excluded** from snapshots. If you store live objects there and then call `handler.snapshot()`, the workflow's `session_pause_policy` decides what happens: the default (`pickle_or_error`) attempts to pickle each entry into the snapshot and raises a clear error if any entry can't be serialised. For workflows that explicitly want ephemeral runs, use `ctx.state` for anything that must survive pause/resume, and `ctx.session` for everything else.
 
 ## Context API
 
@@ -399,7 +401,7 @@ async def load_model(ctx: Context, ev: NextEvent):
 | `@step` | Decorator for workflow steps. Infers `accepts` from the `ev` parameter type annotation. Supports `async def` and plain `def`. May also be called as `@step(accepts=[...], emits=[...], max_concurrency=N)`. |
 | `Workflow(name, steps, timeout=None)` | Validated workflow graph. `timeout` is in seconds (default: 300). |
 | `await wf.run(**kwargs)` | Execute the workflow. Returns a `WorkflowHandler`. Kwargs become the `StartEvent` payload. |
-| `WorkflowHandler` | Handle to a running workflow: `await handler.result()`, `async for ev in handler.stream_events()`, `await handler.pause()`. |
+| `WorkflowHandler` | Handle to a running workflow: `await handler.result()`, `async for ev in handler.stream_events()`, `handler.pause()`, `await handler.snapshot()`, `await handler.resume_in_place()`, `await handler.respond_to_input(request_id, response)`, `await handler.abort()`. |
 | `await Workflow.resume(snapshot_json, steps, timeout=None)` | Resume a paused workflow from a JSON snapshot. Returns a `WorkflowHandler`. |
 | `CompletionModel.<provider>(api_key, options={...})` | LLM provider. Pass provider-specific options (model, region, etc.) as a plain dict via `options=`. Providers: `openai`, `anthropic`, `gemini`, `azure`, `openrouter`, `groq`, `together`, `mistral`, `deepseek`, `fireworks`, `perplexity`, `xai`, `cohere`, `bedrock`, `fal`. |
 | `await model.complete(messages, ...)` | Chat completion. Returns a typed `CompletionResponse`. |

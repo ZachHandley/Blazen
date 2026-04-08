@@ -21,6 +21,17 @@ use crate::types::{PyChatMessage, PyCompletionResponse};
 /// Type alias for the pinned boxed stream returned by `CompletionModel::stream`.
 type PinnedChunkStream = Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>;
 
+/// Deserialize an optional Python options dict into [`ProviderOptions`].
+/// Returns the default (all-`None`) options when no dict is provided.
+fn depy_provider_options(
+    options: Option<&Bound<'_, PyAny>>,
+) -> PyResult<blazen_llm::types::provider_options::ProviderOptions> {
+    match options {
+        Some(o) => Ok(pythonize::depythonize(o)?),
+        None => Ok(blazen_llm::types::provider_options::ProviderOptions::default()),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // PyCompletionOptions
 // ---------------------------------------------------------------------------
@@ -109,6 +120,11 @@ impl PyCompletionModel {
     // -----------------------------------------------------------------
     // Provider constructors
     // -----------------------------------------------------------------
+    //
+    // Each factory deserializes its native options dict into the typed
+    // core struct, then delegates to the provider's `from_options()`
+    // method. The construction logic itself lives in `blazen-llm` (see
+    // `crates/blazen-llm/src/providers/mod.rs::impl_simple_from_options`).
 
     /// Create an OpenAI provider.
     ///
@@ -118,19 +134,11 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
     fn openai(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let mut provider = blazen_llm::providers::openai::OpenAiProvider::new(api_key);
-        if let Some(opts) = options {
-            let opts: blazen_llm::types::provider_options::ProviderOptions =
-                pythonize::depythonize(opts)?;
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
-            if let Some(url) = opts.base_url {
-                provider = provider.with_base_url(url);
-            }
-        }
+        let opts = depy_provider_options(options)?;
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Arc::new(blazen_llm::providers::openai::OpenAiProvider::from_options(
+                api_key, opts,
+            )),
         })
     }
 
@@ -142,19 +150,11 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
     fn anthropic(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let mut provider = blazen_llm::providers::anthropic::AnthropicProvider::new(api_key);
-        if let Some(opts) = options {
-            let opts: blazen_llm::types::provider_options::ProviderOptions =
-                pythonize::depythonize(opts)?;
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
-            if let Some(url) = opts.base_url {
-                provider = provider.with_base_url(url);
-            }
-        }
+        let opts = depy_provider_options(options)?;
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Arc::new(
+                blazen_llm::providers::anthropic::AnthropicProvider::from_options(api_key, opts),
+            ),
         })
     }
 
@@ -166,19 +166,11 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
     fn gemini(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let mut provider = blazen_llm::providers::gemini::GeminiProvider::new(api_key);
-        if let Some(opts) = options {
-            let opts: blazen_llm::types::provider_options::ProviderOptions =
-                pythonize::depythonize(opts)?;
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
-            if let Some(url) = opts.base_url {
-                provider = provider.with_base_url(url);
-            }
-        }
+        let opts = depy_provider_options(options)?;
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Arc::new(blazen_llm::providers::gemini::GeminiProvider::from_options(
+                api_key, opts,
+            )),
         })
     }
 
@@ -193,16 +185,10 @@ impl PyCompletionModel {
     fn azure(api_key: &str, options: &Bound<'_, PyAny>) -> PyResult<Self> {
         let opts: blazen_llm::types::provider_options::AzureOptions =
             pythonize::depythonize(options)?;
-        let mut provider = blazen_llm::providers::azure::AzureOpenAiProvider::new(
-            api_key,
-            &opts.resource_name,
-            &opts.deployment_name,
-        );
-        if let Some(version) = opts.api_version {
-            provider = provider.with_api_version(version);
-        }
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Arc::new(
+                blazen_llm::providers::azure::AzureOpenAiProvider::from_options(api_key, opts),
+            ),
         })
     }
 
@@ -214,16 +200,11 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
     fn openrouter(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let mut provider = blazen_llm::providers::openrouter::OpenRouterProvider::new(api_key);
-        if let Some(opts) = options {
-            let opts: blazen_llm::types::provider_options::ProviderOptions =
-                pythonize::depythonize(opts)?;
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
-        }
+        let opts = depy_provider_options(options)?;
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Arc::new(
+                blazen_llm::providers::openrouter::OpenRouterProvider::from_options(api_key, opts),
+            ),
         })
     }
 
@@ -235,16 +216,11 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
     fn groq(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let mut provider = blazen_llm::providers::groq::GroqProvider::new(api_key);
-        if let Some(opts) = options {
-            let opts: blazen_llm::types::provider_options::ProviderOptions =
-                pythonize::depythonize(opts)?;
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
-        }
+        let opts = depy_provider_options(options)?;
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Arc::new(blazen_llm::providers::groq::GroqProvider::from_options(
+                api_key, opts,
+            )),
         })
     }
 
@@ -256,16 +232,11 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
     fn together(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let mut provider = blazen_llm::providers::together::TogetherProvider::new(api_key);
-        if let Some(opts) = options {
-            let opts: blazen_llm::types::provider_options::ProviderOptions =
-                pythonize::depythonize(opts)?;
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
-        }
+        let opts = depy_provider_options(options)?;
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Arc::new(
+                blazen_llm::providers::together::TogetherProvider::from_options(api_key, opts),
+            ),
         })
     }
 
@@ -277,16 +248,11 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
     fn mistral(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let mut provider = blazen_llm::providers::mistral::MistralProvider::new(api_key);
-        if let Some(opts) = options {
-            let opts: blazen_llm::types::provider_options::ProviderOptions =
-                pythonize::depythonize(opts)?;
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
-        }
+        let opts = depy_provider_options(options)?;
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Arc::new(
+                blazen_llm::providers::mistral::MistralProvider::from_options(api_key, opts),
+            ),
         })
     }
 
@@ -298,16 +264,11 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
     fn deepseek(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let mut provider = blazen_llm::providers::deepseek::DeepSeekProvider::new(api_key);
-        if let Some(opts) = options {
-            let opts: blazen_llm::types::provider_options::ProviderOptions =
-                pythonize::depythonize(opts)?;
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
-        }
+        let opts = depy_provider_options(options)?;
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Arc::new(
+                blazen_llm::providers::deepseek::DeepSeekProvider::from_options(api_key, opts),
+            ),
         })
     }
 
@@ -319,16 +280,11 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
     fn fireworks(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let mut provider = blazen_llm::providers::fireworks::FireworksProvider::new(api_key);
-        if let Some(opts) = options {
-            let opts: blazen_llm::types::provider_options::ProviderOptions =
-                pythonize::depythonize(opts)?;
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
-        }
+        let opts = depy_provider_options(options)?;
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Arc::new(
+                blazen_llm::providers::fireworks::FireworksProvider::from_options(api_key, opts),
+            ),
         })
     }
 
@@ -340,16 +296,11 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
     fn perplexity(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let mut provider = blazen_llm::providers::perplexity::PerplexityProvider::new(api_key);
-        if let Some(opts) = options {
-            let opts: blazen_llm::types::provider_options::ProviderOptions =
-                pythonize::depythonize(opts)?;
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
-        }
+        let opts = depy_provider_options(options)?;
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Arc::new(
+                blazen_llm::providers::perplexity::PerplexityProvider::from_options(api_key, opts),
+            ),
         })
     }
 
@@ -361,16 +312,11 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
     fn xai(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let mut provider = blazen_llm::providers::xai::XaiProvider::new(api_key);
-        if let Some(opts) = options {
-            let opts: blazen_llm::types::provider_options::ProviderOptions =
-                pythonize::depythonize(opts)?;
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
-        }
+        let opts = depy_provider_options(options)?;
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Arc::new(blazen_llm::providers::xai::XaiProvider::from_options(
+                api_key, opts,
+            )),
         })
     }
 
@@ -382,16 +328,11 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
     fn cohere(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let mut provider = blazen_llm::providers::cohere::CohereProvider::new(api_key);
-        if let Some(opts) = options {
-            let opts: blazen_llm::types::provider_options::ProviderOptions =
-                pythonize::depythonize(opts)?;
-            if let Some(m) = opts.model {
-                provider = provider.with_model(m);
-            }
-        }
+        let opts = depy_provider_options(options)?;
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Arc::new(blazen_llm::providers::cohere::CohereProvider::from_options(
+                api_key, opts,
+            )),
         })
     }
 
@@ -405,13 +346,10 @@ impl PyCompletionModel {
     fn bedrock(api_key: &str, options: &Bound<'_, PyAny>) -> PyResult<Self> {
         let opts: blazen_llm::types::provider_options::BedrockOptions =
             pythonize::depythonize(options)?;
-        let mut provider =
-            blazen_llm::providers::bedrock::BedrockProvider::new(api_key, &opts.region);
-        if let Some(m) = opts.base.model {
-            provider = provider.with_model(m);
-        }
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Arc::new(
+                blazen_llm::providers::bedrock::BedrockProvider::from_options(api_key, opts),
+            ),
         })
     }
 
@@ -426,35 +364,14 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
     fn fal(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let mut provider = blazen_llm::providers::fal::FalProvider::new(api_key);
-        if let Some(opts_raw) = options {
-            let opts: blazen_llm::types::provider_options::FalOptions =
-                pythonize::depythonize(opts_raw)?;
-            if let Some(m) = opts.base.model {
-                provider = provider.with_llm_model(m);
-            }
-            if let Some(ep) = opts.endpoint {
-                use blazen_llm::providers::fal::FalLlmEndpoint;
-                use blazen_llm::types::provider_options::FalLlmEndpointKind;
-                let endpoint = match ep {
-                    FalLlmEndpointKind::OpenAiChat => FalLlmEndpoint::OpenAiChat,
-                    FalLlmEndpointKind::OpenAiResponses => FalLlmEndpoint::OpenAiResponses,
-                    FalLlmEndpointKind::OpenAiEmbeddings => FalLlmEndpoint::OpenAiEmbeddings,
-                    FalLlmEndpointKind::OpenRouter => FalLlmEndpoint::OpenRouter {
-                        enterprise: opts.enterprise,
-                    },
-                    FalLlmEndpointKind::AnyLlm => FalLlmEndpoint::AnyLlm {
-                        enterprise: opts.enterprise,
-                    },
-                };
-                provider = provider.with_llm_endpoint(endpoint);
-            } else if opts.enterprise {
-                provider = provider.with_enterprise();
-            }
-            provider = provider.with_auto_route_modality(opts.auto_route_modality);
-        }
+        let opts: blazen_llm::types::provider_options::FalOptions = match options {
+            Some(o) => pythonize::depythonize(o)?,
+            None => blazen_llm::types::provider_options::FalOptions::default(),
+        };
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Arc::new(blazen_llm::providers::fal::FalProvider::from_options(
+                api_key, opts,
+            )),
         })
     }
 
