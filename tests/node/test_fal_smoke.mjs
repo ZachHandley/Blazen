@@ -226,15 +226,15 @@ describe("fal.ai streaming + embeddings + utilities", { skip: !FAL_API_KEY, time
   });
 });
 
-describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY, timeout: 300_000 }, () => {
-  it("generates an image with FLUX", async () => {
+describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY, timeout: 2_100_000 }, () => {
+  it("generates an image with FLUX", { timeout: 300_000 }, async () => {
     const provider = FalProvider.create(FAL_API_KEY);
     const result = await provider.generateImage({ prompt: "a simple red circle on white" });
     assert.ok(result.images, "expected images");
     assert.ok(result.images.length > 0, "expected at least one image");
   });
 
-  it("synthesizes speech from text", async () => {
+  it("synthesizes speech from text", { timeout: 300_000 }, async () => {
     const provider = FalProvider.create(FAL_API_KEY);
     const result = await provider.textToSpeech({
       text: "Hello world.",
@@ -248,7 +248,7 @@ describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY, timeout: 300_000 },
     );
   });
 
-  it("generates music from a prompt", async () => {
+  it("generates music from a prompt", { timeout: 300_000 }, async () => {
     const provider = FalProvider.create(FAL_API_KEY);
     const result = await provider.generateMusic({
       prompt: "happy upbeat jingle",
@@ -263,7 +263,7 @@ describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY, timeout: 300_000 },
     );
   });
 
-  it("transcribes audio from a URL", async () => {
+  it("transcribes audio from a URL", { timeout: 300_000 }, async () => {
     const provider = FalProvider.create(FAL_API_KEY);
     const result = await provider.transcribe({
       audioUrl: "https://cdn.openai.com/API/docs/audio/alloy.wav",
@@ -294,7 +294,7 @@ describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY, timeout: 300_000 },
     }
   });
 
-  it("runs a model synchronously via run()", async () => {
+  it("runs a model synchronously via run()", { timeout: 300_000 }, async () => {
     const provider = FalProvider.create(FAL_API_KEY);
     const result = await provider.run("fal-ai/flux/schnell", {
       prompt: "blue sky with white clouds",
@@ -304,7 +304,7 @@ describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY, timeout: 300_000 },
     assert.ok(result, "expected a non-null result from run()");
   });
 
-  it("submits a job and gets a valid job handle", async () => {
+  it("submits a job and gets a valid job handle", { timeout: 300_000 }, async () => {
     const provider = FalProvider.create(FAL_API_KEY);
 
     const job = await provider.submit("fal-ai/flux/schnell", {
