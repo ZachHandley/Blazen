@@ -39,6 +39,63 @@ export declare class ChatMessage {
 export type JsChatMessage = ChatMessage
 
 /**
+ * A token-windowed conversation memory.
+ *
+ * Holds a sequence of `ChatMessage` objects and automatically evicts the
+ * oldest messages (preserving system messages) when the token count exceeds
+ * the configured budget.
+ *
+ * ```javascript
+ * const window = new ChatWindow(4096);
+ * window.add(ChatMessage.system("You are helpful."));
+ * window.add(ChatMessage.user("Hello!"));
+ * console.log(window.tokenCount());
+ * console.log(window.remainingTokens());
+ * ```
+ */
+export declare class ChatWindow {
+  /**
+   * Create a new chat window with the given token budget.
+   *
+   * @param maxTokens - The maximum number of tokens to allow in the window.
+   */
+  constructor(maxTokens: number)
+  /**
+   * Append a message to the window.
+   *
+   * If the token count exceeds the budget after adding the message,
+   * the oldest non-system messages are evicted until within budget.
+   * System messages are never evicted.
+   *
+   * @param message - A `ChatMessage` to add.
+   */
+  add(message: JsChatMessage): void
+  /**
+   * Get the current messages in the window.
+   *
+   * @returns An array of `ChatMessage` objects.
+   */
+  messages(): Array<JsChatMessage>
+  /** Remove all messages from the window. */
+  clear(): void
+  /**
+   * Estimate the total token count of all messages in the window.
+   *
+   * @returns The estimated number of tokens.
+   */
+  tokenCount(): number
+  /**
+   * Return the number of tokens remaining before the budget is reached.
+   *
+   * @returns The number of tokens remaining (0 if already at or over budget).
+   */
+  remainingTokens(): number
+  /** Return the number of messages in the window. */
+  get length(): number
+}
+export type JsChatWindow = ChatWindow
+
+/**
  * A chat completion model.
  *
  * Use the static factory methods to create an instance for your provider:
@@ -524,6 +581,118 @@ export declare class Memory {
 export type JsMemory = Memory
 
 /**
+ * A versioned registry for prompt templates.
+ *
+ * Organises templates by name and version, with convenient lookup,
+ * rendering, and file I/O.
+ *
+ * ```javascript
+ * const registry = new PromptRegistry();
+ * registry.register("greet", new PromptTemplate("Hello {{name}}!"));
+ * const msg = registry.render("greet", { name: "Alice" });
+ * console.log(msg.content);
+ * ```
+ */
+export declare class PromptRegistry {
+  /** Create a new empty prompt registry. */
+  constructor()
+  /**
+   * Register a template under the given name.
+   *
+   * The template's internal name is updated to match the provided name.
+   * If a template with the same name and version already exists, it is
+   * replaced.
+   *
+   * @param name     - The name to register the template under.
+   * @param template - The `PromptTemplate` to register.
+   */
+  register(name: string, template: PromptTemplate): void
+  /**
+   * Get the latest version of a template by name.
+   *
+   * @param name - The template name.
+   * @returns The `PromptTemplate` or `null` if not found.
+   */
+  get(name: string): PromptTemplate | null
+  /**
+   * Render the latest version of the named template with the given variables.
+   *
+   * @param name      - The template name.
+   * @param variables - A map of variable name to value.
+   * @returns A `ChatMessage` with the rendered content.
+   */
+  render(name: string, variables: Record<string, string>): ChatMessage
+  /**
+   * List all registered template names (sorted).
+   *
+   * @returns An array of template name strings.
+   */
+  list(): Array<string>
+  /**
+   * Load a registry from a YAML or JSON file.
+   *
+   * The file format is detected by extension (`.yaml`/`.yml` for YAML,
+   * `.json` for JSON).
+   *
+   * @param path - Path to the prompt file.
+   * @returns A new `PromptRegistry` with the loaded templates.
+   */
+  static fromFile(path: string): PromptRegistry
+  /**
+   * Load all prompt files from a directory.
+   *
+   * Reads all `.yaml`, `.yml`, and `.json` files in the directory.
+   *
+   * @param path - Path to the directory.
+   * @returns A new `PromptRegistry` with the loaded templates.
+   */
+  static fromDir(path: string): PromptRegistry
+}
+export type JsPromptRegistry = PromptRegistry
+
+/**
+ * A reusable prompt template with `{{variable}}` placeholders.
+ *
+ * Templates are rendered by replacing `{{var}}` placeholders with the
+ * provided variables map.
+ *
+ * ```javascript
+ * const t = new PromptTemplate("Hello {{name}}!", { role: "user" });
+ * const msg = t.render({ name: "Alice" });
+ * console.log(msg.content); // "Hello Alice!"
+ * ```
+ */
+export declare class PromptTemplate {
+  /**
+   * Create a new prompt template.
+   *
+   * @param template - The template string with `{{variable}}` placeholders.
+   * @param options  - Optional configuration (role, name, description, version).
+   */
+  constructor(template: string, options?: PromptTemplateOptions | undefined | null)
+  /** The raw template string. */
+  get template(): string
+  /** The chat role ("system", "user", or "assistant"). */
+  get role(): string
+  /** The template name. */
+  get name(): string
+  /** The optional description. */
+  get description(): string | null
+  /** The version string. */
+  get version(): string
+  /** The sorted list of variable names in this template. */
+  get variables(): Array<string>
+  /**
+   * Render the template with the given variables.
+   *
+   * @param variables - A map of variable name to value.
+   * @returns A `ChatMessage` with the rendered content and template's role.
+   */
+  render(variables: Record<string, string>): ChatMessage
+}
+export type JsPromptTemplate = PromptTemplate
+
+/**
  * Namespace for in-process-only workflow values.
  *
  * Values stored via `session.set` are kept in the
@@ -651,14 +820,13 @@ export declare class Workflow {
    * running workflow:
    *
    * - Call `handler.result()` to await the final result.
-   * - Call `handler.pause()` then `handler.snapshot()` to pause and serialize.
+   * - Call `handler.pause()` to pause and get a snapshot JSON string.
    * - Call `handler.streamEvents(cb)` to subscribe to intermediate events.
    *
    * ```javascript
    * const handler = await workflow.runWithHandler({ message: "hello" });
    * // ... later ...
-   * handler.pause();
-   * const snapshot = await handler.snapshot();
+   * const snapshot = await handler.pause();
    * ```
    */
   runWithHandler(input: any): Promise<WorkflowHandler>
@@ -666,7 +834,7 @@ export declare class Workflow {
    * Resume a previously paused workflow from a snapshot.
    *
    * The snapshot JSON string should have been obtained from a prior
-   * call to `handler.snapshot()`. The workflow will resume with the same
+   * call to `handler.pause()`. The workflow will resume with the same
    * steps that were registered on this `Workflow` instance.
    *
    * Returns a new `WorkflowHandler` for the resumed workflow.
@@ -686,14 +854,19 @@ export type JsWorkflow = Workflow
  *
  * Returned by `Workflow.runWithHandler()`. Provides methods to:
  *
- * - **`result()`** -- await the final workflow result.
+ * - **`result()`** -- await the final workflow result (consumes the handler).
  * - **`pause()`** -- signal the workflow to pause.
- * - **`snapshot()`** -- get the serialized workflow state after pausing.
- * - **`resumeInPlace()`** -- resume a paused workflow.
- * - **`respondToInput(requestId, response)`** -- supply a response to a pending input request.
+ * - **`snapshot()`** -- get a serializable snapshot as a JSON string.
+ * - **`resumeInPlace()`** -- resume a paused workflow without creating a new one.
+ * - **`respondToInput(requestId, response)`** -- respond to an input request.
  * - **`abort()`** -- abort the running workflow.
  * - **`streamEvents(callback)`** -- subscribe to intermediate events
  *   published via `ctx.writeEventToStream()`.
+ *
+ * **Important:** `result()` consumes the handler internally. You can only
+ * call it once. The other control methods (`pause`, `resumeInPlace`,
+ * `abort`, `respondToInput`, `snapshot`) borrow the handler and can be
+ * called multiple times.
  *
  * ```javascript
  * const handler = await workflow.runWithHandler({ message: "hello" });
@@ -701,12 +874,12 @@ export type JsWorkflow = Workflow
  * // Option A: just get the result
  * const result = await handler.result();
  *
- * // Option B: pause, snapshot, then resume later
- * handler.pause();
- * const snapshot = await handler.snapshot();
- * fs.writeFileSync("snapshot.json", snapshot);
- * // ... later ...
- * handler.resumeInPlace();
+ * // Option B: pause, snapshot, then resume
+ * await handler.pause();
+ * const snap = await handler.snapshot();
+ * fs.writeFileSync("snapshot.json", snap);
+ * await handler.resumeInPlace();
+ * const result = await handler.result();
  *
  * // Option C: stream events, then get the result
  * handler.streamEvents((event) => console.log(event));
@@ -718,45 +891,42 @@ export declare class WorkflowHandler {
    * Await the final workflow result.
    *
    * Returns the result when the workflow completes via a `StopEvent`.
+   *
+   * This method consumes the handler internally -- it can only be called
+   * once.
    */
   result(): Promise<JsWorkflowResult>
   /**
-   * Signal the workflow to pause.
+   * Signal the running workflow to pause.
    *
-   * This is a synchronous, non-consuming call. After pausing, call
-   * `snapshot()` to obtain the serialized state, or `resumeInPlace()`
-   * to continue execution.
+   * After pausing, use `snapshot()` to get a serializable snapshot, or
+   * `resumeInPlace()` to continue execution.
    */
-  pause(): void
+  pause(): Promise<void>
+  /** Resume a paused workflow in place without creating a new handler. */
+  resumeInPlace(): Promise<void>
   /**
-   * Capture the paused workflow state as a JSON string.
+   * Get a serializable snapshot of the workflow as a JSON string.
    *
-   * The snapshot can be saved to a file or database. Use
-   * `Workflow.resume(snapshotJson)` to resume later.
+   * The snapshot contains all workflow state and can be saved to a file
+   * or database. Use `Workflow.resume(snapshotJson)` to resume later.
    */
   snapshot(): Promise<string>
   /**
-   * Resume a paused workflow in-place, continuing execution
-   * from where it left off.
-   */
-  resumeInPlace(): Promise<void>
-  /**
-   * Supply a response to a pending `InputRequestEvent`.
+   * Respond to an input request from a paused workflow.
    *
-   * @param requestId - The request ID from the original `InputRequestEvent`.
-   * @param response - The response value to send.
+   * The `request_id` must match the `InputRequestEvent.request_id` that
+   * was published by the workflow step.
    */
   respondToInput(requestId: string, response: any): Promise<void>
-  /**
-   * Abort the running workflow.
-   */
+  /** Abort the running workflow. */
   abort(): Promise<void>
   /**
    * Subscribe to intermediate events published by steps via
    * `ctx.writeEventToStream()`.
    *
    * The `onEvent` callback receives each event as a plain object.
-   * This must be called **before** `result()`.
+   * This must be called **before** `result()` or `pause()`.
    *
    * Events published before this call are not replayed.
    */
@@ -1411,6 +1581,18 @@ export interface JsWorkflowResult {
   type: string
   /** The result data as a JSON object. */
   data: any
+}
+
+/** Options for creating a `PromptTemplate`. */
+export interface PromptTemplateOptions {
+  /** The chat role: "system", "user", or "assistant". Defaults to "user". */
+  role?: string
+  /** A unique name for this template. Defaults to "unnamed". */
+  name?: string
+  /** An optional description of this template. */
+  description?: string
+  /** The version string. Defaults to "1.0". */
+  version?: string
 }
 
 /**

@@ -377,6 +377,7 @@ dependencies = [
  "blazen-llm",
  "blazen-memory",
  "blazen-memory-valkey",
+ "blazen-prompts",
  "chrono",
  "napi",
  "napi-build",

@@ -25,7 +25,7 @@ authors = [{ name = "Zach Handley", email = "zachhandley@gmail.com" }]
 dynamic = ["version"]
 
 [tool.maturin]
-features = ["pyo3/extension-module"]
+features = ["extension-module"]
 module-name = "blazen"
 manifest-path = "Cargo.toml"
 

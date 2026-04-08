@@ -17,6 +17,7 @@ blazen-events.workspace = true
 blazen-llm = { workspace = true, features = ["reqwest"] }
 blazen-memory.workspace = true
 blazen-memory-valkey.workspace = true
+blazen-prompts.workspace = true
 chrono.workspace = true
 napi.workspace = true
 napi-derive.workspace = true

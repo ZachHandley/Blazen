@@ -1,6 +1,7 @@
 //! Shared type definitions for the Node.js bindings.
 
 pub mod artifact;
+pub mod chat_window;
 pub mod citation;
 pub mod completion;
 pub mod embedding;
@@ -8,6 +9,7 @@ pub mod finish_reason;
 pub mod media;
 pub mod memory;
 pub mod message;
+pub mod prompts;
 pub mod reasoning;
 pub mod response_format;
 pub mod stream;
@@ -17,6 +19,7 @@ pub mod usage;
 
 // Re-export all public types for convenient access.
 pub use artifact::JsArtifact;
+pub use chat_window::JsChatWindow;
 pub use citation::JsCitation;
 pub(crate) use completion::build_response;
 pub use completion::{JsCompletionOptions, JsCompletionResponse};
@@ -30,6 +33,7 @@ pub use memory::{
 pub use message::{
     ChatMessageOptions, JsChatMessage, JsContentPart, JsImageContent, JsImageSource, JsRole,
 };
+pub use prompts::{JsPromptRegistry, JsPromptTemplate};
 pub use reasoning::JsReasoningTrace;
 pub use response_format::JsResponseFormat;
 pub use stream::JsStreamChunk;

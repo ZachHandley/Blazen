@@ -39,6 +39,11 @@ pub mod workflow;
 
 use pyo3::prelude::*;
 
+// Register the stub info gatherer so `cargo run --bin stub_gen` can
+// collect all `#[gen_stub_pyclass]` / `#[gen_stub_pymethods]` annotations
+// and generate `blazen.pyi` from Rust source (the single source of truth).
+pyo3_stub_gen::define_stub_info_gatherer!(stub_info);
+
 /// The top-level Python module for `Blazen`.
 #[pymodule]
 fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {

@@ -10,7 +10,7 @@ description = "Python bindings for the Blazen workflow engine"
 
 [lib]
 name = "blazen"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 async-trait.workspace = true
@@ -21,7 +21,7 @@ blazen-memory.workspace = true
 blazen-memory-valkey.workspace = true
 blazen-prompts.workspace = true
 chrono.workspace = true
-pyo3 = { workspace = true, features = ["extension-module"] }
+pyo3.workspace = true
 pyo3-async-runtimes.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
@@ -34,9 +34,13 @@ pythonize = "0.28"
 pyo3-stub-gen = "0.20"
 pyo3-stub-gen-derive = "0.20"
 
+[features]
+default = []
+extension-module = ["pyo3/extension-module"]
+
 [lints]
 workspace = true
 
-[[bin]]
+[[example]]
 name = "stub_gen"
-path = "src/bin/stub_gen.rs"
+path = "examples/stub_gen.rs"
