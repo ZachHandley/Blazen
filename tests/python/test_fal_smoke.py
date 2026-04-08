@@ -295,6 +295,7 @@ async def test_fal_text_to_speech():
 
 @skip_without_key
 @pytest.mark.asyncio
+@pytest.mark.timeout(300)
 async def test_fal_generate_music():
     """Generate music and verify the response contains audio data."""
     provider = FalProvider(api_key=FAL_API_KEY)
@@ -319,7 +320,7 @@ async def test_fal_transcribe():
 
 @skip_without_key
 @pytest.mark.asyncio
-@pytest.mark.timeout(120)
+@pytest.mark.timeout(300)
 async def test_fal_text_to_video():
     """Generate a video from text (slow, ~30-60s)."""
     provider = FalProvider(api_key=FAL_API_KEY)
