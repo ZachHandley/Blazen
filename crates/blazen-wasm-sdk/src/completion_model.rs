@@ -4,7 +4,6 @@
 //! as async methods that return JavaScript `Promise`s.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
@@ -347,7 +346,7 @@ impl WasmCompletionModel {
         max_entries: Option<u32>,
     ) -> WasmCompletionModel {
         let config = CacheConfig {
-            ttl: Duration::from_secs(u64::from(ttl_seconds.unwrap_or(300))),
+            ttl_seconds: u64::from(ttl_seconds.unwrap_or(300)),
             max_entries: max_entries.unwrap_or(1000) as usize,
             ..CacheConfig::default()
         };
