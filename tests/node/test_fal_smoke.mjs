@@ -212,7 +212,7 @@ describe("fal.ai streaming + embeddings + utilities", { skip: !FAL_API_KEY, time
   it("removes background from an image", async () => {
     const provider = FalProvider.create(FAL_API_KEY);
     try {
-      const result = await provider.removeBackground(IMAGE_URL);
+      const result = await provider.removeBackground({ imageUrl: IMAGE_URL });
       assert.ok(result, "expected a background-removal result");
     } catch (e) {
       const m = String(e.message ?? e);
@@ -296,9 +296,9 @@ describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY, timeout: 2_100_000 
 
   it("runs a model synchronously via run()", { timeout: 300_000 }, async () => {
     const provider = FalProvider.create(FAL_API_KEY);
-    const result = await provider.run("fal-ai/flux/schnell", {
-      prompt: "blue sky with white clouds",
-      image_size: "square_hd",
+    const result = await provider.run({
+      model: "fal-ai/flux/schnell",
+      input: { prompt: "blue sky with white clouds", imageSize: "square_hd" },
     });
 
     assert.ok(result, "expected a non-null result from run()");
@@ -307,8 +307,9 @@ describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY, timeout: 2_100_000 
   it("submits a job and gets a valid job handle", { timeout: 300_000 }, async () => {
     const provider = FalProvider.create(FAL_API_KEY);
 
-    const job = await provider.submit("fal-ai/flux/schnell", {
-      prompt: "green forest with sunlight",
+    const job = await provider.submit({
+      model: "fal-ai/flux/schnell",
+      input: { prompt: "green forest with sunlight" },
     });
 
     assert.ok(job, "expected a job handle from submit()");
