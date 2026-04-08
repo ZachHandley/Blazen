@@ -18,12 +18,15 @@ dev = [
     "maturin>=1.0",
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
+    "pytest-xdist>=3.0",
+    "pytest-timeout>=2.0",
     "ruff>=0.1",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]
 asyncio_mode = "auto"
+timeout = 120
 markers = [
     "timeout: set test timeout (requires pytest-timeout)",
 ]

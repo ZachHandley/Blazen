@@ -23,6 +23,17 @@ skip_without_key = pytest.mark.skipif(
 )
 
 
+async def _fal_or_skip(coro):
+    """Await a fal compute coroutine; skip on transient infra errors."""
+    try:
+        return await coro
+    except Exception as e:
+        err = str(e)
+        if any(s in err for s in ("502", "503", "504", "Bad Gateway", "service_unavailable")):
+            pytest.skip(f"fal.ai infra error: {err}")
+        raise
+
+
 # ---------------------------------------------------------------------------
 # LLM completion via fal-ai/any-llm
 # ---------------------------------------------------------------------------
@@ -30,22 +41,27 @@ skip_without_key = pytest.mark.skipif(
 
 @skip_without_key
 @pytest.mark.asyncio
-async def test_fal_basic_completion_openai_chat():
-    """Default endpoint (OpenAiChat) — request lands at openrouter/router/openai/v1/chat/completions."""
-    model = CompletionModel.fal(FAL_API_KEY)  # default options
+async def test_fal_completion_openai_chat():
+    """Default endpoint (OpenAiChat) with temperature, max_tokens, and response field checks."""
+    model = CompletionModel.fal(FAL_API_KEY).with_retry(max_retries=2)
     response = await model.complete(
         [ChatMessage.user("What is 2+2? Reply with just the number.")],
-        CompletionOptions(max_tokens=10),
+        CompletionOptions(temperature=0.1, max_tokens=10),
     )
     assert response.content is not None
     assert "4" in response.content
+    assert response.model is not None
+    assert hasattr(response, "tool_calls")
+    assert hasattr(response, "reasoning")
+    assert hasattr(response, "citations")
+    assert hasattr(response, "artifacts")
 
 
 @skip_without_key
 @pytest.mark.asyncio
 async def test_fal_basic_completion_enterprise():
     """Enterprise mode promotes OpenAiChat -> AnyLlm{enterprise:true}."""
-    model = CompletionModel.fal(FAL_API_KEY, options={"enterprise": True})
+    model = CompletionModel.fal(FAL_API_KEY, options={"enterprise": True}).with_retry(max_retries=2)
     response = await model.complete(
         [ChatMessage.user("Say hello.")],
         CompletionOptions(max_tokens=10),
@@ -60,40 +76,12 @@ async def test_fal_responses_api_endpoint():
     model = CompletionModel.fal(
         FAL_API_KEY,
         options={"endpoint": "open_ai_responses"},
-    )
+    ).with_retry(max_retries=2)
     response = await model.complete(
         [ChatMessage.user("Say hi.")],
         CompletionOptions(max_tokens=10),
     )
     assert response.content is not None
-
-
-@skip_without_key
-@pytest.mark.asyncio
-async def test_fal_passes_temperature_max_tokens():
-    model = CompletionModel.fal(FAL_API_KEY)
-    response = await model.complete(
-        [ChatMessage.user("Write a one-word greeting.")],
-        CompletionOptions(temperature=0.1, max_tokens=10),
-    )
-    assert response.content is not None
-
-
-@skip_without_key
-@pytest.mark.asyncio
-async def test_fal_completion_response_fields():
-    model = CompletionModel.fal(FAL_API_KEY)
-    response = await model.complete(
-        [ChatMessage.user("Hi")],
-        CompletionOptions(max_tokens=5),
-    )
-    assert response.content is not None
-    assert response.model is not None
-    # New typed fields are accessible (default-empty)
-    assert hasattr(response, "tool_calls")
-    assert hasattr(response, "reasoning")
-    assert hasattr(response, "citations")
-    assert hasattr(response, "artifacts")
 
 
 # ---------------------------------------------------------------------------
@@ -109,7 +97,7 @@ async def test_fal_vision_auto_routes_when_anyllm_and_image_present():
     model = CompletionModel.fal(
         FAL_API_KEY,
         options={"endpoint": "any_llm"},
-    )
+    ).with_retry(max_retries=2)
     msg = ChatMessage.user_image_url(
         text="What is in this image? One word.",
         url="https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png",
@@ -195,7 +183,7 @@ async def test_fal_video_auto_routes_when_openrouter_and_video_present():
 @skip_without_key
 @pytest.mark.asyncio
 async def test_fal_streaming_yields_multiple_chunks():
-    model = CompletionModel.fal(FAL_API_KEY)
+    model = CompletionModel.fal(FAL_API_KEY).with_retry(max_retries=2)
     chunks = []
     async for chunk in model.stream(
         [ChatMessage.user("Count from 1 to 5, one number per line.")],
@@ -210,7 +198,7 @@ async def test_fal_streaming_yields_multiple_chunks():
 async def test_fal_embeddings():
     provider = FalProvider(api_key=FAL_API_KEY)
     em = provider.embedding_model()
-    response = await em.embed(["hello", "world"])
+    response = await _fal_or_skip(em.embed(["hello", "world"]))
     assert len(response["embeddings"]) == 2
     assert len(response["embeddings"][0]) == 1536
 
@@ -231,7 +219,7 @@ async def test_fal_3d_generation():
         "image_url": "https://storage.googleapis.com/falserverless/example_inputs/triposr_input.jpg",
     }
     try:
-        result = await provider.generate_3d(request)
+        result = await _fal_or_skip(provider.generate_3d(request))
         assert result is not None
     except Exception as e:
         err = str(e)
@@ -257,9 +245,9 @@ async def test_fal_background_removal():
     """
     provider = FalProvider(api_key=FAL_API_KEY)
     try:
-        result = await provider.remove_background(
+        result = await _fal_or_skip(provider.remove_background(
             image_url="https://storage.googleapis.com/falserverless/example_inputs/birefnet_input.jpeg",
-        )
+        ))
         assert result is not None
     except Exception as e:
         err = str(e)
@@ -282,9 +270,9 @@ async def test_fal_background_removal():
 @pytest.mark.asyncio
 async def test_fal_image_generation():
     provider = FalProvider(api_key=FAL_API_KEY)
-    result = await provider.generate_image(
+    result = await _fal_or_skip(provider.generate_image(
         {"prompt": "a simple red circle on white background"}
-    )
+    ))
     assert "images" in result
     assert len(result["images"]) > 0
 
@@ -293,8 +281,90 @@ async def test_fal_image_generation():
 @pytest.mark.asyncio
 async def test_fal_text_to_speech():
     provider = FalProvider(api_key=FAL_API_KEY)
-    result = await provider.text_to_speech(
+    result = await _fal_or_skip(provider.text_to_speech(
         {"text": "Hello world, this is a test."}
-    )
+    ))
     assert "audio" in result
     assert len(result["audio"]) > 0
+
+
+# ---------------------------------------------------------------------------
+# Compute tests (music, transcription, video, raw run, job lifecycle)
+# ---------------------------------------------------------------------------
+
+
+@skip_without_key
+@pytest.mark.asyncio
+async def test_fal_generate_music():
+    """Generate music and verify the response contains audio data."""
+    provider = FalProvider(api_key=FAL_API_KEY)
+    result = await _fal_or_skip(provider.generate_music(
+        {"prompt": "happy upbeat jingle", "duration_seconds": 5.0}
+    ))
+    assert "audio" in result
+    assert len(result["audio"]) > 0
+
+
+@skip_without_key
+@pytest.mark.asyncio
+async def test_fal_transcribe():
+    """Transcribe a short audio clip and verify text is returned."""
+    provider = FalProvider(api_key=FAL_API_KEY)
+    result = await _fal_or_skip(provider.transcribe(
+        {"audio_url": "https://cdn.openai.com/API/docs/audio/alloy.wav"}
+    ))
+    assert "text" in result
+    assert len(result["text"]) > 0
+
+
+@skip_without_key
+@pytest.mark.asyncio
+@pytest.mark.timeout(120)
+async def test_fal_text_to_video():
+    """Generate a video from text (slow, ~30-60s)."""
+    provider = FalProvider(api_key=FAL_API_KEY)
+    try:
+        result = await _fal_or_skip(provider.text_to_video(
+            {"prompt": "a cat walking"}
+        ))
+    except Exception as e:
+        err = str(e).lower()
+        if any(
+            marker in err
+            for marker in (
+                "downstream_service_unavailable",
+                "service unavailable",
+                "service_unavailable",
+            )
+        ):
+            pytest.skip(f"fal.ai video service transiently unavailable: {e}")
+        raise
+    assert "videos" in result
+    assert len(result["videos"]) > 0
+
+
+@skip_without_key
+@pytest.mark.asyncio
+async def test_fal_raw_compute_run():
+    """Run a raw compute job via the generic run() method."""
+    provider = FalProvider(api_key=FAL_API_KEY)
+    result = await _fal_or_skip(provider.run(
+        model="fal-ai/flux/schnell",
+        input={"prompt": "blue sky", "image_size": "square_hd"},
+    ))
+    assert result is not None
+    assert "output" in result or "images" in result
+
+
+@skip_without_key
+@pytest.mark.asyncio
+async def test_fal_job_submit():
+    """Submit a job and verify a job handle is returned."""
+    provider = FalProvider(api_key=FAL_API_KEY)
+    job = await _fal_or_skip(provider.submit(
+        model="fal-ai/flux/schnell",
+        input={"prompt": "green forest"},
+    ))
+    assert "id" in job
+    assert isinstance(job["id"], str)
+    assert len(job["id"]) > 0

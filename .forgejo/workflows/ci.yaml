@@ -104,7 +104,7 @@ jobs:
         run: uv sync --group dev
 
       - name: Run Python E2E tests
-        run: uv run pytest -v
+        run: uv run pytest -v -n auto --timeout=120
         env:
           FAL_API_KEY: ${{ secrets.FAL_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -144,6 +144,11 @@ jobs:
 
       - name: Run Node.js E2E tests
         run: node --test tests/node/test_workflow.mjs
+
+      - name: Run Node.js free tests (no API keys)
+        run: |
+          node --test tests/node/test_session_refs.mjs
+          node --test tests/node/test_capabilities_smoke.mjs
 
       - name: Run Node.js LLM smoke tests
         run: node --test tests/node/test_llm_smoke.mjs tests/node/test_fal_smoke.mjs
