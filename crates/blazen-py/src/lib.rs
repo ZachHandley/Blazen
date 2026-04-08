@@ -88,6 +88,18 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<providers::completion_model::PyCompletionOptions>()?;
     m.add_class::<providers::completion_model::PyLazyCompletionStream>()?;
 
+    // Provider options (typed wrappers)
+    m.add_class::<providers::options::PyProviderOptions>()?;
+    m.add_class::<providers::options::PyFalLlmEndpointKind>()?;
+    m.add_class::<providers::options::PyFalOptions>()?;
+    m.add_class::<providers::options::PyAzureOptions>()?;
+    m.add_class::<providers::options::PyBedrockOptions>()?;
+
+    // Decorator configs (typed wrappers for retry/cache)
+    m.add_class::<providers::config::PyCacheStrategy>()?;
+    m.add_class::<providers::config::PyRetryConfig>()?;
+    m.add_class::<providers::config::PyCacheConfig>()?;
+
     // Embedding model
     m.add_class::<types::PyEmbeddingModel>()?;
 
@@ -109,6 +121,33 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Compute / Media -- Job types
     m.add_class::<compute::PyJobStatus>()?;
     m.add_class::<compute::PyComputeRequest>()?;
+    m.add_class::<compute::PyJobHandle>()?;
+
+    // Compute request type wrappers (typed inputs for fal provider methods)
+    m.add_class::<compute::request_types::PyImageRequest>()?;
+    m.add_class::<compute::request_types::PyUpscaleRequest>()?;
+    m.add_class::<compute::request_types::PyVideoRequest>()?;
+    m.add_class::<compute::request_types::PySpeechRequest>()?;
+    m.add_class::<compute::request_types::PyMusicRequest>()?;
+    m.add_class::<compute::request_types::PyTranscriptionRequest>()?;
+    m.add_class::<compute::request_types::PyThreeDRequest>()?;
+    m.add_class::<compute::request_types::PyBackgroundRemovalRequest>()?;
+
+    // Compute result type wrappers (typed outputs from fal provider methods)
+    m.add_class::<compute::PyTranscriptionSegment>()?;
+    m.add_class::<compute::PyImageResult>()?;
+    m.add_class::<compute::PyVideoResult>()?;
+    m.add_class::<compute::PyAudioResult>()?;
+    m.add_class::<compute::PyThreeDResult>()?;
+    m.add_class::<compute::PyTranscriptionResult>()?;
+    m.add_class::<compute::PyComputeResult>()?;
+
+    // Generated media output types
+    m.add_class::<types::media::PyMediaOutput>()?;
+    m.add_class::<types::media::PyGeneratedImage>()?;
+    m.add_class::<types::media::PyGeneratedVideo>()?;
+    m.add_class::<types::media::PyGeneratedAudio>()?;
+    m.add_class::<types::media::PyGenerated3DModel>()?;
 
     // Fal provider
     m.add_class::<providers::fal::PyFalProvider>()?;

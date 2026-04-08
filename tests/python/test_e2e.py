@@ -15,16 +15,24 @@ import os
 import pytest
 
 from blazen import (
+    AzureOptions,
+    CacheConfig,
+    CacheStrategy,
     ChatMessage,
     ChatWindow,
     CompletionModel,
     CompletionOptions,
     Context,
     Event,
+    FalLlmEndpointKind,
+    FalOptions,
+    ImageRequest,
     InMemoryBackend,
     Memory,
     PromptRegistry,
     PromptTemplate,
+    ProviderOptions,
+    RetryConfig,
     StartEvent,
     StopEvent,
     Workflow,
@@ -463,21 +471,110 @@ def test_chat_window_clear():
 
 
 # =========================================================================
+# Typed Options classes (construction + field access)
+# =========================================================================
+
+
+def test_provider_options_typed():
+    """ProviderOptions class construction and field access."""
+    opts = ProviderOptions(model="gpt-4o", base_url="https://api.openai.com/v1")
+    assert opts.model == "gpt-4o"
+    assert opts.base_url == "https://api.openai.com/v1"
+    # Pass to a factory
+    model = CompletionModel.openai("fake-key", options=opts)
+    assert model is not None
+
+
+def test_fal_options_typed():
+    """FalOptions with typed endpoint enum."""
+    opts = FalOptions(
+        model="fal-ai/any-llm",
+        endpoint=FalLlmEndpointKind.AnyLlm,
+        enterprise=False,
+        auto_route_modality=True,
+    )
+    assert opts.model == "fal-ai/any-llm"
+    assert opts.enterprise is False
+    assert opts.auto_route_modality is True
+
+
+def test_azure_options_required_fields():
+    """AzureOptions requires resource_name and deployment_name."""
+    opts = AzureOptions(
+        resource_name="my-resource",
+        deployment_name="my-deployment",
+        api_version="2024-02-15-preview",
+    )
+    assert opts.resource_name == "my-resource"
+    assert opts.deployment_name == "my-deployment"
+    assert opts.api_version == "2024-02-15-preview"
+    # AzureOptions is required (not optional) for the factory
+    model = CompletionModel.azure("fake-key", options=opts)
+    assert model is not None
+
+
+def test_image_request_typed():
+    """ImageRequest construction with typed fields."""
+    req = ImageRequest(
+        prompt="A futuristic city at sunset",
+        width=1024,
+        height=1024,
+        num_images=2,
+        negative_prompt="blurry",
+    )
+    assert req.prompt == "A futuristic city at sunset"
+    assert req.width == 1024
+    assert req.height == 1024
+    assert req.num_images == 2
+    assert req.negative_prompt == "blurry"
+
+
+# =========================================================================
 # Retry / Cache / Fallback (construction only, no API calls)
 # =========================================================================
 
 
 def test_with_retry_constructs():
-    """CompletionModel.with_retry returns a CompletionModel."""
+    """CompletionModel.with_retry accepts a typed RetryConfig."""
     model = CompletionModel.openai("fake-key")
-    retried = model.with_retry(max_retries=3, initial_delay_ms=100, max_delay_ms=5000)
+    config = RetryConfig(
+        max_retries=5,
+        initial_delay_ms=500,
+        max_delay_ms=10_000,
+        honor_retry_after=True,
+        jitter=True,
+    )
+    assert config.max_retries == 5
+    assert config.initial_delay_ms == 500
+    retried = model.with_retry(config)
+    assert retried is not None
+
+
+def test_with_retry_no_config_uses_defaults():
+    """with_retry with no config falls back to RetryConfig defaults."""
+    model = CompletionModel.openai("fake-key")
+    retried = model.with_retry()
     assert retried is not None
 
 
 def test_with_cache_constructs():
-    """CompletionModel.with_cache returns a CompletionModel."""
+    """CompletionModel.with_cache accepts a typed CacheConfig."""
     model = CompletionModel.openai("fake-key")
-    cached = model.with_cache(ttl_seconds=60, max_entries=100)
+    config = CacheConfig(
+        ttl_seconds=60,
+        max_entries=100,
+        strategy=CacheStrategy.ContentHash,
+    )
+    assert config.ttl_seconds == 60
+    assert config.max_entries == 100
+    cached = model.with_cache(config)
+    assert cached is not None
+
+
+def test_with_cache_no_config_uses_defaults():
+    """with_cache with no config falls back to CacheConfig defaults."""
+    model = CompletionModel.openai("fake-key")
+    cached = model.with_cache()
     assert cached is not None
 
 

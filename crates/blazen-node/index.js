@@ -612,6 +612,7 @@ module.exports.WorkflowHandler = nativeBinding.WorkflowHandler
 module.exports.JsWorkflowHandler = nativeBinding.JsWorkflowHandler
 module.exports.countMessageTokens = nativeBinding.countMessageTokens
 module.exports.estimateTokens = nativeBinding.estimateTokens
+module.exports.JsCacheStrategy = nativeBinding.JsCacheStrategy
 module.exports.JsFalLlmEndpointKind = nativeBinding.JsFalLlmEndpointKind
 module.exports.JsJobStatus = nativeBinding.JsJobStatus
 module.exports.JsRole = nativeBinding.JsRole

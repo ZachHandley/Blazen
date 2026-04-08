@@ -7,21 +7,29 @@ use std::sync::Arc;
 
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
-use pythonize::depythonize;
 use tokio_stream::StreamExt;
 
-use crate::convert::JsonValue;
+use crate::compute::job::{PyComputeRequest, PyJobHandle};
+use crate::compute::request_types::{
+    PyBackgroundRemovalRequest, PyImageRequest, PyMusicRequest, PySpeechRequest, PyThreeDRequest,
+    PyTranscriptionRequest, PyUpscaleRequest, PyVideoRequest,
+};
+use crate::compute::result_types::{
+    PyAudioResult, PyComputeResult, PyImageResult, PyThreeDResult, PyTranscriptionResult,
+    PyVideoResult,
+};
 use crate::error::{BlazenPyError, blazen_error_to_pyerr};
+use crate::providers::completion_model::PyCompletionOptions;
+use crate::providers::options::PyFalOptions;
 use crate::types::{PyChatMessage, PyCompletionResponse};
 use blazen_llm::ChatMessage;
 use blazen_llm::compute::{
-    AudioGeneration, BackgroundRemoval, BackgroundRemovalRequest, ComputeProvider, ComputeRequest,
-    ImageGeneration, ImageRequest, MusicRequest, SpeechRequest, ThreeDGeneration, ThreeDRequest,
-    Transcription, TranscriptionRequest, UpscaleRequest, VideoGeneration, VideoRequest,
+    AudioGeneration, BackgroundRemoval, ComputeProvider, ImageGeneration, ThreeDGeneration,
+    Transcription, VideoGeneration,
 };
 use blazen_llm::providers::fal::{FalEmbeddingModel, FalProvider};
 use blazen_llm::traits::{CompletionModel, EmbeddingModel};
-use blazen_llm::types::CompletionRequest;
+use blazen_llm::types::{CompletionRequest, ToolDefinition};
 
 // ---------------------------------------------------------------------------
 // PyFalProvider
@@ -58,18 +66,15 @@ impl PyFalProvider {
     ///
     /// Args:
     ///     api_key: Your fal.ai API key.
-    ///     options: Optional dict of options (model, endpoint, enterprise,
-    ///         auto_route_modality) -- deserialized into core ``FalOptions``.
+    ///     options: Optional [`FalOptions`] for model, endpoint, enterprise,
+    ///         and auto-routing configuration.
     #[new]
     #[pyo3(signature = (*, api_key, options=None))]
-    fn new(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let opts: blazen_llm::types::provider_options::FalOptions = match options {
-            Some(o) => depythonize(o)?,
-            None => blazen_llm::types::provider_options::FalOptions::default(),
-        };
-        Ok(Self {
+    fn new(api_key: &str, options: Option<PyRef<'_, PyFalOptions>>) -> Self {
+        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
+        Self {
             inner: Arc::new(FalProvider::from_options(api_key, opts)),
-        })
+        }
     }
 
     // -----------------------------------------------------------------
@@ -79,136 +84,135 @@ impl PyFalProvider {
     /// Generate images from a text prompt.
     ///
     /// Args:
-    ///     request: An ImageRequest with prompt, dimensions, etc.
+    ///     request: An [`ImageRequest`] with prompt, dimensions, etc.
     ///
     /// Returns:
-    ///     A dict with images, timing, cost, and metadata.
+    ///     An [`ImageResult`] with images, timing, cost, and metadata.
     fn generate_image<'py>(
         &self,
         py: Python<'py>,
-        request: &Bound<'py, PyAny>,
+        request: PyRef<'_, PyImageRequest>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req: ImageRequest = depythonize(request)?;
+        let rust_req = request.inner.clone();
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = ImageGeneration::generate_image(inner.as_ref(), rust_req)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
-            let json = serde_json::to_value(&result)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            Ok(JsonValue(json))
+            Ok(PyImageResult { inner: result })
         })
     }
 
     /// Upscale an image.
     ///
     /// Args:
-    ///     request: An UpscaleRequest with image_url and scale factor.
+    ///     request: An [`UpscaleRequest`] with image_url and scale factor.
     ///
     /// Returns:
-    ///     A dict with the upscaled image, timing, cost, and metadata.
+    ///     An [`ImageResult`] with the upscaled image, timing, cost, and metadata.
     fn upscale_image<'py>(
         &self,
         py: Python<'py>,
-        request: &Bound<'py, PyAny>,
+        request: PyRef<'_, PyUpscaleRequest>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req: UpscaleRequest = depythonize(request)?;
+        let rust_req = request.inner.clone();
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = ImageGeneration::upscale_image(inner.as_ref(), rust_req)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
-            let json = serde_json::to_value(&result)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            Ok(JsonValue(json))
+            Ok(PyImageResult { inner: result })
         })
     }
 
     /// Upscale an image via the aura-sr model.
+    ///
+    /// Args:
+    ///     request: An [`UpscaleRequest`] with image_url and scale factor.
+    ///
+    /// Returns:
+    ///     An [`ImageResult`] with the upscaled image, timing, cost, and metadata.
     fn upscale_image_aura<'py>(
         &self,
         py: Python<'py>,
-        request: &Bound<'py, PyAny>,
+        request: PyRef<'_, PyUpscaleRequest>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req: UpscaleRequest = depythonize(request)?;
+        let rust_req = request.inner.clone();
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = inner
                 .upscale_image_aura(rust_req)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
-            let json = serde_json::to_value(&result)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            Ok(JsonValue(json))
+            Ok(PyImageResult { inner: result })
         })
     }
 
     /// Upscale an image via the clarity-upscaler model.
+    ///
+    /// Args:
+    ///     request: An [`UpscaleRequest`] with image_url and scale factor.
+    ///
+    /// Returns:
+    ///     An [`ImageResult`] with the upscaled image, timing, cost, and metadata.
     fn upscale_image_clarity<'py>(
         &self,
         py: Python<'py>,
-        request: &Bound<'py, PyAny>,
+        request: PyRef<'_, PyUpscaleRequest>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req: UpscaleRequest = depythonize(request)?;
+        let rust_req = request.inner.clone();
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = inner
                 .upscale_image_clarity(rust_req)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
-            let json = serde_json::to_value(&result)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            Ok(JsonValue(json))
+            Ok(PyImageResult { inner: result })
         })
     }
 
     /// Upscale an image via the creative-upscaler model.
+    ///
+    /// Args:
+    ///     request: An [`UpscaleRequest`] with image_url and scale factor.
+    ///
+    /// Returns:
+    ///     An [`ImageResult`] with the upscaled image, timing, cost, and metadata.
     fn upscale_image_creative<'py>(
         &self,
         py: Python<'py>,
-        request: &Bound<'py, PyAny>,
+        request: PyRef<'_, PyUpscaleRequest>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req: UpscaleRequest = depythonize(request)?;
+        let rust_req = request.inner.clone();
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = inner
                 .upscale_image_creative(rust_req)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
-            let json = serde_json::to_value(&result)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            Ok(JsonValue(json))
+            Ok(PyImageResult { inner: result })
         })
     }
 
     /// Remove the background from an image.
     ///
     /// Args:
-    ///     image_url: URL of the source image.
-    ///     model: Optional model id override.
+    ///     request: A [`BackgroundRemovalRequest`] with image_url and optional model.
     ///
     /// Returns:
-    ///     A dict with the matted image, timing, cost, and metadata.
-    #[pyo3(signature = (*, image_url, model=None))]
+    ///     An [`ImageResult`] with the matted image, timing, cost, and metadata.
     fn remove_background<'py>(
         &self,
         py: Python<'py>,
-        image_url: String,
-        model: Option<String>,
+        request: PyRef<'_, PyBackgroundRemovalRequest>,
     ) -> PyResult<Bound<'py, PyAny>> {
+        let rust_req = request.inner.clone();
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let request = BackgroundRemovalRequest {
-                image_url,
-                model,
-                parameters: serde_json::Value::Null,
-            };
-            let result = BackgroundRemoval::remove_background(inner.as_ref(), request)
+            let result = BackgroundRemoval::remove_background(inner.as_ref(), rust_req)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
-            let json = serde_json::to_value(&result)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            Ok(JsonValue(json))
+            Ok(PyImageResult { inner: result })
         })
     }
 
@@ -219,24 +223,22 @@ impl PyFalProvider {
     /// Generate a 3D model from a text prompt or source image.
     ///
     /// Args:
-    ///     request: A ThreeDRequest with prompt and/or image_url.
+    ///     request: A [`ThreeDRequest`] with prompt and/or image_url.
     ///
     /// Returns:
-    ///     A dict with the generated 3D model, timing, cost, and metadata.
+    ///     A [`ThreeDResult`] with the generated 3D model, timing, cost, and metadata.
     fn generate_3d<'py>(
         &self,
         py: Python<'py>,
-        request: &Bound<'py, PyAny>,
+        request: PyRef<'_, PyThreeDRequest>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req: ThreeDRequest = depythonize(request)?;
+        let rust_req = request.inner.clone();
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = ThreeDGeneration::generate_3d(inner.as_ref(), rust_req)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
-            let json = serde_json::to_value(&result)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            Ok(JsonValue(json))
+            Ok(PyThreeDResult { inner: result })
         })
     }
 
@@ -262,48 +264,44 @@ impl PyFalProvider {
     /// Generate a video from a text prompt.
     ///
     /// Args:
-    ///     request: A VideoRequest with prompt and optional parameters.
+    ///     request: A [`VideoRequest`] with prompt and optional parameters.
     ///
     /// Returns:
-    ///     A dict with videos, timing, cost, and metadata.
+    ///     A [`VideoResult`] with videos, timing, cost, and metadata.
     fn text_to_video<'py>(
         &self,
         py: Python<'py>,
-        request: &Bound<'py, PyAny>,
+        request: PyRef<'_, PyVideoRequest>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req: VideoRequest = depythonize(request)?;
+        let rust_req = request.inner.clone();
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = VideoGeneration::text_to_video(inner.as_ref(), rust_req)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
-            let json = serde_json::to_value(&result)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            Ok(JsonValue(json))
+            Ok(PyVideoResult { inner: result })
         })
     }
 
     /// Generate a video from a source image and prompt.
     ///
     /// Args:
-    ///     request: A VideoRequest with prompt and image_url.
+    ///     request: A [`VideoRequest`] with prompt and image_url.
     ///
     /// Returns:
-    ///     A dict with videos, timing, cost, and metadata.
+    ///     A [`VideoResult`] with videos, timing, cost, and metadata.
     fn image_to_video<'py>(
         &self,
         py: Python<'py>,
-        request: &Bound<'py, PyAny>,
+        request: PyRef<'_, PyVideoRequest>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req: VideoRequest = depythonize(request)?;
+        let rust_req = request.inner.clone();
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = VideoGeneration::image_to_video(inner.as_ref(), rust_req)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
-            let json = serde_json::to_value(&result)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            Ok(JsonValue(json))
+            Ok(PyVideoResult { inner: result })
         })
     }
 
@@ -314,72 +312,66 @@ impl PyFalProvider {
     /// Synthesize speech from text.
     ///
     /// Args:
-    ///     request: A SpeechRequest with text and optional voice/language.
+    ///     request: A [`SpeechRequest`] with text and optional voice/language.
     ///
     /// Returns:
-    ///     A dict with audio clips, timing, cost, and metadata.
+    ///     An [`AudioResult`] with audio clips, timing, cost, and metadata.
     fn text_to_speech<'py>(
         &self,
         py: Python<'py>,
-        request: &Bound<'py, PyAny>,
+        request: PyRef<'_, PySpeechRequest>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req: SpeechRequest = depythonize(request)?;
+        let rust_req = request.inner.clone();
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = AudioGeneration::text_to_speech(inner.as_ref(), rust_req)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
-            let json = serde_json::to_value(&result)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            Ok(JsonValue(json))
+            Ok(PyAudioResult { inner: result })
         })
     }
 
     /// Generate music from a prompt.
     ///
     /// Args:
-    ///     request: A MusicRequest with prompt and optional duration.
+    ///     request: A [`MusicRequest`] with prompt and optional duration.
     ///
     /// Returns:
-    ///     A dict with audio clips, timing, cost, and metadata.
+    ///     An [`AudioResult`] with audio clips, timing, cost, and metadata.
     fn generate_music<'py>(
         &self,
         py: Python<'py>,
-        request: &Bound<'py, PyAny>,
+        request: PyRef<'_, PyMusicRequest>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req: MusicRequest = depythonize(request)?;
+        let rust_req = request.inner.clone();
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = AudioGeneration::generate_music(inner.as_ref(), rust_req)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
-            let json = serde_json::to_value(&result)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            Ok(JsonValue(json))
+            Ok(PyAudioResult { inner: result })
         })
     }
 
     /// Generate sound effects from a prompt.
     ///
     /// Args:
-    ///     request: A MusicRequest with prompt and optional duration.
+    ///     request: A [`MusicRequest`] with prompt and optional duration.
     ///
     /// Returns:
-    ///     A dict with audio clips, timing, cost, and metadata.
+    ///     An [`AudioResult`] with audio clips, timing, cost, and metadata.
     fn generate_sfx<'py>(
         &self,
         py: Python<'py>,
-        request: &Bound<'py, PyAny>,
+        request: PyRef<'_, PyMusicRequest>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req: MusicRequest = depythonize(request)?;
+        let rust_req = request.inner.clone();
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = AudioGeneration::generate_sfx(inner.as_ref(), rust_req)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
-            let json = serde_json::to_value(&result)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            Ok(JsonValue(json))
+            Ok(PyAudioResult { inner: result })
         })
     }
 
@@ -390,24 +382,23 @@ impl PyFalProvider {
     /// Transcribe audio to text.
     ///
     /// Args:
-    ///     request: A TranscriptionRequest with audio_url and options.
+    ///     request: A [`TranscriptionRequest`] with audio_url and options.
     ///
     /// Returns:
-    ///     A dict with text, segments, language, timing, cost, and metadata.
+    ///     A [`TranscriptionResult`] with text, segments, language, timing,
+    ///     cost, and metadata.
     fn transcribe<'py>(
         &self,
         py: Python<'py>,
-        request: &Bound<'py, PyAny>,
+        request: PyRef<'_, PyTranscriptionRequest>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req: TranscriptionRequest = depythonize(request)?;
+        let rust_req = request.inner.clone();
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = Transcription::transcribe(inner.as_ref(), rust_req)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
-            let json = serde_json::to_value(&result)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            Ok(JsonValue(json))
+            Ok(PyTranscriptionResult { inner: result })
         })
     }
 
@@ -418,90 +409,65 @@ impl PyFalProvider {
     /// Submit a compute job and wait for the result.
     ///
     /// Args:
-    ///     model: The fal.ai model endpoint (e.g. "fal-ai/flux/dev").
-    ///     input: Input parameters as a dict.
+    ///     request: A [`ComputeRequest`] with model and input.
     ///
     /// Returns:
-    ///     A dict with output, timing, cost, and metadata.
-    #[pyo3(signature = (*, model, input))]
+    ///     A [`ComputeResult`] with output, timing, cost, and metadata.
+    #[gen_stub(skip)]
     fn run<'py>(
         &self,
         py: Python<'py>,
-        model: String,
-        input: &Bound<'py, PyAny>,
+        request: PyRef<'_, PyComputeRequest>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let input_json = crate::convert::py_to_json(py, input)?;
+        let rust_req = request.inner.clone();
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let request = ComputeRequest {
-                model,
-                input: input_json,
-                webhook: None,
-            };
-            let result = ComputeProvider::run(inner.as_ref(), request)
+            let result = ComputeProvider::run(inner.as_ref(), rust_req)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
-            let json = serde_json::to_value(&result)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            Ok(JsonValue(json))
+            Ok(PyComputeResult { inner: result })
         })
     }
 
-    /// Submit a compute job without waiting (returns a job handle dict).
+    /// Submit a compute job without waiting.
     ///
     /// Args:
-    ///     model: The fal.ai model endpoint.
-    ///     input: Input parameters as a dict.
+    ///     request: A [`ComputeRequest`] with model and input.
     ///
     /// Returns:
-    ///     A dict with id, provider, model, and submitted_at.
-    #[pyo3(signature = (*, model, input))]
+    ///     A [`JobHandle`] with id, provider, model, and submitted_at.
+    #[gen_stub(skip)]
     fn submit<'py>(
         &self,
         py: Python<'py>,
-        model: String,
-        input: &Bound<'py, PyAny>,
+        request: PyRef<'_, PyComputeRequest>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let input_json = crate::convert::py_to_json(py, input)?;
+        let rust_req = request.inner.clone();
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let request = ComputeRequest {
-                model,
-                input: input_json,
-                webhook: None,
-            };
-            let handle = ComputeProvider::submit(inner.as_ref(), request)
+            let handle = ComputeProvider::submit(inner.as_ref(), rust_req)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
-            let json = serde_json::to_value(&handle)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            Ok(JsonValue(json))
+            Ok(PyJobHandle { inner: handle })
         })
     }
 
     /// Poll the status of a submitted job.
     ///
     /// Args:
-    ///     job_id: The job identifier returned by submit().
-    ///     model: The model endpoint the job was submitted to.
+    ///     job: The [`JobHandle`] returned by [`submit`].
     ///
     /// Returns:
     ///     A status string: "queued", "running", "completed", "failed", or "cancelled".
-    #[pyo3(signature = (*, job_id, model))]
+    #[gen_stub(skip)]
     fn status<'py>(
         &self,
         py: Python<'py>,
-        job_id: String,
-        model: String,
+        job: PyRef<'_, PyJobHandle>,
     ) -> PyResult<Bound<'py, PyAny>> {
+        let handle = job.inner.clone();
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let handle = blazen_llm::compute::JobHandle {
-                id: job_id,
-                provider: "fal".to_owned(),
-                model,
-                submitted_at: chrono::Utc::now(),
-            };
             let status = ComputeProvider::status(inner.as_ref(), &handle)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
@@ -519,23 +485,16 @@ impl PyFalProvider {
     /// Cancel a running or queued job.
     ///
     /// Args:
-    ///     job_id: The job identifier returned by submit().
-    ///     model: The model endpoint the job was submitted to.
-    #[pyo3(signature = (*, job_id, model))]
+    ///     job: The [`JobHandle`] returned by [`submit`].
+    #[gen_stub(skip)]
     fn cancel<'py>(
         &self,
         py: Python<'py>,
-        job_id: String,
-        model: String,
+        job: PyRef<'_, PyJobHandle>,
     ) -> PyResult<Bound<'py, PyAny>> {
+        let handle = job.inner.clone();
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let handle = blazen_llm::compute::JobHandle {
-                id: job_id,
-                provider: "fal".to_owned(),
-                model,
-                submitted_at: chrono::Utc::now(),
-            };
             ComputeProvider::cancel(inner.as_ref(), &handle)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
@@ -551,39 +510,20 @@ impl PyFalProvider {
     ///
     /// Args:
     ///     messages: A list of ChatMessage objects.
-    ///     temperature: Optional sampling temperature (0.0-2.0).
-    ///     max_tokens: Optional maximum tokens to generate.
-    ///     model: Optional model override for this request.
-    ///     response_format: Optional JSON schema dict for structured output.
+    ///     options: Optional [`CompletionOptions`] for sampling parameters,
+    ///         tools, and response format.
     ///
     /// Returns:
     ///     A CompletionResponse with content, model, tool_calls, usage, etc.
-    #[pyo3(signature = (messages, *, temperature=None, max_tokens=None, model=None, response_format=None))]
+    #[pyo3(signature = (messages, options=None))]
     fn complete<'py>(
         &self,
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
-        temperature: Option<f32>,
-        max_tokens: Option<u32>,
-        model: Option<String>,
-        response_format: Option<&Bound<'py, PyAny>>,
+        options: Option<PyRef<'py, PyCompletionOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-
-        let mut request = CompletionRequest::new(rust_messages);
-        if let Some(t) = temperature {
-            request = request.with_temperature(t);
-        }
-        if let Some(mt) = max_tokens {
-            request = request.with_max_tokens(mt);
-        }
-        if let Some(m) = model {
-            request = request.with_model(m);
-        }
-        if let Some(fmt) = response_format {
-            let schema = crate::convert::py_to_json(py, fmt)?;
-            request = request.with_response_format(schema);
-        }
+        let request = build_completion_request(py, rust_messages, options.as_deref())?;
 
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
@@ -599,31 +539,18 @@ impl PyFalProvider {
     /// Args:
     ///     messages: A list of ChatMessage objects.
     ///     on_chunk: Callback function receiving each chunk as a dict.
-    ///     temperature: Optional sampling temperature (0.0-2.0).
-    ///     max_tokens: Optional maximum tokens to generate.
-    ///     model: Optional model override for this request.
-    #[pyo3(signature = (messages, on_chunk, *, temperature=None, max_tokens=None, model=None))]
+    ///     options: Optional [`CompletionOptions`] for sampling parameters,
+    ///         tools, and response format.
+    #[pyo3(signature = (messages, on_chunk, options=None))]
     fn stream<'py>(
         &self,
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
         on_chunk: Py<PyAny>,
-        temperature: Option<f32>,
-        max_tokens: Option<u32>,
-        model: Option<String>,
+        options: Option<PyRef<'py, PyCompletionOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-
-        let mut request = CompletionRequest::new(rust_messages);
-        if let Some(t) = temperature {
-            request = request.with_temperature(t);
-        }
-        if let Some(mt) = max_tokens {
-            request = request.with_max_tokens(mt);
-        }
-        if let Some(m) = model {
-            request = request.with_model(m);
-        }
+        let request = build_completion_request(py, rust_messages, options.as_deref())?;
 
         let inner = self.inner.clone();
 
@@ -677,6 +604,70 @@ impl PyFalProvider {
             CompletionModel::model_id(self.inner.as_ref())
         )
     }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// Build a [`CompletionRequest`] from messages and optional [`PyCompletionOptions`].
+///
+/// Mirrors the helper in [`crate::providers::completion_model`] so that
+/// [`PyFalProvider::complete`] and [`PyFalProvider::stream`] accept the same
+/// typed options object as [`PyCompletionModel`].
+fn build_completion_request(
+    py: Python<'_>,
+    messages: Vec<ChatMessage>,
+    options: Option<&PyCompletionOptions>,
+) -> PyResult<CompletionRequest> {
+    let mut request = CompletionRequest::new(messages);
+
+    if let Some(opts) = options {
+        if let Some(t) = opts.temperature {
+            request = request.with_temperature(t);
+        }
+        if let Some(mt) = opts.max_tokens {
+            request = request.with_max_tokens(mt);
+        }
+        if let Some(tp) = opts.top_p {
+            request = request.with_top_p(tp);
+        }
+        if let Some(ref m) = opts.model {
+            request = request.with_model(m.clone());
+        }
+        if let Some(ref tools_py) = opts.tools {
+            let tools_bound = tools_py.bind(py);
+            let tools_list: &Bound<'_, pyo3::types::PyList> = tools_bound.cast()?;
+            let tool_vec: Vec<Bound<'_, PyAny>> = tools_list.iter().collect();
+            let rust_tools = extract_tool_definitions(py, &tool_vec)?;
+            request = request.with_tools(rust_tools);
+        }
+        if let Some(ref fmt) = opts.response_format {
+            let schema = crate::convert::py_to_json(py, fmt.bind(py))?;
+            request = request.with_response_format(schema);
+        }
+    }
+
+    Ok(request)
+}
+
+/// Extract a list of [`ToolDefinition`] from Python dicts (or dict-like objects).
+fn extract_tool_definitions(
+    py: Python<'_>,
+    tool_list: &[Bound<'_, PyAny>],
+) -> PyResult<Vec<ToolDefinition>> {
+    let mut rust_tools = Vec::with_capacity(tool_list.len());
+    for tool in tool_list {
+        let name: String = tool.get_item("name")?.extract()?;
+        let description: String = tool.get_item("description")?.extract()?;
+        let parameters = crate::convert::py_to_json(py, &tool.get_item("parameters")?)?;
+        rust_tools.push(ToolDefinition {
+            name,
+            description,
+            parameters,
+        });
+    }
+    Ok(rust_tools)
 }
 
 // ---------------------------------------------------------------------------

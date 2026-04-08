@@ -396,49 +396,44 @@ export declare class FalProvider {
   /** Get the model ID. */
   get modelId(): string
   /** Generate images from a text prompt. */
-  generateImage(request: JsImageRequest): Promise<any>
+  generateImage(request: JsImageRequest): Promise<JsImageResult>
   /** Upscale an image. */
-  upscaleImage(request: JsUpscaleRequest): Promise<any>
+  upscaleImage(request: JsUpscaleRequest): Promise<JsImageResult>
   /** Upscale an image via the aura-sr model. */
-  upscaleImageAura(request: JsUpscaleRequest): Promise<any>
+  upscaleImageAura(request: JsUpscaleRequest): Promise<JsImageResult>
   /** Upscale an image via the clarity-upscaler model. */
-  upscaleImageClarity(request: JsUpscaleRequest): Promise<any>
+  upscaleImageClarity(request: JsUpscaleRequest): Promise<JsImageResult>
   /** Upscale an image via the creative-upscaler model. */
-  upscaleImageCreative(request: JsUpscaleRequest): Promise<any>
-  /**
-   * Remove the background from an image.
-   *
-   * `imageUrl` is the URL of the source image. `model` optionally
-   * overrides the model id.
-   */
-  removeBackground(imageUrl: string, model?: string | undefined | null): Promise<any>
+  upscaleImageCreative(request: JsUpscaleRequest): Promise<JsImageResult>
+  /** Remove the background from an image. */
+  removeBackground(request: JsBackgroundRemovalRequest): Promise<JsImageResult>
   /** Generate a 3D model from a text prompt or source image. */
-  generate3d(request: JsThreeDRequest): Promise<any>
+  generate3d(request: JsThreeDRequest): Promise<JsThreeDResult>
   /**
    * Build a [`JsFalEmbeddingModel`] sharing this provider's HTTP client
    * and API key.
    */
   embeddingModel(): JsFalEmbeddingModel
   /** Generate a video from a text prompt. */
-  textToVideo(request: JsVideoRequest): Promise<any>
+  textToVideo(request: JsVideoRequest): Promise<JsVideoResult>
   /** Generate a video from a source image and prompt. */
-  imageToVideo(request: JsVideoRequest): Promise<any>
+  imageToVideo(request: JsVideoRequest): Promise<JsVideoResult>
   /** Synthesize speech from text. */
-  textToSpeech(request: JsSpeechRequest): Promise<any>
+  textToSpeech(request: JsSpeechRequest): Promise<JsAudioResult>
   /** Generate music from a prompt. */
-  generateMusic(request: JsMusicRequest): Promise<any>
+  generateMusic(request: JsMusicRequest): Promise<JsAudioResult>
   /** Generate sound effects from a prompt. */
-  generateSfx(request: JsMusicRequest): Promise<any>
+  generateSfx(request: JsMusicRequest): Promise<JsAudioResult>
   /** Transcribe audio to text. */
-  transcribe(request: JsTranscriptionRequest): Promise<any>
+  transcribe(request: JsTranscriptionRequest): Promise<JsTranscriptionResult>
   /** Run a model synchronously (submit + wait for result). */
-  run(model: string, input: any): Promise<any>
+  run(request: JsComputeRequest): Promise<JsComputeResult>
   /** Submit a job to the queue and return a job handle. */
-  submit(model: string, input: any): Promise<any>
+  submit(request: JsComputeRequest): Promise<JsJobHandle>
   /** Get the status of a submitted job. */
-  status(jobId: string, model: string): Promise<any>
+  status(handle: JsJobHandle): Promise<JsJobStatus>
   /** Cancel a submitted job. */
-  cancel(jobId: string, model: string): Promise<void>
+  cancel(handle: JsJobHandle): Promise<void>
   /** Perform a chat completion via fal.ai's `any-llm` proxy. */
   complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
 }
@@ -1097,12 +1092,17 @@ export interface JsBedrockOptions {
   region: string
 }
 
-/** Configuration for the `withCache` decorator. */
 export interface JsCacheConfig {
-  /** How long a cached response remains valid, in seconds. */
+  strategy?: JsCacheStrategy
   ttlSeconds?: number
-  /** Maximum number of entries to keep in the cache. */
   maxEntries?: number
+}
+
+export declare const enum JsCacheStrategy {
+  None = 'none',
+  ContentHash = 'content_hash',
+  AnthropicEphemeral = 'anthropic_ephemeral',
+  Auto = 'auto'
 }
 
 /**
@@ -1148,9 +1148,9 @@ export interface JsCompletionResponse {
   finishReason?: string
   cost?: number
   timing?: JsRequestTiming
-  images: Array<any>
-  audio: Array<any>
-  videos: Array<any>
+  images: Array<JsGeneratedImage>
+  audio: Array<JsGeneratedAudio>
+  videos: Array<JsGeneratedVideo>
   reasoning?: JsReasoningTrace
   citations: Array<JsCitation>
   artifacts: Array<JsArtifact>
@@ -1408,14 +1408,12 @@ export interface JsResponseFormat {
   strict?: boolean
 }
 
-/** Configuration for the `withRetry` decorator. */
 export interface JsRetryConfig {
-  /** Maximum number of retry attempts (total calls = `maxRetries + 1`). */
   maxRetries?: number
-  /** Delay before the first retry, in milliseconds. */
   initialDelayMs?: number
-  /** Upper bound on the computed backoff delay, in milliseconds. */
   maxDelayMs?: number
+  honorRetryAfter?: boolean
+  jitter?: boolean
 }
 
 /** The role of a participant in a chat conversation. */

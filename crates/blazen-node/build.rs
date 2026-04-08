@@ -44,6 +44,8 @@ const SOURCE_FILES: &[&str] = &[
     "../blazen-llm/src/types/tool.rs",
     "../blazen-llm/src/types/provider_options.rs",
     "../blazen-llm/src/media.rs",
+    "../blazen-llm/src/retry.rs",
+    "../blazen-llm/src/cache.rs",
 ];
 
 fn main() {
@@ -452,9 +454,13 @@ fn core_to_napi(ft: &FieldType, expr: TokenStream) -> TokenStream {
         | FieldType::F64
         | FieldType::JsonValue => expr,
         FieldType::U8 => quote! { u32::from(#expr) },
-        FieldType::U64 => quote! { #expr as f64 },
+        FieldType::U64 => {
+            quote! { { #[allow(clippy::cast_precision_loss)] let __r = #expr as f64; __r } }
+        }
         FieldType::F32 => quote! { f64::from(#expr) },
-        FieldType::Usize => quote! { #expr as i64 },
+        FieldType::Usize => {
+            quote! { { #[allow(clippy::cast_possible_wrap)] let __r = #expr as i64; __r } }
+        }
         FieldType::DateTimeUtc => quote! { #expr.to_rfc3339() },
         FieldType::MediaTypeRef => quote! { #expr.mime().to_owned() },
         FieldType::Option(inner) => {
@@ -718,6 +724,14 @@ fn explicit_default_tokens(ty: &FieldType, sd: &SerdeDefault) -> TokenStream {
     match (ty, sd) {
         (FieldType::Bool, SerdeDefault::Func(f)) if f == "default_true" => quote! { true },
         (FieldType::Bool, _) => quote! { false },
+        // For named types (enums/structs), the map_or closure converts from
+        // the JsX type to the core type via `Into::into`, so the default
+        // must ALSO be the core type -- use the core type's path, NOT the
+        // JsX name (which doesn't implement Default).
+        (FieldType::Named(name), _) => {
+            let core_path = core_type_path(name);
+            quote! { <#core_path as Default>::default() }
+        }
         _ => {
             let core_ty = core_field_type_tokens(ty);
             quote! { <#core_ty as Default>::default() }
@@ -851,6 +865,16 @@ fn core_type_path(name: &str) -> TokenStream {
         "MediaOutput" | "GeneratedImage" | "GeneratedVideo" | "GeneratedAudio"
         | "Generated3DModel" => {
             quote! { blazen_llm::media::#ident }
+        }
+
+        // Retry decorator config
+        "RetryConfig" => {
+            quote! { blazen_llm::retry::#ident }
+        }
+
+        // Cache decorator config
+        "CacheConfig" | "CacheStrategy" => {
+            quote! { blazen_llm::cache::#ident }
         }
 
         // Usage, tool, and fallback types

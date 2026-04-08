@@ -170,6 +170,8 @@ pub trait Tool: Send + Sync {
 
 /// Information about a model offered by a provider.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct ModelInfo {
     /// The model identifier used in API requests (e.g. `"gpt-4o"`).
     pub id: String,
@@ -187,6 +189,8 @@ pub struct ModelInfo {
 
 /// Pricing information for a model.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct ModelPricing {
     /// Cost per million input tokens in USD.
     pub input_per_million: Option<f64>,
@@ -200,6 +204,8 @@ pub struct ModelPricing {
 
 /// Capabilities that a model may support.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 #[allow(clippy::struct_excessive_bools)]
 pub struct ModelCapabilities {
     /// Supports chat completions.
@@ -243,7 +249,9 @@ pub trait ModelRegistry: Send + Sync {
 // ---------------------------------------------------------------------------
 
 /// Capabilities advertised by a provider.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 #[allow(clippy::struct_excessive_bools)]
 pub struct ProviderCapabilities {
     /// Whether the provider supports streaming responses.

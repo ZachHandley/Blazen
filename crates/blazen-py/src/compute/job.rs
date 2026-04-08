@@ -14,6 +14,11 @@ use blazen_llm::compute::{self as compute_types};
 ///     >>> JobStatus.QUEUED    # "queued"
 ///     >>> JobStatus.RUNNING   # "running"
 ///     >>> JobStatus.COMPLETED # "completed"
+///
+/// NOTE: This is currently a flat set of string constants and does NOT
+/// preserve the `error` payload carried by the core `JobStatus::Failed`
+/// variant. A follow-up task will replace this with a proper pyclass enum
+/// that retains the failure message. Known limitation.
 #[pyclass(name = "JobStatus", frozen)]
 pub struct PyJobStatus;
 
@@ -125,14 +130,19 @@ pub struct PyComputeRequest {
 #[pymethods]
 impl PyComputeRequest {
     #[new]
-    #[pyo3(signature = (*, model, input))]
-    fn new(py: Python<'_>, model: &str, input: &Bound<'_, PyAny>) -> PyResult<Self> {
+    #[pyo3(signature = (*, model, input, webhook=None))]
+    fn new(
+        py: Python<'_>,
+        model: &str,
+        input: &Bound<'_, PyAny>,
+        webhook: Option<String>,
+    ) -> PyResult<Self> {
         let input_json = crate::convert::py_to_json(py, input)?;
         Ok(Self {
             inner: compute_types::ComputeRequest {
                 model: model.to_owned(),
                 input: input_json,
-                webhook: None,
+                webhook,
             },
         })
     }
@@ -145,6 +155,11 @@ impl PyComputeRequest {
     #[getter]
     fn input(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         crate::convert::json_to_py(py, &self.inner.input)
+    }
+
+    #[getter]
+    fn webhook(&self) -> Option<String> {
+        self.inner.webhook.clone()
     }
 
     fn __repr__(&self) -> String {

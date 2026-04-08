@@ -6,22 +6,24 @@
 
 use std::sync::Arc;
 
-use chrono::Utc;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
 use blazen_llm::CompletionModel;
 use blazen_llm::compute::{
-    AudioGeneration, BackgroundRemoval, BackgroundRemovalRequest, ComputeProvider, ComputeRequest,
-    ImageGeneration, ThreeDGeneration, Transcription, VideoGeneration,
+    AudioGeneration, BackgroundRemoval, ComputeProvider, ImageGeneration, ThreeDGeneration,
+    Transcription, VideoGeneration,
 };
 use blazen_llm::providers::fal::{FalEmbeddingModel, FalProvider};
 use blazen_llm::types::{ChatMessage, CompletionRequest};
 
+use crate::compute::JsJobStatus;
 use crate::error::blazen_error_to_napi;
 use crate::generated::{
-    JsFalOptions, JsImageRequest, JsMusicRequest, JsSpeechRequest, JsThreeDRequest,
-    JsTranscriptionRequest, JsUpscaleRequest, JsVideoRequest,
+    JsAudioResult, JsBackgroundRemovalRequest, JsComputeRequest, JsComputeResult, JsFalOptions,
+    JsImageRequest, JsImageResult, JsJobHandle, JsMusicRequest, JsSpeechRequest, JsThreeDRequest,
+    JsThreeDResult, JsTranscriptionRequest, JsTranscriptionResult, JsUpscaleRequest,
+    JsVideoRequest, JsVideoResult,
 };
 use crate::types::{JsChatMessage, JsCompletionResponse, build_response};
 
@@ -83,89 +85,75 @@ impl JsFalProvider {
 
     /// Generate images from a text prompt.
     #[napi(js_name = "generateImage")]
-    pub async fn generate_image(&self, request: JsImageRequest) -> Result<serde_json::Value> {
+    pub async fn generate_image(&self, request: JsImageRequest) -> Result<JsImageResult> {
         let rust_req: blazen_llm::compute::ImageRequest = request.into();
         let result = self
             .inner
             .generate_image(rust_req)
             .await
             .map_err(blazen_error_to_napi)?;
-        serde_json::to_value(&result).map_err(|e| napi::Error::from_reason(e.to_string()))
+        Ok(result.into())
     }
 
     /// Upscale an image.
     #[napi(js_name = "upscaleImage")]
-    pub async fn upscale_image(&self, request: JsUpscaleRequest) -> Result<serde_json::Value> {
+    pub async fn upscale_image(&self, request: JsUpscaleRequest) -> Result<JsImageResult> {
         let rust_req: blazen_llm::compute::UpscaleRequest = request.into();
         let result = self
             .inner
             .upscale_image(rust_req)
             .await
             .map_err(blazen_error_to_napi)?;
-        serde_json::to_value(&result).map_err(|e| napi::Error::from_reason(e.to_string()))
+        Ok(result.into())
     }
 
     /// Upscale an image via the aura-sr model.
     #[napi(js_name = "upscaleImageAura")]
-    pub async fn upscale_image_aura(&self, request: JsUpscaleRequest) -> Result<serde_json::Value> {
+    pub async fn upscale_image_aura(&self, request: JsUpscaleRequest) -> Result<JsImageResult> {
         let rust_req: blazen_llm::compute::UpscaleRequest = request.into();
         let result = self
             .inner
             .upscale_image_aura(rust_req)
             .await
             .map_err(blazen_error_to_napi)?;
-        serde_json::to_value(&result).map_err(|e| napi::Error::from_reason(e.to_string()))
+        Ok(result.into())
     }
 
     /// Upscale an image via the clarity-upscaler model.
     #[napi(js_name = "upscaleImageClarity")]
-    pub async fn upscale_image_clarity(
-        &self,
-        request: JsUpscaleRequest,
-    ) -> Result<serde_json::Value> {
+    pub async fn upscale_image_clarity(&self, request: JsUpscaleRequest) -> Result<JsImageResult> {
         let rust_req: blazen_llm::compute::UpscaleRequest = request.into();
         let result = self
             .inner
             .upscale_image_clarity(rust_req)
             .await
             .map_err(blazen_error_to_napi)?;
-        serde_json::to_value(&result).map_err(|e| napi::Error::from_reason(e.to_string()))
+        Ok(result.into())
     }
 
     /// Upscale an image via the creative-upscaler model.
     #[napi(js_name = "upscaleImageCreative")]
-    pub async fn upscale_image_creative(
-        &self,
-        request: JsUpscaleRequest,
-    ) -> Result<serde_json::Value> {
+    pub async fn upscale_image_creative(&self, request: JsUpscaleRequest) -> Result<JsImageResult> {
         let rust_req: blazen_llm::compute::UpscaleRequest = request.into();
         let result = self
             .inner
             .upscale_image_creative(rust_req)
             .await
             .map_err(blazen_error_to_napi)?;
-        serde_json::to_value(&result).map_err(|e| napi::Error::from_reason(e.to_string()))
+        Ok(result.into())
     }
 
     /// Remove the background from an image.
-    ///
-    /// `imageUrl` is the URL of the source image. `model` optionally
-    /// overrides the model id.
     #[napi(js_name = "removeBackground")]
     pub async fn remove_background(
         &self,
-        image_url: String,
-        model: Option<String>,
-    ) -> Result<serde_json::Value> {
-        let request = BackgroundRemovalRequest {
-            image_url,
-            model,
-            parameters: serde_json::Value::Null,
-        };
-        let result = BackgroundRemoval::remove_background(self.inner.as_ref(), request)
+        request: JsBackgroundRemovalRequest,
+    ) -> Result<JsImageResult> {
+        let rust_req: blazen_llm::compute::BackgroundRemovalRequest = request.into();
+        let result = BackgroundRemoval::remove_background(self.inner.as_ref(), rust_req)
             .await
             .map_err(blazen_error_to_napi)?;
-        serde_json::to_value(&result).map_err(|e| napi::Error::from_reason(e.to_string()))
+        Ok(result.into())
     }
 
     // -----------------------------------------------------------------
@@ -174,12 +162,12 @@ impl JsFalProvider {
 
     /// Generate a 3D model from a text prompt or source image.
     #[napi(js_name = "generate3d")]
-    pub async fn generate_3d(&self, request: JsThreeDRequest) -> Result<serde_json::Value> {
+    pub async fn generate_3d(&self, request: JsThreeDRequest) -> Result<JsThreeDResult> {
         let rust_req: blazen_llm::compute::ThreeDRequest = request.into();
         let result = ThreeDGeneration::generate_3d(self.inner.as_ref(), rust_req)
             .await
             .map_err(blazen_error_to_napi)?;
-        serde_json::to_value(&result).map_err(|e| napi::Error::from_reason(e.to_string()))
+        Ok(result.into())
     }
 
     // -----------------------------------------------------------------
@@ -201,26 +189,26 @@ impl JsFalProvider {
 
     /// Generate a video from a text prompt.
     #[napi(js_name = "textToVideo")]
-    pub async fn text_to_video(&self, request: JsVideoRequest) -> Result<serde_json::Value> {
+    pub async fn text_to_video(&self, request: JsVideoRequest) -> Result<JsVideoResult> {
         let rust_req: blazen_llm::compute::VideoRequest = request.into();
         let result = self
             .inner
             .text_to_video(rust_req)
             .await
             .map_err(blazen_error_to_napi)?;
-        serde_json::to_value(&result).map_err(|e| napi::Error::from_reason(e.to_string()))
+        Ok(result.into())
     }
 
     /// Generate a video from a source image and prompt.
     #[napi(js_name = "imageToVideo")]
-    pub async fn image_to_video(&self, request: JsVideoRequest) -> Result<serde_json::Value> {
+    pub async fn image_to_video(&self, request: JsVideoRequest) -> Result<JsVideoResult> {
         let rust_req: blazen_llm::compute::VideoRequest = request.into();
         let result = self
             .inner
             .image_to_video(rust_req)
             .await
             .map_err(blazen_error_to_napi)?;
-        serde_json::to_value(&result).map_err(|e| napi::Error::from_reason(e.to_string()))
+        Ok(result.into())
     }
 
     // -----------------------------------------------------------------
@@ -229,38 +217,38 @@ impl JsFalProvider {
 
     /// Synthesize speech from text.
     #[napi(js_name = "textToSpeech")]
-    pub async fn text_to_speech(&self, request: JsSpeechRequest) -> Result<serde_json::Value> {
+    pub async fn text_to_speech(&self, request: JsSpeechRequest) -> Result<JsAudioResult> {
         let rust_req: blazen_llm::compute::SpeechRequest = request.into();
         let result = self
             .inner
             .text_to_speech(rust_req)
             .await
             .map_err(blazen_error_to_napi)?;
-        serde_json::to_value(&result).map_err(|e| napi::Error::from_reason(e.to_string()))
+        Ok(result.into())
     }
 
     /// Generate music from a prompt.
     #[napi(js_name = "generateMusic")]
-    pub async fn generate_music(&self, request: JsMusicRequest) -> Result<serde_json::Value> {
+    pub async fn generate_music(&self, request: JsMusicRequest) -> Result<JsAudioResult> {
         let rust_req: blazen_llm::compute::MusicRequest = request.into();
         let result = self
             .inner
             .generate_music(rust_req)
             .await
             .map_err(blazen_error_to_napi)?;
-        serde_json::to_value(&result).map_err(|e| napi::Error::from_reason(e.to_string()))
+        Ok(result.into())
     }
 
     /// Generate sound effects from a prompt.
     #[napi(js_name = "generateSfx")]
-    pub async fn generate_sfx(&self, request: JsMusicRequest) -> Result<serde_json::Value> {
+    pub async fn generate_sfx(&self, request: JsMusicRequest) -> Result<JsAudioResult> {
         let rust_req: blazen_llm::compute::MusicRequest = request.into();
         let result = self
             .inner
             .generate_sfx(rust_req)
             .await
             .map_err(blazen_error_to_napi)?;
-        serde_json::to_value(&result).map_err(|e| napi::Error::from_reason(e.to_string()))
+        Ok(result.into())
     }
 
     // -----------------------------------------------------------------
@@ -269,14 +257,17 @@ impl JsFalProvider {
 
     /// Transcribe audio to text.
     #[napi]
-    pub async fn transcribe(&self, request: JsTranscriptionRequest) -> Result<serde_json::Value> {
+    pub async fn transcribe(
+        &self,
+        request: JsTranscriptionRequest,
+    ) -> Result<JsTranscriptionResult> {
         let rust_req: blazen_llm::compute::TranscriptionRequest = request.into();
         let result = self
             .inner
             .transcribe(rust_req)
             .await
             .map_err(blazen_error_to_napi)?;
-        serde_json::to_value(&result).map_err(|e| napi::Error::from_reason(e.to_string()))
+        Ok(result.into())
     }
 
     // -----------------------------------------------------------------
@@ -285,68 +276,52 @@ impl JsFalProvider {
 
     /// Run a model synchronously (submit + wait for result).
     #[napi]
-    pub async fn run(&self, model: String, input: serde_json::Value) -> Result<serde_json::Value> {
-        let request = ComputeRequest {
-            model,
-            input,
-            webhook: None,
-        };
+    pub async fn run(&self, request: JsComputeRequest) -> Result<JsComputeResult> {
+        let rust_req: blazen_llm::compute::ComputeRequest = request.into();
         let result = self
             .inner
-            .run(request)
+            .run(rust_req)
             .await
             .map_err(blazen_error_to_napi)?;
-        serde_json::to_value(&result).map_err(|e| napi::Error::from_reason(e.to_string()))
+        Ok(result.into())
     }
 
     /// Submit a job to the queue and return a job handle.
     #[napi]
-    pub async fn submit(
-        &self,
-        model: String,
-        input: serde_json::Value,
-    ) -> Result<serde_json::Value> {
-        let request = ComputeRequest {
-            model,
-            input,
-            webhook: None,
-        };
+    pub async fn submit(&self, request: JsComputeRequest) -> Result<JsJobHandle> {
+        let rust_req: blazen_llm::compute::ComputeRequest = request.into();
         let handle = self
             .inner
-            .submit(request)
+            .submit(rust_req)
             .await
             .map_err(blazen_error_to_napi)?;
-        serde_json::to_value(&handle).map_err(|e| napi::Error::from_reason(e.to_string()))
+        Ok(handle.into())
     }
 
     /// Get the status of a submitted job.
     #[napi]
-    pub async fn status(&self, job_id: String, model: String) -> Result<serde_json::Value> {
-        let handle = blazen_llm::compute::JobHandle {
-            id: job_id,
-            provider: "fal".to_owned(),
-            model,
-            submitted_at: Utc::now(),
-        };
+    pub async fn status(&self, handle: JsJobHandle) -> Result<JsJobStatus> {
+        let core_handle: blazen_llm::compute::JobHandle = handle.into();
         let status = self
             .inner
-            .status(&handle)
+            .status(&core_handle)
             .await
             .map_err(blazen_error_to_napi)?;
-        serde_json::to_value(&status).map_err(|e| napi::Error::from_reason(e.to_string()))
+        Ok(match status {
+            blazen_llm::compute::JobStatus::Queued => JsJobStatus::Queued,
+            blazen_llm::compute::JobStatus::Running => JsJobStatus::Running,
+            blazen_llm::compute::JobStatus::Completed => JsJobStatus::Completed,
+            blazen_llm::compute::JobStatus::Failed { .. } => JsJobStatus::Failed,
+            blazen_llm::compute::JobStatus::Cancelled => JsJobStatus::Cancelled,
+        })
     }
 
     /// Cancel a submitted job.
     #[napi]
-    pub async fn cancel(&self, job_id: String, model: String) -> Result<()> {
-        let handle = blazen_llm::compute::JobHandle {
-            id: job_id,
-            provider: "fal".to_owned(),
-            model,
-            submitted_at: Utc::now(),
-        };
+    pub async fn cancel(&self, handle: JsJobHandle) -> Result<()> {
+        let core_handle: blazen_llm::compute::JobHandle = handle.into();
         self.inner
-            .cancel(&handle)
+            .cancel(&core_handle)
             .await
             .map_err(blazen_error_to_napi)?;
         Ok(())

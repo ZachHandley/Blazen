@@ -397,6 +397,8 @@ pub struct StructuredResponse<T> {
 
 /// Response from an embedding operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct EmbeddingResponse {
     /// The embedding vectors.
     pub embeddings: Vec<Vec<f32>>,

@@ -37,6 +37,7 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use futures_util::Stream;
+use serde::{Deserialize, Serialize};
 
 use crate::error::BlazenError;
 use crate::traits::CompletionModel;
@@ -48,7 +49,10 @@ use crate::types::{CompletionRequest, CompletionResponse, StreamChunk};
 
 /// Determines how cache keys are computed and whether provider-specific
 /// optimisations are applied.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "snake_case")]
 pub enum CacheStrategy {
     /// No caching -- all requests pass through to the inner model.
     None,
@@ -69,23 +73,39 @@ pub enum CacheStrategy {
 }
 
 /// Configuration for the response cache.
-#[derive(Debug, Clone)]
+///
+/// TTL is expressed as u64 seconds for cross-language binding compatibility
+/// (Python, Node, WASM). It is converted to [`Duration`] internally at the
+/// call sites.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct CacheConfig {
     /// The caching strategy to use.
+    #[serde(default)]
     pub strategy: CacheStrategy,
-    /// How long a cached response remains valid.
-    pub ttl: Duration,
+    /// How long a cached response remains valid, in seconds.
+    #[serde(default = "default_ttl_seconds")]
+    pub ttl_seconds: u64,
     /// Maximum number of entries to keep in the cache. When exceeded, the
     /// oldest entry is evicted.
+    #[serde(default = "default_max_entries")]
     pub max_entries: usize,
+}
+
+fn default_ttl_seconds() -> u64 {
+    5 * 60
+}
+fn default_max_entries() -> usize {
+    1000
 }
 
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             strategy: CacheStrategy::default(),
-            ttl: Duration::from_secs(5 * 60),
-            max_entries: 1000,
+            ttl_seconds: default_ttl_seconds(),
+            max_entries: default_max_entries(),
         }
     }
 }
@@ -222,7 +242,7 @@ impl CachedCompletionModel {
         let cache = self.cache.read().expect("cache lock poisoned");
         let entry = cache.get(&key)?;
 
-        if entry.created_at.elapsed() > self.config.ttl {
+        if entry.created_at.elapsed() > Duration::from_secs(self.config.ttl_seconds) {
             // Expired -- the caller will remove it after acquiring a write lock.
             return None;
         }
@@ -436,7 +456,7 @@ mod tests {
             mock.clone(),
             CacheConfig {
                 strategy: CacheStrategy::ContentHash,
-                ttl: Duration::from_secs(0), // immediate expiry
+                ttl_seconds: 0, // immediate expiry
                 max_entries: 1000,
             },
         );
@@ -462,7 +482,7 @@ mod tests {
             mock.clone(),
             CacheConfig {
                 strategy: CacheStrategy::ContentHash,
-                ttl: Duration::from_secs(300),
+                ttl_seconds: 300,
                 max_entries: 1, // only one entry allowed
             },
         );
@@ -512,7 +532,7 @@ mod tests {
             mock.clone(),
             CacheConfig {
                 strategy: CacheStrategy::None,
-                ttl: Duration::from_secs(300),
+                ttl_seconds: 300,
                 max_entries: 1000,
             },
         );

@@ -7,7 +7,10 @@ use blazen_llm::types::CompletionResponse;
 use super::artifact::JsArtifact;
 use super::citation::JsCitation;
 use super::reasoning::JsReasoningTrace;
-use crate::generated::{JsRequestTiming, JsTokenUsage, JsToolCall, JsToolDefinition};
+use crate::generated::{
+    JsGeneratedAudio, JsGeneratedImage, JsGeneratedVideo, JsRequestTiming, JsTokenUsage,
+    JsToolCall, JsToolDefinition,
+};
 
 /// The result of a chat completion.
 #[napi(object)]
@@ -21,9 +24,9 @@ pub struct JsCompletionResponse {
     pub finish_reason: Option<String>,
     pub cost: Option<f64>,
     pub timing: Option<JsRequestTiming>,
-    pub images: Vec<serde_json::Value>,
-    pub audio: Vec<serde_json::Value>,
-    pub videos: Vec<serde_json::Value>,
+    pub images: Vec<JsGeneratedImage>,
+    pub audio: Vec<JsGeneratedAudio>,
+    pub videos: Vec<JsGeneratedVideo>,
     pub reasoning: Option<JsReasoningTrace>,
     pub citations: Vec<JsCitation>,
     pub artifacts: Vec<JsArtifact>,
@@ -58,21 +61,9 @@ pub(crate) fn build_response(response: CompletionResponse) -> JsCompletionRespon
         finish_reason: response.finish_reason,
         cost: response.cost,
         timing: response.timing.map(Into::into),
-        images: response
-            .images
-            .iter()
-            .map(|img| serde_json::to_value(img).unwrap_or_default())
-            .collect(),
-        audio: response
-            .audio
-            .iter()
-            .map(|a| serde_json::to_value(a).unwrap_or_default())
-            .collect(),
-        videos: response
-            .videos
-            .iter()
-            .map(|v| serde_json::to_value(v).unwrap_or_default())
-            .collect(),
+        images: response.images.into_iter().map(Into::into).collect(),
+        audio: response.audio.into_iter().map(Into::into).collect(),
+        videos: response.videos.into_iter().map(Into::into).collect(),
         reasoning: response.reasoning.as_ref().map(JsReasoningTrace::from),
         citations: response.citations.iter().map(JsCitation::from).collect(),
         artifacts: response.artifacts.iter().map(JsArtifact::from).collect(),

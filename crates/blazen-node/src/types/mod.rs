@@ -18,6 +18,11 @@ pub mod tool;
 pub mod usage;
 
 // Re-export all public types for convenient access.
+pub use crate::generated::{
+    JsAudioResult, JsBackgroundRemovalRequest, JsComputeResult, JsGenerated3DModel,
+    JsGeneratedAudio, JsGeneratedImage, JsGeneratedVideo, JsImageResult, JsJobHandle,
+    JsMediaOutput, JsThreeDResult, JsTranscriptionResult, JsTranscriptionSegment, JsVideoResult,
+};
 pub use artifact::JsArtifact;
 pub use chat_window::JsChatWindow;
 pub use citation::JsCitation;

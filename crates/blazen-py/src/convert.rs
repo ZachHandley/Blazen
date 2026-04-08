@@ -347,6 +347,7 @@ pub(crate) fn json_to_py(py: Python<'_>, val: &serde_json::Value) -> PyResult<Py
 
 /// Newtype wrapper around [`serde_json::Value`] that implements
 /// [`IntoPyObject`] so it can be returned from `future_into_py` closures.
+#[allow(dead_code)]
 pub(crate) struct JsonValue(pub serde_json::Value);
 
 impl<'py> IntoPyObject<'py> for JsonValue {

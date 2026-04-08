@@ -2,39 +2,68 @@
 # ruff: noqa: E501, F401, F403, F405
 
 import builtins
+import enum
 import typing
 __all__ = [
     "AgentResult",
     "Artifact",
+    "AudioResult",
+    "AzureOptions",
+    "BackgroundRemovalRequest",
+    "BedrockOptions",
     "BlazenState",
+    "CacheConfig",
+    "CacheStrategy",
     "ChatMessage",
     "ChatWindow",
     "CompletionModel",
     "CompletionOptions",
     "CompletionResponse",
     "CompletionStream",
+    "ComputeResult",
     "ContentPart",
     "Context",
     "EmbeddingModel",
     "Event",
     "FalEmbeddingModel",
+    "FalLlmEndpointKind",
+    "FalOptions",
     "FalProvider",
     "FinishReason",
+    "Generated3DModel",
+    "GeneratedAudio",
+    "GeneratedImage",
+    "GeneratedVideo",
+    "ImageRequest",
+    "ImageResult",
     "InMemoryBackend",
     "JsonlBackend",
+    "MediaOutput",
     "MediaType",
     "Memory",
     "MemoryResult",
+    "MusicRequest",
     "PromptRegistry",
     "PromptTemplate",
+    "ProviderOptions",
     "ResponseFormat",
+    "RetryConfig",
     "Role",
     "SessionNamespace",
+    "SpeechRequest",
     "StartEvent",
     "StateNamespace",
     "StopEvent",
+    "ThreeDRequest",
+    "ThreeDResult",
     "ToolDef",
+    "TranscriptionRequest",
+    "TranscriptionResult",
+    "TranscriptionSegment",
+    "UpscaleRequest",
     "ValkeyBackend",
+    "VideoRequest",
+    "VideoResult",
     "Workflow",
     "WorkflowHandler",
 ]
@@ -175,6 +204,110 @@ class Artifact:
         """
     def __repr__(self) -> builtins.str: ...
 
+@typing.final
+class AudioResult:
+    r"""
+    Result of an audio generation or TTS operation.
+    """
+    @property
+    def audio(self) -> typing.Any:
+        r"""
+        The generated audio clips (as a list of dicts).
+        """
+    @property
+    def timing(self) -> typing.Any:
+        r"""
+        Request timing breakdown (as a dict).
+        """
+    @property
+    def cost(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost in USD, if reported by the provider.
+        """
+    @property
+    def metadata(self) -> typing.Any:
+        r"""
+        Arbitrary provider-specific metadata (as a dict).
+        """
+
+@typing.final
+class AzureOptions:
+    r"""
+    Options specific to Azure OpenAI.
+    """
+    @property
+    def model(self) -> typing.Optional[builtins.str]: ...
+    @model.setter
+    def model(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def base_url(self) -> typing.Optional[builtins.str]: ...
+    @base_url.setter
+    def base_url(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def resource_name(self) -> builtins.str: ...
+    @resource_name.setter
+    def resource_name(self, value: builtins.str) -> None: ...
+    @property
+    def deployment_name(self) -> builtins.str: ...
+    @deployment_name.setter
+    def deployment_name(self, value: builtins.str) -> None: ...
+    @property
+    def api_version(self) -> typing.Optional[builtins.str]: ...
+    @api_version.setter
+    def api_version(self, value: typing.Optional[builtins.str]) -> None: ...
+    def __new__(cls, resource_name: builtins.str, deployment_name: builtins.str, *, model: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, api_version: typing.Optional[builtins.str] = None) -> AzureOptions:
+        r"""
+        Create a new AzureOptions.
+        
+        Args:
+            resource_name: Azure resource name (required).
+            deployment_name: Azure deployment name (required).
+            model: Override the default model identifier.
+            base_url: Override the provider's base URL.
+            api_version: API version override (e.g. "2024-02-15-preview").
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class BackgroundRemovalRequest:
+    r"""
+    Typed wrapper for a background removal request.
+    """
+    @property
+    def image_url(self) -> builtins.str: ...
+    @property
+    def model(self) -> typing.Optional[builtins.str]: ...
+    def __new__(cls, *, image_url: builtins.str, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> BackgroundRemovalRequest: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class BedrockOptions:
+    r"""
+    Options specific to AWS Bedrock.
+    """
+    @property
+    def model(self) -> typing.Optional[builtins.str]: ...
+    @model.setter
+    def model(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def base_url(self) -> typing.Optional[builtins.str]: ...
+    @base_url.setter
+    def base_url(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def region(self) -> builtins.str: ...
+    @region.setter
+    def region(self, value: builtins.str) -> None: ...
+    def __new__(cls, region: builtins.str, *, model: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None) -> BedrockOptions:
+        r"""
+        Create a new BedrockOptions.
+        
+        Args:
+            region: AWS region (required, e.g. "us-east-1").
+            model: Override the default model identifier.
+            base_url: Override the provider's base URL.
+        """
+    def __repr__(self) -> builtins.str: ...
+
 class BlazenState:
     r"""
     Base class for typed workflow state objects.
@@ -199,6 +332,31 @@ class BlazenState:
     ```
     """
     def __new__(cls, **_kwargs: typing.Any) -> BlazenState: ...
+
+@typing.final
+class CacheConfig:
+    @property
+    def strategy(self) -> CacheStrategy: ...
+    @strategy.setter
+    def strategy(self, value: CacheStrategy) -> None: ...
+    @property
+    def ttl_seconds(self) -> builtins.int: ...
+    @ttl_seconds.setter
+    def ttl_seconds(self, value: builtins.int) -> None: ...
+    @property
+    def max_entries(self) -> builtins.int: ...
+    @max_entries.setter
+    def max_entries(self, value: builtins.int) -> None: ...
+    def __new__(cls, *, strategy: typing.Optional[CacheStrategy] = None, ttl_seconds: builtins.int = 300, max_entries: builtins.int = 1000) -> CacheConfig:
+        r"""
+        Create a new CacheConfig.
+        
+        Args:
+            strategy: Caching strategy (default: CacheStrategy.ContentHash).
+            ttl_seconds: How long a cached response remains valid (default: 300).
+            max_entries: Maximum number of cache entries (default: 1000).
+        """
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class ChatMessage:
@@ -377,145 +535,147 @@ class CompletionModel:
             The string identifier of the model.
         """
     @staticmethod
-    def openai(api_key: builtins.str, *, options: typing.Optional[typing.Any] = None) -> CompletionModel:
+    def openai(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create an OpenAI provider.
         
         Args:
             api_key: Your OpenAI API key.
-            options: Optional dict with ``model`` and ``baseUrl`` overrides.
+            options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def anthropic(api_key: builtins.str, *, options: typing.Optional[typing.Any] = None) -> CompletionModel:
+    def anthropic(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create an Anthropic provider.
         
         Args:
             api_key: Your Anthropic API key.
-            options: Optional dict with ``model`` and ``baseUrl`` overrides.
+            options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def gemini(api_key: builtins.str, *, options: typing.Optional[typing.Any] = None) -> CompletionModel:
+    def gemini(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create a Google Gemini provider.
         
         Args:
             api_key: Your Google API key.
-            options: Optional dict with ``model`` and ``baseUrl`` overrides.
+            options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def azure(api_key: builtins.str, *, options: typing.Any) -> CompletionModel:
+    def azure(api_key: builtins.str, *, options: AzureOptions) -> CompletionModel:
         r"""
         Create an Azure OpenAI provider.
         
         Args:
             api_key: Your Azure API key.
-            options: Dict with required ``resourceName`` and ``deploymentName``,
-                plus optional ``apiVersion``.
+            options: Typed ``AzureOptions`` object with required
+                ``resource_name`` and ``deployment_name``, plus optional
+                ``api_version``.
         """
     @staticmethod
-    def openrouter(api_key: builtins.str, *, options: typing.Optional[typing.Any] = None) -> CompletionModel:
+    def openrouter(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create an OpenRouter provider.
         
         Args:
             api_key: Your OpenRouter API key.
-            options: Optional dict with ``model`` override.
+            options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def groq(api_key: builtins.str, *, options: typing.Optional[typing.Any] = None) -> CompletionModel:
+    def groq(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create a Groq provider.
         
         Args:
             api_key: Your Groq API key.
-            options: Optional dict with ``model`` override.
+            options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def together(api_key: builtins.str, *, options: typing.Optional[typing.Any] = None) -> CompletionModel:
+    def together(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create a Together AI provider.
         
         Args:
             api_key: Your Together API key.
-            options: Optional dict with ``model`` override.
+            options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def mistral(api_key: builtins.str, *, options: typing.Optional[typing.Any] = None) -> CompletionModel:
+    def mistral(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create a Mistral provider.
         
         Args:
             api_key: Your Mistral API key.
-            options: Optional dict with ``model`` override.
+            options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def deepseek(api_key: builtins.str, *, options: typing.Optional[typing.Any] = None) -> CompletionModel:
+    def deepseek(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create a DeepSeek provider.
         
         Args:
             api_key: Your DeepSeek API key.
-            options: Optional dict with ``model`` override.
+            options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def fireworks(api_key: builtins.str, *, options: typing.Optional[typing.Any] = None) -> CompletionModel:
+    def fireworks(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create a Fireworks AI provider.
         
         Args:
             api_key: Your Fireworks API key.
-            options: Optional dict with ``model`` override.
+            options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def perplexity(api_key: builtins.str, *, options: typing.Optional[typing.Any] = None) -> CompletionModel:
+    def perplexity(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create a Perplexity provider.
         
         Args:
             api_key: Your Perplexity API key.
-            options: Optional dict with ``model`` override.
+            options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def xai(api_key: builtins.str, *, options: typing.Optional[typing.Any] = None) -> CompletionModel:
+    def xai(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create an xAI (Grok) provider.
         
         Args:
             api_key: Your xAI API key.
-            options: Optional dict with ``model`` override.
+            options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def cohere(api_key: builtins.str, *, options: typing.Optional[typing.Any] = None) -> CompletionModel:
+    def cohere(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create a Cohere provider.
         
         Args:
             api_key: Your Cohere API key.
-            options: Optional dict with ``model`` override.
+            options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def bedrock(api_key: builtins.str, *, options: typing.Any) -> CompletionModel:
+    def bedrock(api_key: builtins.str, *, options: BedrockOptions) -> CompletionModel:
         r"""
         Create an AWS Bedrock provider.
         
         Args:
             api_key: Your Bedrock API key.
-            options: Dict with required ``region`` and optional ``model``.
+            options: Typed ``BedrockOptions`` object with required ``region``
+                and optional ``model``.
         """
     @staticmethod
-    def fal(api_key: builtins.str, *, options: typing.Optional[typing.Any] = None) -> CompletionModel:
+    def fal(api_key: builtins.str, *, options: typing.Optional[FalOptions] = None) -> CompletionModel:
         r"""
         Create a fal.ai provider.
         
         Args:
             api_key: Your fal.ai API key.
-            options: Optional dict for selecting the model,
-                endpoint, enterprise tier, and auto-routing. Defaults to
+            options: Optional typed ``FalOptions`` object for selecting the
+                model, endpoint, enterprise tier, and auto-routing. Defaults to
                 the OpenAI-chat endpoint
                 (``openrouter/router/openai/v1/chat/completions``).
         """
-    def with_retry(self, *, max_retries: typing.Optional[builtins.int] = None, initial_delay_ms: typing.Optional[builtins.int] = None, max_delay_ms: typing.Optional[builtins.int] = None) -> CompletionModel:
+    def with_retry(self, config: typing.Optional[RetryConfig] = None) -> CompletionModel:
         r"""
         Wrap this model with automatic retry on transient failures.
         
@@ -523,15 +683,14 @@ class CompletionModel:
         timeouts, and server errors with exponential backoff.
         
         Args:
-            max_retries: Maximum retry attempts (default: 3).
-            initial_delay_ms: Delay before first retry in ms (default: 1000).
-            max_delay_ms: Upper bound on backoff delay in ms (default: 30000).
+            config: Optional typed ``RetryConfig`` object. Defaults to
+                ``RetryConfig()`` (3 retries, 1s initial, 30s max).
         
         Returns:
             A new CompletionModel with retry behaviour.
         
         Example:
-            >>> model = CompletionModel.openai("sk-...").with_retry(max_retries=5)
+            >>> model = CompletionModel.openai("sk-...").with_retry(RetryConfig(max_retries=5))
         """
     @staticmethod
     def with_fallback(models: typing.Sequence[CompletionModel]) -> CompletionModel:
@@ -553,7 +712,7 @@ class CompletionModel:
             >>> backup = CompletionModel.anthropic("sk-ant-...")
             >>> model = CompletionModel.with_fallback([primary, backup])
         """
-    def with_cache(self, *, ttl_seconds: typing.Optional[builtins.int] = None, max_entries: typing.Optional[builtins.int] = None) -> CompletionModel:
+    def with_cache(self, config: typing.Optional[CacheConfig] = None) -> CompletionModel:
         r"""
         Wrap this model with response caching.
         
@@ -562,14 +721,14 @@ class CompletionModel:
         never cached.
         
         Args:
-            ttl_seconds: Cache entry time-to-live in seconds (default: 300).
-            max_entries: Maximum cache entries before eviction (default: 1000).
+            config: Optional typed ``CacheConfig`` object. Defaults to
+                ``CacheConfig()`` (content-hash strategy, 300s TTL, 1000 entries).
         
         Returns:
             A new CompletionModel with caching enabled.
         
         Example:
-            >>> model = CompletionModel.openai("sk-...").with_cache(ttl_seconds=600)
+            >>> model = CompletionModel.openai("sk-...").with_cache(CacheConfig(ttl_seconds=600))
         """
     def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> typing.Any:
         r"""
@@ -775,6 +934,37 @@ class CompletionStream:
     def __aiter__(self) -> CompletionStream: ...
     def __anext__(self) -> typing.Any: ...
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ComputeResult:
+    r"""
+    Result of a completed compute job (generic, untyped output).
+    """
+    @property
+    def job(self) -> typing.Any:
+        r"""
+        The job handle that produced this result, if available (as a dict).
+        """
+    @property
+    def output(self) -> typing.Any:
+        r"""
+        Output data (model-specific JSON).
+        """
+    @property
+    def timing(self) -> typing.Any:
+        r"""
+        Request timing breakdown (as a dict).
+        """
+    @property
+    def cost(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost in USD, if reported by the provider.
+        """
+    @property
+    def metadata(self) -> typing.Any:
+        r"""
+        Raw provider-specific metadata (as a dict).
+        """
 
 @typing.final
 class ContentPart:
@@ -1109,6 +1299,40 @@ class FalEmbeddingModel:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class FalOptions:
+    r"""
+    Options specific to the fal.ai provider.
+    """
+    @property
+    def model(self) -> typing.Optional[builtins.str]: ...
+    @model.setter
+    def model(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def base_url(self) -> typing.Optional[builtins.str]: ...
+    @base_url.setter
+    def base_url(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def enterprise(self) -> builtins.bool: ...
+    @enterprise.setter
+    def enterprise(self, value: builtins.bool) -> None: ...
+    @property
+    def auto_route_modality(self) -> builtins.bool: ...
+    @auto_route_modality.setter
+    def auto_route_modality(self, value: builtins.bool) -> None: ...
+    def __new__(cls, *, model: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, endpoint: typing.Optional[FalLlmEndpointKind] = None, enterprise: builtins.bool = False, auto_route_modality: builtins.bool = True) -> FalOptions:
+        r"""
+        Create a new FalOptions.
+        
+        Args:
+            model: Override the default model identifier.
+            base_url: Override the provider's base URL.
+            endpoint: The fal endpoint family (defaults to OpenAiChat).
+            enterprise: Promote the endpoint to its enterprise / SOC2-eligible variant.
+            auto_route_modality: Auto-route to vision/audio/video variant when content has media.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class FalProvider:
     r"""
     A fal.ai provider that supports LLM completions AND compute operations.
@@ -1134,67 +1358,84 @@ class FalProvider:
         r"""
         Get the model ID.
         """
-    def __new__(cls, *, api_key: builtins.str, options: typing.Optional[typing.Any] = None) -> FalProvider:
+    def __new__(cls, *, api_key: builtins.str, options: typing.Optional[FalOptions] = None) -> FalProvider:
         r"""
         Create a new fal.ai provider.
         
         Args:
             api_key: Your fal.ai API key.
-            options: Optional dict of options (model, endpoint, enterprise,
-                auto_route_modality) -- deserialized into core ``FalOptions``.
+            options: Optional [`FalOptions`] for model, endpoint, enterprise,
+                and auto-routing configuration.
         """
-    def generate_image(self, request: typing.Any) -> typing.Any:
+    def generate_image(self, request: ImageRequest) -> typing.Any:
         r"""
         Generate images from a text prompt.
         
         Args:
-            request: An ImageRequest with prompt, dimensions, etc.
+            request: An [`ImageRequest`] with prompt, dimensions, etc.
         
         Returns:
-            A dict with images, timing, cost, and metadata.
+            An [`ImageResult`] with images, timing, cost, and metadata.
         """
-    def upscale_image(self, request: typing.Any) -> typing.Any:
+    def upscale_image(self, request: UpscaleRequest) -> typing.Any:
         r"""
         Upscale an image.
         
         Args:
-            request: An UpscaleRequest with image_url and scale factor.
+            request: An [`UpscaleRequest`] with image_url and scale factor.
         
         Returns:
-            A dict with the upscaled image, timing, cost, and metadata.
+            An [`ImageResult`] with the upscaled image, timing, cost, and metadata.
         """
-    def upscale_image_aura(self, request: typing.Any) -> typing.Any:
+    def upscale_image_aura(self, request: UpscaleRequest) -> typing.Any:
         r"""
         Upscale an image via the aura-sr model.
+        
+        Args:
+            request: An [`UpscaleRequest`] with image_url and scale factor.
+        
+        Returns:
+            An [`ImageResult`] with the upscaled image, timing, cost, and metadata.
         """
-    def upscale_image_clarity(self, request: typing.Any) -> typing.Any:
+    def upscale_image_clarity(self, request: UpscaleRequest) -> typing.Any:
         r"""
         Upscale an image via the clarity-upscaler model.
+        
+        Args:
+            request: An [`UpscaleRequest`] with image_url and scale factor.
+        
+        Returns:
+            An [`ImageResult`] with the upscaled image, timing, cost, and metadata.
         """
-    def upscale_image_creative(self, request: typing.Any) -> typing.Any:
+    def upscale_image_creative(self, request: UpscaleRequest) -> typing.Any:
         r"""
         Upscale an image via the creative-upscaler model.
+        
+        Args:
+            request: An [`UpscaleRequest`] with image_url and scale factor.
+        
+        Returns:
+            An [`ImageResult`] with the upscaled image, timing, cost, and metadata.
         """
-    def remove_background(self, *, image_url: builtins.str, model: typing.Optional[builtins.str] = None) -> typing.Any:
+    def remove_background(self, request: BackgroundRemovalRequest) -> typing.Any:
         r"""
         Remove the background from an image.
         
         Args:
-            image_url: URL of the source image.
-            model: Optional model id override.
+            request: A [`BackgroundRemovalRequest`] with image_url and optional model.
         
         Returns:
-            A dict with the matted image, timing, cost, and metadata.
+            An [`ImageResult`] with the matted image, timing, cost, and metadata.
         """
-    def generate_3d(self, request: typing.Any) -> typing.Any:
+    def generate_3d(self, request: ThreeDRequest) -> typing.Any:
         r"""
         Generate a 3D model from a text prompt or source image.
         
         Args:
-            request: A ThreeDRequest with prompt and/or image_url.
+            request: A [`ThreeDRequest`] with prompt and/or image_url.
         
         Returns:
-            A dict with the generated 3D model, timing, cost, and metadata.
+            A [`ThreeDResult`] with the generated 3D model, timing, cost, and metadata.
         """
     def embedding_model(self) -> FalEmbeddingModel:
         r"""
@@ -1204,131 +1445,88 @@ class FalProvider:
             A FalEmbeddingModel that can be used to embed text via fal's
             OpenAI-compatible router.
         """
-    def text_to_video(self, request: typing.Any) -> typing.Any:
+    def text_to_video(self, request: VideoRequest) -> typing.Any:
         r"""
         Generate a video from a text prompt.
         
         Args:
-            request: A VideoRequest with prompt and optional parameters.
+            request: A [`VideoRequest`] with prompt and optional parameters.
         
         Returns:
-            A dict with videos, timing, cost, and metadata.
+            A [`VideoResult`] with videos, timing, cost, and metadata.
         """
-    def image_to_video(self, request: typing.Any) -> typing.Any:
+    def image_to_video(self, request: VideoRequest) -> typing.Any:
         r"""
         Generate a video from a source image and prompt.
         
         Args:
-            request: A VideoRequest with prompt and image_url.
+            request: A [`VideoRequest`] with prompt and image_url.
         
         Returns:
-            A dict with videos, timing, cost, and metadata.
+            A [`VideoResult`] with videos, timing, cost, and metadata.
         """
-    def text_to_speech(self, request: typing.Any) -> typing.Any:
+    def text_to_speech(self, request: SpeechRequest) -> typing.Any:
         r"""
         Synthesize speech from text.
         
         Args:
-            request: A SpeechRequest with text and optional voice/language.
+            request: A [`SpeechRequest`] with text and optional voice/language.
         
         Returns:
-            A dict with audio clips, timing, cost, and metadata.
+            An [`AudioResult`] with audio clips, timing, cost, and metadata.
         """
-    def generate_music(self, request: typing.Any) -> typing.Any:
+    def generate_music(self, request: MusicRequest) -> typing.Any:
         r"""
         Generate music from a prompt.
         
         Args:
-            request: A MusicRequest with prompt and optional duration.
+            request: A [`MusicRequest`] with prompt and optional duration.
         
         Returns:
-            A dict with audio clips, timing, cost, and metadata.
+            An [`AudioResult`] with audio clips, timing, cost, and metadata.
         """
-    def generate_sfx(self, request: typing.Any) -> typing.Any:
+    def generate_sfx(self, request: MusicRequest) -> typing.Any:
         r"""
         Generate sound effects from a prompt.
         
         Args:
-            request: A MusicRequest with prompt and optional duration.
+            request: A [`MusicRequest`] with prompt and optional duration.
         
         Returns:
-            A dict with audio clips, timing, cost, and metadata.
+            An [`AudioResult`] with audio clips, timing, cost, and metadata.
         """
-    def transcribe(self, request: typing.Any) -> typing.Any:
+    def transcribe(self, request: TranscriptionRequest) -> typing.Any:
         r"""
         Transcribe audio to text.
         
         Args:
-            request: A TranscriptionRequest with audio_url and options.
+            request: A [`TranscriptionRequest`] with audio_url and options.
         
         Returns:
-            A dict with text, segments, language, timing, cost, and metadata.
+            A [`TranscriptionResult`] with text, segments, language, timing,
+            cost, and metadata.
         """
-    def run(self, *, model: builtins.str, input: typing.Any) -> typing.Any:
-        r"""
-        Submit a compute job and wait for the result.
-        
-        Args:
-            model: The fal.ai model endpoint (e.g. "fal-ai/flux/dev").
-            input: Input parameters as a dict.
-        
-        Returns:
-            A dict with output, timing, cost, and metadata.
-        """
-    def submit(self, *, model: builtins.str, input: typing.Any) -> typing.Any:
-        r"""
-        Submit a compute job without waiting (returns a job handle dict).
-        
-        Args:
-            model: The fal.ai model endpoint.
-            input: Input parameters as a dict.
-        
-        Returns:
-            A dict with id, provider, model, and submitted_at.
-        """
-    def status(self, *, job_id: builtins.str, model: builtins.str) -> typing.Any:
-        r"""
-        Poll the status of a submitted job.
-        
-        Args:
-            job_id: The job identifier returned by submit().
-            model: The model endpoint the job was submitted to.
-        
-        Returns:
-            A status string: "queued", "running", "completed", "failed", or "cancelled".
-        """
-    def cancel(self, *, job_id: builtins.str, model: builtins.str) -> typing.Any:
-        r"""
-        Cancel a running or queued job.
-        
-        Args:
-            job_id: The job identifier returned by submit().
-            model: The model endpoint the job was submitted to.
-        """
-    def complete(self, messages: typing.Sequence[ChatMessage], *, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, model: typing.Optional[builtins.str] = None, response_format: typing.Optional[typing.Any] = None) -> typing.Any:
+    def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> typing.Any:
         r"""
         Perform a chat completion via fal-ai/any-llm.
         
         Args:
             messages: A list of ChatMessage objects.
-            temperature: Optional sampling temperature (0.0-2.0).
-            max_tokens: Optional maximum tokens to generate.
-            model: Optional model override for this request.
-            response_format: Optional JSON schema dict for structured output.
+            options: Optional [`CompletionOptions`] for sampling parameters,
+                tools, and response format.
         
         Returns:
             A CompletionResponse with content, model, tool_calls, usage, etc.
         """
-    def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Any, *, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, model: typing.Optional[builtins.str] = None) -> typing.Any:
+    def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Any, options: typing.Optional[CompletionOptions] = None) -> typing.Any:
         r"""
         Stream a chat completion, calling a callback for each chunk.
         
         Args:
             messages: A list of ChatMessage objects.
             on_chunk: Callback function receiving each chunk as a dict.
-            temperature: Optional sampling temperature (0.0-2.0).
-            max_tokens: Optional maximum tokens to generate.
-            model: Optional model override for this request.
+            options: Optional [`CompletionOptions`] for sampling parameters,
+                tools, and response format.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -1375,6 +1573,165 @@ class FinishReason:
     def __eq__(self, other: FinishReason) -> builtins.bool: ...
 
 @typing.final
+class Generated3DModel:
+    r"""
+    A single generated 3D model with optional mesh metadata.
+    """
+    @property
+    def media(self) -> MediaOutput:
+        r"""
+        The underlying media output.
+        """
+    @property
+    def vertex_count(self) -> typing.Optional[builtins.int]:
+        r"""
+        Total vertex count, if known.
+        """
+    @property
+    def face_count(self) -> typing.Optional[builtins.int]:
+        r"""
+        Total face/triangle count, if known.
+        """
+    @property
+    def has_textures(self) -> builtins.bool:
+        r"""
+        Whether the model includes texture data.
+        """
+    @property
+    def has_animations(self) -> builtins.bool:
+        r"""
+        Whether the model includes animation data.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class GeneratedAudio:
+    r"""
+    A single generated audio clip with optional metadata.
+    """
+    @property
+    def media(self) -> MediaOutput:
+        r"""
+        The underlying media output.
+        """
+    @property
+    def duration_seconds(self) -> typing.Optional[builtins.float]:
+        r"""
+        Duration in seconds, if known.
+        """
+    @property
+    def sample_rate(self) -> typing.Optional[builtins.int]:
+        r"""
+        Sample rate in Hz, if known.
+        """
+    @property
+    def channels(self) -> typing.Optional[builtins.int]:
+        r"""
+        Number of audio channels, if known.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class GeneratedImage:
+    r"""
+    A single generated image with optional dimension metadata.
+    """
+    @property
+    def media(self) -> MediaOutput:
+        r"""
+        The underlying media output.
+        """
+    @property
+    def width(self) -> typing.Optional[builtins.int]:
+        r"""
+        Image width in pixels, if known.
+        """
+    @property
+    def height(self) -> typing.Optional[builtins.int]:
+        r"""
+        Image height in pixels, if known.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class GeneratedVideo:
+    r"""
+    A single generated video with optional metadata.
+    """
+    @property
+    def media(self) -> MediaOutput:
+        r"""
+        The underlying media output.
+        """
+    @property
+    def width(self) -> typing.Optional[builtins.int]:
+        r"""
+        Video width in pixels, if known.
+        """
+    @property
+    def height(self) -> typing.Optional[builtins.int]:
+        r"""
+        Video height in pixels, if known.
+        """
+    @property
+    def duration_seconds(self) -> typing.Optional[builtins.float]:
+        r"""
+        Duration in seconds, if known.
+        """
+    @property
+    def fps(self) -> typing.Optional[builtins.float]:
+        r"""
+        Frames per second, if known.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ImageRequest:
+    r"""
+    Typed wrapper for a text-to-image request.
+    """
+    @property
+    def prompt(self) -> builtins.str: ...
+    @property
+    def negative_prompt(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def width(self) -> typing.Optional[builtins.int]: ...
+    @property
+    def height(self) -> typing.Optional[builtins.int]: ...
+    @property
+    def num_images(self) -> typing.Optional[builtins.int]: ...
+    @property
+    def model(self) -> typing.Optional[builtins.str]: ...
+    def __new__(cls, *, prompt: builtins.str, negative_prompt: typing.Optional[builtins.str] = None, width: typing.Optional[builtins.int] = None, height: typing.Optional[builtins.int] = None, num_images: typing.Optional[builtins.int] = None, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> ImageRequest: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ImageResult:
+    r"""
+    Result of an image generation or upscale operation.
+    """
+    @property
+    def images(self) -> typing.Any:
+        r"""
+        The generated or upscaled images (as a list of dicts).
+        """
+    @property
+    def timing(self) -> typing.Any:
+        r"""
+        Request timing breakdown (as a dict).
+        """
+    @property
+    def cost(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost in USD, if reported by the provider.
+        """
+    @property
+    def metadata(self) -> typing.Any:
+        r"""
+        Arbitrary provider-specific metadata (as a dict).
+        """
+
+@typing.final
 class InMemoryBackend:
     r"""
     An in-memory storage backend for Memory.
@@ -1416,6 +1773,46 @@ class JsonlBackend:
         
         Returns:
             A new JsonlBackend instance.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class MediaOutput:
+    r"""
+    A single piece of generated media content.
+    
+    At least one of `url`, `base64`, or `raw_content` will be populated.
+    `raw_content` is used for text-based formats like SVG, OBJ, and GLTF JSON.
+    """
+    @property
+    def url(self) -> typing.Optional[builtins.str]:
+        r"""
+        URL where the media can be downloaded.
+        """
+    @property
+    def base64(self) -> typing.Optional[builtins.str]:
+        r"""
+        Base64-encoded media data.
+        """
+    @property
+    def raw_content(self) -> typing.Optional[builtins.str]:
+        r"""
+        Raw text content for text-based formats (SVG, OBJ, GLTF JSON).
+        """
+    @property
+    def media_type(self) -> builtins.str:
+        r"""
+        The media type as a MIME string (e.g. `"image/png"`).
+        """
+    @property
+    def file_size(self) -> typing.Optional[builtins.int]:
+        r"""
+        File size in bytes, if known.
+        """
+    @property
+    def metadata(self) -> typing.Any:
+        r"""
+        Arbitrary provider-specific metadata as a Python dict.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -1612,6 +2009,20 @@ class MemoryResult:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class MusicRequest:
+    r"""
+    Typed wrapper for a music/SFX generation request.
+    """
+    @property
+    def prompt(self) -> builtins.str: ...
+    @property
+    def duration_seconds(self) -> typing.Optional[builtins.float]: ...
+    @property
+    def model(self) -> typing.Optional[builtins.str]: ...
+    def __new__(cls, *, prompt: builtins.str, duration_seconds: typing.Optional[builtins.float] = None, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> MusicRequest: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class PromptRegistry:
     r"""
     A versioned registry for prompt templates.
@@ -1782,6 +2193,29 @@ class PromptTemplate:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class ProviderOptions:
+    r"""
+    Base options shared by every provider.
+    """
+    @property
+    def model(self) -> typing.Optional[builtins.str]: ...
+    @model.setter
+    def model(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def base_url(self) -> typing.Optional[builtins.str]: ...
+    @base_url.setter
+    def base_url(self, value: typing.Optional[builtins.str]) -> None: ...
+    def __new__(cls, *, model: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None) -> ProviderOptions:
+        r"""
+        Create a new ProviderOptions.
+        
+        Args:
+            model: Override the default model identifier.
+            base_url: Override the provider's base URL.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class ResponseFormat:
     r"""
     Typed response-format hint for structured output.
@@ -1839,6 +2273,41 @@ class ResponseFormat:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class RetryConfig:
+    @property
+    def max_retries(self) -> builtins.int: ...
+    @max_retries.setter
+    def max_retries(self, value: builtins.int) -> None: ...
+    @property
+    def initial_delay_ms(self) -> builtins.int: ...
+    @initial_delay_ms.setter
+    def initial_delay_ms(self, value: builtins.int) -> None: ...
+    @property
+    def max_delay_ms(self) -> builtins.int: ...
+    @max_delay_ms.setter
+    def max_delay_ms(self, value: builtins.int) -> None: ...
+    @property
+    def honor_retry_after(self) -> builtins.bool: ...
+    @honor_retry_after.setter
+    def honor_retry_after(self, value: builtins.bool) -> None: ...
+    @property
+    def jitter(self) -> builtins.bool: ...
+    @jitter.setter
+    def jitter(self, value: builtins.bool) -> None: ...
+    def __new__(cls, *, max_retries: builtins.int = 3, initial_delay_ms: builtins.int = 1000, max_delay_ms: builtins.int = 30000, honor_retry_after: builtins.bool = True, jitter: builtins.bool = True) -> RetryConfig:
+        r"""
+        Create a new RetryConfig.
+        
+        Args:
+            max_retries: Maximum retry attempts (default: 3).
+            initial_delay_ms: Delay before first retry (default: 1000).
+            max_delay_ms: Maximum backoff delay (default: 30000).
+            honor_retry_after: Honor server retry_after (default: True).
+            jitter: Add random jitter (default: True).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class Role:
     r"""
     Role constants for chat messages.
@@ -1884,6 +2353,26 @@ class SessionNamespace:
     def __setitem__(self, key: builtins.str, value: typing.Any) -> None: ...
     def __getitem__(self, key: builtins.str) -> typing.Any: ...
     def __contains__(self, key: builtins.str) -> builtins.bool: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class SpeechRequest:
+    r"""
+    Typed wrapper for a text-to-speech request.
+    """
+    @property
+    def text(self) -> builtins.str: ...
+    @property
+    def voice(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def voice_url(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def language(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def speed(self) -> typing.Optional[builtins.float]: ...
+    @property
+    def model(self) -> typing.Optional[builtins.str]: ...
+    def __new__(cls, *, text: builtins.str, voice: typing.Optional[builtins.str] = None, voice_url: typing.Optional[builtins.str] = None, language: typing.Optional[builtins.str] = None, speed: typing.Optional[builtins.float] = None, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> SpeechRequest: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -1940,6 +2429,48 @@ class StopEvent(Event):
     ...
 
 @typing.final
+class ThreeDRequest:
+    r"""
+    Typed wrapper for a 3D model generation request.
+    """
+    @property
+    def prompt(self) -> builtins.str: ...
+    @property
+    def image_url(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def format(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def model(self) -> typing.Optional[builtins.str]: ...
+    def __new__(cls, *, prompt: builtins.str = '', image_url: typing.Optional[builtins.str] = None, format: typing.Optional[builtins.str] = None, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> ThreeDRequest: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ThreeDResult:
+    r"""
+    Result of a 3D model generation operation.
+    """
+    @property
+    def models(self) -> typing.Any:
+        r"""
+        The generated 3D models (as a list of dicts).
+        """
+    @property
+    def timing(self) -> typing.Any:
+        r"""
+        Request timing breakdown (as a dict).
+        """
+    @property
+    def cost(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost in USD, if reported by the provider.
+        """
+    @property
+    def metadata(self) -> typing.Any:
+        r"""
+        Arbitrary provider-specific metadata (as a dict).
+        """
+
+@typing.final
 class ToolDef:
     r"""
     A tool definition for the agent.
@@ -1953,6 +2484,99 @@ class ToolDef:
         ... )
     """
     def __new__(cls, *, name: builtins.str, description: builtins.str, parameters: typing.Any, handler: typing.Any) -> ToolDef: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class TranscriptionRequest:
+    r"""
+    Typed wrapper for an audio transcription request.
+    """
+    @property
+    def audio_url(self) -> builtins.str: ...
+    @property
+    def language(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def diarize(self) -> builtins.bool: ...
+    @property
+    def model(self) -> typing.Optional[builtins.str]: ...
+    def __new__(cls, *, audio_url: builtins.str, language: typing.Optional[builtins.str] = None, diarize: builtins.bool = False, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> TranscriptionRequest: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class TranscriptionResult:
+    r"""
+    Result of a transcription operation.
+    """
+    @property
+    def text(self) -> builtins.str:
+        r"""
+        The full transcribed text.
+        """
+    @property
+    def segments(self) -> builtins.list[TranscriptionSegment]:
+        r"""
+        Time-aligned segments, if available.
+        """
+    @property
+    def language(self) -> typing.Optional[builtins.str]:
+        r"""
+        Detected or specified language code (e.g. "en", "fr").
+        """
+    @property
+    def timing(self) -> typing.Any:
+        r"""
+        Request timing breakdown (as a dict).
+        """
+    @property
+    def cost(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost in USD, if reported by the provider.
+        """
+    @property
+    def metadata(self) -> typing.Any:
+        r"""
+        Arbitrary provider-specific metadata (as a dict).
+        """
+
+@typing.final
+class TranscriptionSegment:
+    r"""
+    A single segment within a transcription.
+    """
+    @property
+    def text(self) -> builtins.str:
+        r"""
+        The transcribed text for this segment.
+        """
+    @property
+    def start(self) -> builtins.float:
+        r"""
+        Start time in seconds.
+        """
+    @property
+    def end(self) -> builtins.float:
+        r"""
+        End time in seconds.
+        """
+    @property
+    def speaker(self) -> typing.Optional[builtins.str]:
+        r"""
+        Speaker label, if diarization was enabled.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class UpscaleRequest:
+    r"""
+    Typed wrapper for an image upscale request.
+    """
+    @property
+    def image_url(self) -> builtins.str: ...
+    @property
+    def scale(self) -> builtins.float: ...
+    @property
+    def model(self) -> typing.Optional[builtins.str]: ...
+    def __new__(cls, *, image_url: builtins.str, scale: builtins.float, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> UpscaleRequest: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -1975,6 +2599,54 @@ class ValkeyBackend:
             prefix: Optional key prefix for namespacing (default: "blazen:memory:").
         """
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class VideoRequest:
+    r"""
+    Typed wrapper for a video generation request.
+    """
+    @property
+    def prompt(self) -> builtins.str: ...
+    @property
+    def image_url(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def duration_seconds(self) -> typing.Optional[builtins.float]: ...
+    @property
+    def negative_prompt(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def width(self) -> typing.Optional[builtins.int]: ...
+    @property
+    def height(self) -> typing.Optional[builtins.int]: ...
+    @property
+    def model(self) -> typing.Optional[builtins.str]: ...
+    def __new__(cls, *, prompt: builtins.str, image_url: typing.Optional[builtins.str] = None, duration_seconds: typing.Optional[builtins.float] = None, negative_prompt: typing.Optional[builtins.str] = None, width: typing.Optional[builtins.int] = None, height: typing.Optional[builtins.int] = None, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> VideoRequest: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class VideoResult:
+    r"""
+    Result of a video generation operation.
+    """
+    @property
+    def videos(self) -> typing.Any:
+        r"""
+        The generated videos (as a list of dicts).
+        """
+    @property
+    def timing(self) -> typing.Any:
+        r"""
+        Request timing breakdown (as a dict).
+        """
+    @property
+    def cost(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost in USD, if reported by the provider.
+        """
+    @property
+    def metadata(self) -> typing.Any:
+        r"""
+        Arbitrary provider-specific metadata (as a dict).
+        """
 
 @typing.final
 class Workflow:
@@ -2217,4 +2889,22 @@ class _StepWrapper:
         original function for testing convenience).
         """
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class CacheStrategy(enum.Enum):
+    None = ...
+    ContentHash = ...
+    AnthropicEphemeral = ...
+    Auto = ...
+
+@typing.final
+class FalLlmEndpointKind(enum.Enum):
+    r"""
+    Simplified fal.ai endpoint family.
+    """
+    OpenAiChat = ...
+    OpenAiResponses = ...
+    OpenAiEmbeddings = ...
+    OpenRouter = ...
+    AnyLlm = ...
 

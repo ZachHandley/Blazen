@@ -14,7 +14,7 @@ use napi_derive::napi;
 use blazen_llm::agent::{AgentConfig, run_agent as rust_run_agent};
 use blazen_llm::error::BlazenError;
 use blazen_llm::traits::Tool;
-use blazen_llm::types::{ChatMessage, Role, ToolDefinition};
+use blazen_llm::types::{ChatMessage, ToolDefinition};
 
 use crate::error::llm_error_to_napi;
 use crate::providers::JsCompletionModel;
@@ -225,17 +225,14 @@ pub async fn run_agent(
         .messages
         .iter()
         .map(|m| {
-            serde_json::json!({
-                "role": match m.role {
-                    Role::System => "system",
-                    Role::User => "user",
-                    Role::Assistant => "assistant",
-                    Role::Tool => "tool",
-                },
-                "content": m.content.text_content(),
+            serde_json::to_value(m).map_err(|e| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    format!("Failed to serialize ChatMessage: {e}"),
+                )
             })
         })
-        .collect();
+        .collect::<napi::Result<Vec<_>>>()?;
 
     Ok(JsAgentResult {
         response: build_response(result.response),

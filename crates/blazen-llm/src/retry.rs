@@ -19,6 +19,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use futures_util::Stream;
+use serde::{Deserialize, Serialize};
 
 use crate::error::BlazenError;
 use crate::traits::CompletionModel;
@@ -29,28 +30,52 @@ use crate::types::{CompletionRequest, CompletionResponse, StreamChunk};
 // ---------------------------------------------------------------------------
 
 /// Configuration for retry behaviour.
-#[derive(Debug, Clone)]
+///
+/// Delays are expressed as u64 milliseconds for cross-language binding
+/// compatibility (Python, Node, WASM). They are converted to [`Duration`]
+/// internally at the call sites.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct RetryConfig {
     /// Maximum number of retry attempts (total calls = `max_retries + 1`).
+    #[serde(default = "default_max_retries")]
     pub max_retries: u32,
-    /// Delay before the first retry.
-    pub initial_delay: Duration,
-    /// Upper bound on the computed backoff delay.
-    pub max_delay: Duration,
+    /// Delay before the first retry, in milliseconds.
+    #[serde(default = "default_initial_delay_ms")]
+    pub initial_delay_ms: u64,
+    /// Upper bound on the computed backoff delay, in milliseconds.
+    #[serde(default = "default_max_delay_ms")]
+    pub max_delay_ms: u64,
     /// When `true`, a [`BlazenError::RateLimit`] that carries a
     /// `retry_after_ms` value will override the computed backoff.
+    #[serde(default = "default_true")]
     pub honor_retry_after: bool,
     /// When `true`, a random 0-25 % jitter is added to each delay to
     /// avoid thundering-herd effects.
+    #[serde(default = "default_true")]
     pub jitter: bool,
+}
+
+fn default_max_retries() -> u32 {
+    3
+}
+fn default_initial_delay_ms() -> u64 {
+    1000
+}
+fn default_max_delay_ms() -> u64 {
+    30_000
+}
+fn default_true() -> bool {
+    true
 }
 
 impl Default for RetryConfig {
     fn default() -> Self {
         Self {
-            max_retries: 3,
-            initial_delay: Duration::from_secs(1),
-            max_delay: Duration::from_secs(30),
+            max_retries: default_max_retries(),
+            initial_delay_ms: default_initial_delay_ms(),
+            max_delay_ms: default_max_delay_ms(),
             honor_retry_after: true,
             jitter: true,
         }
@@ -85,19 +110,22 @@ impl RetryCompletionModel {
     /// Compute the delay for the given `attempt` (0-indexed), optionally
     /// honouring a provider-supplied `retry_after_ms`.
     fn compute_delay(&self, attempt: u32, retry_after_ms: Option<u64>) -> Duration {
+        let initial_delay = Duration::from_millis(self.config.initial_delay_ms);
+        let max_delay = Duration::from_millis(self.config.max_delay_ms);
+
         // If the provider told us when to retry and we're configured to
         // honour that, use it as the base delay.
         let base = if self.config.honor_retry_after {
             if let Some(ms) = retry_after_ms {
                 Duration::from_millis(ms)
             } else {
-                exp_backoff(self.config.initial_delay, attempt, self.config.max_delay)
+                exp_backoff(initial_delay, attempt, max_delay)
             }
         } else {
-            exp_backoff(self.config.initial_delay, attempt, self.config.max_delay)
+            exp_backoff(initial_delay, attempt, max_delay)
         };
 
-        let capped = base.min(self.config.max_delay);
+        let capped = base.min(max_delay);
 
         if self.config.jitter {
             add_jitter(capped)
@@ -362,8 +390,8 @@ mod tests {
     fn fast_config(max_retries: u32) -> RetryConfig {
         RetryConfig {
             max_retries,
-            initial_delay: Duration::from_millis(0),
-            max_delay: Duration::from_millis(0),
+            initial_delay_ms: 0,
+            max_delay_ms: 0,
             honor_retry_after: false,
             jitter: false,
         }
@@ -445,8 +473,8 @@ mod tests {
         // but we can verify the delay computation logic directly.
         let config = RetryConfig {
             max_retries: 3,
-            initial_delay: Duration::from_secs(1),
-            max_delay: Duration::from_secs(30),
+            initial_delay_ms: 1000,
+            max_delay_ms: 30_000,
             honor_retry_after: true,
             jitter: false,
         };
@@ -478,8 +506,8 @@ mod tests {
     async fn test_jitter_adds_extra() {
         let config = RetryConfig {
             max_retries: 1,
-            initial_delay: Duration::from_secs(1),
-            max_delay: Duration::from_secs(30),
+            initial_delay_ms: 1000,
+            max_delay_ms: 30_000,
             honor_retry_after: false,
             jitter: true,
         };

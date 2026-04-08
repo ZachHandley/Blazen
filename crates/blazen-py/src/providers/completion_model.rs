@@ -2,35 +2,27 @@
 
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::Duration;
 
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use tokio::sync::Mutex;
 use tokio_stream::{Stream, StreamExt};
 
-use blazen_llm::cache::{CacheConfig, CacheStrategy, CachedCompletionModel};
+use blazen_llm::cache::CachedCompletionModel;
 use blazen_llm::fallback::FallbackModel;
-use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
+use blazen_llm::retry::RetryCompletionModel;
 use blazen_llm::types::ToolDefinition;
 use blazen_llm::{BlazenError, ChatMessage, CompletionModel, CompletionRequest, StreamChunk};
 
 use crate::error::BlazenPyError;
+use crate::providers::config::{PyCacheConfig, PyRetryConfig};
+use crate::providers::options::{
+    PyAzureOptions, PyBedrockOptions, PyFalOptions, PyProviderOptions,
+};
 use crate::types::{PyChatMessage, PyCompletionResponse};
 
 /// Type alias for the pinned boxed stream returned by `CompletionModel::stream`.
 type PinnedChunkStream = Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>;
-
-/// Deserialize an optional Python options dict into [`ProviderOptions`].
-/// Returns the default (all-`None`) options when no dict is provided.
-fn depy_provider_options(
-    options: Option<&Bound<'_, PyAny>>,
-) -> PyResult<blazen_llm::types::provider_options::ProviderOptions> {
-    match options {
-        Some(o) => Ok(pythonize::depythonize(o)?),
-        None => Ok(blazen_llm::types::provider_options::ProviderOptions::default()),
-    }
-}
 
 // ---------------------------------------------------------------------------
 // PyCompletionOptions
@@ -130,249 +122,246 @@ impl PyCompletionModel {
     ///
     /// Args:
     ///     api_key: Your OpenAI API key.
-    ///     options: Optional dict with ``model`` and ``baseUrl`` overrides.
+    ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
-    fn openai(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let opts = depy_provider_options(options)?;
-        Ok(Self {
+    fn openai(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
+        Self {
             inner: Arc::new(blazen_llm::providers::openai::OpenAiProvider::from_options(
                 api_key, opts,
             )),
-        })
+        }
     }
 
     /// Create an Anthropic provider.
     ///
     /// Args:
     ///     api_key: Your Anthropic API key.
-    ///     options: Optional dict with ``model`` and ``baseUrl`` overrides.
+    ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
-    fn anthropic(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let opts = depy_provider_options(options)?;
-        Ok(Self {
+    fn anthropic(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
+        Self {
             inner: Arc::new(
                 blazen_llm::providers::anthropic::AnthropicProvider::from_options(api_key, opts),
             ),
-        })
+        }
     }
 
     /// Create a Google Gemini provider.
     ///
     /// Args:
     ///     api_key: Your Google API key.
-    ///     options: Optional dict with ``model`` and ``baseUrl`` overrides.
+    ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
-    fn gemini(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let opts = depy_provider_options(options)?;
-        Ok(Self {
+    fn gemini(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
+        Self {
             inner: Arc::new(blazen_llm::providers::gemini::GeminiProvider::from_options(
                 api_key, opts,
             )),
-        })
+        }
     }
 
     /// Create an Azure OpenAI provider.
     ///
     /// Args:
     ///     api_key: Your Azure API key.
-    ///     options: Dict with required ``resourceName`` and ``deploymentName``,
-    ///         plus optional ``apiVersion``.
+    ///     options: Typed ``AzureOptions`` object with required
+    ///         ``resource_name`` and ``deployment_name``, plus optional
+    ///         ``api_version``.
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options))]
-    fn azure(api_key: &str, options: &Bound<'_, PyAny>) -> PyResult<Self> {
-        let opts: blazen_llm::types::provider_options::AzureOptions =
-            pythonize::depythonize(options)?;
-        Ok(Self {
+    fn azure(api_key: &str, options: PyRef<'_, PyAzureOptions>) -> Self {
+        let opts = options.inner.clone();
+        Self {
             inner: Arc::new(
                 blazen_llm::providers::azure::AzureOpenAiProvider::from_options(api_key, opts),
             ),
-        })
+        }
     }
 
     /// Create an OpenRouter provider.
     ///
     /// Args:
     ///     api_key: Your OpenRouter API key.
-    ///     options: Optional dict with ``model`` override.
+    ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
-    fn openrouter(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let opts = depy_provider_options(options)?;
-        Ok(Self {
+    fn openrouter(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
+        Self {
             inner: Arc::new(
                 blazen_llm::providers::openrouter::OpenRouterProvider::from_options(api_key, opts),
             ),
-        })
+        }
     }
 
     /// Create a Groq provider.
     ///
     /// Args:
     ///     api_key: Your Groq API key.
-    ///     options: Optional dict with ``model`` override.
+    ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
-    fn groq(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let opts = depy_provider_options(options)?;
-        Ok(Self {
+    fn groq(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
+        Self {
             inner: Arc::new(blazen_llm::providers::groq::GroqProvider::from_options(
                 api_key, opts,
             )),
-        })
+        }
     }
 
     /// Create a Together AI provider.
     ///
     /// Args:
     ///     api_key: Your Together API key.
-    ///     options: Optional dict with ``model`` override.
+    ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
-    fn together(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let opts = depy_provider_options(options)?;
-        Ok(Self {
+    fn together(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
+        Self {
             inner: Arc::new(
                 blazen_llm::providers::together::TogetherProvider::from_options(api_key, opts),
             ),
-        })
+        }
     }
 
     /// Create a Mistral provider.
     ///
     /// Args:
     ///     api_key: Your Mistral API key.
-    ///     options: Optional dict with ``model`` override.
+    ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
-    fn mistral(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let opts = depy_provider_options(options)?;
-        Ok(Self {
+    fn mistral(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
+        Self {
             inner: Arc::new(
                 blazen_llm::providers::mistral::MistralProvider::from_options(api_key, opts),
             ),
-        })
+        }
     }
 
     /// Create a DeepSeek provider.
     ///
     /// Args:
     ///     api_key: Your DeepSeek API key.
-    ///     options: Optional dict with ``model`` override.
+    ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
-    fn deepseek(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let opts = depy_provider_options(options)?;
-        Ok(Self {
+    fn deepseek(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
+        Self {
             inner: Arc::new(
                 blazen_llm::providers::deepseek::DeepSeekProvider::from_options(api_key, opts),
             ),
-        })
+        }
     }
 
     /// Create a Fireworks AI provider.
     ///
     /// Args:
     ///     api_key: Your Fireworks API key.
-    ///     options: Optional dict with ``model`` override.
+    ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
-    fn fireworks(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let opts = depy_provider_options(options)?;
-        Ok(Self {
+    fn fireworks(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
+        Self {
             inner: Arc::new(
                 blazen_llm::providers::fireworks::FireworksProvider::from_options(api_key, opts),
             ),
-        })
+        }
     }
 
     /// Create a Perplexity provider.
     ///
     /// Args:
     ///     api_key: Your Perplexity API key.
-    ///     options: Optional dict with ``model`` override.
+    ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
-    fn perplexity(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let opts = depy_provider_options(options)?;
-        Ok(Self {
+    fn perplexity(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
+        Self {
             inner: Arc::new(
                 blazen_llm::providers::perplexity::PerplexityProvider::from_options(api_key, opts),
             ),
-        })
+        }
     }
 
     /// Create an xAI (Grok) provider.
     ///
     /// Args:
     ///     api_key: Your xAI API key.
-    ///     options: Optional dict with ``model`` override.
+    ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
-    fn xai(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let opts = depy_provider_options(options)?;
-        Ok(Self {
+    fn xai(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
+        Self {
             inner: Arc::new(blazen_llm::providers::xai::XaiProvider::from_options(
                 api_key, opts,
             )),
-        })
+        }
     }
 
     /// Create a Cohere provider.
     ///
     /// Args:
     ///     api_key: Your Cohere API key.
-    ///     options: Optional dict with ``model`` override.
+    ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
-    fn cohere(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let opts = depy_provider_options(options)?;
-        Ok(Self {
+    fn cohere(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
+        Self {
             inner: Arc::new(blazen_llm::providers::cohere::CohereProvider::from_options(
                 api_key, opts,
             )),
-        })
+        }
     }
 
     /// Create an AWS Bedrock provider.
     ///
     /// Args:
     ///     api_key: Your Bedrock API key.
-    ///     options: Dict with required ``region`` and optional ``model``.
+    ///     options: Typed ``BedrockOptions`` object with required ``region``
+    ///         and optional ``model``.
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options))]
-    fn bedrock(api_key: &str, options: &Bound<'_, PyAny>) -> PyResult<Self> {
-        let opts: blazen_llm::types::provider_options::BedrockOptions =
-            pythonize::depythonize(options)?;
-        Ok(Self {
+    fn bedrock(api_key: &str, options: PyRef<'_, PyBedrockOptions>) -> Self {
+        let opts = options.inner.clone();
+        Self {
             inner: Arc::new(
                 blazen_llm::providers::bedrock::BedrockProvider::from_options(api_key, opts),
             ),
-        })
+        }
     }
 
     /// Create a fal.ai provider.
     ///
     /// Args:
     ///     api_key: Your fal.ai API key.
-    ///     options: Optional dict for selecting the model,
-    ///         endpoint, enterprise tier, and auto-routing. Defaults to
+    ///     options: Optional typed ``FalOptions`` object for selecting the
+    ///         model, endpoint, enterprise tier, and auto-routing. Defaults to
     ///         the OpenAI-chat endpoint
     ///         (``openrouter/router/openai/v1/chat/completions``).
     #[staticmethod]
     #[pyo3(signature = (api_key, *, options=None))]
-    fn fal(api_key: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let opts: blazen_llm::types::provider_options::FalOptions = match options {
-            Some(o) => pythonize::depythonize(o)?,
-            None => blazen_llm::types::provider_options::FalOptions::default(),
-        };
-        Ok(Self {
+    fn fal(api_key: &str, options: Option<PyRef<'_, PyFalOptions>>) -> Self {
+        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
+        Self {
             inner: Arc::new(blazen_llm::providers::fal::FalProvider::from_options(
                 api_key, opts,
             )),
-        })
+        }
     }
 
     // -----------------------------------------------------------------
@@ -398,30 +387,18 @@ impl PyCompletionModel {
     /// timeouts, and server errors with exponential backoff.
     ///
     /// Args:
-    ///     max_retries: Maximum retry attempts (default: 3).
-    ///     initial_delay_ms: Delay before first retry in ms (default: 1000).
-    ///     max_delay_ms: Upper bound on backoff delay in ms (default: 30000).
+    ///     config: Optional typed ``RetryConfig`` object. Defaults to
+    ///         ``RetryConfig()`` (3 retries, 1s initial, 30s max).
     ///
     /// Returns:
     ///     A new CompletionModel with retry behaviour.
     ///
     /// Example:
-    ///     >>> model = CompletionModel.openai("sk-...").with_retry(max_retries=5)
-    #[pyo3(signature = (*, max_retries=None, initial_delay_ms=None, max_delay_ms=None))]
-    fn with_retry(
-        &self,
-        max_retries: Option<u32>,
-        initial_delay_ms: Option<u64>,
-        max_delay_ms: Option<u64>,
-    ) -> Self {
-        let config = RetryConfig {
-            max_retries: max_retries.unwrap_or(3),
-            initial_delay: Duration::from_millis(initial_delay_ms.unwrap_or(1000)),
-            max_delay: Duration::from_millis(max_delay_ms.unwrap_or(30_000)),
-            honor_retry_after: true,
-            jitter: true,
-        };
-        let model = RetryCompletionModel::from_arc(self.inner.clone(), config);
+    ///     >>> model = CompletionModel.openai("sk-...").with_retry(RetryConfig(max_retries=5))
+    #[pyo3(signature = (config=None))]
+    fn with_retry(&self, config: Option<PyRef<'_, PyRetryConfig>>) -> Self {
+        let retry_config = config.map(|c| c.inner.clone()).unwrap_or_default();
+        let model = RetryCompletionModel::from_arc(self.inner.clone(), retry_config);
         Self {
             inner: Arc::new(model),
         }
@@ -465,22 +442,18 @@ impl PyCompletionModel {
     /// never cached.
     ///
     /// Args:
-    ///     ttl_seconds: Cache entry time-to-live in seconds (default: 300).
-    ///     max_entries: Maximum cache entries before eviction (default: 1000).
+    ///     config: Optional typed ``CacheConfig`` object. Defaults to
+    ///         ``CacheConfig()`` (content-hash strategy, 300s TTL, 1000 entries).
     ///
     /// Returns:
     ///     A new CompletionModel with caching enabled.
     ///
     /// Example:
-    ///     >>> model = CompletionModel.openai("sk-...").with_cache(ttl_seconds=600)
-    #[pyo3(signature = (*, ttl_seconds=None, max_entries=None))]
-    fn with_cache(&self, ttl_seconds: Option<u64>, max_entries: Option<usize>) -> Self {
-        let config = CacheConfig {
-            strategy: CacheStrategy::ContentHash,
-            ttl: Duration::from_secs(ttl_seconds.unwrap_or(300)),
-            max_entries: max_entries.unwrap_or(1000),
-        };
-        let model = CachedCompletionModel::from_arc(self.inner.clone(), config);
+    ///     >>> model = CompletionModel.openai("sk-...").with_cache(CacheConfig(ttl_seconds=600))
+    #[pyo3(signature = (config=None))]
+    fn with_cache(&self, config: Option<PyRef<'_, PyCacheConfig>>) -> Self {
+        let cache_config = config.map(|c| c.inner.clone()).unwrap_or_default();
+        let model = CachedCompletionModel::from_arc(self.inner.clone(), cache_config);
         Self {
             inner: Arc::new(model),
         }

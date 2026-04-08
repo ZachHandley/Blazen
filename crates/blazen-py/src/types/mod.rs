@@ -24,7 +24,8 @@ pub use completion::PyCompletionResponse;
 pub use embedding::{EmbeddingResponse, PyEmbeddingModel};
 pub use finish_reason::PyFinishReason;
 pub use media::{
-    Generated3DModel, GeneratedAudio, GeneratedImage, GeneratedVideo, MediaOutput, PyMediaType,
+    PyGenerated3DModel, PyGeneratedAudio, PyGeneratedImage, PyGeneratedVideo, PyMediaOutput,
+    PyMediaType,
 };
 pub use memory::{PyInMemoryBackend, PyJsonlBackend, PyMemory, PyMemoryResult, PyValkeyBackend};
 pub use message::{PyChatMessage, PyContentPart, PyRole};

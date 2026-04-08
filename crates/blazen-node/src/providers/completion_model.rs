@@ -5,7 +5,6 @@
 //! methods for retry, fallback, and caching.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
@@ -20,7 +19,9 @@ use blazen_llm::types::provider_options::ProviderOptions;
 use blazen_llm::types::{ChatMessage, CompletionRequest, ToolDefinition};
 
 use crate::error::llm_error_to_napi;
-use crate::generated::{JsAzureOptions, JsBedrockOptions, JsFalOptions, JsProviderOptions};
+use crate::generated::{
+    JsAzureOptions, JsBedrockOptions, JsCacheConfig, JsFalOptions, JsProviderOptions, JsRetryConfig,
+};
 use crate::types::{
     JsChatMessage, JsCompletionOptions, JsCompletionResponse, JsStreamChunk, build_response,
     build_stream_chunk,
@@ -38,35 +39,6 @@ fn js_to_provider_options(options: Option<JsProviderOptions>) -> ProviderOptions
 /// `Weak = true` so it does not prevent Node.js from exiting.
 pub(crate) type StreamChunkCallbackTsfn =
     ThreadsafeFunction<JsStreamChunk, Unknown<'static>, JsStreamChunk, napi::Status, false, true>;
-
-// ---------------------------------------------------------------------------
-// Config objects for decorator methods
-// ---------------------------------------------------------------------------
-
-/// Configuration for the `withRetry` decorator.
-#[napi(object)]
-pub struct JsRetryConfig {
-    /// Maximum number of retry attempts (total calls = `maxRetries + 1`).
-    #[napi(js_name = "maxRetries")]
-    pub max_retries: Option<u32>,
-    /// Delay before the first retry, in milliseconds.
-    #[napi(js_name = "initialDelayMs")]
-    pub initial_delay_ms: Option<u32>,
-    /// Upper bound on the computed backoff delay, in milliseconds.
-    #[napi(js_name = "maxDelayMs")]
-    pub max_delay_ms: Option<u32>,
-}
-
-/// Configuration for the `withCache` decorator.
-#[napi(object)]
-pub struct JsCacheConfig {
-    /// How long a cached response remains valid, in seconds.
-    #[napi(js_name = "ttlSeconds")]
-    pub ttl_seconds: Option<u32>,
-    /// Maximum number of entries to keep in the cache.
-    #[napi(js_name = "maxEntries")]
-    pub max_entries: Option<u32>,
-}
 
 // ---------------------------------------------------------------------------
 // CompletionModel wrapper
@@ -311,18 +283,11 @@ impl JsCompletionModel {
     #[napi(js_name = "withRetry")]
     #[must_use]
     pub fn with_retry(&self, config: Option<JsRetryConfig>) -> JsCompletionModel {
-        let cfg = config.unwrap_or(JsRetryConfig {
-            max_retries: None,
-            initial_delay_ms: None,
-            max_delay_ms: None,
-        });
-        let retry_config = RetryConfig {
-            max_retries: cfg.max_retries.unwrap_or(3),
-            initial_delay: Duration::from_millis(u64::from(cfg.initial_delay_ms.unwrap_or(1000))),
-            max_delay: Duration::from_millis(u64::from(cfg.max_delay_ms.unwrap_or(30_000))),
-            honor_retry_after: true,
-            jitter: true,
-        };
+        // `config.map(Into::into)` uses the auto-generated `From<JsRetryConfig>`
+        // impl for explicit configs, and falls back to `RetryConfig::default()`
+        // when no config was supplied. This avoids requiring `Default` on the
+        // generated `JsRetryConfig` type.
+        let retry_config: RetryConfig = config.map(Into::into).unwrap_or_default();
         JsCompletionModel {
             inner: Arc::new(RetryCompletionModel::from_arc(
                 Arc::clone(&self.inner),
@@ -342,15 +307,8 @@ impl JsCompletionModel {
     #[napi(js_name = "withCache")]
     #[must_use]
     pub fn with_cache(&self, config: Option<JsCacheConfig>) -> JsCompletionModel {
-        let cfg = config.unwrap_or(JsCacheConfig {
-            ttl_seconds: None,
-            max_entries: None,
-        });
-        let cache_config = CacheConfig {
-            ttl: Duration::from_secs(u64::from(cfg.ttl_seconds.unwrap_or(300))),
-            max_entries: cfg.max_entries.unwrap_or(1000) as usize,
-            ..CacheConfig::default()
-        };
+        // See `with_retry` for why we use `config.map(Into::into).unwrap_or_default()`.
+        let cache_config: CacheConfig = config.map(Into::into).unwrap_or_default();
         JsCompletionModel {
             inner: Arc::new(CachedCompletionModel::from_arc(
                 Arc::clone(&self.inner),
