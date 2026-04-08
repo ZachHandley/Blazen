@@ -167,7 +167,7 @@ describe("fal.ai modality auto-routing tests", { skip: !FAL_API_KEY }, () => {
   });
 });
 
-describe("fal.ai streaming + embeddings + utilities", { skip: !FAL_API_KEY }, () => {
+describe("fal.ai streaming + embeddings + utilities", { skip: !FAL_API_KEY, timeout: 300_000 }, () => {
   it("streaming yields multiple chunks", async () => {
     const model = CompletionModel.fal(FAL_API_KEY);
     const chunks = [];
@@ -226,7 +226,7 @@ describe("fal.ai streaming + embeddings + utilities", { skip: !FAL_API_KEY }, ()
   });
 });
 
-describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY }, () => {
+describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY, timeout: 300_000 }, () => {
   it("generates an image with FLUX", async () => {
     const provider = FalProvider.create(FAL_API_KEY);
     const result = await provider.generateImage({ prompt: "a simple red circle on white" });

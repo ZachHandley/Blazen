@@ -103,8 +103,11 @@ jobs:
       - name: Install deps and build wheel
         run: uv sync --group dev
 
-      - name: Run Python E2E tests
-        run: uv run pytest -v -n auto --timeout=120
+      - name: Run Python unit tests (parallel)
+        run: uv run pytest -v -n auto --timeout=30 tests/python/test_workflow.py tests/python/test_session_refs.py
+
+      - name: Run Python API smoke tests (sequential, real HTTP)
+        run: uv run pytest -v --timeout=300 tests/python/test_fal_smoke.py tests/python/test_llm_smoke.py tests/python/test_capabilities_smoke.py tests/python/test_provider_smoke.py
         env:
           FAL_API_KEY: ${{ secrets.FAL_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
