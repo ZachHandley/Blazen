@@ -65,16 +65,15 @@ impl PyFalProvider {
     /// Create a new fal.ai provider.
     ///
     /// Args:
-    ///     api_key: Your fal.ai API key.
     ///     options: Optional [`FalOptions`] for model, endpoint, enterprise,
     ///         and auto-routing configuration.
     #[new]
-    #[pyo3(signature = (*, api_key, options=None))]
-    fn new(api_key: &str, options: Option<PyRef<'_, PyFalOptions>>) -> Self {
+    #[pyo3(signature = (*, options=None))]
+    fn new(options: Option<PyRef<'_, PyFalOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
-        Self {
-            inner: Arc::new(FalProvider::from_options(api_key, opts)),
-        }
+        Ok(Self {
+            inner: Arc::new(FalProvider::from_options(opts).map_err(blazen_error_to_pyerr)?),
+        })
     }
 
     // -----------------------------------------------------------------

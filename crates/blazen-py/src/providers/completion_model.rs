@@ -92,9 +92,9 @@ impl PyCompletionOptions {
 /// provider, then call `complete()` to generate responses.
 ///
 /// Example:
-///     >>> model = CompletionModel.openai("sk-...")
-///     >>> model = CompletionModel.anthropic("sk-ant-...")
-///     >>> model = CompletionModel.openrouter("sk-or-...").with_model("meta-llama/llama-3-70b")
+///     >>> model = CompletionModel.openai()
+///     >>> model = CompletionModel.anthropic()
+///     >>> model = CompletionModel.openrouter()
 ///     >>>
 ///     >>> response = await model.complete([
 ///     ...     ChatMessage.user("What is 2+2?")
@@ -121,247 +121,247 @@ impl PyCompletionModel {
     /// Create an OpenAI provider.
     ///
     /// Args:
-    ///     api_key: Your OpenAI API key.
     ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
-    #[pyo3(signature = (api_key, *, options=None))]
-    fn openai(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+    #[pyo3(signature = (*, options=None))]
+    fn openai(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
-        Self {
-            inner: Arc::new(blazen_llm::providers::openai::OpenAiProvider::from_options(
-                api_key, opts,
-            )),
-        }
+        Ok(Self {
+            inner: Arc::new(
+                blazen_llm::providers::openai::OpenAiProvider::from_options(opts)
+                    .map_err(crate::error::blazen_error_to_pyerr)?,
+            ),
+        })
     }
 
     /// Create an Anthropic provider.
     ///
     /// Args:
-    ///     api_key: Your Anthropic API key.
     ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
-    #[pyo3(signature = (api_key, *, options=None))]
-    fn anthropic(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+    #[pyo3(signature = (*, options=None))]
+    fn anthropic(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
-        Self {
+        Ok(Self {
             inner: Arc::new(
-                blazen_llm::providers::anthropic::AnthropicProvider::from_options(api_key, opts),
+                blazen_llm::providers::anthropic::AnthropicProvider::from_options(opts)
+                    .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
-        }
+        })
     }
 
     /// Create a Google Gemini provider.
     ///
     /// Args:
-    ///     api_key: Your Google API key.
     ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
-    #[pyo3(signature = (api_key, *, options=None))]
-    fn gemini(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+    #[pyo3(signature = (*, options=None))]
+    fn gemini(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
-        Self {
-            inner: Arc::new(blazen_llm::providers::gemini::GeminiProvider::from_options(
-                api_key, opts,
-            )),
-        }
+        Ok(Self {
+            inner: Arc::new(
+                blazen_llm::providers::gemini::GeminiProvider::from_options(opts)
+                    .map_err(crate::error::blazen_error_to_pyerr)?,
+            ),
+        })
     }
 
     /// Create an Azure OpenAI provider.
     ///
     /// Args:
-    ///     api_key: Your Azure API key.
     ///     options: Typed ``AzureOptions`` object with required
     ///         ``resource_name`` and ``deployment_name``, plus optional
     ///         ``api_version``.
     #[staticmethod]
-    #[pyo3(signature = (api_key, *, options))]
-    fn azure(api_key: &str, options: PyRef<'_, PyAzureOptions>) -> Self {
+    #[pyo3(signature = (*, options))]
+    fn azure(options: PyRef<'_, PyAzureOptions>) -> PyResult<Self> {
         let opts = options.inner.clone();
-        Self {
+        Ok(Self {
             inner: Arc::new(
-                blazen_llm::providers::azure::AzureOpenAiProvider::from_options(api_key, opts),
+                blazen_llm::providers::azure::AzureOpenAiProvider::from_options(opts)
+                    .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
-        }
+        })
     }
 
     /// Create an OpenRouter provider.
     ///
     /// Args:
-    ///     api_key: Your OpenRouter API key.
     ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
-    #[pyo3(signature = (api_key, *, options=None))]
-    fn openrouter(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+    #[pyo3(signature = (*, options=None))]
+    fn openrouter(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
-        Self {
+        Ok(Self {
             inner: Arc::new(
-                blazen_llm::providers::openrouter::OpenRouterProvider::from_options(api_key, opts),
+                blazen_llm::providers::openrouter::OpenRouterProvider::from_options(opts)
+                    .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
-        }
+        })
     }
 
     /// Create a Groq provider.
     ///
     /// Args:
-    ///     api_key: Your Groq API key.
     ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
-    #[pyo3(signature = (api_key, *, options=None))]
-    fn groq(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+    #[pyo3(signature = (*, options=None))]
+    fn groq(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
-        Self {
-            inner: Arc::new(blazen_llm::providers::groq::GroqProvider::from_options(
-                api_key, opts,
-            )),
-        }
+        Ok(Self {
+            inner: Arc::new(
+                blazen_llm::providers::groq::GroqProvider::from_options(opts)
+                    .map_err(crate::error::blazen_error_to_pyerr)?,
+            ),
+        })
     }
 
     /// Create a Together AI provider.
     ///
     /// Args:
-    ///     api_key: Your Together API key.
     ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
-    #[pyo3(signature = (api_key, *, options=None))]
-    fn together(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+    #[pyo3(signature = (*, options=None))]
+    fn together(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
-        Self {
+        Ok(Self {
             inner: Arc::new(
-                blazen_llm::providers::together::TogetherProvider::from_options(api_key, opts),
+                blazen_llm::providers::together::TogetherProvider::from_options(opts)
+                    .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
-        }
+        })
     }
 
     /// Create a Mistral provider.
     ///
     /// Args:
-    ///     api_key: Your Mistral API key.
     ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
-    #[pyo3(signature = (api_key, *, options=None))]
-    fn mistral(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+    #[pyo3(signature = (*, options=None))]
+    fn mistral(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
-        Self {
+        Ok(Self {
             inner: Arc::new(
-                blazen_llm::providers::mistral::MistralProvider::from_options(api_key, opts),
+                blazen_llm::providers::mistral::MistralProvider::from_options(opts)
+                    .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
-        }
+        })
     }
 
     /// Create a DeepSeek provider.
     ///
     /// Args:
-    ///     api_key: Your DeepSeek API key.
     ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
-    #[pyo3(signature = (api_key, *, options=None))]
-    fn deepseek(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+    #[pyo3(signature = (*, options=None))]
+    fn deepseek(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
-        Self {
+        Ok(Self {
             inner: Arc::new(
-                blazen_llm::providers::deepseek::DeepSeekProvider::from_options(api_key, opts),
+                blazen_llm::providers::deepseek::DeepSeekProvider::from_options(opts)
+                    .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
-        }
+        })
     }
 
     /// Create a Fireworks AI provider.
     ///
     /// Args:
-    ///     api_key: Your Fireworks API key.
     ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
-    #[pyo3(signature = (api_key, *, options=None))]
-    fn fireworks(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+    #[pyo3(signature = (*, options=None))]
+    fn fireworks(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
-        Self {
+        Ok(Self {
             inner: Arc::new(
-                blazen_llm::providers::fireworks::FireworksProvider::from_options(api_key, opts),
+                blazen_llm::providers::fireworks::FireworksProvider::from_options(opts)
+                    .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
-        }
+        })
     }
 
     /// Create a Perplexity provider.
     ///
     /// Args:
-    ///     api_key: Your Perplexity API key.
     ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
-    #[pyo3(signature = (api_key, *, options=None))]
-    fn perplexity(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+    #[pyo3(signature = (*, options=None))]
+    fn perplexity(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
-        Self {
+        Ok(Self {
             inner: Arc::new(
-                blazen_llm::providers::perplexity::PerplexityProvider::from_options(api_key, opts),
+                blazen_llm::providers::perplexity::PerplexityProvider::from_options(opts)
+                    .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
-        }
+        })
     }
 
     /// Create an xAI (Grok) provider.
     ///
     /// Args:
-    ///     api_key: Your xAI API key.
     ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
-    #[pyo3(signature = (api_key, *, options=None))]
-    fn xai(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+    #[pyo3(signature = (*, options=None))]
+    fn xai(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
-        Self {
-            inner: Arc::new(blazen_llm::providers::xai::XaiProvider::from_options(
-                api_key, opts,
-            )),
-        }
+        Ok(Self {
+            inner: Arc::new(
+                blazen_llm::providers::xai::XaiProvider::from_options(opts)
+                    .map_err(crate::error::blazen_error_to_pyerr)?,
+            ),
+        })
     }
 
     /// Create a Cohere provider.
     ///
     /// Args:
-    ///     api_key: Your Cohere API key.
     ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
-    #[pyo3(signature = (api_key, *, options=None))]
-    fn cohere(api_key: &str, options: Option<PyRef<'_, PyProviderOptions>>) -> Self {
+    #[pyo3(signature = (*, options=None))]
+    fn cohere(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
-        Self {
-            inner: Arc::new(blazen_llm::providers::cohere::CohereProvider::from_options(
-                api_key, opts,
-            )),
-        }
+        Ok(Self {
+            inner: Arc::new(
+                blazen_llm::providers::cohere::CohereProvider::from_options(opts)
+                    .map_err(crate::error::blazen_error_to_pyerr)?,
+            ),
+        })
     }
 
     /// Create an AWS Bedrock provider.
     ///
     /// Args:
-    ///     api_key: Your Bedrock API key.
     ///     options: Typed ``BedrockOptions`` object with required ``region``
     ///         and optional ``model``.
     #[staticmethod]
-    #[pyo3(signature = (api_key, *, options))]
-    fn bedrock(api_key: &str, options: PyRef<'_, PyBedrockOptions>) -> Self {
+    #[pyo3(signature = (*, options))]
+    fn bedrock(options: PyRef<'_, PyBedrockOptions>) -> PyResult<Self> {
         let opts = options.inner.clone();
-        Self {
+        Ok(Self {
             inner: Arc::new(
-                blazen_llm::providers::bedrock::BedrockProvider::from_options(api_key, opts),
+                blazen_llm::providers::bedrock::BedrockProvider::from_options(opts)
+                    .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
-        }
+        })
     }
 
     /// Create a fal.ai provider.
     ///
     /// Args:
-    ///     api_key: Your fal.ai API key.
     ///     options: Optional typed ``FalOptions`` object for selecting the
     ///         model, endpoint, enterprise tier, and auto-routing. Defaults to
     ///         the OpenAI-chat endpoint
     ///         (``openrouter/router/openai/v1/chat/completions``).
     #[staticmethod]
-    #[pyo3(signature = (api_key, *, options=None))]
-    fn fal(api_key: &str, options: Option<PyRef<'_, PyFalOptions>>) -> Self {
+    #[pyo3(signature = (*, options=None))]
+    fn fal(options: Option<PyRef<'_, PyFalOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
-        Self {
-            inner: Arc::new(blazen_llm::providers::fal::FalProvider::from_options(
-                api_key, opts,
-            )),
-        }
+        Ok(Self {
+            inner: Arc::new(
+                blazen_llm::providers::fal::FalProvider::from_options(opts)
+                    .map_err(crate::error::blazen_error_to_pyerr)?,
+            ),
+        })
     }
 
     // -----------------------------------------------------------------

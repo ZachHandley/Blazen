@@ -15,6 +15,10 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct ProviderOptions {
+    /// API key for the provider. If `None`, the key is resolved from the
+    /// corresponding environment variable (e.g. `OPENAI_API_KEY`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
     /// Override the default model.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,

@@ -18,7 +18,7 @@ use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
 use blazen_llm::types::provider_options::ProviderOptions;
 use blazen_llm::types::{ChatMessage, CompletionRequest, ToolDefinition};
 
-use crate::error::llm_error_to_napi;
+use crate::error::{blazen_error_to_napi, llm_error_to_napi};
 use crate::generated::{
     JsAzureOptions, JsBedrockOptions, JsCacheConfig, JsFalOptions, JsProviderOptions, JsRetryConfig,
 };
@@ -74,50 +74,52 @@ impl JsCompletionModel {
 
     /// Create an `OpenAI` completion model.
     #[napi(factory)]
-    pub fn openai(api_key: String, options: Option<JsProviderOptions>) -> Self {
-        Self {
-            inner: Arc::new(blazen_llm::providers::openai::OpenAiProvider::from_options(
-                api_key,
-                js_to_provider_options(options),
-            )),
-        }
+    pub fn openai(options: Option<JsProviderOptions>) -> Result<Self> {
+        Ok(Self {
+            inner: Arc::new(
+                blazen_llm::providers::openai::OpenAiProvider::from_options(
+                    js_to_provider_options(options),
+                )
+                .map_err(blazen_error_to_napi)?,
+            ),
+        })
     }
 
     /// Create an Anthropic completion model.
     #[napi(factory)]
-    pub fn anthropic(api_key: String, options: Option<JsProviderOptions>) -> Self {
-        Self {
+    pub fn anthropic(options: Option<JsProviderOptions>) -> Result<Self> {
+        Ok(Self {
             inner: Arc::new(
                 blazen_llm::providers::anthropic::AnthropicProvider::from_options(
-                    api_key,
                     js_to_provider_options(options),
-                ),
+                )
+                .map_err(blazen_error_to_napi)?,
             ),
-        }
+        })
     }
 
     /// Create a Google Gemini completion model.
     #[napi(factory)]
-    pub fn gemini(api_key: String, options: Option<JsProviderOptions>) -> Self {
-        Self {
-            inner: Arc::new(blazen_llm::providers::gemini::GeminiProvider::from_options(
-                api_key,
-                js_to_provider_options(options),
-            )),
-        }
+    pub fn gemini(options: Option<JsProviderOptions>) -> Result<Self> {
+        Ok(Self {
+            inner: Arc::new(
+                blazen_llm::providers::gemini::GeminiProvider::from_options(
+                    js_to_provider_options(options),
+                )
+                .map_err(blazen_error_to_napi)?,
+            ),
+        })
     }
 
     /// Create an Azure `OpenAI` completion model.
     #[napi(factory)]
-    pub fn azure(api_key: String, options: JsAzureOptions) -> Self {
-        Self {
+    pub fn azure(options: JsAzureOptions) -> Result<Self> {
+        Ok(Self {
             inner: Arc::new(
-                blazen_llm::providers::azure::AzureOpenAiProvider::from_options(
-                    api_key,
-                    options.into(),
-                ),
+                blazen_llm::providers::azure::AzureOpenAiProvider::from_options(options.into())
+                    .map_err(blazen_error_to_napi)?,
             ),
-        }
+        })
     }
 
     /// Create a fal.ai completion model.
@@ -126,138 +128,143 @@ impl JsCompletionModel {
     /// enterprise tier, and modality auto-routing. Defaults to the
     /// OpenAI-compatible chat-completions endpoint.
     #[napi(factory)]
-    pub fn fal(api_key: String, options: Option<JsFalOptions>) -> Self {
+    pub fn fal(options: Option<JsFalOptions>) -> Result<Self> {
         let opts: blazen_llm::types::provider_options::FalOptions =
             options.map(Into::into).unwrap_or_default();
-        Self {
-            inner: Arc::new(blazen_llm::providers::fal::FalProvider::from_options(
-                api_key, opts,
-            )),
-        }
+        Ok(Self {
+            inner: Arc::new(
+                blazen_llm::providers::fal::FalProvider::from_options(opts)
+                    .map_err(blazen_error_to_napi)?,
+            ),
+        })
     }
 
     /// Create an `OpenRouter` completion model.
     #[napi(factory)]
-    pub fn openrouter(api_key: String, options: Option<JsProviderOptions>) -> Self {
-        Self {
+    pub fn openrouter(options: Option<JsProviderOptions>) -> Result<Self> {
+        Ok(Self {
             inner: Arc::new(
                 blazen_llm::providers::openrouter::OpenRouterProvider::from_options(
-                    api_key,
                     js_to_provider_options(options),
-                ),
+                )
+                .map_err(blazen_error_to_napi)?,
             ),
-        }
+        })
     }
 
     /// Create a Groq completion model.
     #[napi(factory)]
-    pub fn groq(api_key: String, options: Option<JsProviderOptions>) -> Self {
-        Self {
-            inner: Arc::new(blazen_llm::providers::groq::GroqProvider::from_options(
-                api_key,
-                js_to_provider_options(options),
-            )),
-        }
+    pub fn groq(options: Option<JsProviderOptions>) -> Result<Self> {
+        Ok(Self {
+            inner: Arc::new(
+                blazen_llm::providers::groq::GroqProvider::from_options(js_to_provider_options(
+                    options,
+                ))
+                .map_err(blazen_error_to_napi)?,
+            ),
+        })
     }
 
     /// Create a Together AI completion model.
     #[napi(factory)]
-    pub fn together(api_key: String, options: Option<JsProviderOptions>) -> Self {
-        Self {
+    pub fn together(options: Option<JsProviderOptions>) -> Result<Self> {
+        Ok(Self {
             inner: Arc::new(
                 blazen_llm::providers::together::TogetherProvider::from_options(
-                    api_key,
                     js_to_provider_options(options),
-                ),
+                )
+                .map_err(blazen_error_to_napi)?,
             ),
-        }
+        })
     }
 
     /// Create a Mistral AI completion model.
     #[napi(factory)]
-    pub fn mistral(api_key: String, options: Option<JsProviderOptions>) -> Self {
-        Self {
+    pub fn mistral(options: Option<JsProviderOptions>) -> Result<Self> {
+        Ok(Self {
             inner: Arc::new(
                 blazen_llm::providers::mistral::MistralProvider::from_options(
-                    api_key,
                     js_to_provider_options(options),
-                ),
+                )
+                .map_err(blazen_error_to_napi)?,
             ),
-        }
+        })
     }
 
     /// Create a `DeepSeek` completion model.
     #[napi(factory)]
-    pub fn deepseek(api_key: String, options: Option<JsProviderOptions>) -> Self {
-        Self {
+    pub fn deepseek(options: Option<JsProviderOptions>) -> Result<Self> {
+        Ok(Self {
             inner: Arc::new(
                 blazen_llm::providers::deepseek::DeepSeekProvider::from_options(
-                    api_key,
                     js_to_provider_options(options),
-                ),
+                )
+                .map_err(blazen_error_to_napi)?,
             ),
-        }
+        })
     }
 
     /// Create a Fireworks AI completion model.
     #[napi(factory)]
-    pub fn fireworks(api_key: String, options: Option<JsProviderOptions>) -> Self {
-        Self {
+    pub fn fireworks(options: Option<JsProviderOptions>) -> Result<Self> {
+        Ok(Self {
             inner: Arc::new(
                 blazen_llm::providers::fireworks::FireworksProvider::from_options(
-                    api_key,
                     js_to_provider_options(options),
-                ),
+                )
+                .map_err(blazen_error_to_napi)?,
             ),
-        }
+        })
     }
 
     /// Create a Perplexity completion model.
     #[napi(factory)]
-    pub fn perplexity(api_key: String, options: Option<JsProviderOptions>) -> Self {
-        Self {
+    pub fn perplexity(options: Option<JsProviderOptions>) -> Result<Self> {
+        Ok(Self {
             inner: Arc::new(
                 blazen_llm::providers::perplexity::PerplexityProvider::from_options(
-                    api_key,
                     js_to_provider_options(options),
-                ),
+                )
+                .map_err(blazen_error_to_napi)?,
             ),
-        }
+        })
     }
 
     /// Create an xAI (Grok) completion model.
     #[napi(factory)]
-    pub fn xai(api_key: String, options: Option<JsProviderOptions>) -> Self {
-        Self {
-            inner: Arc::new(blazen_llm::providers::xai::XaiProvider::from_options(
-                api_key,
-                js_to_provider_options(options),
-            )),
-        }
+    pub fn xai(options: Option<JsProviderOptions>) -> Result<Self> {
+        Ok(Self {
+            inner: Arc::new(
+                blazen_llm::providers::xai::XaiProvider::from_options(js_to_provider_options(
+                    options,
+                ))
+                .map_err(blazen_error_to_napi)?,
+            ),
+        })
     }
 
     /// Create a Cohere completion model.
     #[napi(factory)]
-    pub fn cohere(api_key: String, options: Option<JsProviderOptions>) -> Self {
-        Self {
-            inner: Arc::new(blazen_llm::providers::cohere::CohereProvider::from_options(
-                api_key,
-                js_to_provider_options(options),
-            )),
-        }
+    pub fn cohere(options: Option<JsProviderOptions>) -> Result<Self> {
+        Ok(Self {
+            inner: Arc::new(
+                blazen_llm::providers::cohere::CohereProvider::from_options(
+                    js_to_provider_options(options),
+                )
+                .map_err(blazen_error_to_napi)?,
+            ),
+        })
     }
 
     /// Create an AWS Bedrock completion model.
     #[napi(factory)]
-    pub fn bedrock(api_key: String, options: JsBedrockOptions) -> Self {
-        Self {
+    pub fn bedrock(options: JsBedrockOptions) -> Result<Self> {
+        Ok(Self {
             inner: Arc::new(
-                blazen_llm::providers::bedrock::BedrockProvider::from_options(
-                    api_key,
-                    options.into(),
-                ),
+                blazen_llm::providers::bedrock::BedrockProvider::from_options(options.into())
+                    .map_err(blazen_error_to_napi)?,
             ),
-        }
+        })
     }
 
     // -----------------------------------------------------------------

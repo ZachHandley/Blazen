@@ -112,7 +112,7 @@ impl DeepSeekProvider {
     }
 }
 
-super::impl_simple_from_options!(DeepSeekProvider, no_base_url);
+super::impl_simple_from_options!(DeepSeekProvider, "deepseek", no_base_url);
 
 // ---------------------------------------------------------------------------
 // CompletionModel implementation

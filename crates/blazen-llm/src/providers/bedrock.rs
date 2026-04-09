@@ -131,16 +131,19 @@ impl BedrockProvider {
         all(target_arch = "wasm32", not(target_os = "wasi")),
         feature = "reqwest"
     ))]
-    #[must_use]
+    /// # Errors
+    ///
+    /// Returns [`BlazenError::Auth`] if no API key is provided and the
+    /// `AWS_ACCESS_KEY_ID` environment variable is not set.
     pub fn from_options(
-        api_key: impl Into<String>,
         opts: crate::types::provider_options::BedrockOptions,
-    ) -> Self {
+    ) -> Result<Self, crate::BlazenError> {
+        let api_key = crate::keys::resolve_api_key("bedrock", opts.base.api_key)?;
         let mut provider = Self::new(api_key, &opts.region);
         if let Some(m) = opts.base.model {
             provider = provider.with_model(m);
         }
-        provider
+        Ok(provider)
     }
 }
 

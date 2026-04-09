@@ -64,6 +64,7 @@ pub mod fallback;
 pub mod http;
 #[cfg(all(feature = "reqwest", not(target_arch = "wasm32")))]
 mod http_reqwest;
+pub mod keys;
 pub(crate) mod sleep;
 #[cfg(all(feature = "reqwest", not(target_arch = "wasm32")))]
 pub use http_reqwest::ReqwestHttpClient;

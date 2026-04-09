@@ -25,14 +25,28 @@ impl PyProviderOptions {
     /// Create a new ProviderOptions.
     ///
     /// Args:
+    ///     api_key: Override the provider's API key.
     ///     model: Override the default model identifier.
     ///     base_url: Override the provider's base URL.
     #[new]
-    #[pyo3(signature = (*, model=None, base_url=None))]
-    fn new(model: Option<String>, base_url: Option<String>) -> Self {
+    #[pyo3(signature = (*, api_key=None, model=None, base_url=None))]
+    fn new(api_key: Option<String>, model: Option<String>, base_url: Option<String>) -> Self {
         Self {
-            inner: ProviderOptions { model, base_url },
+            inner: ProviderOptions {
+                api_key,
+                model,
+                base_url,
+            },
         }
+    }
+
+    #[getter]
+    fn api_key(&self) -> Option<String> {
+        self.inner.api_key.clone()
+    }
+    #[setter]
+    fn set_api_key(&mut self, value: Option<String>) {
+        self.inner.api_key = value;
     }
 
     #[getter]
@@ -107,14 +121,16 @@ impl PyFalOptions {
     /// Create a new FalOptions.
     ///
     /// Args:
+    ///     api_key: Override the provider's API key.
     ///     model: Override the default model identifier.
     ///     base_url: Override the provider's base URL.
     ///     endpoint: The fal endpoint family (defaults to OpenAiChat).
     ///     enterprise: Promote the endpoint to its enterprise / SOC2-eligible variant.
     ///     auto_route_modality: Auto-route to vision/audio/video variant when content has media.
     #[new]
-    #[pyo3(signature = (*, model=None, base_url=None, endpoint=None, enterprise=false, auto_route_modality=true))]
+    #[pyo3(signature = (*, api_key=None, model=None, base_url=None, endpoint=None, enterprise=false, auto_route_modality=true))]
     fn new(
+        api_key: Option<String>,
         model: Option<String>,
         base_url: Option<String>,
         endpoint: Option<PyFalLlmEndpointKind>,
@@ -123,12 +139,25 @@ impl PyFalOptions {
     ) -> Self {
         Self {
             inner: FalOptions {
-                base: ProviderOptions { model, base_url },
+                base: ProviderOptions {
+                    api_key,
+                    model,
+                    base_url,
+                },
                 endpoint: endpoint.map(Into::into),
                 enterprise,
                 auto_route_modality,
             },
         }
+    }
+
+    #[getter]
+    fn api_key(&self) -> Option<String> {
+        self.inner.base.api_key.clone()
+    }
+    #[setter]
+    fn set_api_key(&mut self, value: Option<String>) {
+        self.inner.base.api_key = value;
     }
 
     #[getter]
@@ -195,26 +224,41 @@ impl PyAzureOptions {
     /// Args:
     ///     resource_name: Azure resource name (required).
     ///     deployment_name: Azure deployment name (required).
+    ///     api_key: Override the provider's API key.
     ///     model: Override the default model identifier.
     ///     base_url: Override the provider's base URL.
     ///     api_version: API version override (e.g. "2024-02-15-preview").
     #[new]
-    #[pyo3(signature = (resource_name, deployment_name, *, model=None, base_url=None, api_version=None))]
+    #[pyo3(signature = (resource_name, deployment_name, *, api_key=None, model=None, base_url=None, api_version=None))]
     fn new(
         resource_name: String,
         deployment_name: String,
+        api_key: Option<String>,
         model: Option<String>,
         base_url: Option<String>,
         api_version: Option<String>,
     ) -> Self {
         Self {
             inner: AzureOptions {
-                base: ProviderOptions { model, base_url },
+                base: ProviderOptions {
+                    api_key,
+                    model,
+                    base_url,
+                },
                 resource_name,
                 deployment_name,
                 api_version,
             },
         }
+    }
+
+    #[getter]
+    fn api_key(&self) -> Option<String> {
+        self.inner.base.api_key.clone()
+    }
+    #[setter]
+    fn set_api_key(&mut self, value: Option<String>) {
+        self.inner.base.api_key = value;
     }
 
     #[getter]
@@ -289,17 +333,36 @@ impl PyBedrockOptions {
     ///
     /// Args:
     ///     region: AWS region (required, e.g. "us-east-1").
+    ///     api_key: Override the provider's API key.
     ///     model: Override the default model identifier.
     ///     base_url: Override the provider's base URL.
     #[new]
-    #[pyo3(signature = (region, *, model=None, base_url=None))]
-    fn new(region: String, model: Option<String>, base_url: Option<String>) -> Self {
+    #[pyo3(signature = (region, *, api_key=None, model=None, base_url=None))]
+    fn new(
+        region: String,
+        api_key: Option<String>,
+        model: Option<String>,
+        base_url: Option<String>,
+    ) -> Self {
         Self {
             inner: BedrockOptions {
-                base: ProviderOptions { model, base_url },
+                base: ProviderOptions {
+                    api_key,
+                    model,
+                    base_url,
+                },
                 region,
             },
         }
+    }
+
+    #[getter]
+    fn api_key(&self) -> Option<String> {
+        self.inner.base.api_key.clone()
+    }
+    #[setter]
+    fn set_api_key(&mut self, value: Option<String>) {
+        self.inner.base.api_key = value;
     }
 
     #[getter]

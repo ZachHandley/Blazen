@@ -14,6 +14,7 @@ from blazen import (
     CompletionOptions,
     Context,
     Event,
+    ProviderOptions,
     StopEvent,
     Workflow,
     step,
@@ -30,7 +31,7 @@ skip_without_key = pytest.mark.skipif(
 @skip_without_key
 @pytest.mark.asyncio
 async def test_openrouter_completion():
-    model = CompletionModel.openrouter(OPENROUTER_API_KEY)
+    model = CompletionModel.openrouter(options=ProviderOptions(api_key=OPENROUTER_API_KEY))
     response = await model.complete(
         [ChatMessage.user("What is 2+2? Reply with just the number.")],
         CompletionOptions(max_tokens=32),
@@ -46,7 +47,7 @@ async def test_openrouter_completion():
 async def test_openrouter_in_workflow():
     @step
     async def ask_llm(ctx: Context, ev: Event):
-        model = CompletionModel.openrouter(OPENROUTER_API_KEY)
+        model = CompletionModel.openrouter(options=ProviderOptions(api_key=OPENROUTER_API_KEY))
         response = await model.complete(
             [
                 ChatMessage.system("You are a math tutor. Reply with just the number."),

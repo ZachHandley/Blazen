@@ -112,7 +112,7 @@ impl TogetherProvider {
     }
 }
 
-super::impl_simple_from_options!(TogetherProvider, no_base_url);
+super::impl_simple_from_options!(TogetherProvider, "together", no_base_url);
 
 // ---------------------------------------------------------------------------
 // CompletionModel implementation

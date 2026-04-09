@@ -35,7 +35,7 @@ use crate::types::{JsChatMessage, JsCompletionResponse, build_response};
 /// and LLM capabilities.
 ///
 /// ```typescript
-/// const fal = FalProvider.create("fal-key-...");
+/// const fal = FalProvider.create();
 /// const result = await fal.generateImage({ prompt: "a sunset" });
 /// const response = await fal.complete([ChatMessage.user("Hi")]);
 /// ```
@@ -61,12 +61,12 @@ impl JsFalProvider {
     /// enterprise tier, and modality auto-routing. Defaults to the
     /// OpenAI-compatible chat-completions endpoint (`OpenAiChat`).
     #[napi(factory)]
-    pub fn create(api_key: String, options: Option<JsFalOptions>) -> Self {
+    pub fn create(options: Option<JsFalOptions>) -> Result<Self> {
         let opts: blazen_llm::types::provider_options::FalOptions =
             options.map(Into::into).unwrap_or_default();
-        Self {
-            inner: Arc::new(FalProvider::from_options(api_key, opts)),
-        }
+        Ok(Self {
+            inner: Arc::new(FalProvider::from_options(opts).map_err(blazen_error_to_napi)?),
+        })
     }
 
     // -----------------------------------------------------------------
@@ -358,7 +358,7 @@ impl JsFalProvider {
 /// Constructed via [`JsFalProvider::embedding_model`].
 ///
 /// ```typescript
-/// const fal = FalProvider.create("fal-key-...");
+/// const fal = FalProvider.create();
 /// const em = fal.embeddingModel();
 /// const vectors = await em.embed(["hello", "world"]);
 /// console.log(vectors.length); // 2

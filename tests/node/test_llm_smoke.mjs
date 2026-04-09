@@ -18,7 +18,7 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 describe("OpenRouter LLM smoke tests", { skip: !OPENROUTER_API_KEY }, () => {
   it("completes a basic prompt", async () => {
-    const model = CompletionModel.openrouter(OPENROUTER_API_KEY);
+    const model = CompletionModel.openrouter({ apiKey: OPENROUTER_API_KEY });
     const response = await model.complete([
       ChatMessage.user("What is 2+2? Reply with just the number."),
     ]);
@@ -32,7 +32,7 @@ describe("OpenRouter LLM smoke tests", { skip: !OPENROUTER_API_KEY }, () => {
     const wf = new Workflow("llm-smoke");
 
     wf.addStep("ask", ["blazen::StartEvent"], async (event, ctx) => {
-      const model = CompletionModel.openrouter(OPENROUTER_API_KEY);
+      const model = CompletionModel.openrouter({ apiKey: OPENROUTER_API_KEY });
       const response = await model.completeWithOptions(
         [
           ChatMessage.system("You are a math tutor. Reply with just the number."),

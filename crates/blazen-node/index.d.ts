@@ -109,13 +109,13 @@ export type JsChatWindow = ChatWindow
  */
 export declare class CompletionModel {
   /** Create an `OpenAI` completion model. */
-  static openai(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
+  static openai(options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create an Anthropic completion model. */
-  static anthropic(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
+  static anthropic(options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create a Google Gemini completion model. */
-  static gemini(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
+  static gemini(options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create an Azure `OpenAI` completion model. */
-  static azure(apiKey: string, options: JsAzureOptions): CompletionModel
+  static azure(options: JsAzureOptions): CompletionModel
   /**
    * Create a fal.ai completion model.
    *
@@ -123,27 +123,27 @@ export declare class CompletionModel {
    * enterprise tier, and modality auto-routing. Defaults to the
    * OpenAI-compatible chat-completions endpoint.
    */
-  static fal(apiKey: string, options?: JsFalOptions | undefined | null): CompletionModel
+  static fal(options?: JsFalOptions | undefined | null): CompletionModel
   /** Create an `OpenRouter` completion model. */
-  static openrouter(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
+  static openrouter(options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create a Groq completion model. */
-  static groq(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
+  static groq(options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create a Together AI completion model. */
-  static together(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
+  static together(options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create a Mistral AI completion model. */
-  static mistral(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
+  static mistral(options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create a `DeepSeek` completion model. */
-  static deepseek(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
+  static deepseek(options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create a Fireworks AI completion model. */
-  static fireworks(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
+  static fireworks(options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create a Perplexity completion model. */
-  static perplexity(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
+  static perplexity(options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create an xAI (Grok) completion model. */
-  static xai(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
+  static xai(options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create a Cohere completion model. */
-  static cohere(apiKey: string, options?: JsProviderOptions | undefined | null): CompletionModel
+  static cohere(options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create an AWS Bedrock completion model. */
-  static bedrock(apiKey: string, options: JsBedrockOptions): CompletionModel
+  static bedrock(options: JsBedrockOptions): CompletionModel
   /** Get the model ID. */
   get modelId(): string
   /**
@@ -354,7 +354,7 @@ export type JsEmbeddingModel = EmbeddingModel
  * Constructed via [`JsFalProvider::embedding_model`].
  *
  * ```typescript
- * const fal = FalProvider.create("fal-key-...");
+ * const fal = FalProvider.create();
  * const em = fal.embeddingModel();
  * const vectors = await em.embed(["hello", "world"]);
  * console.log(vectors.length); // 2
@@ -379,7 +379,7 @@ export type JsFalEmbeddingModel = FalEmbeddingModel
  * and LLM capabilities.
  *
  * ```typescript
- * const fal = FalProvider.create("fal-key-...");
+ * const fal = FalProvider.create();
  * const result = await fal.generateImage({ prompt: "a sunset" });
  * const response = await fal.complete([ChatMessage.user("Hi")]);
  * ```
@@ -392,7 +392,7 @@ export declare class FalProvider {
    * enterprise tier, and modality auto-routing. Defaults to the
    * OpenAI-compatible chat-completions endpoint (`OpenAiChat`).
    */
-  static create(apiKey: string, options?: JsFalOptions | undefined | null): FalProvider
+  static create(options?: JsFalOptions | undefined | null): FalProvider
   /** Get the model ID. */
   get modelId(): string
   /** Generate images from a text prompt. */
@@ -1073,6 +1073,7 @@ export interface JsAudioResult {
 }
 
 export interface JsAzureOptions {
+  apiKey?: string
   model?: string
   baseUrl?: string
   resourceName: string
@@ -1087,6 +1088,7 @@ export interface JsBackgroundRemovalRequest {
 }
 
 export interface JsBedrockOptions {
+  apiKey?: string
   model?: string
   baseUrl?: string
   region: string
@@ -1210,6 +1212,7 @@ export declare const enum JsFalLlmEndpointKind {
 }
 
 export interface JsFalOptions {
+  apiKey?: string
   model?: string
   baseUrl?: string
   endpoint?: JsFalLlmEndpointKind
@@ -1360,6 +1363,7 @@ export interface JsMusicRequest {
 }
 
 export interface JsProviderOptions {
+  apiKey?: string
   model?: string
   baseUrl?: string
 }

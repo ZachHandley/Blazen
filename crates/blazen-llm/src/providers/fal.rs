@@ -688,13 +688,18 @@ impl FalProvider {
         all(target_arch = "wasm32", not(target_os = "wasi")),
         feature = "reqwest"
     ))]
-    #[must_use]
+    /// Construct from typed [`FalOptions`](crate::types::provider_options::FalOptions).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BlazenError::Auth`] if no API key is provided and the
+    /// `FAL_KEY` environment variable is not set.
     pub fn from_options(
-        api_key: impl Into<String>,
         opts: crate::types::provider_options::FalOptions,
-    ) -> Self {
+    ) -> Result<Self, crate::BlazenError> {
         use crate::types::provider_options::FalLlmEndpointKind;
 
+        let api_key = crate::keys::resolve_api_key("fal", opts.base.api_key)?;
         let mut provider = Self::new(api_key);
         if let Some(m) = opts.base.model {
             provider = provider.with_llm_model(m);
@@ -719,7 +724,7 @@ impl FalProvider {
             provider = provider.with_enterprise();
         }
         provider = provider.with_auto_route_modality(opts.auto_route_modality);
-        provider
+        Ok(provider)
     }
 
     /// Build a [`FalEmbeddingModel`] sharing this provider's HTTP client and

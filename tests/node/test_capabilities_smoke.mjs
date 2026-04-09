@@ -20,7 +20,7 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 describe("Streaming smoke tests", { skip: !OPENROUTER_API_KEY }, () => {
   it("streams chunks for a basic prompt", async () => {
-    const model = CompletionModel.openrouter(OPENROUTER_API_KEY);
+    const model = CompletionModel.openrouter({ apiKey: OPENROUTER_API_KEY });
     const chunks = [];
 
     await model.stream(
@@ -44,7 +44,7 @@ describe("Streaming smoke tests", { skip: !OPENROUTER_API_KEY }, () => {
 
 describe("Structured output smoke tests", { skip: !OPENROUTER_API_KEY }, () => {
   it("returns JSON conforming to a schema", async () => {
-    const model = CompletionModel.openrouter(OPENROUTER_API_KEY);
+    const model = CompletionModel.openrouter({ apiKey: OPENROUTER_API_KEY });
 
     const response = await model.completeWithOptions(
       [ChatMessage.user("What is 2 + 2? Respond in the required JSON format.")],
@@ -77,7 +77,7 @@ describe("Structured output smoke tests", { skip: !OPENROUTER_API_KEY }, () => {
 
 describe("Agent tool calling smoke tests", { skip: !OPENROUTER_API_KEY }, () => {
   it("uses a multiply tool and returns the correct result", async () => {
-    const model = CompletionModel.openrouter(OPENROUTER_API_KEY);
+    const model = CompletionModel.openrouter({ apiKey: OPENROUTER_API_KEY });
 
     const tools = [
       {

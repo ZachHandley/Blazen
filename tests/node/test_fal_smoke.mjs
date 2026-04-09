@@ -25,7 +25,7 @@ const VIDEO_URL =
 
 describe("fal.ai LLM smoke tests", { skip: !FAL_API_KEY }, () => {
   it("completes a basic prompt via OpenAiChat default", async () => {
-    const model = CompletionModel.fal(FAL_API_KEY);
+    const model = CompletionModel.fal({ apiKey: FAL_API_KEY });
     const response = await model.complete([
       ChatMessage.user("What is 2+2? Reply with just the number."),
     ]);
@@ -36,7 +36,7 @@ describe("fal.ai LLM smoke tests", { skip: !FAL_API_KEY }, () => {
   });
 
   it("completes a basic prompt with enterprise=true", async () => {
-    const model = CompletionModel.fal(FAL_API_KEY, { enterprise: true });
+    const model = CompletionModel.fal({ apiKey: FAL_API_KEY, enterprise: true });
     const response = await model.complete([
       ChatMessage.user("What is 3+3? Reply with just the number."),
     ]);
@@ -46,7 +46,8 @@ describe("fal.ai LLM smoke tests", { skip: !FAL_API_KEY }, () => {
   });
 
   it("completes a basic prompt via OpenAiResponses endpoint", async () => {
-    const model = CompletionModel.fal(FAL_API_KEY, {
+    const model = CompletionModel.fal({
+      apiKey: FAL_API_KEY,
       endpoint: "open_ai_responses",
     });
     const response = await model.complete([
@@ -58,7 +59,7 @@ describe("fal.ai LLM smoke tests", { skip: !FAL_API_KEY }, () => {
   });
 
   it("returns timing metadata", async () => {
-    const model = CompletionModel.fal(FAL_API_KEY);
+    const model = CompletionModel.fal({ apiKey: FAL_API_KEY });
     const response = await model.complete([
       ChatMessage.user("Say hello."),
     ]);
@@ -74,7 +75,7 @@ describe("fal.ai LLM smoke tests", { skip: !FAL_API_KEY }, () => {
   });
 
   it("passes temperature and max_tokens", async () => {
-    const model = CompletionModel.fal(FAL_API_KEY);
+    const model = CompletionModel.fal({ apiKey: FAL_API_KEY });
     const response = await model.completeWithOptions(
       [ChatMessage.user("Write a one-word greeting.")],
       { temperature: 0.1, maxTokens: 10 }
@@ -86,7 +87,7 @@ describe("fal.ai LLM smoke tests", { skip: !FAL_API_KEY }, () => {
   });
 
   it("exposes new typed CompletionResponse fields (reasoning/citations/artifacts)", async () => {
-    const model = CompletionModel.fal(FAL_API_KEY);
+    const model = CompletionModel.fal({ apiKey: FAL_API_KEY });
     const response = await model.complete([
       ChatMessage.user("Say hi."),
     ]);
@@ -112,7 +113,8 @@ describe("fal.ai LLM smoke tests", { skip: !FAL_API_KEY }, () => {
 
 describe("fal.ai modality auto-routing tests", { skip: !FAL_API_KEY }, () => {
   it("auto-routes to vision when AnyLlm and image part present", async () => {
-    const model = CompletionModel.fal(FAL_API_KEY, {
+    const model = CompletionModel.fal({
+      apiKey: FAL_API_KEY,
       endpoint: "any_llm",
       autoRouteModality: true,
     });
@@ -125,7 +127,8 @@ describe("fal.ai modality auto-routing tests", { skip: !FAL_API_KEY }, () => {
   });
 
   it("auto-routes to audio when OpenRouter and audio part present", async () => {
-    const model = CompletionModel.fal(FAL_API_KEY, {
+    const model = CompletionModel.fal({
+      apiKey: FAL_API_KEY,
       endpoint: "open_router",
       autoRouteModality: true,
     });
@@ -146,7 +149,8 @@ describe("fal.ai modality auto-routing tests", { skip: !FAL_API_KEY }, () => {
   });
 
   it("auto-routes to video when OpenRouter and video part present", async () => {
-    const model = CompletionModel.fal(FAL_API_KEY, {
+    const model = CompletionModel.fal({
+      apiKey: FAL_API_KEY,
       endpoint: "open_router",
       autoRouteModality: true,
     });
@@ -169,7 +173,7 @@ describe("fal.ai modality auto-routing tests", { skip: !FAL_API_KEY }, () => {
 
 describe("fal.ai streaming + embeddings + utilities", { skip: !FAL_API_KEY, timeout: 300_000 }, () => {
   it("streaming yields multiple chunks", async () => {
-    const model = CompletionModel.fal(FAL_API_KEY);
+    const model = CompletionModel.fal({ apiKey: FAL_API_KEY });
     const chunks = [];
 
     await model.stream(
@@ -183,7 +187,7 @@ describe("fal.ai streaming + embeddings + utilities", { skip: !FAL_API_KEY, time
   });
 
   it("FalProvider.embeddingModel().embed produces vectors", async () => {
-    const provider = FalProvider.create(FAL_API_KEY);
+    const provider = FalProvider.create({ apiKey: FAL_API_KEY });
     const embedder = provider.embeddingModel();
     const vectors = await embedder.embed(["hi", "hello"]);
 
@@ -194,7 +198,7 @@ describe("fal.ai streaming + embeddings + utilities", { skip: !FAL_API_KEY, time
   });
 
   it("generates a 3D model", async () => {
-    const provider = FalProvider.create(FAL_API_KEY);
+    const provider = FalProvider.create({ apiKey: FAL_API_KEY });
     try {
       const result = await provider.generate3d({ imageUrl: IMAGE_URL });
       assert.ok(result, "expected a 3D generation result");
@@ -210,7 +214,7 @@ describe("fal.ai streaming + embeddings + utilities", { skip: !FAL_API_KEY, time
   });
 
   it("removes background from an image", async () => {
-    const provider = FalProvider.create(FAL_API_KEY);
+    const provider = FalProvider.create({ apiKey: FAL_API_KEY });
     try {
       const result = await provider.removeBackground({ imageUrl: IMAGE_URL });
       assert.ok(result, "expected a background-removal result");
@@ -228,14 +232,14 @@ describe("fal.ai streaming + embeddings + utilities", { skip: !FAL_API_KEY, time
 
 describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY, timeout: 2_100_000 }, () => {
   it("generates an image with FLUX", { timeout: 300_000 }, async () => {
-    const provider = FalProvider.create(FAL_API_KEY);
+    const provider = FalProvider.create({ apiKey: FAL_API_KEY });
     const result = await provider.generateImage({ prompt: "a simple red circle on white" });
     assert.ok(result.images, "expected images");
     assert.ok(result.images.length > 0, "expected at least one image");
   });
 
   it("synthesizes speech from text", { timeout: 300_000 }, async () => {
-    const provider = FalProvider.create(FAL_API_KEY);
+    const provider = FalProvider.create({ apiKey: FAL_API_KEY });
     const result = await provider.textToSpeech({
       text: "Hello world.",
     });
@@ -249,7 +253,7 @@ describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY, timeout: 2_100_000 
   });
 
   it("generates music from a prompt", { timeout: 300_000 }, async () => {
-    const provider = FalProvider.create(FAL_API_KEY);
+    const provider = FalProvider.create({ apiKey: FAL_API_KEY });
     const result = await provider.generateMusic({
       prompt: "happy upbeat jingle",
       durationSeconds: 5,
@@ -264,7 +268,7 @@ describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY, timeout: 2_100_000 
   });
 
   it("transcribes audio from a URL", { timeout: 300_000 }, async () => {
-    const provider = FalProvider.create(FAL_API_KEY);
+    const provider = FalProvider.create({ apiKey: FAL_API_KEY });
     const result = await provider.transcribe({
       audioUrl: "https://cdn.openai.com/API/docs/audio/alloy.wav",
     });
@@ -278,7 +282,7 @@ describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY, timeout: 2_100_000 
   });
 
   it("generates a video from a text prompt", { timeout: 300_000 }, async () => {
-    const provider = FalProvider.create(FAL_API_KEY);
+    const provider = FalProvider.create({ apiKey: FAL_API_KEY });
     const result = await provider.textToVideo({
       prompt: "a cat walking slowly",
     });
@@ -295,7 +299,7 @@ describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY, timeout: 2_100_000 
   });
 
   it("runs a model synchronously via run()", { timeout: 300_000 }, async () => {
-    const provider = FalProvider.create(FAL_API_KEY);
+    const provider = FalProvider.create({ apiKey: FAL_API_KEY });
     const result = await provider.run({
       model: "fal-ai/flux/schnell",
       input: { prompt: "blue sky with white clouds", imageSize: "square_hd" },
@@ -305,7 +309,7 @@ describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY, timeout: 2_100_000 
   });
 
   it("submits a job and gets a valid job handle", { timeout: 300_000 }, async () => {
-    const provider = FalProvider.create(FAL_API_KEY);
+    const provider = FalProvider.create({ apiKey: FAL_API_KEY });
 
     const job = await provider.submit({
       model: "fal-ai/flux/schnell",

@@ -28,23 +28,7 @@ pub enum KeyStrategy {
     Proxy,
 }
 
-/// Well-known provider key names and their corresponding environment variables.
-const PROVIDER_ENV_VARS: &[(&str, &str)] = &[
-    ("openai", "OPENAI_API_KEY"),
-    ("anthropic", "ANTHROPIC_API_KEY"),
-    ("gemini", "GEMINI_API_KEY"),
-    ("azure", "AZURE_OPENAI_API_KEY"),
-    ("fal", "FAL_KEY"),
-    ("openrouter", "OPENROUTER_API_KEY"),
-    ("groq", "GROQ_API_KEY"),
-    ("together", "TOGETHER_API_KEY"),
-    ("mistral", "MISTRAL_API_KEY"),
-    ("deepseek", "DEEPSEEK_API_KEY"),
-    ("fireworks", "FIREWORKS_API_KEY"),
-    ("perplexity", "PERPLEXITY_API_KEY"),
-    ("xai", "XAI_API_KEY"),
-    ("cohere", "COHERE_API_KEY"),
-];
+use blazen_llm::keys::PROVIDER_ENV_VARS;
 
 /// Resolves API keys for LLM providers.
 #[derive(Debug, Clone)]

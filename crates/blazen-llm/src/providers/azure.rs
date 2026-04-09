@@ -131,16 +131,19 @@ impl AzureOpenAiProvider {
         all(target_arch = "wasm32", not(target_os = "wasi")),
         feature = "reqwest"
     ))]
-    #[must_use]
+    /// # Errors
+    ///
+    /// Returns [`BlazenError::Auth`] if no API key is provided and the
+    /// `AZURE_OPENAI_API_KEY` environment variable is not set.
     pub fn from_options(
-        api_key: impl Into<String>,
         opts: crate::types::provider_options::AzureOptions,
-    ) -> Self {
+    ) -> Result<Self, crate::BlazenError> {
+        let api_key = crate::keys::resolve_api_key("azure", opts.base.api_key)?;
         let mut provider = Self::new(api_key, &opts.resource_name, &opts.deployment_name);
         if let Some(version) = opts.api_version {
             provider = provider.with_api_version(version);
         }
-        provider
+        Ok(provider)
     }
 
     /// Override the API version.

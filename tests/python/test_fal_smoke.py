@@ -54,7 +54,7 @@ async def _fal_or_skip(coro):
 @pytest.mark.asyncio
 async def test_fal_completion_openai_chat():
     """Default endpoint (OpenAiChat) with temperature, max_tokens, and response field checks."""
-    model = CompletionModel.fal(FAL_API_KEY).with_retry(RetryConfig(max_retries=2))
+    model = CompletionModel.fal(options=FalOptions(api_key=FAL_API_KEY)).with_retry(RetryConfig(max_retries=2))
     response = await model.complete(
         [ChatMessage.user("What is 2+2? Reply with just the number.")],
         CompletionOptions(temperature=0.1, max_tokens=10),
@@ -72,7 +72,7 @@ async def test_fal_completion_openai_chat():
 @pytest.mark.asyncio
 async def test_fal_basic_completion_enterprise():
     """Enterprise mode promotes OpenAiChat -> AnyLlm{enterprise:true}."""
-    model = CompletionModel.fal(FAL_API_KEY, options=FalOptions(enterprise=True)).with_retry(RetryConfig(max_retries=2))
+    model = CompletionModel.fal(options=FalOptions(api_key=FAL_API_KEY, enterprise=True)).with_retry(RetryConfig(max_retries=2))
     response = await model.complete(
         [ChatMessage.user("Say hello.")],
         CompletionOptions(max_tokens=10),
@@ -85,8 +85,7 @@ async def test_fal_basic_completion_enterprise():
 async def test_fal_responses_api_endpoint():
     """OpenAiResponses endpoint targets openrouter/router/openai/v1/responses."""
     model = CompletionModel.fal(
-        FAL_API_KEY,
-        options=FalOptions(endpoint=FalLlmEndpointKind.OpenAiResponses),
+        options=FalOptions(api_key=FAL_API_KEY, endpoint=FalLlmEndpointKind.OpenAiResponses),
     ).with_retry(RetryConfig(max_retries=2))
     response = await model.complete(
         [ChatMessage.user("Say hi.")],
@@ -106,8 +105,7 @@ async def test_fal_vision_auto_routes_when_anyllm_and_image_present():
     """When AnyLlm endpoint is configured and a message has an image part,
     the request should auto-route to fal-ai/any-llm/vision."""
     model = CompletionModel.fal(
-        FAL_API_KEY,
-        options=FalOptions(endpoint=FalLlmEndpointKind.AnyLlm),
+        options=FalOptions(api_key=FAL_API_KEY, endpoint=FalLlmEndpointKind.AnyLlm),
     ).with_retry(RetryConfig(max_retries=2))
     msg = ChatMessage.user_image_url(
         text="What is in this image? One word.",
@@ -129,8 +127,7 @@ async def test_fal_audio_auto_routes_when_openrouter_and_audio_present():
     routing landed at the audio endpoint correctly).
     """
     model = CompletionModel.fal(
-        FAL_API_KEY,
-        options=FalOptions(endpoint=FalLlmEndpointKind.OpenRouter),
+        options=FalOptions(api_key=FAL_API_KEY, endpoint=FalLlmEndpointKind.OpenRouter),
     )
     msg = ChatMessage.user_audio(
         text="What does this clip say?",
@@ -163,8 +160,7 @@ async def test_fal_video_auto_routes_when_openrouter_and_video_present():
     routing landed at the video endpoint correctly).
     """
     model = CompletionModel.fal(
-        FAL_API_KEY,
-        options=FalOptions(endpoint=FalLlmEndpointKind.OpenRouter),
+        options=FalOptions(api_key=FAL_API_KEY, endpoint=FalLlmEndpointKind.OpenRouter),
     )
     msg = ChatMessage.user_video(
         text="What is happening in this video? One sentence.",
@@ -194,7 +190,7 @@ async def test_fal_video_auto_routes_when_openrouter_and_video_present():
 @skip_without_key
 @pytest.mark.asyncio
 async def test_fal_streaming_yields_multiple_chunks():
-    model = CompletionModel.fal(FAL_API_KEY).with_retry(RetryConfig(max_retries=2))
+    model = CompletionModel.fal(options=FalOptions(api_key=FAL_API_KEY)).with_retry(RetryConfig(max_retries=2))
     chunks = []
     async for chunk in model.stream(
         [ChatMessage.user("Count from 1 to 5, one number per line.")],
@@ -208,7 +204,7 @@ async def test_fal_streaming_yields_multiple_chunks():
 @pytest.mark.asyncio
 @pytest.mark.timeout(300)
 async def test_fal_embeddings():
-    provider = FalProvider(api_key=FAL_API_KEY)
+    provider = FalProvider(options=FalOptions(api_key=FAL_API_KEY))
     em = provider.embedding_model()
     response = await _fal_or_skip(em.embed(["hello", "world"]))
     assert len(response["embeddings"]) == 2
@@ -226,7 +222,7 @@ async def test_fal_3d_generation():
     the error is specifically a fal file-download failure (which proves
     routing landed at the 3D endpoint correctly).
     """
-    provider = FalProvider(api_key=FAL_API_KEY)
+    provider = FalProvider(options=FalOptions(api_key=FAL_API_KEY))
     request = ThreeDRequest(
         prompt="a wooden chair",
         image_url="https://storage.googleapis.com/falserverless/example_inputs/triposr_input.jpg",
@@ -257,7 +253,7 @@ async def test_fal_background_removal():
     the error is specifically a fal file-download failure (which proves
     routing landed at the background-removal endpoint correctly).
     """
-    provider = FalProvider(api_key=FAL_API_KEY)
+    provider = FalProvider(options=FalOptions(api_key=FAL_API_KEY))
     try:
         result = await _fal_or_skip(provider.remove_background(
             BackgroundRemovalRequest(image_url="https://storage.googleapis.com/falserverless/example_inputs/birefnet_input.jpeg"),
@@ -284,7 +280,7 @@ async def test_fal_background_removal():
 @pytest.mark.asyncio
 @pytest.mark.timeout(300)
 async def test_fal_image_generation():
-    provider = FalProvider(api_key=FAL_API_KEY)
+    provider = FalProvider(options=FalOptions(api_key=FAL_API_KEY))
     result = await _fal_or_skip(provider.generate_image(
         ImageRequest(prompt="a simple red circle on white background"),
     ))
@@ -296,7 +292,7 @@ async def test_fal_image_generation():
 @pytest.mark.asyncio
 @pytest.mark.timeout(300)
 async def test_fal_text_to_speech():
-    provider = FalProvider(api_key=FAL_API_KEY)
+    provider = FalProvider(options=FalOptions(api_key=FAL_API_KEY))
     result = await _fal_or_skip(provider.text_to_speech(
         SpeechRequest(text="Hello world, this is a test."),
     ))
@@ -314,7 +310,7 @@ async def test_fal_text_to_speech():
 @pytest.mark.timeout(300)
 async def test_fal_generate_music():
     """Generate music and verify the response contains audio data."""
-    provider = FalProvider(api_key=FAL_API_KEY)
+    provider = FalProvider(options=FalOptions(api_key=FAL_API_KEY))
     result = await _fal_or_skip(provider.generate_music(
         MusicRequest(prompt="happy upbeat jingle", duration_seconds=5.0),
     ))
@@ -327,7 +323,7 @@ async def test_fal_generate_music():
 @pytest.mark.timeout(300)
 async def test_fal_transcribe():
     """Transcribe a short audio clip and verify text is returned."""
-    provider = FalProvider(api_key=FAL_API_KEY)
+    provider = FalProvider(options=FalOptions(api_key=FAL_API_KEY))
     result = await _fal_or_skip(provider.transcribe(
         TranscriptionRequest(audio_url="https://cdn.openai.com/API/docs/audio/alloy.wav"),
     ))
@@ -340,7 +336,7 @@ async def test_fal_transcribe():
 @pytest.mark.timeout(300)
 async def test_fal_text_to_video():
     """Generate a video from text (slow, ~30-60s)."""
-    provider = FalProvider(api_key=FAL_API_KEY)
+    provider = FalProvider(options=FalOptions(api_key=FAL_API_KEY))
     try:
         result = await _fal_or_skip(provider.text_to_video(
             VideoRequest(prompt="a cat walking"),
@@ -366,7 +362,7 @@ async def test_fal_text_to_video():
 @pytest.mark.timeout(300)
 async def test_fal_raw_compute_run():
     """Run a raw compute job via the generic run() method."""
-    provider = FalProvider(api_key=FAL_API_KEY)
+    provider = FalProvider(options=FalOptions(api_key=FAL_API_KEY))
     result = await _fal_or_skip(provider.run(
         ComputeRequest(
             model="fal-ai/flux/schnell",
@@ -382,7 +378,7 @@ async def test_fal_raw_compute_run():
 @pytest.mark.timeout(300)
 async def test_fal_job_submit():
     """Submit a job and verify a job handle is returned."""
-    provider = FalProvider(api_key=FAL_API_KEY)
+    provider = FalProvider(options=FalOptions(api_key=FAL_API_KEY))
     job = await _fal_or_skip(provider.submit(
         ComputeRequest(
             model="fal-ai/flux/schnell",

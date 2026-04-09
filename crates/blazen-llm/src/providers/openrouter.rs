@@ -113,7 +113,7 @@ impl OpenRouterProvider {
     }
 }
 
-super::impl_simple_from_options!(OpenRouterProvider, no_base_url);
+super::impl_simple_from_options!(OpenRouterProvider, "openrouter", no_base_url);
 
 // ---------------------------------------------------------------------------
 // CompletionModel implementation
