@@ -410,7 +410,7 @@ describe("ChatWindow", () => {
 
 describe("CompletionModel decorators", () => {
   it("withRetry returns a CompletionModel", () => {
-    const model = CompletionModel.openai("fake-key");
+    const model = CompletionModel.openai({ apiKey: "fake-key" });
     const retried = model.withRetry({
       maxRetries: 3,
       initialDelayMs: 100,
@@ -420,14 +420,14 @@ describe("CompletionModel decorators", () => {
   });
 
   it("withCache returns a CompletionModel", () => {
-    const model = CompletionModel.openai("fake-key");
+    const model = CompletionModel.openai({ apiKey: "fake-key" });
     const cached = model.withCache({ ttlSeconds: 60, maxEntries: 100 });
     assert.ok(cached);
   });
 
   it("withFallback chains multiple models", () => {
-    const m1 = CompletionModel.openai("fake-key-1");
-    const m2 = CompletionModel.openai("fake-key-2");
+    const m1 = CompletionModel.openai({ apiKey: "fake-key-1" });
+    const m2 = CompletionModel.openai({ apiKey: "fake-key-2" });
     const fallback = CompletionModel.withFallback([m1, m2]);
     assert.ok(fallback);
   });

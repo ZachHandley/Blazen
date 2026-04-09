@@ -481,7 +481,8 @@ def test_provider_options_typed():
     assert opts.model == "gpt-4o"
     assert opts.base_url == "https://api.openai.com/v1"
     # Pass to a factory
-    model = CompletionModel.openai("fake-key", options=opts)
+    opts.api_key = "fake-key"
+    model = CompletionModel.openai(options=opts)
     assert model is not None
 
 
@@ -509,7 +510,8 @@ def test_azure_options_required_fields():
     assert opts.deployment_name == "my-deployment"
     assert opts.api_version == "2024-02-15-preview"
     # AzureOptions is required (not optional) for the factory
-    model = CompletionModel.azure("fake-key", options=opts)
+    opts.api_key = "fake-key"
+    model = CompletionModel.azure(options=opts)
     assert model is not None
 
 
@@ -536,7 +538,7 @@ def test_image_request_typed():
 
 def test_with_retry_constructs():
     """CompletionModel.with_retry accepts a typed RetryConfig."""
-    model = CompletionModel.openai("fake-key")
+    model = CompletionModel.openai(options=ProviderOptions(api_key="fake-key"))
     config = RetryConfig(
         max_retries=5,
         initial_delay_ms=500,
@@ -552,14 +554,14 @@ def test_with_retry_constructs():
 
 def test_with_retry_no_config_uses_defaults():
     """with_retry with no config falls back to RetryConfig defaults."""
-    model = CompletionModel.openai("fake-key")
+    model = CompletionModel.openai(options=ProviderOptions(api_key="fake-key"))
     retried = model.with_retry()
     assert retried is not None
 
 
 def test_with_cache_constructs():
     """CompletionModel.with_cache accepts a typed CacheConfig."""
-    model = CompletionModel.openai("fake-key")
+    model = CompletionModel.openai(options=ProviderOptions(api_key="fake-key"))
     config = CacheConfig(
         ttl_seconds=60,
         max_entries=100,
@@ -573,14 +575,14 @@ def test_with_cache_constructs():
 
 def test_with_cache_no_config_uses_defaults():
     """with_cache with no config falls back to CacheConfig defaults."""
-    model = CompletionModel.openai("fake-key")
+    model = CompletionModel.openai(options=ProviderOptions(api_key="fake-key"))
     cached = model.with_cache()
     assert cached is not None
 
 
 def test_with_fallback_constructs():
     """CompletionModel.with_fallback chains multiple models."""
-    m1 = CompletionModel.openai("fake-key-1")
-    m2 = CompletionModel.openai("fake-key-2")
+    m1 = CompletionModel.openai(options=ProviderOptions(api_key="fake-key-1"))
+    m2 = CompletionModel.openai(options=ProviderOptions(api_key="fake-key-2"))
     fallback = CompletionModel.with_fallback([m1, m2])
     assert fallback is not None
