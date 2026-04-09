@@ -15,7 +15,7 @@
 //!
 //! await init(); // load WASM module
 //!
-//! const model = CompletionModel.openrouter('or-key');
+//! const model = CompletionModel.openrouter();
 //! const response = await model.complete([ChatMessage.user('Hello!')]);
 //! console.log(response.content);
 //! ```

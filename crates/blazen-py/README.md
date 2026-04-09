@@ -135,9 +135,9 @@ Blazen includes a built-in multi-provider LLM client. All providers share the sa
 
 ```python
 import os
-from blazen import CompletionModel, ChatMessage, Role, CompletionResponse
+from blazen import CompletionModel, ChatMessage, Role, CompletionResponse, ProviderOptions
 
-model = CompletionModel.openrouter(os.environ["OPENROUTER_API_KEY"], options={"model": "openai/gpt-4o"})
+model = CompletionModel.openrouter(options=ProviderOptions(api_key=os.environ["OPENROUTER_API_KEY"], model="openai/gpt-4o"))
 response: CompletionResponse = await model.complete([
     ChatMessage.system("You are helpful."),
     ChatMessage.user("What is 2+2?"),
@@ -193,34 +193,34 @@ msg = ChatMessage.user_parts([
 
 | Provider | Constructor | Default Model |
 |---|---|---|
-| OpenAI | `CompletionModel.openai(api_key, options={"model": "gpt-4o"})` | `gpt-4o` |
-| Anthropic | `CompletionModel.anthropic(api_key, options={"model": "claude-sonnet-4-20250514"})` | `claude-sonnet-4-20250514` |
-| Google Gemini | `CompletionModel.gemini(api_key, options={"model": "gemini-2.0-flash"})` | `gemini-2.0-flash` |
-| Azure OpenAI | `CompletionModel.azure(api_key, options={"resource_name": "...", "deployment_name": "..."})` | (deployment) |
-| OpenRouter | `CompletionModel.openrouter(api_key, options={"model": "..."})` | -- |
-| Groq | `CompletionModel.groq(api_key, options={"model": "..."})` | -- |
-| Together AI | `CompletionModel.together(api_key, options={"model": "..."})` | -- |
-| Mistral | `CompletionModel.mistral(api_key, options={"model": "..."})` | -- |
-| DeepSeek | `CompletionModel.deepseek(api_key, options={"model": "..."})` | -- |
-| Fireworks | `CompletionModel.fireworks(api_key, options={"model": "..."})` | -- |
-| Perplexity | `CompletionModel.perplexity(api_key, options={"model": "..."})` | -- |
-| xAI (Grok) | `CompletionModel.xai(api_key, options={"model": "..."})` | -- |
-| Cohere | `CompletionModel.cohere(api_key, options={"model": "..."})` | -- |
-| AWS Bedrock | `CompletionModel.bedrock(api_key, options={"region": "...", "model": "..."})` | -- |
-| fal.ai | `CompletionModel.fal(api_key, options={"model": "..."})` | -- |
+| OpenAI | `CompletionModel.openai(options=ProviderOptions(api_key=key, model="gpt-4o"))` | `gpt-4o` |
+| Anthropic | `CompletionModel.anthropic(options=ProviderOptions(api_key=key, model="claude-sonnet-4-20250514"))` | `claude-sonnet-4-20250514` |
+| Google Gemini | `CompletionModel.gemini(options=ProviderOptions(api_key=key, model="gemini-2.0-flash"))` | `gemini-2.0-flash` |
+| Azure OpenAI | `CompletionModel.azure(options=AzureOptions(api_key=key, resource_name="...", deployment_name="..."))` | (deployment) |
+| OpenRouter | `CompletionModel.openrouter(options=ProviderOptions(api_key=key, model="..."))` | -- |
+| Groq | `CompletionModel.groq(options=ProviderOptions(api_key=key, model="..."))` | -- |
+| Together AI | `CompletionModel.together(options=ProviderOptions(api_key=key, model="..."))` | -- |
+| Mistral | `CompletionModel.mistral(options=ProviderOptions(api_key=key, model="..."))` | -- |
+| DeepSeek | `CompletionModel.deepseek(options=ProviderOptions(api_key=key, model="..."))` | -- |
+| Fireworks | `CompletionModel.fireworks(options=ProviderOptions(api_key=key, model="..."))` | -- |
+| Perplexity | `CompletionModel.perplexity(options=ProviderOptions(api_key=key, model="..."))` | -- |
+| xAI (Grok) | `CompletionModel.xai(options=ProviderOptions(api_key=key, model="..."))` | -- |
+| Cohere | `CompletionModel.cohere(options=ProviderOptions(api_key=key, model="..."))` | -- |
+| AWS Bedrock | `CompletionModel.bedrock(options=BedrockOptions(api_key=key, region="...", model="..."))` | -- |
+| fal.ai | `CompletionModel.fal(options=FalOptions(api_key=key, model="..."))` | -- |
 
 ### Using LLMs in Workflows
 
 ```python
 import os
-from blazen import Workflow, step, Event, StopEvent, Context, CompletionModel, ChatMessage
+from blazen import Workflow, step, Event, StopEvent, Context, CompletionModel, ChatMessage, ProviderOptions
 
 class AnswerEvent(Event):
     answer: str
 
 @step
 async def ask_llm(ctx: Context, ev: Event):
-    model = CompletionModel.anthropic(os.environ["ANTHROPIC_API_KEY"], options={"model": "claude-sonnet-4-20250514"})
+    model = CompletionModel.anthropic(options=ProviderOptions(api_key=os.environ["ANTHROPIC_API_KEY"], model="claude-sonnet-4-20250514"))
     response = await model.complete([
         ChatMessage.system("Answer concisely."),
         ChatMessage.user(ev.prompt),
@@ -403,7 +403,7 @@ async def load_model(ctx: Context, ev: NextEvent):
 | `await wf.run(**kwargs)` | Execute the workflow. Returns a `WorkflowHandler`. Kwargs become the `StartEvent` payload. |
 | `WorkflowHandler` | Handle to a running workflow: `await handler.result()`, `async for ev in handler.stream_events()`, `handler.pause()`, `await handler.snapshot()`, `await handler.resume_in_place()`, `await handler.respond_to_input(request_id, response)`, `await handler.abort()`. |
 | `await Workflow.resume(snapshot_json, steps, timeout=None)` | Resume a paused workflow from a JSON snapshot. Returns a `WorkflowHandler`. |
-| `CompletionModel.<provider>(api_key, options={...})` | LLM provider. Pass provider-specific options (model, region, etc.) as a plain dict via `options=`. Providers: `openai`, `anthropic`, `gemini`, `azure`, `openrouter`, `groq`, `together`, `mistral`, `deepseek`, `fireworks`, `perplexity`, `xai`, `cohere`, `bedrock`, `fal`. |
+| `CompletionModel.<provider>(options=ProviderOptions(...))` | LLM provider. Pass a typed options struct (`ProviderOptions`, `AzureOptions`, `BedrockOptions`, or `FalOptions`) via `options=`. Providers: `openai`, `anthropic`, `gemini`, `azure`, `openrouter`, `groq`, `together`, `mistral`, `deepseek`, `fireworks`, `perplexity`, `xai`, `cohere`, `bedrock`, `fal`. |
 | `await model.complete(messages, ...)` | Chat completion. Returns a typed `CompletionResponse`. |
 | `ChatMessage(role=, content=, parts=)` | Chat message. Constructor with keyword args (role defaults to `"user"`). Static factories: `.system()`, `.user()`, `.assistant()`, `.tool()`, `.user_image_url()`, `.user_image_base64()`, `.user_parts()`. |
 | `Role` | Role enum: `Role.SYSTEM`, `Role.USER`, `Role.ASSISTANT`, `Role.TOOL`. |

@@ -26,6 +26,7 @@ from blazen import (
     CompletionModel,
     Context,
     Event,
+    ProviderOptions,
     StartEvent,
     StopEvent,
     Workflow,
@@ -43,7 +44,7 @@ def get_model() -> CompletionModel:
         print("ERROR: Set the ANTHROPIC_API_KEY environment variable.")
         print("  ANTHROPIC_API_KEY=sk-ant-... python llm_anthropic.py")
         sys.exit(1)
-    return CompletionModel.anthropic(api_key, model="claude-haiku-4-5-20251001")
+    return CompletionModel.anthropic(options=ProviderOptions(api_key=api_key, model="claude-haiku-4-5-20251001"))
 
 
 MODEL = get_model()

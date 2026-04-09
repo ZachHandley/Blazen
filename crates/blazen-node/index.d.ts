@@ -318,25 +318,25 @@ export declare class EmbeddingModel {
    *
    * Defaults to `text-embedding-3-small` (1536 dimensions).
    */
-  static openai(apiKey: string): EmbeddingModel
+  static openai(options?: JsProviderOptions | undefined | null): EmbeddingModel
   /**
    * Create a Together AI embedding model.
    *
    * Defaults to `togethercomputer/m2-bert-80M-8k-retrieval` (768 dimensions).
    */
-  static together(apiKey: string): EmbeddingModel
+  static together(options?: JsProviderOptions | undefined | null): EmbeddingModel
   /**
    * Create a Cohere embedding model.
    *
    * Defaults to `embed-v4.0` (1024 dimensions).
    */
-  static cohere(apiKey: string): EmbeddingModel
+  static cohere(options?: JsProviderOptions | undefined | null): EmbeddingModel
   /**
    * Create a Fireworks AI embedding model.
    *
    * Defaults to `nomic-ai/nomic-embed-text-v1.5` (768 dimensions).
    */
-  static fireworks(apiKey: string): EmbeddingModel
+  static fireworks(options?: JsProviderOptions | undefined | null): EmbeddingModel
   /** The model identifier. */
   get modelId(): string
   /** The dimensionality of the embedding vectors produced by this model. */

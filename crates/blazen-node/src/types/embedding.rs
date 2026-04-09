@@ -5,11 +5,10 @@ use std::sync::Arc;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
-use blazen_llm::providers::openai_compat::{AuthMethod, OpenAiCompatConfig};
 use blazen_llm::traits::EmbeddingModel;
 
-use crate::error::llm_error_to_napi;
-use crate::generated::{JsRequestTiming, JsTokenUsage};
+use crate::error::{blazen_error_to_napi, llm_error_to_napi};
+use crate::generated::{JsProviderOptions, JsRequestTiming, JsTokenUsage};
 
 // ---------------------------------------------------------------------------
 // EmbeddingResponse
@@ -68,87 +67,56 @@ impl JsEmbeddingModel {
     ///
     /// Defaults to `text-embedding-3-small` (1536 dimensions).
     #[napi(factory)]
-    pub fn openai(api_key: String) -> Self {
-        Self {
+    pub fn openai(options: Option<JsProviderOptions>) -> Result<Self> {
+        let api_key = blazen_llm::keys::resolve_api_key("openai", options.and_then(|o| o.api_key))
+            .map_err(blazen_error_to_napi)?;
+        Ok(Self {
             inner: Arc::new(blazen_llm::providers::openai::OpenAiEmbeddingModel::new(
                 api_key,
             )),
-        }
+        })
     }
 
     /// Create a Together AI embedding model.
     ///
     /// Defaults to `togethercomputer/m2-bert-80M-8k-retrieval` (768 dimensions).
     #[napi(factory)]
-    pub fn together(api_key: String) -> Self {
-        Self {
+    pub fn together(options: Option<JsProviderOptions>) -> Result<Self> {
+        let opts = options.map(Into::into).unwrap_or_default();
+        Ok(Self {
             inner: Arc::new(
-                blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::new(
-                    OpenAiCompatConfig {
-                        provider_name: "together".into(),
-                        base_url: "https://api.together.xyz/v1".into(),
-                        api_key,
-                        default_model: String::new(),
-                        auth_method: AuthMethod::Bearer,
-                        extra_headers: Vec::new(),
-                        query_params: Vec::new(),
-                        supports_model_listing: false,
-                    },
-                    "togethercomputer/m2-bert-80M-8k-retrieval",
-                    768,
-                ),
+                blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::embedding_from_options("together", opts)
+                    .map_err(blazen_error_to_napi)?,
             ),
-        }
+        })
     }
 
     /// Create a Cohere embedding model.
     ///
     /// Defaults to `embed-v4.0` (1024 dimensions).
     #[napi(factory)]
-    pub fn cohere(api_key: String) -> Self {
-        Self {
+    pub fn cohere(options: Option<JsProviderOptions>) -> Result<Self> {
+        let opts = options.map(Into::into).unwrap_or_default();
+        Ok(Self {
             inner: Arc::new(
-                blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::new(
-                    OpenAiCompatConfig {
-                        provider_name: "cohere".into(),
-                        base_url: "https://api.cohere.ai/compatibility/v1".into(),
-                        api_key,
-                        default_model: String::new(),
-                        auth_method: AuthMethod::Bearer,
-                        extra_headers: Vec::new(),
-                        query_params: Vec::new(),
-                        supports_model_listing: false,
-                    },
-                    "embed-v4.0",
-                    1024,
-                ),
+                blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::embedding_from_options("cohere", opts)
+                    .map_err(blazen_error_to_napi)?,
             ),
-        }
+        })
     }
 
     /// Create a Fireworks AI embedding model.
     ///
     /// Defaults to `nomic-ai/nomic-embed-text-v1.5` (768 dimensions).
     #[napi(factory)]
-    pub fn fireworks(api_key: String) -> Self {
-        Self {
+    pub fn fireworks(options: Option<JsProviderOptions>) -> Result<Self> {
+        let opts = options.map(Into::into).unwrap_or_default();
+        Ok(Self {
             inner: Arc::new(
-                blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::new(
-                    OpenAiCompatConfig {
-                        provider_name: "fireworks".into(),
-                        base_url: "https://api.fireworks.ai/inference/v1".into(),
-                        api_key,
-                        default_model: String::new(),
-                        auth_method: AuthMethod::Bearer,
-                        extra_headers: Vec::new(),
-                        query_params: Vec::new(),
-                        supports_model_listing: false,
-                    },
-                    "nomic-ai/nomic-embed-text-v1.5",
-                    768,
-                ),
+                blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::embedding_from_options("fireworks", opts)
+                    .map_err(blazen_error_to_napi)?,
             ),
-        }
+        })
     }
 
     // -----------------------------------------------------------------

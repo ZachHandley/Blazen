@@ -255,7 +255,7 @@ async def main() -> None:
     # CompletionModel is a native Rust object (not JSON-serializable), so we
     # store it as a module-level variable rather than in ctx.set().
     global MODEL
-    MODEL = CompletionModel.fal(fal_key)
+    MODEL = CompletionModel.fal(options=FalOptions(api_key=fal_key))
 
     # You can also pin a specific model, endpoint, or the enterprise tier
     # by constructing a ``FalOptions`` and passing it as ``options=``. The
@@ -267,7 +267,7 @@ async def main() -> None:
         enterprise=True,
     )
     _ = enterprise_opts  # silence "unused" lint
-    # MODEL = CompletionModel.fal(fal_key, options=enterprise_opts)
+    # MODEL = CompletionModel.fal(options=enterprise_opts)
 
     print(f"Using model: {MODEL.model_id}")
     print("NOTE: fal.ai uses a queue-based architecture. Each call involves")
@@ -328,7 +328,7 @@ async def main() -> None:
         except Exception as exc:
             print(f"[{demo.__name__}] skipped: {exc}")
 
-    provider = FalProvider(api_key=fal_key)
+    provider = FalProvider(options=FalOptions(api_key=fal_key))
     for demo in (demo_embeddings, demo_generate_3d, demo_remove_background):
         try:
             await demo(provider)

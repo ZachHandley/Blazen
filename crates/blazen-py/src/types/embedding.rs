@@ -5,10 +5,10 @@ use std::sync::Arc;
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
+use crate::error::{BlazenPyError, blazen_error_to_pyerr};
+use crate::providers::options::PyProviderOptions;
 use blazen_llm::EmbeddingModel;
-use blazen_llm::providers::openai_compat::{AuthMethod, OpenAiCompatConfig};
-
-use crate::error::BlazenPyError;
+use blazen_llm::keys::resolve_api_key;
 
 // ---------------------------------------------------------------------------
 // PyEmbeddingModel
@@ -40,96 +40,72 @@ impl PyEmbeddingModel {
     /// Create an OpenAI embedding model.
     ///
     /// Args:
-    ///     api_key: Your OpenAI API key.
+    ///     options: Optional typed ``ProviderOptions`` object.
     ///     model: Optional model name (default: "text-embedding-3-small").
     ///     dimensions: Optional output dimensions (default: 1536).
     #[staticmethod]
-    #[pyo3(signature = (api_key, model=None, dimensions=None))]
-    fn openai(api_key: &str, model: Option<&str>, dimensions: Option<usize>) -> Self {
-        let mut provider = blazen_llm::providers::openai::OpenAiEmbeddingModel::new(api_key);
+    #[pyo3(signature = (*, options=None, model=None, dimensions=None))]
+    fn openai(
+        options: Option<PyRef<'_, PyProviderOptions>>,
+        model: Option<&str>,
+        dimensions: Option<usize>,
+    ) -> PyResult<Self> {
+        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
+        let api_key = resolve_api_key("openai", opts.api_key).map_err(blazen_error_to_pyerr)?;
+        let mut provider = blazen_llm::providers::openai::OpenAiEmbeddingModel::new(&api_key);
         if let Some(m) = model {
             provider = provider.with_model(m, dimensions.unwrap_or(1536));
         } else if let Some(d) = dimensions {
             provider = provider.with_model("text-embedding-3-small", d);
         }
-        Self {
+        Ok(Self {
             inner: Arc::new(provider),
-        }
+        })
     }
 
     /// Create a Together AI embedding model.
     ///
     /// Args:
-    ///     api_key: Your Together API key.
+    ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
-    fn together(api_key: &str) -> Self {
-        let provider = blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::new(
-            OpenAiCompatConfig {
-                provider_name: "together".into(),
-                base_url: "https://api.together.xyz/v1".into(),
-                api_key: api_key.into(),
-                default_model: String::new(),
-                auth_method: AuthMethod::Bearer,
-                extra_headers: Vec::new(),
-                query_params: Vec::new(),
-                supports_model_listing: false,
-            },
-            "togethercomputer/m2-bert-80M-8k-retrieval",
-            768,
-        );
-        Self {
+    #[pyo3(signature = (*, options=None))]
+    fn together(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
+        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
+        let provider = blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::embedding_from_options("together", opts)
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(Self {
             inner: Arc::new(provider),
-        }
+        })
     }
 
     /// Create a Cohere embedding model.
     ///
     /// Args:
-    ///     api_key: Your Cohere API key.
+    ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
-    fn cohere(api_key: &str) -> Self {
-        let provider = blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::new(
-            OpenAiCompatConfig {
-                provider_name: "cohere".into(),
-                base_url: "https://api.cohere.ai/compatibility/v1".into(),
-                api_key: api_key.into(),
-                default_model: String::new(),
-                auth_method: AuthMethod::Bearer,
-                extra_headers: Vec::new(),
-                query_params: Vec::new(),
-                supports_model_listing: false,
-            },
-            "embed-v4.0",
-            1024,
-        );
-        Self {
+    #[pyo3(signature = (*, options=None))]
+    fn cohere(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
+        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
+        let provider = blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::embedding_from_options("cohere", opts)
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(Self {
             inner: Arc::new(provider),
-        }
+        })
     }
 
     /// Create a Fireworks AI embedding model.
     ///
     /// Args:
-    ///     api_key: Your Fireworks API key.
+    ///     options: Optional typed ``ProviderOptions`` object.
     #[staticmethod]
-    fn fireworks(api_key: &str) -> Self {
-        let provider = blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::new(
-            OpenAiCompatConfig {
-                provider_name: "fireworks".into(),
-                base_url: "https://api.fireworks.ai/inference/v1".into(),
-                api_key: api_key.into(),
-                default_model: String::new(),
-                auth_method: AuthMethod::Bearer,
-                extra_headers: Vec::new(),
-                query_params: Vec::new(),
-                supports_model_listing: false,
-            },
-            "nomic-ai/nomic-embed-text-v1.5",
-            768,
-        );
-        Self {
+    #[pyo3(signature = (*, options=None))]
+    fn fireworks(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
+        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
+        let provider = blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::embedding_from_options("fireworks", opts)
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(Self {
             inner: Arc::new(provider),
-        }
+        })
     }
 
     // -----------------------------------------------------------------

@@ -29,6 +29,7 @@ from blazen import (
     CompletionModel,
     Context,
     Event,
+    ProviderOptions,
     StopEvent,
     Workflow,
     step,
@@ -141,7 +142,7 @@ async def main() -> None:
     # ------------------------------------------------------------------
     # 2. Create the CompletionModel targeting OpenRouter
     # ------------------------------------------------------------------
-    llm = CompletionModel.openrouter(api_key, model=DEFAULT_MODEL)
+    llm = CompletionModel.openrouter(options=ProviderOptions(api_key=api_key, model=DEFAULT_MODEL))
     print(f"Using model: {llm.model_id}")
     print()
 

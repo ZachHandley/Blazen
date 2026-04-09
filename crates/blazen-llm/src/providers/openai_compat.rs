@@ -830,6 +830,73 @@ impl OpenAiCompatEmbeddingModel {
     }
 }
 
+/// Default embedding configurations for known providers.
+const EMBEDDING_DEFAULTS: &[(&str, &str, &str, usize)] = &[
+    // (provider_name, base_url, default_model, dimensions)
+    (
+        "together",
+        "https://api.together.xyz/v1",
+        "togethercomputer/m2-bert-80M-8k-retrieval",
+        768,
+    ),
+    (
+        "cohere",
+        "https://api.cohere.ai/compatibility/v1",
+        "embed-v4.0",
+        1024,
+    ),
+    (
+        "fireworks",
+        "https://api.fireworks.ai/inference/v1",
+        "nomic-ai/nomic-embed-text-v1.5",
+        768,
+    ),
+];
+
+impl OpenAiCompatEmbeddingModel {
+    /// Construct an embedding model for a known provider from
+    /// [`ProviderOptions`](crate::types::provider_options::ProviderOptions).
+    ///
+    /// Resolves the API key from `opts.api_key` or the provider's
+    /// environment variable, then applies default base URL, model, and
+    /// dimensions for the provider (overridable via `opts`).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BlazenError::Auth`] if the API key cannot be resolved, or
+    /// [`BlazenError::InvalidArg`] if the provider name is unknown.
+    pub fn embedding_from_options(
+        provider: &str,
+        opts: crate::types::provider_options::ProviderOptions,
+    ) -> Result<Self, crate::BlazenError> {
+        let (_, default_url, default_model, default_dims) = EMBEDDING_DEFAULTS
+            .iter()
+            .find(|(name, _, _, _)| *name == provider)
+            .ok_or_else(|| crate::BlazenError::Unsupported {
+                message: format!("unknown embedding provider: {provider}"),
+            })?;
+
+        let api_key = crate::keys::resolve_api_key(provider, opts.api_key)?;
+        let base_url = opts.base_url.unwrap_or_else(|| (*default_url).to_owned());
+        let model = opts.model.unwrap_or_else(|| (*default_model).to_owned());
+
+        Ok(Self::new(
+            OpenAiCompatConfig {
+                provider_name: provider.into(),
+                base_url,
+                api_key,
+                default_model: String::new(),
+                auth_method: AuthMethod::Bearer,
+                extra_headers: Vec::new(),
+                query_params: Vec::new(),
+                supports_model_listing: false,
+            },
+            model,
+            *default_dims,
+        ))
+    }
+}
+
 impl OpenAiCompatEmbeddingModel {
     // -----------------------------------------------------------------------
     // Builder methods

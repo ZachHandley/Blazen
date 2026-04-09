@@ -236,6 +236,10 @@ class AzureOptions:
     Options specific to Azure OpenAI.
     """
     @property
+    def api_key(self) -> typing.Optional[builtins.str]: ...
+    @api_key.setter
+    def api_key(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
     def model(self) -> typing.Optional[builtins.str]: ...
     @model.setter
     def model(self, value: typing.Optional[builtins.str]) -> None: ...
@@ -255,13 +259,14 @@ class AzureOptions:
     def api_version(self) -> typing.Optional[builtins.str]: ...
     @api_version.setter
     def api_version(self, value: typing.Optional[builtins.str]) -> None: ...
-    def __new__(cls, resource_name: builtins.str, deployment_name: builtins.str, *, model: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, api_version: typing.Optional[builtins.str] = None) -> AzureOptions:
+    def __new__(cls, resource_name: builtins.str, deployment_name: builtins.str, *, api_key: typing.Optional[builtins.str] = None, model: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, api_version: typing.Optional[builtins.str] = None) -> AzureOptions:
         r"""
         Create a new AzureOptions.
         
         Args:
             resource_name: Azure resource name (required).
             deployment_name: Azure deployment name (required).
+            api_key: Override the provider's API key.
             model: Override the default model identifier.
             base_url: Override the provider's base URL.
             api_version: API version override (e.g. "2024-02-15-preview").
@@ -286,6 +291,10 @@ class BedrockOptions:
     Options specific to AWS Bedrock.
     """
     @property
+    def api_key(self) -> typing.Optional[builtins.str]: ...
+    @api_key.setter
+    def api_key(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
     def model(self) -> typing.Optional[builtins.str]: ...
     @model.setter
     def model(self, value: typing.Optional[builtins.str]) -> None: ...
@@ -297,12 +306,13 @@ class BedrockOptions:
     def region(self) -> builtins.str: ...
     @region.setter
     def region(self, value: builtins.str) -> None: ...
-    def __new__(cls, region: builtins.str, *, model: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None) -> BedrockOptions:
+    def __new__(cls, region: builtins.str, *, api_key: typing.Optional[builtins.str] = None, model: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None) -> BedrockOptions:
         r"""
         Create a new BedrockOptions.
         
         Args:
             region: AWS region (required, e.g. "us-east-1").
+            api_key: Override the provider's API key.
             model: Override the default model identifier.
             base_url: Override the provider's base URL.
         """
@@ -518,9 +528,9 @@ class CompletionModel:
     provider, then call `complete()` to generate responses.
     
     Example:
-        >>> model = CompletionModel.openai("sk-...")
-        >>> model = CompletionModel.anthropic("sk-ant-...")
-        >>> model = CompletionModel.openrouter("sk-or-...").with_model("meta-llama/llama-3-70b")
+        >>> model = CompletionModel.openai()
+        >>> model = CompletionModel.anthropic()
+        >>> model = CompletionModel.openrouter()
         >>>
         >>> response = await model.complete([
         ...     ChatMessage.user("What is 2+2?")
@@ -535,141 +545,126 @@ class CompletionModel:
             The string identifier of the model.
         """
     @staticmethod
-    def openai(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
+    def openai(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create an OpenAI provider.
         
         Args:
-            api_key: Your OpenAI API key.
             options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def anthropic(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
+    def anthropic(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create an Anthropic provider.
         
         Args:
-            api_key: Your Anthropic API key.
             options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def gemini(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
+    def gemini(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create a Google Gemini provider.
         
         Args:
-            api_key: Your Google API key.
             options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def azure(api_key: builtins.str, *, options: AzureOptions) -> CompletionModel:
+    def azure(*, options: AzureOptions) -> CompletionModel:
         r"""
         Create an Azure OpenAI provider.
         
         Args:
-            api_key: Your Azure API key.
             options: Typed ``AzureOptions`` object with required
                 ``resource_name`` and ``deployment_name``, plus optional
                 ``api_version``.
         """
     @staticmethod
-    def openrouter(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
+    def openrouter(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create an OpenRouter provider.
         
         Args:
-            api_key: Your OpenRouter API key.
             options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def groq(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
+    def groq(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create a Groq provider.
         
         Args:
-            api_key: Your Groq API key.
             options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def together(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
+    def together(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create a Together AI provider.
         
         Args:
-            api_key: Your Together API key.
             options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def mistral(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
+    def mistral(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create a Mistral provider.
         
         Args:
-            api_key: Your Mistral API key.
             options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def deepseek(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
+    def deepseek(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create a DeepSeek provider.
         
         Args:
-            api_key: Your DeepSeek API key.
             options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def fireworks(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
+    def fireworks(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create a Fireworks AI provider.
         
         Args:
-            api_key: Your Fireworks API key.
             options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def perplexity(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
+    def perplexity(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create a Perplexity provider.
         
         Args:
-            api_key: Your Perplexity API key.
             options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def xai(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
+    def xai(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create an xAI (Grok) provider.
         
         Args:
-            api_key: Your xAI API key.
             options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def cohere(api_key: builtins.str, *, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
+    def cohere(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
         r"""
         Create a Cohere provider.
         
         Args:
-            api_key: Your Cohere API key.
             options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def bedrock(api_key: builtins.str, *, options: BedrockOptions) -> CompletionModel:
+    def bedrock(*, options: BedrockOptions) -> CompletionModel:
         r"""
         Create an AWS Bedrock provider.
         
         Args:
-            api_key: Your Bedrock API key.
             options: Typed ``BedrockOptions`` object with required ``region``
                 and optional ``model``.
         """
     @staticmethod
-    def fal(api_key: builtins.str, *, options: typing.Optional[FalOptions] = None) -> CompletionModel:
+    def fal(*, options: typing.Optional[FalOptions] = None) -> CompletionModel:
         r"""
         Create a fal.ai provider.
         
         Args:
-            api_key: Your fal.ai API key.
             options: Optional typed ``FalOptions`` object for selecting the
                 model, endpoint, enterprise tier, and auto-routing. Defaults to
                 the OpenAI-chat endpoint
@@ -1147,38 +1142,38 @@ class EmbeddingModel:
             The number of dimensions in the output vectors.
         """
     @staticmethod
-    def openai(api_key: builtins.str, model: typing.Optional[builtins.str] = None, dimensions: typing.Optional[builtins.int] = None) -> EmbeddingModel:
+    def openai(*, options: typing.Optional[ProviderOptions] = None, model: typing.Optional[builtins.str] = None, dimensions: typing.Optional[builtins.int] = None) -> EmbeddingModel:
         r"""
         Create an OpenAI embedding model.
         
         Args:
-            api_key: Your OpenAI API key.
+            options: Optional typed ``ProviderOptions`` object.
             model: Optional model name (default: "text-embedding-3-small").
             dimensions: Optional output dimensions (default: 1536).
         """
     @staticmethod
-    def together(api_key: builtins.str) -> EmbeddingModel:
+    def together(*, options: typing.Optional[ProviderOptions] = None) -> EmbeddingModel:
         r"""
         Create a Together AI embedding model.
         
         Args:
-            api_key: Your Together API key.
+            options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def cohere(api_key: builtins.str) -> EmbeddingModel:
+    def cohere(*, options: typing.Optional[ProviderOptions] = None) -> EmbeddingModel:
         r"""
         Create a Cohere embedding model.
         
         Args:
-            api_key: Your Cohere API key.
+            options: Optional typed ``ProviderOptions`` object.
         """
     @staticmethod
-    def fireworks(api_key: builtins.str) -> EmbeddingModel:
+    def fireworks(*, options: typing.Optional[ProviderOptions] = None) -> EmbeddingModel:
         r"""
         Create a Fireworks AI embedding model.
         
         Args:
-            api_key: Your Fireworks API key.
+            options: Optional typed ``ProviderOptions`` object.
         """
     def embed(self, texts: typing.Sequence[builtins.str]) -> typing.Any:
         r"""
@@ -1304,6 +1299,10 @@ class FalOptions:
     Options specific to the fal.ai provider.
     """
     @property
+    def api_key(self) -> typing.Optional[builtins.str]: ...
+    @api_key.setter
+    def api_key(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
     def model(self) -> typing.Optional[builtins.str]: ...
     @model.setter
     def model(self, value: typing.Optional[builtins.str]) -> None: ...
@@ -1319,11 +1318,12 @@ class FalOptions:
     def auto_route_modality(self) -> builtins.bool: ...
     @auto_route_modality.setter
     def auto_route_modality(self, value: builtins.bool) -> None: ...
-    def __new__(cls, *, model: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, endpoint: typing.Optional[FalLlmEndpointKind] = None, enterprise: builtins.bool = False, auto_route_modality: builtins.bool = True) -> FalOptions:
+    def __new__(cls, *, api_key: typing.Optional[builtins.str] = None, model: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, endpoint: typing.Optional[FalLlmEndpointKind] = None, enterprise: builtins.bool = False, auto_route_modality: builtins.bool = True) -> FalOptions:
         r"""
         Create a new FalOptions.
         
         Args:
+            api_key: Override the provider's API key.
             model: Override the default model identifier.
             base_url: Override the provider's base URL.
             endpoint: The fal endpoint family (defaults to OpenAiChat).
@@ -1358,12 +1358,11 @@ class FalProvider:
         r"""
         Get the model ID.
         """
-    def __new__(cls, *, api_key: builtins.str, options: typing.Optional[FalOptions] = None) -> FalProvider:
+    def __new__(cls, *, options: typing.Optional[FalOptions] = None) -> FalProvider:
         r"""
         Create a new fal.ai provider.
         
         Args:
-            api_key: Your fal.ai API key.
             options: Optional [`FalOptions`] for model, endpoint, enterprise,
                 and auto-routing configuration.
         """
@@ -2198,6 +2197,10 @@ class ProviderOptions:
     Base options shared by every provider.
     """
     @property
+    def api_key(self) -> typing.Optional[builtins.str]: ...
+    @api_key.setter
+    def api_key(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
     def model(self) -> typing.Optional[builtins.str]: ...
     @model.setter
     def model(self, value: typing.Optional[builtins.str]) -> None: ...
@@ -2205,11 +2208,12 @@ class ProviderOptions:
     def base_url(self) -> typing.Optional[builtins.str]: ...
     @base_url.setter
     def base_url(self, value: typing.Optional[builtins.str]) -> None: ...
-    def __new__(cls, *, model: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None) -> ProviderOptions:
+    def __new__(cls, *, api_key: typing.Optional[builtins.str] = None, model: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None) -> ProviderOptions:
         r"""
         Create a new ProviderOptions.
         
         Args:
+            api_key: Override the provider's API key.
             model: Override the default model identifier.
             base_url: Override the provider's base URL.
         """

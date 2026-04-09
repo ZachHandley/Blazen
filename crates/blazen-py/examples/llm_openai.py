@@ -22,6 +22,7 @@ from blazen import (
     CompletionModel,
     Context,
     Event,
+    ProviderOptions,
     StartEvent,
     StopEvent,
     Workflow,
@@ -176,7 +177,7 @@ async def main() -> None:
     # Stored at module level because CompletionModel is a native object that
     # cannot be serialised into the JSON-based workflow context.
     global MODEL
-    MODEL = CompletionModel.openai(api_key, model="gpt-5.3-chat-latest")
+    MODEL = CompletionModel.openai(options=ProviderOptions(api_key=api_key, model="gpt-5.3-chat-latest"))
 
     # Build the 3-step content pipeline.
     wf = Workflow("content-pipeline", [generate_outline, write_draft, review])
