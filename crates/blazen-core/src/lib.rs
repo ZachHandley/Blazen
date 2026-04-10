@@ -25,23 +25,34 @@
 
 pub mod builder;
 pub mod context;
+#[cfg(feature = "distributed")]
+pub mod distributed;
 pub mod error;
 pub(crate) mod event_loop;
 pub mod handler;
 pub mod session_ref;
 pub mod snapshot;
 pub mod step;
+pub mod step_registry;
 pub mod value;
 pub mod workflow;
 
 pub use builder::{InputHandlerFn, WorkflowBuilder};
 pub use context::Context;
+#[cfg(feature = "distributed")]
+pub use distributed::{PeerClient, RemoteWorkflowRequest, RemoteWorkflowResponse};
 pub use error::{Result, WorkflowError};
 pub use handler::{WorkflowHandler, WorkflowResult};
 pub use session_ref::{
-    RegistryKey, SESSION_REF_TAG, SessionPausePolicy, SessionRefError, SessionRefRegistry,
+    CURRENT_SESSION_REGISTRY, RefLifetime, RegistryKey, RemoteRefDescriptor,
+    SERIALIZED_SESSION_REFS_META_KEY, SESSION_REF_TAG, SessionPausePolicy, SessionRefError,
+    SessionRefRegistry, SessionRefSerializable, current_session_registry, with_session_registry,
 };
-pub use snapshot::{SerializedEvent, WorkflowSnapshot};
+pub use snapshot::{SNAPSHOT_VERSION, SerializedEvent, WorkflowSnapshot};
 pub use step::{StepFn, StepOutput, StepRegistration};
+pub use step_registry::{
+    StepBuilderFn, StepDeserializerRegistry, lookup_step_builder, register_step_builder,
+    registered_step_ids,
+};
 pub use value::{BytesWrapper, StateValue};
-pub use workflow::Workflow;
+pub use workflow::{SessionRefDeserializerFn, Workflow};

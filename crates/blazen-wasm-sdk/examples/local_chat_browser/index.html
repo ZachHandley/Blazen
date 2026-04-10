@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Blazen WASM SDK - Local Chat Browser Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      max-width: 720px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      color: #1a1a2e;
+      background: #f8f9fa;
+    }
+
+    h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+    .subtitle { color: #555; margin-bottom: 1.5rem; }
+
+    #status {
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+    }
+    #status.loading { background: #fff3cd; color: #664d03; }
+    #status.ready   { background: #d1e7dd; color: #0f5132; }
+    #status.error   { background: #f8d7da; color: #842029; }
+
+    .model-info {
+      font-size: 0.85rem;
+      color: #666;
+      margin-bottom: 1.5rem;
+    }
+
+    #chat-log {
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      background: #fff;
+      padding: 1rem;
+      min-height: 300px;
+      max-height: 500px;
+      overflow-y: auto;
+      margin-bottom: 0.75rem;
+    }
+
+    .message {
+      margin-bottom: 0.75rem;
+      line-height: 1.5;
+    }
+    .message:last-child { margin-bottom: 0; }
+
+    .message .role {
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-bottom: 0.15rem;
+    }
+    .message.user .role { color: #4361ee; }
+    .message.assistant .role { color: #2d6a4f; }
+    .message .content {
+      font-size: 0.95rem;
+      white-space: pre-wrap;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .input-row input {
+      flex: 1;
+      padding: 0.6rem 0.8rem;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    .input-row button {
+      padding: 0.6rem 1.2rem;
+      font-size: 1rem;
+      border: none;
+      border-radius: 6px;
+      background: #4361ee;
+      color: #fff;
+      cursor: pointer;
+    }
+    .input-row button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .input-row button:hover:not(:disabled) { background: #3a56d4; }
+
+    .hint {
+      margin-top: 0.5rem;
+      font-size: 0.8rem;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Local Chat in the Browser</h1>
+  <p class="subtitle">
+    On-device LLM chat using <a href="https://webllm.mlc.ai/">WebLLM</a> and
+    the Blazen WASM SDK. No API key required after model download.
+  </p>
+
+  <div id="status" class="loading">Initializing...</div>
+  <div class="model-info" id="model-info"></div>
+
+  <div id="chat-log"></div>
+
+  <div class="input-row">
+    <input id="user-input" type="text" placeholder="Type a message..." disabled />
+    <button id="send-btn" disabled>Send</button>
+  </div>
+  <p class="hint">
+    First message may take 30-60 seconds while WebLLM compiles the model
+    for your GPU. Subsequent messages are fast.
+  </p>
+
+  <!--
+    This example uses ES module imports. Serve it with a local dev server
+    (e.g. `npx serve`) and ensure @blazen/sdk and @mlc-ai/web-llm are
+    available via an import map or a bundler.
+
+    For a zero-build-step setup, uncomment the importmap below.
+  -->
+  <!--
+  <script type="importmap">
+  {
+    "imports": {
+      "@blazen/sdk": "https://cdn.jsdelivr.net/npm/@blazen/sdk/blazen_wasm_sdk.js",
+      "@mlc-ai/web-llm": "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm/lib/index.min.js"
+    }
+  }
+  </script>
+  -->
+
+  <script type="module">
+    import init, { CompletionModel, ChatMessage } from '@blazen/sdk';
+    import * as webllm from '@mlc-ai/web-llm';
+
+    // ----- Configuration -----
+    // Choose a small model that fits in browser GPU memory.
+    // 1B-3B models work well. 7B+ models cause multi-minute cold starts.
+    const MODEL_ID = 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
+
+    // ----- DOM refs -----
+    const statusEl = document.getElementById('status');
+    const modelInfoEl = document.getElementById('model-info');
+    const chatLog = document.getElementById('chat-log');
+    const userInput = document.getElementById('user-input');
+    const sendBtn = document.getElementById('send-btn');
+
+    // ----- Chat history -----
+    // Maintained as plain objects for the WebLLM engine.
+    const conversationHistory = [];
+
+    // ----- Helpers -----
+    function addMessage(role, text) {
+      const div = document.createElement('div');
+      div.className = `message ${role}`;
+      div.innerHTML = `<div class="role">${role}</div><div class="content"></div>`;
+      div.querySelector('.content').textContent = text;
+      chatLog.appendChild(div);
+      chatLog.scrollTop = chatLog.scrollHeight;
+      return div;
+    }
+
+    function updateLastMessage(div, text) {
+      div.querySelector('.content').textContent = text;
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    // ----- Initialize -----
+    let model;
+    let webllmEngine;
+
+    try {
+      // 1. Init the WASM module
+      await init();
+
+      statusEl.textContent = `Loading WebLLM engine for ${MODEL_ID}...`;
+      modelInfoEl.textContent = `Model: ${MODEL_ID} (this may download ~600 MB on first visit)`;
+
+      // 2. Create the WebLLM engine
+      webllmEngine = await webllm.CreateMLCEngine(MODEL_ID, {
+        initProgressCallback: (progress) => {
+          statusEl.textContent = progress.text || `Loading: ${Math.round(progress.progress * 100)}%`;
+        },
+      });
+
+      // 3. Wrap it as a Blazen CompletionModel via fromJsHandler
+      model = CompletionModel.fromJsHandler(
+        MODEL_ID,
+        async (request) => {
+          // `request` is a CompletionRequest-shaped object from Blazen.
+          // Convert Blazen messages to OpenAI chat format for WebLLM.
+          const messages = (request.messages || []).map((m) => ({
+            role: m.role,
+            content: typeof m.content === 'string'
+              ? m.content
+              : m.content?.text || '',
+          }));
+
+          const reply = await webllmEngine.chat.completions.create({
+            messages,
+            temperature: request.temperature ?? 0.7,
+            max_tokens: request.max_tokens ?? 512,
+          });
+
+          const text = reply.choices?.[0]?.message?.content || '';
+
+          return {
+            content: text,
+            toolCalls: [],
+            citations: [],
+            artifacts: [],
+            images: [],
+            audio: [],
+            videos: [],
+            model: MODEL_ID,
+            metadata: {},
+          };
+        },
+      );
+
+      // Ready
+      statusEl.textContent = `Ready. Chatting with ${MODEL_ID} locally in your browser.`;
+      statusEl.className = 'ready';
+      userInput.disabled = false;
+      sendBtn.disabled = false;
+
+    } catch (err) {
+      statusEl.textContent = `Error: ${err.message || err}`;
+      statusEl.className = 'error';
+      console.error(err);
+
+      // -------------------------------------------------------------------
+      // Fallback pattern: if WebLLM fails (no WebGPU, OOM, etc.), you can
+      // fall back to a hosted API model. Uncomment the block below and set
+      // your API key via a proxy or environment variable.
+      // -------------------------------------------------------------------
+      // try {
+      //   const apiModel = CompletionModel.openrouter();
+      //   model = CompletionModel.withFallback([model, apiModel]);
+      //   statusEl.textContent = 'WebLLM unavailable. Using hosted API fallback.';
+      //   statusEl.className = 'ready';
+      //   userInput.disabled = false;
+      //   sendBtn.disabled = false;
+      // } catch (fallbackErr) {
+      //   console.error('Fallback also failed:', fallbackErr);
+      // }
+    }
+
+    // ----- Send handler -----
+    async function sendMessage() {
+      const text = userInput.value.trim();
+      if (!text || !model) return;
+
+      userInput.value = '';
+      sendBtn.disabled = true;
+      userInput.disabled = true;
+
+      // Show user message
+      addMessage('user', text);
+      conversationHistory.push({ role: 'user', content: text });
+
+      // Show placeholder for assistant
+      const assistantDiv = addMessage('assistant', 'Thinking...');
+
+      try {
+        // Build ChatMessage array from history
+        const messages = conversationHistory.map((m) => {
+          if (m.role === 'user') return ChatMessage.user(m.content);
+          if (m.role === 'assistant') return ChatMessage.assistant(m.content);
+          return ChatMessage.system(m.content);
+        });
+
+        const response = await model.complete(messages);
+        const reply = response.content || '(no response)';
+
+        updateLastMessage(assistantDiv, reply);
+        conversationHistory.push({ role: 'assistant', content: reply });
+
+      } catch (err) {
+        updateLastMessage(assistantDiv, `Error: ${err.message || err}`);
+        console.error(err);
+      } finally {
+        sendBtn.disabled = false;
+        userInput.disabled = false;
+        userInput.focus();
+      }
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    userInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+  </script>
+
+</body>
+</html>

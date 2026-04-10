@@ -144,30 +144,33 @@ A chat completion model. Created via static factory methods for each provider.
 
 ### Provider Factory Methods
 
-All providers accept an API key and an optional options object. If `options` is omitted (or `model` is not set within it), the provider's default model is used.
+All providers accept an optional options object containing an `apiKey` (and other provider-specific fields). If `options` is omitted -- or `apiKey` is not set within it -- the key is read from the provider's standard environment variable (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, etc.). If `model` is not set, the provider's default model is used.
 
 | Method | Signature |
 |---|---|
-| `CompletionModel.openai` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.anthropic` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.gemini` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.azure` | `(apiKey: string, options: AzureOptions)` |
-| `CompletionModel.fal` | `(apiKey: string, options?: FalOptions)` |
-| `CompletionModel.openrouter` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.groq` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.together` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.mistral` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.deepseek` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.fireworks` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.perplexity` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.xai` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.cohere` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.bedrock` | `(apiKey: string, options: BedrockOptions)` |
+| `CompletionModel.openai` | `(options?: ProviderOptions)` |
+| `CompletionModel.anthropic` | `(options?: ProviderOptions)` |
+| `CompletionModel.gemini` | `(options?: ProviderOptions)` |
+| `CompletionModel.azure` | `(options: AzureOptions)` |
+| `CompletionModel.fal` | `(options?: FalOptions)` |
+| `CompletionModel.openrouter` | `(options?: ProviderOptions)` |
+| `CompletionModel.groq` | `(options?: ProviderOptions)` |
+| `CompletionModel.together` | `(options?: ProviderOptions)` |
+| `CompletionModel.mistral` | `(options?: ProviderOptions)` |
+| `CompletionModel.deepseek` | `(options?: ProviderOptions)` |
+| `CompletionModel.fireworks` | `(options?: ProviderOptions)` |
+| `CompletionModel.perplexity` | `(options?: ProviderOptions)` |
+| `CompletionModel.xai` | `(options?: ProviderOptions)` |
+| `CompletionModel.cohere` | `(options?: ProviderOptions)` |
+| `CompletionModel.bedrock` | `(options: BedrockOptions)` |
 
 ```typescript
-const model = CompletionModel.openai("sk-...");
-const claude = CompletionModel.anthropic("sk-ant-...", { model: "claude-sonnet-4-20250514" });
-const gemini = CompletionModel.gemini("AIza...", { model: "gemini-2.5-flash" });
+// Read key from OPENAI_API_KEY env var
+const model = CompletionModel.openai();
+
+// Pass an explicit key and override the model
+const claude = CompletionModel.anthropic({ apiKey: "sk-ant-...", model: "claude-sonnet-4-20250514" });
+const gemini = CompletionModel.gemini({ model: "gemini-2.5-flash" });
 ```
 
 ### Properties
@@ -271,8 +274,8 @@ Static factory method. Tries providers in order; falls back on transient errors.
 
 ```typescript
 const model = CompletionModel.withFallback([
-  CompletionModel.openai("sk-..."),
-  CompletionModel.anthropic("sk-ant-..."),
+  CompletionModel.openai(),
+  CompletionModel.anthropic(),
 ]);
 ```
 
@@ -403,7 +406,7 @@ const result = await runAgent(model, messages, tools, toolHandler, options?);
 ```typescript
 import { CompletionModel, ChatMessage, runAgent } from "blazen";
 
-const model = CompletionModel.openai("sk-...");
+const model = CompletionModel.openai();
 
 const result = await runAgent(
   model,
@@ -1155,25 +1158,25 @@ console.log(types.glb);   // "model/gltf-binary"
 
 ## EmbeddingModel
 
-Generate vector embeddings from text. Created via static factory methods.
+Generate vector embeddings from text. Created via static factory methods. Keys are read from environment variables (`OPENAI_API_KEY`, `TOGETHER_API_KEY`, etc.) when `options` is omitted, or can be passed explicitly via `{ apiKey: "..." }`.
 
 ```typescript
 import { EmbeddingModel } from "blazen";
 
-const model = EmbeddingModel.openai("sk-...");
-const together = EmbeddingModel.together("tok-...");
-const cohere = EmbeddingModel.cohere("co-...");
-const fireworks = EmbeddingModel.fireworks("fw-...");
+const model = EmbeddingModel.openai();
+const together = EmbeddingModel.together();
+const cohere = EmbeddingModel.cohere({ apiKey: "co-..." });
+const fireworks = EmbeddingModel.fireworks();
 ```
 
 ### Provider Factory Methods
 
 | Method | Default Model | Default Dimensions |
 |---|---|---|
-| `EmbeddingModel.openai(apiKey)` | `text-embedding-3-small` | 1536 |
-| `EmbeddingModel.together(apiKey)` | `togethercomputer/m2-bert-80M-8k-retrieval` | 768 |
-| `EmbeddingModel.cohere(apiKey)` | `embed-v4.0` | 1024 |
-| `EmbeddingModel.fireworks(apiKey)` | `nomic-ai/nomic-embed-text-v1.5` | 768 |
+| `EmbeddingModel.openai(options?)` | `text-embedding-3-small` | 1536 |
+| `EmbeddingModel.together(options?)` | `togethercomputer/m2-bert-80M-8k-retrieval` | 768 |
+| `EmbeddingModel.cohere(options?)` | `embed-v4.0` | 1024 |
+| `EmbeddingModel.fireworks(options?)` | `nomic-ai/nomic-embed-text-v1.5` | 768 |
 
 ### Properties
 

@@ -49,7 +49,7 @@ use blazen_llm::types::{CompletionRequest, ToolDefinition};
 ///   ``openrouter/router/openai/v1/chat/completions`` -- ``OpenAiChat``)
 ///
 /// Example:
-///     >>> fal = FalProvider(api_key="fal-key-...")
+///     >>> fal = FalProvider(options=FalOptions(api_key="fal-key-..."))
 ///     >>> result = await fal.generate_image(ImageRequest(prompt="a cat in space"))
 ///     >>> response = await fal.complete([ChatMessage.user("Hello!")])
 #[gen_stub_pyclass]
@@ -680,7 +680,7 @@ fn extract_tool_definitions(
 /// Python. Constructed via [`FalProvider::embedding_model`].
 ///
 /// Example:
-///     >>> fal = FalProvider(api_key="fal-...")
+///     >>> fal = FalProvider(options=FalOptions(api_key="fal-..."))
 ///     >>> em = fal.embedding_model()
 ///     >>> resp = await em.embed(["hello", "world"])
 ///     >>> print(len(resp.embeddings))  # 2

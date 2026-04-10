@@ -23,6 +23,7 @@ __all__ = [
     "ComputeResult",
     "ContentPart",
     "Context",
+    "Device",
     "EmbeddingModel",
     "Event",
     "FalEmbeddingModel",
@@ -46,10 +47,12 @@ __all__ = [
     "PromptRegistry",
     "PromptTemplate",
     "ProviderOptions",
+    "Quantization",
     "ResponseFormat",
     "RetryConfig",
     "Role",
     "SessionNamespace",
+    "SessionPausePolicy",
     "SpeechRequest",
     "StartEvent",
     "StateNamespace",
@@ -57,6 +60,7 @@ __all__ = [
     "ThreeDRequest",
     "ThreeDResult",
     "ToolDef",
+    "Transcription",
     "TranscriptionRequest",
     "TranscriptionResult",
     "TranscriptionSegment",
@@ -685,7 +689,7 @@ class CompletionModel:
             A new CompletionModel with retry behaviour.
         
         Example:
-            >>> model = CompletionModel.openai("sk-...").with_retry(RetryConfig(max_retries=5))
+            >>> model = CompletionModel.openai(options=ProviderOptions(api_key="sk-...")).with_retry(RetryConfig(max_retries=5))
         """
     @staticmethod
     def with_fallback(models: typing.Sequence[CompletionModel]) -> CompletionModel:
@@ -703,8 +707,8 @@ class CompletionModel:
             A new CompletionModel that falls back through the providers.
         
         Example:
-            >>> primary = CompletionModel.openai("sk-...")
-            >>> backup = CompletionModel.anthropic("sk-ant-...")
+            >>> primary = CompletionModel.openai(options=ProviderOptions(api_key="sk-..."))
+            >>> backup = CompletionModel.anthropic(options=ProviderOptions(api_key="sk-ant-..."))
             >>> model = CompletionModel.with_fallback([primary, backup])
         """
     def with_cache(self, config: typing.Optional[CacheConfig] = None) -> CompletionModel:
@@ -723,7 +727,7 @@ class CompletionModel:
             A new CompletionModel with caching enabled.
         
         Example:
-            >>> model = CompletionModel.openai("sk-...").with_cache(CacheConfig(ttl_seconds=600))
+            >>> model = CompletionModel.openai(options=ProviderOptions(api_key="sk-...")).with_cache(CacheConfig(ttl_seconds=600))
         """
     def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> typing.Any:
         r"""
@@ -1121,7 +1125,7 @@ class EmbeddingModel:
     provider, then call `embed()` to generate embeddings.
     
     Example:
-        >>> model = EmbeddingModel.openai("sk-...")
+        >>> model = EmbeddingModel.openai(options=ProviderOptions(api_key="sk-..."))
         >>> response = await model.embed(["Hello", "World"])
         >>> print(response.embeddings)
     """
@@ -1266,7 +1270,7 @@ class FalEmbeddingModel:
     Python. Constructed via [`FalProvider::embedding_model`].
     
     Example:
-        >>> fal = FalProvider(api_key="fal-...")
+        >>> fal = FalProvider(options=FalOptions(api_key="fal-..."))
         >>> em = fal.embedding_model()
         >>> resp = await em.embed(["hello", "world"])
         >>> print(len(resp.embeddings))  # 2
@@ -1349,7 +1353,7 @@ class FalProvider:
       ``openrouter/router/openai/v1/chat/completions`` -- ``OpenAiChat``)
     
     Example:
-        >>> fal = FalProvider(api_key="fal-key-...")
+        >>> fal = FalProvider(options=FalOptions(api_key="fal-key-..."))
         >>> result = await fal.generate_image(ImageRequest(prompt="a cat in space"))
         >>> response = await fal.complete([ChatMessage.user("Hello!")])
     """
@@ -1862,7 +1866,7 @@ class Memory:
     ``search_local()`` is available -- no embedding model is required.
     
     Example:
-        >>> embedder = EmbeddingModel.openai(key)
+        >>> embedder = EmbeddingModel.openai(options=ProviderOptions(api_key=key))
         >>> memory = Memory(embedder, InMemoryBackend())
         >>> await memory.add("doc1", "Paris is the capital of France")
         >>> results = await memory.search("France capital", limit=5)
@@ -2491,6 +2495,66 @@ class ToolDef:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class Transcription:
+    r"""
+    An audio transcription provider.
+    
+    Use the static constructor methods to create a transcriber for a specific
+    provider, then call :meth:`transcribe` to convert audio to text.
+    
+    Example:
+        >>> # Local, offline transcription via whisper.cpp
+        >>> opts = WhisperOptions(model=WhisperModel.Base)
+        >>> transcriber = Transcription.whispercpp(options=opts)
+        >>> result = await transcriber.transcribe(
+        ...     TranscriptionRequest.from_file("audio.wav")
+        ... )
+        >>> print(result.text)
+    
+        >>> # Remote transcription via fal.ai (requires API key)
+        >>> transcriber = Transcription.fal()
+        >>> result = await transcriber.transcribe(
+        ...     TranscriptionRequest(audio_url="https://example.com/audio.mp3")
+        ... )
+    """
+    @property
+    def provider_id(self) -> builtins.str:
+        r"""
+        Get the provider identifier (e.g. "fal", "whispercpp").
+        """
+    @staticmethod
+    def fal(*, options: typing.Optional[FalOptions] = None) -> Transcription:
+        r"""
+        Create a fal.ai transcription provider.
+        
+        Requires a fal.ai API key via ``options.api_key`` or the ``FAL_KEY``
+        environment variable. Supports remote audio URLs.
+        
+        Args:
+            options: Optional typed ``FalOptions`` for endpoint, enterprise
+                tier, and modality auto-routing.
+        """
+    def transcribe(self, request: TranscriptionRequest) -> typing.Any:
+        r"""
+        Transcribe an audio clip to text.
+        
+        Args:
+            request: A :class:`TranscriptionRequest` (use
+                :meth:`TranscriptionRequest.from_file` for local backends
+                like whisper.cpp).
+        
+        Returns:
+            A :class:`TranscriptionResult` with ``text``, ``segments``,
+            ``language``, ``timing``, ``cost``, and ``metadata``.
+        
+        Example:
+            >>> req = TranscriptionRequest.from_file("/path/to/audio.wav")
+            >>> result = await transcriber.transcribe(req)
+            >>> print(result.text)
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class TranscriptionRequest:
     r"""
     Typed wrapper for an audio transcription request.
@@ -2504,6 +2568,28 @@ class TranscriptionRequest:
     @property
     def model(self) -> typing.Optional[builtins.str]: ...
     def __new__(cls, *, audio_url: builtins.str, language: typing.Optional[builtins.str] = None, diarize: builtins.bool = False, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> TranscriptionRequest: ...
+    @staticmethod
+    def from_file(path: builtins.str, *, language: typing.Optional[builtins.str] = None, diarize: builtins.bool = False, model: typing.Optional[builtins.str] = None) -> TranscriptionRequest:
+        r"""
+        Create a transcription request from a local file path.
+        
+        This is the preferred constructor for local backends like whisper.cpp
+        that read audio directly from disk. It sets ``audio_source`` to a
+        ``MediaSource::File`` and leaves ``audio_url`` empty.
+        
+        Args:
+            path: Absolute or relative path to a local audio file
+                (16-bit PCM mono 16 kHz WAV for whisper.cpp).
+            language: Optional ISO 639-1 language hint (e.g. "en").
+            diarize: Enable speaker diarization (provider-dependent).
+            model: Optional provider-specific model override.
+        
+        Example:
+            >>> req = TranscriptionRequest.from_file("/path/to/audio.wav")
+            >>> req = TranscriptionRequest.from_file(
+            ...     "/path/to/audio.wav", language="en"
+            ... )
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -2669,7 +2755,7 @@ class Workflow:
         >>> handler = await wf.run({"message": "hello"})
         >>> result = await handler.result()
     """
-    def __new__(cls, name: builtins.str, steps: typing.Sequence[_StepWrapper], timeout: typing.Optional[builtins.float] = None) -> Workflow:
+    def __new__(cls, name: builtins.str, steps: typing.Sequence[_StepWrapper], timeout: typing.Optional[builtins.float] = None, session_pause_policy: typing.Optional[SessionPausePolicy] = None) -> Workflow:
         r"""
         Create a new workflow.
         
@@ -2677,6 +2763,12 @@ class Workflow:
             name: A human-readable name for the workflow.
             steps: A list of `_StepWrapper` objects created by `@step`.
             timeout: Optional timeout in seconds (default: 300).
+            session_pause_policy: How to treat live session refs when the
+                workflow is paused or snapshotted. Defaults to
+                `SessionPausePolicy.PickleOrError`. Use
+                `SessionPausePolicy.PickleOrSerialize` to honour the
+                `__blazen_serialize__` / `__blazen_deserialize__`
+                protocol on value classes.
         """
     def run(self, **kwargs: typing.Any) -> typing.Any:
         r"""
@@ -2716,6 +2808,53 @@ class Workflow:
         Example:
             >>> handler = await Workflow.resume(snapshot_json, [step1, step2])
             >>> result = await handler.result()
+        """
+    @staticmethod
+    def resume_with_session_refs(snapshot_json: builtins.str, steps: typing.Sequence[_StepWrapper], timeout: typing.Optional[builtins.float] = None) -> typing.Any:
+        r"""
+        Resume a workflow from a snapshot, reconstructing every
+        `SessionPausePolicy.PickleOrSerialize` session-ref entry via
+        the Python `__blazen_deserialize__` classmethod on each value's
+        original class.
+        
+        This is the resume-side counterpart of setting
+        `session_pause_policy=SessionPausePolicy.PickleOrSerialize` on
+        the workflow that produced the snapshot. For every entry stored
+        under the snapshot's serialized-session-refs metadata, the
+        class `module.qualname` baked into the payload is imported and
+        `cls.__blazen_deserialize__(data)` is invoked to produce a
+        fresh instance; the rebuilt instance is re-inserted into the
+        resumed workflow's session-ref registry under the *original*
+        [`RegistryKey`] so `__blazen_session_ref__` markers carried in
+        reinjected events keep resolving.
+        
+        Snapshots that do NOT contain any serialized session refs work
+        fine with the plain `Workflow.resume` entrypoint. Use this
+        method only when you need the serializable rehydration path.
+        
+        Args:
+            snapshot_json: A JSON string produced by
+                `WorkflowHandler.snapshot()` from a workflow configured
+                with `SessionPausePolicy.PickleOrSerialize`.
+            steps: A list of `_StepWrapper` objects created by `@step`,
+                equivalent to the set registered on the original
+                workflow.
+            timeout: Optional timeout in seconds (default: no timeout).
+        
+        Returns:
+            A new `WorkflowHandler` for the resumed workflow.
+        
+        Example:
+            >>> class Blob:
+            ...     def __init__(self, n: int) -> None:
+            ...         self.n = n
+            ...     def __blazen_serialize__(self) -> bytes:
+            ...         return self.n.to_bytes(4, "big")
+            ...     @classmethod
+            ...     def __blazen_deserialize__(cls, data: bytes) -> "Blob":
+            ...         return cls(int.from_bytes(data, "big"))
+            >>>
+            >>> handler = await Workflow.resume_with_session_refs(snap, [s])
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -2902,6 +3041,22 @@ class CacheStrategy(enum.Enum):
     Auto = ...
 
 @typing.final
+class Device(enum.Enum):
+    r"""
+    Hardware device selection for compute backends.
+    
+    Example:
+        >>> Device.Cpu
+        >>> Device.Metal
+        >>> Device.Cuda
+    """
+    Cpu = ...
+    Cuda = ...
+    Metal = ...
+    Vulkan = ...
+    Rocm = ...
+
+@typing.final
 class FalLlmEndpointKind(enum.Enum):
     r"""
     Simplified fal.ai endpoint family.
@@ -2911,4 +3066,61 @@ class FalLlmEndpointKind(enum.Enum):
     OpenAiEmbeddings = ...
     OpenRouter = ...
     AnyLlm = ...
+
+@typing.final
+class Quantization(enum.Enum):
+    r"""
+    Model quantization format.
+    
+    Covers IEEE floating-point formats, GGML k-quant levels, and the two
+    most popular GPU quantization schemes (GPTQ, AWQ).
+    
+    Example:
+        >>> opts = MistralRsOptions("my-org/model", quantization=Quantization.Q4KM)
+    """
+    F32 = ...
+    F16 = ...
+    BF16 = ...
+    Q8_0 = ...
+    Q6K = ...
+    Q5KM = ...
+    Q5KS = ...
+    Q4KM = ...
+    Q4KS = ...
+    Q3KM = ...
+    Q2K = ...
+    Gptq4Bit = ...
+    Awq4Bit = ...
+
+@typing.final
+class SessionPausePolicy(enum.Enum):
+    r"""
+    Policy applied to live session references when a workflow is paused
+    or snapshotted.
+    
+    Mirrors the Rust-side
+    [`SessionPausePolicy`](blazen_core::session_ref::SessionPausePolicy)
+    enum. Configure it on a [`Workflow`] by passing
+    `session_pause_policy=SessionPausePolicy.PickleOrSerialize` to the
+    constructor.
+    
+    Variants:
+        PickleOrError: Best-effort pickle each live ref; fail the pause
+            with a descriptive error if a ref is not picklable. This is
+            the default.
+        PickleOrSerialize: Same as `PickleOrError` but also honours the
+            `__blazen_serialize__` / `__blazen_deserialize__` protocol.
+            Values whose class implements those dunders are captured as
+            opaque bytes in snapshot metadata and reconstructed on
+            resume via `Workflow.resume_with_session_refs`.
+        WarnDrop: Log a warning and drop each live ref. The snapshot
+            will no longer contain any references to the dropped
+            values, and downstream `__blazen_session_ref__` markers
+            become unresolved.
+        HardError: Fail the pause immediately if any live refs exist.
+    """
+    PickleOrError = ...
+    PickleOrSerialize = ...
+    WarnDrop = ...
+    HardError = ...
 

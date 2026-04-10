@@ -238,7 +238,7 @@ impl PyMemoryResult {
 /// ``search_local()`` is available -- no embedding model is required.
 ///
 /// Example:
-///     >>> embedder = EmbeddingModel.openai(key)
+///     >>> embedder = EmbeddingModel.openai(options=ProviderOptions(api_key=key))
 ///     >>> memory = Memory(embedder, InMemoryBackend())
 ///     >>> await memory.add("doc1", "Paris is the capital of France")
 ///     >>> results = await memory.search("France capital", limit=5)

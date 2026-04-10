@@ -58,6 +58,13 @@ pub(crate) fn image_content_to_openai(img: &ImageContent) -> serde_json::Value {
             let media_type = img.media_type.as_deref().unwrap_or("image/png");
             format!("data:{media_type};base64,{data}")
         }
+        ImageSource::File { .. } => {
+            tracing::warn!(
+                "openai-compat: local file source is not supported — use a URL or base64 source \
+                 instead; image content dropped."
+            );
+            return serde_json::Value::Null;
+        }
     };
     serde_json::json!({
         "type": "image_url",
@@ -79,6 +86,13 @@ pub(crate) fn content_part_to_openai(part: &ContentPart) -> serde_json::Value {
                 ImageSource::Url { url } => url.clone(),
                 ImageSource::Base64 { data } => {
                     format!("data:{};base64,{data}", file.media_type)
+                }
+                ImageSource::File { .. } => {
+                    tracing::warn!(
+                        "openai-compat: local file source is not supported — use a URL or base64 \
+                         source instead; file content dropped."
+                    );
+                    return serde_json::Value::Null;
                 }
             };
             serde_json::json!({
@@ -107,6 +121,13 @@ pub(crate) fn content_part_to_openai(part: &ContentPart) -> serde_json::Value {
                         "openai-compat: audio URL inputs are not supported; \
                          pass base64 data via AudioContent::from_base64 instead. \
                          Audio content dropped."
+                    );
+                    serde_json::Value::Null
+                }
+                ImageSource::File { .. } => {
+                    tracing::warn!(
+                        "openai-compat: local file source is not supported — use a URL or base64 \
+                         source instead; audio content dropped."
                     );
                     serde_json::Value::Null
                 }

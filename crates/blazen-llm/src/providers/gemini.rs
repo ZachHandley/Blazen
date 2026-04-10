@@ -60,6 +60,13 @@ fn image_content_to_gemini(img: &ImageContent) -> serde_json::Value {
                 }
             })
         }
+        ImageSource::File { .. } => {
+            tracing::warn!(
+                "gemini: local file source is not supported — use a URL or base64 source instead; \
+                 image content dropped."
+            );
+            serde_json::Value::Null
+        }
     }
 }
 
@@ -85,6 +92,13 @@ fn content_part_to_gemini(part: &ContentPart) -> serde_json::Value {
                     }
                 })
             }
+            ImageSource::File { .. } => {
+                tracing::warn!(
+                    "gemini: local file source is not supported — use a URL or base64 source \
+                     instead; file content dropped."
+                );
+                serde_json::Value::Null
+            }
         },
         ContentPart::Audio(audio) => {
             // Gemini natively accepts audio via the same inlineData/fileData
@@ -97,6 +111,13 @@ fn content_part_to_gemini(part: &ContentPart) -> serde_json::Value {
                 ImageSource::Url { url } => serde_json::json!({
                     "fileData": { "mimeType": mime, "fileUri": url }
                 }),
+                ImageSource::File { .. } => {
+                    tracing::warn!(
+                        "gemini: local file source is not supported — use a URL or base64 source \
+                         instead; audio content dropped."
+                    );
+                    serde_json::Value::Null
+                }
             }
         }
         ContentPart::Video(video) => {
@@ -110,6 +131,13 @@ fn content_part_to_gemini(part: &ContentPart) -> serde_json::Value {
                 ImageSource::Url { url } => serde_json::json!({
                     "fileData": { "mimeType": mime, "fileUri": url }
                 }),
+                ImageSource::File { .. } => {
+                    tracing::warn!(
+                        "gemini: local file source is not supported — use a URL or base64 source \
+                         instead; video content dropped."
+                    );
+                    serde_json::Value::Null
+                }
             }
         }
     }

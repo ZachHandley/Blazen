@@ -60,9 +60,13 @@ async def counter(ctx: Context, ev: StartEvent) -> StopEvent:
 ## LLM Integration
 
 ```python
-from blazen import CompletionModel, ChatMessage
+from blazen import CompletionModel, ChatMessage, ProviderOptions
 
-model = CompletionModel.openai("your-api-key")
+# Pass an explicit key via typed options...
+model = CompletionModel.openai(options=ProviderOptions(api_key="your-api-key"))
+
+# ...or omit options to pick up the standard env var (OPENAI_API_KEY):
+# model = CompletionModel.openai()
 
 @step
 async def ask_llm(ctx: Context, ev: StartEvent) -> StopEvent:
@@ -74,14 +78,20 @@ async def ask_llm(ctx: Context, ev: StartEvent) -> StopEvent:
 
 ### Supported Providers
 
+Every provider factory accepts a keyword-only `options` argument. Use
+`ProviderOptions` for simple providers, or the dedicated `AzureOptions` /
+`BedrockOptions` classes for providers with required extra fields. Omit
+`options` entirely to fall back to the provider's standard environment
+variable (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`).
+
 | Provider | Factory |
 |----------|---------|
-| OpenAI | `CompletionModel.openai(api_key)` |
-| Anthropic | `CompletionModel.anthropic(api_key)` |
-| Google Gemini | `CompletionModel.gemini(api_key)` |
-| Azure OpenAI | `CompletionModel.azure(api_key, resource, deployment)` |
-| OpenRouter | `CompletionModel.openrouter(api_key)` |
-| Groq | `CompletionModel.groq(api_key)` |
+| OpenAI | `CompletionModel.openai(options=ProviderOptions(api_key="..."))` |
+| Anthropic | `CompletionModel.anthropic(options=ProviderOptions(api_key="..."))` |
+| Google Gemini | `CompletionModel.gemini(options=ProviderOptions(api_key="..."))` |
+| Azure OpenAI | `CompletionModel.azure(options=AzureOptions(resource_name="...", deployment_name="...", api_key="..."))` |
+| OpenRouter | `CompletionModel.openrouter(options=ProviderOptions(api_key="..."))` |
+| Groq | `CompletionModel.groq(options=ProviderOptions(api_key="..."))` |
 
 ## Package Structure
 
@@ -94,5 +104,8 @@ async def ask_llm(ctx: Context, ev: StartEvent) -> StopEvent:
 | `StopEvent` | Terminates a workflow with a result |
 | `CompletionModel` | LLM provider interface |
 | `ChatMessage` | Message for LLM requests |
+| `ProviderOptions` | Typed options (api_key, model, base_url) for most providers |
+| `AzureOptions` | Typed options for Azure OpenAI |
+| `BedrockOptions` | Typed options for AWS Bedrock |
 | `@step` | Decorator to register step functions |
 "#;

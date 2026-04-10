@@ -1,6 +1,10 @@
 //! Typed request types for media generation operations.
 
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
+
+use crate::types::MediaSource;
 
 // ---------------------------------------------------------------------------
 // Image
@@ -349,6 +353,11 @@ impl MusicRequest {
 pub struct TranscriptionRequest {
     /// URL of the audio file to transcribe.
     pub audio_url: String,
+    /// Alternative to `audio_url` for local file sources. When set,
+    /// this takes precedence over `audio_url`. Used by local backends
+    /// (whisper.cpp, etc.) that read audio directly from disk.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_source: Option<MediaSource>,
     /// Language hint (e.g. "en", "fr").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
@@ -363,16 +372,39 @@ pub struct TranscriptionRequest {
     pub parameters: serde_json::Value,
 }
 
+impl Default for TranscriptionRequest {
+    fn default() -> Self {
+        Self {
+            audio_url: String::new(),
+            audio_source: None,
+            language: None,
+            diarize: false,
+            model: None,
+            parameters: serde_json::Value::Object(serde_json::Map::new()),
+        }
+    }
+}
+
 impl TranscriptionRequest {
     /// Create a new transcription request.
     #[must_use]
     pub fn new(audio_url: impl Into<String>) -> Self {
         Self {
             audio_url: audio_url.into(),
-            language: None,
-            diarize: false,
-            model: None,
-            parameters: serde_json::Value::Object(serde_json::Map::new()),
+            ..Self::default()
+        }
+    }
+
+    /// Create a transcription request from a local file path.
+    ///
+    /// Sets `audio_source` to [`MediaSource::File`] and leaves `audio_url`
+    /// empty. Local backends (whisper.cpp, etc.) will read the file directly
+    /// from disk.
+    #[must_use]
+    pub fn from_file(path: impl Into<PathBuf>) -> Self {
+        Self {
+            audio_source: Some(MediaSource::file(path)),
+            ..Self::default()
         }
     }
 

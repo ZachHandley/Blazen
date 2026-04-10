@@ -34,6 +34,65 @@ fn js_to_provider_options(options: Option<JsProviderOptions>) -> ProviderOptions
     options.map(Into::into).unwrap_or_default()
 }
 
+// ---------------------------------------------------------------------------
+// MistralRs options (manual mirror -- feature-gated)
+// ---------------------------------------------------------------------------
+
+/// Options for the local mistral.rs LLM backend.
+///
+/// `modelId` is required (`HuggingFace` model ID or local GGUF path).
+/// All other fields are optional.
+///
+/// ```javascript
+/// const model = CompletionModel.mistralrs({
+///   modelId: "mistralai/Mistral-7B-Instruct-v0.3",
+///   device: "cuda:0",
+///   quantization: "q4_k_m",
+/// });
+/// ```
+#[cfg(feature = "mistralrs")]
+#[napi(object)]
+pub struct JsMistralRsOptions {
+    /// `HuggingFace` model ID or local GGUF path.
+    #[napi(js_name = "modelId")]
+    pub model_id: String,
+    /// Quantization format string (e.g. `"q4_k_m"`, `"f16"`, `"gptq-4bit"`).
+    pub quantization: Option<String>,
+    /// Hardware device string (e.g. `"cpu"`, `"cuda:0"`, `"metal"`).
+    pub device: Option<String>,
+    /// Maximum context length in tokens.
+    #[napi(js_name = "contextLength")]
+    pub context_length: Option<u32>,
+    /// Maximum batch size for concurrent requests.
+    #[napi(js_name = "maxBatchSize")]
+    pub max_batch_size: Option<u32>,
+    /// Jinja2 chat template override.
+    #[napi(js_name = "chatTemplate")]
+    pub chat_template: Option<String>,
+    /// Path to cache downloaded models.
+    #[napi(js_name = "cacheDir")]
+    pub cache_dir: Option<String>,
+}
+
+#[cfg(feature = "mistralrs")]
+impl From<JsMistralRsOptions> for blazen_llm::MistralRsOptions {
+    fn from(val: JsMistralRsOptions) -> Self {
+        Self {
+            model_id: val.model_id,
+            quantization: val.quantization,
+            device: val.device,
+            context_length: val.context_length.map(|v| v as usize),
+            max_batch_size: val.max_batch_size.map(|v| v as usize),
+            chat_template: val.chat_template,
+            cache_dir: val.cache_dir.map(std::path::PathBuf::from),
+            // Vision input is not yet surfaced through the Node binding.
+            // Users must construct `MistralRsOptions` directly in Rust to
+            // enable vision mode.
+            vision: false,
+        }
+    }
+}
+
 /// Stream callback: takes a typed `JsStreamChunk`, returns nothing meaningful.
 /// `CalleeHandled = false` to avoid the error-first callback convention.
 /// `Weak = true` so it does not prevent Node.js from exiting.
@@ -49,7 +108,7 @@ pub(crate) type StreamChunkCallbackTsfn =
 /// Use the static factory methods to create an instance for your provider:
 ///
 /// ```javascript
-/// const model = CompletionModel.openai("sk-...");
+/// const model = CompletionModel.openai({ apiKey: "sk-..." });
 /// const response = await model.complete([
 ///   ChatMessage.user("What is 2 + 2?")
 /// ]);
@@ -284,7 +343,7 @@ impl JsCompletionModel {
     /// Wrap this model with automatic retry on transient failures.
     ///
     /// ```javascript
-    /// const model = CompletionModel.openrouter(key);
+    /// const model = CompletionModel.openrouter({ apiKey: key });
     /// const withRetry = model.withRetry({ maxRetries: 3, initialDelayMs: 1000 });
     /// ```
     #[napi(js_name = "withRetry")]
@@ -536,5 +595,34 @@ impl JsCompletionModel {
             }
         }
         Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Feature-gated mistralrs factory (separate impl block required by napi-derive)
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "mistralrs")]
+#[napi]
+#[allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
+impl JsCompletionModel {
+    /// Create a local mistral.rs completion model.
+    ///
+    /// Runs LLM inference entirely on-device -- no API key required.
+    ///
+    /// ```javascript
+    /// const model = CompletionModel.mistralrs({
+    ///   modelId: "mistralai/Mistral-7B-Instruct-v0.3",
+    /// });
+    /// ```
+    #[napi(factory)]
+    pub fn mistralrs(options: JsMistralRsOptions) -> Result<Self> {
+        let opts: blazen_llm::MistralRsOptions = options.into();
+        Ok(Self {
+            inner: Arc::new(
+                blazen_llm::MistralRsProvider::from_options(opts)
+                    .map_err(|e| napi::Error::from_reason(e.to_string()))?,
+            ),
+        })
     }
 }

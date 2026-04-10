@@ -17,6 +17,47 @@ use blazen_llm::traits::EmbeddingModel;
 
 use blazen_llm::FetchHttpClient;
 
+use crate::js_embedding::JsEmbeddingHandler;
+
+// ---------------------------------------------------------------------------
+// TransformersJsOptions
+// ---------------------------------------------------------------------------
+
+/// Options for the `EmbeddingModel.transformersJs()` convenience factory.
+///
+/// Controls quantisation and declared embedding dimensions for models loaded
+/// via `@huggingface/transformers` (formerly `@xenova/transformers`).
+#[wasm_bindgen(js_name = "TransformersJsOptions")]
+pub struct TransformersJsOptions {
+    /// Whether to load the quantized (ONNX int8) variant of the model.
+    /// Defaults to `true`.
+    pub quantized: bool,
+
+    /// The dimensionality of the embedding vectors produced by the model.
+    /// Defaults to 384 (correct for `all-MiniLM-L6-v2` and similar small
+    /// sentence-transformer models).
+    pub dimensions: u32,
+}
+
+#[wasm_bindgen(js_class = "TransformersJsOptions")]
+impl TransformersJsOptions {
+    /// Create default options (`quantized: true`, `dimensions: 384`).
+    #[wasm_bindgen(constructor)]
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            quantized: true,
+            dimensions: 384,
+        }
+    }
+}
+
+impl Default for TransformersJsOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // ---------------------------------------------------------------------------
 // WasmEmbeddingModel
 // ---------------------------------------------------------------------------
@@ -38,6 +79,19 @@ pub struct WasmEmbeddingModel {
 // SAFETY: WASM is single-threaded.
 unsafe impl Send for WasmEmbeddingModel {}
 unsafe impl Sync for WasmEmbeddingModel {}
+
+impl WasmEmbeddingModel {
+    /// Access the inner `Arc<dyn EmbeddingModel>` for use by other crate modules.
+    pub(crate) fn inner_arc(&self) -> Arc<dyn EmbeddingModel> {
+        Arc::clone(&self.inner)
+    }
+}
+
+#[wasm_bindgen(typescript_custom_section)]
+const TS_EMBED_HANDLER: &str = r#"
+/** Callback for local/in-browser embedding via `EmbeddingModel.fromJsHandler`. */
+export type EmbedHandler = (texts: string[]) => Promise<Float32Array[]> | Float32Array[];
+"#;
 
 /// Create an `OpenAiCompatEmbeddingModel` backed by the fetch HTTP client.
 fn compat_embedding_with_fetch(model: OpenAiCompatEmbeddingModel) -> OpenAiCompatEmbeddingModel {
@@ -147,6 +201,111 @@ impl WasmEmbeddingModel {
             ));
         Ok(Self {
             inner: Arc::new(model),
+        })
+    }
+
+    /// Create an embedding model backed by a JavaScript callback function.
+    ///
+    /// The handler receives a `string[]` and must return
+    /// `Promise<Float32Array[]> | Float32Array[]`.
+    ///
+    /// This lets you wrap local inference libraries like `transformers.js` or
+    /// ONNX Runtime Web:
+    ///
+    /// ```js
+    /// const embedder = EmbeddingModel.fromJsHandler(
+    ///   'all-MiniLM-L6-v2',
+    ///   384,
+    ///   async (texts) => {
+    ///     const results = await pipe(texts, { pooling: 'mean', normalize: true });
+    ///     return Array.from({ length: texts.length }, (_, i) => results[i].data);
+    ///   },
+    /// );
+    /// ```
+    #[must_use]
+    #[wasm_bindgen(js_name = "fromJsHandler")]
+    pub fn from_js_handler(
+        model_id: String,
+        dimensions: u32,
+        handler: js_sys::Function,
+    ) -> Self {
+        let wrapper = JsEmbeddingHandler::new(model_id, dimensions as usize, handler);
+        Self {
+            inner: Arc::new(wrapper),
+        }
+    }
+
+    /// Create an embedding model backed by `@huggingface/transformers`.
+    ///
+    /// The library is **dynamically imported** on the first `embed()` call,
+    /// so there is no top-level `await` and the WASM init path stays
+    /// synchronous.  If the package is not installed the first call fails
+    /// with a clear import error.
+    ///
+    /// **Requires:** `npm install @huggingface/transformers`
+    ///
+    /// # Errors
+    ///
+    /// This factory itself is infallible in practice; errors from the dynamic
+    /// import surface at `embed()` call time, not here.
+    ///
+    /// ```js
+    /// const embedder = EmbeddingModel.transformersJs('Xenova/all-MiniLM-L6-v2');
+    /// const vecs = await embedder.embed(['Hello world']);
+    /// ```
+    #[allow(clippy::needless_pass_by_value)] // wasm_bindgen requires owned args
+    #[wasm_bindgen(js_name = "transformersJs")]
+    pub fn transformers_js(
+        model_id: String,
+        options: Option<TransformersJsOptions>,
+    ) -> Result<WasmEmbeddingModel, JsValue> {
+        let quantized = options.as_ref().is_none_or(|o| o.quantized);
+        let dimensions = options.as_ref().map_or(384, |o| o.dimensions);
+
+        // Build a JS function body that lazily imports @huggingface/transformers,
+        // creates a feature-extraction pipeline (cached on globalThis), and
+        // returns Float32Array[] for each input text.
+        //
+        // The cache key includes the model id so different models can coexist.
+        let cache_key = format!(
+            "__blazen_embed_pipeline_{}",
+            model_id.replace(['/', '-', '.'], "_")
+        );
+
+        // Note: we use named `format!` args rather than inline captures because
+        // the `{{` / `}}` escaping for JS object literals conflicts with inline
+        // capture syntax and makes the template less readable.
+        #[allow(clippy::uninlined_format_args)]
+        let handler_body = format!(
+            r"
+            const {{ pipeline }} = await import('@huggingface/transformers');
+            if (!globalThis['{cache_key}']) {{
+                globalThis['{cache_key}'] = await pipeline(
+                    'feature-extraction',
+                    '{model_id}',
+                    {{ quantized: {quantized} }}
+                );
+            }}
+            const pipe = globalThis['{cache_key}'];
+            const results = [];
+            for (const text of texts) {{
+                const output = await pipe(text, {{ pooling: 'mean', normalize: true }});
+                results.push(new Float32Array(output.data));
+            }}
+            return results;
+            ",
+            cache_key = cache_key,
+            model_id = model_id,
+            quantized = quantized,
+        );
+
+        // `new Function("texts", body)` creates `function anonymous(texts) { body }`.
+        let handler = js_sys::Function::new_with_args("texts", &handler_body);
+
+        let wrapper =
+            JsEmbeddingHandler::new(model_id, dimensions as usize, handler);
+        Ok(Self {
+            inner: Arc::new(wrapper),
         })
     }
 

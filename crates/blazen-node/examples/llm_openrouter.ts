@@ -46,7 +46,7 @@ if (!apiKey) {
 // ---------------------------------------------------------------------------
 // 2. Create the CompletionModel targeting OpenRouter
 // ---------------------------------------------------------------------------
-const llm: CompletionModel = CompletionModel.openrouter(apiKey);
+const llm: CompletionModel = CompletionModel.openrouter({ apiKey });
 console.log(`Using model: ${DEFAULT_MODEL}`);
 console.log();
 

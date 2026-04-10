@@ -140,7 +140,8 @@ Build messages with the `ChatMessage` class and `Role` enum:
 import { CompletionModel, ChatMessage, Role } from "blazen";
 import type { CompletionResponse, ToolCall, TokenUsage } from "blazen";
 
-const model = CompletionModel.openrouter(process.env.OPENROUTER_API_KEY!);
+const model = CompletionModel.openrouter({ apiKey: process.env.OPENROUTER_API_KEY! });
+// or rely on the OPENROUTER_API_KEY env var: CompletionModel.openrouter();
 
 // Using static factory methods (recommended)
 const response: CompletionResponse = await model.complete([
@@ -207,30 +208,39 @@ const response = await model.completeWithOptions(
 
 ### All 15 Providers
 
+Every factory method takes a single options object (or no argument, to read the API key from environment variables). Pass `{ apiKey, model, baseUrl, ... }` to override defaults.
+
 | Factory Method | Provider |
 |---|---|
-| `CompletionModel.openai(apiKey)` | OpenAI |
-| `CompletionModel.anthropic(apiKey)` | Anthropic |
-| `CompletionModel.gemini(apiKey)` | Google Gemini |
-| `CompletionModel.azure(apiKey, resourceName, deploymentName)` | Azure OpenAI |
-| `CompletionModel.openrouter(apiKey)` | OpenRouter |
-| `CompletionModel.groq(apiKey)` | Groq |
-| `CompletionModel.together(apiKey)` | Together AI |
-| `CompletionModel.mistral(apiKey)` | Mistral AI |
-| `CompletionModel.deepseek(apiKey)` | DeepSeek |
-| `CompletionModel.fireworks(apiKey)` | Fireworks AI |
-| `CompletionModel.perplexity(apiKey)` | Perplexity |
-| `CompletionModel.xai(apiKey)` | xAI / Grok |
-| `CompletionModel.cohere(apiKey)` | Cohere |
-| `CompletionModel.bedrock(apiKey, region)` | AWS Bedrock |
-| `CompletionModel.fal(apiKey)` | fal.ai |
+| `CompletionModel.openai({ apiKey })` | OpenAI |
+| `CompletionModel.anthropic({ apiKey })` | Anthropic |
+| `CompletionModel.gemini({ apiKey })` | Google Gemini |
+| `CompletionModel.azure({ apiKey, resourceName, deploymentName })` | Azure OpenAI |
+| `CompletionModel.openrouter({ apiKey })` | OpenRouter |
+| `CompletionModel.groq({ apiKey })` | Groq |
+| `CompletionModel.together({ apiKey })` | Together AI |
+| `CompletionModel.mistral({ apiKey })` | Mistral AI |
+| `CompletionModel.deepseek({ apiKey })` | DeepSeek |
+| `CompletionModel.fireworks({ apiKey })` | Fireworks AI |
+| `CompletionModel.perplexity({ apiKey })` | Perplexity |
+| `CompletionModel.xai({ apiKey })` | xAI / Grok |
+| `CompletionModel.cohere({ apiKey })` | Cohere |
+| `CompletionModel.bedrock({ apiKey, region })` | AWS Bedrock |
+| `CompletionModel.fal({ apiKey })` | fal.ai |
+
+Omit the argument entirely to fall back to provider-specific environment variables (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`):
+
+```typescript
+const model = CompletionModel.openai(); // reads OPENAI_API_KEY
+```
 
 ### Using LLMs Inside Workflows
 
 ```typescript
 import { Workflow, CompletionModel, ChatMessage } from "blazen";
 
-const model = CompletionModel.openai(process.env.OPENAI_API_KEY!);
+const model = CompletionModel.openai({ apiKey: process.env.OPENAI_API_KEY! });
+// or rely on the OPENAI_API_KEY env var: CompletionModel.openai();
 
 const wf = new Workflow("llm-workflow");
 

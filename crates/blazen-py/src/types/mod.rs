@@ -15,6 +15,7 @@ pub mod response_format;
 pub mod stream;
 pub mod tokens;
 pub mod tool;
+pub mod transcription;
 pub mod usage;
 
 pub use artifact::PyArtifact;
@@ -35,4 +36,5 @@ pub use response_format::PyResponseFormat;
 pub use stream::StreamChunk;
 pub use tokens::{count_message_tokens, estimate_tokens};
 pub use tool::ToolCall;
+pub use transcription::PyTranscription;
 pub use usage::{RequestTiming, TokenUsage};

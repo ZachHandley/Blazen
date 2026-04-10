@@ -1,0 +1,42 @@
+[package]
+name = "blazen-peer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "Distributed workflow execution peer for Blazen — gRPC server + client over tonic"
+
+[dependencies]
+tonic = { workspace = true, features = ["tls-aws-lc"] }
+tonic-prost = { workspace = true }
+prost = { workspace = true }
+postcard = { workspace = true, features = ["alloc"] }
+rustls = { workspace = true, features = ["aws-lc-rs"] }
+tokio-rustls = { workspace = true }
+blazen-core = { workspace = true }
+blazen-events = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tokio-stream = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_bytes = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[build-dependencies]
+tonic-prost-build = { workspace = true }
+
+[features]
+default = ["server", "client"]
+server = []
+client = []
+
+[lints]
+workspace = true

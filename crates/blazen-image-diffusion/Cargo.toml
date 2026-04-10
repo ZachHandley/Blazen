@@ -1,0 +1,34 @@
+[package]
+name = "blazen-image-diffusion"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "Local image generation backend for Blazen using diffusion-rs (pure Rust Stable Diffusion)"
+
+[dependencies]
+# diffusion-rs = { version = "0.1", optional = true }  -- commented until Phase 5.3
+blazen-model-cache = { workspace = true }
+serde = { workspace = true }
+serde_json.workspace = true
+tokio = { workspace = true }
+tracing.workspace = true
+thiserror = { workspace = true }
+
+[features]
+default = []
+# Intended feature flags for Phase 5.3 when the diffusion-rs dep is added:
+#   engine   = ["dep:diffusion-rs"]
+#   cuda     = ["engine", "diffusion-rs/cuda"]
+#   metal    = ["engine", "diffusion-rs/metal"]
+#
+# For now, these are no-op feature flags that exist so that downstream crates
+# can already declare their feature mappings without breaking.
+engine = []
+cuda = ["engine"]
+metal = ["engine"]
+
+[lints]
+workspace = true

@@ -19,15 +19,23 @@
 //! visible from inside the user's `async def` body. Python `ContextVar`s
 //! flow through asyncio Tasks by design, so we use one of those.
 //!
-//! A Tokio `task_local!` (`CURRENT_SESSION_REGISTRY`) is *also* kept as
-//! a fallback for the few synchronous paths that run entirely on the
-//! Tokio worker thread — e.g., a Python step that turns out not to be
-//! a coroutine, the `WorkflowHandler::result` future, or
+//! The Tokio `task_local!`
+//! ([`blazen_core::session_ref::CURRENT_SESSION_REGISTRY`]) is *also*
+//! consulted as a fallback for the few synchronous paths that run
+//! entirely on the Tokio worker thread — e.g., a Python step that turns
+//! out not to be a coroutine, the `WorkflowHandler::result` future, or
 //! `PyEventStream::__anext__`.
 //!
 //! [`current_session_registry`] consults the Python `ContextVar` first
 //! (via `Python::attach`) and falls back to the Tokio `task_local!` if
 //! Python doesn't have a registry installed.
+//!
+//! The task-local, its `with_session_registry` scoper, and its
+//! `current_session_registry` reader all live in `blazen-core` so that
+//! Node bindings (which do not need the Python contextvar shim) can
+//! reuse the exact same plumbing. This module re-exports the names so
+//! existing `use crate::workflow::session_ref::...` imports inside
+//! `blazen-py` keep compiling.
 
 use std::sync::Arc;
 
@@ -36,13 +44,8 @@ use pyo3::sync::PyOnceLock;
 use pyo3_stub_gen::derive::gen_stub_pyclass;
 
 use blazen_core::session_ref::SessionRefRegistry;
-
-tokio::task_local! {
-    /// Tokio-side fallback for the active session-ref registry. Used by
-    /// the handler-result and stream-event paths, which run on the Tokio
-    /// worker thread that awaits the result oneshot.
-    pub static CURRENT_SESSION_REGISTRY: Arc<SessionRefRegistry>;
-}
+#[doc(inline)]
+pub use blazen_core::session_ref::{CURRENT_SESSION_REGISTRY, with_session_registry};
 
 /// Opaque PyO3-visible holder for an `Arc<SessionRefRegistry>`. Stored
 /// inside the Python `ContextVar` so the user-side asyncio Task can
@@ -148,9 +151,10 @@ pub(crate) fn current_session_registry() -> Option<Arc<SessionRefRegistry>> {
     if let Some(reg) = Python::attach(current_session_registry_py) {
         return Some(reg);
     }
-    // Fallback: the Tokio task_local!, used by the handler-result and
-    // stream-event paths that run on the Tokio worker thread.
-    CURRENT_SESSION_REGISTRY.try_with(Arc::clone).ok()
+    // Fallback: the Tokio task_local! that lives in `blazen-core`, used
+    // by the handler-result and stream-event paths that run on the
+    // Tokio worker thread.
+    blazen_core::session_ref::current_session_registry()
 }
 
 /// Python-side lookup helper. Returns `None` if the contextvar isn't set
@@ -165,64 +169,7 @@ fn current_session_registry_py(py: Python<'_>) -> Option<Arc<SessionRefRegistry>
     Some(Arc::clone(&handle.inner))
 }
 
-/// Run an async block with the given registry installed as the current
-/// Tokio `task_local!`. Used by paths that run on the Tokio worker
-/// thread (handler result, stream events) where Python contextvars are
-/// not yet on the stack.
-pub(crate) async fn with_session_registry<F, T>(registry: Arc<SessionRefRegistry>, fut: F) -> T
-where
-    F: std::future::Future<Output = T>,
-{
-    CURRENT_SESSION_REGISTRY.scope(registry, fut).await
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn current_returns_none_outside_scope() {
-        assert!(current_session_registry().is_none());
-    }
-
-    #[tokio::test]
-    async fn current_returns_registry_inside_tokio_scope() {
-        let reg = Arc::new(SessionRefRegistry::new());
-        let reg_clone = Arc::clone(&reg);
-        with_session_registry(reg, async move {
-            let got = current_session_registry().expect("registry should be set");
-            assert!(Arc::ptr_eq(&got, &reg_clone));
-        })
-        .await;
-    }
-
-    #[tokio::test]
-    async fn scope_isolates_concurrent_tasks() {
-        // Two concurrent tasks each get their own registry.
-        let reg_a = Arc::new(SessionRefRegistry::new());
-        let reg_b = Arc::new(SessionRefRegistry::new());
-        let _ = reg_a.insert(1_i32).await.unwrap();
-        let _ = reg_b.insert(2_i32).await.unwrap();
-
-        let a_clone = Arc::clone(&reg_a);
-        let b_clone = Arc::clone(&reg_b);
-
-        let task_a = tokio::spawn(async move {
-            with_session_registry(a_clone, async move {
-                let got = current_session_registry().unwrap();
-                got.len().await
-            })
-            .await
-        });
-        let task_b = tokio::spawn(async move {
-            with_session_registry(b_clone, async move {
-                let got = current_session_registry().unwrap();
-                got.len().await
-            })
-            .await
-        });
-
-        assert_eq!(task_a.await.unwrap(), 1);
-        assert_eq!(task_b.await.unwrap(), 1);
-    }
-}
+// NOTE: `with_session_registry` is re-exported from `blazen_core` at the
+// top of this module. Tokio unit tests covering its semantics live in
+// `blazen-core/src/session_ref.rs` — they are the canonical tests for
+// that infrastructure now that Node bindings share it too.

@@ -60,6 +60,16 @@ pub enum WorkflowError {
     #[error("binary serialization error: {0}")]
     BinarySerialization(String),
 
+    /// Returned when a snapshot was written by a newer version of
+    /// `blazen-core` than the reader supports.
+    #[error("snapshot version {snapshot} is newer than supported version {supported}")]
+    SnapshotVersionMismatch {
+        /// The version recorded in the snapshot being read.
+        snapshot: u32,
+        /// The maximum snapshot version this reader can handle.
+        supported: u32,
+    },
+
     /// The workflow was paused.
     ///
     /// This is not truly an error -- it signals that the workflow event loop
@@ -85,6 +95,16 @@ pub enum WorkflowError {
         /// String-formatted UUIDs of the live session refs that could not
         /// be persisted.
         keys: Vec<String>,
+    },
+
+    /// Returned when a step ID cannot be looked up in the
+    /// [`StepDeserializerRegistry`](crate::step_registry::StepDeserializerRegistry)
+    /// — typically because the peer node that received a distributed
+    /// workflow request doesn't have the same step code compiled in.
+    #[error("unknown step id `{step_id}` — not found in step deserializer registry")]
+    UnknownStep {
+        /// The step ID that could not be resolved.
+        step_id: String,
     },
 
     /// A catch-all for other errors.

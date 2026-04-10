@@ -21,8 +21,10 @@ use crate::builder::InputHandlerFn;
 use crate::context::Context;
 use crate::error::WorkflowError;
 use crate::handler::WorkflowControl;
-use crate::session_ref::SessionPausePolicy;
-use crate::snapshot::WorkflowSnapshot;
+use crate::session_ref::{
+    RefLifetime, SERIALIZED_SESSION_REFS_META_KEY, SessionPausePolicy, SessionRefRegistry,
+};
+use crate::snapshot::{SNAPSHOT_VERSION, WorkflowSnapshot};
 use crate::step::{StepOutput, StepRegistration};
 
 // ---------------------------------------------------------------------------
@@ -56,6 +58,7 @@ async fn save_checkpoint(
     let history = history_buffer.to_vec();
 
     let snapshot = WorkflowSnapshot {
+        version: SNAPSHOT_VERSION,
         workflow_name: workflow_name.to_owned(),
         run_id,
         timestamp: Utc::now(),
@@ -678,6 +681,13 @@ async fn event_loop_inner(
 ///
 /// Enforces the [`SessionPausePolicy`] configured on the context:
 /// - **`HardError`**: returns an error if any live session refs exist.
+/// - **`PickleOrSerialize`**: attempts to serialize entries that opted
+///   in via
+///   [`crate::SessionRefRegistry::insert_serializable`], stashing the
+///   captured bytes under
+///   [`crate::session_ref::SERIALIZED_SESSION_REFS_META_KEY`] in
+///   snapshot metadata. Non-serializable entries fall through to the
+///   same drop-and-warn path as `PickleOrError`.
 /// - **`WarnDrop`** / **`PickleOrError`** (without a pickler): logs a
 ///   warning and stores the dropped keys in snapshot metadata under
 ///   `"__blazen_dropped_session_refs"`.
@@ -695,60 +705,7 @@ async fn build_snapshot_in_place(
     let collected_events = ctx.snapshot_collected().await;
     let mut metadata = ctx.snapshot_metadata().await;
 
-    // ---------------------------------------------------------------
-    // SessionPausePolicy enforcement
-    // ---------------------------------------------------------------
-    let policy = ctx.session_pause_policy().await;
-    let registry = ctx.session_refs_arc().await;
-
-    if !registry.is_empty().await {
-        match policy {
-            SessionPausePolicy::HardError => {
-                let keys: Vec<String> = registry
-                    .keys()
-                    .await
-                    .iter()
-                    .map(std::string::ToString::to_string)
-                    .collect();
-                return Err(WorkflowError::SessionRefsNotSerializable { keys });
-            }
-            SessionPausePolicy::WarnDrop => {
-                let keys = registry.keys().await;
-                if !keys.is_empty() {
-                    let key_strs: Vec<String> =
-                        keys.iter().map(std::string::ToString::to_string).collect();
-                    tracing::warn!(
-                        count = keys.len(),
-                        keys = ?key_strs,
-                        "dropping live session refs from snapshot (WarnDrop policy)"
-                    );
-                    metadata.insert(
-                        "__blazen_dropped_session_refs".to_owned(),
-                        serde_json::to_value(&key_strs).unwrap_or_default(),
-                    );
-                }
-            }
-            SessionPausePolicy::PickleOrError => {
-                // Without a binding-provided pickle hook, behave like WarnDrop.
-                // Future: add a session_pickler callback to WorkflowBuilder.
-                let keys = registry.keys().await;
-                if !keys.is_empty() {
-                    let key_strs: Vec<String> =
-                        keys.iter().map(std::string::ToString::to_string).collect();
-                    tracing::warn!(
-                        count = keys.len(),
-                        keys = ?key_strs,
-                        "dropping live session refs from snapshot \
-                         (PickleOrError policy, no pickler registered)"
-                    );
-                    metadata.insert(
-                        "__blazen_dropped_session_refs".to_owned(),
-                        serde_json::to_value(&key_strs).unwrap_or_default(),
-                    );
-                }
-            }
-        }
-    }
+    apply_session_pause_policy(ctx, &mut metadata).await?;
 
     // ---------------------------------------------------------------
     // Build the snapshot
@@ -757,6 +714,7 @@ async fn build_snapshot_in_place(
     let history = history_buffer.to_vec();
 
     Ok(WorkflowSnapshot {
+        version: SNAPSHOT_VERSION,
         workflow_name: workflow_name.to_owned(),
         run_id,
         timestamp: Utc::now(),
@@ -767,6 +725,182 @@ async fn build_snapshot_in_place(
         #[cfg(feature = "telemetry")]
         history,
     })
+}
+
+/// Walk the registry and remove every entry whose [`RefLifetime`] is
+/// [`RefLifetime::UntilSnapshot`]. Called before any
+/// [`SessionPausePolicy`] processing so ephemeral refs are guaranteed
+/// not to reach the snapshot walker.
+async fn purge_until_snapshot_refs(registry: &SessionRefRegistry) {
+    let keys = registry.keys().await;
+    for key in keys {
+        if registry.lifetime_of(key).await == Some(RefLifetime::UntilSnapshot) {
+            registry.remove(key).await;
+            tracing::debug!(
+                key = %key,
+                "purged UntilSnapshot session ref before snapshot walk"
+            );
+        }
+    }
+}
+
+/// Apply the configured [`SessionPausePolicy`] to the live session-ref
+/// registry, mutating `metadata` to reflect the outcome.
+///
+/// See [`build_snapshot_in_place`] for the list of policies handled and
+/// their semantics. Returns
+/// [`WorkflowError::SessionRefsNotSerializable`] when the policy is
+/// [`SessionPausePolicy::HardError`] and live refs are present.
+///
+/// Per-ref [`RefLifetime`] policies are applied here as well: every
+/// entry marked [`RefLifetime::UntilSnapshot`] is purged from the
+/// registry **before** the configured pause policy runs, regardless
+/// of which policy is active. This guarantees ephemeral refs never
+/// reach the snapshot walker (so e.g. `HardError` does not trip on
+/// them) and never cross a pause boundary.
+async fn apply_session_pause_policy(
+    ctx: &Context,
+    metadata: &mut HashMap<String, serde_json::Value>,
+) -> Result<(), WorkflowError> {
+    let policy = ctx.session_pause_policy().await;
+    let registry = ctx.session_refs_arc().await;
+
+    // Purge `UntilSnapshot` lifetime refs unconditionally — they are
+    // ephemeral and must not survive into the snapshot regardless of
+    // the configured pause policy.
+    purge_until_snapshot_refs(&registry).await;
+
+    if registry.is_empty().await {
+        return Ok(());
+    }
+
+    match policy {
+        SessionPausePolicy::HardError => {
+            let keys: Vec<String> = registry
+                .keys()
+                .await
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect();
+            Err(WorkflowError::SessionRefsNotSerializable { keys })
+        }
+        SessionPausePolicy::WarnDrop => {
+            let keys = registry.keys().await;
+            if !keys.is_empty() {
+                let key_strs: Vec<String> =
+                    keys.iter().map(std::string::ToString::to_string).collect();
+                tracing::warn!(
+                    count = keys.len(),
+                    keys = ?key_strs,
+                    "dropping live session refs from snapshot (WarnDrop policy)"
+                );
+                metadata.insert(
+                    "__blazen_dropped_session_refs".to_owned(),
+                    serde_json::to_value(&key_strs).unwrap_or_default(),
+                );
+            }
+            Ok(())
+        }
+        SessionPausePolicy::PickleOrError => {
+            // Without a binding-provided pickle hook, behave like WarnDrop.
+            // Future: add a session_pickler callback to WorkflowBuilder.
+            let keys = registry.keys().await;
+            if !keys.is_empty() {
+                let key_strs: Vec<String> =
+                    keys.iter().map(std::string::ToString::to_string).collect();
+                tracing::warn!(
+                    count = keys.len(),
+                    keys = ?key_strs,
+                    "dropping live session refs from snapshot \
+                     (PickleOrError policy, no pickler registered)"
+                );
+                metadata.insert(
+                    "__blazen_dropped_session_refs".to_owned(),
+                    serde_json::to_value(&key_strs).unwrap_or_default(),
+                );
+            }
+            Ok(())
+        }
+        SessionPausePolicy::PickleOrSerialize => {
+            apply_pickle_or_serialize_policy(&registry, metadata).await;
+            Ok(())
+        }
+    }
+}
+
+/// Walk the sidecar of serializable entries for the
+/// [`SessionPausePolicy::PickleOrSerialize`] policy, capturing each
+/// one's binary representation into snapshot metadata and recording
+/// any non-serializable keys under the existing dropped-refs field.
+async fn apply_pickle_or_serialize_policy(
+    registry: &SessionRefRegistry,
+    metadata: &mut HashMap<String, serde_json::Value>,
+) {
+    let all_keys = registry.keys().await;
+    let serializable = registry.serializable_entries().await;
+    let mut captured: HashMap<String, serde_json::Value> =
+        HashMap::with_capacity(serializable.len());
+
+    for (key, entry) in &serializable {
+        let type_tag = entry.blazen_type_tag();
+        match entry.blazen_serialize() {
+            Ok(bytes) => {
+                let mut record = serde_json::Map::with_capacity(2);
+                record.insert(
+                    "type_tag".to_owned(),
+                    serde_json::Value::String(type_tag.to_owned()),
+                );
+                // Use `serde_bytes` via a `BytesWrapper` so the
+                // payload round-trips cleanly through both JSON
+                // (array of numbers) and MessagePack (raw bin8)
+                // without pulling in a base64 dependency.
+                record.insert(
+                    "data".to_owned(),
+                    serde_json::to_value(crate::value::BytesWrapper(bytes))
+                        .unwrap_or(serde_json::Value::Null),
+                );
+                captured.insert(key.to_string(), serde_json::Value::Object(record));
+            }
+            Err(err) => {
+                tracing::warn!(
+                    key = %key,
+                    type_tag = %type_tag,
+                    error = %err,
+                    "session ref serialization failed; dropping entry from snapshot"
+                );
+            }
+        }
+    }
+
+    if !captured.is_empty() {
+        metadata.insert(
+            SERIALIZED_SESSION_REFS_META_KEY.to_owned(),
+            serde_json::to_value(&captured).unwrap_or_default(),
+        );
+    }
+
+    // Record any non-serializable keys under the existing dropped-refs
+    // metadata field so the resume side can surface a clear error if
+    // someone tries to use them.
+    let dropped: Vec<String> = all_keys
+        .iter()
+        .filter(|k| !captured.contains_key(&k.to_string()))
+        .map(std::string::ToString::to_string)
+        .collect();
+
+    if !dropped.is_empty() {
+        tracing::warn!(
+            count = dropped.len(),
+            keys = ?dropped,
+            "dropping live session refs from snapshot \
+             (PickleOrSerialize policy, entries did not \
+              implement SessionRefSerializable)"
+        );
+        metadata.insert(
+            "__blazen_dropped_session_refs".to_owned(),
+            serde_json::to_value(&dropped).unwrap_or_default(),
+        );
+    }
 }
 
 /// Spawn step handler tasks for each matching step registration.

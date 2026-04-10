@@ -34,7 +34,9 @@ import init, { CompletionModel, ChatMessage } from '@blazen/sdk';
 
 await init();
 
-const model = CompletionModel.openrouter('your-key');
+// The WASM SDK reads API keys from the runtime environment only
+// (OPENROUTER_API_KEY, OPENAI_API_KEY, etc.). No arguments are accepted.
+const model = CompletionModel.openrouter();
 const response = await model.complete([ChatMessage.user('Hello!')]);
 console.log(response.content);
 ```
@@ -50,7 +52,7 @@ import init, { CompletionModel, ChatMessage } from '@blazen/sdk';
 
 await init();
 
-const model = CompletionModel.openai('your-key');
+const model = CompletionModel.openai(); // reads OPENAI_API_KEY from env
 
 await model.stream(
   [ChatMessage.user('Write a haiku about WebAssembly')],

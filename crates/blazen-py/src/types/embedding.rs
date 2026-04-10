@@ -6,6 +6,8 @@ use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use crate::error::{BlazenPyError, blazen_error_to_pyerr};
+#[cfg(feature = "fastembed")]
+use crate::providers::options::PyFastEmbedOptions;
 use crate::providers::options::PyProviderOptions;
 use blazen_llm::EmbeddingModel;
 use blazen_llm::keys::resolve_api_key;
@@ -20,7 +22,7 @@ use blazen_llm::keys::resolve_api_key;
 /// provider, then call `embed()` to generate embeddings.
 ///
 /// Example:
-///     >>> model = EmbeddingModel.openai("sk-...")
+///     >>> model = EmbeddingModel.openai(options=ProviderOptions(api_key="sk-..."))
 ///     >>> response = await model.embed(["Hello", "World"])
 ///     >>> print(response.embeddings)
 #[gen_stub_pyclass]
@@ -166,6 +168,35 @@ impl PyEmbeddingModel {
             self.inner.model_id(),
             self.inner.dimensions()
         )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Feature-gated fastembed factory (separate impl block so pyo3-stub-gen
+// does not try to resolve the option type when the feature is disabled)
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "fastembed")]
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyEmbeddingModel {
+    /// Create a local fastembed embedding model (ONNX Runtime, no API key required).
+    ///
+    /// Args:
+    ///     options: Optional typed ``FastEmbedOptions`` object.
+    ///
+    /// Example:
+    ///     >>> model = EmbeddingModel.fastembed()
+    ///     >>> model = EmbeddingModel.fastembed(options=FastEmbedOptions(model_name="BGESmallENV15"))
+    #[staticmethod]
+    #[pyo3(signature = (*, options=None))]
+    fn fastembed(options: Option<PyRef<'_, PyFastEmbedOptions>>) -> PyResult<Self> {
+        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
+        let model = blazen_llm::FastEmbedModel::from_options(opts)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        Ok(Self {
+            inner: Arc::new(model),
+        })
     }
 }
 

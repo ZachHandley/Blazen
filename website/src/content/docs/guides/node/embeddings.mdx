@@ -14,16 +14,20 @@ Blazen provides a unified `EmbeddingModel` interface for generating vector embed
 import { EmbeddingModel } from "blazen";
 
 // OpenAI (default: text-embedding-3-small, 1536 dimensions)
-const model = EmbeddingModel.openai("sk-...");
+// Reads OPENAI_API_KEY from the environment by default.
+const model = EmbeddingModel.openai();
+
+// Or pass an API key explicitly.
+const model = EmbeddingModel.openai({ apiKey: "sk-..." });
 
 // Together AI
-const model = EmbeddingModel.together("tok-...");
+const model = EmbeddingModel.together({ apiKey: "tok-..." });
 
 // Cohere
-const model = EmbeddingModel.cohere("co-...");
+const model = EmbeddingModel.cohere({ apiKey: "co-..." });
 
 // Fireworks AI
-const model = EmbeddingModel.fireworks("fw-...");
+const model = EmbeddingModel.fireworks({ apiKey: "fw-..." });
 ```
 
 ## Generate Embeddings
@@ -57,6 +61,62 @@ console.log(model.modelId);     // "text-embedding-3-small"
 console.log(model.dimensions);  // 1536
 ```
 
+## Local Embeddings (FastEmbed)
+
+Blazen can generate embeddings entirely on your machine using [FastEmbed](https://github.com/qdrant/fastembed) and ONNX Runtime. No API key, no network calls after the initial model download, and completely free.
+
+### Setup
+
+Local embeddings are available when Blazen is built with the `fastembed` feature. The default `npm install blazen` package includes it.
+
+### Usage
+
+```typescript
+import { EmbeddingModel } from "blazen";
+
+// Use the default model (BAAI/bge-small-en-v1.5, 384 dimensions)
+const model = EmbeddingModel.fastembed();
+
+// Or specify a model and other options explicitly
+const model = EmbeddingModel.fastembed({
+  modelName: "BGESmallENV15",
+  cacheDir: "/tmp/models",
+  maxBatchSize: 256,
+  showDownloadProgress: true,
+});
+
+const response = await model.embed(["hello", "world"]);
+console.log(response.embeddings.length);       // 2
+console.log(response.embeddings[0].length);    // 384
+```
+
+### FastEmbedOptions
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `modelName` | `string \| undefined` | `"BGESmallENV15"` | FastEmbed model variant name. |
+| `cacheDir` | `string \| undefined` | FastEmbed default | Directory where downloaded models are cached. |
+| `maxBatchSize` | `number \| undefined` | `256` | Maximum batch size for embedding. |
+| `showDownloadProgress` | `boolean \| undefined` | `false` | Print a progress bar during model download. |
+
+### Drop-in with Memory
+
+A local embedding model is a regular `EmbeddingModel` -- it plugs into `Memory` with no changes:
+
+```typescript
+import { EmbeddingModel, Memory, InMemoryBackend } from "blazen";
+
+const model = EmbeddingModel.fastembed();
+const memory = new Memory(model, new InMemoryBackend());
+
+await memory.add("doc1", "Paris is the capital of France");
+const results = await memory.search("capital of France", 5);
+```
+
+### Model Download
+
+The first call to `embed()` (or `memory.add()`) downloads the ONNX model weights. For `BGESmallENV15` the download is roughly 33 MB. After the first run the model is cached locally and no further network access is required.
+
 ## Use Cases
 
 Embeddings are the building block for semantic search, RAG pipelines, clustering, and classification. A typical pattern inside a workflow step:
@@ -64,7 +124,7 @@ Embeddings are the building block for semantic search, RAG pipelines, clustering
 ```typescript
 import { EmbeddingModel } from "blazen";
 
-const embedModel = EmbeddingModel.openai("sk-...");
+const embedModel = EmbeddingModel.openai({ apiKey: "sk-..." });
 
 wf.addStep("embed_documents", ["DocumentsReady"], async (event, ctx) => {
   const response = await embedModel.embed(event.documents);

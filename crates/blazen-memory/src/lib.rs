@@ -58,7 +58,9 @@ pub mod store;
 pub mod types;
 
 // Re-exports for ergonomic imports.
-pub use backends::{InMemoryBackend, JsonlBackend};
+pub use backends::InMemoryBackend;
+#[cfg(feature = "jsonl")]
+pub use backends::JsonlBackend;
 pub use error::MemoryError;
 pub use memory::Memory;
 pub use store::{MemoryBackend, MemoryStore};

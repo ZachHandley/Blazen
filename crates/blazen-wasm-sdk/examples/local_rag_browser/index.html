@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Blazen WASM SDK - Local RAG Browser Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      max-width: 720px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      color: #1a1a2e;
+      background: #f8f9fa;
+    }
+
+    h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+    .subtitle { color: #555; margin-bottom: 1.5rem; }
+
+    #status {
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      margin-bottom: 1.5rem;
+      font-size: 0.9rem;
+    }
+    #status.loading { background: #fff3cd; color: #664d03; }
+    #status.ready   { background: #d1e7dd; color: #0f5132; }
+    #status.error   { background: #f8d7da; color: #842029; }
+
+    .search-box {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .search-box input {
+      flex: 1;
+      padding: 0.6rem 0.8rem;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    .search-box button {
+      padding: 0.6rem 1.2rem;
+      font-size: 1rem;
+      border: none;
+      border-radius: 6px;
+      background: #4361ee;
+      color: #fff;
+      cursor: pointer;
+    }
+    .search-box button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .search-box button:hover:not(:disabled) { background: #3a56d4; }
+
+    .documents {
+      margin-bottom: 1.5rem;
+    }
+    .documents h2 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+    .doc-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .doc-list li {
+      padding: 0.5rem 0.75rem;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      margin-bottom: 0.4rem;
+      font-size: 0.9rem;
+    }
+    .doc-list li .doc-id {
+      font-weight: 600;
+      color: #4361ee;
+      margin-right: 0.5rem;
+    }
+
+    .results h2 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+    .result-card {
+      padding: 0.75rem 1rem;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      margin-bottom: 0.5rem;
+    }
+    .result-card .score {
+      display: inline-block;
+      background: #4361ee;
+      color: #fff;
+      font-size: 0.75rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 3px;
+      margin-right: 0.5rem;
+    }
+    .result-card .text { margin-top: 0.4rem; font-size: 0.9rem; }
+
+    .no-results { color: #888; font-style: italic; }
+  </style>
+</head>
+<body>
+
+  <h1>Local RAG in the Browser</h1>
+  <p class="subtitle">
+    In-browser embeddings with <code>transformers.js</code> and Blazen
+    <code>Memory</code>. No API key required.
+  </p>
+
+  <div id="status" class="loading">Loading embedding model...</div>
+
+  <div class="documents">
+    <h2>Stored Documents</h2>
+    <ul class="doc-list" id="doc-list"></ul>
+  </div>
+
+  <div class="search-box">
+    <input id="query" type="text" placeholder="Search documents..." disabled />
+    <button id="search-btn" disabled>Search</button>
+  </div>
+
+  <div class="results">
+    <h2>Results</h2>
+    <div id="results-container">
+      <p class="no-results">Enter a query above to search.</p>
+    </div>
+  </div>
+
+  <!--
+    This example uses ES module imports. Serve it with a local dev server
+    (e.g. `npx serve`) and ensure @blazen/sdk and @huggingface/transformers
+    are available via an import map or a bundler.
+
+    For a zero-build-step setup, uncomment the importmap below and adjust
+    the CDN URLs to match the versions you need.
+  -->
+  <!--
+  <script type="importmap">
+  {
+    "imports": {
+      "@blazen/sdk": "https://cdn.jsdelivr.net/npm/@blazen/sdk/blazen_wasm_sdk.js",
+      "@huggingface/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers"
+    }
+  }
+  </script>
+  -->
+
+  <script type="module">
+    import init, { EmbeddingModel, Memory } from '@blazen/sdk';
+    import { pipeline } from '@huggingface/transformers';
+
+    // ----- Configuration -----
+    const MODEL_NAME = 'Xenova/all-MiniLM-L6-v2';
+    const DIMENSIONS = 384;
+
+    const DOCUMENTS = [
+      { id: 'doc-paris',  text: 'Paris is the capital and most populous city of France, known for the Eiffel Tower and the Louvre Museum.' },
+      { id: 'doc-tokyo',  text: 'Tokyo is the capital of Japan and one of the most densely populated metropolitan areas in the world.' },
+      { id: 'doc-rust',   text: 'Rust is a systems programming language focused on safety, speed, and concurrency without a garbage collector.' },
+      { id: 'doc-wasm',   text: 'WebAssembly (WASM) is a binary instruction format that enables near-native performance in web browsers.' },
+      { id: 'doc-rag',    text: 'Retrieval-Augmented Generation (RAG) combines a retriever with a language model to ground answers in external knowledge.' },
+    ];
+
+    // ----- DOM refs -----
+    const statusEl = document.getElementById('status');
+    const docListEl = document.getElementById('doc-list');
+    const queryInput = document.getElementById('query');
+    const searchBtn = document.getElementById('search-btn');
+    const resultsContainer = document.getElementById('results-container');
+
+    // ----- Render documents -----
+    for (const doc of DOCUMENTS) {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="doc-id">${doc.id}</span>${doc.text}`;
+      docListEl.appendChild(li);
+    }
+
+    // ----- Initialize -----
+    let memory;
+
+    try {
+      // 1. Init the WASM module
+      await init();
+
+      statusEl.textContent = 'Loading transformers.js pipeline...';
+
+      // 2. Load the transformers.js feature-extraction pipeline
+      const pipe = await pipeline('feature-extraction', MODEL_NAME);
+
+      // 3. Wrap it as a Blazen EmbeddingModel via fromJsHandler
+      const embedder = EmbeddingModel.fromJsHandler(
+        MODEL_NAME,
+        DIMENSIONS,
+        async (texts) => {
+          const output = await pipe(texts, { pooling: 'mean', normalize: true });
+          // transformers.js v4 returns a Tensor; convert each row to Float32Array
+          return Array.from({ length: texts.length }, (_, i) => {
+            const row = output[i];
+            return row.data instanceof Float32Array
+              ? row.data
+              : new Float32Array(row.data);
+          });
+        },
+      );
+
+      // 4. Create a Memory store backed by this embedding model
+      memory = new Memory(embedder);
+
+      statusEl.textContent = 'Indexing documents...';
+
+      // 5. Insert documents
+      for (const doc of DOCUMENTS) {
+        await memory.add(doc.id, doc.text, null);
+      }
+
+      // Ready
+      statusEl.textContent = `Ready. ${DOCUMENTS.length} documents indexed with ${MODEL_NAME}.`;
+      statusEl.className = 'ready';
+      queryInput.disabled = false;
+      searchBtn.disabled = false;
+
+    } catch (err) {
+      statusEl.textContent = `Error: ${err.message || err}`;
+      statusEl.className = 'error';
+      console.error(err);
+    }
+
+    // ----- Search handler -----
+    async function doSearch() {
+      const query = queryInput.value.trim();
+      if (!query || !memory) return;
+
+      searchBtn.disabled = true;
+      searchBtn.textContent = 'Searching...';
+
+      try {
+        const results = await memory.search(query, 5, null);
+        resultsContainer.innerHTML = '';
+
+        if (results.length === 0) {
+          resultsContainer.innerHTML = '<p class="no-results">No results found.</p>';
+          return;
+        }
+
+        for (const r of results) {
+          const card = document.createElement('div');
+          card.className = 'result-card';
+          card.innerHTML = `
+            <span class="score">${r.score.toFixed(4)}</span>
+            <strong>${r.id}</strong>
+            <div class="text">${r.text}</div>
+          `;
+          resultsContainer.appendChild(card);
+        }
+      } catch (err) {
+        resultsContainer.innerHTML = `<p class="no-results">Search error: ${err.message || err}</p>`;
+        console.error(err);
+      } finally {
+        searchBtn.disabled = false;
+        searchBtn.textContent = 'Search';
+      }
+    }
+
+    searchBtn.addEventListener('click', doSearch);
+    queryInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') doSearch();
+    });
+  </script>
+
+</body>
+</html>

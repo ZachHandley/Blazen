@@ -249,7 +249,7 @@ if (!falKey) {
 // outputs, native streaming.
 // CompletionModel is a native Rust object (not JSON-serializable), so we
 // store it as a module-level variable rather than in ctx.set().
-MODEL = CompletionModel.fal(falKey);
+MODEL = CompletionModel.fal({ apiKey: falKey });
 
 // You can also pin a specific model, endpoint, or the enterprise tier
 // by passing a `JsFalOptions` as the second argument. The object below is
@@ -261,7 +261,7 @@ const enterpriseOpts: JsFalOptions = {
   enterprise: true,
 };
 void enterpriseOpts; // silence "unused" lint
-// MODEL = CompletionModel.fal(falKey, enterpriseOpts);
+// MODEL = CompletionModel.fal({ apiKey: falKey, ...enterpriseOpts });
 
 console.log(`Using model: ${MODEL.modelId}`);
 console.log("NOTE: fal.ai uses a queue-based architecture. Each call involves");
@@ -333,7 +333,7 @@ for (const [name, demo] of [
   }
 }
 
-const provider = FalProvider.create(falKey);
+const provider = FalProvider.create({ apiKey: falKey });
 for (const [name, demo] of [
   ["demoEmbeddings", demoEmbeddings],
   ["demoGenerate3d", demoGenerate3d],

@@ -66,6 +66,13 @@ fn image_content_to_anthropic(img: &ImageContent) -> serde_json::Value {
                 }
             })
         }
+        ImageSource::File { .. } => {
+            tracing::warn!(
+                "anthropic: local file source is not supported — use a URL or base64 source \
+                 instead; image content dropped."
+            );
+            serde_json::Value::Null
+        }
     }
 }
 
@@ -97,6 +104,13 @@ fn content_part_to_anthropic(part: &ContentPart) -> serde_json::Value {
                             "url": url,
                         }
                     })
+                }
+                ImageSource::File { .. } => {
+                    tracing::warn!(
+                        "anthropic: local file source is not supported — use a URL or base64 \
+                         source instead; file content dropped."
+                    );
+                    serde_json::Value::Null
                 }
             }
         }

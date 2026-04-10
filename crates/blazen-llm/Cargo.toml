@@ -14,6 +14,16 @@ reqwest = ["dep:reqwest"]
 tiktoken = ["dep:tiktoken-rs"]
 tsify = ["dep:tsify-next", "dep:wasm-bindgen"]
 pyo3-serde = ["dep:pythonize", "dep:pyo3"]
+# Local inference backends (populated per-phase as crates land)
+fastembed = ["dep:blazen-embed-fastembed"]      # Phase 2: local embeddings via fastembed-rs
+candle-embed = ["dep:blazen-embed-candle"]   # Phase 6: local embeddings via candle
+mistralrs = ["dep:blazen-llm-mistralrs", "dep:base64"]      # Phase 3: local LLM via mistral.rs
+llamacpp = ["dep:blazen-llm-llamacpp"]       # Phase 8: local LLM via llama.cpp
+candle-llm = ["dep:blazen-llm-candle"]     # Phase 7: local LLM via candle
+diffusion = ["dep:blazen-image-diffusion"]      # Phase 5: local image gen via diffusion-rs
+whispercpp = ["dep:blazen-audio-whispercpp"]     # Phase 4: local STT via whisper.cpp
+piper = ["dep:blazen-audio-piper"]          # Phase 9: local TTS via Piper
+candle-audio = []   # Phase 10: local music/SFX via candle
 
 [dependencies]
 blazen-events.workspace = true
@@ -33,6 +43,15 @@ tsify-next = { version = "0.5", features = ["js", "json"], optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 pythonize = { version = "0.28", optional = true }
 pyo3 = { version = "0.28", optional = true }
+base64 = { workspace = true, optional = true }
+blazen-embed-fastembed = { workspace = true, optional = true }
+blazen-llm-mistralrs = { workspace = true, optional = true }
+blazen-audio-whispercpp = { workspace = true, optional = true }
+blazen-embed-candle = { workspace = true, optional = true }
+blazen-image-diffusion = { workspace = true, optional = true }
+blazen-llm-candle = { workspace = true, optional = true }
+blazen-llm-llamacpp = { workspace = true, optional = true }
+blazen-audio-piper = { workspace = true, optional = true }
 
 # Timer/runtime features only on native targets (mio doesn't support any wasm32 target)
 [target.'cfg(not(any(target_os = "wasi", target_arch = "wasm32")))'.dependencies]

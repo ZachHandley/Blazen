@@ -220,7 +220,7 @@ pub struct JsMemoryEntry {
 /// ```javascript
 /// import { Memory, EmbeddingModel, InMemoryBackend } from 'blazen';
 ///
-/// const embedder = EmbeddingModel.openai(key);
+/// const embedder = EmbeddingModel.openai({ apiKey: key });
 /// const memory = new Memory(embedder, new InMemoryBackend());
 ///
 /// await memory.add("doc1", "Paris is the capital of France");

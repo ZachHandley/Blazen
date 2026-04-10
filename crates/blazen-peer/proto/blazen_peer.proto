@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package blazen.peer.v1;
+
+// BlazenPeer is the RPC service that a Blazen workflow peer exposes
+// to accept remote sub-workflow invocations and session-ref dereference
+// requests from other peers. All request/response payloads are
+// postcard-encoded Rust structs carried as bytes, so the proto schema
+// itself never drifts — see the `envelope_version` field on each
+// postcard-encoded message for versioning.
+service BlazenPeer {
+  // Invoke a sub-workflow on this peer. The postcard_payload is a
+  // postcard-encoded SubWorkflowRequest. Returns a postcard-encoded
+  // SubWorkflowResponse.
+  rpc InvokeSubWorkflow(PostcardRequest) returns (PostcardResponse);
+
+  // Stream events from a sub-workflow. The postcard_payload is a
+  // SubWorkflowRequest; the stream items are postcard-encoded
+  // SubWorkflowEvent messages.
+  rpc StreamSubWorkflowEvents(PostcardRequest) returns (stream PostcardResponse);
+
+  // Dereference a session ref by UUID. Returns postcard-encoded bytes
+  // of the underlying value via the SessionRefSerializable trait.
+  rpc DerefSessionRef(PostcardRequest) returns (PostcardResponse);
+
+  // Release (drop) a session ref on the peer side. Used by parent
+  // workflows when they are done with a remote proxy handle.
+  rpc ReleaseSessionRef(PostcardRequest) returns (PostcardResponse);
+}
+
+// Envelope for postcard-encoded requests.
+message PostcardRequest {
+  bytes postcard_payload = 1;
+}
+
+// Envelope for postcard-encoded responses.
+message PostcardResponse {
+  bytes postcard_payload = 1;
+}

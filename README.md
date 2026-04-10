@@ -176,12 +176,13 @@ let deepseek = OpenAiCompatProvider::deepseek("...");
 ### Python
 
 ```python
-from blazen import CompletionModel, ChatMessage, Role, CompletionResponse
+from blazen import CompletionModel, ChatMessage, Role, CompletionResponse, ProviderOptions
 
-model = CompletionModel.openai("sk-...")
-# or: CompletionModel.anthropic("sk-ant-...")
-# or: CompletionModel.groq("gsk-...")
-# or: CompletionModel.openrouter("sk-or-...")
+model = CompletionModel.openai(options=ProviderOptions(api_key="sk-..."))
+# or: CompletionModel.anthropic(options=ProviderOptions(api_key="sk-ant-..."))
+# or: CompletionModel.groq(options=ProviderOptions(api_key="gsk-..."))
+# or: CompletionModel.openrouter(options=ProviderOptions(api_key="sk-or-..."))
+# or with env vars: CompletionModel.openai()
 
 response: CompletionResponse = await model.complete([
     ChatMessage.system("You are helpful."),
@@ -199,10 +200,11 @@ print(response.finish_reason)
 import { CompletionModel, ChatMessage, Role } from "blazen";
 import type { CompletionResponse } from "blazen";
 
-const model = CompletionModel.openai("sk-...");
-// or: CompletionModel.anthropic("sk-ant-...")
-// or: CompletionModel.groq("gsk-...")
-// or: CompletionModel.openrouter("sk-or-...")
+const model = CompletionModel.openai({ apiKey: "sk-..." });
+// or: CompletionModel.anthropic({ apiKey: "sk-ant-..." })
+// or: CompletionModel.groq({ apiKey: "gsk-..." })
+// or: CompletionModel.openrouter({ apiKey: "sk-or-..." })
+// or with env vars: CompletionModel.openai()
 
 const response: CompletionResponse = await model.complete([
   ChatMessage.system("You are helpful."),

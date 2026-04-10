@@ -50,7 +50,7 @@ function getModel(): CompletionModel {
     console.error("  ANTHROPIC_API_KEY=sk-ant-... npx tsx llm_anthropic.ts");
     process.exit(1);
   }
-  return CompletionModel.anthropic(apiKey);
+  return CompletionModel.anthropic({ apiKey });
 }
 
 const MODEL: CompletionModel = getModel();

@@ -37,6 +37,16 @@ pyo3-stub-gen-derive = "0.21"
 [features]
 default = []
 extension-module = ["pyo3/extension-module"]
+# Local inference backends (feature-gated, populated per-phase)
+fastembed = ["blazen-llm/fastembed"]
+candle-embed = ["blazen-llm/candle-embed"]
+mistralrs = ["blazen-llm/mistralrs"]
+llamacpp = ["blazen-llm/llamacpp"]
+candle-llm = ["blazen-llm/candle-llm"]
+diffusion = ["blazen-llm/diffusion"]
+whispercpp = ["blazen-llm/whispercpp"]
+piper = ["blazen-llm/piper"]
+local-all = ["fastembed", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "piper"]
 
 [lints]
 workspace = true

@@ -155,7 +155,7 @@ impl Tool for JsToolWrapper {
 /// ```typescript
 /// import { CompletionModel, ChatMessage, runAgent } from 'blazen';
 ///
-/// const model = CompletionModel.openai("sk-...");
+/// const model = CompletionModel.openai({ apiKey: "sk-..." });
 ///
 /// const result = await runAgent(
 ///   model,

@@ -1,0 +1,361 @@
+---
+title: "Local Inference"
+description: "Run embeddings and LLMs entirely in the browser with the Blazen WASM SDK"
+language: "wasm"
+section: "guides"
+order: 5
+---
+
+The Blazen WASM SDK can run AI models entirely in the browser -- no API key required after the initial model download. This guide covers local embeddings with [transformers.js](https://huggingface.co/docs/transformers.js) and local LLM chat with [WebLLM](https://webllm.mlc.ai/).
+
+## What is possible
+
+The `EmbeddingModel.fromJsHandler()` and `CompletionModel.fromJsHandler()` factories let you plug any JavaScript inference library into the Blazen pipeline. The model runs on the user's device while Blazen's `Memory`, `CompletionModel.withFallback()`, `withRetry()`, and `withCache()` work exactly the same as they do with hosted APIs.
+
+Use cases:
+
+- **Offline-first apps** -- search and chat without a network connection
+- **Privacy-sensitive data** -- embeddings and queries never leave the device
+- **Zero marginal cost** -- no per-token charges after the model is cached
+- **Hybrid patterns** -- fast local embeddings for search, hosted API for generation
+
+## Browser compatibility (April 2026)
+
+Local inference relies on WebGPU (for LLMs) and WebAssembly (for embeddings). Current support:
+
+| Browser | WebGPU since | Notes |
+|---|---|---|
+| Chrome / Edge | 113 (May 2023) | Full support |
+| Safari | 26 (Sep 2025) | Including iOS and iPadOS |
+| Firefox | 141 Windows / 145 macOS ARM | Linux support in progress |
+
+Approximately 65% of global users have WebGPU support. Embeddings via WASM (CPU) work in all modern browsers regardless of WebGPU.
+
+## Local embeddings with transformers.js
+
+[transformers.js v4](https://huggingface.co/docs/transformers.js) runs Hugging Face models in the browser via ONNX Runtime. For embeddings, it uses WebAssembly SIMD on the CPU -- no GPU required.
+
+### Installation
+
+```bash
+npm install @blazen/sdk @huggingface/transformers
+```
+
+### Usage
+
+```typescript
+import init, { EmbeddingModel, Memory } from '@blazen/sdk';
+import { pipeline } from '@huggingface/transformers';
+
+await init();
+
+// Load the transformers.js feature-extraction pipeline
+const pipe = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+
+// Wrap it as a Blazen EmbeddingModel
+const embedder = EmbeddingModel.fromJsHandler(
+  'all-MiniLM-L6-v2',
+  384,    // dimensions for this model
+  async (texts) => {
+    const output = await pipe(texts, { pooling: 'mean', normalize: true });
+    return Array.from({ length: texts.length }, (_, i) => {
+      const row = output[i];
+      return row.data instanceof Float32Array
+        ? row.data
+        : new Float32Array(row.data);
+    });
+  },
+);
+
+// Use it with Memory for semantic search
+const memory = new Memory(embedder);
+await memory.add('doc1', 'Paris is the capital of France');
+await memory.add('doc2', 'Rust is a systems programming language');
+
+const results = await memory.search("What is France's capital?", 5);
+console.log(results[0].text); // "Paris is the capital of France"
+```
+
+### The `fromJsHandler` API
+
+```typescript
+EmbeddingModel.fromJsHandler(
+  modelId: string,      // identifier for logging / display
+  dimensions: number,   // vector dimensionality (e.g. 384 for MiniLM)
+  handler: (texts: string[]) => Promise<Float32Array[]> | Float32Array[]
+): EmbeddingModel
+```
+
+The handler receives an array of strings and must return one `Float32Array` per input text, each with exactly `dimensions` elements.
+
+### Performance
+
+| Backend | Latency (single query) | Notes |
+|---|---|---|
+| WASM (CPU) | ~170 ms | Works everywhere, no WebGPU needed |
+| WebGPU | ~35 ms | Chrome 113+, Safari 26+, Firefox 141+ |
+
+transformers.js automatically uses WebGPU when available and falls back to WASM.
+
+### Bundle size
+
+| Component | Size | When loaded |
+|---|---|---|
+| `@huggingface/transformers` | ~1.2 MB | Import time |
+| ONNX Runtime WASM | ~3.5 MB | Lazy, on first inference |
+| Model weights | ~23 MB | Cached in browser after first download |
+
+The model weights are cached in the browser's Cache API. Subsequent page loads skip the download.
+
+## Local LLM with WebLLM
+
+[WebLLM](https://webllm.mlc.ai/) runs large language models on WebGPU. It compiles models to the user's specific GPU at first load, then caches the compiled shaders for near-instant subsequent starts.
+
+### Installation
+
+```bash
+npm install @blazen/sdk @mlc-ai/web-llm
+```
+
+### Usage
+
+```typescript
+import init, { CompletionModel, ChatMessage } from '@blazen/sdk';
+import * as webllm from '@mlc-ai/web-llm';
+
+await init();
+
+// Create the WebLLM engine (downloads + compiles on first visit)
+const engine = await webllm.CreateMLCEngine(
+  'Llama-3.2-1B-Instruct-q4f16_1-MLC',
+  {
+    initProgressCallback: (p) => console.log(p.text),
+  },
+);
+
+// Wrap it as a Blazen CompletionModel
+const model = CompletionModel.fromJsHandler(
+  'Llama-3.2-1B-Instruct',
+  async (request) => {
+    const messages = (request.messages || []).map((m) => ({
+      role: m.role,
+      content: typeof m.content === 'string'
+        ? m.content
+        : m.content?.text || '',
+    }));
+
+    const reply = await engine.chat.completions.create({
+      messages,
+      temperature: request.temperature ?? 0.7,
+      max_tokens: request.max_tokens ?? 512,
+    });
+
+    return {
+      content: reply.choices?.[0]?.message?.content || '',
+      toolCalls: [],
+      citations: [],
+      artifacts: [],
+      images: [],
+      audio: [],
+      videos: [],
+      model: 'Llama-3.2-1B-Instruct',
+      metadata: {},
+    };
+  },
+);
+
+// Use it like any other Blazen model
+const response = await model.complete([
+  ChatMessage.user('Explain WebAssembly in one sentence.'),
+]);
+console.log(response.content);
+```
+
+### The `fromJsHandler` API
+
+```typescript
+CompletionModel.fromJsHandler(
+  modelId: string,
+  completeHandler: (request: CompletionRequest) => Promise<CompletionResponse>,
+  streamHandler?: (request: CompletionRequest, onChunk: (chunk: StreamChunk) => void) => Promise<void>
+): CompletionModel
+```
+
+The `completeHandler` receives a `CompletionRequest`-shaped object and must return a `CompletionResponse`-shaped object. The optional `streamHandler` enables token streaming; if omitted, `model.stream()` falls back to calling `completeHandler` and yielding the result as a single chunk.
+
+### Practical model sizes
+
+Stick to 1B-3B parameter models for a usable browser experience:
+
+| Model | Download | Cold start | Tokens/sec |
+|---|---|---|---|
+| Llama-3.2-1B-Instruct (q4f16) | ~600 MB | ~30 s | 40-60 |
+| Llama-3.2-3B-Instruct (q4f16) | ~1.8 GB | ~60 s | 15-30 |
+| Llama-3.1-8B-Instruct (q4f16) | ~4.5 GB | 2-3 min | 5-10 |
+
+Models at 7B+ parameters require 4+ GB of GPU memory and have cold starts measured in minutes. They are not recommended unless you know your users have high-end hardware.
+
+## Always ship a hosted API fallback
+
+Not every user has WebGPU. Even those who do may be on low-end hardware or a phone with insufficient memory. The recommended production pattern is to try local inference first and fall back to a cloud API:
+
+```typescript
+import init, { CompletionModel, ChatMessage } from '@blazen/sdk';
+
+await init();
+
+let localModel;
+try {
+  // Try to create local model (WebLLM, etc.)
+  localModel = CompletionModel.fromJsHandler('local', localHandler);
+} catch {
+  // WebGPU not available or model too large
+}
+
+const apiModel = CompletionModel.openrouter(); // reads OPENROUTER_API_KEY
+
+// If local model loaded, try it first; if it fails, use the API.
+// If local model did not load, use the API directly.
+const model = localModel
+  ? CompletionModel.withFallback([localModel, apiModel])
+  : apiModel;
+
+const response = await model.complete([ChatMessage.user('Hello!')]);
+```
+
+`CompletionModel.withFallback()` is a static method that takes an array of models and tries them in order. If the first model throws a retryable error, the next is tried. Non-retryable errors (auth failures, invalid input) short-circuit.
+
+## In-browser RAG
+
+Combine local embeddings with `Memory` for full retrieval-augmented generation that runs entirely on the device:
+
+```typescript
+import init, { EmbeddingModel, Memory, CompletionModel, ChatMessage } from '@blazen/sdk';
+import { pipeline } from '@huggingface/transformers';
+
+await init();
+
+// 1. Local embeddings
+const pipe = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+const embedder = EmbeddingModel.fromJsHandler('MiniLM', 384, async (texts) => {
+  const output = await pipe(texts, { pooling: 'mean', normalize: true });
+  return Array.from({ length: texts.length }, (_, i) => {
+    const row = output[i];
+    return row.data instanceof Float32Array ? row.data : new Float32Array(row.data);
+  });
+});
+
+// 2. Memory store
+const memory = new Memory(embedder);
+await memory.add('faq-1', 'Refunds are processed within 5-7 business days.');
+await memory.add('faq-2', 'Free shipping on orders over $50.');
+await memory.add('faq-3', 'Contact support at help@example.com.');
+
+// 3. Search + generate
+async function answerQuestion(question) {
+  const context = await memory.search(question, 3);
+  const contextText = context.map((r) => r.text).join('\n');
+
+  // Use a hosted model for generation (or a local one via WebLLM)
+  const llm = CompletionModel.openrouter();
+  const response = await llm.complete([
+    ChatMessage.system(`Answer using only this context:\n${contextText}`),
+    ChatMessage.user(question),
+  ]);
+  return response.content;
+}
+```
+
+The embedding search runs locally. Only the final generation call hits the API, and even that can be replaced with a local WebLLM model.
+
+## COOP/COEP trap
+
+Some guides for WASM threading recommend adding these HTTP headers:
+
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+**Do not add these headers** unless you specifically need `SharedArrayBuffer` for WASM SIMD multi-threading. They break:
+
+- Stripe, PayPal, and other payment iframes
+- YouTube / Vimeo embeds
+- Google OAuth popups
+- Most third-party ad scripts
+
+transformers.js and WebLLM work without these headers. They use single-threaded WASM or WebGPU, neither of which requires `SharedArrayBuffer`.
+
+If you do need SIMD threads (rare), scope the headers to a dedicated `/inference` path with a service worker rather than applying them site-wide.
+
+## iOS Safari warning
+
+WebGPU in Safari 26+ works on iOS and iPadOS, but iPhones have limited unified memory:
+
+| Device | RAM | Can run 1B LLM? | Can run 3B LLM? |
+|---|---|---|---|
+| iPhone 15 Pro / 16 Pro | 8 GB | Yes | Marginal |
+| iPhone 15 / 16 | 6 GB | Marginal | No |
+| iPhone 14 and earlier | 6 GB or less | No | No |
+
+Embedding models (~23 MB) work fine on all iPhones. For LLMs, detect available memory or WebGPU adapter limits before attempting to load a model, and fall back to a hosted API.
+
+## Troubleshooting
+
+### `@huggingface/transformers` not found
+
+The import must resolve at runtime. If you are not using a bundler, add an import map:
+
+```html
+<script type="importmap">
+{
+  "imports": {
+    "@huggingface/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers"
+  }
+}
+</script>
+```
+
+### WebGPU initialization failure
+
+```
+Error: WebGPU is not supported in this browser
+```
+
+The user's browser does not support WebGPU. This affects LLM inference via WebLLM but not embeddings via transformers.js (which uses WASM). Use the fallback pattern described above.
+
+### Model download stalls
+
+Large models (3B+) require a stable connection for the initial download. If the download stalls, the browser's Cache API may have a corrupt entry. Clear site data and retry, or switch to a smaller model.
+
+### `SharedArrayBuffer is not defined`
+
+This error usually means COOP/COEP headers are misconfigured. See the COOP/COEP section above. If you are using a library that requires `SharedArrayBuffer`, verify that both headers are set correctly:
+
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+But prefer libraries that do not require them.
+
+### Slow first inference
+
+The first inference after page load is always slower because:
+
+1. **transformers.js**: The ONNX Runtime WASM module (~3.5 MB) loads lazily on first call.
+2. **WebLLM**: The model is compiled to GPU shaders on first use (~30-60 seconds).
+
+Subsequent inferences are fast. For transformers.js, you can warm up the pipeline at load time:
+
+```typescript
+// Warm up: embed an empty string to trigger WASM loading
+await embedder.embed(['']);
+```
+
+## Next steps
+
+- See the [Local RAG Browser Example](https://github.com/ZachHandley/Blazen/tree/main/crates/blazen-wasm-sdk/examples/local_rag_browser) for a complete working demo.
+- See the [Local Chat Browser Example](https://github.com/ZachHandley/Blazen/tree/main/crates/blazen-wasm-sdk/examples/local_chat_browser) for an on-device chat UI.
+- Combine local inference with [WASM Workflows](/docs/guides/wasm/workflows) for multi-step pipelines.
+- Add resilience with [Middleware & Composition](/docs/guides/wasm/middleware) (retry, cache, fallback).

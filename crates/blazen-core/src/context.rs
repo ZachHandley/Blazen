@@ -47,6 +47,29 @@ struct ContextInner {
     session_refs: Arc<crate::session_ref::SessionRefRegistry>,
     /// Per-workflow snapshot policy for session refs.
     session_pause_policy: crate::session_ref::SessionPausePolicy,
+    /// Optional handle to a peer client for distributed workflow RPCs.
+    /// Only available when the `distributed` feature is enabled.
+    #[cfg(feature = "distributed")]
+    peer_client: Option<Arc<dyn crate::distributed::PeerClient>>,
+    /// Whether this `Context` owns its session ref registry or borrows
+    /// one supplied by a parent workflow (pipeline or distributed
+    /// caller). Borrowed registries MUST NOT have their default-lifetime
+    /// refs drained by this context — the parent still needs to resolve
+    /// refs emitted by this child.
+    ///
+    /// Set to `true` for contexts created via [`Context::new`] (fresh
+    /// registry) and `false` for contexts created via
+    /// [`Context::new_with_session_refs`] (borrowed registry).
+    ///
+    /// Phase 11.2's `RefLifetime::UntilParentFinish` now supersedes
+    /// the tactical `owns_registry` flag semantically. The flag is
+    /// retained internally to make
+    /// [`crate::session_ref::SessionRefRegistry::clear_on_context_drop`]
+    /// compute the right default behavior for `UntilParentFinish`
+    /// refs (only the owning side actually purges them), but
+    /// user-facing lifetime control flows through the
+    /// [`crate::session_ref::RefLifetime`] enum.
+    owns_registry: bool,
 }
 
 /// Shared workflow context.
@@ -69,27 +92,41 @@ impl Context {
     // Construction (crate-internal)
     // -----------------------------------------------------------------
 
-    /// Create a new context wired to the given channels.
-    ///
-    /// Internally delegates to [`Context::new_with_session_refs`] with a
-    /// freshly-created empty registry.
+    /// Create a new context wired to the given channels with a freshly
+    /// created empty registry. The returned context OWNS its registry
+    /// and will drain it on `clear_session_refs()`.
     pub(crate) fn new(
         event_tx: mpsc::UnboundedSender<EventEnvelope>,
         stream_tx: broadcast::Sender<Box<dyn AnyEvent>>,
     ) -> Self {
-        Self::new_with_session_refs(
-            event_tx,
-            stream_tx,
-            Arc::new(crate::session_ref::SessionRefRegistry::new()),
-        )
+        Self {
+            inner: Arc::new(RwLock::new(ContextInner {
+                state: HashMap::new(),
+                event_tx,
+                stream_tx,
+                collected: HashMap::new(),
+                metadata: HashMap::new(),
+                objects: HashMap::new(),
+                session_refs: Arc::new(crate::session_ref::SessionRefRegistry::new()),
+                session_pause_policy: crate::session_ref::SessionPausePolicy::default(),
+                #[cfg(feature = "distributed")]
+                peer_client: None,
+                owns_registry: true,
+            })),
+        }
     }
 
     /// Create a new context wired to the given channels with an
     /// externally-supplied session-ref registry.
     ///
-    /// Used by the pipeline crate to share one registry across multiple
-    /// workflow runs so cross-workflow `__blazen_session_ref__` markers
-    /// remain resolvable.
+    /// Used by the pipeline crate and by parent workflows that invoke
+    /// sub-workflows via `run_with_registry` to share one registry
+    /// across multiple workflow runs so cross-workflow
+    /// `__blazen_session_ref__` markers remain resolvable.
+    ///
+    /// The returned context BORROWS the registry. Its
+    /// [`Context::clear_session_refs`] is a no-op — the parent owns the
+    /// registry's lifetime and is responsible for draining it.
     pub(crate) fn new_with_session_refs(
         event_tx: mpsc::UnboundedSender<EventEnvelope>,
         stream_tx: broadcast::Sender<Box<dyn AnyEvent>>,
@@ -105,8 +142,64 @@ impl Context {
                 objects: HashMap::new(),
                 session_refs,
                 session_pause_policy: crate::session_ref::SessionPausePolicy::default(),
+                #[cfg(feature = "distributed")]
+                peer_client: None,
+                owns_registry: false,
             })),
         }
+    }
+
+    /// Create a new context with a pre-wired peer client for distributed
+    /// RPCs. The context borrows the supplied session-ref registry (same
+    /// semantics as [`new_with_session_refs`](Self::new_with_session_refs)).
+    #[cfg(feature = "distributed")]
+    #[allow(dead_code)]
+    pub(crate) fn new_with_peer(
+        event_tx: mpsc::UnboundedSender<EventEnvelope>,
+        stream_tx: broadcast::Sender<Box<dyn AnyEvent>>,
+        session_refs: Arc<crate::session_ref::SessionRefRegistry>,
+        peer_client: Arc<dyn crate::distributed::PeerClient>,
+    ) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(ContextInner {
+                state: HashMap::new(),
+                event_tx,
+                stream_tx,
+                collected: HashMap::new(),
+                metadata: HashMap::new(),
+                objects: HashMap::new(),
+                session_refs,
+                session_pause_policy: crate::session_ref::SessionPausePolicy::default(),
+                peer_client: Some(peer_client),
+                owns_registry: false,
+            })),
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // Distributed peer access
+    // -----------------------------------------------------------------
+
+    /// Get a clone of the peer client handle, if one was configured.
+    ///
+    /// Returns `None` when the context was constructed without a peer
+    /// client (i.e. for non-distributed workflows).
+    #[cfg(feature = "distributed")]
+    pub async fn peer_client(&self) -> Option<Arc<dyn crate::distributed::PeerClient>> {
+        let inner = self.inner.read().await;
+        inner.peer_client.clone()
+    }
+
+    /// Attach a peer client to an already-constructed context.
+    ///
+    /// Used by the distributed runtime to inject the client after initial
+    /// context creation (e.g. when the peer connection is established
+    /// after the workflow is built).
+    #[cfg(feature = "distributed")]
+    #[allow(dead_code)]
+    pub(crate) async fn set_peer_client(&self, client: Arc<dyn crate::distributed::PeerClient>) {
+        let mut inner = self.inner.write().await;
+        inner.peer_client = Some(client);
     }
 
     // -----------------------------------------------------------------
@@ -214,12 +307,40 @@ impl Context {
         inner.session_refs.clone()
     }
 
-    /// Drain the session ref registry. Called on workflow termination by the
-    /// language bindings to release platform-specific live refs (`Py<PyAny>`,
-    /// `napi::Ref<JsObject>`, etc.) back to their respective garbage collectors.
+    /// Purge session refs from the registry whose
+    /// [`crate::session_ref::RefLifetime`] policy says they should be
+    /// dropped at this point. Called on workflow termination by the
+    /// language bindings to release platform-specific live refs
+    /// (`Py<PyAny>`, `napi::Ref<JsObject>`, etc.) back to their
+    /// respective garbage collectors.
+    ///
+    /// Per-lifetime semantics (delegated to
+    /// [`crate::session_ref::SessionRefRegistry::clear_on_context_drop`]):
+    /// - [`crate::session_ref::RefLifetime::UntilContextDrop`] (default) —
+    ///   purged when **this** [`Context`] owns the registry (i.e. it
+    ///   was constructed via [`Context::new`]). For child contexts
+    ///   that borrow a parent registry via
+    ///   [`Context::new_with_session_refs`], default-lifetime refs
+    ///   are NOT purged because the parent still needs to resolve
+    ///   them — this preserves the pre-Phase-11.2 borrowed-registry
+    ///   no-op behavior.
+    /// - [`crate::session_ref::RefLifetime::UntilExplicitDrop`] — never
+    ///   purged. The caller must invoke
+    ///   [`crate::session_ref::SessionRefRegistry::remove`] explicitly.
+    /// - [`crate::session_ref::RefLifetime::UntilSnapshot`] — never
+    ///   purged here; the snapshot walker handles them.
+    /// - [`crate::session_ref::RefLifetime::UntilParentFinish`] — purged
+    ///   only when **this** [`Context`] owns the registry. For child
+    ///   contexts that borrow a parent registry, these refs survive
+    ///   the child's termination so the parent can still resolve them.
+    ///
+    /// Returns the number of refs actually removed.
     pub async fn clear_session_refs(&self) -> usize {
         let inner = self.inner.read().await;
-        inner.session_refs.drain().await
+        inner
+            .session_refs
+            .clear_on_context_drop(inner.owns_registry)
+            .await
     }
 
     /// Get the configured session pause policy.
@@ -731,5 +852,53 @@ mod tests {
             ctx.session_pause_policy().await,
             SessionPausePolicy::WarnDrop
         );
+    }
+
+    /// Phase 0.5: a `Context` constructed via `new_with_session_refs`
+    /// borrows the registry and must NOT drain it on `clear_session_refs`.
+    #[tokio::test]
+    async fn clear_session_refs_is_noop_for_borrowed_registry() {
+        let parent_registry = Arc::new(crate::session_ref::SessionRefRegistry::new());
+        let _ = parent_registry.insert(1_i32).await.unwrap();
+        let _ = parent_registry.insert(2_i32).await.unwrap();
+        assert_eq!(parent_registry.len().await, 2);
+
+        let (event_tx, _event_rx) = mpsc::unbounded_channel();
+        let (stream_tx, _stream_rx) = broadcast::channel(16);
+        let child_ctx =
+            Context::new_with_session_refs(event_tx, stream_tx, Arc::clone(&parent_registry));
+
+        // The child ctx sees the inherited entries...
+        assert_eq!(child_ctx.session_refs_arc().await.len().await, 2);
+
+        // ...but clear_session_refs is a no-op because the child does
+        // not own the registry.
+        let dropped = child_ctx.clear_session_refs().await;
+        assert_eq!(dropped, 0, "child context must not drain parent registry");
+        assert_eq!(
+            parent_registry.len().await,
+            2,
+            "parent registry must still contain its entries"
+        );
+
+        // Drop the child context entirely. Parent registry is still
+        // intact because its Arc is held externally.
+        drop(child_ctx);
+        assert_eq!(parent_registry.len().await, 2);
+    }
+
+    /// And the inverse: a `Context::new` DOES drain because it owns the
+    /// registry.
+    #[tokio::test]
+    async fn clear_session_refs_drains_owned_registry() {
+        let ctx = test_context();
+        let reg = ctx.session_refs_arc().await;
+        let _ = reg.insert(10_i32).await.unwrap();
+        let _ = reg.insert(20_i32).await.unwrap();
+        assert_eq!(reg.len().await, 2);
+
+        let dropped = ctx.clear_session_refs().await;
+        assert_eq!(dropped, 2);
+        assert_eq!(reg.len().await, 0);
     }
 }

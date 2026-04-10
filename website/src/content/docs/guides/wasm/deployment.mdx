@@ -51,7 +51,9 @@ await init();
 
 export async function handler(request: Request): Promise<Response> {
   const { prompt } = await request.json();
-  const model = CompletionModel.openrouter(getApiKey());
+  // The WASM SDK reads OPENROUTER_API_KEY from the runtime env.
+  // Set it via your platform's secret store before invoking the handler.
+  const model = CompletionModel.openrouter();
 
   const result = await runAgent(
     model,
@@ -98,20 +100,28 @@ const apiKey = JSON.parse(config).openaiKey;
 
 ### Proxy
 
-Route all LLM requests through a central proxy that injects keys server-side. The edge function never sees the raw key. Configure your proxy to accept requests on an OpenAI-compatible `/v1` endpoint, then use the `openai` factory with your proxy token:
+Route all LLM requests through a central proxy that injects keys server-side. The edge function never sees the raw upstream key. Configure your proxy to accept requests on an OpenAI-compatible `/v1` endpoint, then supply the short-lived proxy token via `OPENAI_API_KEY` in the runtime env:
+
+```bash
+# Set OPENAI_API_KEY to the per-deployment proxy token.
+zlayer secret set OPENAI_API_KEY edge-token
+```
 
 ```typescript
+// The WASM SDK reads OPENAI_API_KEY from the runtime environment.
 // The proxy at proxy.yourcompany.com intercepts requests,
 // swaps 'edge-token' for the real API key, and forwards upstream.
-const model = CompletionModel.openai('edge-token');
+const model = CompletionModel.openai();
 ```
 
 ### Runtime injection
 
-For development and staging, pass keys at request time (never in production):
+The WASM SDK does **not** accept API keys as constructor arguments -- every `CompletionModel` factory reads from the runtime environment only. If you need to swap keys per-request, point the SDK at a proxy (see above) and have the proxy decide which upstream key to use based on per-request metadata such as a header:
 
 ```typescript
-const apiKey = request.headers.get('X-API-Key');
+const callerToken = request.headers.get('X-Caller-Token');
+// Forward callerToken to your proxy via the request URL or a custom header;
+// the proxy uses it to look up the correct upstream API key.
 ```
 
 ## Deploying to ZLayer

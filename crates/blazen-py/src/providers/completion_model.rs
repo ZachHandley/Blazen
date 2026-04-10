@@ -394,7 +394,7 @@ impl PyCompletionModel {
     ///     A new CompletionModel with retry behaviour.
     ///
     /// Example:
-    ///     >>> model = CompletionModel.openai("sk-...").with_retry(RetryConfig(max_retries=5))
+    ///     >>> model = CompletionModel.openai(options=ProviderOptions(api_key="sk-...")).with_retry(RetryConfig(max_retries=5))
     #[pyo3(signature = (config=None))]
     fn with_retry(&self, config: Option<PyRef<'_, PyRetryConfig>>) -> Self {
         let retry_config = config.map(|c| c.inner.clone()).unwrap_or_default();
@@ -417,8 +417,8 @@ impl PyCompletionModel {
     ///     A new CompletionModel that falls back through the providers.
     ///
     /// Example:
-    ///     >>> primary = CompletionModel.openai("sk-...")
-    ///     >>> backup = CompletionModel.anthropic("sk-ant-...")
+    ///     >>> primary = CompletionModel.openai(options=ProviderOptions(api_key="sk-..."))
+    ///     >>> backup = CompletionModel.anthropic(options=ProviderOptions(api_key="sk-ant-..."))
     ///     >>> model = CompletionModel.with_fallback([primary, backup])
     #[staticmethod]
     fn with_fallback(models: Vec<PyRef<'_, PyCompletionModel>>) -> PyResult<Self> {
@@ -449,7 +449,7 @@ impl PyCompletionModel {
     ///     A new CompletionModel with caching enabled.
     ///
     /// Example:
-    ///     >>> model = CompletionModel.openai("sk-...").with_cache(CacheConfig(ttl_seconds=600))
+    ///     >>> model = CompletionModel.openai(options=ProviderOptions(api_key="sk-...")).with_cache(CacheConfig(ttl_seconds=600))
     #[pyo3(signature = (config=None))]
     fn with_cache(&self, config: Option<PyRef<'_, PyCacheConfig>>) -> Self {
         let cache_config = config.map(|c| c.inner.clone()).unwrap_or_default();
@@ -764,4 +764,36 @@ fn extract_tool_definitions(
         });
     }
     Ok(rust_tools)
+}
+
+// ---------------------------------------------------------------------------
+// Feature-gated mistralrs factory (separate impl block so pyo3-stub-gen
+// does not try to resolve the type when the feature is disabled)
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "mistralrs")]
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyCompletionModel {
+    /// Create a local mistral.rs provider.
+    ///
+    /// Runs LLM inference entirely on-device using the mistral.rs engine.
+    /// No API key is required.
+    ///
+    /// Args:
+    ///     options: Typed ``MistralRsOptions`` with required ``model_id``
+    ///         (HuggingFace model ID or local GGUF path).
+    #[staticmethod]
+    #[pyo3(signature = (*, options))]
+    fn mistralrs(
+        options: PyRef<'_, crate::providers::options::PyMistralRsOptions>,
+    ) -> PyResult<Self> {
+        let opts = options.inner.clone();
+        Ok(Self {
+            inner: Arc::new(
+                blazen_llm::MistralRsProvider::from_options(opts)
+                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?,
+            ),
+        })
+    }
 }

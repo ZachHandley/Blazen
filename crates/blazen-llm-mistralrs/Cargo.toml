@@ -1,0 +1,67 @@
+[package]
+name = "blazen-llm-mistralrs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "Local LLM backend for Blazen using mistral.rs inference engine"
+
+[dependencies]
+blazen-model-cache = { workspace = true }
+async-trait.workspace = true
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+futures-util.workspace = true
+tokio-stream.workspace = true
+anyhow.workspace = true
+
+# mistralrs with default-features = false compiles on all platforms (CPU-only).
+# Platform-specific acceleration is opt-in via `cuda`, `metal`, etc. features.
+mistralrs = { version = "0.8.1", optional = true, default-features = false }
+
+# Image decoding for vision message inputs. Only needed when the `engine`
+# feature is active, since mistral.rs consumes `image::DynamicImage` values
+# for multimodal requests.
+image = { version = "0.25", optional = true, default-features = false, features = [
+    "jpeg",
+    "png",
+    "gif",
+    "webp",
+    "bmp",
+    "tiff",
+    "ico",
+] }
+base64 = { workspace = true, optional = true }
+
+[features]
+default = []
+engine = ["dep:mistralrs", "dep:image", "dep:base64"]
+
+# Platform-specific acceleration features.
+#
+# These are intentionally NO-OP flags at the library level. Cargo features
+# cannot be gated on `cfg()` targets, and `--all-features` must pass on
+# every platform. Activating `mistralrs/metal` on Linux or `mistralrs/cuda`
+# without an NVIDIA GPU causes hard compile errors from candle's backend
+# guards.
+#
+# To enable GPU acceleration, add `mistralrs` as a direct dependency in your
+# **binary crate** with the desired features:
+#
+#   [dependencies]
+#   mistralrs = { version = "0.8.1", default-features = false, features = ["cuda"] }
+#
+# Cargo's feature unification will merge them with the `engine` dep here.
+cuda = ["engine"]
+metal = ["engine"]
+accelerate = ["engine"]
+mkl = ["engine"]
+flash-attn = ["cuda"]
+
+[lints]
+workspace = true

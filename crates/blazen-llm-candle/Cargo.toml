@@ -1,0 +1,38 @@
+[package]
+name = "blazen-llm-candle"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "Local LLM backend for Blazen using candle inference engine"
+
+[dependencies]
+# candle-core = { version = "0.8", optional = true }  -- commented until Phase 7
+# candle-nn = { version = "0.8", optional = true }    -- commented until Phase 7
+# candle-transformers = { version = "0.8", optional = true }  -- commented until Phase 7
+blazen-model-cache = { workspace = true }
+serde = { workspace = true }
+serde_json.workspace = true
+tokio = { workspace = true }
+tracing.workspace = true
+thiserror = { workspace = true }
+
+[features]
+default = ["cpu"]
+# Intended feature flags for Phase 7 when the candle deps are added:
+#   engine   = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers"]
+#   cpu      = ["engine"]
+#   cuda     = ["engine", "candle-core/cuda"]
+#   metal    = ["engine", "candle-core/metal"]
+#
+# For now, these are no-op feature flags that exist so that downstream crates
+# can already declare their feature mappings without breaking.
+engine = []
+cpu = ["engine"]
+cuda = ["engine"]
+metal = ["engine"]
+
+[lints]
+workspace = true

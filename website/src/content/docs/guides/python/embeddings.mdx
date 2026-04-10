@@ -11,22 +11,30 @@ Blazen provides a unified `EmbeddingModel` interface for generating vector embed
 ## Create an Embedding Model
 
 ```python
-from blazen import EmbeddingModel
+from blazen import EmbeddingModel, ProviderOptions
 
 # OpenAI (default: text-embedding-3-small, 1536 dimensions)
-model = EmbeddingModel.openai("sk-...")
+# Reads OPENAI_API_KEY from the environment by default.
+model = EmbeddingModel.openai()
+
+# Or pass an API key explicitly via ProviderOptions.
+model = EmbeddingModel.openai(options=ProviderOptions(api_key="sk-..."))
 
 # OpenAI with a specific model and dimensionality
-model = EmbeddingModel.openai("sk-...", model="text-embedding-3-large", dimensions=3072)
+model = EmbeddingModel.openai(
+    options=ProviderOptions(api_key="sk-..."),
+    model="text-embedding-3-large",
+    dimensions=3072,
+)
 
 # Together AI
-model = EmbeddingModel.together("tok-...")
+model = EmbeddingModel.together(options=ProviderOptions(api_key="tok-..."))
 
 # Cohere
-model = EmbeddingModel.cohere("co-...")
+model = EmbeddingModel.cohere(options=ProviderOptions(api_key="co-..."))
 
 # Fireworks AI
-model = EmbeddingModel.fireworks("fw-...")
+model = EmbeddingModel.fireworks(options=ProviderOptions(api_key="fw-..."))
 ```
 
 ## Generate Embeddings
@@ -60,14 +68,72 @@ print(model.model_id)    # "text-embedding-3-small"
 print(model.dimensions)  # 1536
 ```
 
+## Local Embeddings (FastEmbed)
+
+Blazen can generate embeddings entirely on your machine using [FastEmbed](https://github.com/qdrant/fastembed) and ONNX Runtime. No API key, no network calls after the initial model download, and completely free.
+
+### Setup
+
+Local embeddings are available when Blazen is built with the `fastembed` feature. The default `pip install blazen` wheels include it.
+
+### Usage
+
+```python
+from blazen import EmbeddingModel, FastEmbedOptions
+
+# Use the default model (BAAI/bge-small-en-v1.5, 384 dimensions)
+model = EmbeddingModel.fastembed()
+
+# Or specify a model and other options explicitly
+model = EmbeddingModel.fastembed(
+    options=FastEmbedOptions(
+        model_name="BGESmallENV15",
+        cache_dir="/tmp/models",
+        max_batch_size=256,
+        show_download_progress=True,
+    )
+)
+
+response = await model.embed(["hello", "world"])
+print(len(response.embeddings))       # 2
+print(len(response.embeddings[0]))    # 384
+```
+
+### FastEmbedOptions
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `model_name` | `str \| None` | `"BGESmallENV15"` | FastEmbed model variant name. |
+| `cache_dir` | `str \| None` | FastEmbed default | Directory where downloaded models are cached. |
+| `max_batch_size` | `int \| None` | `256` | Maximum batch size for embedding. |
+| `show_download_progress` | `bool \| None` | `False` | Print a progress bar during model download. |
+
+### Drop-in with Memory
+
+A local embedding model is a regular `EmbeddingModel` -- it plugs into `Memory` with no changes:
+
+```python
+from blazen import EmbeddingModel, Memory, InMemoryBackend
+
+model = EmbeddingModel.fastembed()
+memory = Memory(model, InMemoryBackend())
+
+await memory.add("doc1", "Paris is the capital of France")
+results = await memory.search("capital of France", limit=5)
+```
+
+### Model Download
+
+The first call to `embed()` (or `Memory.add()`) downloads the ONNX model weights. For `BGESmallENV15` the download is roughly 33 MB. After the first run the model is cached locally and no further network access is required.
+
 ## Use Cases
 
 Embeddings are the building block for semantic search, RAG pipelines, clustering, and classification. A typical pattern inside a workflow step:
 
 ```python
-from blazen import step, Context, Event, EmbeddingModel
+from blazen import step, Context, Event, EmbeddingModel, ProviderOptions
 
-embed_model = EmbeddingModel.openai("sk-...")
+embed_model = EmbeddingModel.openai(options=ProviderOptions(api_key="sk-..."))
 
 @step
 async def embed_documents(ctx: Context, ev: Event):

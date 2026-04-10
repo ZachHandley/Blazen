@@ -17,7 +17,9 @@ import init, { CompletionModel } from "@blazen/sdk";
 
 await init();
 
-const model = CompletionModel.openai("sk-...").withRetry(5);
+// The WASM SDK reads OPENAI_API_KEY from the runtime environment;
+// factory methods do not accept arguments.
+const model = CompletionModel.openai().withRetry(5);
 ```
 
 ## Cache
@@ -26,7 +28,7 @@ Cache identical non-streaming requests in memory.
 
 ```typescript
 // ttlSeconds (default 300), maxEntries (default 1000)
-const model = CompletionModel.openai("sk-...").withCache(600, 500);
+const model = CompletionModel.openai().withCache(600, 500);
 ```
 
 Streaming requests always bypass the cache.
@@ -36,8 +38,8 @@ Streaming requests always bypass the cache.
 Route requests through multiple providers in order.
 
 ```typescript
-const primary = CompletionModel.openai("sk-...");
-const backup = CompletionModel.groq("gsk-...");
+const primary = CompletionModel.openai(); // reads OPENAI_API_KEY
+const backup = CompletionModel.groq();   // reads GROQ_API_KEY
 
 const model = CompletionModel.withFallback([primary, backup]);
 ```
@@ -49,7 +51,7 @@ When the first provider fails with a transient error (rate limit, timeout, serve
 Chain decorators to layer multiple behaviours:
 
 ```typescript
-const model = CompletionModel.openai("sk-...")
+const model = CompletionModel.openai()
   .withCache(300, 1000)
   .withRetry(3);
 ```
@@ -57,8 +59,10 @@ const model = CompletionModel.openai("sk-...")
 For maximum resilience, combine all three:
 
 ```typescript
-const primary = CompletionModel.openai("sk-...").withCache().withRetry();
-const backup = CompletionModel.anthropic("sk-ant-...").withRetry();
+// The WASM SDK exposes OpenAI-compatible providers only.
+// Use OpenRouter for Claude/Gemini/etc. via a single key.
+const primary = CompletionModel.openai().withCache().withRetry();
+const backup = CompletionModel.openrouter().withRetry();
 
 const model = CompletionModel.withFallback([primary, backup]);
 ```

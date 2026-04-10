@@ -476,7 +476,7 @@ fn url_from_source(src: &crate::types::ImageSource) -> Option<String> {
     use crate::types::ImageSource;
     match src {
         ImageSource::Url { url } => Some(url.clone()),
-        ImageSource::Base64 { .. } => None,
+        ImageSource::Base64 { .. } | ImageSource::File { .. } => None,
     }
 }
 

@@ -1,0 +1,30 @@
+[package]
+name = "blazen-audio-piper"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "Local text-to-speech backend for Blazen using Piper (ONNX Runtime)"
+
+[dependencies]
+# ort = { version = "...", optional = true }  -- commented until Phase 9 (Piper uses ONNX Runtime)
+blazen-model-cache = { workspace = true }
+serde = { workspace = true }
+serde_json.workspace = true
+tokio = { workspace = true }
+tracing.workspace = true
+thiserror = { workspace = true }
+
+[features]
+default = []
+# Intended feature flags for Phase 9 when the ONNX Runtime dep is added:
+#   engine   = ["dep:ort"]
+#
+# For now, this is a no-op feature flag that exists so that downstream crates
+# can already declare their feature mappings without breaking.
+engine = []
+
+[lints]
+workspace = true

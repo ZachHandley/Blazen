@@ -371,12 +371,46 @@ impl PyTranscriptionRequest {
         Ok(Self {
             inner: TranscriptionRequest {
                 audio_url,
+                audio_source: None,
                 language,
                 diarize,
                 model,
                 parameters: parse_parameters(py, parameters)?,
             },
         })
+    }
+
+    /// Create a transcription request from a local file path.
+    ///
+    /// This is the preferred constructor for local backends like whisper.cpp
+    /// that read audio directly from disk. It sets ``audio_source`` to a
+    /// ``MediaSource::File`` and leaves ``audio_url`` empty.
+    ///
+    /// Args:
+    ///     path: Absolute or relative path to a local audio file
+    ///         (16-bit PCM mono 16 kHz WAV for whisper.cpp).
+    ///     language: Optional ISO 639-1 language hint (e.g. "en").
+    ///     diarize: Enable speaker diarization (provider-dependent).
+    ///     model: Optional provider-specific model override.
+    ///
+    /// Example:
+    ///     >>> req = TranscriptionRequest.from_file("/path/to/audio.wav")
+    ///     >>> req = TranscriptionRequest.from_file(
+    ///     ...     "/path/to/audio.wav", language="en"
+    ///     ... )
+    #[staticmethod]
+    #[pyo3(signature = (path, *, language=None, diarize=false, model=None))]
+    fn from_file(
+        path: String,
+        language: Option<String>,
+        diarize: bool,
+        model: Option<String>,
+    ) -> Self {
+        let mut inner = TranscriptionRequest::from_file(path);
+        inner.language = language;
+        inner.diarize = diarize;
+        inner.model = model;
+        Self { inner }
     }
 
     #[getter]

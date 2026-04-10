@@ -29,6 +29,7 @@
 //! ```
 
 pub(crate) mod convert;
+pub(crate) mod session_ref_serializable;
 
 pub mod agent;
 pub mod compute;
@@ -69,6 +70,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Workflow
     m.add_class::<workflow::workflow::PyWorkflow>()?;
+    m.add_class::<workflow::workflow::PySessionPausePolicy>()?;
 
     // Handler
     m.add_class::<workflow::handler::PyWorkflowHandler>()?;
@@ -94,6 +96,20 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<providers::options::PyFalOptions>()?;
     m.add_class::<providers::options::PyAzureOptions>()?;
     m.add_class::<providers::options::PyBedrockOptions>()?;
+    m.add_class::<providers::options::PyDevice>()?;
+
+    #[cfg(feature = "fastembed")]
+    m.add_class::<providers::options::PyFastEmbedOptions>()?;
+
+    m.add_class::<providers::options::PyQuantization>()?;
+
+    #[cfg(feature = "mistralrs")]
+    m.add_class::<providers::options::PyMistralRsOptions>()?;
+
+    #[cfg(feature = "whispercpp")]
+    m.add_class::<providers::options::PyWhisperModel>()?;
+    #[cfg(feature = "whispercpp")]
+    m.add_class::<providers::options::PyWhisperOptions>()?;
 
     // Decorator configs (typed wrappers for retry/cache)
     m.add_class::<providers::config::PyCacheStrategy>()?;
@@ -102,6 +118,9 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Embedding model
     m.add_class::<types::PyEmbeddingModel>()?;
+
+    // Transcription provider
+    m.add_class::<types::PyTranscription>()?;
 
     // Token counting utilities
     m.add_function(wrap_pyfunction!(types::estimate_tokens, m)?)?;

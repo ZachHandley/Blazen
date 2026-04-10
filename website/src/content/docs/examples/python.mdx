@@ -81,7 +81,8 @@ Multi-step RAG pipeline with context sharing between steps. Uses typed `ChatMess
 ```python
 from blazen import CompletionModel, ChatMessage, CompletionResponse
 
-model = CompletionModel.openai(os.environ["OPENAI_API_KEY"])
+# Reads OPENAI_API_KEY from the environment by default.
+model = CompletionModel.openai()
 response: CompletionResponse = await model.complete([
     ChatMessage.system("Answer based on the provided documents."),
     ChatMessage.user(query),

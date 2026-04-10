@@ -48,8 +48,9 @@ use pyo3::types::{PyDict, PyList, PyTuple};
 use serde::Serialize;
 
 use blazen_core::RegistryKey;
-use blazen_core::session_ref::SESSION_REF_TAG;
+use blazen_core::session_ref::{SESSION_REF_TAG, SessionRefSerializable};
 
+use crate::session_ref_serializable::{PySerializableSessionRef, SERIALIZE_DUNDER};
 use crate::workflow::session_ref::current_session_registry;
 
 /// The JSON key used to tag legacy pickle-serialized Python objects.
@@ -225,12 +226,37 @@ pub(crate) fn py_to_json(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<ser
 
     // Non-JSON value. Try the active session-ref registry first.
     if let Some(reg) = current_session_registry() {
-        // Wrap the live Py<PyAny> in an Arc and store in the registry.
-        // Py<PyAny> is Send + Sync + 'static so the trait coercion to
-        // Arc<dyn Any + Send + Sync> is direct.
-        let live: Arc<dyn Any + Send + Sync> = Arc::new(obj.clone().unbind());
-        let key = block_on_context(async move { reg.insert_arc(live).await })
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        // Opt-in to the `SessionRefSerializable` protocol if the object
+        // exposes a `__blazen_serialize__` dunder. Values that opt in
+        // are stored in both the main registry (so identity-preserving
+        // lookups keep working) and the serializable sidecar, so they
+        // survive snapshot/resume when the workflow uses
+        // `SessionPausePolicy::PickleOrSerialize`.
+        let has_serializable = obj.hasattr(SERIALIZE_DUNDER).unwrap_or(false);
+
+        let key = if has_serializable {
+            if let Ok(serializable) = PySerializableSessionRef::try_new(obj) {
+                let arc = Arc::new(serializable);
+                block_on_context(async move { reg.insert_serializable(arc).await })
+                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?
+            } else {
+                // The dunder exists but construction failed (e.g. the
+                // call raised or returned non-bytes). Fall through to
+                // the plain live-ref path so the user still gets
+                // identity preservation, rather than losing the object
+                // outright.
+                let live: Arc<dyn Any + Send + Sync> = Arc::new(obj.clone().unbind());
+                block_on_context(async move { reg.insert_arc(live).await })
+                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?
+            }
+        } else {
+            // Wrap the live Py<PyAny> in an Arc and store in the
+            // registry. Py<PyAny> is Send + Sync + 'static so the
+            // trait coercion to Arc<dyn Any + Send + Sync> is direct.
+            let live: Arc<dyn Any + Send + Sync> = Arc::new(obj.clone().unbind());
+            block_on_context(async move { reg.insert_arc(live).await })
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?
+        };
         return Ok(serde_json::json!({ SESSION_REF_TAG: key.to_string() }));
     }
 
@@ -304,22 +330,69 @@ pub(crate) fn json_to_py(py: Python<'_>, val: &serde_json::Value) -> PyResult<Py
                              workflow step or the workflow handler that produced it)"
                         )));
                     };
-                    let arc_any = block_on_context(async move { reg.get_any(key).await });
+                    let reg_for_any = reg.clone();
+                    let arc_any = block_on_context(async move { reg_for_any.get_any(key).await });
                     let Some(arc_any) = arc_any else {
+                        // The key is not in the local `inner` map.  Before
+                        // giving up, check the remote-refs sidecar — the ref
+                        // may live on a peer node and require a Deref RPC.
+                        let reg_for_remote = reg.clone();
+                        let remote =
+                            block_on_context(async move { reg_for_remote.get_remote(key).await });
+                        if let Some(descriptor) = remote {
+                            return Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                                "session ref `{uuid_str}` is a remote ref on peer `{}` \
+                                 — call peer_client.deref_session_ref('{uuid_str}') to \
+                                 fetch the value, or use Workflow.run_remote() which \
+                                 handles this automatically",
+                                descriptor.origin_node_id
+                            )));
+                        }
                         return Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
                             "session ref `{uuid_str}` no longer available (the workflow may \
                              have been resumed in a different process, or the registry was \
                              cleared)"
                         )));
                     };
-                    let py_arc: Arc<Py<PyAny>> =
-                        Arc::downcast::<Py<PyAny>>(arc_any).map_err(|_| {
-                            pyo3::exceptions::PyRuntimeError::new_err(format!(
-                                "session ref `{uuid_str}` has unexpected runtime type \
-                                 (expected Python object, got cross-runtime entry)"
-                            ))
-                        })?;
-                    return Ok(py_arc.clone_ref(py));
+
+                    // Path A: legacy live-ref insertion via `insert_arc`
+                    // stored the underlying `Py<PyAny>` directly.
+                    match Arc::downcast::<Py<PyAny>>(arc_any) {
+                        Ok(py_arc) => return Ok(py_arc.clone_ref(py)),
+                        Err(arc_any) => {
+                            // Path B: values inserted via the
+                            // `__blazen_serialize__` fast path are
+                            // stored as `Arc<PySerializableSessionRef>`
+                            // in the main registry (see
+                            // `insert_serializable`). Downcast directly
+                            // and return the wrapped Py<PyAny>.
+                            if let Ok(pysr) = Arc::downcast::<PySerializableSessionRef>(arc_any) {
+                                return Ok(pysr.obj.clone_ref(py));
+                            }
+                        }
+                    }
+
+                    // Path C: resumed serializable entries live in the
+                    // sidecar as `Arc<dyn SessionRefSerializable>`. Try
+                    // the sidecar lookup and upcast the trait object to
+                    // `&dyn Any` (stable since Rust 1.86) so we can
+                    // downcast to the concrete `PySerializableSessionRef`.
+                    let reg_for_ser = reg.clone();
+                    let ser_arc =
+                        block_on_context(async move { reg_for_ser.get_serializable(key).await });
+                    if let Some(ser_arc) = ser_arc {
+                        let trait_ref: &dyn SessionRefSerializable = &*ser_arc;
+                        let any_ref: &dyn std::any::Any = trait_ref;
+                        if let Some(pysr) = any_ref.downcast_ref::<PySerializableSessionRef>() {
+                            return Ok(pysr.obj.clone_ref(py));
+                        }
+                    }
+
+                    return Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                        "session ref `{uuid_str}` has unexpected runtime type \
+                         (expected Python object or serializable session ref, \
+                          got cross-runtime entry)"
+                    )));
                 }
                 // Legacy pickle tag (back-compat reader only).
                 if let Some(serde_json::Value::String(b64)) = map.get(PICKLE_TAG)

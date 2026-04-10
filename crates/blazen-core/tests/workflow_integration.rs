@@ -1529,8 +1529,8 @@ async fn test_pause_resume_in_place() {
 
     // The workflow should complete after the step finishes its sleep.
     let result = handler.result().await.unwrap();
-    let stop = result.event.downcast_ref::<StopEvent>().unwrap();
-    assert_eq!(stop.result["test"], "pause_resume");
+    let stop_event = result.event.downcast_ref::<StopEvent>().unwrap();
+    assert_eq!(stop_event.result["test"], "pause_resume");
 }
 
 // ===========================================================================
@@ -1594,8 +1594,8 @@ async fn test_snapshot_while_running() {
     // Resume and let the workflow complete.
     handler.resume_in_place().unwrap();
     let result = handler.result().await.unwrap();
-    let stop = result.event.downcast_ref::<StopEvent>().unwrap();
-    assert_eq!(stop.result["done"], true);
+    let stop_event = result.event.downcast_ref::<StopEvent>().unwrap();
+    assert_eq!(stop_event.result["done"], true);
 }
 
 // ===========================================================================
@@ -1693,6 +1693,129 @@ async fn test_workflow_result_carries_registry() {
 }
 
 // ===========================================================================
+// 18b. Sub-workflow session ref handoff via a shared registry Arc
+// ===========================================================================
+// Regression test for `FUTURE_ROADMAP.md` §0 (Phase 0.3). When a parent
+// workflow invokes a sub-workflow and passes its own `SessionRefRegistry`
+// via `run_with_registry`, the sub-workflow's inserts must remain
+// resolvable via the PARENT registry **after** the sub-workflow handler
+// has finished. This is the whole point of Option A (parent-owned
+// registry for sub-workflow results).
+
+#[tokio::test]
+async fn test_sub_workflow_session_ref_handoff_via_shared_registry() {
+    use blazen_core::session_ref::RegistryKey;
+
+    // Build the inner workflow first. Its one step inserts a value into
+    // the *current* session ref registry (which will be the parent's Arc
+    // once we invoke it via `run_with_registry`) and returns the
+    // RegistryKey inside `StopEvent.result` as a JSON marker.
+    let inner_step: StepRegistration = {
+        let handler: StepFn = Arc::new(|_event: Box<dyn AnyEvent>, ctx: Context| {
+            Box::pin(async move {
+                let registry = ctx.session_refs_arc().await;
+                let key = registry
+                    .insert("the-secret-value".to_string())
+                    .await
+                    .unwrap();
+                Ok(StepOutput::Single(Box::new(StopEvent {
+                    result: serde_json::json!({
+                        "__blazen_session_ref__": key.to_string(),
+                    }),
+                })))
+            })
+        });
+
+        StepRegistration {
+            name: "inner_insert".to_string(),
+            accepts: vec![StartEvent::event_type()],
+            emits: vec![StopEvent::event_type()],
+            handler,
+            max_concurrency: 1,
+        }
+    };
+
+    let inner_workflow = Arc::new(
+        WorkflowBuilder::new("inner")
+            .step(inner_step)
+            .no_timeout()
+            .build()
+            .unwrap(),
+    );
+
+    // Build the outer workflow. Its step calls
+    // `inner.run_with_registry(input, parent_registry).await`, awaits
+    // the sub-handler's result, and re-emits the sub-result JSON as
+    // its own `StopEvent.result` so we can inspect it from the test.
+    let outer_step: StepRegistration = {
+        let inner = Arc::clone(&inner_workflow);
+        let handler: StepFn = Arc::new(move |_event: Box<dyn AnyEvent>, ctx: Context| {
+            let inner = Arc::clone(&inner);
+            Box::pin(async move {
+                let parent_registry = ctx.session_refs_arc().await;
+                let sub_handler = inner
+                    .run_with_registry(serde_json::json!({}), Arc::clone(&parent_registry))
+                    .await
+                    .expect("sub-workflow run_with_registry should succeed");
+                let sub_result_event = sub_handler
+                    .result()
+                    .await
+                    .expect("sub result should be Ok")
+                    .event;
+                let sub_stop = sub_result_event
+                    .downcast_ref::<StopEvent>()
+                    .expect("inner workflow should emit a StopEvent");
+                let sub_result = sub_stop.result.clone();
+                Ok(StepOutput::Single(Box::new(StopEvent {
+                    result: sub_result,
+                })))
+            })
+        });
+
+        StepRegistration {
+            name: "outer_invoke".to_string(),
+            accepts: vec![StartEvent::event_type()],
+            emits: vec![StopEvent::event_type()],
+            handler,
+            max_concurrency: 1,
+        }
+    };
+
+    let outer_workflow = WorkflowBuilder::new("outer")
+        .step(outer_step)
+        .no_timeout()
+        .build()
+        .unwrap();
+
+    let outer_handler = outer_workflow.run(serde_json::json!(null)).await.unwrap();
+    let outer_result = outer_handler.result().await.unwrap();
+    let outer_stop_event = outer_result
+        .event
+        .downcast_ref::<StopEvent>()
+        .expect("outer workflow should emit a StopEvent");
+
+    // The outer result JSON should carry the session_ref marker the inner
+    // step produced.
+    let ref_str = outer_stop_event
+        .result
+        .get("__blazen_session_ref__")
+        .and_then(serde_json::Value::as_str)
+        .expect("outer result should carry __blazen_session_ref__ marker");
+    let key = RegistryKey::parse(ref_str).expect("ref str is a valid UUID");
+
+    // The actual object is STILL resolvable via the OUTER result's
+    // registry even though the inner workflow handler has already
+    // finished and its handle has been dropped. This is the whole point
+    // of sharing the registry Arc across parent/child.
+    let got: Arc<String> = outer_result
+        .session_refs
+        .get::<String>(key)
+        .await
+        .expect("inner-inserted session ref must survive on the parent registry");
+    assert_eq!(*got, "the-secret-value");
+}
+
+// ===========================================================================
 // 19. SessionPausePolicy::HardError prevents snapshot when refs exist
 // ===========================================================================
 
@@ -1755,4 +1878,390 @@ async fn test_session_pause_policy_hard_error() {
 
     // Clean up: abort the workflow so the test doesn't hang.
     handler.abort().unwrap();
+}
+
+// ===========================================================================
+// 20. Child SessionPausePolicy::HardError fires on parent-owned refs in a
+//     shared registry
+// ===========================================================================
+// When a parent and child share one `SessionRefRegistry` via
+// `run_with_registry`, the child's `SessionPausePolicy` is enforced against
+// the ENTIRE shared registry — including refs the parent inserted before
+// invoking the child. This test pins that current behavior: a child with
+// `HardError` will reject a mid-run snapshot solely because the parent has
+// a live ref in the registry. When `RefLifetime` (roadmap Phase 11.2)
+// lands, the correct semantics will be "child HardError only applies to
+// refs the child inserted" and this test will need to be updated.
+
+#[tokio::test]
+async fn test_sub_workflow_hard_error_policy_sees_parent_refs() {
+    use blazen_core::SessionPausePolicy;
+    use blazen_core::session_ref::RegistryKey;
+    use tokio::sync::{Mutex, oneshot};
+
+    // Child workflow: one slow step, inserts NO refs of its own, so any ref
+    // its HardError policy sees must come from the parent's registry.
+    let child_step: StepRegistration = StepRegistration {
+        name: "child_slow_step".to_string(),
+        accepts: vec![StartEvent::event_type()],
+        emits: vec![StopEvent::event_type()],
+        handler: Arc::new(|_event: Box<dyn AnyEvent>, _ctx: Context| {
+            Box::pin(async move {
+                tokio::time::sleep(Duration::from_millis(500)).await;
+                Ok(StepOutput::Single(Box::new(StopEvent {
+                    result: serde_json::json!({"child_done": true}),
+                })))
+            })
+        }),
+        max_concurrency: 1,
+    };
+    let child_workflow = Arc::new(
+        WorkflowBuilder::new("child-hard-error")
+            .step(child_step)
+            .no_timeout()
+            .session_pause_policy(SessionPausePolicy::HardError)
+            .build()
+            .unwrap(),
+    );
+
+    // Parent step inserts a ref, launches the child, ships the child handle
+    // to the test body, then waits for `resume_tx` before finishing.
+    let (child_handle_tx, child_handle_rx) = oneshot::channel::<blazen_core::WorkflowHandler>();
+    let (resume_tx, resume_rx) = oneshot::channel::<()>();
+    let child_handle_tx = Arc::new(Mutex::new(Some(child_handle_tx)));
+    let resume_rx = Arc::new(Mutex::new(Some(resume_rx)));
+
+    let parent_step: StepRegistration = StepRegistration {
+        name: "parent_invoke".to_string(),
+        accepts: vec![StartEvent::event_type()],
+        emits: vec![StopEvent::event_type()],
+        handler: {
+            let child = Arc::clone(&child_workflow);
+            let tx_cell = Arc::clone(&child_handle_tx);
+            let rx_cell = Arc::clone(&resume_rx);
+            Arc::new(move |_event: Box<dyn AnyEvent>, ctx: Context| {
+                let child = Arc::clone(&child);
+                let tx_cell = Arc::clone(&tx_cell);
+                let rx_cell = Arc::clone(&rx_cell);
+                Box::pin(async move {
+                    let registry = ctx.session_refs_arc().await;
+                    let parent_key = registry.insert(7777_i32).await.unwrap();
+                    let sub = child
+                        .run_with_registry(serde_json::json!({}), Arc::clone(&registry))
+                        .await
+                        .unwrap();
+                    let send_tx = tx_cell.lock().await.take().unwrap();
+                    send_tx.send(sub).ok().unwrap();
+                    let wait_rx = rx_cell.lock().await.take().unwrap();
+                    wait_rx.await.unwrap();
+                    Ok(StepOutput::Single(Box::new(StopEvent {
+                        result: serde_json::json!({ "parent_ref_key": parent_key.to_string() }),
+                    })))
+                })
+            })
+        },
+        max_concurrency: 1,
+    };
+
+    let parent_handler = WorkflowBuilder::new("parent-shared-registry")
+        .step(parent_step)
+        .no_timeout()
+        .build()
+        .unwrap()
+        .run(serde_json::json!(null))
+        .await
+        .unwrap();
+
+    // Grab the child handle and give the slow step time to start running.
+    let child_handler = child_handle_rx.await.expect("child handle delivered");
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Pause + snapshot the CHILD. Its HardError policy fires against the
+    // shared registry and raises SessionRefsNotSerializable — the offending
+    // ref is the PARENT's 7777_i32 entry. The child inserted nothing.
+    child_handler.pause().unwrap();
+    let snapshot_result = child_handler.snapshot().await;
+    match snapshot_result {
+        Err(WorkflowError::SessionRefsNotSerializable { keys }) => {
+            assert_eq!(keys.len(), 1, "shared registry holds only the parent's ref");
+        }
+        other => panic!("expected SessionRefsNotSerializable, got: {other:?}"),
+    }
+
+    // Clean up the child, release the parent step, then verify the parent's
+    // ref is STILL resolvable on the returned WorkflowResult.
+    child_handler.abort().unwrap();
+    drop(child_handler);
+    resume_tx.send(()).expect("parent step should be waiting");
+
+    let parent_result = parent_handler.result().await.unwrap();
+    let final_stop = parent_result
+        .event
+        .downcast_ref::<StopEvent>()
+        .expect("parent emits StopEvent");
+    let parent_key = RegistryKey::parse(
+        final_stop.result["parent_ref_key"]
+            .as_str()
+            .expect("parent_ref_key present"),
+    )
+    .expect("valid uuid");
+    assert_eq!(parent_result.session_refs.len().await, 1);
+    let got: Arc<i32> = parent_result
+        .session_refs
+        .get::<i32>(parent_key)
+        .await
+        .expect("parent ref still resolvable after child abort");
+    assert_eq!(*got, 7777);
+}
+
+// ===========================================================================
+// 21. RefLifetime::UntilSnapshot — ephemeral refs are purged when a
+//     snapshot is built mid-flight, while default-lifetime refs survive.
+// ===========================================================================
+
+#[tokio::test]
+async fn test_until_snapshot_lifetime_purged_by_snapshot_walker() {
+    use blazen_core::session_ref::{RefLifetime, RegistryKey};
+    use tokio::sync::oneshot;
+
+    // The step inserts two refs: one with the default lifetime
+    // (UntilContextDrop), one with UntilSnapshot. It ships both keys
+    // out via a oneshot so the test can verify post-snapshot state,
+    // then sleeps long enough for the test to pause+snapshot.
+    let (keys_tx, keys_rx) = oneshot::channel::<(RegistryKey, RegistryKey)>();
+    let keys_tx = std::sync::Mutex::new(Some(keys_tx));
+
+    let step: StepRegistration = {
+        let handler: StepFn = Arc::new(move |_event: Box<dyn AnyEvent>, ctx: Context| {
+            let tx = keys_tx
+                .lock()
+                .unwrap()
+                .take()
+                .expect("step handler called more than once");
+            Box::pin(async move {
+                let registry = ctx.session_refs_arc().await;
+
+                // Default lifetime — should survive the snapshot.
+                let durable_key = registry.insert(111_i32).await.unwrap();
+
+                // UntilSnapshot lifetime — should be purged by the
+                // snapshot walker before the configured pause policy
+                // runs.
+                let ephemeral_key = registry
+                    .insert_with_lifetime("ephemeral".to_owned(), RefLifetime::UntilSnapshot)
+                    .await
+                    .unwrap();
+
+                // Hand the keys back to the test body.
+                tx.send((durable_key, ephemeral_key)).ok();
+
+                // Sleep long enough for the test to pause+snapshot.
+                tokio::time::sleep(Duration::from_millis(300)).await;
+
+                Ok(StepOutput::Single(Box::new(StopEvent {
+                    result: serde_json::json!({"done": true}),
+                })))
+            })
+        });
+
+        StepRegistration {
+            name: "until_snapshot_step".to_string(),
+            accepts: vec![StartEvent::event_type()],
+            emits: vec![StopEvent::event_type()],
+            handler,
+            max_concurrency: 1,
+        }
+    };
+
+    // Use WarnDrop so the snapshot walker doesn't error on the
+    // surviving default-lifetime ref — we want it to complete
+    // successfully and we'll verify the registry contents directly.
+    let workflow = WorkflowBuilder::new("until-snapshot-purge")
+        .step(step)
+        .no_timeout()
+        .session_pause_policy(blazen_core::SessionPausePolicy::WarnDrop)
+        .build()
+        .unwrap();
+
+    let handler = workflow.run(serde_json::json!(null)).await.unwrap();
+
+    // Wait for the step to insert both refs.
+    let (durable_key, ephemeral_key) = keys_rx.await.expect("step delivered keys");
+
+    // Both refs are live before the snapshot.
+    let registry = handler.session_refs();
+    assert!(
+        registry.get::<i32>(durable_key).await.is_some(),
+        "durable ref should be present before snapshot"
+    );
+    assert!(
+        registry.get::<String>(ephemeral_key).await.is_some(),
+        "ephemeral ref should be present before snapshot"
+    );
+    assert_eq!(
+        registry.lifetime_of(ephemeral_key).await,
+        Some(RefLifetime::UntilSnapshot),
+    );
+
+    // Pause and snapshot. The snapshot walker should purge the
+    // UntilSnapshot ref BEFORE the WarnDrop policy looks at the
+    // registry.
+    handler.pause().unwrap();
+    let snapshot = handler
+        .snapshot()
+        .await
+        .expect("snapshot should succeed under WarnDrop");
+
+    // Ephemeral ref must be gone (purged by the snapshot walker).
+    assert!(
+        registry.get::<String>(ephemeral_key).await.is_none(),
+        "UntilSnapshot ref must be purged by the snapshot walker"
+    );
+    assert!(
+        registry.lifetime_of(ephemeral_key).await.is_none(),
+        "UntilSnapshot lifetime sidecar must be cleared too"
+    );
+
+    // Durable default-lifetime ref must still be live.
+    assert!(
+        registry.get::<i32>(durable_key).await.is_some(),
+        "default-lifetime ref must survive a snapshot"
+    );
+    assert_eq!(
+        registry.lifetime_of(durable_key).await,
+        Some(RefLifetime::UntilContextDrop),
+    );
+
+    // Snapshot metadata must report the durable ref as dropped (it
+    // wasn't pickled because no pickler is registered) but must NOT
+    // mention the ephemeral key — the walker purged it before the
+    // policy ran, so the policy never saw it.
+    let dropped = snapshot
+        .metadata
+        .get("__blazen_dropped_session_refs")
+        .expect("WarnDrop policy records dropped refs in snapshot metadata");
+    let dropped_keys: Vec<String> = serde_json::from_value(dropped.clone()).unwrap();
+    let durable_str = durable_key.to_string();
+    let ephemeral_str = ephemeral_key.to_string();
+    assert!(
+        dropped_keys.contains(&durable_str),
+        "durable key must appear in dropped refs metadata, got {dropped_keys:?}",
+    );
+    assert!(
+        !dropped_keys.contains(&ephemeral_str),
+        "ephemeral key must NOT appear in dropped refs metadata \
+         (snapshot walker purged it before the policy ran), got {dropped_keys:?}",
+    );
+
+    // Clean up.
+    handler.abort().unwrap();
+}
+
+// ===========================================================================
+// Phase 12.2 — Step deserializer registry
+// ===========================================================================
+//
+// These tests exercise `Workflow::new_from_registered_steps` end-to-end:
+// a step builder is registered in the process-global
+// `StepDeserializerRegistry`, the workflow is rebuilt by looking up the
+// step ID, and the workflow runs to completion. Tests use unique,
+// test-specific step IDs so they do not collide with each other or with
+// the inline unit tests in `step_registry.rs`.
+
+/// Step ID used by the `new_workflow_from_registered_steps` test.
+const STEP_ID_ECHO: &str = "blazen_core::tests::phase_12_2::echo";
+
+/// Step ID used by the `registered_step_ids_lists_all` test (second entry).
+const STEP_ID_NOOP: &str = "blazen_core::tests::phase_12_2::noop";
+
+fn registry_echo_step() -> StepRegistration {
+    let handler: StepFn = Arc::new(|event, _ctx| {
+        Box::pin(async move {
+            let start = event
+                .as_any()
+                .downcast_ref::<StartEvent>()
+                .expect("expected StartEvent");
+            let stop = StopEvent {
+                result: start.data.clone(),
+            };
+            Ok(StepOutput::Single(Box::new(stop)))
+        })
+    });
+
+    StepRegistration {
+        name: "registry_echo".into(),
+        accepts: vec![StartEvent::event_type()],
+        emits: vec![StopEvent::event_type()],
+        handler,
+        max_concurrency: 0,
+    }
+}
+
+fn registry_noop_step() -> StepRegistration {
+    let handler: StepFn = Arc::new(|_event, _ctx| Box::pin(async move { Ok(StepOutput::None) }));
+
+    StepRegistration {
+        name: "registry_noop".into(),
+        // Accept a custom event so it does not collide with the echo
+        // step on StartEvent dispatch if both were registered in the
+        // same workflow.
+        accepts: vec!["test::phase_12_2::NoopEvent"],
+        emits: vec![],
+        handler,
+        max_concurrency: 0,
+    }
+}
+
+#[tokio::test]
+async fn new_workflow_from_registered_steps() {
+    use blazen_core::register_step_builder;
+
+    register_step_builder(STEP_ID_ECHO, registry_echo_step);
+
+    let workflow =
+        Workflow::new_from_registered_steps("phase-12-2-rebuilt", vec![STEP_ID_ECHO]).unwrap();
+
+    let handler = workflow
+        .run(serde_json::json!({"hello": "distributed"}))
+        .await
+        .unwrap();
+    let result = handler.result().await.unwrap().event;
+    assert_eq!(result.event_type_id(), StopEvent::event_type());
+
+    let stop = result.downcast_ref::<StopEvent>().unwrap();
+    assert_eq!(stop.result, serde_json::json!({"hello": "distributed"}));
+}
+
+#[tokio::test]
+async fn unknown_step_id_errors() {
+    let err = Workflow::new_from_registered_steps(
+        "phase-12-2-missing",
+        vec!["blazen_core::tests::phase_12_2::does_not_exist"],
+    )
+    .unwrap_err();
+
+    match err {
+        WorkflowError::UnknownStep { step_id } => {
+            assert_eq!(step_id, "blazen_core::tests::phase_12_2::does_not_exist");
+        }
+        other => panic!("expected UnknownStep, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn registered_step_ids_lists_all() {
+    use blazen_core::{register_step_builder, registered_step_ids};
+
+    register_step_builder(STEP_ID_ECHO, registry_echo_step);
+    register_step_builder(STEP_ID_NOOP, registry_noop_step);
+
+    let ids = registered_step_ids();
+    assert!(
+        ids.contains(&STEP_ID_ECHO),
+        "registered_step_ids() must include {STEP_ID_ECHO}, got {ids:?}",
+    );
+    assert!(
+        ids.contains(&STEP_ID_NOOP),
+        "registered_step_ids() must include {STEP_ID_NOOP}, got {ids:?}",
+    );
 }

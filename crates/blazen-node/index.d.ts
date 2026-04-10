@@ -101,7 +101,7 @@ export type JsChatWindow = ChatWindow
  * Use the static factory methods to create an instance for your provider:
  *
  * ```javascript
- * const model = CompletionModel.openai("sk-...");
+ * const model = CompletionModel.openai({ apiKey: "sk-..." });
  * const response = await model.complete([
  *   ChatMessage.user("What is 2 + 2?")
  * ]);
@@ -150,7 +150,7 @@ export declare class CompletionModel {
    * Wrap this model with automatic retry on transient failures.
    *
    * ```javascript
-   * const model = CompletionModel.openrouter(key);
+   * const model = CompletionModel.openrouter({ apiKey: key });
    * const withRetry = model.withRetry({ maxRetries: 3, initialDelayMs: 1000 });
    * ```
    */
@@ -279,6 +279,43 @@ export declare class Context {
   /** Get the workflow run ID. */
   runId(): Promise<string>
   /**
+   * Store an opaque, user-serialized payload in the session-ref
+   * registry under a fresh [`RegistryKey`].
+   *
+   * `typeName` is a stable identifier the caller chooses for this
+   * payload (e.g. `"app::EmbeddingHandle"`). The same name must be
+   * used on the resume side to recognise the payload — the type tag
+   * is captured into snapshot metadata along with the bytes when
+   * the workflow is paused under
+   * [`SessionPausePolicy::PickleOrSerialize`](blazen_core::session_ref::SessionPausePolicy).
+   *
+   * Returns the registry key as a string. JS callers can use this
+   * key with [`Self::get_session_ref_serializable`] inside the same
+   * run, or after a snapshot/resume cycle to retrieve the bytes
+   * they originally inserted.
+   *
+   * **Important.** Unlike the Python binding, the Node bindings do
+   * not currently auto-detect a `serialize()` method on JS objects.
+   * JS code must serialize the value itself (typically into a
+   * `Buffer`) before calling this method, and must deserialize the
+   * bytes returned by `getSessionRefSerializable` back into a
+   * runtime object in user code. This limitation is rooted in the
+   * `serde_json::Value`-based step bridge and is tracked separately
+   * from this method.
+   */
+  insertSessionRefSerializable(typeName: string, bytes: Buffer): Promise<string>
+  /**
+   * Retrieve a payload previously stored via
+   * [`Self::insert_session_ref_serializable`].
+   *
+   * Returns `null` if the registry has no entry under `key`, or if
+   * the entry exists but was inserted via the non-serializable
+   * path (`set` / `setBytes` / language-specific live refs).
+   * Otherwise returns `{ typeName, bytes }` matching the
+   * arguments the caller originally passed in.
+   */
+  getSessionRefSerializable(key: string): Promise<SerializableRefPayload | null>
+  /**
    * Persistable workflow state. Survives `pause()` / `resume()`,
    * checkpoints, and durable storage.
    *
@@ -307,7 +344,7 @@ export type JsContext = Context
  * Use the static factory methods to create an instance for your provider:
  *
  * ```javascript
- * const model = EmbeddingModel.openai("sk-...");
+ * const model = EmbeddingModel.openai({ apiKey: "sk-..." });
  * const response = await model.embed(["Hello", "World"]);
  * console.log(response.embeddings); // [[0.1, ...], [0.3, ...]]
  * ```
@@ -487,7 +524,7 @@ export type JsJsonlBackend = JsonlBackend
  * ```javascript
  * import { Memory, EmbeddingModel, InMemoryBackend } from 'blazen';
  *
- * const embedder = EmbeddingModel.openai(key);
+ * const embedder = EmbeddingModel.openai({ apiKey: key });
  * const memory = new Memory(embedder, new InMemoryBackend());
  *
  * await memory.add("doc1", "Paris is the capital of France");
@@ -740,6 +777,45 @@ export declare class StateNamespace {
 export type JsStateNamespace = StateNamespace
 
 /**
+ * An audio transcription provider.
+ *
+ * Use the static factory methods to create a transcriber for a specific
+ * backend, then call `transcribe` to convert audio to text.
+ *
+ * ```javascript
+ * // Local, offline transcription via whisper.cpp
+ * const transcriber = Transcription.whispercpp({ model: "base" });
+ * const result = await transcriber.transcribe({ audioUrl: "audio.wav" });
+ * console.log(result.text);
+ *
+ * // Remote transcription via fal.ai (requires API key)
+ * const transcriber = Transcription.fal();
+ * const result = await transcriber.transcribe({
+ *   audioUrl: "https://example.com/audio.mp3",
+ * });
+ * ```
+ */
+export declare class Transcription {
+  /**
+   * Create a fal.ai transcription provider.
+   *
+   * Requires a fal.ai API key via `options.apiKey` or the `FAL_KEY`
+   * environment variable. Supports remote audio URLs.
+   */
+  static fal(options?: JsFalOptions | undefined | null): Transcription
+  /** Get the provider identifier (e.g. `"fal"`, `"whispercpp"`). */
+  get providerId(): string
+  /**
+   * Transcribe an audio clip to text.
+   *
+   * For local backends like whisper.cpp, pass `audioUrl` as a local file
+   * path (whisper.cpp does not fetch remote URLs).
+   */
+  transcribe(request: JsTranscriptionRequest): Promise<JsTranscriptionResult>
+}
+export type JsTranscription = Transcription
+
+/**
  * A Valkey/Redis-backed backend for the memory store.
  *
  * ```javascript
@@ -776,6 +852,15 @@ export type JsValkeyBackend = ValkeyBackend
 export declare class Workflow {
   /** Create a new workflow with the given name. */
   constructor(name: string)
+  /**
+   * Configure how live session refs are treated when the workflow
+   * is paused or snapshotted.
+   *
+   * Defaults to `SessionPausePolicy.PickleOrError`. Set this to
+   * `SessionPausePolicy.PickleOrSerialize` to opt into the
+   * `insertSessionRefSerializable` round-trip path.
+   */
+  setSessionPausePolicy(policy: SessionPausePolicy): void
   /**
    * Add a step to the workflow.
    *
@@ -841,6 +926,35 @@ export declare class Workflow {
    * ```
    */
   resume(snapshotJson: string): Promise<WorkflowHandler>
+  /**
+   * Resume a workflow from a snapshot, rehydrating every
+   * `SessionPausePolicy.PickleOrSerialize` session-ref entry into
+   * the resumed registry under its original [`RegistryKey`].
+   *
+   * This is the resume-side counterpart of pausing a workflow whose
+   * `sessionPausePolicy` is set to `PickleOrSerialize`. The
+   * snapshot's `__blazen_serialized_session_refs` sidecar carries
+   * `(typeName, bytes)` records for every payload that was inserted
+   * via `ctx.insertSessionRefSerializable`. This method walks that
+   * sidecar, registers a no-op rehydrator for each unique type tag,
+   * and lets the core
+   * [`Workflow::resume_with_deserializers`](blazen_core::Workflow::resume_with_deserializers)
+   * path repopulate the registry. After this call, JS code can
+   * retrieve the original bytes via
+   * `ctx.getSessionRefSerializable(key)` and deserialize them
+   * itself.
+   *
+   * Snapshots that do **not** contain any serialized session refs
+   * work fine with the plain [`Self::resume`] entrypoint. Use this
+   * method only when you need the serializable rehydration path.
+   *
+   * ```javascript
+   * const snap = fs.readFileSync("snapshot.json", "utf-8");
+   * const handler = await workflow.resumeWithSerializableRefs(snap);
+   * const result = await handler.result();
+   * ```
+   */
+  resumeWithSerializableRefs(snapshotJson: string): Promise<WorkflowHandler>
 }
 export type JsWorkflow = Workflow
 
@@ -1611,7 +1725,7 @@ export interface PromptTemplateOptions {
  * ```typescript
  * import { CompletionModel, ChatMessage, runAgent } from 'blazen';
  *
- * const model = CompletionModel.openai("sk-...");
+ * const model = CompletionModel.openai({ apiKey: "sk-..." });
  *
  * const result = await runAgent(
  *   model,
@@ -1626,6 +1740,63 @@ export interface PromptTemplateOptions {
  * ```
  */
 export declare function runAgent(model: JsCompletionModel, messages: Array<JsChatMessage>, tools: Array<JsToolDef>, toolHandler: ToolHandlerTsfn, options?: JsAgentRunOptions | undefined | null): Promise<JsAgentResult>
+
+/**
+ * Payload returned by [`JsContext::get_session_ref_serializable`].
+ *
+ * Carries the type-tag string the JS caller supplied at insertion
+ * time alongside the raw bytes captured for that key. JS code is
+ * responsible for reconstructing whatever runtime object the bytes
+ * represent — see the module docs on
+ * [`super::session_ref_serializable`] for the trade-off rationale.
+ */
+export interface SerializableRefPayload {
+  /**
+   * Stable identifier the JS caller passed to
+   * `insertSessionRefSerializable`.
+   */
+  typeName: string
+  /**
+   * Raw bytes the JS caller passed to
+   * `insertSessionRefSerializable`. Returned as a `Buffer` so the
+   * payload survives the napi boundary unchanged.
+   */
+  bytes: Buffer
+}
+
+/**
+ * Policy applied to live session references when a workflow is paused
+ * or snapshotted.
+ *
+ * Mirrors the Rust-side
+ * [`SessionPausePolicy`](blazen_core::session_ref::SessionPausePolicy)
+ * enum and the Python `SessionPausePolicy` exposed by the pyo3
+ * bindings. Configure it on a [`JsWorkflow`] via
+ * [`JsWorkflow::set_session_pause_policy`] before calling
+ * `run`/`runWithHandler`/`resume`.
+ *
+ * Variants:
+ *
+ * - `PickleOrError`: best-effort pickle each live ref; fail the pause
+ *   with a descriptive error if a ref cannot be captured. This is the
+ *   default.
+ * - `PickleOrSerialize`: same as `PickleOrError` but additionally
+ *   honours the [`SessionRefSerializable`](blazen_core::session_ref::SessionRefSerializable)
+ *   protocol — values registered via
+ *   `ctx.insertSessionRefSerializable(typeName, bytes)` are captured
+ *   as opaque bytes in snapshot metadata and reconstructed on resume
+ *   via [`JsWorkflow::resume_with_serializable_refs`].
+ * - `WarnDrop`: log a warning and drop each live ref. Downstream
+ *   `__blazen_session_ref__` markers carrying dropped UUIDs become
+ *   unresolved.
+ * - `HardError`: fail the pause immediately if any live refs exist.
+ */
+export declare const enum SessionPausePolicy {
+  PickleOrError = 'PickleOrError',
+  PickleOrSerialize = 'PickleOrSerialize',
+  WarnDrop = 'WarnDrop',
+  HardError = 'HardError'
+}
 
 /** Returns the version of the blazen library. */
 export declare function version(): string

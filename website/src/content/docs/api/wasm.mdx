@@ -26,30 +26,44 @@ A chat completion model. Created via static factory methods for each provider.
 
 ### Provider Factory Methods
 
-All providers accept an API key and an optional options object. If `model` is omitted, the provider's default model is used.
+All factory methods take **no arguments** -- API keys are read from environment variables at runtime (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `FAL_KEY`, `OPENROUTER_API_KEY`, etc.). To override the default model, chain `.withModel(...)` on the returned instance.
+
+Azure additionally requires `resourceName` and `deploymentName` as arguments (there's no single global endpoint). Bedrock requires `region`.
 
 | Method | Signature |
 |---|---|
-| `CompletionModel.openai` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.anthropic` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.gemini` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.azure` | `(apiKey: string, options: AzureOptions)` |
-| `CompletionModel.fal` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.openrouter` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.groq` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.together` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.mistral` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.deepseek` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.fireworks` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.perplexity` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.xai` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.cohere` | `(apiKey: string, options?: ProviderOptions)` |
-| `CompletionModel.bedrock` | `(apiKey: string, options: BedrockOptions)` |
+| `CompletionModel.openai` | `()` |
+| `CompletionModel.anthropic` | `()` |
+| `CompletionModel.gemini` | `()` |
+| `CompletionModel.azure` | `(resourceName: string, deploymentName: string)` |
+| `CompletionModel.fal` | `()` |
+| `CompletionModel.openrouter` | `()` |
+| `CompletionModel.groq` | `()` |
+| `CompletionModel.together` | `()` |
+| `CompletionModel.mistral` | `()` |
+| `CompletionModel.deepseek` | `()` |
+| `CompletionModel.fireworks` | `()` |
+| `CompletionModel.perplexity` | `()` |
+| `CompletionModel.xai` | `()` |
+| `CompletionModel.cohere` | `()` |
+| `CompletionModel.bedrock` | `(region: string)` |
 
 ```typescript
-const model = CompletionModel.openai('sk-...');
-const claude = CompletionModel.anthropic('sk-ant-...', { model: 'claude-sonnet-4-20250514' });
-const gemini = CompletionModel.gemini('AIza...', { model: 'gemini-2.5-flash' });
+const model = CompletionModel.openai();
+const claude = CompletionModel.anthropic();
+const gemini = CompletionModel.gemini();
+const azure = CompletionModel.azure('my-resource', 'my-deployment');
+const fal = CompletionModel.fal();
+const groq = CompletionModel.groq().withModel('llama-3.3-70b-versatile');
+const bedrock = CompletionModel.bedrock('us-east-1');
+```
+
+#### `model.withModel(modelId: string): CompletionModel`
+
+Override the default model ID for this provider instance. Returns a new `CompletionModel` (WASM does not mutate in place).
+
+```typescript
+const model = CompletionModel.openai().withModel('gpt-4o-mini');
 ```
 
 ### Properties
@@ -139,8 +153,8 @@ Static method. Tries providers in order; falls back on transient errors.
 
 ```typescript
 const model = CompletionModel.withFallback([
-  CompletionModel.openai('sk-...'),
-  CompletionModel.groq('gsk-...'),
+  CompletionModel.openai(),
+  CompletionModel.groq(),
 ]);
 ```
 
@@ -557,25 +571,25 @@ Events are plain objects with a `type` field.
 
 ## EmbeddingModel
 
-Generate vector embeddings from text. Created via static factory methods.
+Generate vector embeddings from text. Created via static factory methods. All factory methods take no arguments -- API keys are read from environment variables (`OPENAI_API_KEY`, `TOGETHER_API_KEY`, `COHERE_API_KEY`, `FIREWORKS_API_KEY`).
 
 ```typescript
 import { EmbeddingModel } from '@blazen/sdk';
 
-const model = EmbeddingModel.openai('sk-...');
-const together = EmbeddingModel.together('tok-...');
-const cohere = EmbeddingModel.cohere('co-...');
-const fireworks = EmbeddingModel.fireworks('fw-...');
+const model = EmbeddingModel.openai();
+const together = EmbeddingModel.together();
+const cohere = EmbeddingModel.cohere();
+const fireworks = EmbeddingModel.fireworks();
 ```
 
 ### Provider Factory Methods
 
 | Method | Default Model | Default Dimensions |
 |---|---|---|
-| `EmbeddingModel.openai(apiKey)` | `text-embedding-3-small` | 1536 |
-| `EmbeddingModel.together(apiKey)` | `togethercomputer/m2-bert-80M-8k-retrieval` | 768 |
-| `EmbeddingModel.cohere(apiKey)` | `embed-v4.0` | 1024 |
-| `EmbeddingModel.fireworks(apiKey)` | `nomic-ai/nomic-embed-text-v1.5` | 768 |
+| `EmbeddingModel.openai()` | `text-embedding-3-small` | 1536 |
+| `EmbeddingModel.together()` | `togethercomputer/m2-bert-80M-8k-retrieval` | 768 |
+| `EmbeddingModel.cohere()` | `embed-v4.0` | 1024 |
+| `EmbeddingModel.fireworks()` | `nomic-ai/nomic-embed-text-v1.5` | 768 |
 
 ### Properties
 

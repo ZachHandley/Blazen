@@ -98,12 +98,20 @@ cargo add blazen --registry forgejo --features openai
 # or: --features anthropic, --features all
 ```
 
+Each provider is a concrete struct under `blazen::llm::providers::<name>`
+that implements the `blazen::llm::CompletionModel` trait. Construct one
+directly with `ProviderName::new("your-api-key")` and fluently configure
+the default model via `.with_model("...")`.
+
 ```rust
+use blazen::llm::providers::openai::OpenAiProvider;
 use blazen::llm::{CompletionModel, CompletionRequest, ChatMessage, Role};
 
 #[step]
 async fn ask_llm(event: StartEvent, _ctx: Context) -> Result<StopEvent, WorkflowError> {
-    let model = CompletionModel::openai("your-api-key", None)?; // None = default model
+    // Construct the provider directly. `.with_model()` is optional.
+    let model = OpenAiProvider::new("your-api-key")
+        .with_model("gpt-4.1-mini");
 
     let request = CompletionRequest {
         messages: vec![
@@ -121,16 +129,21 @@ async fn ask_llm(event: StartEvent, _ctx: Context) -> Result<StopEvent, Workflow
 
 ### Supported Providers
 
-| Provider | Feature Flag | Factory |
-|----------|-------------|---------|
-| OpenAI | `openai` | `CompletionModel::openai(key, model)` |
-| Anthropic | `anthropic` | `CompletionModel::anthropic(key, model)` |
-| Google Gemini | `gemini` | `CompletionModel::gemini(key, model)` |
-| Azure OpenAI | `azure` | `CompletionModel::azure(key, resource, deployment, model)` |
-| OpenRouter | `openai` | `CompletionModel::openrouter(key, model)` |
-| Groq | `openai` | `CompletionModel::groq(key, model)` |
-| Together | `openai` | `CompletionModel::together(key, model)` |
-| DeepSeek | `openai` | `CompletionModel::deepseek(key, model)` |
+| Provider | Feature Flag | Constructor |
+|----------|-------------|-------------|
+| OpenAI | `openai` | `OpenAiProvider::new("key")` |
+| Anthropic | `anthropic` | `AnthropicProvider::new("key")` |
+| Google Gemini | `gemini` | `GeminiProvider::new("key")` |
+| Azure OpenAI | `azure` | `AzureOpenAiProvider::new("key", "resource", "deployment")` |
+| OpenRouter | `openai` | `OpenRouterProvider::new("key")` |
+| Groq | `openai` | `GroqProvider::new("key")` |
+| Together | `openai` | `TogetherProvider::new("key")` |
+| DeepSeek | `openai` | `DeepSeekProvider::new("key")` |
+
+All provider types live under `blazen::llm::providers::<name>`. Every
+constructor is `fn new(api_key: impl Into<String>) -> Self`, and each
+returned value exposes `.with_model("...")` and `.with_base_url("...")`
+for further configuration.
 
 ## Feature Flags
 

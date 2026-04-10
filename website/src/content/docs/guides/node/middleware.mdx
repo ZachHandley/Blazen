@@ -15,7 +15,7 @@ Wrap a model with automatic retry on transient failures (rate limits, timeouts, 
 ```typescript
 import { CompletionModel } from "blazen";
 
-const model = CompletionModel.openai("sk-...").withRetry({
+const model = CompletionModel.openai({ apiKey: "sk-..." }).withRetry({
   maxRetries: 5,
   initialDelayMs: 500,
   maxDelayMs: 15000,
@@ -37,7 +37,7 @@ You can also call `withRetry()` with no argument to use the defaults.
 Cache identical non-streaming requests in memory so repeated prompts are served instantly without hitting the provider.
 
 ```typescript
-const model = CompletionModel.openai("sk-...").withCache({
+const model = CompletionModel.openai({ apiKey: "sk-..." }).withCache({
   ttlSeconds: 600,
   maxEntries: 500,
 });
@@ -55,8 +55,8 @@ Streaming requests (`model.stream(...)`) bypass the cache and always go to the p
 Route requests through multiple providers in order. If the first provider fails with a transient error, the next one is tried automatically. Non-retryable errors (auth, validation) short-circuit immediately.
 
 ```typescript
-const primary = CompletionModel.openai("sk-...");
-const backup = CompletionModel.anthropic("sk-ant-...");
+const primary = CompletionModel.openai({ apiKey: "sk-..." });
+const backup = CompletionModel.anthropic({ apiKey: "sk-ant-..." });
 
 const model = CompletionModel.withFallback([primary, backup]);
 ```
@@ -68,7 +68,7 @@ const model = CompletionModel.withFallback([primary, backup]);
 Because each decorator returns a new `CompletionModel`, you can chain them:
 
 ```typescript
-const model = CompletionModel.openai("sk-...")
+const model = CompletionModel.openai({ apiKey: "sk-..." })
   .withCache({ ttlSeconds: 300 })
   .withRetry({ maxRetries: 3 });
 ```
@@ -82,8 +82,8 @@ request -> retry -> cache -> provider -> cache -> retry -> response
 For maximum resilience, combine all three:
 
 ```typescript
-const primary = CompletionModel.openai("sk-...").withCache().withRetry();
-const backup = CompletionModel.anthropic("sk-ant-...").withRetry();
+const primary = CompletionModel.openai({ apiKey: "sk-..." }).withCache().withRetry();
+const backup = CompletionModel.anthropic({ apiKey: "sk-ant-..." }).withRetry();
 
 const model = CompletionModel.withFallback([primary, backup]);
 ```

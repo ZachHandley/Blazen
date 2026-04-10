@@ -306,31 +306,42 @@ store = CallbackFieldStore(
 
 Use static constructor methods to create a model for a specific provider, then call `complete()` or `stream()` to generate responses.
 
+API keys are resolved from `ProviderOptions(api_key=...)` when passed explicitly, or from the provider's standard environment variable (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) when `options` is omitted.
+
 ```python
-model = CompletionModel.openai("sk-...")
-model = CompletionModel.anthropic("sk-ant-...")
-model = CompletionModel.openrouter("sk-or-...", options={"model": "meta-llama/llama-3-70b"})
+from blazen import CompletionModel, ProviderOptions
+
+# Read key from OPENAI_API_KEY env var
+model = CompletionModel.openai()
+
+# Pass an explicit key
+model = CompletionModel.anthropic(options=ProviderOptions(api_key="sk-ant-..."))
+
+# Override the default model
+model = CompletionModel.openrouter(
+    options=ProviderOptions(api_key="sk-or-...", model="meta-llama/llama-3-70b")
+)
 ```
 
 **Provider constructors**
 
 | Constructor | Signature |
 |---|---|
-| `openai` | `CompletionModel.openai(api_key: str, *, options: dict = None)` |
-| `anthropic` | `CompletionModel.anthropic(api_key: str, *, options: dict = None)` |
-| `gemini` | `CompletionModel.gemini(api_key: str, *, options: dict = None)` |
-| `azure` | `CompletionModel.azure(api_key: str, *, options: dict)` |
-| `openrouter` | `CompletionModel.openrouter(api_key: str, *, options: dict = None)` |
-| `groq` | `CompletionModel.groq(api_key: str, *, options: dict = None)` |
-| `together` | `CompletionModel.together(api_key: str, *, options: dict = None)` |
-| `mistral` | `CompletionModel.mistral(api_key: str, *, options: dict = None)` |
-| `deepseek` | `CompletionModel.deepseek(api_key: str, *, options: dict = None)` |
-| `fireworks` | `CompletionModel.fireworks(api_key: str, *, options: dict = None)` |
-| `perplexity` | `CompletionModel.perplexity(api_key: str, *, options: dict = None)` |
-| `xai` | `CompletionModel.xai(api_key: str, *, options: dict = None)` |
-| `cohere` | `CompletionModel.cohere(api_key: str, *, options: dict = None)` |
-| `bedrock` | `CompletionModel.bedrock(api_key: str, *, options: dict)` |
-| `fal` | `CompletionModel.fal(api_key: str, *, options: dict = None)` |
+| `openai` | `CompletionModel.openai(*, options: ProviderOptions = None)` |
+| `anthropic` | `CompletionModel.anthropic(*, options: ProviderOptions = None)` |
+| `gemini` | `CompletionModel.gemini(*, options: ProviderOptions = None)` |
+| `azure` | `CompletionModel.azure(*, options: AzureOptions)` |
+| `openrouter` | `CompletionModel.openrouter(*, options: ProviderOptions = None)` |
+| `groq` | `CompletionModel.groq(*, options: ProviderOptions = None)` |
+| `together` | `CompletionModel.together(*, options: ProviderOptions = None)` |
+| `mistral` | `CompletionModel.mistral(*, options: ProviderOptions = None)` |
+| `deepseek` | `CompletionModel.deepseek(*, options: ProviderOptions = None)` |
+| `fireworks` | `CompletionModel.fireworks(*, options: ProviderOptions = None)` |
+| `perplexity` | `CompletionModel.perplexity(*, options: ProviderOptions = None)` |
+| `xai` | `CompletionModel.xai(*, options: ProviderOptions = None)` |
+| `cohere` | `CompletionModel.cohere(*, options: ProviderOptions = None)` |
+| `bedrock` | `CompletionModel.bedrock(*, options: BedrockOptions)` |
+| `fal` | `CompletionModel.fal(*, options: FalOptions = None)` |
 
 **Properties**
 
@@ -416,11 +427,11 @@ Each decorator returns a new `CompletionModel` wrapping the original with additi
 
 ```python
 # Chain decorators
-model = CompletionModel.openai("sk-...").with_cache().with_retry(max_retries=5)
+model = CompletionModel.openai().with_cache().with_retry(max_retries=5)
 
 # Fallback across providers
-primary = CompletionModel.openai("sk-...")
-backup = CompletionModel.anthropic("sk-ant-...")
+primary = CompletionModel.openai()
+backup = CompletionModel.anthropic()
 model = CompletionModel.with_fallback([primary, backup])
 ```
 
@@ -656,7 +667,7 @@ result: AgentResult = await run_agent(
 | `add_finish_tool` | `bool` | `False` | If `True`, adds a built-in "finish" tool the model can call to explicitly end the loop. |
 
 ```python
-model = CompletionModel.openai("sk-...")
+model = CompletionModel.openai()
 messages = [ChatMessage.user("What's the weather in Paris and London?")]
 
 result = await run_agent(model, messages, tools=[weather_tool])
@@ -955,24 +966,27 @@ async def on_chunk(chunk):
 
 ## EmbeddingModel
 
-Generate vector embeddings from text. Created via static constructor methods, similar to `CompletionModel`.
+Generate vector embeddings from text. Created via static constructor methods, similar to `CompletionModel`. Keys are read from environment variables (`OPENAI_API_KEY`, etc.) when `options` is omitted, or can be passed explicitly via `ProviderOptions(api_key=...)`.
 
 ```python
-model = EmbeddingModel.openai("sk-...")
-model = EmbeddingModel.openai("sk-...", model="text-embedding-3-large", dimensions=3072)
-model = EmbeddingModel.together("tok-...")
-model = EmbeddingModel.cohere("co-...")
-model = EmbeddingModel.fireworks("fw-...")
+from blazen import EmbeddingModel, ProviderOptions
+
+model = EmbeddingModel.openai()
+model = EmbeddingModel.openai(model="text-embedding-3-large", dimensions=3072)
+model = EmbeddingModel.openai(options=ProviderOptions(api_key="sk-..."))
+model = EmbeddingModel.together()
+model = EmbeddingModel.cohere()
+model = EmbeddingModel.fireworks()
 ```
 
 **Provider constructors**
 
 | Constructor | Signature |
 |---|---|
-| `openai` | `EmbeddingModel.openai(api_key: str, model: str = None, dimensions: int = None)` |
-| `together` | `EmbeddingModel.together(api_key: str)` |
-| `cohere` | `EmbeddingModel.cohere(api_key: str)` |
-| `fireworks` | `EmbeddingModel.fireworks(api_key: str)` |
+| `openai` | `EmbeddingModel.openai(*, options: ProviderOptions = None, model: str = None, dimensions: int = None)` |
+| `together` | `EmbeddingModel.together(*, options: ProviderOptions = None)` |
+| `cohere` | `EmbeddingModel.cohere(*, options: ProviderOptions = None)` |
+| `fireworks` | `EmbeddingModel.fireworks(*, options: ProviderOptions = None)` |
 
 **Properties**
 

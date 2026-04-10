@@ -1,5 +1,7 @@
 //! Message-related types: roles, content variants, and chat messages.
 
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 
 use super::tool::ToolCall;
@@ -28,6 +30,8 @@ pub enum Role {
 ///
 /// Used by [`ImageContent`], [`AudioContent`], [`VideoContent`], and
 /// [`FileContent`] — all media kinds share this URL-or-base64 envelope.
+/// The [`File`](ImageSource::File) variant allows local backends to
+/// reference files directly on disk.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
@@ -37,6 +41,21 @@ pub enum ImageSource {
     Url { url: String },
     /// Media provided as base64-encoded data.
     Base64 { data: String },
+    /// Media provided as a local file path on disk.
+    ///
+    /// This variant is intended for local/on-device backends (e.g.
+    /// whisper.cpp, local diffusion models) that can read files directly.
+    /// Cloud API providers do **not** support this variant and will return
+    /// an [`Unsupported`](crate::error::BlazenError::Unsupported) error.
+    File { path: PathBuf },
+}
+
+impl ImageSource {
+    /// Build a [`File`](Self::File) media source from a local path.
+    #[must_use]
+    pub fn file(path: impl Into<PathBuf>) -> Self {
+        Self::File { path: path.into() }
+    }
 }
 
 /// Generic media source alias used by audio, video, and document content.

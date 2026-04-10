@@ -8,16 +8,24 @@ repository.workspace = true
 rust-version.workspace = true
 description = "Memory and vector store for Blazen with ELID integration"
 
+[features]
+default = ["jsonl"]
+jsonl = []
+
 [dependencies]
 blazen-llm.workspace = true
 elid = { version = "0.4.3", default-features = false, features = ["embeddings"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 async-trait = { workspace = true }
-tokio = { workspace = true, features = ["fs"] }
+tokio = { version = "1", default-features = false, features = ["sync"] }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
+
+# tokio/fs is needed for the JSONL backend (not available on WASM)
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1", default-features = false, features = ["fs"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }

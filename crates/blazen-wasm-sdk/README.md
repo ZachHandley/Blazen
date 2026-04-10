@@ -15,7 +15,8 @@ import init, { CompletionModel, ChatMessage } from "@blazen/sdk";
 
 await init(); // load the WASM module
 
-const model = CompletionModel.openrouter("or-key");
+// WASM SDK reads API keys from environment variables (e.g. OPENROUTER_API_KEY).
+const model = CompletionModel.openrouter();
 const response = await model.complete([ChatMessage.user("Hello!")]);
 console.log(response.content);
 ```

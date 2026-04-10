@@ -107,6 +107,13 @@ fn content_part_to_responses(part: &ContentPart, text_kind: &str) -> Option<serd
                 );
                 None
             }
+            ImageSource::File { .. } => {
+                tracing::warn!(
+                    "fal Responses API: local file source is not supported — use a URL or base64 \
+                     source instead; audio content dropped."
+                );
+                None
+            }
         },
         ContentPart::Video(_) => {
             tracing::warn!(
@@ -119,6 +126,13 @@ fn content_part_to_responses(part: &ContentPart, text_kind: &str) -> Option<serd
                 ImageSource::Url { url } => url.clone(),
                 ImageSource::Base64 { data } => {
                     format!("data:{};base64,{data}", file.media_type)
+                }
+                ImageSource::File { .. } => {
+                    tracing::warn!(
+                        "fal Responses API: local file source is not supported — use a URL or \
+                         base64 source instead; file content dropped."
+                    );
+                    return None;
                 }
             };
             let mut block = serde_json::json!({
@@ -139,6 +153,13 @@ fn image_to_input_image(source: &ImageSource, media_type: Option<&str>) -> serde
         ImageSource::Base64 { data } => {
             let mt = media_type.unwrap_or("image/png");
             format!("data:{mt};base64,{data}")
+        }
+        ImageSource::File { .. } => {
+            tracing::warn!(
+                "fal Responses API: local file source is not supported — use a URL or base64 \
+                 source instead; image content dropped."
+            );
+            return serde_json::Value::Null;
         }
     };
     serde_json::json!({

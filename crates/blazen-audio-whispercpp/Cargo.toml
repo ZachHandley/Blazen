@@ -1,0 +1,46 @@
+[package]
+name = "blazen-audio-whispercpp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "Local speech-to-text backend for Blazen using whisper.cpp"
+
+[dependencies]
+# whisper-rs with default-features = false compiles on all platforms (CPU-only).
+# Platform-specific acceleration is opt-in via `cuda`, `metal`, etc. features.
+whisper-rs = { version = "0.16", optional = true, default-features = false }
+blazen-model-cache = { workspace = true }
+serde = { workspace = true }
+serde_json.workspace = true
+tokio = { workspace = true }
+tracing.workspace = true
+thiserror = { workspace = true }
+
+[features]
+default = []
+engine = ["dep:whisper-rs"]
+
+# Platform-specific acceleration features.
+#
+# These are intentionally NO-OP flags at the library level. Cargo features
+# cannot be gated on `cfg()` targets, and `--all-features` must pass on
+# every platform. Activating `whisper-rs/metal` on Linux or `whisper-rs/cuda`
+# without an NVIDIA GPU / CUDA toolkit causes hard compile errors from the
+# whisper.cpp build system.
+#
+# To enable GPU acceleration, add `whisper-rs` as a direct dependency in your
+# **binary crate** with the desired features:
+#
+#   [dependencies]
+#   whisper-rs = { version = "0.16", default-features = false, features = ["cuda"] }
+#
+# Cargo's feature unification will merge them with the `engine` dep here.
+cuda = ["engine"]
+metal = ["engine"]
+coreml = ["engine"]
+
+[lints]
+workspace = true

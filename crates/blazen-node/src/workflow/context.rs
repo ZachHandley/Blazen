@@ -24,11 +24,34 @@
 //! `Arc<Py<PyAny>>` path — is a follow-up refactor that would need a
 //! different threading model.
 
+use std::sync::Arc;
+
 use blazen_core::StateValue;
+use blazen_core::session_ref::{RegistryKey, SessionRefSerializable};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
 use super::event::js_value_to_any_event;
+use super::session_ref_serializable::NodeSessionRefSerializable;
+
+/// Payload returned by [`JsContext::get_session_ref_serializable`].
+///
+/// Carries the type-tag string the JS caller supplied at insertion
+/// time alongside the raw bytes captured for that key. JS code is
+/// responsible for reconstructing whatever runtime object the bytes
+/// represent — see the module docs on
+/// [`super::session_ref_serializable`] for the trade-off rationale.
+#[napi(object, js_name = "SerializableRefPayload")]
+pub struct SerializableRefPayload {
+    /// Stable identifier the JS caller passed to
+    /// `insertSessionRefSerializable`.
+    #[napi(js_name = "typeName")]
+    pub type_name: String,
+    /// Raw bytes the JS caller passed to
+    /// `insertSessionRefSerializable`. Returned as a `Buffer` so the
+    /// payload survives the napi boundary unchanged.
+    pub bytes: Buffer,
+}
 
 /// Shared workflow context accessible by all steps.
 ///
@@ -130,6 +153,89 @@ impl JsContext {
     pub async fn run_id(&self) -> Result<String> {
         let id = self.inner.run_id().await;
         Ok(id.to_string())
+    }
+
+    /// Store an opaque, user-serialized payload in the session-ref
+    /// registry under a fresh [`RegistryKey`].
+    ///
+    /// `typeName` is a stable identifier the caller chooses for this
+    /// payload (e.g. `"app::EmbeddingHandle"`). The same name must be
+    /// used on the resume side to recognise the payload — the type tag
+    /// is captured into snapshot metadata along with the bytes when
+    /// the workflow is paused under
+    /// [`SessionPausePolicy::PickleOrSerialize`](blazen_core::session_ref::SessionPausePolicy).
+    ///
+    /// Returns the registry key as a string. JS callers can use this
+    /// key with [`Self::get_session_ref_serializable`] inside the same
+    /// run, or after a snapshot/resume cycle to retrieve the bytes
+    /// they originally inserted.
+    ///
+    /// **Important.** Unlike the Python binding, the Node bindings do
+    /// not currently auto-detect a `serialize()` method on JS objects.
+    /// JS code must serialize the value itself (typically into a
+    /// `Buffer`) before calling this method, and must deserialize the
+    /// bytes returned by `getSessionRefSerializable` back into a
+    /// runtime object in user code. This limitation is rooted in the
+    /// `serde_json::Value`-based step bridge and is tracked separately
+    /// from this method.
+    #[napi(js_name = "insertSessionRefSerializable")]
+    pub async fn insert_session_ref_serializable(
+        &self,
+        type_name: String,
+        bytes: Buffer,
+    ) -> Result<String> {
+        let registry = self.inner.session_refs_arc().await;
+        let serializable = Arc::new(NodeSessionRefSerializable::new(&type_name, bytes.to_vec()));
+        let key = registry
+            .insert_serializable(serializable)
+            .await
+            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        Ok(key.to_string())
+    }
+
+    /// Retrieve a payload previously stored via
+    /// [`Self::insert_session_ref_serializable`].
+    ///
+    /// Returns `null` if the registry has no entry under `key`, or if
+    /// the entry exists but was inserted via the non-serializable
+    /// path (`set` / `setBytes` / language-specific live refs).
+    /// Otherwise returns `{ typeName, bytes }` matching the
+    /// arguments the caller originally passed in.
+    #[napi(js_name = "getSessionRefSerializable")]
+    pub async fn get_session_ref_serializable(
+        &self,
+        key: String,
+    ) -> Result<Option<SerializableRefPayload>> {
+        let parsed = RegistryKey::parse(&key)
+            .map_err(|e| napi::Error::from_reason(format!("invalid registry key `{key}`: {e}")))?;
+        let registry = self.inner.session_refs_arc().await;
+        let Some(serializable) = registry.get_serializable(parsed).await else {
+            return Ok(None);
+        };
+
+        // Try to downcast to the concrete `NodeSessionRefSerializable`
+        // adapter so we can return the original user bytes (not the
+        // length-prefixed wire format produced by `blazen_serialize`).
+        let trait_ref: &dyn SessionRefSerializable = &*serializable;
+        let any_ref: &dyn std::any::Any = trait_ref;
+        if let Some(node_ser) = any_ref.downcast_ref::<NodeSessionRefSerializable>() {
+            return Ok(Some(SerializableRefPayload {
+                type_name: node_ser.type_tag().to_owned(),
+                bytes: Buffer::from(node_ser.user_bytes().to_vec()),
+            }));
+        }
+
+        // Foreign serializable adapter (e.g. inserted via a different
+        // language binding sharing the same registry). Fall back to the
+        // wire-format bytes returned by `blazen_serialize` so the
+        // caller still has something to work with.
+        let wire_bytes = serializable
+            .blazen_serialize()
+            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        Ok(Some(SerializableRefPayload {
+            type_name: serializable.blazen_type_tag().to_owned(),
+            bytes: Buffer::from(wire_bytes),
+        }))
     }
 
     /// Persistable workflow state. Survives `pause()` / `resume()`,

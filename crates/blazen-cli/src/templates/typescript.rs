@@ -85,7 +85,11 @@ const result = await workflow.runStreaming(
 ```typescript
 import { CompletionModel, ChatMessage, CompletionResponse } from "blazen";
 
-const model = CompletionModel.openai("your-api-key");
+// Pass an explicit key via the typed options object...
+const model = CompletionModel.openai({ apiKey: "your-api-key" });
+
+// ...or omit options to pick up the standard env var (OPENAI_API_KEY):
+// const model = CompletionModel.openai();
 
 const response: CompletionResponse = await model.complete([
   { role: "user", content: "What is 2 + 2?" },
@@ -105,23 +109,29 @@ const response = await model.completeWithOptions(
 
 ### Supported Providers
 
+Every provider factory accepts a single options object (`{ apiKey, model,
+baseUrl }`). Azure, FAL, and Bedrock take their own options types with
+required extra fields (e.g. `resourceName`, `deploymentName`, `region`).
+Omit the options argument entirely to fall back to the provider's standard
+environment variable (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`).
+
 | Provider | Factory |
 |----------|---------|
-| OpenAI | `CompletionModel.openai(apiKey)` |
-| Anthropic | `CompletionModel.anthropic(apiKey)` |
-| Google Gemini | `CompletionModel.gemini(apiKey)` |
-| Azure OpenAI | `CompletionModel.azure(apiKey, resource, deployment)` |
-| FAL.ai | `CompletionModel.fal(apiKey)` |
-| OpenRouter | `CompletionModel.openrouter(apiKey)` |
-| Groq | `CompletionModel.groq(apiKey)` |
-| Together | `CompletionModel.together(apiKey)` |
-| Mistral | `CompletionModel.mistral(apiKey)` |
-| DeepSeek | `CompletionModel.deepseek(apiKey)` |
-| Fireworks | `CompletionModel.fireworks(apiKey)` |
-| Perplexity | `CompletionModel.perplexity(apiKey)` |
-| xAI (Grok) | `CompletionModel.xai(apiKey)` |
-| Cohere | `CompletionModel.cohere(apiKey)` |
-| AWS Bedrock | `CompletionModel.bedrock(apiKey, region)` |
+| OpenAI | `CompletionModel.openai({ apiKey: "..." })` |
+| Anthropic | `CompletionModel.anthropic({ apiKey: "..." })` |
+| Google Gemini | `CompletionModel.gemini({ apiKey: "..." })` |
+| Azure OpenAI | `CompletionModel.azure({ apiKey: "...", resourceName: "...", deploymentName: "..." })` |
+| FAL.ai | `CompletionModel.fal({ apiKey: "..." })` |
+| OpenRouter | `CompletionModel.openrouter({ apiKey: "..." })` |
+| Groq | `CompletionModel.groq({ apiKey: "..." })` |
+| Together | `CompletionModel.together({ apiKey: "..." })` |
+| Mistral | `CompletionModel.mistral({ apiKey: "..." })` |
+| DeepSeek | `CompletionModel.deepseek({ apiKey: "..." })` |
+| Fireworks | `CompletionModel.fireworks({ apiKey: "..." })` |
+| Perplexity | `CompletionModel.perplexity({ apiKey: "..." })` |
+| xAI (Grok) | `CompletionModel.xai({ apiKey: "..." })` |
+| Cohere | `CompletionModel.cohere({ apiKey: "..." })` |
+| AWS Bedrock | `CompletionModel.bedrock({ apiKey: "...", region: "..." })` |
 
 ## TypeScript Types
 

@@ -35,6 +35,13 @@ const EXCLUDED: &[&str] = &[
     "MediaType",
 ];
 
+/// Field types that cannot be represented in the napi mirror layer (e.g.
+/// complex enums with data variants that have no auto-generated `Js*` mirror).
+/// Fields whose innermost type matches one of these names are **omitted** from
+/// the generated struct and defaulted to `None` / `Default::default()` in the
+/// `From` impls.
+const SKIPPED_FIELD_TYPES: &[&str] = &["MediaSource", "ImageSource"];
+
 /// Source files (relative to this crate's directory).
 const SOURCE_FILES: &[&str] = &[
     "../blazen-llm/src/compute/requests.rs",
@@ -195,6 +202,16 @@ enum ParsedItem {
 // ---------------------------------------------------------------------------
 // Parsing helpers
 // ---------------------------------------------------------------------------
+
+/// Returns `true` when `ft` (or its innermost wrapped type) is a `Named`
+/// variant whose name appears in [`SKIPPED_FIELD_TYPES`].
+fn is_skipped_field_type(ft: &FieldType) -> bool {
+    match ft {
+        FieldType::Named(n) => SKIPPED_FIELD_TYPES.contains(&n.as_str()),
+        FieldType::Option(inner) | FieldType::Vec(inner) => is_skipped_field_type(inner),
+        _ => false,
+    }
+}
 
 fn is_pub(vis: &syn::Visibility) -> bool {
     matches!(vis, syn::Visibility::Public(_))
@@ -361,6 +378,10 @@ fn resolve_flat_fields(
 ) -> Vec<FlatField> {
     let mut result = Vec::new();
     for field in fields {
+        // Drop fields whose type cannot be represented in the napi layer.
+        if is_skipped_field_type(&field.ty) {
+            continue;
+        }
         if field.is_flatten
             && let FieldType::Named(ref type_name) = field.ty
             && let Some(inner_fields) = all_structs.get(type_name)
@@ -619,6 +640,10 @@ fn gen_core_to_js_fields(
 ) -> Vec<TokenStream> {
     let mut result = Vec::new();
     for field in raw_fields {
+        // Skip fields whose type cannot be represented in the napi layer.
+        if is_skipped_field_type(&field.ty) {
+            continue;
+        }
         if field.is_flatten
             && let FieldType::Named(ref type_name) = field.ty
             && let Some(inner_fields) = all_structs.get(type_name)
@@ -653,6 +678,19 @@ fn gen_js_to_core_fields(
     let mut result = Vec::new();
     for field in raw_fields {
         let field_ident = format_ident!("{}", field.name);
+        // Skipped field types are absent from the JS struct; use the default.
+        if is_skipped_field_type(&field.ty) {
+            // Use `None` for Option-wrapped skipped types; fall back to
+            // the type's own `Default` for anything else.
+            let default_expr = if matches!(field.ty, FieldType::Option(_)) {
+                quote! { None }
+            } else {
+                let core_ty = core_field_type_tokens(&field.ty);
+                quote! { <#core_ty>::default() }
+            };
+            result.push(quote! { #field_ident: #default_expr, });
+            continue;
+        }
         if field.is_flatten
             && let FieldType::Named(ref type_name) = field.ty
             && let Some(inner_fields) = all_structs.get(type_name)

@@ -3,9 +3,14 @@
 //! Provides [`JsWorkflow`] which lets TypeScript/JavaScript users define
 //! workflows with step handlers as async functions.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use blazen_core::SessionRefDeserializerFn;
+use blazen_core::session_ref::{
+    SERIALIZED_SESSION_REFS_META_KEY, SessionPausePolicy as CoreSessionPausePolicy,
+};
 use blazen_events::{AnyEvent, intern_event_type};
 use napi::Status;
 use napi::bindgen_prelude::*;
@@ -16,7 +21,68 @@ use tokio_stream::StreamExt;
 use super::context::JsContext;
 use super::event::{any_event_to_js_value, js_value_to_any_event};
 use super::handler::JsWorkflowHandler;
+use super::session_ref_serializable::{DESERIALIZER_FN, intern_type_tag};
 use crate::error::workflow_error_to_napi;
+
+// ---------------------------------------------------------------------------
+// SessionPausePolicy enum
+// ---------------------------------------------------------------------------
+
+/// Policy applied to live session references when a workflow is paused
+/// or snapshotted.
+///
+/// Mirrors the Rust-side
+/// [`SessionPausePolicy`](blazen_core::session_ref::SessionPausePolicy)
+/// enum and the Python `SessionPausePolicy` exposed by the pyo3
+/// bindings. Configure it on a [`JsWorkflow`] via
+/// [`JsWorkflow::set_session_pause_policy`] before calling
+/// `run`/`runWithHandler`/`resume`.
+///
+/// Variants:
+///
+/// - `PickleOrError`: best-effort pickle each live ref; fail the pause
+///   with a descriptive error if a ref cannot be captured. This is the
+///   default.
+/// - `PickleOrSerialize`: same as `PickleOrError` but additionally
+///   honours the [`SessionRefSerializable`](blazen_core::session_ref::SessionRefSerializable)
+///   protocol — values registered via
+///   `ctx.insertSessionRefSerializable(typeName, bytes)` are captured
+///   as opaque bytes in snapshot metadata and reconstructed on resume
+///   via [`JsWorkflow::resume_with_serializable_refs`].
+/// - `WarnDrop`: log a warning and drop each live ref. Downstream
+///   `__blazen_session_ref__` markers carrying dropped UUIDs become
+///   unresolved.
+/// - `HardError`: fail the pause immediately if any live refs exist.
+#[napi(string_enum, js_name = "SessionPausePolicy")]
+#[derive(Clone, Copy)]
+pub enum JsSessionPausePolicy {
+    PickleOrError,
+    PickleOrSerialize,
+    WarnDrop,
+    HardError,
+}
+
+impl From<JsSessionPausePolicy> for CoreSessionPausePolicy {
+    fn from(p: JsSessionPausePolicy) -> Self {
+        match p {
+            JsSessionPausePolicy::PickleOrError => Self::PickleOrError,
+            JsSessionPausePolicy::PickleOrSerialize => Self::PickleOrSerialize,
+            JsSessionPausePolicy::WarnDrop => Self::WarnDrop,
+            JsSessionPausePolicy::HardError => Self::HardError,
+        }
+    }
+}
+
+impl From<CoreSessionPausePolicy> for JsSessionPausePolicy {
+    fn from(p: CoreSessionPausePolicy) -> Self {
+        match p {
+            CoreSessionPausePolicy::PickleOrError => Self::PickleOrError,
+            CoreSessionPausePolicy::PickleOrSerialize => Self::PickleOrSerialize,
+            CoreSessionPausePolicy::WarnDrop => Self::WarnDrop,
+            CoreSessionPausePolicy::HardError => Self::HardError,
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Type aliases for ThreadsafeFunction variants
@@ -108,6 +174,7 @@ pub struct JsWorkflow {
     name: String,
     steps: Vec<JsStepRegistration>,
     timeout_secs: Option<f64>,
+    session_pause_policy: JsSessionPausePolicy,
 }
 
 #[napi]
@@ -120,7 +187,19 @@ impl JsWorkflow {
             name,
             steps: Vec::new(),
             timeout_secs: Some(300.0), // 5 min default
+            session_pause_policy: JsSessionPausePolicy::PickleOrError,
         }
+    }
+
+    /// Configure how live session refs are treated when the workflow
+    /// is paused or snapshotted.
+    ///
+    /// Defaults to `SessionPausePolicy.PickleOrError`. Set this to
+    /// `SessionPausePolicy.PickleOrSerialize` to opt into the
+    /// `insertSessionRefSerializable` round-trip path.
+    #[napi(js_name = "setSessionPausePolicy")]
+    pub fn set_session_pause_policy(&mut self, policy: JsSessionPausePolicy) {
+        self.session_pause_policy = policy;
     }
 
     /// Add a step to the workflow.
@@ -164,7 +243,7 @@ impl JsWorkflow {
     pub async fn run(&self, input: serde_json::Value) -> Result<JsWorkflowResult> {
         let workflow = self.build_workflow()?;
 
-        let handler = workflow.run(input).await.map_err(workflow_error_to_napi)?;
+        let handler = run_with_optional_parent_registry(&workflow, input).await?;
 
         let result = handler.result().await.map_err(workflow_error_to_napi)?;
 
@@ -185,7 +264,7 @@ impl JsWorkflow {
     ) -> Result<JsWorkflowResult> {
         let workflow = self.build_workflow()?;
 
-        let handler = workflow.run(input).await.map_err(workflow_error_to_napi)?;
+        let handler = run_with_optional_parent_registry(&workflow, input).await?;
 
         // Subscribe to the stream before awaiting the result.
         let mut stream = handler.stream_events();
@@ -234,7 +313,7 @@ impl JsWorkflow {
     #[napi(js_name = "runWithHandler")]
     pub async fn run_with_handler(&self, input: serde_json::Value) -> Result<JsWorkflowHandler> {
         let workflow = self.build_workflow()?;
-        let handler = workflow.run(input).await.map_err(workflow_error_to_napi)?;
+        let handler = run_with_optional_parent_registry(&workflow, input).await?;
         Ok(JsWorkflowHandler::new(handler))
     }
 
@@ -269,6 +348,76 @@ impl JsWorkflow {
 
         Ok(JsWorkflowHandler::new(handler))
     }
+
+    /// Resume a workflow from a snapshot, rehydrating every
+    /// `SessionPausePolicy.PickleOrSerialize` session-ref entry into
+    /// the resumed registry under its original [`RegistryKey`].
+    ///
+    /// This is the resume-side counterpart of pausing a workflow whose
+    /// `sessionPausePolicy` is set to `PickleOrSerialize`. The
+    /// snapshot's `__blazen_serialized_session_refs` sidecar carries
+    /// `(typeName, bytes)` records for every payload that was inserted
+    /// via `ctx.insertSessionRefSerializable`. This method walks that
+    /// sidecar, registers a no-op rehydrator for each unique type tag,
+    /// and lets the core
+    /// [`Workflow::resume_with_deserializers`](blazen_core::Workflow::resume_with_deserializers)
+    /// path repopulate the registry. After this call, JS code can
+    /// retrieve the original bytes via
+    /// `ctx.getSessionRefSerializable(key)` and deserialize them
+    /// itself.
+    ///
+    /// Snapshots that do **not** contain any serialized session refs
+    /// work fine with the plain [`Self::resume`] entrypoint. Use this
+    /// method only when you need the serializable rehydration path.
+    ///
+    /// ```javascript
+    /// const snap = fs.readFileSync("snapshot.json", "utf-8");
+    /// const handler = await workflow.resumeWithSerializableRefs(snap);
+    /// const result = await handler.result();
+    /// ```
+    #[napi(js_name = "resumeWithSerializableRefs")]
+    pub async fn resume_with_serializable_refs(
+        &self,
+        snapshot_json: String,
+    ) -> Result<JsWorkflowHandler> {
+        let snapshot = blazen_core::WorkflowSnapshot::from_json(&snapshot_json)
+            .map_err(workflow_error_to_napi)?;
+
+        // Walk the serialized-refs sidecar and register the Node-side
+        // trampoline for every unique type tag referenced inside it.
+        // The trampoline simply re-wraps the captured bytes in a fresh
+        // `NodeSessionRefSerializable`, which is enough for JS callers
+        // to read them back via `ctx.getSessionRefSerializable`.
+        let mut deserializers: HashMap<&'static str, SessionRefDeserializerFn> = HashMap::new();
+        if let Some(serde_json::Value::Object(entries)) =
+            snapshot.metadata.get(SERIALIZED_SESSION_REFS_META_KEY)
+        {
+            for record in entries.values() {
+                if let Some(type_tag) = record.get("type_tag").and_then(serde_json::Value::as_str) {
+                    let interned = intern_type_tag(type_tag);
+                    deserializers.insert(interned, DESERIALIZER_FN);
+                }
+            }
+        }
+
+        // Build the step registrations from the JS steps.
+        let steps: Vec<blazen_core::StepRegistration> =
+            self.steps.iter().map(make_step_registration).collect();
+
+        // Use the workflow's configured timeout.
+        let timeout = self.timeout_secs.map(Duration::from_secs_f64);
+
+        let handler = blazen_core::Workflow::resume_with_deserializers(
+            snapshot,
+            steps,
+            deserializers,
+            timeout,
+        )
+        .await
+        .map_err(workflow_error_to_napi)?;
+
+        Ok(JsWorkflowHandler::new(handler))
+    }
 }
 
 impl JsWorkflow {
@@ -287,8 +436,32 @@ impl JsWorkflow {
             builder = builder.step(registration);
         }
 
+        builder = builder.session_pause_policy(self.session_pause_policy.into());
+
         builder.build().map_err(workflow_error_to_napi)
     }
+}
+
+/// Run the workflow, threading through a parent session-ref registry
+/// if one is currently installed.
+///
+/// This is the Phase 0.6 fix site for the sub-workflow session-ref
+/// lifespan bug: if a parent workflow is already in flight (detected
+/// via [`blazen_core::session_ref::current_session_registry`]), this
+/// child run inherits the parent's `Arc<SessionRefRegistry>` via
+/// [`blazen_core::Workflow::run_with_registry`]. Otherwise it takes the
+/// normal `Workflow::run` path and gets a fresh registry.
+async fn run_with_optional_parent_registry(
+    workflow: &blazen_core::Workflow,
+    input: serde_json::Value,
+) -> Result<blazen_core::WorkflowHandler> {
+    let handler =
+        if let Some(parent_registry) = blazen_core::session_ref::current_session_registry() {
+            workflow.run_with_registry(input, parent_registry).await
+        } else {
+            workflow.run(input).await
+        };
+    handler.map_err(workflow_error_to_napi)
 }
 
 /// Create a [`StepRegistration`](blazen_core::StepRegistration) from a JS step.
@@ -318,35 +491,47 @@ fn make_step_registration(step: &JsStepRegistration) -> blazen_core::StepRegistr
             let tsfn = Arc::clone(&handler_tsfn);
 
             Box::pin(async move {
-                // Convert the Rust event to a JS-friendly JSON value.
-                let js_event = any_event_to_js_value(&*event);
+                // Install the session-ref registry as a Tokio task_local so
+                // that `current_session_registry()` returns `Some` inside the
+                // JS step handler (mirrors the Python binding's wrapper).
+                let registry = ctx.session_refs_arc().await;
                 let js_ctx = JsContext::new(ctx);
 
-                // Call the JavaScript handler function.
-                // ThreadsafeFunction::call_async returns a Future that resolves
-                // to the JS function's return value (serde_json::Value).
-                let result_value: serde_json::Value = tsfn
-                    .call_async(FnArgs::from((js_event, js_ctx)))
-                    .await
-                    .map_err(|e: napi::Error| blazen_core::WorkflowError::Context(e.to_string()))?
-                    .await
-                    .map_err(|e: napi::Error| blazen_core::WorkflowError::Context(e.to_string()))?;
+                blazen_core::session_ref::with_session_registry(registry, async move {
+                    // Convert the Rust event to a JS-friendly JSON value.
+                    let js_event = any_event_to_js_value(&*event);
 
-                // Convert the JS return value back to a Rust event.
-                if result_value.is_null() {
-                    return Ok(blazen_core::StepOutput::None);
-                }
+                    // Call the JavaScript handler function.
+                    // ThreadsafeFunction::call_async returns a Future that resolves
+                    // to the JS function's return value (serde_json::Value).
+                    let result_value: serde_json::Value = tsfn
+                        .call_async(FnArgs::from((js_event, js_ctx)))
+                        .await
+                        .map_err(|e: napi::Error| {
+                            blazen_core::WorkflowError::Context(e.to_string())
+                        })?
+                        .await
+                        .map_err(|e: napi::Error| {
+                            blazen_core::WorkflowError::Context(e.to_string())
+                        })?;
 
-                // Check if it's an array (multiple events).
-                if let serde_json::Value::Array(arr) = &result_value {
-                    let events: Vec<Box<dyn AnyEvent>> =
-                        arr.iter().map(js_value_to_any_event).collect();
-                    return Ok(blazen_core::StepOutput::Multiple(events));
-                }
+                    // Convert the JS return value back to a Rust event.
+                    if result_value.is_null() {
+                        return Ok(blazen_core::StepOutput::None);
+                    }
 
-                // Single event.
-                let event = js_value_to_any_event(&result_value);
-                Ok(blazen_core::StepOutput::Single(event))
+                    // Check if it's an array (multiple events).
+                    if let serde_json::Value::Array(arr) = &result_value {
+                        let events: Vec<Box<dyn AnyEvent>> =
+                            arr.iter().map(js_value_to_any_event).collect();
+                        return Ok(blazen_core::StepOutput::Multiple(events));
+                    }
+
+                    // Single event.
+                    let event = js_value_to_any_event(&result_value);
+                    Ok(blazen_core::StepOutput::Single(event))
+                })
+                .await
             })
         },
     );

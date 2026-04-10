@@ -18,6 +18,16 @@ use blazen_events::InputRequestEvent;
 use crate::error::WorkflowError;
 use crate::value::StateValue;
 
+/// Snapshot format version. Incremented whenever the on-disk or
+/// on-the-wire representation changes in a way that older readers
+/// cannot handle. Readers that see a snapshot with a higher version
+/// MUST return [`WorkflowError::SnapshotVersionMismatch`].
+pub const SNAPSHOT_VERSION: u32 = 1;
+
+fn default_snapshot_version() -> u32 {
+    SNAPSHOT_VERSION
+}
+
 /// A serialized representation of an event captured during a pause.
 ///
 /// This is the core-crate version -- distinct from the one in
@@ -45,6 +55,13 @@ pub struct SerializedEvent {
 /// - History events recorded up to the pause point (requires `telemetry` feature)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowSnapshot {
+    /// Snapshot format version.
+    ///
+    /// Defaults to [`SNAPSHOT_VERSION`] when missing, so snapshots
+    /// written by pre-versioned (legacy) readers/writers can still
+    /// be deserialized cleanly.
+    #[serde(default = "default_snapshot_version")]
+    pub version: u32,
     /// The name of the workflow that produced this snapshot.
     pub workflow_name: String,
     /// Unique identifier for the workflow run.
@@ -93,9 +110,19 @@ impl WorkflowSnapshot {
     /// # Errors
     ///
     /// Returns [`WorkflowError::Serialization`] if the JSON is malformed or
-    /// does not match the expected schema.
+    /// does not match the expected schema, or
+    /// [`WorkflowError::SnapshotVersionMismatch`] if the snapshot was
+    /// written by a newer version of `blazen-core` than this reader
+    /// supports.
     pub fn from_json(json: &str) -> Result<Self, WorkflowError> {
-        serde_json::from_str(json).map_err(WorkflowError::Serialization)
+        let snapshot: Self = serde_json::from_str(json).map_err(WorkflowError::Serialization)?;
+        if snapshot.version > SNAPSHOT_VERSION {
+            return Err(WorkflowError::SnapshotVersionMismatch {
+                snapshot: snapshot.version,
+                supported: SNAPSHOT_VERSION,
+            });
+        }
+        Ok(snapshot)
     }
 
     /// Serialize the snapshot to `MessagePack` bytes.
@@ -104,11 +131,16 @@ impl WorkflowSnapshot {
     /// for [`StateValue::Bytes`] data since `serde_bytes` avoids per-byte
     /// overhead.
     ///
+    /// Uses the field-named (map) encoding so that snapshots remain
+    /// forward-compatible: readers can skip unknown fields and apply
+    /// `#[serde(default)]` for missing ones (e.g. legacy snapshots
+    /// written before [`SNAPSHOT_VERSION`] existed).
+    ///
     /// # Errors
     ///
     /// Returns [`WorkflowError::BinarySerialization`] if serialization fails.
     pub fn to_msgpack(&self) -> Result<Vec<u8>, WorkflowError> {
-        rmp_serde::to_vec(self).map_err(|e| WorkflowError::BinarySerialization(e.to_string()))
+        rmp_serde::to_vec_named(self).map_err(|e| WorkflowError::BinarySerialization(e.to_string()))
     }
 
     /// Deserialize a snapshot from `MessagePack` bytes.
@@ -116,9 +148,20 @@ impl WorkflowSnapshot {
     /// # Errors
     ///
     /// Returns [`WorkflowError::BinarySerialization`] if the bytes are
-    /// malformed or do not match the expected schema.
+    /// malformed or do not match the expected schema, or
+    /// [`WorkflowError::SnapshotVersionMismatch`] if the snapshot was
+    /// written by a newer version of `blazen-core` than this reader
+    /// supports.
     pub fn from_msgpack(bytes: &[u8]) -> Result<Self, WorkflowError> {
-        rmp_serde::from_slice(bytes).map_err(|e| WorkflowError::BinarySerialization(e.to_string()))
+        let snapshot: Self = rmp_serde::from_slice(bytes)
+            .map_err(|e| WorkflowError::BinarySerialization(e.to_string()))?;
+        if snapshot.version > SNAPSHOT_VERSION {
+            return Err(WorkflowError::SnapshotVersionMismatch {
+                snapshot: snapshot.version,
+                supported: SNAPSHOT_VERSION,
+            });
+        }
+        Ok(snapshot)
     }
 
     /// Returns the pending input request, if the workflow paused for human input.
@@ -250,6 +293,7 @@ impl From<blazen_persist::WorkflowCheckpoint> for WorkflowSnapshot {
             .collect();
 
         WorkflowSnapshot {
+            version: SNAPSHOT_VERSION,
             workflow_name: cp.workflow_name,
             run_id: cp.run_id,
             timestamp: cp.timestamp,
@@ -296,6 +340,7 @@ mod tests {
         );
 
         WorkflowSnapshot {
+            version: SNAPSHOT_VERSION,
             workflow_name: "test_wf".to_owned(),
             run_id,
             timestamp: Utc::now(),
@@ -366,6 +411,7 @@ mod tests {
         state.insert("count".to_owned(), StateValue::Json(serde_json::json!(42)));
 
         let snap = WorkflowSnapshot {
+            version: SNAPSHOT_VERSION,
             workflow_name: "bytes_test".to_owned(),
             run_id: Uuid::new_v4(),
             timestamp: Utc::now(),
@@ -395,5 +441,157 @@ mod tests {
     fn from_invalid_msgpack_fails() {
         let result = WorkflowSnapshot::from_msgpack(&[0xFF, 0xFF]);
         assert!(result.is_err());
+    }
+
+    // -----------------------------------------------------------------
+    // Version field / SnapshotVersionMismatch coverage
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn snapshot_default_version_is_one() {
+        let snap = sample_snapshot();
+        assert_eq!(snap.version, 1);
+        assert_eq!(snap.version, SNAPSHOT_VERSION);
+    }
+
+    #[test]
+    fn snapshot_write_includes_version_in_json() {
+        let snap = sample_snapshot();
+        let json = snap.to_json().unwrap();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(value["version"], serde_json::json!(SNAPSHOT_VERSION));
+    }
+
+    #[test]
+    fn snapshot_round_trip_via_json_preserves_version() {
+        let snap = sample_snapshot();
+        let json = snap.to_json().unwrap();
+        let restored = WorkflowSnapshot::from_json(&json).unwrap();
+        assert_eq!(restored.version, SNAPSHOT_VERSION);
+    }
+
+    #[test]
+    fn snapshot_read_rejects_newer_json_version() {
+        // Build a snapshot then re-encode with a higher version field.
+        let snap = sample_snapshot();
+        let json = snap.to_json().unwrap();
+        let mut value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        value["version"] = serde_json::json!(999u32);
+        let bumped = serde_json::to_string(&value).unwrap();
+
+        let err = WorkflowSnapshot::from_json(&bumped).unwrap_err();
+        match err {
+            WorkflowError::SnapshotVersionMismatch {
+                snapshot,
+                supported,
+            } => {
+                assert_eq!(snapshot, 999);
+                assert_eq!(supported, SNAPSHOT_VERSION);
+            }
+            other => panic!("expected SnapshotVersionMismatch, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn snapshot_read_accepts_missing_json_version_defaults_to_one() {
+        // Build a snapshot then strip the version field, simulating a
+        // pre-versioned (legacy) snapshot.
+        let snap = sample_snapshot();
+        let json = snap.to_json().unwrap();
+        let mut value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        value.as_object_mut().unwrap().remove("version");
+        let stripped = serde_json::to_string(&value).unwrap();
+
+        let restored = WorkflowSnapshot::from_json(&stripped).unwrap();
+        assert_eq!(restored.version, 1);
+        assert_eq!(restored.workflow_name, snap.workflow_name);
+    }
+
+    #[test]
+    fn snapshot_write_includes_version_in_msgpack() {
+        // Decode just the `version` field by deserializing into a
+        // partial shadow struct. `to_vec_named` writes a map keyed
+        // by field name, and rmp-serde will skip unknown fields when
+        // the target struct does not request them. This proves the
+        // field is on the wire and is not just being synthesized at
+        // read time by `#[serde(default)]`.
+        #[derive(Deserialize)]
+        struct VersionOnly {
+            version: u32,
+        }
+
+        let snap = sample_snapshot();
+        let bytes = snap.to_msgpack().unwrap();
+
+        let probe: VersionOnly = rmp_serde::from_slice(&bytes).unwrap();
+        assert_eq!(probe.version, SNAPSHOT_VERSION);
+
+        // And the standard reader still round-trips cleanly.
+        let restored = WorkflowSnapshot::from_msgpack(&bytes).unwrap();
+        assert_eq!(restored.version, SNAPSHOT_VERSION);
+    }
+
+    #[test]
+    fn snapshot_read_rejects_newer_msgpack_version() {
+        // Construct a snapshot with version=999, encode with msgpack,
+        // and verify the reader rejects it.
+        let mut snap = sample_snapshot();
+        snap.version = 999;
+        let bytes = snap.to_msgpack().unwrap();
+
+        let err = WorkflowSnapshot::from_msgpack(&bytes).unwrap_err();
+        match err {
+            WorkflowError::SnapshotVersionMismatch {
+                snapshot,
+                supported,
+            } => {
+                assert_eq!(snapshot, 999);
+                assert_eq!(supported, SNAPSHOT_VERSION);
+            }
+            other => panic!("expected SnapshotVersionMismatch, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn snapshot_read_accepts_missing_msgpack_version_defaults_to_one() {
+        // Build a struct WITHOUT the version field by serializing a
+        // shadow type that omits it, then read it back through the
+        // versioned reader. The serde default should kick in.
+        #[derive(Serialize)]
+        struct LegacySnapshot {
+            workflow_name: String,
+            run_id: Uuid,
+            timestamp: DateTime<Utc>,
+            context_state: HashMap<String, StateValue>,
+            collected_events: HashMap<String, Vec<serde_json::Value>>,
+            pending_events: Vec<SerializedEvent>,
+            metadata: HashMap<String, serde_json::Value>,
+            #[cfg(feature = "telemetry")]
+            history: Vec<blazen_telemetry::HistoryEvent>,
+        }
+
+        let snap = sample_snapshot();
+        let legacy = LegacySnapshot {
+            workflow_name: snap.workflow_name.clone(),
+            run_id: snap.run_id,
+            timestamp: snap.timestamp,
+            context_state: snap.context_state.clone(),
+            collected_events: snap.collected_events.clone(),
+            pending_events: snap.pending_events.clone(),
+            metadata: snap.metadata.clone(),
+            #[cfg(feature = "telemetry")]
+            history: snap.history.clone(),
+        };
+
+        // Encode using the field-named map form, which is what the
+        // versioned writer uses too. A legacy producer that wrote
+        // positional msgpack with no `version` field cannot be
+        // decoded by a versioned reader because positional encoding
+        // requires a fixed field order; the on-wire format MUST be
+        // map-encoded for forward compatibility.
+        let bytes = rmp_serde::to_vec_named(&legacy).unwrap();
+        let restored = WorkflowSnapshot::from_msgpack(&bytes).unwrap();
+        assert_eq!(restored.version, 1);
+        assert_eq!(restored.workflow_name, snap.workflow_name);
     }
 }

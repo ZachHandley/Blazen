@@ -58,6 +58,7 @@ pub mod artifacts;
 pub mod cache;
 pub mod chat_window;
 pub mod compute;
+pub mod device;
 pub mod error;
 pub mod events;
 pub mod fallback;
@@ -89,6 +90,7 @@ pub mod media;
 pub mod middleware;
 pub mod pricing;
 pub mod providers;
+pub mod quantization;
 pub mod retry;
 pub mod tokens;
 pub mod traits;
@@ -134,6 +136,7 @@ pub use compute::{
     VideoRequest,
     VideoResult,
 };
+pub use device::Device;
 #[allow(deprecated)]
 pub use error::LlmError;
 pub use error::{BlazenError, CompletionErrorKind, ComputeErrorKind, MediaErrorKind};
@@ -143,6 +146,7 @@ pub use media::{
     Generated3DModel, GeneratedAudio, GeneratedImage, GeneratedVideo, MediaOutput, MediaType,
 };
 pub use middleware::{CacheMiddleware, Middleware, MiddlewareStack, RetryMiddleware};
+pub use quantization::Quantization;
 pub use retry::{RetryCompletionModel, RetryConfig};
 #[cfg(feature = "tiktoken")]
 pub use tokens::TiktokenCounter;
@@ -157,3 +161,35 @@ pub use types::{
     MediaSource, MessageContent, ReasoningTrace, RequestTiming, ResponseFormat, Role, StreamChunk,
     StructuredResponse, TokenUsage, ToolCall, ToolDefinition, VideoContent,
 };
+
+// ---------------------------------------------------------------------------
+// Local inference backends (gated behind feature flags)
+// ---------------------------------------------------------------------------
+
+mod backends;
+
+#[cfg(feature = "fastembed")]
+pub use blazen_embed_fastembed::{FastEmbedModel, FastEmbedOptions};
+
+#[cfg(feature = "mistralrs")]
+pub use blazen_llm_mistralrs::{MistralRsOptions, MistralRsProvider};
+
+#[cfg(feature = "candle-embed")]
+pub use blazen_embed_candle::{CandleEmbedError, CandleEmbedModel, CandleEmbedOptions};
+
+#[cfg(feature = "whispercpp")]
+pub use blazen_audio_whispercpp::{WhisperCppProvider, WhisperError, WhisperModel, WhisperOptions};
+
+#[cfg(feature = "diffusion")]
+pub use blazen_image_diffusion::{
+    DiffusionError, DiffusionOptions, DiffusionProvider, DiffusionScheduler,
+};
+
+#[cfg(feature = "candle-llm")]
+pub use blazen_llm_candle::{CandleLlmError, CandleLlmOptions, CandleLlmProvider};
+
+#[cfg(feature = "llamacpp")]
+pub use blazen_llm_llamacpp::{LlamaCppError, LlamaCppOptions, LlamaCppProvider};
+
+#[cfg(feature = "piper")]
+pub use blazen_audio_piper::{PiperError, PiperOptions, PiperProvider};

@@ -1,0 +1,23 @@
+[package]
+name = "blazen-model-cache"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "Shared model download and cache layer for Blazen local-inference backends"
+
+[dependencies]
+hf-hub = { workspace = true, features = ["tokio"] }
+tokio = { workspace = true, features = ["fs"] }
+sha2 = { workspace = true }
+dirs = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

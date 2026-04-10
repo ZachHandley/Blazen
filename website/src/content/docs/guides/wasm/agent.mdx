@@ -17,7 +17,8 @@ import init, { CompletionModel, ChatMessage, runAgent } from '@blazen/sdk';
 
 await init();
 
-const model = CompletionModel.openai('your-key');
+// The WASM SDK reads OPENAI_API_KEY from the runtime environment.
+const model = CompletionModel.openai();
 
 const tools = [
   {

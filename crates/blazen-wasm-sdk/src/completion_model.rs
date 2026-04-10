@@ -11,13 +11,55 @@ use wasm_bindgen_futures::future_to_promise;
 use blazen_llm::cache::{CacheConfig, CachedCompletionModel};
 use blazen_llm::fallback::FallbackModel;
 use blazen_llm::http::HttpClient;
+use blazen_llm::providers::anthropic::AnthropicProvider;
+use blazen_llm::providers::azure::AzureOpenAiProvider;
+use blazen_llm::providers::fal::FalProvider;
+use blazen_llm::providers::gemini::GeminiProvider;
 use blazen_llm::providers::openai_compat::{AuthMethod, OpenAiCompatConfig, OpenAiCompatProvider};
 use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
 use blazen_llm::traits::CompletionModel;
 use blazen_llm::types::CompletionRequest;
 
 use crate::chat_message::js_messages_to_vec;
+use crate::js_completion::JsCompletionHandler;
 use blazen_llm::FetchHttpClient;
+
+// ---------------------------------------------------------------------------
+// WebLlmOptions
+// ---------------------------------------------------------------------------
+
+/// Options for the `CompletionModel.webLlm()` convenience factory.
+///
+/// Controls default temperature and max-token limits for models loaded via
+/// `@mlc-ai/web-llm`.
+#[wasm_bindgen(js_name = "WebLlmOptions")]
+pub struct WebLlmOptions {
+    /// Sampling temperature. Defaults to `0.7`.
+    pub temperature: f32,
+
+    /// Maximum number of tokens to generate. Defaults to `512`.
+    #[wasm_bindgen(js_name = "maxTokens")]
+    pub max_tokens: u32,
+}
+
+#[wasm_bindgen(js_class = "WebLlmOptions")]
+impl WebLlmOptions {
+    /// Create default options (`temperature: 0.7`, `maxTokens: 512`).
+    #[wasm_bindgen(constructor)]
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            temperature: 0.7,
+            max_tokens: 512,
+        }
+    }
+}
+
+impl Default for WebLlmOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 // ---------------------------------------------------------------------------
 // WasmCompletionModel
@@ -278,6 +320,202 @@ impl WasmCompletionModel {
         }));
         Ok(Self {
             inner: Arc::new(provider),
+        })
+    }
+
+    /// Anthropic (default `claude-sonnet-4-5-20250929`).
+    ///
+    /// Reads the API key from the `ANTHROPIC_API_KEY` environment variable.
+    #[wasm_bindgen]
+    pub fn anthropic() -> Result<WasmCompletionModel, JsValue> {
+        let api_key = blazen_llm::keys::resolve_api_key("anthropic", None)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let client: Arc<dyn HttpClient> = FetchHttpClient::new().into_arc();
+        let provider = AnthropicProvider::new_with_client(api_key, client);
+        Ok(Self {
+            inner: Arc::new(provider),
+        })
+    }
+
+    /// Google Gemini (default `gemini-2.5-flash`).
+    ///
+    /// Reads the API key from the `GEMINI_API_KEY` environment variable.
+    #[wasm_bindgen]
+    pub fn gemini() -> Result<WasmCompletionModel, JsValue> {
+        let api_key = blazen_llm::keys::resolve_api_key("gemini", None)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let client: Arc<dyn HttpClient> = FetchHttpClient::new().into_arc();
+        let provider = GeminiProvider::new_with_client(api_key, client);
+        Ok(Self {
+            inner: Arc::new(provider),
+        })
+    }
+
+    /// Azure OpenAI.
+    ///
+    /// Reads the API key from the `AZURE_OPENAI_API_KEY` environment variable.
+    /// Requires `resourceName` and `deploymentName` — Azure does not have a
+    /// single global endpoint.
+    #[wasm_bindgen(js_name = "azure")]
+    pub fn azure(
+        resource_name: &str,
+        deployment_name: &str,
+    ) -> Result<WasmCompletionModel, JsValue> {
+        let api_key = blazen_llm::keys::resolve_api_key("azure", None)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let client: Arc<dyn HttpClient> = FetchHttpClient::new().into_arc();
+        let provider =
+            AzureOpenAiProvider::new_with_client(api_key, resource_name, deployment_name, client);
+        Ok(Self {
+            inner: Arc::new(provider),
+        })
+    }
+
+    /// fal.ai (default `anthropic/claude-sonnet-4.5` via the OpenAI-compatible
+    /// chat-completions endpoint).
+    ///
+    /// Reads the API key from the `FAL_KEY` environment variable.
+    #[wasm_bindgen]
+    pub fn fal() -> Result<WasmCompletionModel, JsValue> {
+        let api_key = blazen_llm::keys::resolve_api_key("fal", None)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let client: Arc<dyn HttpClient> = FetchHttpClient::new().into_arc();
+        let provider = FalProvider::new_with_client(api_key, client);
+        Ok(Self {
+            inner: Arc::new(provider),
+        })
+    }
+
+    // -----------------------------------------------------------------------
+    // JS callback handler
+    // -----------------------------------------------------------------------
+
+    /// Create a `CompletionModel` backed by JavaScript callback functions.
+    ///
+    /// This enables local/custom models (e.g. `transformers.js`, WebLLM, or
+    /// any JS-side inference library) to participate in the Blazen completion
+    /// pipeline.
+    ///
+    /// - `model_id` identifies the model for logging and routing.
+    /// - `complete_handler` is called for non-streaming completions with a
+    ///   `CompletionRequest`-shaped JS object; must return (or resolve to)
+    ///   a `CompletionResponse`-shaped object.
+    /// - `stream_handler` (optional) is called for streaming completions with
+    ///   `(request, onChunk)` where `onChunk` is a callback that accepts
+    ///   `StreamChunk`-shaped objects. If omitted, `stream()` falls back to
+    ///   calling the `complete_handler` and yielding a single chunk.
+    ///
+    /// ```js
+    /// const model = CompletionModel.fromJsHandler(
+    ///   'my-local-model',
+    ///   async (request) => {
+    ///     const text = await myLocalModel.generate(request.messages);
+    ///     return {
+    ///       content: text, toolCalls: [], citations: [],
+    ///       artifacts: [], images: [], audio: [], videos: [],
+    ///       model: 'my-local-model', metadata: {},
+    ///     };
+    ///   },
+    /// );
+    /// ```
+    #[wasm_bindgen(js_name = "fromJsHandler")]
+    pub fn from_js_handler(
+        model_id: String,
+        complete_handler: js_sys::Function,
+        stream_handler: Option<js_sys::Function>,
+    ) -> Self {
+        let handler = JsCompletionHandler::new(model_id, complete_handler, stream_handler);
+        Self {
+            inner: Arc::new(handler),
+        }
+    }
+
+    /// Create a completion model backed by `@mlc-ai/web-llm`.
+    ///
+    /// The library is **dynamically imported** on the first `complete()` call,
+    /// so there is no top-level `await` and the WASM init path stays
+    /// synchronous.  If the package is not installed the first call fails
+    /// with a clear import error.
+    ///
+    /// **Requires:** `npm install @mlc-ai/web-llm`
+    ///
+    /// # Errors
+    ///
+    /// This factory itself is infallible in practice; errors from the dynamic
+    /// import surface at `complete()` call time, not here.
+    ///
+    /// ```js
+    /// const model = CompletionModel.webLlm('Llama-3.1-8B-Instruct-q4f32_1-MLC');
+    /// const res = await model.complete([ChatMessage.user('Hello!')]);
+    /// console.log(res.content);
+    /// ```
+    #[allow(clippy::needless_pass_by_value)] // wasm_bindgen requires owned args
+    #[wasm_bindgen(js_name = "webLlm")]
+    pub fn web_llm(
+        model_id: String,
+        options: Option<WebLlmOptions>,
+    ) -> Result<WasmCompletionModel, JsValue> {
+        let temperature = options.as_ref().map_or(0.7, |o| o.temperature);
+        let max_tokens = options.as_ref().map_or(512, |o| o.max_tokens);
+
+        // Build a JS function body that lazily imports @mlc-ai/web-llm,
+        // creates an MLC engine (cached on globalThis), and performs a
+        // chat completion.
+        //
+        // The cache key includes the model id so different models can coexist.
+        let cache_key = format!(
+            "__blazen_llm_engine_{}",
+            model_id.replace(['/', '-', '.'], "_")
+        );
+
+        // Note: we use named `format!` args rather than inline captures because
+        // the `{{` / `}}` escaping for JS object literals conflicts with inline
+        // capture syntax and makes the template less readable.
+        #[allow(clippy::uninlined_format_args)]
+        let handler_body = format!(
+            r"
+            const webllm = await import('@mlc-ai/web-llm');
+            if (!globalThis['{cache_key}']) {{
+                globalThis['{cache_key}'] = await webllm.CreateMLCEngine('{model_id}');
+            }}
+            const engine = globalThis['{cache_key}'];
+            const messages = request.messages || [];
+            const response = await engine.chat.completions.create({{
+                messages: messages,
+                temperature: request.temperature != null ? request.temperature : {temperature},
+                max_tokens: request.max_tokens != null ? request.max_tokens : {max_tokens},
+            }});
+            const choice = response.choices && response.choices[0];
+            return {{
+                content: choice && choice.message ? choice.message.content || '' : '',
+                toolCalls: [],
+                citations: [],
+                artifacts: [],
+                images: [],
+                audio: [],
+                videos: [],
+                model: '{model_id}',
+                metadata: {{}},
+                usage: response.usage || null,
+            }};
+            ",
+            cache_key = cache_key,
+            model_id = model_id,
+            temperature = temperature,
+            max_tokens = max_tokens,
+        );
+
+        // `new Function("request", body)` creates `function anonymous(request) { body }`.
+        let complete_handler =
+            js_sys::Function::new_with_args("request", &handler_body);
+
+        let handler = JsCompletionHandler::new(
+            model_id,
+            complete_handler,
+            None, // streaming falls back to single-chunk via complete handler
+        );
+        Ok(Self {
+            inner: Arc::new(handler),
         })
     }
 

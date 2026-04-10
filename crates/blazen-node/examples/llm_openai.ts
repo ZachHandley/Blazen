@@ -55,7 +55,7 @@ if (!apiKey) {
 }
 
 // Create the OpenAI completion model (gpt-5.3-chat-latest is cheap for examples).
-const model: CompletionModel = CompletionModel.openai(apiKey);
+const model: CompletionModel = CompletionModel.openai({ apiKey });
 
 // Build the 3-step content pipeline.
 const wf: Workflow = new Workflow("content-pipeline");

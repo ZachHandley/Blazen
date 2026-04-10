@@ -1,0 +1,42 @@
+[package]
+name = "blazen-embed-candle"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "Local embedding backend for Blazen using HuggingFace candle"
+
+[dependencies]
+# candle-core = { version = "0.8", optional = true }  -- commented until Phase 6.2
+# candle-nn = { version = "0.8", optional = true }    -- commented until Phase 6.2
+# candle-transformers = { version = "0.8", optional = true }  -- commented until Phase 6.2
+# tokenizers = { version = "0.21", optional = true }  -- commented until Phase 6.2
+# hf-hub = { workspace = true, optional = true }      -- commented until Phase 6.2
+blazen-model-cache = { workspace = true }
+serde = { workspace = true }
+serde_json.workspace = true
+tokio = { workspace = true }
+tracing.workspace = true
+thiserror = { workspace = true }
+
+[features]
+default = ["cpu"]
+# Intended feature flags for Phase 6.2 when candle deps are added:
+#   engine      = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub"]
+#   cpu         = ["engine"]
+#   cuda        = ["engine", "candle-core/cuda"]
+#   metal       = ["engine", "candle-core/metal"]
+#   accelerate  = ["engine", "candle-core/accelerate"]
+#
+# For now, these are no-op feature flags that exist so that downstream crates
+# can already declare their feature mappings without breaking.
+engine = []
+cpu = ["engine"]
+cuda = ["engine"]
+metal = ["engine"]
+accelerate = ["engine"]
+
+[lints]
+workspace = true

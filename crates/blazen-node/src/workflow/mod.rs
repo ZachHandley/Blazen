@@ -3,10 +3,13 @@
 pub mod context;
 pub mod event;
 pub mod handler;
+pub mod session_ref;
+pub mod session_ref_convert;
+pub mod session_ref_serializable;
 #[allow(clippy::module_inception)]
 pub mod workflow;
 
 // Re-export the main types.
-pub use context::{JsContext, JsSessionNamespace, JsStateNamespace};
+pub use context::{JsContext, JsSessionNamespace, JsStateNamespace, SerializableRefPayload};
 pub use handler::JsWorkflowHandler;
-pub use workflow::{JsWorkflow, JsWorkflowResult};
+pub use workflow::{JsSessionPausePolicy, JsWorkflow, JsWorkflowResult};

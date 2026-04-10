@@ -26,7 +26,10 @@ wf.addStep('fetch_text', ['blazen::StartEvent'], async (event, ctx) => {
 });
 
 wf.addStep('summarize', ['SummarizeEvent'], async (event, ctx) => {
-  const model = CompletionModel.openrouter(event.apiKey);
+  // The WASM SDK reads OPENROUTER_API_KEY from the runtime environment.
+  // Factory methods do not accept runtime keys -- configure the env var
+  // at deploy time (see the Edge Deployment guide for strategies).
+  const model = CompletionModel.openrouter();
   const response = await model.complete([
     ChatMessage.system('Summarize the following text in 2-3 sentences.'),
     ChatMessage.user(event.text),
@@ -37,7 +40,7 @@ wf.addStep('summarize', ['SummarizeEvent'], async (event, ctx) => {
   };
 });
 
-const result = await wf.run({ url: 'https://example.com/article', apiKey: 'your-key' });
+const result = await wf.run({ url: 'https://example.com/article' });
 console.log(result.data.summary);
 ```
 

@@ -415,12 +415,13 @@ In the WASM component, custom providers can be registered at runtime via `POST /
 ### Python
 
 ```python
-from blazen import CompletionModel
+from blazen import CompletionModel, ProviderOptions
 
-model = CompletionModel.groq("gsk-...")
+model = CompletionModel.groq(options=ProviderOptions(api_key="gsk-..."))
 # Or: .openai(), .anthropic(), .gemini(), .azure(), .fal(),
 #     .openrouter(), .together(), .mistral(), .deepseek(),
 #     .fireworks(), .perplexity(), .xai(), .cohere(), .bedrock()
+# All provider methods take `options=ProviderOptions(api_key="...")`.
 
 response = await model.complete(
     messages=[{"role": "user", "content": "Hello"}],
@@ -438,8 +439,8 @@ from blazen import CompletionModel, FalOptions, FalLlmEndpoint, FalProvider
 
 # LLM completion model via CompletionModel.fal():
 model = CompletionModel.fal(
-    "fal-...",
     options=FalOptions(
+        api_key="fal-...",
         model="openai/gpt-4o",
         endpoint=FalLlmEndpoint.OPENAI_CHAT,  # default
         enterprise=False,
@@ -449,8 +450,10 @@ model = CompletionModel.fal(
 
 # Or build a full FalProvider for compute + embeddings:
 fal = FalProvider(
-    api_key="fal-...",
-    options=FalOptions(enterprise=True),
+    options=FalOptions(
+        api_key="fal-...",
+        enterprise=True,
+    ),
 )
 embeddings = fal.embedding_model()
 resp = await embeddings.embed(["hello", "world"])
@@ -468,7 +471,7 @@ await fal.upscale_image_creative(request)
 ```typescript
 import { CompletionModel } from 'blazen';
 
-const model = CompletionModel.groq('gsk-...');
+const model = CompletionModel.groq({ apiKey: 'gsk-...' });
 
 const response = await model.completeWithOptions(
     [{ role: 'user', content: 'Hello' }],

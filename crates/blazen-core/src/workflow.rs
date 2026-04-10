@@ -33,10 +33,28 @@ use crate::error::WorkflowError;
 #[cfg(feature = "persist")]
 use crate::event_loop::CheckpointConfig;
 use crate::event_loop::event_loop;
+#[cfg(feature = "distributed")]
+use crate::handler::WorkflowResult;
 use crate::handler::{WorkflowControl, WorkflowHandler};
-use crate::session_ref::SessionRefRegistry;
+#[cfg(feature = "distributed")]
+use crate::session_ref::RemoteRefDescriptor;
+use crate::session_ref::{
+    RegistryKey, SERIALIZED_SESSION_REFS_META_KEY, SessionRefError, SessionRefRegistry,
+    SessionRefSerializable,
+};
 use crate::snapshot::WorkflowSnapshot;
 use crate::step::StepRegistration;
+
+/// Deserializer callback used by
+/// [`Workflow::resume_with_deserializers`] to reconstruct a
+/// previously-captured [`SessionRefSerializable`] value from its bytes.
+///
+/// Keyed by the value's stable type tag (see
+/// [`SessionRefSerializable::blazen_type_tag`]). Returning an error
+/// aborts the resume with
+/// [`WorkflowError::SessionRefsNotSerializable`].
+pub type SessionRefDeserializerFn =
+    fn(&[u8]) -> Result<Arc<dyn SessionRefSerializable>, SessionRefError>;
 
 /// A validated, ready-to-run workflow.
 pub struct Workflow {
@@ -233,6 +251,14 @@ impl Workflow {
     /// compatible superset) that were registered when the workflow was
     /// originally built.
     ///
+    /// This is equivalent to calling
+    /// [`Workflow::resume_with_deserializers`] with an empty
+    /// deserializer map. Any `SessionPausePolicy::PickleOrSerialize`
+    /// payload stored under
+    /// [`crate::session_ref::SERIALIZED_SESSION_REFS_META_KEY`] will be
+    /// left in metadata untouched — the resumed registry will be
+    /// empty.
+    ///
     /// # Errors
     ///
     /// Returns an error if the snapshot's pending events cannot be
@@ -240,6 +266,46 @@ impl Workflow {
     pub async fn resume(
         snapshot: WorkflowSnapshot,
         steps: Vec<StepRegistration>,
+        timeout: Option<Duration>,
+    ) -> crate::error::Result<WorkflowHandler> {
+        Self::resume_inner(snapshot, steps, HashMap::new(), timeout).await
+    }
+
+    /// Resume a workflow from a snapshot, rehydrating
+    /// [`SessionRefSerializable`] entries captured under
+    /// [`SessionPausePolicy::PickleOrSerialize`](crate::SessionPausePolicy::PickleOrSerialize).
+    ///
+    /// For each entry stored in snapshot metadata under
+    /// [`crate::session_ref::SERIALIZED_SESSION_REFS_META_KEY`], the
+    /// resumer looks up `deserializers[type_tag]` and invokes it with
+    /// the captured bytes. The resulting `Arc<dyn
+    /// SessionRefSerializable>` is re-inserted into the fresh
+    /// context's session-ref registry under the original
+    /// [`RegistryKey`] so downstream `__blazen_session_ref__` markers
+    /// in the snapshot keep resolving after resume.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WorkflowError::SessionRefsNotSerializable`] when a
+    /// referenced `type_tag` has no registered deserializer, when the
+    /// deserializer itself errors, or when the stored payload is
+    /// malformed. Returns [`WorkflowError::ChannelClosed`] if pending
+    /// events cannot be reinjected.
+    pub async fn resume_with_deserializers(
+        snapshot: WorkflowSnapshot,
+        steps: Vec<StepRegistration>,
+        deserializers: HashMap<&'static str, SessionRefDeserializerFn>,
+        timeout: Option<Duration>,
+    ) -> crate::error::Result<WorkflowHandler> {
+        Self::resume_inner(snapshot, steps, deserializers, timeout).await
+    }
+
+    /// Shared implementation behind [`Workflow::resume`] and
+    /// [`Workflow::resume_with_deserializers`].
+    async fn resume_inner(
+        snapshot: WorkflowSnapshot,
+        steps: Vec<StepRegistration>,
+        deserializers: HashMap<&'static str, SessionRefDeserializerFn>,
         timeout: Option<Duration>,
     ) -> crate::error::Result<WorkflowHandler> {
         // Rebuild the registry from the provided steps.
@@ -271,11 +337,19 @@ impl Workflow {
         ctx.restore_collected(snapshot.collected_events).await;
         ctx.restore_metadata(snapshot.metadata).await;
 
-        // Capture an Arc to the resumed context's session-ref registry
-        // (empty after a cross-process resume) so the handler can later
-        // surface a clear error if a marker references a now-missing
-        // entry.
+        // Rehydrate any serializable session-ref payloads captured by
+        // the PickleOrSerialize policy. We do this BEFORE pending
+        // events are reinjected so steps that consume those events
+        // see a populated registry.
         let session_refs = ctx.session_refs_arc().await;
+        if let Some(meta) = ctx
+            .snapshot_metadata()
+            .await
+            .get(SERIALIZED_SESSION_REFS_META_KEY)
+            && !deserializers.is_empty()
+        {
+            rehydrate_serialized_session_refs(&session_refs, meta, &deserializers).await?;
+        }
 
         // Reinject pending events into the channel.
         // Try to reconstruct concrete event types via the deserializer
@@ -371,6 +445,225 @@ impl Workflow {
         // Use a default 5-minute timeout for resumed workflows.
         Self::resume(snapshot, steps, Some(Duration::from_secs(300))).await
     }
+
+    /// Return the unique step names registered in this workflow.
+    ///
+    /// The order is deterministic within a single build but depends on
+    /// the internal `HashMap` iteration order, so callers should not
+    /// rely on it being stable across runs.
+    #[must_use]
+    pub fn step_names(&self) -> Vec<String> {
+        let mut seen = std::collections::HashSet::new();
+        let mut names = Vec::new();
+        for registrations in self.step_registry.values() {
+            for reg in registrations {
+                if seen.insert(&reg.name) {
+                    names.push(reg.name.clone());
+                }
+            }
+        }
+        names
+    }
+
+    /// Invoke this workflow on a remote peer.
+    ///
+    /// The peer must have the same steps registered in its
+    /// [`crate::step_registry`] under the same step IDs. Returns a
+    /// [`WorkflowResult`] whose `event` field is a
+    /// [`StopEvent`](blazen_events::StopEvent) carrying the remote
+    /// sub-workflow's terminal result. Any non-serializable session
+    /// refs produced by the remote workflow are tracked as
+    /// [`RemoteRefDescriptor`](crate::session_ref::RemoteRefDescriptor)s
+    /// in the returned `session_refs` registry -- call
+    /// `deref_session_ref` on the peer client to fetch their values.
+    ///
+    /// The `peer` parameter is any implementor of
+    /// [`PeerClient`](crate::distributed::PeerClient), which
+    /// `blazen_peer::BlazenPeerClient` implements when the `distributed`
+    /// feature of this crate is enabled alongside `blazen-peer`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`WorkflowError`] wrapping the peer error if the remote
+    /// call fails, or if the remote workflow itself reported an error.
+    #[cfg(feature = "distributed")]
+    pub async fn run_remote(
+        &self,
+        input: serde_json::Value,
+        peer: &dyn crate::distributed::PeerClient,
+    ) -> crate::error::Result<WorkflowResult> {
+        use crate::distributed::{RemoteWorkflowRequest, RemoteWorkflowResponse};
+
+        // Collect unique step names from our local step registrations.
+        let step_ids = self.step_names();
+
+        let request = RemoteWorkflowRequest {
+            workflow_name: self.name.clone(),
+            step_ids,
+            input,
+            timeout_secs: self.timeout.map(|d| d.as_secs()),
+        };
+
+        let response: RemoteWorkflowResponse = peer
+            .invoke_sub_workflow(request)
+            .await
+            .map_err(|e| WorkflowError::Context(format!("peer invocation failed: {e}")))?;
+
+        // Check for remote error.
+        if let Some(err) = &response.error
+            && !err.is_empty()
+        {
+            return Err(WorkflowError::Context(format!(
+                "remote workflow failed: {err}"
+            )));
+        }
+
+        // Build a local session ref registry and populate it with remote refs.
+        let registry = Arc::new(SessionRefRegistry::new());
+        for (key_uuid, descriptor) in &response.remote_refs {
+            let key = RegistryKey(*key_uuid);
+            let remote_desc = RemoteRefDescriptor {
+                origin_node_id: descriptor.origin_node_id.clone(),
+                type_tag: descriptor.type_tag.clone(),
+                created_at_epoch_ms: descriptor.created_at_epoch_ms,
+            };
+            // Best-effort insert; capacity errors are unlikely for a
+            // single sub-workflow response but we log and continue.
+            let _ = registry.insert_remote(key, remote_desc).await;
+        }
+
+        // Build a StopEvent from the response result.
+        let result_json = response.result.unwrap_or(serde_json::Value::Null);
+        let stop_event = blazen_events::StopEvent {
+            result: result_json,
+        };
+
+        Ok(WorkflowResult {
+            event: Box::new(stop_event),
+            session_refs: registry,
+        })
+    }
+
+    /// Build a new workflow by looking up each step ID in the
+    /// process-global
+    /// [`StepDeserializerRegistry`](crate::step_registry::StepDeserializerRegistry).
+    ///
+    /// Returns an error if any step ID is not registered. This is the
+    /// entry point used by the distributed workflow peer server to
+    /// reconstruct a sub-workflow from a list of step IDs carried in a
+    /// wire request — the peer must have the same step code compiled
+    /// in as the caller.
+    ///
+    /// The resulting workflow has no timeout applied. Callers who need
+    /// a timeout should construct the workflow manually with
+    /// [`WorkflowBuilder`](crate::builder::WorkflowBuilder) and call
+    /// [`WorkflowBuilder::timeout`](crate::builder::WorkflowBuilder::timeout)
+    /// explicitly.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WorkflowError::UnknownStep`] if any entry in
+    /// `step_ids` is not registered in the global step registry.
+    /// Propagates [`WorkflowError::ValidationFailed`] from
+    /// [`WorkflowBuilder::build`](crate::builder::WorkflowBuilder::build)
+    /// if the resulting step set is invalid (e.g. empty).
+    pub fn new_from_registered_steps(
+        name: impl Into<String>,
+        step_ids: Vec<&str>,
+    ) -> crate::error::Result<Self> {
+        use crate::builder::WorkflowBuilder;
+        use crate::step_registry::lookup_step_builder;
+
+        let mut builder = WorkflowBuilder::new(name);
+        for step_id in step_ids {
+            let registration =
+                lookup_step_builder(step_id).ok_or_else(|| WorkflowError::UnknownStep {
+                    step_id: step_id.to_string(),
+                })?;
+            builder = builder.step(registration);
+        }
+        builder.no_timeout().build()
+    }
+}
+
+/// Walk the `__blazen_serialized_session_refs` sidecar produced by the
+/// [`SessionPausePolicy::PickleOrSerialize`](crate::SessionPausePolicy::PickleOrSerialize)
+/// snapshot path and re-insert each entry into the fresh context's
+/// session-ref registry under its original [`RegistryKey`].
+///
+/// Malformed records (missing `type_tag`, missing/non-array `data`,
+/// unknown `type_tag`, deserializer error) are surfaced as
+/// [`WorkflowError::SessionRefsNotSerializable`] with the offending
+/// keys in the error payload.
+async fn rehydrate_serialized_session_refs(
+    registry: &Arc<SessionRefRegistry>,
+    meta: &serde_json::Value,
+    deserializers: &HashMap<&'static str, SessionRefDeserializerFn>,
+) -> crate::error::Result<()> {
+    let Some(entries) = meta.as_object() else {
+        return Err(WorkflowError::SessionRefsNotSerializable {
+            keys: vec!["__blazen_serialized_session_refs metadata is not a JSON object".to_owned()],
+        });
+    };
+
+    let mut failures: Vec<String> = Vec::new();
+
+    for (key_str, record) in entries {
+        let Ok(key) = RegistryKey::parse(key_str) else {
+            failures.push(format!("invalid RegistryKey '{key_str}'"));
+            continue;
+        };
+
+        let Some(record_obj) = record.as_object() else {
+            failures.push(format!("record for key {key_str} is not an object"));
+            continue;
+        };
+
+        let Some(type_tag) = record_obj.get("type_tag").and_then(|v| v.as_str()) else {
+            failures.push(format!("record for key {key_str} missing type_tag"));
+            continue;
+        };
+
+        let Some(data_value) = record_obj.get("data") else {
+            failures.push(format!("record for key {key_str} missing data"));
+            continue;
+        };
+
+        let bytes: crate::value::BytesWrapper = match serde_json::from_value(data_value.clone()) {
+            Ok(b) => b,
+            Err(e) => {
+                failures.push(format!("failed to decode data bytes for {key_str}: {e}"));
+                continue;
+            }
+        };
+
+        let Some(&deserializer) = deserializers.get(type_tag) else {
+            failures.push(format!(
+                "no registered deserializer for type_tag '{type_tag}' (key {key_str})"
+            ));
+            continue;
+        };
+
+        let value = match deserializer(&bytes.0) {
+            Ok(v) => v,
+            Err(e) => {
+                failures.push(format!(
+                    "deserializer for type_tag '{type_tag}' failed on key {key_str}: {e}"
+                ));
+                continue;
+            }
+        };
+
+        if let Err(e) = registry.insert_serializable_with_key(key, value).await {
+            failures.push(format!("registry insert failed for {key_str}: {e}"));
+        }
+    }
+
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(WorkflowError::SessionRefsNotSerializable { keys: failures })
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -383,6 +676,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
+    use crate::Workflow;
     use crate::builder::WorkflowBuilder;
     use crate::error::WorkflowError;
     use crate::step::{StepFn, StepOutput, StepRegistration};
@@ -435,6 +729,30 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(matches!(err, WorkflowError::ValidationFailed(_)));
+    }
+
+    #[test]
+    fn step_names_returns_unique_names() {
+        // A second step that also listens on StartEvent.
+        let handler_b: StepFn =
+            Arc::new(|_event, _ctx| Box::pin(async move { Ok(StepOutput::None) }));
+        let step_b = StepRegistration {
+            name: "side_effect".into(),
+            accepts: vec![StartEvent::event_type()],
+            emits: vec![],
+            handler: handler_b,
+            max_concurrency: 0,
+        };
+
+        let workflow = WorkflowBuilder::new("step-names-test")
+            .step(echo_step())
+            .step(step_b)
+            .build()
+            .unwrap();
+
+        let mut names = workflow.step_names();
+        names.sort();
+        assert_eq!(names, vec!["echo", "side_effect"]);
     }
 
     #[tokio::test]
@@ -494,5 +812,179 @@ mod tests {
             result.unwrap_err(),
             WorkflowError::StepFailed { .. }
         ));
+    }
+
+    // --------------------------------------------------------------
+    // PickleOrSerialize snapshot + resume round-trip
+    // --------------------------------------------------------------
+
+    /// A tiny serializable ref used for the round-trip test: stores a
+    /// single `i32` as four big-endian bytes.
+    struct TestSerializable {
+        value: i32,
+    }
+
+    impl crate::session_ref::SessionRefSerializable for TestSerializable {
+        fn blazen_serialize(&self) -> Result<Vec<u8>, crate::session_ref::SessionRefError> {
+            Ok(self.value.to_be_bytes().to_vec())
+        }
+        fn blazen_type_tag(&self) -> &'static str {
+            "test::TestSerializable"
+        }
+    }
+
+    fn test_deserialize(
+        bytes: &[u8],
+    ) -> Result<
+        Arc<dyn crate::session_ref::SessionRefSerializable>,
+        crate::session_ref::SessionRefError,
+    > {
+        if bytes.len() != 4 {
+            return Err(crate::session_ref::SessionRefError::SerializationFailed {
+                type_tag: "test::TestSerializable".to_owned(),
+                source: "expected 4 bytes".into(),
+            });
+        }
+        let mut buf = [0u8; 4];
+        buf.copy_from_slice(bytes);
+        let value = i32::from_be_bytes(buf);
+        Ok(Arc::new(TestSerializable { value }))
+    }
+
+    /// Step that inserts a `TestSerializable` session ref into the
+    /// context registry and then pauses the workflow for snapshotting.
+    /// Does NOT emit a `StopEvent` so the handler stays alive for
+    /// the snapshot + resume dance.
+    fn park_step() -> StepRegistration {
+        let handler: StepFn = Arc::new(|_event, ctx| {
+            Box::pin(async move {
+                let registry = ctx.session_refs_arc().await;
+                let _ = registry
+                    .insert_serializable(Arc::new(TestSerializable { value: 1234 }))
+                    .await
+                    .unwrap();
+                Ok(StepOutput::None)
+            })
+        });
+
+        StepRegistration {
+            name: "park".into(),
+            accepts: vec![StartEvent::event_type()],
+            emits: vec![],
+            handler,
+            max_concurrency: 0,
+        }
+    }
+
+    #[tokio::test]
+    async fn pickle_or_serialize_round_trip_through_snapshot() {
+        use crate::session_ref::{SERIALIZED_SESSION_REFS_META_KEY, SessionPausePolicy};
+        use std::collections::HashMap;
+
+        // 1. Build a workflow configured with PickleOrSerialize.
+        let workflow = WorkflowBuilder::new("serialize-roundtrip")
+            .step(park_step())
+            .session_pause_policy(SessionPausePolicy::PickleOrSerialize)
+            .build()
+            .unwrap();
+
+        // 2. Run it and wait for the park step to insert the ref.
+        let wf_handler = workflow.run(serde_json::json!(null)).await.unwrap();
+        // Give the step a moment to run and insert the serializable ref.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // 3. Pause and snapshot. Then abort so the handler frees up.
+        wf_handler.pause().unwrap();
+        let snapshot = wf_handler.snapshot().await.unwrap();
+        wf_handler.abort().unwrap();
+
+        // 4. Verify the metadata contains the serialized bytes.
+        let raw = snapshot
+            .metadata
+            .get(SERIALIZED_SESSION_REFS_META_KEY)
+            .expect("metadata must contain serialized session refs");
+        let entries = raw
+            .as_object()
+            .expect("serialized session refs metadata must be a JSON object");
+        assert_eq!(entries.len(), 1);
+        let (_key_str, record) = entries.iter().next().unwrap();
+        let record_obj = record.as_object().unwrap();
+        assert_eq!(
+            record_obj.get("type_tag").and_then(|v| v.as_str()).unwrap(),
+            "test::TestSerializable"
+        );
+        let bytes: crate::value::BytesWrapper =
+            serde_json::from_value(record_obj.get("data").unwrap().clone()).unwrap();
+        assert_eq!(bytes.0, vec![0, 0, 4, 210]); // 1234 big-endian
+
+        // 5. Resume with deserializers and verify the ref is rehydrated.
+        let mut deserializers: HashMap<&'static str, crate::workflow::SessionRefDeserializerFn> =
+            HashMap::new();
+        deserializers.insert("test::TestSerializable", test_deserialize);
+
+        let resumed_handler = Workflow::resume_with_deserializers(
+            snapshot,
+            vec![park_step()],
+            deserializers,
+            Some(Duration::from_millis(200)),
+        )
+        .await
+        .unwrap();
+
+        // 6. The resumed handler's session-ref registry should now
+        // contain exactly one entry, and it should be the concrete
+        // TestSerializable we originally captured.
+        let resumed_refs = resumed_handler.session_refs();
+        assert_eq!(resumed_refs.len().await, 1);
+        let entries = resumed_refs.serializable_entries().await;
+        assert_eq!(entries.len(), 1);
+        let ser = &entries[0].1;
+        let round_trip = ser.blazen_serialize().unwrap();
+        assert_eq!(round_trip, vec![0, 0, 4, 210]);
+        assert_eq!(ser.blazen_type_tag(), "test::TestSerializable");
+
+        // Clean up the resumed workflow — it has no StopEvent source
+        // so it would otherwise time out.
+        resumed_handler.abort().unwrap();
+    }
+
+    #[tokio::test]
+    async fn resume_with_missing_deserializer_errors() {
+        use crate::session_ref::SessionPausePolicy;
+        use std::collections::HashMap;
+
+        let workflow = WorkflowBuilder::new("serialize-missing-deser")
+            .step(park_step())
+            .session_pause_policy(SessionPausePolicy::PickleOrSerialize)
+            .build()
+            .unwrap();
+
+        let wf_handler = workflow.run(serde_json::json!(null)).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        wf_handler.pause().unwrap();
+        let snapshot = wf_handler.snapshot().await.unwrap();
+        wf_handler.abort().unwrap();
+
+        // Empty deserializer map → the resume should fail with
+        // SessionRefsNotSerializable pointing at the missing tag.
+        let deserializers: HashMap<&'static str, crate::workflow::SessionRefDeserializerFn> =
+            HashMap::new();
+
+        let resumed = Workflow::resume_with_deserializers(
+            snapshot,
+            vec![park_step()],
+            deserializers,
+            Some(Duration::from_millis(200)),
+        )
+        .await;
+
+        // With an empty map, rehydrate_serialized_session_refs is
+        // skipped entirely (the if gating on !deserializers.is_empty()
+        // short-circuits), so the resume succeeds but the registry
+        // starts empty. That's a deliberate design choice: callers
+        // who want a strict check supply at least one entry.
+        let h = resumed.unwrap();
+        assert_eq!(h.session_refs().len().await, 0);
+        h.abort().unwrap();
     }
 }

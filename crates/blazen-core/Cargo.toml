@@ -11,6 +11,7 @@ description = "Core workflow engine for Blazen - event-driven, async, pausable w
 [features]
 persist = ["dep:blazen-persist"]
 telemetry = ["dep:blazen-telemetry"]
+distributed = []
 
 [dependencies]
 blazen-persist = { workspace = true, optional = true }
