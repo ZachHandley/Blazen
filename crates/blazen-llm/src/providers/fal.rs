@@ -1387,7 +1387,7 @@ impl FalProvider {
                 self.queue_poll_status(model, request_id).await?
             };
 
-            last_status = status_body.status.clone();
+            last_status.clone_from(&status_body.status);
             #[allow(clippy::cast_possible_truncation)]
             let elapsed_ms = start.elapsed().as_millis() as u64;
             tracing::debug!(

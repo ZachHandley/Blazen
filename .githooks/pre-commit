@@ -6,3 +6,22 @@ cargo fmt --all -- --check
 
 echo "Running cargo clippy (workspace, all features, deny warnings)..."
 cargo clippy --workspace --all-features -- -D warnings
+
+# Check that generated type stubs are up to date when binding source changes.
+if git diff --cached --name-only | grep -q '^crates/blazen-py/src/'; then
+  echo "Checking blazen.pyi is up to date..."
+  cargo run --example stub_gen -p blazen-py
+  git diff --exit-code crates/blazen-py/blazen.pyi || {
+    echo "ERROR: blazen.pyi is stale. Run 'cargo run --example stub_gen -p blazen-py' and stage the result."
+    exit 1
+  }
+fi
+
+if git diff --cached --name-only | grep -q '^crates/blazen-node/src/'; then
+  echo "Checking index.d.ts is up to date..."
+  (cd crates/blazen-node && npm run build)
+  git diff --exit-code crates/blazen-node/index.d.ts || {
+    echo "ERROR: index.d.ts is stale. Run 'cd crates/blazen-node && npm run build' and stage the result."
+    exit 1
+  }
+fi
