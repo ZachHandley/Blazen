@@ -80,8 +80,20 @@ const FAL_SYNC_URL: &str = "https://fal.run";
 /// Default poll interval for queue-based execution.
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
-/// Maximum number of poll iterations before giving up.
-const MAX_POLL_ITERATIONS: u32 = 600; // 10 minutes at 1s intervals
+/// Maximum poll iterations for TTS jobs (~90s at 1s intervals).
+const MAX_TTS_POLL_ITERATIONS: u32 = 90;
+/// Maximum poll iterations for image generation (~5 min at 1s intervals).
+const MAX_IMAGE_POLL_ITERATIONS: u32 = 300;
+/// Maximum poll iterations for video generation (~10 min at 1s intervals).
+const MAX_VIDEO_POLL_ITERATIONS: u32 = 600;
+/// Maximum poll iterations for music generation (~5 min at 1s intervals).
+const MAX_MUSIC_POLL_ITERATIONS: u32 = 300;
+/// Maximum poll iterations for audio transcription (~5 min at 1s intervals).
+const MAX_TRANSCRIBE_POLL_ITERATIONS: u32 = 300;
+/// Maximum poll iterations for LLM completion (~3 min at 1s intervals).
+const MAX_LLM_POLL_ITERATIONS: u32 = 180;
+/// Default poll iterations for background removal, 3D, raw compute (~5 min at 1s intervals).
+const DEFAULT_POLL_ITERATIONS: u32 = 300;
 
 /// Default image generation model.
 const DEFAULT_IMAGE_MODEL: &str = "fal-ai/flux/schnell";
@@ -1357,11 +1369,13 @@ impl FalProvider {
         poll_interval: Duration,
         status_url: Option<&str>,
         response_url: Option<&str>,
+        max_iterations: u32,
     ) -> Result<(serde_json::Value, serde_json::Value, RequestTiming), BlazenError> {
         let start = Instant::now();
         let mut in_progress_at: Option<Instant> = None;
+        let mut last_status: String = String::new();
 
-        for _ in 0..MAX_POLL_ITERATIONS {
+        for _ in 0..max_iterations {
             crate::sleep::sleep(poll_interval).await;
 
             let status_body = if let Some(url) = status_url {
@@ -1369,6 +1383,17 @@ impl FalProvider {
             } else {
                 self.queue_poll_status(model, request_id).await?
             };
+
+            last_status = status_body.status.clone();
+            #[allow(clippy::cast_possible_truncation)]
+            let elapsed_ms = start.elapsed().as_millis() as u64;
+            tracing::debug!(
+                model = %model,
+                request_id = %request_id,
+                status = %status_body.status,
+                elapsed_ms,
+                "fal poll"
+            );
 
             match status_body.status.as_str() {
                 "COMPLETED" => {
@@ -1404,14 +1429,31 @@ impl FalProvider {
                         in_progress_at = Some(Instant::now());
                     }
                 }
-                // IN_QUEUE -- keep polling.
-                _ => {}
+                // IN_QUEUE -- expected transient state, keep polling.
+                "IN_QUEUE" => {}
+                other => {
+                    tracing::warn!(
+                        model = %model,
+                        request_id = %request_id,
+                        status = %other,
+                        "fal returned unexpected status"
+                    );
+                }
             }
         }
 
-        Err(BlazenError::Timeout {
-            elapsed_ms: millis_u64(start.elapsed()),
-        })
+        let elapsed_ms = millis_u64(start.elapsed());
+        let last_status_display = if last_status.is_empty() {
+            "<none received>"
+        } else {
+            last_status.as_str()
+        };
+        Err(BlazenError::provider(
+            "fal",
+            format!(
+                "poll timeout after {max_iterations} iterations ({elapsed_ms}ms), last seen status: {last_status_display}, model: {model}, request_id: {request_id}"
+            ),
+        ))
     }
 
     /// GET a URL and deserialize the response as [`FalStatusResponse`].
@@ -1469,10 +1511,66 @@ impl FalProvider {
                 poll_interval,
                 submit_response.status_url.as_deref(),
                 submit_response.response_url.as_deref(),
+                MAX_LLM_POLL_ITERATIONS,
             )
             .await?;
 
         Ok((result, timing))
+    }
+
+    /// Submit a compute request and poll until completion, using a
+    /// capability-specific maximum iteration count.
+    ///
+    /// Each capability (TTS, image, video, etc.) has its own expected latency
+    /// profile, so we cannot share a single global polling budget. The
+    /// `ComputeProvider::run` trait method delegates here with
+    /// [`DEFAULT_POLL_ITERATIONS`]; capability trait methods
+    /// (e.g. `text_to_speech`) call this directly with their own limit.
+    async fn run_with_max_iterations(
+        &self,
+        request: ComputeRequest,
+        max_iterations: u32,
+    ) -> Result<ComputeResult, BlazenError> {
+        let poll_interval = match &self.execution_mode {
+            FalExecutionMode::Queue { poll_interval } => *poll_interval,
+            _ => DEFAULT_POLL_INTERVAL,
+        };
+
+        let submit_response = self
+            .queue_submit(&request.model, &request.input, request.webhook.as_deref())
+            .await?;
+
+        debug!(
+            request_id = %submit_response.request_id,
+            model = %request.model,
+            "fal.ai compute job submitted (via run)"
+        );
+
+        let job = JobHandle {
+            id: submit_response.request_id.clone(),
+            provider: "fal".to_owned(),
+            model: request.model,
+            submitted_at: Utc::now(),
+        };
+
+        let (output, status_json, timing) = self
+            .poll_until_complete(
+                &job.model,
+                &job.id,
+                poll_interval,
+                submit_response.status_url.as_deref(),
+                submit_response.response_url.as_deref(),
+                max_iterations,
+            )
+            .await?;
+
+        Ok(ComputeResult {
+            job: Some(job),
+            output,
+            timing,
+            cost: None,
+            metadata: status_json,
+        })
     }
 
     // -----------------------------------------------------------------------
@@ -2288,7 +2386,14 @@ impl ComputeProvider for FalProvider {
         // External callers use submit() -> result() without access to the
         // server-provided URLs, so we fall back to manual URL construction.
         let (output, status_json, timing) = self
-            .poll_until_complete(&job.model, &job.id, poll_interval, None, None)
+            .poll_until_complete(
+                &job.model,
+                &job.id,
+                poll_interval,
+                None,
+                None,
+                DEFAULT_POLL_ITERATIONS,
+            )
             .await?;
 
         Ok(ComputeResult {
@@ -2306,46 +2411,14 @@ impl ComputeProvider for FalProvider {
     /// This overrides the default `run()` to avoid the 405 errors that occur
     /// when manually constructing URLs for models with multi-segment IDs
     /// (e.g. `fal-ai/kling-video/v2.1/pro/image-to-video`).
+    ///
+    /// Uses [`DEFAULT_POLL_ITERATIONS`] as the polling budget. Capability
+    /// trait methods (TTS, image, video, etc.) bypass this trait method and
+    /// call [`FalProvider::run_with_max_iterations`] directly with their
+    /// own per-capability limit.
     async fn run(&self, request: ComputeRequest) -> Result<ComputeResult, BlazenError> {
-        let poll_interval = match &self.execution_mode {
-            FalExecutionMode::Queue { poll_interval } => *poll_interval,
-            _ => DEFAULT_POLL_INTERVAL,
-        };
-
-        let submit_response = self
-            .queue_submit(&request.model, &request.input, request.webhook.as_deref())
-            .await?;
-
-        debug!(
-            request_id = %submit_response.request_id,
-            model = %request.model,
-            "fal.ai compute job submitted (via run)"
-        );
-
-        let job = JobHandle {
-            id: submit_response.request_id.clone(),
-            provider: "fal".to_owned(),
-            model: request.model,
-            submitted_at: Utc::now(),
-        };
-
-        let (output, status_json, timing) = self
-            .poll_until_complete(
-                &job.model,
-                &job.id,
-                poll_interval,
-                submit_response.status_url.as_deref(),
-                submit_response.response_url.as_deref(),
-            )
-            .await?;
-
-        Ok(ComputeResult {
-            job: Some(job),
-            output,
-            timing,
-            cost: None,
-            metadata: status_json,
-        })
+        self.run_with_max_iterations(request, DEFAULT_POLL_ITERATIONS)
+            .await
     }
 
     async fn cancel(&self, job: &JobHandle) -> Result<(), BlazenError> {
@@ -2425,7 +2498,9 @@ impl ImageGeneration for FalProvider {
             input,
             webhook: None,
         };
-        let result = self.run(compute_request).await?;
+        let result = self
+            .run_with_max_iterations(compute_request, MAX_IMAGE_POLL_ITERATIONS)
+            .await?;
 
         // Parse the image output.
         let image_output: FalImageOutput =
@@ -2487,7 +2562,9 @@ impl ImageGeneration for FalProvider {
             input,
             webhook: None,
         };
-        let result = self.run(compute_request).await?;
+        let result = self
+            .run_with_max_iterations(compute_request, MAX_IMAGE_POLL_ITERATIONS)
+            .await?;
 
         // ESRGAN returns a single image object, not an array.
         let upscale_output: FalUpscaleOutput = serde_json::from_value(result.output.clone())
@@ -2791,7 +2868,9 @@ impl VideoGeneration for FalProvider {
             input,
             webhook: None,
         };
-        let result = self.run(compute_req).await?;
+        let result = self
+            .run_with_max_iterations(compute_req, MAX_VIDEO_POLL_ITERATIONS)
+            .await?;
         let video = parse_fal_video(&result.output)?;
 
         Ok(VideoResult {
@@ -2837,7 +2916,9 @@ impl VideoGeneration for FalProvider {
             input,
             webhook: None,
         };
-        let result = self.run(compute_req).await?;
+        let result = self
+            .run_with_max_iterations(compute_req, MAX_VIDEO_POLL_ITERATIONS)
+            .await?;
         let video = parse_fal_video(&result.output)?;
 
         Ok(VideoResult {
@@ -2885,7 +2966,9 @@ impl AudioGeneration for FalProvider {
             input,
             webhook: None,
         };
-        let result = self.run(compute_req).await?;
+        let result = self
+            .run_with_max_iterations(compute_req, MAX_TTS_POLL_ITERATIONS)
+            .await?;
         let audio = parse_fal_audio(&result.output)?;
 
         Ok(AudioResult {
@@ -2917,7 +3000,9 @@ impl AudioGeneration for FalProvider {
             input,
             webhook: None,
         };
-        let result = self.run(compute_req).await?;
+        let result = self
+            .run_with_max_iterations(compute_req, MAX_MUSIC_POLL_ITERATIONS)
+            .await?;
         let audio = parse_fal_audio(&result.output)?;
 
         Ok(AudioResult {
@@ -2949,7 +3034,9 @@ impl AudioGeneration for FalProvider {
             input,
             webhook: None,
         };
-        let result = self.run(compute_req).await?;
+        let result = self
+            .run_with_max_iterations(compute_req, MAX_MUSIC_POLL_ITERATIONS)
+            .await?;
         let audio = parse_fal_audio(&result.output)?;
 
         Ok(AudioResult {
@@ -2981,11 +3068,14 @@ impl ThreeDGeneration for FalProvider {
         }
         merge_parameters(&mut input, &request.parameters);
         let result = self
-            .run(ComputeRequest {
-                model,
-                input,
-                webhook: None,
-            })
+            .run_with_max_iterations(
+                ComputeRequest {
+                    model,
+                    input,
+                    webhook: None,
+                },
+                DEFAULT_POLL_ITERATIONS,
+            )
             .await?;
         Ok(ThreeDResult {
             models: vec![parse_fal_3d_model(&result.output)?],
@@ -3029,7 +3119,9 @@ impl Transcription for FalProvider {
             input,
             webhook: None,
         };
-        let result = self.run(compute_req).await?;
+        let result = self
+            .run_with_max_iterations(compute_req, MAX_TRANSCRIBE_POLL_ITERATIONS)
+            .await?;
 
         // Parse Whisper response:
         // { "text": "...", "chunks": [...], "inferred_languages": ["en"], ... }
@@ -3099,11 +3191,14 @@ impl BackgroundRemoval for FalProvider {
         let mut input = serde_json::json!({ "image_url": &request.image_url });
         merge_parameters(&mut input, &request.parameters);
         let result = self
-            .run(ComputeRequest {
-                model,
-                input,
-                webhook: None,
-            })
+            .run_with_max_iterations(
+                ComputeRequest {
+                    model,
+                    input,
+                    webhook: None,
+                },
+                DEFAULT_POLL_ITERATIONS,
+            )
             .await?;
         // birefnet returns { image: { url, ... } } -- same shape as upscale.
         let parsed: FalUpscaleOutput = serde_json::from_value(result.output.clone())

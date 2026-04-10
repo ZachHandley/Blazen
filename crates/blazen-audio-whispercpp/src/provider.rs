@@ -11,6 +11,9 @@ use std::path::PathBuf;
 #[cfg(feature = "engine")]
 use std::sync::Arc;
 
+#[cfg(feature = "engine")]
+use tokio::sync::OnceCell;
+
 use crate::WhisperOptions;
 
 // ---------------------------------------------------------------------------
@@ -96,37 +99,40 @@ pub struct TranscriptionSegment {
 /// [`whisper.cpp`](https://github.com/ggerganov/whisper.cpp).
 ///
 /// Constructed via [`WhisperCppProvider::from_options`].  When the `engine`
-/// feature is active the provider downloads the model (via `blazen-model-cache`)
-/// and loads it eagerly.  Without the feature the provider is a lightweight
-/// stub.
+/// feature is active the provider defers the model download
+/// (via `blazen-model-cache`) and context creation until the first
+/// [`WhisperCppProvider::transcribe`] call, so validation-only callers do not
+/// pay the ~500MB download cost.  Without the feature the provider is a
+/// lightweight stub.
 pub struct WhisperCppProvider {
     /// The resolved model size that was requested.
     model: crate::WhisperModel,
     /// Full options preserved for transcription calls.
     #[cfg_attr(not(feature = "engine"), allow(dead_code))]
     options: WhisperOptions,
-    /// The loaded whisper context (only present with the `engine` feature).
+    /// Lazily-loaded whisper context.  Populated on the first successful
+    /// `transcribe()` call (only present with the `engine` feature).
     #[cfg(feature = "engine")]
-    ctx: Arc<whisper_rs::WhisperContext>,
+    engine: Arc<OnceCell<Arc<whisper_rs::WhisperContext>>>,
 }
 
 impl WhisperCppProvider {
     /// Create a new provider from the given options.
     ///
-    /// With the `engine` feature enabled this downloads the GGML model (or
-    /// reads it from cache) and loads the `WhisperContext`.  Without the
-    /// feature only option validation is performed.
+    /// This only validates the supplied options -- it does **not** download
+    /// the GGML model or create the `WhisperContext`.  Model loading is
+    /// deferred until the first [`WhisperCppProvider::transcribe`] call so
+    /// that validation-only code paths (and parallel unit tests) never pay
+    /// the ~500MB download cost.
     ///
     /// # Errors
     ///
-    /// Returns [`WhisperError::InvalidOptions`] for bad option values,
-    /// [`WhisperError::ModelLoad`] if the model cannot be fetched or loaded,
-    /// or [`WhisperError::EngineNotAvailable`] on the non-engine path (only
-    /// from transcription methods, not from this constructor).
-    // This fn is `async` to keep the API stable across feature flags: without
-    // `engine` there is nothing to await, but with `engine` the model
-    // download happens here.
-    #[cfg_attr(not(feature = "engine"), allow(clippy::unused_async))]
+    /// Returns [`WhisperError::InvalidOptions`] for bad option values.
+    /// [`WhisperError::ModelLoad`] and [`WhisperError::EngineNotAvailable`]
+    /// are produced from transcription methods, not from this constructor.
+    // This fn is `async` to keep the API stable with any future async
+    // validation work and with the existing call sites in `blazen-llm`.
+    #[allow(clippy::unused_async)]
     pub async fn from_options(opts: WhisperOptions) -> Result<Self, WhisperError> {
         // --- Validate common options ---
         if let Some(ref device) = opts.device
@@ -147,26 +153,10 @@ impl WhisperCppProvider {
 
         #[cfg(feature = "engine")]
         {
-            let model_path = Self::resolve_model_path(&opts).await?;
-            tracing::info!(
-                model = %opts.model,
-                path = %model_path.display(),
-                "loading whisper.cpp model"
-            );
-
-            let params = whisper_rs::WhisperContextParameters::default();
-            let ctx = whisper_rs::WhisperContext::new_with_params(
-                model_path.to_str().ok_or_else(|| {
-                    WhisperError::ModelLoad("model path contains invalid UTF-8".into())
-                })?,
-                params,
-            )
-            .map_err(|e| WhisperError::ModelLoad(e.to_string()))?;
-
             Ok(Self {
                 model: opts.model,
                 options: opts,
-                ctx: Arc::new(ctx),
+                engine: Arc::new(OnceCell::new()),
             })
         }
 
@@ -177,6 +167,37 @@ impl WhisperCppProvider {
                 options: opts,
             })
         }
+    }
+
+    /// Lazily initialize (or return the cached) whisper context.
+    ///
+    /// The first successful call downloads (or locates in cache) the GGML
+    /// model and calls `WhisperContext::new_with_params`.  Subsequent calls
+    /// return a clone of the cached `Arc<WhisperContext>`.
+    #[cfg(feature = "engine")]
+    async fn ensure_engine(&self) -> Result<Arc<whisper_rs::WhisperContext>, WhisperError> {
+        self.engine
+            .get_or_try_init(|| async {
+                let model_path = Self::resolve_model_path(&self.options).await?;
+                tracing::info!(
+                    model = %self.options.model,
+                    path = %model_path.display(),
+                    "loading whisper.cpp model"
+                );
+
+                let params = whisper_rs::WhisperContextParameters::default();
+                let ctx = whisper_rs::WhisperContext::new_with_params(
+                    model_path.to_str().ok_or_else(|| {
+                        WhisperError::ModelLoad("model path contains invalid UTF-8".into())
+                    })?,
+                    params,
+                )
+                .map_err(|e| WhisperError::ModelLoad(e.to_string()))?;
+
+                Ok(Arc::new(ctx))
+            })
+            .await
+            .map(Arc::clone)
     }
 
     /// Download (or locate in cache) the GGML model file.
@@ -244,9 +265,13 @@ impl WhisperCppProvider {
 
         // Read the WAV file bytes on the async runtime, then hand off to
         // a blocking thread for the CPU-intensive whisper inference.
+        // Validate the audio file exists/reads before triggering the
+        // (potentially very expensive) model download.
         let raw_bytes = tokio::fs::read(audio_path).await?;
 
-        let ctx = Arc::clone(&self.ctx);
+        // Only AFTER audio validation succeeds do we load the engine (which
+        // may download a ~500MB model on first call).
+        let ctx = self.ensure_engine().await?;
         let lang = language
             .map(String::from)
             .or_else(|| self.options.language.clone());

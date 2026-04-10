@@ -238,7 +238,7 @@ describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY, timeout: 2_100_000 
     assert.ok(result.images.length > 0, "expected at least one image");
   });
 
-  it("synthesizes speech from text", { timeout: 300_000 }, async () => {
+  it("synthesizes speech from text", { timeout: 90_000 }, async () => {
     const provider = FalProvider.create({ apiKey: FAL_API_KEY });
     const result = await provider.textToSpeech({
       text: "Hello world.",

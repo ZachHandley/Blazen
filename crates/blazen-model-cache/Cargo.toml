@@ -10,14 +10,16 @@ description = "Shared model download and cache layer for Blazen local-inference 
 
 [dependencies]
 hf-hub = { workspace = true, features = ["tokio"] }
-tokio = { workspace = true, features = ["fs"] }
+tokio = { workspace = true, features = ["fs", "sync"] }
 sha2 = { workspace = true }
 dirs = { workspace = true }
 thiserror = { workspace = true }
+dashmap = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
 tempfile = { workspace = true }
+futures-util = { workspace = true }
 
 [lints]
 workspace = true

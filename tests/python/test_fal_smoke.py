@@ -290,7 +290,7 @@ async def test_fal_image_generation():
 
 @skip_without_key
 @pytest.mark.asyncio
-@pytest.mark.timeout(300)
+@pytest.mark.timeout(90)
 async def test_fal_text_to_speech():
     provider = FalProvider(options=FalOptions(api_key=FAL_API_KEY))
     result = await _fal_or_skip(provider.text_to_speech(

@@ -5,7 +5,13 @@
 //! local-inference backends (fastembed, mistral.rs, whisper.cpp, etc.).
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
+
+/// Per-destination-path mutexes that serialize concurrent [`ModelCache::download`]
+/// calls for the same file. Different files download in parallel; same-file
+/// callers wait so hf-hub's internal blob lock isn't raced.
+static DOWNLOAD_LOCKS: LazyLock<dashmap::DashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>> =
+    LazyLock::new(dashmap::DashMap::new);
 
 /// Errors that can occur during model cache operations.
 #[derive(Debug, thiserror::Error)]
@@ -183,7 +189,18 @@ impl ModelCache {
     ) -> Result<PathBuf, CacheError> {
         let dest = self.cached_path(repo_id, filename);
 
-        // Already cached -- return immediately.
+        // Serialize concurrent callers for the same destination path. Different
+        // files download in parallel; same-file callers wait so hf-hub's internal
+        // blob lock isn't raced.
+        let lock = DOWNLOAD_LOCKS
+            .entry(dest.clone())
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .value()
+            .clone();
+        let _guard = lock.lock().await;
+
+        // Already cached -- return immediately (re-check inside the lock so
+        // subsequent callers observe the file created by whoever went first).
         if dest.is_file() {
             return Ok(dest);
         }
@@ -214,13 +231,37 @@ impl ModelCache {
                 .map_err(|e| CacheError::Download(e.to_string()))?
         };
 
+        // hf-hub returns `snapshots/main/<filename>` as a symlink into
+        // `blobs/<hash>`. Resolve to the real blob so hard-linking targets the
+        // actual file; otherwise on some filesystems we would hard-link the
+        // symlink itself, which can behave unexpectedly if the snapshot is
+        // pruned later. If canonicalization fails (e.g. broken chain), fall
+        // back to the original path and let the copy fallback handle it.
+        let hf_path_resolved = tokio::fs::canonicalize(&hf_path)
+            .await
+            .unwrap_or_else(|_| hf_path.clone());
+
         // Link or copy the file into our own cache layout.
-        if dest != hf_path {
+        if dest != hf_path_resolved {
             // Try hard link first (instant, no extra disk space).
-            if tokio::fs::hard_link(&hf_path, &dest).await.is_err() {
+            if tokio::fs::hard_link(&hf_path_resolved, &dest)
+                .await
+                .is_err()
+            {
                 // Cross-device or unsupported -- fall back to copy.
-                tokio::fs::copy(&hf_path, &dest).await?;
+                tokio::fs::copy(&hf_path_resolved, &dest).await?;
             }
+        }
+
+        // Postcondition: dest must exist after a successful download.
+        if !dest.is_file() {
+            return Err(CacheError::Io(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!(
+                    "download completed but cache path is missing: {}",
+                    dest.display()
+                ),
+            )));
         }
 
         Ok(dest)
@@ -331,6 +372,49 @@ mod tests {
         assert_eq!(path, PathBuf::from("/fake/cache/org/model/weights.bin"));
     }
 
+    /// Verifies that the per-path lock actually serializes concurrent callers
+    /// targeting the same destination. We can't easily mock hf-hub inside
+    /// `download()`, so this test exercises the serialization primitive
+    /// directly: if the lock map misbehaves (e.g. hands out independent
+    /// mutexes for the same path), more than one task will sit inside the
+    /// critical section at the same time and the counter will exceed zero
+    /// when observed by another task.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_downloads_serialize_same_path() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let cache = ModelCache::with_dir(tmp.path().to_path_buf());
+        let dest = cache.cached_path("test/repo", "file.bin");
+
+        let counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut handles = Vec::new();
+        for _ in 0..4 {
+            let dest_clone = dest.clone();
+            let counter_clone = Arc::clone(&counter);
+            handles.push(tokio::spawn(async move {
+                let lock = DOWNLOAD_LOCKS
+                    .entry(dest_clone)
+                    .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+                    .value()
+                    .clone();
+                let _guard = lock.lock().await;
+                // If another task already holds the lock, it would have
+                // incremented the counter before us; the assertion below
+                // would then catch the violation.
+                let prev = counter_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                // Simulate in-flight work to widen the race window.
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                counter_clone.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                prev
+            }));
+        }
+
+        let results = futures_util::future::join_all(handles).await;
+        for r in results {
+            let prev = r.expect("task panicked");
+            assert_eq!(prev, 0, "another task held the lock concurrently");
+        }
+    }
+
     /// Integration test that actually downloads from `HuggingFace` Hub.
     ///
     /// Ignored by default because it requires network access. Run with:
@@ -338,7 +422,7 @@ mod tests {
     /// cargo test -p blazen-model-cache -- --ignored
     /// ```
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires network access to HuggingFace Hub"]
     async fn test_download_and_cache() {
         let dir = tempfile::tempdir().expect("tempdir");
         let cache = ModelCache::with_dir(dir.path());
@@ -364,7 +448,7 @@ mod tests {
 
     /// Integration test verifying progress callback fires.
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires network access to HuggingFace Hub"]
     async fn test_download_with_progress() {
         use std::sync::atomic::{AtomicU64, Ordering};
 
