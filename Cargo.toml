@@ -139,6 +139,12 @@ indexmap = { version = "2", features = ["serde"] }
 # Model caching / download
 hf-hub = { version = "0.4", default-features = false }
 
+# Candle ML framework (local inference)
+candle-core = "0.8"
+candle-nn = "0.8"
+candle-transformers = "0.8"
+tokenizers = "0.21"
+
 # Local embedding via ONNX Runtime
 fastembed = "5"
 sha2 = "0.10"

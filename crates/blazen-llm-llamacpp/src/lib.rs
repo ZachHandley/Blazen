@@ -25,4 +25,7 @@ mod options;
 mod provider;
 
 pub use options::LlamaCppOptions;
-pub use provider::{LlamaCppError, LlamaCppProvider};
+pub use provider::{
+    ChatMessageInput, ChatRole, InferenceChunk, InferenceChunkStream, InferenceResult,
+    InferenceUsage, LlamaCppError, LlamaCppProvider,
+};

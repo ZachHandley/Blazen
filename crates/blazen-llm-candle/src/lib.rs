@@ -23,4 +23,4 @@ mod options;
 mod provider;
 
 pub use options::CandleLlmOptions;
-pub use provider::{CandleLlmError, CandleLlmProvider};
+pub use provider::{CandleInferenceResult, CandleLlmError, CandleLlmProvider};

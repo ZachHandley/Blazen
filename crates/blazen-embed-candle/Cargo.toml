@@ -9,11 +9,11 @@ repository.workspace = true
 description = "Local embedding backend for Blazen using HuggingFace candle"
 
 [dependencies]
-# candle-core = { version = "0.8", optional = true }  -- commented until Phase 6.2
-# candle-nn = { version = "0.8", optional = true }    -- commented until Phase 6.2
-# candle-transformers = { version = "0.8", optional = true }  -- commented until Phase 6.2
-# tokenizers = { version = "0.21", optional = true }  -- commented until Phase 6.2
-# hf-hub = { workspace = true, optional = true }      -- commented until Phase 6.2
+candle-core = { version = "0.10", optional = true, default-features = false }
+candle-nn = { version = "0.10", optional = true }
+candle-transformers = { version = "0.10", optional = true }
+tokenizers = { version = "0.22", optional = true }
+hf-hub = { workspace = true, features = ["tokio"], optional = true }
 blazen-model-cache = { workspace = true }
 serde = { workspace = true }
 serde_json.workspace = true
@@ -21,18 +21,13 @@ tokio = { workspace = true }
 tracing.workspace = true
 thiserror = { workspace = true }
 
+# On Apple targets, forward metal + accelerate features into candle-core
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+candle-core = { version = "0.10", optional = true, default-features = false, features = ["metal", "accelerate"] }
+
 [features]
 default = ["cpu"]
-# Intended feature flags for Phase 6.2 when candle deps are added:
-#   engine      = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub"]
-#   cpu         = ["engine"]
-#   cuda        = ["engine", "candle-core/cuda"]
-#   metal       = ["engine", "candle-core/metal"]
-#   accelerate  = ["engine", "candle-core/accelerate"]
-#
-# For now, these are no-op feature flags that exist so that downstream crates
-# can already declare their feature mappings without breaking.
-engine = []
+engine = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub"]
 cpu = ["engine"]
 cuda = ["engine"]
 metal = ["engine"]

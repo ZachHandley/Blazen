@@ -4,6 +4,12 @@
 //! `blazen-llm` trait (e.g. [`EmbeddingModel`](crate::EmbeddingModel)) for
 //! the backing crate's model type.
 
+#[cfg(feature = "candle-embed")]
+pub mod candle_embed;
+
+#[cfg(feature = "candle-llm")]
+pub mod candle_llm;
+
 #[cfg(feature = "fastembed")]
 pub mod fastembed;
 
@@ -12,3 +18,6 @@ pub mod mistralrs;
 
 #[cfg(feature = "whispercpp")]
 pub mod whispercpp;
+
+#[cfg(feature = "llamacpp")]
+pub mod llamacpp;

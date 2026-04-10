@@ -7,3 +7,10 @@ node_modules/
 *.node
 .env
 .env.*
+
+# Model caches (downloaded at runtime, often 100MB+)
+.fastembed_cache/
+.cache/
+*.gguf
+*.onnx
+*.safetensors

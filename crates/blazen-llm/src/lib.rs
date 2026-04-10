@@ -186,6 +186,8 @@ pub use blazen_image_diffusion::{
 };
 
 #[cfg(feature = "candle-llm")]
+pub use backends::candle_llm::CandleLlmCompletionModel;
+#[cfg(feature = "candle-llm")]
 pub use blazen_llm_candle::{CandleLlmError, CandleLlmOptions, CandleLlmProvider};
 
 #[cfg(feature = "llamacpp")]

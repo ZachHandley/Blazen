@@ -9,9 +9,11 @@ repository.workspace = true
 description = "Local LLM backend for Blazen using candle inference engine"
 
 [dependencies]
-# candle-core = { version = "0.8", optional = true }  -- commented until Phase 7
-# candle-nn = { version = "0.8", optional = true }    -- commented until Phase 7
-# candle-transformers = { version = "0.8", optional = true }  -- commented until Phase 7
+candle-core = { workspace = true, optional = true }
+candle-nn = { workspace = true, optional = true }
+candle-transformers = { workspace = true, optional = true }
+tokenizers = { workspace = true, optional = true }
+hf-hub = { workspace = true, optional = true, features = ["tokio"] }
 blazen-model-cache = { workspace = true }
 serde = { workspace = true }
 serde_json.workspace = true
@@ -19,17 +21,13 @@ tokio = { workspace = true }
 tracing.workspace = true
 thiserror = { workspace = true }
 
+# On Apple targets, forward metal feature into candle-core
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+candle-core = { workspace = true, optional = true, features = ["metal"] }
+
 [features]
 default = ["cpu"]
-# Intended feature flags for Phase 7 when the candle deps are added:
-#   engine   = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers"]
-#   cpu      = ["engine"]
-#   cuda     = ["engine", "candle-core/cuda"]
-#   metal    = ["engine", "candle-core/metal"]
-#
-# For now, these are no-op feature flags that exist so that downstream crates
-# can already declare their feature mappings without breaking.
-engine = []
+engine = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub"]
 cpu = ["engine"]
 cuda = ["engine"]
 metal = ["engine"]
