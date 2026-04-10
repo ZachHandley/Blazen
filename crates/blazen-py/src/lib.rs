@@ -48,6 +48,19 @@ pyo3_stub_gen::define_stub_info_gatherer!(stub_info);
 /// The top-level Python module for `Blazen`.
 #[pymodule]
 fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // Initialize the Rust tracing subscriber once on module load. `try_init`
+    // is a no-op if a subscriber is already installed (e.g. the user supplied
+    // one before importing blazen). The filter honors `RUST_LOG` and defaults
+    // to WARN if the env var is unset. Output goes to stderr so pytest `-s`
+    // passes it through without mixing into captured stdout.
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
+        )
+        .with_writer(std::io::stderr)
+        .try_init();
+
     // Version
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 

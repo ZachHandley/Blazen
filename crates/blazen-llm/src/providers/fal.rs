@@ -80,8 +80,11 @@ const FAL_SYNC_URL: &str = "https://fal.run";
 /// Default poll interval for queue-based execution.
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
-/// Maximum poll iterations for TTS jobs (~90s at 1s intervals).
-const MAX_TTS_POLL_ITERATIONS: u32 = 90;
+/// Maximum poll iterations for TTS jobs (~60s at 1s intervals).
+/// Deliberately lower than pytest/node test timeouts (90s) so the Rust
+/// poll loop fires its diagnostic timeout error before the test harness
+/// kills the process. TTS should complete in <30s for reasonable input.
+const MAX_TTS_POLL_ITERATIONS: u32 = 60;
 /// Maximum poll iterations for image generation (~5 min at 1s intervals).
 const MAX_IMAGE_POLL_ITERATIONS: u32 = 300;
 /// Maximum poll iterations for video generation (~10 min at 1s intervals).
@@ -108,7 +111,7 @@ const DEFAULT_TEXT_TO_VIDEO_MODEL: &str = "fal-ai/minimax/video-01";
 const DEFAULT_IMAGE_TO_VIDEO_MODEL: &str = "fal-ai/kling-video/v2.1/pro/image-to-video";
 
 /// Default text-to-speech model.
-const DEFAULT_TTS_MODEL: &str = "fal-ai/chatterbox/text-to-speech";
+const DEFAULT_TTS_MODEL: &str = "fal-ai/kokoro";
 
 /// Default music generation model.
 const DEFAULT_MUSIC_MODEL: &str = "fal-ai/stable-audio";

@@ -21,6 +21,27 @@ pub mod workflow;
 
 use napi_derive::napi;
 
+/// Initialize the Rust `tracing` subscriber once when the native `.node`
+/// module is first loaded into Node.js.
+///
+/// Without this, every `tracing::debug!` / `info!` / `warn!` call made by
+/// the underlying Rust crates is silently dropped because no subscriber is
+/// listening — setting `RUST_LOG` has no effect. `try_init` is a no-op if a
+/// subscriber is already installed (e.g. by a host embedder), so this is
+/// safe to call unconditionally. The filter honors `RUST_LOG` and defaults
+/// to `warn` when unset. Output goes to stderr so `node:test` passes it
+/// through without mixing into captured stdout.
+#[napi_derive::module_init]
+fn init() {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
+        )
+        .with_writer(std::io::stderr)
+        .try_init();
+}
+
 /// Returns the version of the blazen library.
 #[napi]
 #[must_use]
