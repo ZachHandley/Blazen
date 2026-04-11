@@ -333,7 +333,7 @@ async def test_fal_transcribe():
 
 @skip_without_key
 @pytest.mark.asyncio
-@pytest.mark.timeout(600)
+@pytest.mark.timeout(1200)
 async def test_fal_text_to_video():
     """Generate a video from text (slow, ~30-60s)."""
     provider = FalProvider(options=FalOptions(api_key=FAL_API_KEY))

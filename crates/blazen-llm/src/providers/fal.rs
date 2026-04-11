@@ -87,8 +87,8 @@ const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(1);
 const MAX_TTS_POLL_ITERATIONS: u32 = 60;
 /// Maximum poll iterations for image generation (~5 min at 1s intervals).
 const MAX_IMAGE_POLL_ITERATIONS: u32 = 300;
-/// Maximum poll iterations for video generation (~10 min at 1s intervals).
-const MAX_VIDEO_POLL_ITERATIONS: u32 = 600;
+/// Maximum poll iterations for video generation (~20 min at 1s intervals).
+const MAX_VIDEO_POLL_ITERATIONS: u32 = 1200;
 /// Maximum poll iterations for music generation (~5 min at 1s intervals).
 const MAX_MUSIC_POLL_ITERATIONS: u32 = 300;
 /// Maximum poll iterations for audio transcription (~5 min at 1s intervals).

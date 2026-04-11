@@ -281,7 +281,7 @@ describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY, timeout: 2_100_000 
     );
   });
 
-  it("generates a video from a text prompt", { timeout: 300_000 }, async () => {
+  it("generates a video from a text prompt", { timeout: 1_200_000 }, async () => {
     const provider = FalProvider.create({ apiKey: FAL_API_KEY });
     const result = await provider.textToVideo({
       prompt: "a cat walking slowly",
