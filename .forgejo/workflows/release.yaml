@@ -73,10 +73,14 @@ jobs:
 
       - name: Publish crates in dependency order
         if: steps.check.outputs.completed != 'true'
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          cargo publish --workspace --registry crates-io --no-verify --allow-dirty --exclude blazen-py --exclude blazen-node
+        uses: https://forge.blackleafdigital.com/Public/actions/cargo-publish-workspace@main
+        with:
+          version: ${{ needs.version.outputs.version }}
+          registry: crates-io
+          exclude: blazen-py,blazen-node
+          cargo-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          max-backoff-seconds: '300'
+          max-attempts-per-crate: '5'
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
