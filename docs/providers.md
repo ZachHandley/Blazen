@@ -410,6 +410,144 @@ In the WASM component, custom providers can be registered at runtime via `POST /
 
 ---
 
+## Text-to-Speech providers
+
+Blazen exposes text-to-speech through the `OpenAiProvider` compute class (separate from `CompletionModel.openai()`, which is the chat completions entry point). Because `OpenAiProvider` speaks the stock `/v1/audio/speech` wire format, the **same class** works against real OpenAI and against any OpenAI-compatible TTS service — including a local [zvoice](https://github.com/zachhandley/zvoice) instance wrapping the [VoxCPM2](https://github.com/OpenBMB/VoxCPM2) model.
+
+Setting `api_key` to an empty string makes the provider omit the `Authorization` header entirely, which is required for most local services.
+
+### Rust
+
+```rust
+use blazen_llm::providers::openai::OpenAiProvider;
+use blazen_llm::compute::{AudioGeneration, SpeechRequest};
+
+// Real OpenAI.
+let openai = OpenAiProvider::new("sk-...");
+let audio = openai
+    .text_to_speech(SpeechRequest::new("Hello, world!").with_voice("alloy"))
+    .await?;
+
+// Local zvoice wrapping VoxCPM2 — empty key omits the Authorization header.
+let zvoice = OpenAiProvider::new("").with_base_url("http://beastpc.lan:8900/v1");
+let audio = zvoice
+    .text_to_speech(SpeechRequest::new("Hello, world!"))
+    .await?;
+```
+
+### Python
+
+```python
+from blazen import OpenAiProvider, ProviderOptions, SpeechRequest
+
+# Real OpenAI
+openai = OpenAiProvider(options=ProviderOptions(api_key="sk-..."))
+audio = await openai.text_to_speech(SpeechRequest(text="Hello, world!", voice="alloy"))
+
+# Local zvoice wrapping VoxCPM2 — empty api_key omits Authorization header
+zvoice = OpenAiProvider(options=ProviderOptions(
+    api_key="",
+    base_url="http://beastpc.lan:8900/v1",
+))
+audio = await zvoice.text_to_speech(SpeechRequest(text="Hello, world!"))
+```
+
+### Node.js / TypeScript
+
+```typescript
+import { OpenAiProvider } from "blazen";
+
+const openai = OpenAiProvider.create({ apiKey: "sk-..." });
+const audio = await openai.textToSpeech({ text: "Hello, world!", voice: "alloy" });
+
+const zvoice = OpenAiProvider.create({ apiKey: "", baseUrl: "http://beastpc.lan:8900/v1" });
+const localAudio = await zvoice.textToSpeech({ text: "Hello, world!" });
+```
+
+The same base-URL override pattern works with `OpenAiCompatProvider` for any other OpenAI-compatible TTS service (Groq, Together AI, etc.) that ships a `/v1/audio/speech` endpoint.
+
+---
+
+## Local models
+
+Blazen's local in-process LLM backends (`mistral.rs`, `llama.cpp`, `candle`) load model weights into memory or VRAM on the current process. Unlike remote providers, these models are a finite resource — you only want one (or a few) loaded at once, and you want explicit control over when the GPU memory is freed.
+
+Every `CompletionModel` exposes four lifecycle methods:
+
+| Method | Returns | Behaviour |
+|---|---|---|
+| `load()` | `None` / `void` | For local providers, synchronously downloads (if needed) and loads the model so the next inference call pays no startup cost. For remote providers, raises `NotImplementedError` / throws. Idempotent. |
+| `unload()` | `None` / `void` | For local providers, drops the model and frees its GPU/CPU memory so the process can load a different model. For remote providers, raises `NotImplementedError` / throws. Idempotent. |
+| `is_loaded()` / `isLoaded()` | `bool` | Whether the model is currently resident in memory. Always `false` for remote providers (they have no local weights). |
+| `vram_bytes()` / `vramBytes()` | `int?` / `number?` | Approximate VRAM footprint in bytes, if the underlying implementation reports one. `None` / `null` for remote providers and for local providers that don't yet expose memory usage. |
+
+Inference methods (`complete`, `stream`) still auto-load the model on first call if you never called `load()` explicitly — the explicit calls are only there when you need deterministic timing or want to unload between runs.
+
+Today the Python and Node factories only expose `CompletionModel.mistralrs()`; `llama.cpp` and `candle` are Rust-only until their host-language factories land, but all three already implement the load/unload plumbing in Rust.
+
+### Python
+
+```python
+from blazen import CompletionModel, MistralRsOptions, ChatMessage
+
+model = CompletionModel.mistralrs(options=MistralRsOptions(
+    model_id="mistralai/Mistral-7B-Instruct-v0.3",
+))
+
+# Explicit load (otherwise happens lazily on first `complete` call).
+await model.load()
+assert await model.is_loaded()
+
+# Inference
+response = await model.complete([ChatMessage.user("Hello")])
+
+# Free the GPU memory when idle.
+await model.unload()
+assert not await model.is_loaded()
+
+# Remote providers raise NotImplementedError on load.
+openai = CompletionModel.openai()
+try:
+    await openai.load()
+except NotImplementedError:
+    print("openai is a remote provider, nothing to load")
+```
+
+### Node.js / TypeScript
+
+```typescript
+import { CompletionModel } from "blazen";
+
+const model = CompletionModel.mistralrs({
+    modelId: "mistralai/Mistral-7B-Instruct-v0.3",
+});
+
+await model.load();
+console.log(await model.isLoaded()); // true
+
+// Inference ...
+
+await model.unload();
+console.log(await model.isLoaded()); // false
+
+// Remote providers throw on load.
+const openai = CompletionModel.openai({});
+try {
+    await openai.load();
+} catch (e) {
+    console.log("openai is remote:", (e as Error).message);
+}
+```
+
+Notes:
+
+- `load` / `unload` are idempotent — calling them repeatedly is a no-op.
+- `is_loaded` / `isLoaded` always returns `false` for remote providers.
+- `vram_bytes` / `vramBytes` returns `None` / `null` for providers that don't report memory usage. Today that is every provider — the plumbing is wired through but no backend exposes a number yet.
+- If you never call `load()` explicitly, inference methods still auto-load on first call. The explicit lifecycle is only there so you can front-load startup cost and unload between runs.
+
+---
+
 ## SDK Usage
 
 ### Python
@@ -490,3 +628,168 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 ```
 
 Provider is resolved from the `provider/model` prefix. If no slash, defaults to `openai`.
+
+---
+
+## Writing a custom provider
+
+Not every service Blazen users want to reach ships an OpenAI-compatible API, and not every capability maps onto one of the built-in providers above. For those cases Blazen exposes a **custom provider** escape hatch in all three host languages: you write a normal class in Rust, Python, or TypeScript whose methods match Blazen's capability trait method names, hand it to Blazen, and get back an object that behaves exactly like a first-class provider.
+
+The workflow engine treats the wrapped object as implementing every capability trait whose methods the host object actually defines; missing methods raise `UnsupportedError` at the call site.
+
+### Rust
+
+Downstream Rust crates can implement the capability traits directly on any type of their choosing — this is the baseline and has always been supported. The reference example is embedded in [`crates/blazen-llm/src/compute/traits.rs`](../crates/blazen-llm/src/compute/traits.rs) lines 1–33, which walks through a minimal `ComputeProvider` + `ImageGeneration` impl.
+
+```rust
+use async_trait::async_trait;
+use blazen_llm::compute::{ComputeProvider, ImageGeneration, ImageRequest, ImageResult};
+use blazen_llm::BlazenError;
+
+struct MyImageProvider { /* ... */ }
+
+#[async_trait]
+impl ImageGeneration for MyImageProvider {
+    async fn generate_image(&self, request: ImageRequest) -> Result<ImageResult, BlazenError> {
+        // Your implementation.
+        todo!()
+    }
+    // upscale_image(...) ...
+}
+```
+
+The Rust path does not need a wrapper type — you just `impl` the traits you care about, and the rest of Blazen picks up the implementation through its usual trait machinery.
+
+### Python (`blazen.CustomProvider`)
+
+On the Python side, write a normal class with `async def` methods whose names match Blazen's capability trait method names (snake_case: `text_to_speech`, `clone_voice`, `generate_image`, ...), then wrap an instance in `CustomProvider(instance, provider_id="...")`.
+
+Requests arrive as plain Python dicts shaped like the corresponding `SpeechRequest` / `ImageRequest` / ... classes — you do not need to construct typed request objects yourself. Responses must be dicts whose keys match the underlying Rust result struct fields exactly (`AudioResult`, `VoiceHandle`, `ImageResult`, ...), because Blazen deserialises them through serde.
+
+```python
+import base64
+from blazen import CustomProvider, SpeechRequest
+
+class MyElevenLabsProvider:
+    def __init__(self, api_key: str):
+        from elevenlabs.client import AsyncElevenLabs
+        self._client = AsyncElevenLabs(api_key=api_key)
+
+    async def text_to_speech(self, request):
+        # `request` is a dict shaped like SpeechRequest (serde JSON).
+        audio_bytes = await self._client.text_to_speech.convert(
+            voice_id=request["voice"],
+            text=request["text"],
+            model_id="eleven_multilingual_v2",
+        )
+        # Return a dict shaped like AudioResult.
+        return {
+            "audio": [{
+                "media": {
+                    "base64": base64.b64encode(audio_bytes).decode(),
+                    "media_type": "mpeg",
+                    "metadata": {},
+                },
+            }],
+            "timing": {"total_ms": 0, "queue_ms": None, "execution_ms": None},
+            "metadata": {},
+        }
+
+    async def clone_voice(self, request):
+        voice = await self._client.voices.add(
+            name=request["name"],
+            files=[...],  # fetch request["reference_urls"][0] to bytes
+        )
+        return {
+            "id": voice.voice_id,
+            "name": voice.name,
+            "provider": "elevenlabs",
+            "metadata": {},
+        }
+
+# Wrap the instance as a Blazen provider.
+my_provider = CustomProvider(
+    MyElevenLabsProvider(api_key="..."),
+    provider_id="elevenlabs",
+)
+
+# Now use it exactly like a built-in provider.
+audio = await my_provider.text_to_speech(SpeechRequest(
+    text="Hello from ElevenLabs!",
+    voice="rachel",
+))
+```
+
+Notes:
+
+- Method names match the Rust trait method names (`text_to_speech`, **not** `textToSpeech`).
+- Requests arrive as Python dicts. You do not need to write `SpeechRequest(...)` constructors inside your host class.
+- Responses must be dicts that match the corresponding result struct layout (`AudioResult`, `VoiceHandle`, etc.). Dict keys must match the Rust struct field names exactly — the Rust side deserialises them via serde.
+- Only methods you actually implement count. If your class doesn't define a `generate_music` method, calling `my_provider.generate_music(...)` raises `UnsupportedError`.
+- Full list of supported capability method names (snake_case): `text_to_speech`, `generate_music`, `generate_sfx`, `clone_voice`, `list_voices`, `delete_voice`, `generate_image`, `upscale_image`, `text_to_video`, `image_to_video`, `transcribe`, `generate_3d`, `remove_background`, `submit`, `status`, `result`, `cancel`.
+
+### Node.js / TypeScript (`CustomProvider`)
+
+Same idea on the JavaScript side, but method names use camelCase (`textToSpeech`, `cloneVoice`, `generateImage`, ...) to match JavaScript conventions. The Rust shim calls `Function.prototype.bind(hostObject)` under the hood so `this` refers to the original instance when your methods are invoked — you can safely write class methods that read `this.client` or `this.apiKey`.
+
+```typescript
+import { CustomProvider } from "blazen";
+import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
+
+class MyElevenLabsProvider {
+    private client: ElevenLabsClient;
+
+    constructor(apiKey: string) {
+        this.client = new ElevenLabsClient({ apiKey });
+    }
+
+    async textToSpeech(request: any) {
+        const audio = await this.client.textToSpeech.convert({
+            voiceId: request.voice,
+            text: request.text,
+            modelId: "eleven_multilingual_v2",
+        });
+        return {
+            audio: [{
+                media: {
+                    base64: Buffer.from(audio).toString("base64"),
+                    mediaType: "mpeg",
+                    metadata: {},
+                },
+            }],
+            timing: { totalMs: 0, queueMs: null, executionMs: null },
+            metadata: {},
+        };
+    }
+
+    async cloneVoice(request: any) {
+        const voice = await this.client.voices.add({
+            name: request.name,
+            files: [/* fetch from request.referenceUrls[0] */],
+        });
+        return {
+            id: voice.voiceId,
+            name: voice.name,
+            provider: "elevenlabs",
+            metadata: {},
+        };
+    }
+}
+
+const provider = new CustomProvider(
+    new MyElevenLabsProvider("..."),
+    { providerId: "elevenlabs" },
+);
+
+const audio = await provider.textToSpeech({
+    text: "Hello!",
+    voice: "rachel",
+});
+```
+
+Notes:
+
+- Method names on the JS side are camelCase (`textToSpeech`, `cloneVoice`, `generateImage`, ...).
+- The Rust shim uses `Function.prototype.bind(hostObject)` internally so `this` resolves to the right instance when your methods are invoked.
+- Missing methods throw `UnsupportedError` at the call site.
+- Full list of supported capability method names (camelCase): `textToSpeech`, `generateMusic`, `generateSfx`, `cloneVoice`, `listVoices`, `deleteVoice`, `generateImage`, `upscaleImage`, `textToVideo`, `imageToVideo`, `transcribe`, `generate3d`, `removeBackground`, `submit`, `status`, `result`, `cancel`.

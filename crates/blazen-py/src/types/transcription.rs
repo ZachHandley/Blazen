@@ -104,19 +104,13 @@ impl PyTranscription {
     ///     >>> req = TranscriptionRequest.from_file("/path/to/audio.wav")
     ///     >>> result = await transcriber.transcribe(req)
     ///     >>> print(result.text)
-    fn transcribe<'py>(
-        &self,
-        py: Python<'py>,
-        request: PyRef<'_, PyTranscriptionRequest>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+    async fn transcribe(&self, request: PyTranscriptionRequest) -> PyResult<PyTranscriptionResult> {
+        let rust_req = request.inner;
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = Transcription::transcribe(inner.as_ref(), rust_req)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            Ok(PyTranscriptionResult { inner: result })
-        })
+        let result = Transcription::transcribe(inner.as_ref(), rust_req)
+            .await
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(PyTranscriptionResult { inner: result })
     }
 
     fn __repr__(&self) -> String {

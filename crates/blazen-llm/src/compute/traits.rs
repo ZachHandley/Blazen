@@ -37,9 +37,11 @@ use async_trait::async_trait;
 use super::job::{ComputeRequest, ComputeResult, JobHandle, JobStatus};
 use super::requests::{
     BackgroundRemovalRequest, ImageRequest, MusicRequest, SpeechRequest, ThreeDRequest,
-    TranscriptionRequest, UpscaleRequest, VideoRequest,
+    TranscriptionRequest, UpscaleRequest, VideoRequest, VoiceCloneRequest,
 };
-use super::results::{AudioResult, ImageResult, ThreeDResult, TranscriptionResult, VideoResult};
+use super::results::{
+    AudioResult, ImageResult, ThreeDResult, TranscriptionResult, VideoResult, VoiceHandle,
+};
 use crate::error::BlazenError;
 
 // ---------------------------------------------------------------------------
@@ -166,6 +168,44 @@ pub trait BackgroundRemoval: ComputeProvider {
         &self,
         request: BackgroundRemovalRequest,
     ) -> Result<ImageResult, BlazenError>;
+}
+
+// ---------------------------------------------------------------------------
+// Voice cloning
+// ---------------------------------------------------------------------------
+
+/// Voice cloning capability.
+///
+/// Distinct from `AudioGeneration::text_to_speech` because cloning creates
+/// a persisted voice that can be reused across later TTS calls. No
+/// Blazen-shipped provider implements this trait -- it exists so users
+/// building their own providers (via `CustomProvider`) can wire up
+/// services like `ElevenLabs` or `zvoice` into Blazen's capability system.
+#[async_trait]
+pub trait VoiceCloning: ComputeProvider {
+    /// Clone a voice from one or more reference audio clips and return
+    /// a persistent handle that can be passed as `SpeechRequest.voice`
+    /// on subsequent TTS calls.
+    async fn clone_voice(&self, request: VoiceCloneRequest) -> Result<VoiceHandle, BlazenError>;
+
+    /// List all voices known to this provider (presets + cloned).
+    ///
+    /// Returns `BlazenError::Unsupported` by default.
+    async fn list_voices(&self) -> Result<Vec<VoiceHandle>, BlazenError> {
+        Err(BlazenError::unsupported(
+            "list_voices not supported by this provider",
+        ))
+    }
+
+    /// Delete a previously cloned voice.
+    ///
+    /// Returns `BlazenError::Unsupported` by default.
+    async fn delete_voice(&self, voice: &VoiceHandle) -> Result<(), BlazenError> {
+        let _ = voice;
+        Err(BlazenError::unsupported(
+            "delete_voice not supported by this provider",
+        ))
+    }
 }
 
 // Backwards-compatible type alias for the old trait name.

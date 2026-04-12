@@ -87,19 +87,13 @@ impl PyFalProvider {
     ///
     /// Returns:
     ///     An [`ImageResult`] with images, timing, cost, and metadata.
-    fn generate_image<'py>(
-        &self,
-        py: Python<'py>,
-        request: PyRef<'_, PyImageRequest>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+    async fn generate_image(&self, request: PyImageRequest) -> PyResult<PyImageResult> {
+        let rust_req = request.inner;
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = ImageGeneration::generate_image(inner.as_ref(), rust_req)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            Ok(PyImageResult { inner: result })
-        })
+        let result = ImageGeneration::generate_image(inner.as_ref(), rust_req)
+            .await
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(PyImageResult { inner: result })
     }
 
     /// Upscale an image.
@@ -109,19 +103,13 @@ impl PyFalProvider {
     ///
     /// Returns:
     ///     An [`ImageResult`] with the upscaled image, timing, cost, and metadata.
-    fn upscale_image<'py>(
-        &self,
-        py: Python<'py>,
-        request: PyRef<'_, PyUpscaleRequest>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+    async fn upscale_image(&self, request: PyUpscaleRequest) -> PyResult<PyImageResult> {
+        let rust_req = request.inner;
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = ImageGeneration::upscale_image(inner.as_ref(), rust_req)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            Ok(PyImageResult { inner: result })
-        })
+        let result = ImageGeneration::upscale_image(inner.as_ref(), rust_req)
+            .await
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(PyImageResult { inner: result })
     }
 
     /// Upscale an image via the aura-sr model.
@@ -131,20 +119,14 @@ impl PyFalProvider {
     ///
     /// Returns:
     ///     An [`ImageResult`] with the upscaled image, timing, cost, and metadata.
-    fn upscale_image_aura<'py>(
-        &self,
-        py: Python<'py>,
-        request: PyRef<'_, PyUpscaleRequest>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+    async fn upscale_image_aura(&self, request: PyUpscaleRequest) -> PyResult<PyImageResult> {
+        let rust_req = request.inner;
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = inner
-                .upscale_image_aura(rust_req)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            Ok(PyImageResult { inner: result })
-        })
+        let result = inner
+            .upscale_image_aura(rust_req)
+            .await
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(PyImageResult { inner: result })
     }
 
     /// Upscale an image via the clarity-upscaler model.
@@ -154,20 +136,14 @@ impl PyFalProvider {
     ///
     /// Returns:
     ///     An [`ImageResult`] with the upscaled image, timing, cost, and metadata.
-    fn upscale_image_clarity<'py>(
-        &self,
-        py: Python<'py>,
-        request: PyRef<'_, PyUpscaleRequest>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+    async fn upscale_image_clarity(&self, request: PyUpscaleRequest) -> PyResult<PyImageResult> {
+        let rust_req = request.inner;
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = inner
-                .upscale_image_clarity(rust_req)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            Ok(PyImageResult { inner: result })
-        })
+        let result = inner
+            .upscale_image_clarity(rust_req)
+            .await
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(PyImageResult { inner: result })
     }
 
     /// Upscale an image via the creative-upscaler model.
@@ -177,20 +153,14 @@ impl PyFalProvider {
     ///
     /// Returns:
     ///     An [`ImageResult`] with the upscaled image, timing, cost, and metadata.
-    fn upscale_image_creative<'py>(
-        &self,
-        py: Python<'py>,
-        request: PyRef<'_, PyUpscaleRequest>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+    async fn upscale_image_creative(&self, request: PyUpscaleRequest) -> PyResult<PyImageResult> {
+        let rust_req = request.inner;
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = inner
-                .upscale_image_creative(rust_req)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            Ok(PyImageResult { inner: result })
-        })
+        let result = inner
+            .upscale_image_creative(rust_req)
+            .await
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(PyImageResult { inner: result })
     }
 
     /// Remove the background from an image.
@@ -200,19 +170,16 @@ impl PyFalProvider {
     ///
     /// Returns:
     ///     An [`ImageResult`] with the matted image, timing, cost, and metadata.
-    fn remove_background<'py>(
+    async fn remove_background(
         &self,
-        py: Python<'py>,
-        request: PyRef<'_, PyBackgroundRemovalRequest>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+        request: PyBackgroundRemovalRequest,
+    ) -> PyResult<PyImageResult> {
+        let rust_req = request.inner;
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = BackgroundRemoval::remove_background(inner.as_ref(), rust_req)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            Ok(PyImageResult { inner: result })
-        })
+        let result = BackgroundRemoval::remove_background(inner.as_ref(), rust_req)
+            .await
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(PyImageResult { inner: result })
     }
 
     // -----------------------------------------------------------------
@@ -226,19 +193,13 @@ impl PyFalProvider {
     ///
     /// Returns:
     ///     A [`ThreeDResult`] with the generated 3D model, timing, cost, and metadata.
-    fn generate_3d<'py>(
-        &self,
-        py: Python<'py>,
-        request: PyRef<'_, PyThreeDRequest>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+    async fn generate_3d(&self, request: PyThreeDRequest) -> PyResult<PyThreeDResult> {
+        let rust_req = request.inner;
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = ThreeDGeneration::generate_3d(inner.as_ref(), rust_req)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            Ok(PyThreeDResult { inner: result })
-        })
+        let result = ThreeDGeneration::generate_3d(inner.as_ref(), rust_req)
+            .await
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(PyThreeDResult { inner: result })
     }
 
     // -----------------------------------------------------------------
@@ -267,19 +228,13 @@ impl PyFalProvider {
     ///
     /// Returns:
     ///     A [`VideoResult`] with videos, timing, cost, and metadata.
-    fn text_to_video<'py>(
-        &self,
-        py: Python<'py>,
-        request: PyRef<'_, PyVideoRequest>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+    async fn text_to_video(&self, request: PyVideoRequest) -> PyResult<PyVideoResult> {
+        let rust_req = request.inner;
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = VideoGeneration::text_to_video(inner.as_ref(), rust_req)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            Ok(PyVideoResult { inner: result })
-        })
+        let result = VideoGeneration::text_to_video(inner.as_ref(), rust_req)
+            .await
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(PyVideoResult { inner: result })
     }
 
     /// Generate a video from a source image and prompt.
@@ -289,19 +244,13 @@ impl PyFalProvider {
     ///
     /// Returns:
     ///     A [`VideoResult`] with videos, timing, cost, and metadata.
-    fn image_to_video<'py>(
-        &self,
-        py: Python<'py>,
-        request: PyRef<'_, PyVideoRequest>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+    async fn image_to_video(&self, request: PyVideoRequest) -> PyResult<PyVideoResult> {
+        let rust_req = request.inner;
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = VideoGeneration::image_to_video(inner.as_ref(), rust_req)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            Ok(PyVideoResult { inner: result })
-        })
+        let result = VideoGeneration::image_to_video(inner.as_ref(), rust_req)
+            .await
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(PyVideoResult { inner: result })
     }
 
     // -----------------------------------------------------------------
@@ -315,19 +264,13 @@ impl PyFalProvider {
     ///
     /// Returns:
     ///     An [`AudioResult`] with audio clips, timing, cost, and metadata.
-    fn text_to_speech<'py>(
-        &self,
-        py: Python<'py>,
-        request: PyRef<'_, PySpeechRequest>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+    async fn text_to_speech(&self, request: PySpeechRequest) -> PyResult<PyAudioResult> {
+        let rust_req = request.inner;
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = AudioGeneration::text_to_speech(inner.as_ref(), rust_req)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            Ok(PyAudioResult { inner: result })
-        })
+        let result = AudioGeneration::text_to_speech(inner.as_ref(), rust_req)
+            .await
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(PyAudioResult { inner: result })
     }
 
     /// Generate music from a prompt.
@@ -337,19 +280,13 @@ impl PyFalProvider {
     ///
     /// Returns:
     ///     An [`AudioResult`] with audio clips, timing, cost, and metadata.
-    fn generate_music<'py>(
-        &self,
-        py: Python<'py>,
-        request: PyRef<'_, PyMusicRequest>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+    async fn generate_music(&self, request: PyMusicRequest) -> PyResult<PyAudioResult> {
+        let rust_req = request.inner;
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = AudioGeneration::generate_music(inner.as_ref(), rust_req)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            Ok(PyAudioResult { inner: result })
-        })
+        let result = AudioGeneration::generate_music(inner.as_ref(), rust_req)
+            .await
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(PyAudioResult { inner: result })
     }
 
     /// Generate sound effects from a prompt.
@@ -359,19 +296,13 @@ impl PyFalProvider {
     ///
     /// Returns:
     ///     An [`AudioResult`] with audio clips, timing, cost, and metadata.
-    fn generate_sfx<'py>(
-        &self,
-        py: Python<'py>,
-        request: PyRef<'_, PyMusicRequest>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+    async fn generate_sfx(&self, request: PyMusicRequest) -> PyResult<PyAudioResult> {
+        let rust_req = request.inner;
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = AudioGeneration::generate_sfx(inner.as_ref(), rust_req)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            Ok(PyAudioResult { inner: result })
-        })
+        let result = AudioGeneration::generate_sfx(inner.as_ref(), rust_req)
+            .await
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(PyAudioResult { inner: result })
     }
 
     // -----------------------------------------------------------------
@@ -386,19 +317,13 @@ impl PyFalProvider {
     /// Returns:
     ///     A [`TranscriptionResult`] with text, segments, language, timing,
     ///     cost, and metadata.
-    fn transcribe<'py>(
-        &self,
-        py: Python<'py>,
-        request: PyRef<'_, PyTranscriptionRequest>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+    async fn transcribe(&self, request: PyTranscriptionRequest) -> PyResult<PyTranscriptionResult> {
+        let rust_req = request.inner;
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = Transcription::transcribe(inner.as_ref(), rust_req)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            Ok(PyTranscriptionResult { inner: result })
-        })
+        let result = Transcription::transcribe(inner.as_ref(), rust_req)
+            .await
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(PyTranscriptionResult { inner: result })
     }
 
     // -----------------------------------------------------------------
@@ -413,19 +338,13 @@ impl PyFalProvider {
     /// Returns:
     ///     A [`ComputeResult`] with output, timing, cost, and metadata.
     #[gen_stub(skip)]
-    fn run<'py>(
-        &self,
-        py: Python<'py>,
-        request: PyRef<'_, PyComputeRequest>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+    async fn run(&self, request: PyComputeRequest) -> PyResult<PyComputeResult> {
+        let rust_req = request.inner;
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = ComputeProvider::run(inner.as_ref(), rust_req)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            Ok(PyComputeResult { inner: result })
-        })
+        let result = ComputeProvider::run(inner.as_ref(), rust_req)
+            .await
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(PyComputeResult { inner: result })
     }
 
     /// Submit a compute job without waiting.
@@ -436,19 +355,13 @@ impl PyFalProvider {
     /// Returns:
     ///     A [`JobHandle`] with id, provider, model, and submitted_at.
     #[gen_stub(skip)]
-    fn submit<'py>(
-        &self,
-        py: Python<'py>,
-        request: PyRef<'_, PyComputeRequest>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner.clone();
+    async fn submit(&self, request: PyComputeRequest) -> PyResult<PyJobHandle> {
+        let rust_req = request.inner;
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let handle = ComputeProvider::submit(inner.as_ref(), rust_req)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            Ok(PyJobHandle { inner: handle })
-        })
+        let handle = ComputeProvider::submit(inner.as_ref(), rust_req)
+            .await
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(PyJobHandle { inner: handle })
     }
 
     /// Poll the status of a submitted job.
@@ -459,26 +372,20 @@ impl PyFalProvider {
     /// Returns:
     ///     A status string: "queued", "running", "completed", "failed", or "cancelled".
     #[gen_stub(skip)]
-    fn status<'py>(
-        &self,
-        py: Python<'py>,
-        job: PyRef<'_, PyJobHandle>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let handle = job.inner.clone();
+    async fn status(&self, job: PyJobHandle) -> PyResult<String> {
+        let handle = job.inner;
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let status = ComputeProvider::status(inner.as_ref(), &handle)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            let status_str = match status {
-                blazen_llm::compute::JobStatus::Queued => "queued",
-                blazen_llm::compute::JobStatus::Running => "running",
-                blazen_llm::compute::JobStatus::Completed => "completed",
-                blazen_llm::compute::JobStatus::Failed { .. } => "failed",
-                blazen_llm::compute::JobStatus::Cancelled => "cancelled",
-            };
-            Ok(status_str.to_owned())
-        })
+        let status = ComputeProvider::status(inner.as_ref(), &handle)
+            .await
+            .map_err(blazen_error_to_pyerr)?;
+        let status_str = match status {
+            blazen_llm::compute::JobStatus::Queued => "queued",
+            blazen_llm::compute::JobStatus::Running => "running",
+            blazen_llm::compute::JobStatus::Completed => "completed",
+            blazen_llm::compute::JobStatus::Failed { .. } => "failed",
+            blazen_llm::compute::JobStatus::Cancelled => "cancelled",
+        };
+        Ok(status_str.to_owned())
     }
 
     /// Cancel a running or queued job.
@@ -486,19 +393,13 @@ impl PyFalProvider {
     /// Args:
     ///     job: The [`JobHandle`] returned by [`submit`].
     #[gen_stub(skip)]
-    fn cancel<'py>(
-        &self,
-        py: Python<'py>,
-        job: PyRef<'_, PyJobHandle>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let handle = job.inner.clone();
+    async fn cancel(&self, job: PyJobHandle) -> PyResult<()> {
+        let handle = job.inner;
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            ComputeProvider::cancel(inner.as_ref(), &handle)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            Ok(())
-        })
+        ComputeProvider::cancel(inner.as_ref(), &handle)
+            .await
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(())
     }
 
     // -----------------------------------------------------------------
@@ -515,22 +416,27 @@ impl PyFalProvider {
     /// Returns:
     ///     A CompletionResponse with content, model, tool_calls, usage, etc.
     #[pyo3(signature = (messages, options=None))]
-    fn complete<'py>(
+    async fn complete(
         &self,
-        py: Python<'py>,
-        messages: Vec<PyRef<'py, PyChatMessage>>,
-        options: Option<PyRef<'py, PyCompletionOptions>>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let request = build_completion_request(py, rust_messages, options.as_deref())?;
+        messages: Vec<PyChatMessage>,
+        options: Option<Py<PyCompletionOptions>>,
+    ) -> PyResult<PyCompletionResponse> {
+        // Building the request requires GIL access because `PyCompletionOptions`
+        // holds `tools` / `response_format` as `Py<PyAny>` and we need to
+        // convert them with `crate::convert::py_to_json`. We acquire the GIL
+        // synchronously once here, build the fully-owned `CompletionRequest`,
+        // and then drop the GIL before awaiting the HTTP call.
+        let request = Python::attach(|py| -> PyResult<CompletionRequest> {
+            let rust_messages: Vec<ChatMessage> = messages.into_iter().map(|m| m.inner).collect();
+            let opts_borrow = options.as_ref().map(|o| o.borrow(py));
+            build_completion_request(py, rust_messages, opts_borrow.as_deref())
+        })?;
 
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let response = CompletionModel::complete(inner.as_ref(), request)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            Ok(PyCompletionResponse { inner: response })
-        })
+        let response = CompletionModel::complete(inner.as_ref(), request)
+            .await
+            .map_err(blazen_error_to_pyerr)?;
+        Ok(PyCompletionResponse { inner: response })
     }
 
     /// Stream a chat completion, calling a callback for each chunk.
@@ -713,17 +619,15 @@ impl PyFalEmbeddingModel {
     ///
     /// Returns:
     ///     An EmbeddingResponse with embeddings, model, usage, and cost.
-    fn embed<'py>(&self, py: Python<'py>, texts: Vec<String>) -> PyResult<Bound<'py, PyAny>> {
+    async fn embed(&self, texts: Vec<String>) -> PyResult<Py<PyAny>> {
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let response = EmbeddingModel::embed(inner.as_ref(), &texts)
-                .await
-                .map_err(BlazenPyError::from)?;
-            Python::attach(|py| -> PyResult<Py<PyAny>> {
-                let obj = pythonize::pythonize(py, &response)
-                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-                Ok(obj.unbind())
-            })
+        let response = EmbeddingModel::embed(inner.as_ref(), &texts)
+            .await
+            .map_err(BlazenPyError::from)?;
+        Python::attach(|py| -> PyResult<Py<PyAny>> {
+            let obj = pythonize::pythonize(py, &response)
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            Ok(obj.unbind())
         })
     }
 

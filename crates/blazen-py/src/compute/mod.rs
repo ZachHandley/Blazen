@@ -12,5 +12,5 @@ pub use requests::{
 };
 pub use result_types::{
     PyAudioResult, PyComputeResult, PyImageResult, PyThreeDResult, PyTranscriptionResult,
-    PyTranscriptionSegment, PyVideoResult,
+    PyTranscriptionSegment, PyVideoResult, PyVoiceHandle,
 };

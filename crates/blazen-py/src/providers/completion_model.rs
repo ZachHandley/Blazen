@@ -104,6 +104,11 @@ impl PyCompletionOptions {
 #[derive(Clone)]
 pub struct PyCompletionModel {
     pub(crate) inner: Arc<dyn CompletionModel>,
+    /// Present iff the underlying provider is a local in-process model
+    /// (mistral.rs, llama.cpp, candle) that implements
+    /// [`blazen_llm::LocalModel`]. `None` for remote HTTP providers.
+    /// Populated by the provider factory methods.
+    pub(crate) local_model: Option<Arc<dyn blazen_llm::LocalModel>>,
 }
 
 #[gen_stub_pymethods]
@@ -131,6 +136,7 @@ impl PyCompletionModel {
                 blazen_llm::providers::openai::OpenAiProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
+            local_model: None,
         })
     }
 
@@ -147,6 +153,7 @@ impl PyCompletionModel {
                 blazen_llm::providers::anthropic::AnthropicProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
+            local_model: None,
         })
     }
 
@@ -163,6 +170,7 @@ impl PyCompletionModel {
                 blazen_llm::providers::gemini::GeminiProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
+            local_model: None,
         })
     }
 
@@ -181,6 +189,7 @@ impl PyCompletionModel {
                 blazen_llm::providers::azure::AzureOpenAiProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
+            local_model: None,
         })
     }
 
@@ -197,6 +206,7 @@ impl PyCompletionModel {
                 blazen_llm::providers::openrouter::OpenRouterProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
+            local_model: None,
         })
     }
 
@@ -213,6 +223,7 @@ impl PyCompletionModel {
                 blazen_llm::providers::groq::GroqProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
+            local_model: None,
         })
     }
 
@@ -229,6 +240,7 @@ impl PyCompletionModel {
                 blazen_llm::providers::together::TogetherProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
+            local_model: None,
         })
     }
 
@@ -245,6 +257,7 @@ impl PyCompletionModel {
                 blazen_llm::providers::mistral::MistralProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
+            local_model: None,
         })
     }
 
@@ -261,6 +274,7 @@ impl PyCompletionModel {
                 blazen_llm::providers::deepseek::DeepSeekProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
+            local_model: None,
         })
     }
 
@@ -277,6 +291,7 @@ impl PyCompletionModel {
                 blazen_llm::providers::fireworks::FireworksProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
+            local_model: None,
         })
     }
 
@@ -293,6 +308,7 @@ impl PyCompletionModel {
                 blazen_llm::providers::perplexity::PerplexityProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
+            local_model: None,
         })
     }
 
@@ -309,6 +325,7 @@ impl PyCompletionModel {
                 blazen_llm::providers::xai::XaiProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
+            local_model: None,
         })
     }
 
@@ -325,6 +342,7 @@ impl PyCompletionModel {
                 blazen_llm::providers::cohere::CohereProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
+            local_model: None,
         })
     }
 
@@ -342,6 +360,7 @@ impl PyCompletionModel {
                 blazen_llm::providers::bedrock::BedrockProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
+            local_model: None,
         })
     }
 
@@ -361,6 +380,7 @@ impl PyCompletionModel {
                 blazen_llm::providers::fal::FalProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
             ),
+            local_model: None,
         })
     }
 
@@ -401,6 +421,7 @@ impl PyCompletionModel {
         let model = RetryCompletionModel::from_arc(self.inner.clone(), retry_config);
         Self {
             inner: Arc::new(model),
+            local_model: self.local_model.clone(),
         }
     }
 
@@ -430,8 +451,13 @@ impl PyCompletionModel {
         let providers: Vec<Arc<dyn CompletionModel>> =
             models.iter().map(|m| m.inner.clone()).collect();
         let model = FallbackModel::new(providers);
+        // A fallback chain is a composition of heterogeneous providers, so
+        // there is no single `LocalModel` to forward load/unload to. Callers
+        // that need local-model control should apply it to the individual
+        // component models before combining them via `with_fallback`.
         Ok(Self {
             inner: Arc::new(model),
+            local_model: None,
         })
     }
 
@@ -456,6 +482,7 @@ impl PyCompletionModel {
         let model = CachedCompletionModel::from_arc(self.inner.clone(), cache_config);
         Self {
             inner: Arc::new(model),
+            local_model: self.local_model.clone(),
         }
     }
 
@@ -486,20 +513,23 @@ impl PyCompletionModel {
     ///     ... ])
     ///     >>> print(response.content)
     #[pyo3(signature = (messages, options=None))]
-    fn complete<'py>(
+    async fn complete(
         &self,
-        py: Python<'py>,
-        messages: Vec<PyRef<'py, PyChatMessage>>,
-        options: Option<PyRef<'py, PyCompletionOptions>>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let request = build_request(py, rust_messages, options.as_deref())?;
+        messages: Vec<PyChatMessage>,
+        options: Option<Py<PyCompletionOptions>>,
+    ) -> PyResult<PyCompletionResponse> {
+        let rust_messages: Vec<ChatMessage> = messages.into_iter().map(|m| m.inner).collect();
+        // Build the request synchronously under the GIL so we can read the
+        // tools/response_format Python objects on `PyCompletionOptions` before
+        // the coroutine suspends.
+        let request = Python::attach(|py| {
+            let opts_ref = options.as_ref().map(|o| o.borrow(py));
+            build_request(py, rust_messages, opts_ref.as_deref())
+        })?;
 
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let response = inner.complete(request).await.map_err(BlazenPyError::from)?;
-            Ok(PyCompletionResponse { inner: response })
-        })
+        let response = inner.complete(request).await.map_err(BlazenPyError::from)?;
+        Ok(PyCompletionResponse { inner: response })
     }
 
     /// Stream a chat completion.
@@ -599,6 +629,71 @@ impl PyCompletionModel {
 
     fn __repr__(&self) -> String {
         format!("CompletionModel(model_id='{}')", self.inner.model_id())
+    }
+
+    // -----------------------------------------------------------------
+    // Local-model control (only meaningful for in-process providers)
+    // -----------------------------------------------------------------
+
+    /// Explicitly load the model weights into memory / VRAM.
+    ///
+    /// For remote providers (OpenAI, Anthropic, fal, etc.) this raises
+    /// ``NotImplementedError`` -- there is no local model to load.
+    /// For local providers (mistral.rs, llama.cpp, candle) this triggers
+    /// the download + load synchronously, so the next inference call
+    /// does not pay the startup cost.
+    ///
+    /// Idempotent: calling ``load`` on an already-loaded model is a no-op
+    /// that returns immediately.
+    async fn load(&self) -> PyResult<()> {
+        let local = self.local_model.clone();
+        match local {
+            Some(lm) => lm.load().await.map_err(crate::error::blazen_error_to_pyerr),
+            None => Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "load() is only supported for local in-process providers (mistral.rs, llama.cpp, candle)",
+            )),
+        }
+    }
+
+    /// Drop the loaded model and free its memory / VRAM.
+    ///
+    /// For remote providers this raises ``NotImplementedError``.
+    /// For local providers this frees GPU memory so the process can
+    /// load a different model. Idempotent.
+    async fn unload(&self) -> PyResult<()> {
+        let local = self.local_model.clone();
+        match local {
+            Some(lm) => lm
+                .unload()
+                .await
+                .map_err(crate::error::blazen_error_to_pyerr),
+            None => Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "unload() is only supported for local in-process providers",
+            )),
+        }
+    }
+
+    /// Whether the model is currently loaded in memory / VRAM.
+    ///
+    /// Always returns ``False`` for remote providers (they have no local
+    /// model to load). Returns the real state for local providers.
+    async fn is_loaded(&self) -> bool {
+        let local = self.local_model.clone();
+        match local {
+            Some(lm) => lm.is_loaded().await,
+            None => false,
+        }
+    }
+
+    /// Approximate VRAM footprint in bytes, if the implementation can
+    /// report it. Returns ``None`` for remote providers or for local
+    /// providers that do not expose memory usage.
+    async fn vram_bytes(&self) -> Option<u64> {
+        let local = self.local_model.clone();
+        match local {
+            Some(lm) => lm.vram_bytes().await,
+            None => None,
+        }
     }
 }
 
@@ -789,11 +884,13 @@ impl PyCompletionModel {
         options: PyRef<'_, crate::providers::options::PyMistralRsOptions>,
     ) -> PyResult<Self> {
         let opts = options.inner.clone();
+        let concrete = Arc::new(
+            blazen_llm::MistralRsProvider::from_options(opts)
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?,
+        );
         Ok(Self {
-            inner: Arc::new(
-                blazen_llm::MistralRsProvider::from_options(opts)
-                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?,
-            ),
+            inner: concrete.clone(),
+            local_model: Some(concrete),
         })
     }
 }

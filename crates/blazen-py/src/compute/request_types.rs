@@ -5,7 +5,7 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_llm::compute::requests::{
     BackgroundRemovalRequest, ImageRequest, MusicRequest, SpeechRequest, ThreeDRequest,
-    TranscriptionRequest, UpscaleRequest, VideoRequest,
+    TranscriptionRequest, UpscaleRequest, VideoRequest, VoiceCloneRequest,
 };
 
 /// Parse an optional Python object into a `serde_json::Value` (for the
@@ -490,6 +490,71 @@ impl PyThreeDRequest {
 
     fn __repr__(&self) -> String {
         format!("ThreeDRequest(prompt={:?})", self.inner.prompt)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// VoiceCloneRequest
+// ---------------------------------------------------------------------------
+
+/// Typed wrapper for a voice cloning request.
+///
+/// No Blazen-shipped provider implements voice cloning natively; this
+/// request type exists to be used by user-defined [`CustomProvider`]s
+/// that wrap services like ElevenLabs.
+#[gen_stub_pyclass]
+#[pyclass(name = "VoiceCloneRequest", from_py_object)]
+#[derive(Clone)]
+pub struct PyVoiceCloneRequest {
+    pub(crate) inner: VoiceCloneRequest,
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyVoiceCloneRequest {
+    #[new]
+    #[pyo3(signature = (*, name, reference_urls, language=None, description=None, parameters=None))]
+    fn new(
+        py: Python<'_>,
+        name: String,
+        reference_urls: Vec<String>,
+        language: Option<String>,
+        description: Option<String>,
+        parameters: Option<Py<PyAny>>,
+    ) -> PyResult<Self> {
+        Ok(Self {
+            inner: VoiceCloneRequest {
+                name,
+                reference_urls,
+                language,
+                description,
+                parameters: parse_parameters(py, parameters)?,
+            },
+        })
+    }
+
+    #[getter]
+    fn name(&self) -> &str {
+        &self.inner.name
+    }
+    #[getter]
+    fn reference_urls(&self) -> Vec<String> {
+        self.inner.reference_urls.clone()
+    }
+    #[getter]
+    fn language(&self) -> Option<String> {
+        self.inner.language.clone()
+    }
+    #[getter]
+    fn description(&self) -> Option<String> {
+        self.inner.description.clone()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "VoiceCloneRequest(name={:?}, reference_urls={:?})",
+            self.inner.name, self.inner.reference_urls
+        )
     }
 }
 

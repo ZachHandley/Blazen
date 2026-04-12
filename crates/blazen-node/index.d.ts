@@ -223,6 +223,43 @@ export declare class CompletionModel {
    * - `tools` (array): Tool definitions for function calling
    */
   streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
+  /**
+   * Explicitly load the model weights into memory / `VRAM`.
+   *
+   * For remote providers (`OpenAI`, Anthropic, fal, etc.) this throws --
+   * there is no local model to load. For local providers (mistral.rs,
+   * llama.cpp, candle) this triggers the download + load synchronously,
+   * so the next inference call does not pay the startup cost.
+   *
+   * Idempotent: calling `load` on an already-loaded model is a no-op
+   * that resolves immediately.
+   */
+  load(): Promise<void>
+  /**
+   * Drop the loaded model and free its memory / `VRAM`.
+   *
+   * For remote providers this throws. For local providers this frees
+   * `GPU` memory so the process can load a different model. Idempotent.
+   */
+  unload(): Promise<void>
+  /**
+   * Whether the model is currently loaded in memory / `VRAM`.
+   *
+   * Always returns `false` for remote providers (they have no local
+   * model to load). Returns the real state for local providers.
+   */
+  isLoaded(): Promise<boolean>
+  /**
+   * Approximate `VRAM` footprint in bytes, if the implementation can
+   * report it. Returns `null` for remote providers or for local
+   * providers that do not expose memory usage.
+   *
+   * Note: napi-rs exposes this as a JS `number`. The underlying
+   * [`blazen_llm::LocalModel::vram_bytes`] returns `u64`; we clamp to
+   * `i64::MAX` (~9.2 exabytes) when surfacing through `JSON`-compatible
+   * types, which is effectively lossless for any realistic `VRAM` size.
+   */
+  vramBytes(): Promise<number | null>
 }
 export type JsCompletionModel = CompletionModel
 
@@ -337,6 +374,149 @@ export declare class Context {
   get session(): JsSessionNamespace
 }
 export type JsContext = Context
+
+/**
+ * A user-defined Blazen provider backed by a JavaScript class instance.
+ *
+ * Wraps an arbitrary object whose async methods match Blazen's
+ * capability trait names (`textToSpeech`, `cloneVoice`,
+ * `generateImage`, etc.) and exposes them as a first-class provider.
+ * The workflow engine treats the result as implementing every
+ * capability trait whose methods the wrapped object provides; missing
+ * methods return `UnsupportedError` when called.
+ *
+ * Request/response shapes use Blazen's typed request/result types on
+ * the JavaScript side and get serialized through napi's
+ * `serde_json::Value` bridge to the wrapped object's methods, which
+ * receive/return plain objects.
+ *
+ * ```typescript
+ * import { CustomProvider } from "blazen";
+ *
+ * class MyElevenLabsProvider {
+ *     constructor(apiKey: string) {
+ *         this.client = new ElevenLabs({ apiKey });
+ *     }
+ *
+ *     async textToSpeech(request: { text: string; voice?: string }) {
+ *         const audio = await this.client.textToSpeech.convert({
+ *             voiceId: request.voice ?? "default",
+ *             text: request.text,
+ *             modelId: "eleven_multilingual_v2",
+ *         });
+ *         return {
+ *             audio: [{
+ *                 media: {
+ *                     base64: Buffer.from(audio).toString("base64"),
+ *                     mediaType: "mpeg",
+ *                 },
+ *             }],
+ *             timing: { totalMs: 0, queueMs: null, executionMs: null },
+ *             metadata: {},
+ *         };
+ *     }
+ * }
+ *
+ * const provider = new CustomProvider(
+ *     new MyElevenLabsProvider("..."),
+ *     { providerId: "elevenlabs" },
+ * );
+ * const audio = await provider.textToSpeech({
+ *     text: "hello",
+ *     voice: "rachel",
+ * });
+ * ```
+ */
+export declare class CustomProvider {
+  /**
+   * Wrap a JavaScript host object as a Blazen [`CustomProvider`].
+   *
+   * `hostObject` is a class instance (or plain object) whose async
+   * methods match Blazen capability trait method names
+   * (`textToSpeech`, `generateImage`, `cloneVoice`, ...). Host
+   * methods should be `async` and accept a single object argument
+   * shaped like the corresponding Blazen request type. Synchronous
+   * host methods are supported as long as they return a `Promise`
+   * explicitly -- the ordinary async dispatch path awaits the
+   * returned `Promise`.
+   *
+   * `options.providerId` is an optional short identifier used for
+   * logging and returned from [`JsCustomProvider::provider_id`].
+   * Defaults to `"custom"`.
+   */
+  constructor(hostObject: object, options?: CustomProviderOptions | undefined | null)
+  /** The provider identifier used for logging (e.g. `"elevenlabs"`). */
+  get providerId(): string
+  /**
+   * Synthesize speech by calling the host's `textToSpeech` async
+   * method.
+   */
+  textToSpeech(request: JsSpeechRequest): Promise<JsAudioResult>
+  /**
+   * Generate music by calling the host's `generateMusic` async
+   * method.
+   */
+  generateMusic(request: JsMusicRequest): Promise<JsAudioResult>
+  /**
+   * Generate sound effects by calling the host's `generateSfx` async
+   * method.
+   */
+  generateSfx(request: JsMusicRequest): Promise<JsAudioResult>
+  /**
+   * Clone a voice from reference audio clips by calling the host's
+   * `cloneVoice` async method. Returns a persistent `VoiceHandle`
+   * that can be passed as `SpeechRequest.voice` on subsequent TTS
+   * calls.
+   */
+  cloneVoice(request: JsVoiceCloneRequest): Promise<JsVoiceHandle>
+  /**
+   * List all voices known to the host by calling its `listVoices`
+   * async method (which must return an array of objects shaped
+   * like `VoiceHandle`).
+   */
+  listVoices(): Promise<Array<JsVoiceHandle>>
+  /**
+   * Delete a previously cloned voice by calling the host's
+   * `deleteVoice` async method.
+   */
+  deleteVoice(voice: JsVoiceHandle): Promise<void>
+  /**
+   * Generate an image by calling the host's `generateImage` async
+   * method.
+   */
+  generateImage(request: JsImageRequest): Promise<JsImageResult>
+  /**
+   * Upscale an image by calling the host's `upscaleImage` async
+   * method.
+   */
+  upscaleImage(request: JsUpscaleRequest): Promise<JsImageResult>
+  /**
+   * Generate a video from text by calling the host's `textToVideo`
+   * async method.
+   */
+  textToVideo(request: JsVideoRequest): Promise<JsVideoResult>
+  /**
+   * Generate a video from a source image by calling the host's
+   * `imageToVideo` async method.
+   */
+  imageToVideo(request: JsVideoRequest): Promise<JsVideoResult>
+  /**
+   * Transcribe audio to text by calling the host's `transcribe`
+   * async method.
+   */
+  transcribe(request: JsTranscriptionRequest): Promise<JsTranscriptionResult>
+  /**
+   * Generate a 3D model by calling the host's `generate3d` async
+   * method.
+   */
+  generate3d(request: JsThreeDRequest): Promise<JsThreeDResult>
+  /**
+   * Remove the background from an image by calling the host's
+   * `removeBackground` async method.
+   */
+  removeBackground(request: JsBackgroundRemovalRequest): Promise<JsImageResult>
+}
+export type JsCustomProvider = CustomProvider
 
 /**
  * An embedding model that produces vector representations of text.
@@ -611,6 +791,38 @@ export declare class Memory {
   count(): Promise<number>
 }
 export type JsMemory = Memory
+
+/**
+ * An `OpenAI` compute provider exposing text-to-speech.
+ *
+ * For chat completions and embeddings, use
+ * [`CompletionModel.openai`](crate::providers::completion_model::JsCompletionModel::openai)
+ * instead — this class is the standalone entry point for the compute
+ * capabilities (currently text-to-speech) that the `OpenAI` provider
+ * implements directly.
+ *
+ * ```typescript
+ * const openai = OpenAiProvider.create({ apiKey: "sk-..." });
+ * const audio = await openai.textToSpeech({
+ *     text: "Hello, world!",
+ *     voice: "alloy",
+ * });
+ * ```
+ */
+export declare class OpenAiProvider {
+  /**
+   * Create a new `OpenAI` provider.
+   *
+   * `options` optionally overrides the API key, model, and base URL.
+   * When omitted, the API key is read from the `OPENAI_API_KEY`
+   * environment variable and the defaults from
+   * [`OpenAiProvider::from_options`] are applied.
+   */
+  static create(options?: JsProviderOptions | undefined | null): OpenAiProvider
+  /** Synthesize speech from text via `OpenAI`'s `/v1/audio/speech`. */
+  textToSpeech(request: JsSpeechRequest): Promise<JsAudioResult>
+}
+export type JsOpenAiProvider = OpenAiProvider
 
 /**
  * A versioned registry for prompt templates.
@@ -1069,6 +1281,15 @@ export interface ChatMessageOptions {
  * ```
  */
 export declare function countMessageTokens(messages: Array<ChatMessage>, contextSize?: number | undefined | null): number
+
+/** Optional configuration for a [`JsCustomProvider`]. */
+export interface CustomProviderOptions {
+  /**
+   * Short identifier used for logging and returned from
+   * [`ComputeProvider::provider_id`]. Defaults to `"custom"`.
+   */
+  providerId?: string
+}
 
 /**
  * Estimate the number of tokens in a text string.
@@ -1688,6 +1909,23 @@ export interface JsVideoResult {
   videos: Array<JsGeneratedVideo>
   timing: JsRequestTiming
   cost?: number
+  metadata: any
+}
+
+export interface JsVoiceCloneRequest {
+  name: string
+  referenceUrls: Array<string>
+  language?: string
+  description?: string
+  parameters?: any
+}
+
+export interface JsVoiceHandle {
+  id: string
+  name: string
+  provider: string
+  language?: string
+  description?: string
   metadata: any
 }
 

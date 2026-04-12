@@ -5,6 +5,8 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_llm::CompletionResponse;
 
+use super::PyRequestTiming;
+
 // ---------------------------------------------------------------------------
 // PyCompletionResponse
 // ---------------------------------------------------------------------------
@@ -59,11 +61,11 @@ impl PyCompletionResponse {
     }
 
     #[getter]
-    fn timing(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
-        match &self.inner.timing {
-            Some(t) => Ok(Some(pythonize::pythonize(py, t)?.into())),
-            None => Ok(None),
-        }
+    fn timing(&self) -> Option<PyRequestTiming> {
+        self.inner
+            .timing
+            .as_ref()
+            .map(|t| PyRequestTiming { inner: t.clone() })
     }
 
     #[getter]
@@ -171,14 +173,10 @@ impl PyCompletionResponse {
                 None => Ok(py.None()),
             },
             "timing" => match &self.inner.timing {
-                Some(t) => {
-                    let val = serde_json::json!({
-                        "queue_ms": t.queue_ms,
-                        "execution_ms": t.execution_ms,
-                        "total_ms": t.total_ms,
-                    });
-                    crate::convert::json_to_py(py, &val)
-                }
+                Some(t) => Ok(PyRequestTiming { inner: t.clone() }
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind()),
                 None => Ok(py.None()),
             },
             "images" => {

@@ -17,7 +17,7 @@ use blazen_core::snapshot::WorkflowSnapshot;
 use super::handler::PyWorkflowHandler;
 use super::step::PyStepWrapper;
 use crate::convert::dict_to_json;
-use crate::error::{BlazenPyError, to_py_result};
+use crate::error::BlazenPyError;
 use crate::session_ref_serializable::{DESERIALIZER_FN, intern_type_tag};
 
 // ---------------------------------------------------------------------------
@@ -150,54 +150,58 @@ impl PyWorkflow {
     ///     >>> handler = await wf.run({"prompt": "Hello!"})
     ///     >>> result = await handler.result()
     #[pyo3(signature = (**kwargs))]
-    fn run<'py>(
-        &self,
-        py: Python<'py>,
-        kwargs: Option<&Bound<'py, PyDict>>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let data = if let Some(kw) = kwargs {
-            dict_to_json(kw)?
-        } else {
-            serde_json::Value::Object(serde_json::Map::new())
-        };
-
-        let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
-
-        // Build the workflow here with task locals
-        let mut builder = blazen_core::WorkflowBuilder::new(&self.name);
-        for step in &self.steps {
-            let step_ref = step.borrow(py);
-            let registration = step_ref.to_registration_with_locals(locals.clone())?;
-            builder = builder.step(registration);
-        }
-        if let Some(t) = self.timeout {
-            builder = builder.timeout(Duration::from_secs_f64(t));
-        }
-        builder = builder.session_pause_policy(self.session_pause_policy.into());
-        let workflow = builder.build().map_err(BlazenPyError::from)?;
-
-        // Phase 0.4: capture the parent session-ref registry BEFORE
-        // entering the async block. This call must run on the Python
-        // asyncio thread (where `py` is bound), because the Python
-        // ContextVar that holds the active registry is only visible
-        // from inside the current asyncio Task — once we move into the
-        // Tokio-scheduled `async move` block below, that context is
-        // gone. Capturing up front means: if the caller is inside a
-        // parent `@step` body, we read the parent's registry here and
-        // thread it into `run_with_registry` so the child inherits it.
-        let parent_registry = crate::workflow::session_ref::current_session_registry();
-
-        pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
-            let handler = if let Some(parent_registry) = parent_registry {
-                workflow
-                    .run_with_registry(data, parent_registry)
-                    .await
-                    .map_err(BlazenPyError::from)?
+    async fn run(&self, kwargs: Option<Py<PyDict>>) -> PyResult<PyWorkflowHandler> {
+        // All GIL-bound setup happens synchronously under a single
+        // `Python::attach` scope BEFORE we cross any `.await` boundary.
+        // This runs on the Python asyncio loop thread (pyo3 0.28
+        // native-async coroutines are polled by asyncio), so the
+        // contextvar holding the parent session-ref registry is
+        // visible here — the same invariant the old
+        // `future_into_py_with_locals` bridge relied on.
+        let (workflow, data, parent_registry) = Python::attach(|py| -> PyResult<_> {
+            let data = if let Some(kw) = kwargs {
+                dict_to_json(kw.bind(py))?
             } else {
-                workflow.run(data).await.map_err(BlazenPyError::from)?
+                serde_json::Value::Object(serde_json::Map::new())
             };
-            to_py_result(Ok(PyWorkflowHandler::new(handler)))
-        })
+
+            let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
+
+            // Build the workflow here with task locals
+            let mut builder = blazen_core::WorkflowBuilder::new(&self.name);
+            for step in &self.steps {
+                let step_ref = step.borrow(py);
+                let registration = step_ref.to_registration_with_locals(locals.clone())?;
+                builder = builder.step(registration);
+            }
+            if let Some(t) = self.timeout {
+                builder = builder.timeout(Duration::from_secs_f64(t));
+            }
+            builder = builder.session_pause_policy(self.session_pause_policy.into());
+            let workflow = builder.build().map_err(BlazenPyError::from)?;
+
+            // Phase 0.4: capture the parent session-ref registry BEFORE
+            // entering the async block. This call must run on the Python
+            // asyncio thread (where `py` is bound), because the Python
+            // ContextVar that holds the active registry is only visible
+            // from inside the current asyncio Task. Capturing up front
+            // means: if the caller is inside a parent `@step` body, we
+            // read the parent's registry here and thread it into
+            // `run_with_registry` so the child inherits it.
+            let parent_registry = crate::workflow::session_ref::current_session_registry();
+
+            Ok((workflow, data, parent_registry))
+        })?;
+
+        let handler = if let Some(parent_registry) = parent_registry {
+            workflow
+                .run_with_registry(data, parent_registry)
+                .await
+                .map_err(BlazenPyError::from)?
+        } else {
+            workflow.run(data).await.map_err(BlazenPyError::from)?
+        };
+        Ok(PyWorkflowHandler::new(handler))
     }
 
     /// Resume a workflow from a previously captured snapshot.
@@ -220,29 +224,34 @@ impl PyWorkflow {
     ///     >>> result = await handler.result()
     #[staticmethod]
     #[pyo3(signature = (snapshot_json, steps, timeout=None))]
-    fn resume<'py>(
-        py: Python<'py>,
-        snapshot_json: &str,
-        steps: Vec<PyRef<'_, PyStepWrapper>>,
+    async fn resume(
+        snapshot_json: String,
+        steps: Vec<Py<PyStepWrapper>>,
         timeout: Option<f64>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let snapshot = WorkflowSnapshot::from_json(snapshot_json).map_err(BlazenPyError::from)?;
+    ) -> PyResult<PyWorkflowHandler> {
+        let snapshot = WorkflowSnapshot::from_json(&snapshot_json).map_err(BlazenPyError::from)?;
 
-        let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
-
-        let mut registrations = Vec::with_capacity(steps.len());
-        for step in &steps {
-            registrations.push(step.to_registration_with_locals(locals.clone())?);
-        }
+        // Build registrations synchronously under the GIL before we cross
+        // any `.await` boundary. `TaskLocals` must be read from the
+        // active asyncio task (the same thread this `async fn` is polled
+        // on under pyo3 0.28 experimental-async), so this captures the
+        // caller's loop/contextvars correctly.
+        let registrations = Python::attach(|py| -> PyResult<_> {
+            let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
+            let mut regs = Vec::with_capacity(steps.len());
+            for step in &steps {
+                let step_ref = step.borrow(py);
+                regs.push(step_ref.to_registration_with_locals(locals.clone())?);
+            }
+            Ok(regs)
+        })?;
 
         let timeout_dur = timeout.map(Duration::from_secs_f64);
 
-        pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
-            let handler = blazen_core::Workflow::resume(snapshot, registrations, timeout_dur)
-                .await
-                .map_err(BlazenPyError::from)?;
-            to_py_result(Ok(PyWorkflowHandler::new(handler)))
-        })
+        let handler = blazen_core::Workflow::resume(snapshot, registrations, timeout_dur)
+            .await
+            .map_err(BlazenPyError::from)?;
+        Ok(PyWorkflowHandler::new(handler))
     }
 
     /// Resume a workflow from a snapshot, reconstructing every
@@ -290,13 +299,12 @@ impl PyWorkflow {
     ///     >>> handler = await Workflow.resume_with_session_refs(snap, [s])
     #[staticmethod]
     #[pyo3(signature = (snapshot_json, steps, timeout=None))]
-    fn resume_with_session_refs<'py>(
-        py: Python<'py>,
-        snapshot_json: &str,
-        steps: Vec<PyRef<'_, PyStepWrapper>>,
+    async fn resume_with_session_refs(
+        snapshot_json: String,
+        steps: Vec<Py<PyStepWrapper>>,
         timeout: Option<f64>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let snapshot = WorkflowSnapshot::from_json(snapshot_json).map_err(BlazenPyError::from)?;
+    ) -> PyResult<PyWorkflowHandler> {
+        let snapshot = WorkflowSnapshot::from_json(&snapshot_json).map_err(BlazenPyError::from)?;
 
         // Walk the snapshot metadata and intern every type tag referenced
         // in the serialized session refs sidecar. Each unique tag gets a
@@ -314,26 +322,29 @@ impl PyWorkflow {
             }
         }
 
-        let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
-
-        let mut registrations = Vec::with_capacity(steps.len());
-        for step in &steps {
-            registrations.push(step.to_registration_with_locals(locals.clone())?);
-        }
+        // Build registrations synchronously under the GIL before we cross
+        // any `.await` boundary.
+        let registrations = Python::attach(|py| -> PyResult<_> {
+            let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
+            let mut regs = Vec::with_capacity(steps.len());
+            for step in &steps {
+                let step_ref = step.borrow(py);
+                regs.push(step_ref.to_registration_with_locals(locals.clone())?);
+            }
+            Ok(regs)
+        })?;
 
         let timeout_dur = timeout.map(Duration::from_secs_f64);
 
-        pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
-            let handler = blazen_core::Workflow::resume_with_deserializers(
-                snapshot,
-                registrations,
-                deserializers,
-                timeout_dur,
-            )
-            .await
-            .map_err(BlazenPyError::from)?;
-            to_py_result(Ok(PyWorkflowHandler::new(handler)))
-        })
+        let handler = blazen_core::Workflow::resume_with_deserializers(
+            snapshot,
+            registrations,
+            deserializers,
+            timeout_dur,
+        )
+        .await
+        .map_err(BlazenPyError::from)?;
+        Ok(PyWorkflowHandler::new(handler))
     }
 
     fn __repr__(&self) -> String {

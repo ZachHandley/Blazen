@@ -229,42 +229,49 @@ impl PyAgentResult {
 #[pyfunction]
 #[pyo3(signature = (model, messages, *, tools, max_iterations=10, system_prompt=None, temperature=None, max_tokens=None, add_finish_tool=false))]
 #[allow(clippy::too_many_arguments)]
-pub fn run_agent<'py>(
-    py: Python<'py>,
-    model: &PyCompletionModel,
-    messages: Vec<PyRef<'py, PyChatMessage>>,
-    tools: Vec<PyRef<'py, PyToolDef>>,
+pub async fn run_agent(
+    model: PyCompletionModel,
+    messages: Vec<PyChatMessage>,
+    tools: Vec<Py<PyToolDef>>,
     max_iterations: u32,
     system_prompt: Option<String>,
     temperature: Option<f32>,
     max_tokens: Option<u32>,
     add_finish_tool: bool,
-) -> PyResult<Bound<'py, PyAny>> {
+) -> PyResult<PyAgentResult> {
     let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
 
-    // Capture task locals for async tool handler support
-    let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
-    let inspect = py.import("inspect")?;
+    // Capture task locals and build the tool wrappers synchronously under
+    // the GIL, BEFORE we cross any `.await` boundary. `TaskLocals` must be
+    // read from the active Python asyncio task, which is only possible
+    // while the GIL is held on the asyncio-loop thread. We then thread the
+    // locals into each `PyToolWrapper` so async tool handlers can be
+    // bridged back to Python coroutines inside the agent loop.
+    let rust_tools: Vec<Arc<dyn Tool>> = Python::attach(|py| -> PyResult<_> {
+        let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
+        let inspect = py.import("inspect")?;
 
-    let rust_tools: Vec<Arc<dyn Tool>> = tools
-        .iter()
-        .map(|t| {
-            // Detect whether the handler is an async coroutine function
-            let is_async: bool = inspect
-                .call_method1("iscoroutinefunction", (&t.handler,))
-                .and_then(|r| r.extract())
-                .unwrap_or(false);
+        tools
+            .iter()
+            .map(|t| {
+                let t = t.borrow(py);
+                // Detect whether the handler is an async coroutine function
+                let is_async: bool = inspect
+                    .call_method1("iscoroutinefunction", (&t.handler,))
+                    .and_then(|r| r.extract())
+                    .unwrap_or(false);
 
-            Arc::new(PyToolWrapper {
-                name: t.name.clone(),
-                description: t.description.clone(),
-                parameters: t.parameters.clone(),
-                callable: t.handler.clone_ref(py),
-                is_async,
-                locals: locals.clone(),
-            }) as Arc<dyn Tool>
-        })
-        .collect();
+                Ok(Arc::new(PyToolWrapper {
+                    name: t.name.clone(),
+                    description: t.description.clone(),
+                    parameters: t.parameters.clone(),
+                    callable: t.handler.clone_ref(py),
+                    is_async,
+                    locals: locals.clone(),
+                }) as Arc<dyn Tool>)
+            })
+            .collect()
+    })?;
 
     let mut config = AgentConfig::new(rust_tools).with_max_iterations(max_iterations);
 
@@ -283,11 +290,9 @@ pub fn run_agent<'py>(
 
     let inner_model = model.inner.clone();
 
-    pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
-        let result = rust_run_agent(inner_model.as_ref(), rust_messages, config)
-            .await
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+    let result = rust_run_agent(inner_model.as_ref(), rust_messages, config)
+        .await
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
-        Ok(PyAgentResult { inner: result })
-    })
+    Ok(PyAgentResult { inner: result })
 }

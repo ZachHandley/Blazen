@@ -499,10 +499,21 @@ pub struct CandleLlmProvider {
     /// Full options preserved for deferred engine initialisation.
     #[cfg_attr(not(feature = "engine"), allow(dead_code))]
     options: CandleLlmOptions,
-    /// The loaded engine state (only present when `engine` feature is on
-    /// and [`CandleLlmProvider::load`] has been called).
+    /// Lazily loaded candle engine, wrapped in
+    /// `Arc<Mutex<Option<...>>>` so we can both (a) auto-load on first
+    /// use and (b) explicitly unload later to free GPU memory.
+    ///
+    /// A `tokio::sync::Mutex` is used instead of `RwLock` because the
+    /// engine's `ModelWeights` forward pass requires `&mut self` and
+    /// inference must hold an exclusive guard for the entire generation
+    /// loop. Holding the guard across an `await` -- required because the
+    /// load path downloads weights from `HuggingFace` Hub -- is safe with
+    /// `tokio::sync::Mutex`, and passing an `OwnedMutexGuard` into
+    /// `spawn_blocking` keeps the lock alive across the thread hop so
+    /// that an `unload` call cannot yank the engine out from under an
+    /// in-flight inference.
     #[cfg(feature = "engine")]
-    engine: Option<std::sync::Arc<tokio::sync::Mutex<engine::CandleEngine>>>,
+    engine: std::sync::Arc<tokio::sync::Mutex<Option<engine::CandleEngine>>>,
 }
 
 impl CandleLlmProvider {
@@ -537,7 +548,7 @@ impl CandleLlmProvider {
             model_id: opts.model_id.clone(),
             options: opts,
             #[cfg(feature = "engine")]
-            engine: None,
+            engine: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
         })
     }
 
@@ -553,45 +564,128 @@ impl CandleLlmProvider {
         cfg!(feature = "engine")
     }
 
-    /// Eagerly load the candle engine.
+    // -----------------------------------------------------------------------
+    // Explicit load / unload (always in the public API)
+    //
+    // These mirror the `infer` / `infer_stream` cfg dual-stub pattern so
+    // that the public surface is identical with and without the `engine`
+    // feature, and so the `blazen_llm::LocalModel` trait bridge in
+    // `blazen-llm/src/backends/candle_llm.rs` can call them unconditionally.
+    // -----------------------------------------------------------------------
+
+    /// Eagerly load the candle engine. Idempotent -- if the engine is
+    /// already loaded, this is a no-op that returns `Ok(())`.
     ///
     /// Downloads the model weights and tokenizer from `HuggingFace` Hub
     /// (if not already cached) and initialises the inference engine.
     ///
-    /// This is optional -- the engine is also loaded lazily on the first
-    /// inference call. Call this method when you want to control when the
-    /// (potentially slow) download and load happens.
+    /// Inference methods ([`Self::infer`], [`Self::infer_stream`]) will
+    /// still auto-load on first call if [`Self::load`] was never invoked,
+    /// so explicit loading is only needed when the caller wants to pay
+    /// the initialization cost up-front (e.g. to avoid latency spikes
+    /// during a time-sensitive workflow step).
     ///
     /// # Errors
     ///
     /// Returns [`CandleLlmError::EngineNotAvailable`] if the `engine`
     /// feature is not compiled in.
     /// Returns [`CandleLlmError::ModelLoad`] if the download or load fails.
-    #[allow(clippy::unused_async)] // async is required when `engine` feature is on
-    pub async fn load(&mut self) -> Result<(), CandleLlmError> {
-        #[cfg(feature = "engine")]
-        {
-            let eng = engine::CandleEngine::load(&self.options).await?;
-            self.engine = Some(std::sync::Arc::new(tokio::sync::Mutex::new(eng)));
-            Ok(())
-        }
-        #[cfg(not(feature = "engine"))]
-        {
-            Err(CandleLlmError::EngineNotAvailable)
-        }
+    #[cfg(feature = "engine")]
+    pub async fn load(&self) -> Result<(), CandleLlmError> {
+        // Reuse the guarded loader. Drop the returned guard immediately;
+        // we only wanted the side effect of populating the Option.
+        let _ = self.get_or_load_engine_guard().await?;
+        Ok(())
     }
 
-    /// Ensure the engine is loaded, loading it lazily if needed.
+    /// Stub: engine not available.
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`CandleLlmError::EngineNotAvailable`].
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn load(&self) -> Result<(), CandleLlmError> {
+        Err(CandleLlmError::EngineNotAvailable)
+    }
+
+    /// Drop the loaded engine and free its VRAM / memory. Idempotent --
+    /// if the engine is already unloaded, this is a no-op that returns
+    /// `Ok(())`.
+    ///
+    /// Note: if an inference task is still holding an `OwnedMutexGuard`
+    /// (which is passed into `spawn_blocking` for the whole generation
+    /// loop), `unload` will wait for the mutex and only then set the
+    /// inner `Option` to `None`. This serialises unload vs in-flight
+    /// inference correctly; the engine is dropped the moment no other
+    /// guard is alive.
+    ///
+    /// # Errors
+    ///
+    /// This method currently never returns an error; the `Result` return
+    /// type is preserved to match [`crate::CandleLlmError`] conventions
+    /// and the [`blazen_llm::traits::LocalModel`] trait contract.
     #[cfg(feature = "engine")]
-    async fn ensure_engine(
-        &mut self,
-    ) -> Result<std::sync::Arc<tokio::sync::Mutex<engine::CandleEngine>>, CandleLlmError> {
-        if self.engine.is_none() {
-            self.load().await?;
+    pub async fn unload(&self) -> Result<(), CandleLlmError> {
+        let mut guard = self.engine.lock().await;
+        // Drop the CandleEngine. VRAM is freed by the Drop impls on the
+        // inner `ModelWeights` / `Device` handles.
+        *guard = None;
+        Ok(())
+    }
+
+    /// Stub: engine not available. Always succeeds as a no-op, matching
+    /// the idempotent-unload contract even when there is no engine to
+    /// unload in the first place.
+    ///
+    /// # Errors
+    ///
+    /// This method never returns an error.
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn unload(&self) -> Result<(), CandleLlmError> {
+        Ok(())
+    }
+
+    /// Whether the engine is currently loaded in memory / VRAM.
+    #[cfg(feature = "engine")]
+    pub async fn is_loaded(&self) -> bool {
+        self.engine.lock().await.is_some()
+    }
+
+    /// Stub: without the engine feature there is never a loaded model,
+    /// so this always returns `false`.
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn is_loaded(&self) -> bool {
+        false
+    }
+
+    /// Acquire an [`OwnedMutexGuard`] over the engine slot, loading the
+    /// engine lazily if the slot is empty.
+    ///
+    /// The returned guard holds the `Mutex<Option<CandleEngine>>` locked
+    /// for as long as the caller keeps it alive. Callers pass it into
+    /// `tokio::task::spawn_blocking` so that the lock stays held across
+    /// the async-to-blocking thread hop; this guarantees that an
+    /// `unload` call in another task cannot yank the engine out from
+    /// under an in-flight inference.
+    ///
+    /// Holding the guard across the `CandleEngine::load(...)` await is
+    /// intentional -- it serialises concurrent loaders onto a single
+    /// `HuggingFace` download.
+    ///
+    /// [`OwnedMutexGuard`]: tokio::sync::OwnedMutexGuard
+    #[cfg(feature = "engine")]
+    async fn get_or_load_engine_guard(
+        &self,
+    ) -> Result<tokio::sync::OwnedMutexGuard<Option<engine::CandleEngine>>, CandleLlmError> {
+        let mut guard = std::sync::Arc::clone(&self.engine).lock_owned().await;
+        if guard.is_none() {
+            let eng = engine::CandleEngine::load(&self.options).await?;
+            *guard = Some(eng);
         }
-        self.engine.clone().ok_or(CandleLlmError::Inference(
-            "engine failed to initialise".into(),
-        ))
+        Ok(guard)
     }
 
     /// Run a non-streaming inference on the given messages.
@@ -606,7 +700,7 @@ impl CandleLlmProvider {
     /// Returns [`CandleLlmError::Inference`] if generation fails.
     #[allow(clippy::unused_async)] // async is required when `engine` feature is on
     pub async fn infer(
-        &mut self,
+        &self,
         messages: Vec<(String, String)>,
         max_tokens: Option<usize>,
         temperature: Option<f64>,
@@ -614,12 +708,27 @@ impl CandleLlmProvider {
     ) -> Result<CandleInferenceResult, CandleLlmError> {
         #[cfg(feature = "engine")]
         {
-            let engine_arc = self.ensure_engine().await?;
+            // Acquire an owned guard in async-land: this loads the
+            // engine if needed and keeps the Mutex locked across the
+            // transition into `spawn_blocking`, so `unload` cannot
+            // yank the engine out mid-inference.
+            let mut owned_guard = self.get_or_load_engine_guard().await?;
             let max_tokens = max_tokens.unwrap_or(512);
             let start = std::time::Instant::now();
 
             let result = tokio::task::spawn_blocking(move || {
-                let mut engine = engine_arc.blocking_lock();
+                // `get_or_load_engine_guard` populated the Option
+                // before returning, and we hold the exclusive lock, so
+                // no other task could have reset it. Guard against the
+                // impossible `None` case with a structured error
+                // instead of a panic so the public API surface stays
+                // panic-free.
+                let engine = owned_guard.as_mut().ok_or_else(|| {
+                    CandleLlmError::Inference(
+                        "engine slot empty under the mutex after successful load".into(),
+                    )
+                })?;
+
                 let prompt = engine::format_prompt(&messages);
 
                 let prompt_token_count = engine
@@ -629,9 +738,10 @@ impl CandleLlmProvider {
                     .unwrap_or(0);
 
                 let (text, completion_tokens) =
-                    engine::generate(&mut engine, &prompt, max_tokens, temperature, top_p)?;
+                    engine::generate(engine, &prompt, max_tokens, temperature, top_p)?;
 
                 Ok::<_, CandleLlmError>((text, prompt_token_count, completion_tokens))
+                // `owned_guard` is dropped here, releasing the mutex.
             })
             .await
             .map_err(|e| CandleLlmError::Inference(format!("blocking task failed: {e}")))??;
@@ -662,7 +772,7 @@ impl CandleLlmProvider {
     /// feature is not compiled in.
     #[allow(clippy::unused_async)] // async is required when `engine` feature is on
     pub async fn infer_stream(
-        &mut self,
+        &self,
         messages: Vec<(String, String)>,
         max_tokens: Option<usize>,
         temperature: Option<f64>,
@@ -670,16 +780,31 @@ impl CandleLlmProvider {
     ) -> Result<tokio::sync::mpsc::Receiver<Result<String, CandleLlmError>>, CandleLlmError> {
         #[cfg(feature = "engine")]
         {
-            let engine_arc = self.ensure_engine().await?;
+            // Acquire the owned guard up front: this loads the engine
+            // if needed and keeps the mutex locked for the whole
+            // streaming task so that `unload` cannot yank it out.
+            let mut owned_guard = self.get_or_load_engine_guard().await?;
             let max_tokens = max_tokens.unwrap_or(512);
             let (tx, rx) = tokio::sync::mpsc::channel(64);
 
             tokio::task::spawn_blocking(move || {
-                let mut engine = engine_arc.blocking_lock();
+                // `get_or_load_engine_guard` populated the Option
+                // before returning, and we hold the exclusive lock, so
+                // no other task could have reset it. Guard against the
+                // impossible `None` case by emitting a structured
+                // error on the channel instead of panicking, so the
+                // public API surface stays panic-free.
+                let Some(engine) = owned_guard.as_mut() else {
+                    let _ = tx.blocking_send(Err(CandleLlmError::Inference(
+                        "engine slot empty under the mutex after successful load".into(),
+                    )));
+                    return;
+                };
+
                 let prompt = engine::format_prompt(&messages);
 
                 let result = engine::generate_streaming(
-                    &mut engine,
+                    engine,
                     &prompt,
                     max_tokens,
                     temperature,
@@ -692,7 +817,8 @@ impl CandleLlmProvider {
                 if let Err(e) = result {
                     let _ = tx.blocking_send(Err(e));
                 }
-                // tx is dropped here, closing the channel.
+                // `owned_guard` and `tx` are both dropped here: the
+                // mutex is released and the channel closes.
             });
 
             Ok(rx)
@@ -823,7 +949,7 @@ mod tests {
             ..CandleLlmOptions::default()
         };
 
-        let mut provider = CandleLlmProvider::from_options(opts).expect("options valid");
+        let provider = CandleLlmProvider::from_options(opts).expect("options valid");
         provider.load().await.expect("model should load");
 
         let messages = vec![

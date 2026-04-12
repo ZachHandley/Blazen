@@ -23,6 +23,7 @@ __all__ = [
     "ComputeResult",
     "ContentPart",
     "Context",
+    "CustomProvider",
     "Device",
     "EmbeddingModel",
     "Event",
@@ -44,10 +45,12 @@ __all__ = [
     "Memory",
     "MemoryResult",
     "MusicRequest",
+    "OpenAiProvider",
     "PromptRegistry",
     "PromptTemplate",
     "ProviderOptions",
     "Quantization",
+    "RequestTiming",
     "ResponseFormat",
     "RetryConfig",
     "Role",
@@ -68,6 +71,8 @@ __all__ = [
     "ValkeyBackend",
     "VideoRequest",
     "VideoResult",
+    "VoiceCloneRequest",
+    "VoiceHandle",
     "Workflow",
     "WorkflowHandler",
 ]
@@ -214,14 +219,14 @@ class AudioResult:
     Result of an audio generation or TTS operation.
     """
     @property
-    def audio(self) -> typing.Any:
+    def audio(self) -> builtins.list[GeneratedAudio]:
         r"""
-        The generated audio clips (as a list of dicts).
+        The generated audio clips.
         """
     @property
-    def timing(self) -> typing.Any:
+    def timing(self) -> RequestTiming:
         r"""
-        Request timing breakdown (as a dict).
+        Request timing breakdown.
         """
     @property
     def cost(self) -> typing.Optional[builtins.float]:
@@ -729,7 +734,7 @@ class CompletionModel:
         Example:
             >>> model = CompletionModel.openai(options=ProviderOptions(api_key="sk-...")).with_cache(CacheConfig(ttl_seconds=600))
         """
-    def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> typing.Any:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
         r"""
         Perform a chat completion.
         
@@ -785,6 +790,40 @@ class CompletionModel:
             >>> await model.stream([ChatMessage.user("Hi!")], handle_chunk)
         """
     def __repr__(self) -> builtins.str: ...
+    async def load(self) -> None:
+        r"""
+        Explicitly load the model weights into memory / VRAM.
+        
+        For remote providers (OpenAI, Anthropic, fal, etc.) this raises
+        ``NotImplementedError`` -- there is no local model to load.
+        For local providers (mistral.rs, llama.cpp, candle) this triggers
+        the download + load synchronously, so the next inference call
+        does not pay the startup cost.
+        
+        Idempotent: calling ``load`` on an already-loaded model is a no-op
+        that returns immediately.
+        """
+    async def unload(self) -> None:
+        r"""
+        Drop the loaded model and free its memory / VRAM.
+        
+        For remote providers this raises ``NotImplementedError``.
+        For local providers this frees GPU memory so the process can
+        load a different model. Idempotent.
+        """
+    async def is_loaded(self) -> builtins.bool:
+        r"""
+        Whether the model is currently loaded in memory / VRAM.
+        
+        Always returns ``False`` for remote providers (they have no local
+        model to load). Returns the real state for local providers.
+        """
+    async def vram_bytes(self) -> typing.Optional[builtins.int]:
+        r"""
+        Approximate VRAM footprint in bytes, if the implementation can
+        report it. Returns ``None`` for remote providers or for local
+        providers that do not expose memory usage.
+        """
 
 @typing.final
 class CompletionOptions:
@@ -882,7 +921,7 @@ class CompletionResponse:
     @property
     def cost(self) -> typing.Optional[builtins.float]: ...
     @property
-    def timing(self) -> typing.Optional[typing.Any]: ...
+    def timing(self) -> typing.Optional[RequestTiming]: ...
     @property
     def images(self) -> typing.Any: ...
     @property
@@ -950,9 +989,9 @@ class ComputeResult:
         Output data (model-specific JSON).
         """
     @property
-    def timing(self) -> typing.Any:
+    def timing(self) -> RequestTiming:
         r"""
-        Request timing breakdown (as a dict).
+        Request timing breakdown.
         """
     @property
     def cost(self) -> typing.Optional[builtins.float]:
@@ -1117,6 +1156,134 @@ class Context:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class CustomProvider:
+    r"""
+    A user-defined Blazen provider backed by a Python class instance.
+    
+    Wraps an arbitrary Python object whose async methods match Blazen's
+    capability trait names (``text_to_speech``, ``clone_voice``,
+    ``generate_image``, etc.) and exposes them as a first-class provider.
+    The workflow engine treats the result as implementing every capability
+    trait whose methods the wrapped object provides; missing methods
+    return ``UnsupportedError`` when called.
+    
+    Request/response shapes use Blazen's typed request/result classes on
+    the Python side and get serialized through ``pythonize`` to the
+    wrapped object's methods, which receive/return plain dicts.
+    
+    Example:
+        >>> import base64
+        >>> from elevenlabs.client import AsyncElevenLabs
+        >>> class ElevenLabsProvider:
+        ...     def __init__(self, api_key):
+        ...         self._client = AsyncElevenLabs(api_key=api_key)
+        ...     async def text_to_speech(self, request):
+        ...         audio = b"".join([
+        ...             chunk async for chunk in self._client.text_to_speech.convert(
+        ...                 voice_id=request["voice"],
+        ...                 text=request["text"],
+        ...                 model_id="eleven_multilingual_v2",
+        ...             )
+        ...         ])
+        ...         return {
+        ...             "audio": [{
+        ...                 "media": {
+        ...                     "base64": base64.b64encode(audio).decode(),
+        ...                     "media_type": "mpeg",
+        ...                 },
+        ...             }],
+        ...             "timing": {"total_ms": 0, "queue_ms": None, "execution_ms": None},
+        ...             "metadata": {},
+        ...         }
+        >>> provider = CustomProvider(
+        ...     ElevenLabsProvider(api_key="..."),
+        ...     provider_id="elevenlabs",
+        ... )
+        >>> result = await provider.text_to_speech(SpeechRequest(text="hi", voice="rachel"))
+    """
+    @property
+    def provider_id(self) -> builtins.str:
+        r"""
+        The provider id used for logging (e.g. ``"elevenlabs"``).
+        """
+    def __new__(cls, host_object: typing.Any, *, provider_id: typing.Optional[builtins.str] = None) -> CustomProvider:
+        r"""
+        Wrap a Python host object as a Blazen [`CustomProvider`].
+        
+        Args:
+            host_object: A Python class instance whose async methods match
+                Blazen capability trait methods
+                (``text_to_speech``, ``generate_image``, ``clone_voice``, ...).
+                Host methods must be ``async def`` and accept a single dict
+                argument shaped like the corresponding Blazen request type.
+            provider_id: Optional short identifier used for logging and
+                returned by ``provider_id``. Defaults to ``"custom"``.
+        """
+    async def text_to_speech(self, request: SpeechRequest) -> AudioResult:
+        r"""
+        Synthesize speech from text by calling the host's
+        ``text_to_speech`` async method.
+        """
+    async def generate_music(self, request: MusicRequest) -> AudioResult:
+        r"""
+        Generate music by calling the host's ``generate_music`` async method.
+        """
+    async def generate_sfx(self, request: MusicRequest) -> AudioResult:
+        r"""
+        Generate sound effects by calling the host's ``generate_sfx`` async method.
+        """
+    async def clone_voice(self, request: VoiceCloneRequest) -> VoiceHandle:
+        r"""
+        Clone a voice from reference audio clips by calling the host's
+        ``clone_voice`` async method. Returns a persistent
+        [`VoiceHandle`] that can be passed as ``SpeechRequest.voice`` on
+        subsequent TTS calls.
+        """
+    async def list_voices(self) -> builtins.list[VoiceHandle]:
+        r"""
+        List all voices known to the host by calling its ``list_voices``
+        async method (which must return a list of dicts shaped like
+        [`VoiceHandle`]).
+        """
+    async def delete_voice(self, voice: VoiceHandle) -> None:
+        r"""
+        Delete a previously cloned voice by calling the host's
+        ``delete_voice`` async method.
+        """
+    async def generate_image(self, request: ImageRequest) -> ImageResult:
+        r"""
+        Generate an image by calling the host's ``generate_image`` async method.
+        """
+    async def upscale_image(self, request: UpscaleRequest) -> ImageResult:
+        r"""
+        Upscale an image by calling the host's ``upscale_image`` async method.
+        """
+    async def text_to_video(self, request: VideoRequest) -> VideoResult:
+        r"""
+        Generate a video from text by calling the host's ``text_to_video``
+        async method.
+        """
+    async def image_to_video(self, request: VideoRequest) -> VideoResult:
+        r"""
+        Generate a video from an image by calling the host's
+        ``image_to_video`` async method.
+        """
+    async def transcribe(self, request: TranscriptionRequest) -> TranscriptionResult:
+        r"""
+        Transcribe audio by calling the host's ``transcribe`` async method.
+        """
+    async def generate_3d(self, request: ThreeDRequest) -> ThreeDResult:
+        r"""
+        Generate a 3D model by calling the host's ``generate_3d`` async method.
+        """
+    async def remove_background(self, request: BackgroundRemovalRequest) -> ImageResult:
+        r"""
+        Remove the background from an image by calling the host's
+        ``remove_background`` async method.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class EmbeddingModel:
     r"""
     A text embedding model.
@@ -1179,7 +1346,7 @@ class EmbeddingModel:
         Args:
             options: Optional typed ``ProviderOptions`` object.
         """
-    def embed(self, texts: typing.Sequence[builtins.str]) -> typing.Any:
+    async def embed(self, texts: typing.Sequence[builtins.str]) -> typing.Any:
         r"""
         Embed one or more texts.
         
@@ -1285,7 +1452,7 @@ class FalEmbeddingModel:
         r"""
         Get the dimensionality of the produced embedding vectors.
         """
-    def embed(self, texts: typing.Sequence[builtins.str]) -> typing.Any:
+    async def embed(self, texts: typing.Sequence[builtins.str]) -> typing.Any:
         r"""
         Embed one or more texts.
         
@@ -1370,7 +1537,7 @@ class FalProvider:
             options: Optional [`FalOptions`] for model, endpoint, enterprise,
                 and auto-routing configuration.
         """
-    def generate_image(self, request: ImageRequest) -> typing.Any:
+    async def generate_image(self, request: ImageRequest) -> ImageResult:
         r"""
         Generate images from a text prompt.
         
@@ -1380,7 +1547,7 @@ class FalProvider:
         Returns:
             An [`ImageResult`] with images, timing, cost, and metadata.
         """
-    def upscale_image(self, request: UpscaleRequest) -> typing.Any:
+    async def upscale_image(self, request: UpscaleRequest) -> ImageResult:
         r"""
         Upscale an image.
         
@@ -1390,7 +1557,7 @@ class FalProvider:
         Returns:
             An [`ImageResult`] with the upscaled image, timing, cost, and metadata.
         """
-    def upscale_image_aura(self, request: UpscaleRequest) -> typing.Any:
+    async def upscale_image_aura(self, request: UpscaleRequest) -> ImageResult:
         r"""
         Upscale an image via the aura-sr model.
         
@@ -1400,7 +1567,7 @@ class FalProvider:
         Returns:
             An [`ImageResult`] with the upscaled image, timing, cost, and metadata.
         """
-    def upscale_image_clarity(self, request: UpscaleRequest) -> typing.Any:
+    async def upscale_image_clarity(self, request: UpscaleRequest) -> ImageResult:
         r"""
         Upscale an image via the clarity-upscaler model.
         
@@ -1410,7 +1577,7 @@ class FalProvider:
         Returns:
             An [`ImageResult`] with the upscaled image, timing, cost, and metadata.
         """
-    def upscale_image_creative(self, request: UpscaleRequest) -> typing.Any:
+    async def upscale_image_creative(self, request: UpscaleRequest) -> ImageResult:
         r"""
         Upscale an image via the creative-upscaler model.
         
@@ -1420,7 +1587,7 @@ class FalProvider:
         Returns:
             An [`ImageResult`] with the upscaled image, timing, cost, and metadata.
         """
-    def remove_background(self, request: BackgroundRemovalRequest) -> typing.Any:
+    async def remove_background(self, request: BackgroundRemovalRequest) -> ImageResult:
         r"""
         Remove the background from an image.
         
@@ -1430,7 +1597,7 @@ class FalProvider:
         Returns:
             An [`ImageResult`] with the matted image, timing, cost, and metadata.
         """
-    def generate_3d(self, request: ThreeDRequest) -> typing.Any:
+    async def generate_3d(self, request: ThreeDRequest) -> ThreeDResult:
         r"""
         Generate a 3D model from a text prompt or source image.
         
@@ -1448,7 +1615,7 @@ class FalProvider:
             A FalEmbeddingModel that can be used to embed text via fal's
             OpenAI-compatible router.
         """
-    def text_to_video(self, request: VideoRequest) -> typing.Any:
+    async def text_to_video(self, request: VideoRequest) -> VideoResult:
         r"""
         Generate a video from a text prompt.
         
@@ -1458,7 +1625,7 @@ class FalProvider:
         Returns:
             A [`VideoResult`] with videos, timing, cost, and metadata.
         """
-    def image_to_video(self, request: VideoRequest) -> typing.Any:
+    async def image_to_video(self, request: VideoRequest) -> VideoResult:
         r"""
         Generate a video from a source image and prompt.
         
@@ -1468,7 +1635,7 @@ class FalProvider:
         Returns:
             A [`VideoResult`] with videos, timing, cost, and metadata.
         """
-    def text_to_speech(self, request: SpeechRequest) -> typing.Any:
+    async def text_to_speech(self, request: SpeechRequest) -> AudioResult:
         r"""
         Synthesize speech from text.
         
@@ -1478,7 +1645,7 @@ class FalProvider:
         Returns:
             An [`AudioResult`] with audio clips, timing, cost, and metadata.
         """
-    def generate_music(self, request: MusicRequest) -> typing.Any:
+    async def generate_music(self, request: MusicRequest) -> AudioResult:
         r"""
         Generate music from a prompt.
         
@@ -1488,7 +1655,7 @@ class FalProvider:
         Returns:
             An [`AudioResult`] with audio clips, timing, cost, and metadata.
         """
-    def generate_sfx(self, request: MusicRequest) -> typing.Any:
+    async def generate_sfx(self, request: MusicRequest) -> AudioResult:
         r"""
         Generate sound effects from a prompt.
         
@@ -1498,7 +1665,7 @@ class FalProvider:
         Returns:
             An [`AudioResult`] with audio clips, timing, cost, and metadata.
         """
-    def transcribe(self, request: TranscriptionRequest) -> typing.Any:
+    async def transcribe(self, request: TranscriptionRequest) -> TranscriptionResult:
         r"""
         Transcribe audio to text.
         
@@ -1509,7 +1676,7 @@ class FalProvider:
             A [`TranscriptionResult`] with text, segments, language, timing,
             cost, and metadata.
         """
-    def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> typing.Any:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
         r"""
         Perform a chat completion via fal-ai/any-llm.
         
@@ -1714,14 +1881,14 @@ class ImageResult:
     Result of an image generation or upscale operation.
     """
     @property
-    def images(self) -> typing.Any:
+    def images(self) -> builtins.list[GeneratedImage]:
         r"""
-        The generated or upscaled images (as a list of dicts).
+        The generated or upscaled images.
         """
     @property
-    def timing(self) -> typing.Any:
+    def timing(self) -> RequestTiming:
         r"""
-        Request timing breakdown (as a dict).
+        Request timing breakdown.
         """
     @property
     def cost(self) -> typing.Optional[builtins.float]:
@@ -1765,7 +1932,7 @@ class JsonlBackend:
         >>> memory = Memory(embedder, backend)
     """
     @staticmethod
-    def create(path: builtins.str) -> typing.Any:
+    async def create(path: builtins.str) -> JsonlBackend:
         r"""
         Create a new JSONL backend at the given file path.
         
@@ -1890,7 +2057,7 @@ class Memory:
         Args:
             backend: A backend instance (InMemoryBackend, JsonlBackend, or ValkeyBackend).
         """
-    def add(self, id: builtins.str, text: builtins.str, metadata: typing.Optional[typing.Any] = None) -> typing.Any:
+    async def add(self, id: builtins.str, text: builtins.str, metadata: typing.Optional[typing.Any] = None) -> builtins.str:
         r"""
         Add a document to the memory store.
         
@@ -1902,7 +2069,7 @@ class Memory:
         Returns:
             The id of the stored document.
         """
-    def add_many(self, entries: typing.Sequence[typing.Any]) -> typing.Any:
+    async def add_many(self, entries: typing.Sequence[typing.Any]) -> builtins.list[builtins.str]:
         r"""
         Add multiple documents to the memory store in a single batch.
         
@@ -1912,7 +2079,7 @@ class Memory:
         Returns:
             A list of ids for the stored documents.
         """
-    def search(self, query: builtins.str, limit: builtins.int = 5, metadata_filter: typing.Optional[typing.Any] = None) -> typing.Any:
+    async def search(self, query: builtins.str, limit: builtins.int = 5, metadata_filter: typing.Optional[typing.Any] = None) -> builtins.list[MemoryResult]:
         r"""
         Semantic search using the configured embedding model.
         
@@ -1929,7 +2096,7 @@ class Memory:
         Returns:
             A list of MemoryResult objects sorted by descending similarity.
         """
-    def search_local(self, query: builtins.str, limit: builtins.int = 5, metadata_filter: typing.Optional[typing.Any] = None) -> typing.Any:
+    async def search_local(self, query: builtins.str, limit: builtins.int = 5, metadata_filter: typing.Optional[typing.Any] = None) -> builtins.list[MemoryResult]:
         r"""
         Local SimHash-based search (no embedding model required).
         
@@ -1946,7 +2113,7 @@ class Memory:
         Returns:
             A list of MemoryResult objects sorted by descending similarity.
         """
-    def get(self, id: builtins.str) -> typing.Any:
+    async def get(self, id: builtins.str) -> typing.Optional[typing.Any]:
         r"""
         Retrieve a single entry by its id.
         
@@ -1956,7 +2123,7 @@ class Memory:
         Returns:
             A dict with the entry data, or None if not found.
         """
-    def delete(self, id: builtins.str) -> typing.Any:
+    async def delete(self, id: builtins.str) -> builtins.bool:
         r"""
         Delete a document by its id.
         
@@ -1966,7 +2133,7 @@ class Memory:
         Returns:
             True if the document existed and was deleted, False otherwise.
         """
-    def count(self) -> typing.Any:
+    async def count(self) -> builtins.int:
         r"""
         Return the number of documents in the store.
         
@@ -2024,6 +2191,47 @@ class MusicRequest:
     def model(self) -> typing.Optional[builtins.str]: ...
     def __new__(cls, *, prompt: builtins.str, duration_seconds: typing.Optional[builtins.float] = None, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> MusicRequest: ...
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class OpenAiProvider:
+    r"""
+    An OpenAI provider for text-to-speech and other compute capabilities.
+    
+    For LLM chat completions, use [`CompletionModel.openai`] instead.
+    This class wraps [`blazen_llm::providers::openai::OpenAiProvider`]
+    directly and exposes its non-completion capabilities.
+    
+    Example:
+        >>> from blazen import OpenAiProvider, ProviderOptions, SpeechRequest
+        >>> openai = OpenAiProvider(options=ProviderOptions(api_key="sk-..."))
+        >>> result = await openai.text_to_speech(SpeechRequest(text="Hello, world!"))
+    
+    To target an OpenAI-compatible service (zvoice/VoxCPM2, etc.), set
+    ``base_url`` on the options. With an empty ``api_key`` the ``Authorization``
+    header is omitted:
+        >>> local = OpenAiProvider(options=ProviderOptions(
+        ...     api_key="",
+        ...     base_url="http://beastpc.lan:8900/v1",
+        ... ))
+        >>> result = await local.text_to_speech(SpeechRequest(text="Hello!"))
+    """
+    def __new__(cls, *, options: typing.Optional[ProviderOptions] = None) -> OpenAiProvider:
+        r"""
+        Create a new OpenAI provider.
+        
+        Args:
+            options: Optional [`ProviderOptions`] with api_key, base_url, model.
+        """
+    async def text_to_speech(self, request: SpeechRequest) -> AudioResult:
+        r"""
+        Synthesize speech from text.
+        
+        Args:
+            request: A [`SpeechRequest`] with text and optional voice/model.
+        
+        Returns:
+            An [`AudioResult`] with audio clips, timing, cost, and metadata.
+        """
 
 @typing.final
 class PromptRegistry:
@@ -2220,6 +2428,28 @@ class ProviderOptions:
             api_key: Override the provider's API key.
             model: Override the default model identifier.
             base_url: Override the provider's base URL.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class RequestTiming:
+    r"""
+    Breakdown of request timing (queue, execution, total) in milliseconds.
+    """
+    @property
+    def queue_ms(self) -> typing.Optional[builtins.int]:
+        r"""
+        Time spent in the provider queue, in milliseconds.
+        """
+    @property
+    def execution_ms(self) -> typing.Optional[builtins.int]:
+        r"""
+        Time spent executing the request, in milliseconds.
+        """
+    @property
+    def total_ms(self) -> typing.Optional[builtins.int]:
+        r"""
+        Total wall-clock time for the request, in milliseconds.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -2458,14 +2688,14 @@ class ThreeDResult:
     Result of a 3D model generation operation.
     """
     @property
-    def models(self) -> typing.Any:
+    def models(self) -> builtins.list[Generated3DModel]:
         r"""
-        The generated 3D models (as a list of dicts).
+        The generated 3D models.
         """
     @property
-    def timing(self) -> typing.Any:
+    def timing(self) -> RequestTiming:
         r"""
-        Request timing breakdown (as a dict).
+        Request timing breakdown.
         """
     @property
     def cost(self) -> typing.Optional[builtins.float]:
@@ -2534,7 +2764,7 @@ class Transcription:
             options: Optional typed ``FalOptions`` for endpoint, enterprise
                 tier, and modality auto-routing.
         """
-    def transcribe(self, request: TranscriptionRequest) -> typing.Any:
+    async def transcribe(self, request: TranscriptionRequest) -> TranscriptionResult:
         r"""
         Transcribe an audio clip to text.
         
@@ -2613,9 +2843,9 @@ class TranscriptionResult:
         Detected or specified language code (e.g. "en", "fr").
         """
     @property
-    def timing(self) -> typing.Any:
+    def timing(self) -> RequestTiming:
         r"""
-        Request timing breakdown (as a dict).
+        Request timing breakdown.
         """
     @property
     def cost(self) -> typing.Optional[builtins.float]:
@@ -2623,7 +2853,7 @@ class TranscriptionResult:
         Cost in USD, if reported by the provider.
         """
     @property
-    def metadata(self) -> typing.Any:
+    def metadata(self) -> dict[str, typing.Any]:
         r"""
         Arbitrary provider-specific metadata (as a dict).
         """
@@ -2718,14 +2948,14 @@ class VideoResult:
     Result of a video generation operation.
     """
     @property
-    def videos(self) -> typing.Any:
+    def videos(self) -> builtins.list[GeneratedVideo]:
         r"""
-        The generated videos (as a list of dicts).
+        The generated videos.
         """
     @property
-    def timing(self) -> typing.Any:
+    def timing(self) -> RequestTiming:
         r"""
-        Request timing breakdown (as a dict).
+        Request timing breakdown.
         """
     @property
     def cost(self) -> typing.Optional[builtins.float]:
@@ -2737,6 +2967,76 @@ class VideoResult:
         r"""
         Arbitrary provider-specific metadata (as a dict).
         """
+
+@typing.final
+class VoiceCloneRequest:
+    r"""
+    Typed wrapper for a voice cloning request.
+    
+    No Blazen-shipped provider implements voice cloning natively; this
+    request type exists to be used by user-defined [`CustomProvider`]s
+    that wrap services like ElevenLabs.
+    """
+    @property
+    def name(self) -> builtins.str: ...
+    @property
+    def reference_urls(self) -> builtins.list[builtins.str]: ...
+    @property
+    def language(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    def __new__(cls, *, name: builtins.str, reference_urls: typing.Sequence[builtins.str], language: typing.Optional[builtins.str] = None, description: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> VoiceCloneRequest: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class VoiceHandle:
+    r"""
+    A persisted voice identifier returned by a voice-cloning provider.
+    
+    Unlike the other result types in this module, ``VoiceHandle`` is both
+    produced by provider methods (``clone_voice``, ``list_voices``) and
+    passed back into provider methods (``delete_voice``), so it is
+    constructible from Python via ``from_py_object``.
+    
+    Example:
+        >>> handle = await provider.clone_voice(VoiceCloneRequest(
+        ...     name="rachel-clone",
+        ...     reference_urls=["https://example.com/rachel.wav"],
+        ... ))
+        >>> await provider.delete_voice(handle)
+    """
+    @property
+    def id(self) -> builtins.str:
+        r"""
+        Provider-specific voice identifier (e.g. ElevenLabs ``voice_id``).
+        """
+    @property
+    def name(self) -> builtins.str:
+        r"""
+        Human-readable name for the voice.
+        """
+    @property
+    def provider(self) -> builtins.str:
+        r"""
+        Which provider owns this voice (e.g. ``"elevenlabs"``).
+        """
+    @property
+    def language(self) -> typing.Optional[builtins.str]:
+        r"""
+        Optional language code (e.g. ``"en"``) for language-specific voices.
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Optional description of the voice.
+        """
+    @property
+    def metadata(self) -> typing.Any:
+        r"""
+        Arbitrary provider-specific metadata (as a dict).
+        """
+    def __new__(cls, *, id: builtins.str, name: builtins.str, provider: builtins.str, language: typing.Optional[builtins.str] = None, description: typing.Optional[builtins.str] = None, metadata: typing.Optional[typing.Any] = None) -> VoiceHandle: ...
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class Workflow:
@@ -2770,7 +3070,7 @@ class Workflow:
                 `__blazen_serialize__` / `__blazen_deserialize__`
                 protocol on value classes.
         """
-    def run(self, **kwargs: typing.Any) -> typing.Any:
+    async def run(self, **kwargs: typing.Any) -> WorkflowHandler:
         r"""
         Execute the workflow with a JSON payload.
         
@@ -2788,7 +3088,7 @@ class Workflow:
             >>> result = await handler.result()
         """
     @staticmethod
-    def resume(snapshot_json: builtins.str, steps: typing.Sequence[_StepWrapper], timeout: typing.Optional[builtins.float] = None) -> typing.Any:
+    async def resume(snapshot_json: builtins.str, steps: typing.Sequence[_StepWrapper], timeout: typing.Optional[builtins.float] = None) -> WorkflowHandler:
         r"""
         Resume a workflow from a previously captured snapshot.
         
@@ -2810,7 +3110,7 @@ class Workflow:
             >>> result = await handler.result()
         """
     @staticmethod
-    def resume_with_session_refs(snapshot_json: builtins.str, steps: typing.Sequence[_StepWrapper], timeout: typing.Optional[builtins.float] = None) -> typing.Any:
+    async def resume_with_session_refs(snapshot_json: builtins.str, steps: typing.Sequence[_StepWrapper], timeout: typing.Optional[builtins.float] = None) -> WorkflowHandler:
         r"""
         Resume a workflow from a snapshot, reconstructing every
         `SessionPausePolicy.PickleOrSerialize` session-ref entry via
@@ -2871,7 +3171,7 @@ class WorkflowHandler:
         >>> result = await handler.result()
         >>> print(result.to_dict())
     """
-    def result(self) -> typing.Any:
+    async def result(self) -> Event:
         r"""
         Await the final workflow result.
         
@@ -2900,7 +3200,7 @@ class WorkflowHandler:
             >>> async for event in handler.stream_events():
             ...     print(event.event_type, event.to_dict())
         """
-    def pause(self) -> typing.Any:
+    async def pause(self) -> None:
         r"""
         Pause the running workflow.
         
@@ -2911,7 +3211,7 @@ class WorkflowHandler:
         
         Raises `RuntimeError` if the handler was already consumed.
         """
-    def resume_in_place(self) -> typing.Any:
+    async def resume_in_place(self) -> None:
         r"""
         Resume a paused workflow in place.
         
@@ -2920,7 +3220,7 @@ class WorkflowHandler:
         
         Raises `RuntimeError` if the handler was already consumed.
         """
-    def snapshot(self) -> typing.Any:
+    async def snapshot(self) -> builtins.str:
         r"""
         Capture a snapshot of the current workflow state.
         
@@ -2932,7 +3232,7 @@ class WorkflowHandler:
         Returns:
             A JSON string representing the workflow snapshot.
         """
-    def respond_to_input(self, request_id: builtins.str, response: typing.Any) -> typing.Any:
+    async def respond_to_input(self, request_id: builtins.str, response: typing.Any) -> None:
         r"""
         Respond to an input request from a workflow step.
         
@@ -2943,7 +3243,7 @@ class WorkflowHandler:
         
         Raises `RuntimeError` if the handler was already consumed.
         """
-    def abort(self) -> typing.Any:
+    async def abort(self) -> None:
         r"""
         Abort the running workflow.
         
@@ -3002,7 +3302,7 @@ class _StepWrapper:
         Event type identifiers this step accepts.
         """
     @accepts.setter
-    def accepts(self, value: builtins.list[builtins.str]) -> None:
+    def accepts(self, value: typing.Sequence[builtins.str]) -> None:
         r"""
         Event type identifiers this step accepts.
         """
@@ -3012,7 +3312,7 @@ class _StepWrapper:
         Event type identifiers this step may emit.
         """
     @emits.setter
-    def emits(self, value: builtins.list[builtins.str]) -> None:
+    def emits(self, value: typing.Sequence[builtins.str]) -> None:
         r"""
         Event type identifiers this step may emit.
         """

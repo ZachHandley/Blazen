@@ -250,6 +250,49 @@ impl crate::traits::CompletionModel for MistralRsProvider {
 }
 
 // ---------------------------------------------------------------------------
+// LocalModel implementation
+// ---------------------------------------------------------------------------
+
+/// `LocalModel` bridge: gives callers explicit `load`/`unload` control over
+/// the underlying mistral.rs engine while preserving the existing lazy
+/// auto-load-on-first-inference behavior provided by
+/// [`MistralRsProvider::infer`] and [`MistralRsProvider::infer_stream`].
+///
+/// The impl forwards to the inherent methods on [`MistralRsProvider`] and
+/// wraps [`blazen_llm_mistralrs::MistralRsError`] into
+/// [`BlazenError::Provider`] via [`BlazenError::provider`]. The upstream
+/// crate does not define a `From<MistralRsError> for BlazenError`
+/// conversion (and cannot, because `blazen-llm-mistralrs` does not depend
+/// on `blazen-llm` -- the dependency edge runs the other way), so we do
+/// the conversion inline here.
+///
+/// Without the upstream `engine` feature, the inherent `load`,
+/// `unload`, and `is_loaded` methods on [`MistralRsProvider`] are stubs
+/// that return [`MistralRsError::EngineNotAvailable`] (for `load`),
+/// succeed as no-ops (for `unload`), or return `false` (for
+/// `is_loaded`). This mirrors the behavior of `infer` / `infer_stream`
+/// and lets downstream crates depend on `LocalModel` without
+/// unconditionally pulling in the heavy mistral.rs runtime.
+#[async_trait]
+impl crate::traits::LocalModel for MistralRsProvider {
+    async fn load(&self) -> Result<(), BlazenError> {
+        MistralRsProvider::load(self)
+            .await
+            .map_err(|e| BlazenError::provider("mistralrs", e.to_string()))
+    }
+
+    async fn unload(&self) -> Result<(), BlazenError> {
+        MistralRsProvider::unload(self)
+            .await
+            .map_err(|e| BlazenError::provider("mistralrs", e.to_string()))
+    }
+
+    async fn is_loaded(&self) -> bool {
+        MistralRsProvider::is_loaded(self).await
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 

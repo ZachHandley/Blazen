@@ -38,9 +38,11 @@ pub(crate) mod responses_format;
 // Native providers
 pub mod anthropic;
 pub mod azure;
+pub mod custom;
 pub mod fal;
 pub mod gemini;
 pub mod openai;
+mod openai_audio;
 pub mod openai_compat;
 
 // OpenAI-compatible dedicated providers

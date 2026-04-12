@@ -131,14 +131,18 @@ pub struct LlamaCppProvider {
     /// Full options preserved for deferred engine initialisation.
     #[cfg_attr(not(feature = "engine"), allow(dead_code))]
     options: LlamaCppOptions,
-    /// Lazily loaded llama.cpp engine handle.
+    /// Lazily loaded llama.cpp engine handle, wrapped in
+    /// `Arc<RwLock<Option<Arc<...>>>>` so we can both (a) auto-load on first
+    /// use and (b) explicitly unload later to free VRAM / memory. The inner
+    /// `Arc<Engine>` is cloned out of the lock for each inference call so
+    /// that the spawned blocking task can own the handle without holding
+    /// the read guard across a `spawn_blocking` boundary.
     ///
-    /// Wrapped in `Arc<OnceCell>` so that:
-    /// - The model is loaded once on first use (not at construction time).
-    /// - Streaming can spawn a `'static` task that borrows the engine
-    ///   independently of `&self`.
+    /// [`Engine`] is **not** `Clone` (it wraps the `llama-cpp-2` backend
+    /// and model handles, which are not cloneable), so wrapping it in an
+    /// inner `Arc` gives cheap clones out of the lock.
     #[cfg(feature = "engine")]
-    engine: std::sync::Arc<tokio::sync::OnceCell<Engine>>,
+    engine: std::sync::Arc<tokio::sync::RwLock<Option<std::sync::Arc<Engine>>>>,
 }
 
 /// Inner engine state. Only compiled with the `engine` feature.
@@ -169,7 +173,7 @@ impl LlamaCppProvider {
         Ok(Self {
             model_path,
             #[cfg(feature = "engine")]
-            engine: std::sync::Arc::new(tokio::sync::OnceCell::new()),
+            engine: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
             options: opts,
         })
     }
@@ -256,12 +260,16 @@ impl LlamaCppProvider {
     /// Returns [`LlamaCppError::Inference`] if the stream cannot be started,
     /// or [`LlamaCppError::EngineNotAvailable`] if the engine is not compiled in.
     #[cfg(feature = "engine")]
+    // `async` is required to match the non-engine stub and keep the public
+    // signature stable across feature configurations. The body hands off
+    // work to a background task and does not need to await anything here;
+    // engine loading happens inside the spawned task so load errors surface
+    // as the first item on the returned stream.
+    #[allow(clippy::unused_async)]
     pub async fn infer_stream(
         &self,
         messages: Vec<ChatMessageInput>,
     ) -> Result<InferenceChunkStream, LlamaCppError> {
-        // Ensure the engine is loaded before spawning the blocking stream task.
-        let _ = self.get_engine().await?;
         Ok(self.infer_stream_engine(messages))
     }
 
@@ -278,6 +286,98 @@ impl LlamaCppProvider {
     ) -> Result<InferenceChunkStream, LlamaCppError> {
         let _ = messages;
         Err(LlamaCppError::EngineNotAvailable)
+    }
+
+    // -----------------------------------------------------------------------
+    // Explicit load / unload (always in the public API)
+    //
+    // These mirror the `infer` / `infer_stream` cfg dual-stub pattern so
+    // that the public surface is identical with and without the `engine`
+    // feature, and so the `blazen_llm::LocalModel` trait bridge in
+    // `blazen-llm/src/backends/llamacpp.rs` can call them unconditionally.
+    // -----------------------------------------------------------------------
+
+    /// Load the model explicitly. Idempotent -- if already loaded, this
+    /// is a no-op that returns `Ok(())`.
+    ///
+    /// Inference methods ([`Self::infer`], [`Self::infer_stream`]) will
+    /// still auto-load on first call if [`Self::load`] was never invoked,
+    /// so explicit loading is only needed when the caller wants to
+    /// pay the initialization cost up-front (e.g. to avoid latency
+    /// spikes during a time-sensitive workflow step).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LlamaCppError::ModelLoad`] if the underlying model fails
+    /// to load (e.g. missing GGUF file, corrupt weights, or an
+    /// incompatible accelerator backend).
+    #[cfg(feature = "engine")]
+    pub async fn load(&self) -> Result<(), LlamaCppError> {
+        // Reuse the existing loader logic.
+        let _ = self.get_or_load_engine().await?;
+        Ok(())
+    }
+
+    /// Stub: engine not available.
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`LlamaCppError::EngineNotAvailable`].
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn load(&self) -> Result<(), LlamaCppError> {
+        Err(LlamaCppError::EngineNotAvailable)
+    }
+
+    /// Drop the loaded model and free its VRAM / memory. Idempotent --
+    /// if the model is already unloaded, this is a no-op that returns
+    /// `Ok(())`.
+    ///
+    /// Note: if a blocking inference task is still holding an
+    /// `Arc<Engine>` clone, the underlying `Engine` will only be dropped
+    /// (and its VRAM freed) once that task finishes. `unload` always
+    /// releases the provider's own reference immediately.
+    ///
+    /// # Errors
+    ///
+    /// This method currently never returns an error; the `Result` return
+    /// type is preserved to match [`crate::LlamaCppError`] conventions
+    /// and the [`blazen_llm::traits::LocalModel`] trait contract.
+    #[cfg(feature = "engine")]
+    pub async fn unload(&self) -> Result<(), LlamaCppError> {
+        let mut guard = self.engine.write().await;
+        // Drop the Arc<Engine>. When no other clones remain (e.g. from an
+        // in-flight blocking inference task), VRAM is freed by the Drop
+        // impl on the underlying llama.cpp model + backend.
+        *guard = None;
+        Ok(())
+    }
+
+    /// Stub: engine not available. Always succeeds as a no-op, matching
+    /// the idempotent-unload contract even when there is no engine to
+    /// unload in the first place.
+    ///
+    /// # Errors
+    ///
+    /// This method never returns an error.
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn unload(&self) -> Result<(), LlamaCppError> {
+        Ok(())
+    }
+
+    /// Whether the model is currently loaded in memory / VRAM.
+    #[cfg(feature = "engine")]
+    pub async fn is_loaded(&self) -> bool {
+        self.engine.read().await.is_some()
+    }
+
+    /// Stub: without the engine feature there is never a loaded model,
+    /// so this always returns `false`.
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn is_loaded(&self) -> bool {
+        false
     }
 }
 
@@ -459,12 +559,34 @@ fn format_prompt_chatml(messages: &[ChatMessageInput]) -> String {
 
 #[cfg(feature = "engine")]
 impl LlamaCppProvider {
-    /// Lazily initialise the engine on first use.
-    async fn get_engine(&self) -> Result<&Engine, LlamaCppError> {
-        let opts = self.options.clone();
-        self.engine
-            .get_or_try_init(|| async { build_engine(&opts).await })
-            .await
+    /// Return the loaded engine, loading it on first use.
+    ///
+    /// Uses a double-checked `RwLock` pattern: the fast path takes a read
+    /// lock and clones out the existing `Arc<Engine>`; if the engine is
+    /// not yet loaded, it drops the read lock, acquires a write lock,
+    /// re-checks (another task may have loaded it concurrently), and
+    /// finally builds the engine.
+    ///
+    /// Returns an owned `Arc<Engine>` so the caller can hold it across
+    /// await points and pass it to spawned blocking tasks without holding
+    /// the read lock.
+    async fn get_or_load_engine(&self) -> Result<std::sync::Arc<Engine>, LlamaCppError> {
+        // Fast path: acquire read lock, check if already loaded, clone Arc.
+        {
+            let guard = self.engine.read().await;
+            if let Some(engine) = guard.as_ref() {
+                return Ok(std::sync::Arc::clone(engine));
+            }
+        }
+        // Slow path: acquire write lock, double-check, build, clone Arc.
+        let mut guard = self.engine.write().await;
+        if guard.is_none() {
+            let engine = build_engine(&self.options).await?;
+            *guard = Some(std::sync::Arc::new(engine));
+        }
+        // SAFETY: we just set Some above (or found Some from a concurrent loader).
+        let engine = guard.as_ref().expect("engine loaded above");
+        Ok(std::sync::Arc::clone(engine))
     }
 
     #[allow(
@@ -477,9 +599,10 @@ impl LlamaCppProvider {
         &self,
         messages: Vec<ChatMessageInput>,
     ) -> Result<InferenceResult, LlamaCppError> {
-        // Ensure the engine is loaded, then clone the Arc for the blocking task.
-        let _ = self.get_engine().await?;
-        let engine = std::sync::Arc::clone(&self.engine);
+        // Load the engine (or grab the already-loaded handle) and move an
+        // owned `Arc<Engine>` into the blocking task so it stays alive for
+        // the duration of inference, independent of any concurrent `unload`.
+        let engine = self.get_or_load_engine().await?;
 
         tokio::task::spawn_blocking(move || {
             use llama_cpp_2::context::params::LlamaContextParams;
@@ -488,8 +611,7 @@ impl LlamaCppProvider {
             use llama_cpp_2::sampling::LlamaSampler;
             use std::num::NonZeroU32;
 
-            // Engine is guaranteed initialized by the `get_engine()` call above.
-            let eng = engine.get().expect("engine should be initialized");
+            let eng: &Engine = &engine;
 
             let prompt = format_prompt(&eng.model, &messages)
                 .or_else(|_| Ok::<String, LlamaCppError>(format_prompt_chatml(&messages)))?;
@@ -596,8 +718,18 @@ impl LlamaCppProvider {
         .map_err(|e| LlamaCppError::Inference(format!("spawn_blocking panicked: {e}")))?
     }
 
-    /// Returns a `'static` stream by spawning a blocking task that generates
-    /// tokens one at a time and sends them through a channel.
+    /// Returns a `'static` stream by spawning an async task that owns a
+    /// clone of the engine `Arc<RwLock<...>>` and the options, initialises
+    /// the engine lazily, and then delegates the actual token-generation
+    /// work to a `spawn_blocking` task which forwards mapped chunks
+    /// through a channel.
+    ///
+    /// Engine errors (including failure to load or start the stream) are
+    /// delivered as error items on the returned stream. The blocking task
+    /// holds an owned `Arc<Engine>` for the entire duration of streaming,
+    /// so an explicit `unload` from another task cannot yank the engine
+    /// out from under an in-flight stream -- the `Engine` stays alive
+    /// until this task drops its `Arc`.
     #[allow(
         clippy::cast_possible_wrap,
         clippy::cast_possible_truncation,
@@ -609,131 +741,171 @@ impl LlamaCppProvider {
         use tokio_stream::wrappers::ReceiverStream;
 
         let (tx, rx) = tokio::sync::mpsc::channel(32);
-        let engine = std::sync::Arc::clone(&self.engine);
 
-        tokio::task::spawn_blocking(move || {
-            use llama_cpp_2::context::params::LlamaContextParams;
-            use llama_cpp_2::llama_batch::LlamaBatch;
-            use llama_cpp_2::model::AddBos;
-            use llama_cpp_2::sampling::LlamaSampler;
-            use std::num::NonZeroU32;
+        // Clone the Arc + options so the spawned task can outlive `&self`.
+        let engine_lock = std::sync::Arc::clone(&self.engine);
+        let options = self.options.clone();
 
-            let send_err = |e: LlamaCppError| {
-                let _ = tx.blocking_send(Err(e));
-            };
-
-            // Engine is guaranteed initialized by the caller.
-            let eng = engine.get().expect("engine should be initialized");
-
-            let prompt = match format_prompt(&eng.model, &messages) {
-                Ok(p) => p,
-                Err(_) => format_prompt_chatml(&messages),
-            };
-
-            let tokens = match eng.model.str_to_token(&prompt, AddBos::Always) {
-                Ok(t) => t,
-                Err(e) => {
-                    send_err(LlamaCppError::Inference(format!(
-                        "tokenization failed: {e}"
-                    )));
-                    return;
-                }
-            };
-
-            let prompt_token_count = tokens.len() as u32;
-
-            let ctx_params = LlamaContextParams::default()
-                .with_n_ctx(NonZeroU32::new(eng.context_length))
-                .with_n_batch(eng.context_length);
-
-            let mut ctx = match eng.model.new_context(&eng.backend, ctx_params) {
-                Ok(c) => c,
-                Err(e) => {
-                    send_err(LlamaCppError::Inference(format!(
-                        "failed to create context: {e}"
-                    )));
-                    return;
-                }
-            };
-
-            let mut batch = LlamaBatch::new(eng.context_length as usize, 1);
-            let last_index = tokens.len() as i32 - 1;
-            for (i, token) in (0_i32..).zip(tokens.into_iter()) {
-                let is_last = i == last_index;
-                if let Err(e) = batch.add(token, i, &[0], is_last) {
-                    send_err(LlamaCppError::Inference(format!(
-                        "failed to add token to batch: {e}"
-                    )));
-                    return;
-                }
-            }
-
-            if let Err(e) = ctx.decode(&mut batch) {
-                send_err(LlamaCppError::Inference(format!(
-                    "prompt decode failed: {e}"
-                )));
-                return;
-            }
-
-            let max_gen_tokens = eng.context_length.saturating_sub(prompt_token_count);
-            let mut n_cur = batch.n_tokens();
-            let mut n_generated: u32 = 0;
-            let mut decoder = encoding_rs::UTF_8.new_decoder();
-            let mut sampler = LlamaSampler::chain_simple([
-                LlamaSampler::temp(0.8),
-                LlamaSampler::top_p(0.95, 1),
-                LlamaSampler::min_p(0.05, 1),
-                LlamaSampler::dist(1234),
-            ]);
-
-            while n_generated < max_gen_tokens {
-                let token = sampler.sample(&ctx, batch.n_tokens() - 1);
-                sampler.accept(token);
-
-                if eng.model.is_eog_token(token) {
-                    // Send final chunk with finish_reason.
-                    let _ = tx.blocking_send(Ok(InferenceChunk {
-                        delta: None,
-                        finish_reason: Some("stop".to_string()),
-                    }));
-                    return;
-                }
-
-                if let Ok(piece) = eng.model.token_to_piece(token, &mut decoder, true, None)
-                    && tx
-                        .blocking_send(Ok(InferenceChunk {
-                            delta: Some(piece),
-                            finish_reason: None,
-                        }))
-                        .is_err()
+        tokio::spawn(async move {
+            // Lazily initialise the engine inside the spawned task. We
+            // inline the double-checked `RwLock` load pattern here instead
+            // of calling `get_or_load_engine` so that we can preserve the
+            // existing error-delivery contract (load errors appear as the
+            // first stream item, not as a synchronous return error).
+            let engine: std::sync::Arc<Engine> = {
+                // Fast path: acquire read lock, check if already loaded.
                 {
-                    return; // Receiver dropped.
+                    let guard = engine_lock.read().await;
+                    if let Some(engine) = guard.as_ref() {
+                        std::sync::Arc::clone(engine)
+                    } else {
+                        drop(guard);
+                        // Slow path: acquire write lock, double-check, build.
+                        let mut guard = engine_lock.write().await;
+                        if guard.is_none() {
+                            match build_engine(&options).await {
+                                Ok(eng) => {
+                                    *guard = Some(std::sync::Arc::new(eng));
+                                }
+                                Err(e) => {
+                                    let _ = tx.send(Err(e)).await;
+                                    return;
+                                }
+                            }
+                        }
+                        // SAFETY: we just set Some above (or found Some from a concurrent loader).
+                        std::sync::Arc::clone(guard.as_ref().expect("engine loaded above"))
+                    }
                 }
+            };
 
-                n_generated += 1;
+            // Hand the actual (blocking) token-generation loop off to a
+            // dedicated blocking thread. The `Arc<Engine>` we hold keeps
+            // the model alive for the duration of the task.
+            let _ = tokio::task::spawn_blocking(move || {
+                use llama_cpp_2::context::params::LlamaContextParams;
+                use llama_cpp_2::llama_batch::LlamaBatch;
+                use llama_cpp_2::model::AddBos;
+                use llama_cpp_2::sampling::LlamaSampler;
+                use std::num::NonZeroU32;
 
-                batch.clear();
-                if let Err(e) = batch.add(token, n_cur, &[0], true) {
-                    send_err(LlamaCppError::Inference(format!(
-                        "failed to add generated token: {e}"
-                    )));
-                    return;
+                let send_err = |e: LlamaCppError| {
+                    let _ = tx.blocking_send(Err(e));
+                };
+
+                let eng: &Engine = &engine;
+
+                let prompt = match format_prompt(&eng.model, &messages) {
+                    Ok(p) => p,
+                    Err(_) => format_prompt_chatml(&messages),
+                };
+
+                let tokens = match eng.model.str_to_token(&prompt, AddBos::Always) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        send_err(LlamaCppError::Inference(format!(
+                            "tokenization failed: {e}"
+                        )));
+                        return;
+                    }
+                };
+
+                let prompt_token_count = tokens.len() as u32;
+
+                let ctx_params = LlamaContextParams::default()
+                    .with_n_ctx(NonZeroU32::new(eng.context_length))
+                    .with_n_batch(eng.context_length);
+
+                let mut ctx = match eng.model.new_context(&eng.backend, ctx_params) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        send_err(LlamaCppError::Inference(format!(
+                            "failed to create context: {e}"
+                        )));
+                        return;
+                    }
+                };
+
+                let mut batch = LlamaBatch::new(eng.context_length as usize, 1);
+                let last_index = tokens.len() as i32 - 1;
+                for (i, token) in (0_i32..).zip(tokens.into_iter()) {
+                    let is_last = i == last_index;
+                    if let Err(e) = batch.add(token, i, &[0], is_last) {
+                        send_err(LlamaCppError::Inference(format!(
+                            "failed to add token to batch: {e}"
+                        )));
+                        return;
+                    }
                 }
-                n_cur += 1;
 
                 if let Err(e) = ctx.decode(&mut batch) {
                     send_err(LlamaCppError::Inference(format!(
-                        "decode failed during generation: {e}"
+                        "prompt decode failed: {e}"
                     )));
                     return;
                 }
-            }
 
-            // Max tokens reached.
-            let _ = tx.blocking_send(Ok(InferenceChunk {
-                delta: None,
-                finish_reason: Some("length".to_string()),
-            }));
+                let max_gen_tokens = eng.context_length.saturating_sub(prompt_token_count);
+                let mut n_cur = batch.n_tokens();
+                let mut n_generated: u32 = 0;
+                let mut decoder = encoding_rs::UTF_8.new_decoder();
+                let mut sampler = LlamaSampler::chain_simple([
+                    LlamaSampler::temp(0.8),
+                    LlamaSampler::top_p(0.95, 1),
+                    LlamaSampler::min_p(0.05, 1),
+                    LlamaSampler::dist(1234),
+                ]);
+
+                while n_generated < max_gen_tokens {
+                    let token = sampler.sample(&ctx, batch.n_tokens() - 1);
+                    sampler.accept(token);
+
+                    if eng.model.is_eog_token(token) {
+                        // Send final chunk with finish_reason.
+                        let _ = tx.blocking_send(Ok(InferenceChunk {
+                            delta: None,
+                            finish_reason: Some("stop".to_string()),
+                        }));
+                        return;
+                    }
+
+                    if let Ok(piece) = eng.model.token_to_piece(token, &mut decoder, true, None)
+                        && tx
+                            .blocking_send(Ok(InferenceChunk {
+                                delta: Some(piece),
+                                finish_reason: None,
+                            }))
+                            .is_err()
+                    {
+                        return; // Receiver dropped.
+                    }
+
+                    n_generated += 1;
+
+                    batch.clear();
+                    if let Err(e) = batch.add(token, n_cur, &[0], true) {
+                        send_err(LlamaCppError::Inference(format!(
+                            "failed to add generated token: {e}"
+                        )));
+                        return;
+                    }
+                    n_cur += 1;
+
+                    if let Err(e) = ctx.decode(&mut batch) {
+                        send_err(LlamaCppError::Inference(format!(
+                            "decode failed during generation: {e}"
+                        )));
+                        return;
+                    }
+                }
+
+                // Max tokens reached.
+                let _ = tx.blocking_send(Ok(InferenceChunk {
+                    delta: None,
+                    finish_reason: Some("length".to_string()),
+                }));
+            })
+            .await;
         });
 
         Box::pin(ReceiverStream::new(rx))

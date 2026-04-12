@@ -17,7 +17,7 @@ pyo3-serde = ["dep:pythonize", "dep:pyo3"]
 # Local inference backends (populated per-phase as crates land)
 fastembed = ["dep:blazen-embed-fastembed"]      # Phase 2: local embeddings via fastembed-rs
 candle-embed = ["dep:blazen-embed-candle"]   # Phase 6: local embeddings via candle
-mistralrs = ["dep:blazen-llm-mistralrs", "dep:base64"]      # Phase 3: local LLM via mistral.rs
+mistralrs = ["dep:blazen-llm-mistralrs"]      # Phase 3: local LLM via mistral.rs
 llamacpp = ["dep:blazen-llm-llamacpp"]       # Phase 8: local LLM via llama.cpp
 candle-llm = ["dep:blazen-llm-candle"]     # Phase 7: local LLM via candle
 diffusion = ["dep:blazen-image-diffusion"]      # Phase 5: local image gen via diffusion-rs
@@ -43,7 +43,7 @@ tsify-next = { version = "0.5", features = ["js", "json"], optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 pythonize = { version = "0.28", optional = true }
 pyo3 = { version = "0.28", optional = true }
-base64 = { workspace = true, optional = true }
+base64 = { workspace = true }
 blazen-embed-fastembed = { workspace = true, optional = true }
 blazen-llm-mistralrs = { workspace = true, optional = true }
 blazen-audio-whispercpp = { workspace = true, optional = true }

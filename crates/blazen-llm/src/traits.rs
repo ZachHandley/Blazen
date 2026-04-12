@@ -282,3 +282,73 @@ pub trait ProviderInfo {
     /// The provider's capabilities.
     fn capabilities(&self) -> ProviderCapabilities;
 }
+
+// ---------------------------------------------------------------------------
+// LocalModel -- explicit load/unload for in-process model providers
+// ---------------------------------------------------------------------------
+
+/// A model that is loaded into memory / `VRAM` on the current process, as
+/// opposed to being reached over an HTTP API.
+///
+/// Providers that hold actual model weights (mistral.rs, llama.cpp, candle,
+/// whisper.cpp, etc.) implement this trait so callers can:
+///
+/// 1. Explicitly trigger loading (`load`) -- avoiding the "lazy load on
+///    first call" latency spike during a workflow step that needs
+///    predictable timing.
+/// 2. Explicitly free `GPU` memory (`unload`) -- letting a single Blazen
+///    process swap models in and out, or release `VRAM` when idle.
+/// 3. Query load state (`is_loaded`) and an approximate `VRAM` footprint
+///    (`vram_bytes`) for monitoring or budget-aware scheduling.
+///
+/// Remote providers (`OpenAI`, Anthropic, Gemini, fal.ai, etc.) do NOT
+/// implement this trait -- there is no local model to load or unload.
+///
+/// # Implementor guidance
+///
+/// - `load` and `unload` must both be **idempotent**. Calling `load` on
+///   an already-loaded model is a no-op success; calling `unload` on an
+///   already-unloaded model is also a no-op success.
+/// - Inference methods (on [`CompletionModel`], [`EmbeddingModel`], etc.)
+///   should auto-load on first call to preserve today's lazy-init
+///   behavior -- this trait only adds explicit control on top.
+/// - After `unload` returns, the provider may be re-loaded; the struct
+///   itself must not be invalidated.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use blazen_llm::traits::LocalModel;
+///
+/// async fn swap_models(
+///     model_a: &impl LocalModel,
+///     model_b: &impl LocalModel,
+/// ) -> Result<(), blazen_llm::BlazenError> {
+///     model_a.unload().await?;  // free VRAM
+///     model_b.load().await?;    // load the other one
+///     Ok(())
+/// }
+/// ```
+#[async_trait]
+pub trait LocalModel: Send + Sync {
+    /// Load the model into memory / `VRAM`. Idempotent -- if the model is
+    /// already loaded, this is a no-op that returns `Ok(())`.
+    async fn load(&self) -> Result<(), crate::error::BlazenError>;
+
+    /// Drop the loaded model and free its memory / `VRAM`. Idempotent --
+    /// if the model is already unloaded, this is a no-op that returns
+    /// `Ok(())`.
+    async fn unload(&self) -> Result<(), crate::error::BlazenError>;
+
+    /// Whether the model is currently loaded in memory / `VRAM`.
+    async fn is_loaded(&self) -> bool;
+
+    /// Approximate memory footprint in bytes, if the implementation can
+    /// report it. Returns `None` for implementations that have no way to
+    /// measure (e.g. because the underlying runtime does not expose it).
+    ///
+    /// The default implementation returns `None`.
+    async fn vram_bytes(&self) -> Option<u64> {
+        None
+    }
+}

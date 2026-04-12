@@ -116,6 +116,10 @@ pub(crate) type StreamChunkCallbackTsfn =
 #[napi(js_name = "CompletionModel")]
 pub struct JsCompletionModel {
     pub(crate) inner: Arc<dyn CompletionModel>,
+    /// Present iff the underlying provider is a local in-process model
+    /// (mistral.rs, llama.cpp, candle) that implements
+    /// [`blazen_llm::LocalModel`]. `None` for remote HTTP providers.
+    pub(crate) local_model: Option<Arc<dyn blazen_llm::LocalModel>>,
 }
 
 #[napi]
@@ -141,6 +145,7 @@ impl JsCompletionModel {
                 )
                 .map_err(blazen_error_to_napi)?,
             ),
+            local_model: None,
         })
     }
 
@@ -154,6 +159,7 @@ impl JsCompletionModel {
                 )
                 .map_err(blazen_error_to_napi)?,
             ),
+            local_model: None,
         })
     }
 
@@ -167,6 +173,7 @@ impl JsCompletionModel {
                 )
                 .map_err(blazen_error_to_napi)?,
             ),
+            local_model: None,
         })
     }
 
@@ -178,6 +185,7 @@ impl JsCompletionModel {
                 blazen_llm::providers::azure::AzureOpenAiProvider::from_options(options.into())
                     .map_err(blazen_error_to_napi)?,
             ),
+            local_model: None,
         })
     }
 
@@ -195,6 +203,7 @@ impl JsCompletionModel {
                 blazen_llm::providers::fal::FalProvider::from_options(opts)
                     .map_err(blazen_error_to_napi)?,
             ),
+            local_model: None,
         })
     }
 
@@ -208,6 +217,7 @@ impl JsCompletionModel {
                 )
                 .map_err(blazen_error_to_napi)?,
             ),
+            local_model: None,
         })
     }
 
@@ -221,6 +231,7 @@ impl JsCompletionModel {
                 ))
                 .map_err(blazen_error_to_napi)?,
             ),
+            local_model: None,
         })
     }
 
@@ -234,6 +245,7 @@ impl JsCompletionModel {
                 )
                 .map_err(blazen_error_to_napi)?,
             ),
+            local_model: None,
         })
     }
 
@@ -247,6 +259,7 @@ impl JsCompletionModel {
                 )
                 .map_err(blazen_error_to_napi)?,
             ),
+            local_model: None,
         })
     }
 
@@ -260,6 +273,7 @@ impl JsCompletionModel {
                 )
                 .map_err(blazen_error_to_napi)?,
             ),
+            local_model: None,
         })
     }
 
@@ -273,6 +287,7 @@ impl JsCompletionModel {
                 )
                 .map_err(blazen_error_to_napi)?,
             ),
+            local_model: None,
         })
     }
 
@@ -286,6 +301,7 @@ impl JsCompletionModel {
                 )
                 .map_err(blazen_error_to_napi)?,
             ),
+            local_model: None,
         })
     }
 
@@ -299,6 +315,7 @@ impl JsCompletionModel {
                 ))
                 .map_err(blazen_error_to_napi)?,
             ),
+            local_model: None,
         })
     }
 
@@ -312,6 +329,7 @@ impl JsCompletionModel {
                 )
                 .map_err(blazen_error_to_napi)?,
             ),
+            local_model: None,
         })
     }
 
@@ -323,6 +341,7 @@ impl JsCompletionModel {
                 blazen_llm::providers::bedrock::BedrockProvider::from_options(options.into())
                     .map_err(blazen_error_to_napi)?,
             ),
+            local_model: None,
         })
     }
 
@@ -359,6 +378,9 @@ impl JsCompletionModel {
                 Arc::clone(&self.inner),
                 retry_config,
             )),
+            // Retry wraps a single provider; forwarding load/unload to the
+            // underlying local model is still meaningful.
+            local_model: self.local_model.clone(),
         }
     }
 
@@ -380,6 +402,9 @@ impl JsCompletionModel {
                 Arc::clone(&self.inner),
                 cache_config,
             )),
+            // Cache wraps a single provider; forwarding load/unload to the
+            // underlying local model is still meaningful.
+            local_model: self.local_model.clone(),
         }
     }
 
@@ -405,6 +430,11 @@ impl JsCompletionModel {
             models.iter().map(|m| Arc::clone(&m.inner)).collect();
         Ok(JsCompletionModel {
             inner: Arc::new(FallbackModel::new(providers)),
+            // Fallback combines heterogeneous providers (potentially a mix of
+            // local and remote). There is no single `LocalModel` to forward
+            // `load`/`unload` to, so callers must manage lifecycle on the
+            // component models before combining them via `withFallback`.
+            local_model: None,
         })
     }
 
@@ -596,6 +626,75 @@ impl JsCompletionModel {
         }
         Ok(())
     }
+
+    // -----------------------------------------------------------------
+    // Local-model control (only meaningful for in-process providers)
+    // -----------------------------------------------------------------
+
+    /// Explicitly load the model weights into memory / `VRAM`.
+    ///
+    /// For remote providers (`OpenAI`, Anthropic, fal, etc.) this throws --
+    /// there is no local model to load. For local providers (mistral.rs,
+    /// llama.cpp, candle) this triggers the download + load synchronously,
+    /// so the next inference call does not pay the startup cost.
+    ///
+    /// Idempotent: calling `load` on an already-loaded model is a no-op
+    /// that resolves immediately.
+    #[napi]
+    pub async fn load(&self) -> Result<()> {
+        match &self.local_model {
+            Some(lm) => lm.load().await.map_err(blazen_error_to_napi),
+            None => Err(napi::Error::from_reason(
+                "load() is only supported for local in-process providers (mistral.rs, llama.cpp, candle)",
+            )),
+        }
+    }
+
+    /// Drop the loaded model and free its memory / `VRAM`.
+    ///
+    /// For remote providers this throws. For local providers this frees
+    /// `GPU` memory so the process can load a different model. Idempotent.
+    #[napi]
+    pub async fn unload(&self) -> Result<()> {
+        match &self.local_model {
+            Some(lm) => lm.unload().await.map_err(blazen_error_to_napi),
+            None => Err(napi::Error::from_reason(
+                "unload() is only supported for local in-process providers",
+            )),
+        }
+    }
+
+    /// Whether the model is currently loaded in memory / `VRAM`.
+    ///
+    /// Always returns `false` for remote providers (they have no local
+    /// model to load). Returns the real state for local providers.
+    #[napi(js_name = "isLoaded")]
+    pub async fn is_loaded(&self) -> Result<bool> {
+        Ok(match &self.local_model {
+            Some(lm) => lm.is_loaded().await,
+            None => false,
+        })
+    }
+
+    /// Approximate `VRAM` footprint in bytes, if the implementation can
+    /// report it. Returns `null` for remote providers or for local
+    /// providers that do not expose memory usage.
+    ///
+    /// Note: napi-rs exposes this as a JS `number`. The underlying
+    /// [`blazen_llm::LocalModel::vram_bytes`] returns `u64`; we clamp to
+    /// `i64::MAX` (~9.2 exabytes) when surfacing through `JSON`-compatible
+    /// types, which is effectively lossless for any realistic `VRAM` size.
+    #[napi(js_name = "vramBytes")]
+    #[allow(clippy::cast_possible_wrap)]
+    pub async fn vram_bytes(&self) -> Result<Option<i64>> {
+        Ok(match &self.local_model {
+            Some(lm) => lm
+                .vram_bytes()
+                .await
+                .map(|b| i64::try_from(b).unwrap_or(i64::MAX)),
+            None => None,
+        })
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -618,11 +717,17 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn mistralrs(options: JsMistralRsOptions) -> Result<Self> {
         let opts: blazen_llm::MistralRsOptions = options.into();
+        // `MistralRsProvider` implements both `CompletionModel` and
+        // `LocalModel`, so we construct a single concrete `Arc` and clone
+        // it into both trait-object storages. Both clones share the same
+        // allocation.
+        let concrete = Arc::new(
+            blazen_llm::MistralRsProvider::from_options(opts)
+                .map_err(|e| napi::Error::from_reason(e.to_string()))?,
+        );
         Ok(Self {
-            inner: Arc::new(
-                blazen_llm::MistralRsProvider::from_options(opts)
-                    .map_err(|e| napi::Error::from_reason(e.to_string()))?,
-            ),
+            inner: concrete.clone(),
+            local_model: Some(concrete),
         })
     }
 }

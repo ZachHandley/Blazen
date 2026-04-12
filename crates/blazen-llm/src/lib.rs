@@ -96,6 +96,8 @@ pub mod tokens;
 pub mod traits;
 pub mod types;
 
+pub use providers::custom::{CustomProvider, HostDispatch};
+
 // Re-export primary types at crate root for ergonomic imports.
 pub use agent::{AgentConfig, AgentEvent, AgentResult, run_agent, run_agent_with_callback};
 pub use artifacts::extract_inline_artifacts;
@@ -152,8 +154,8 @@ pub use retry::{RetryCompletionModel, RetryConfig};
 pub use tokens::TiktokenCounter;
 pub use tokens::{EstimateCounter, TokenCounter};
 pub use traits::{
-    CompletionModel, EmbeddingModel, ModelCapabilities, ModelInfo, ModelPricing, ModelRegistry,
-    ProviderCapabilities, ProviderInfo, StructuredOutput, Tool,
+    CompletionModel, EmbeddingModel, LocalModel, ModelCapabilities, ModelInfo, ModelPricing,
+    ModelRegistry, ProviderCapabilities, ProviderInfo, StructuredOutput, Tool,
 };
 pub use types::{
     Artifact, AudioContent, ChatMessage, Citation, CompletionRequest, CompletionResponse,

@@ -874,7 +874,8 @@ fn core_type_path(name: &str) -> TokenStream {
         | "MusicRequest"
         | "TranscriptionRequest"
         | "ThreeDRequest"
-        | "BackgroundRemovalRequest" => {
+        | "BackgroundRemovalRequest"
+        | "VoiceCloneRequest" => {
             quote! { blazen_llm::compute::requests::#ident }
         }
 
@@ -884,7 +885,8 @@ fn core_type_path(name: &str) -> TokenStream {
         | "AudioResult"
         | "TranscriptionSegment"
         | "TranscriptionResult"
-        | "ThreeDResult" => {
+        | "ThreeDResult"
+        | "VoiceHandle" => {
             quote! { blazen_llm::compute::results::#ident }
         }
 

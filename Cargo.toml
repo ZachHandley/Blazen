@@ -82,7 +82,7 @@ bytes = "1"
 base64 = "0.22"
 
 # Python bindings
-pyo3 = { version = "0.28", features = ["multiple-pymethods"] }
+pyo3 = { version = "0.28", features = ["multiple-pymethods", "experimental-async"] }
 pyo3-async-runtimes = { version = "0.28", features = ["tokio-runtime"] }
 
 # Node.js bindings

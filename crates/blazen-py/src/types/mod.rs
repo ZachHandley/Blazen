@@ -11,6 +11,7 @@ pub mod memory;
 pub mod message;
 pub mod prompts;
 pub mod reasoning;
+pub mod request_timing;
 pub mod response_format;
 pub mod stream;
 pub mod tokens;
@@ -32,6 +33,7 @@ pub use memory::{PyInMemoryBackend, PyJsonlBackend, PyMemory, PyMemoryResult, Py
 pub use message::{PyChatMessage, PyContentPart, PyRole};
 pub use prompts::{PyPromptRegistry, PyPromptTemplate};
 pub use reasoning::ReasoningTrace;
+pub use request_timing::PyRequestTiming;
 pub use response_format::PyResponseFormat;
 pub use stream::StreamChunk;
 pub use tokens::{count_message_tokens, estimate_tokens};

@@ -77,6 +77,7 @@ mod engine {
     use candle_transformers::models::bert::{BertModel, Config as BertConfig};
     use hf_hub::api::tokio::Api;
     use tokenizers::Tokenizer;
+    use tokio::sync::RwLock;
 
     use super::{CandleEmbedError, CandleEmbedOptions, CandleEmbedResponse};
 
@@ -96,17 +97,35 @@ mod engine {
     #[allow(unsafe_code)]
     unsafe impl Send for CandleEngine {}
 
+    /// Type alias for a shared, interior-mutable handle to a loaded engine.
+    ///
+    /// The inner `Mutex` exists because `BertModel` is not `Sync`, and the
+    /// inference path runs inside [`tokio::task::spawn_blocking`] which needs
+    /// an owned `Send` handle. The outer `Arc` lets us clone the handle out
+    /// of the `RwLock` without holding the read guard across await points.
+    type EngineHandle = Arc<Mutex<CandleEngine>>;
+
     /// A local embedding model backed by candle.
     pub struct CandleEmbedModel {
         /// The resolved model ID.
         model_id: String,
-        /// Full options preserved for reference.
-        #[allow(dead_code)]
+        /// Full options preserved so [`Self::load`] can rebuild the engine
+        /// after an explicit [`Self::unload`].
         options: CandleEmbedOptions,
-        /// The loaded engine. Wrapped in `Arc<Mutex<...>>` because the model
-        /// is not `Sync` and we dispatch onto `spawn_blocking`.
-        engine: Arc<Mutex<CandleEngine>>,
-        /// Embedding dimensionality.
+        /// The loaded engine, wrapped in
+        /// `Arc<RwLock<Option<Arc<Mutex<CandleEngine>>>>>` so we can both
+        /// (a) auto-load on first use after an unload and (b) explicitly
+        /// [`Self::unload`] to free memory. The inner `Arc<Mutex<...>>` is
+        /// cloned out of the `RwLock` for each inference call so the
+        /// spawned blocking task can own the handle without holding the
+        /// read guard.
+        engine: Arc<RwLock<Option<EngineHandle>>>,
+        /// Embedding dimensionality, cached from the first successful load.
+        ///
+        /// Because the options are frozen at construction time and the
+        /// architecture is determined by `config.hidden_size`, this value
+        /// is stable across `unload` / `load` cycles, so callers may query
+        /// [`Self::dimensions`] even when the engine is currently unloaded.
         dims: usize,
     }
 
@@ -125,77 +144,18 @@ mod engine {
             validate_options(&opts)?;
 
             let model_id = opts.effective_model_id().to_owned();
-            let revision = opts.revision.clone().unwrap_or_else(|| "main".to_owned());
 
-            tracing::info!(model = %model_id, revision = %revision, "loading candle embedding model");
-
-            // Resolve the candle device.
-            let device = resolve_device(&opts)?;
-
-            // Download model artifacts from `HuggingFace` Hub.
-            let api = Api::new().map_err(|e| {
-                CandleEmbedError::ModelLoad(format!("failed to create HF API client: {e}"))
-            })?;
-            let repo = api.repo(hf_hub::Repo::with_revision(
-                model_id.clone(),
-                hf_hub::RepoType::Model,
-                revision,
-            ));
-
-            let config_path = repo.get("config.json").await.map_err(|e| {
-                CandleEmbedError::ModelLoad(format!("failed to download config.json: {e}"))
-            })?;
-            let tokenizer_path = repo.get("tokenizer.json").await.map_err(|e| {
-                CandleEmbedError::ModelLoad(format!("failed to download tokenizer.json: {e}"))
-            })?;
-            let weights_path = repo.get("model.safetensors").await.map_err(|e| {
-                CandleEmbedError::ModelLoad(format!("failed to download model.safetensors: {e}"))
-            })?;
-
-            // Load config.
-            let config_bytes = std::fs::read(&config_path).map_err(|e| {
-                CandleEmbedError::ModelLoad(format!("failed to read config.json: {e}"))
-            })?;
-            let config: BertConfig = serde_json::from_slice(&config_bytes).map_err(|e| {
-                CandleEmbedError::ModelLoad(format!("failed to parse config.json: {e}"))
-            })?;
-
-            let dims = config.hidden_size;
-
-            // Load tokenizer.
-            let tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
-                CandleEmbedError::ModelLoad(format!("failed to load tokenizer: {e}"))
-            })?;
-
-            // Load weights and build the model.
-            //
-            // SAFETY: Memory-mapping the safetensors file is safe as long as
-            // the file is not modified while mapped. This is the standard
-            // pattern used by candle for loading model weights.
-            #[allow(unsafe_code)]
-            let vb = unsafe {
-                VarBuilder::from_mmaped_safetensors(&[weights_path], DType::F32, &device).map_err(
-                    |e| CandleEmbedError::ModelLoad(format!("failed to load model weights: {e}")),
-                )?
-            };
-
-            let model = BertModel::load(vb, &config).map_err(|e| {
-                CandleEmbedError::ModelLoad(format!("failed to build BERT model: {e}"))
-            })?;
-
-            tracing::info!(model = %model_id, dims = dims, "candle embedding model loaded");
-
-            let engine = CandleEngine {
-                model,
-                tokenizer,
-                device,
-                dims,
-            };
+            // Eagerly build the engine so callers still get a ready-to-use
+            // model from `from_options`, matching the pre-refactor contract.
+            // Later `unload`/`load` cycles will rebuild it lazily from the
+            // stored options.
+            let engine = build_engine(&opts).await?;
+            let dims = engine.dims;
 
             Ok(Self {
                 model_id,
                 options: opts,
-                engine: Arc::new(Mutex::new(engine)),
+                engine: Arc::new(RwLock::new(Some(Arc::new(Mutex::new(engine))))),
                 dims,
             })
         }
@@ -212,14 +172,51 @@ mod engine {
             self.dims
         }
 
+        /// Return the loaded engine handle, rebuilding it on first use
+        /// after an [`Self::unload`] call.
+        ///
+        /// Uses a double-checked `RwLock` pattern: the fast path takes a
+        /// read lock and clones out the existing `Arc<Mutex<CandleEngine>>`;
+        /// if the engine is not currently loaded, the read lock is dropped,
+        /// a write lock is acquired, the slot is re-checked (in case a
+        /// concurrent caller loaded it first), and finally `build_engine` is
+        /// invoked.
+        ///
+        /// Returns an owned `EngineHandle` so the caller can hold it across
+        /// await points and pass it to [`tokio::task::spawn_blocking`]
+        /// without holding the `RwLock` read guard.
+        async fn get_or_load_engine(&self) -> Result<EngineHandle, CandleEmbedError> {
+            // Fast path: acquire read lock, check if already loaded, clone Arc.
+            {
+                let guard = self.engine.read().await;
+                if let Some(handle) = guard.as_ref() {
+                    return Ok(Arc::clone(handle));
+                }
+            }
+            // Slow path: acquire write lock, double-check, build, clone Arc.
+            let mut guard = self.engine.write().await;
+            if guard.is_none() {
+                let engine = build_engine(&self.options).await?;
+                *guard = Some(Arc::new(Mutex::new(engine)));
+            }
+            // SAFETY: we just set `Some` above (or found `Some` from a concurrent loader).
+            let handle = guard.as_ref().expect("engine loaded above");
+            Ok(Arc::clone(handle))
+        }
+
         /// Embed one or more texts, returning one vector per input text.
         ///
         /// The candle forward pass is CPU-bound -- this function dispatches the
         /// work onto Tokio's blocking thread pool via [`tokio::task::spawn_blocking`].
         ///
+        /// If the engine was previously released via [`Self::unload`], this
+        /// call will transparently rebuild it from the stored options before
+        /// running inference.
+        ///
         /// # Errors
         ///
-        /// Returns [`CandleEmbedError`] if tokenization or inference fails.
+        /// Returns [`CandleEmbedError`] if tokenization or inference fails,
+        /// or if the engine has to be rebuilt and the rebuild fails.
         pub async fn embed(
             &self,
             texts: &[String],
@@ -233,7 +230,7 @@ mod engine {
 
             let texts_owned: Vec<String> = texts.to_vec();
             let model_id = self.model_id.clone();
-            let engine_handle = Arc::clone(&self.engine);
+            let engine_handle = self.get_or_load_engine().await?;
 
             let embeddings = tokio::task::spawn_blocking(move || {
                 let engine = engine_handle
@@ -249,6 +246,70 @@ mod engine {
                 embeddings,
                 model: model_id,
             })
+        }
+
+        // -------------------------------------------------------------------
+        // Explicit load / unload
+        //
+        // These mirror the dual-stub pattern in `blazen-llm-mistralrs` so
+        // that the public surface is identical with and without the
+        // `engine` feature, and so the `blazen_llm::LocalModel` trait
+        // bridge in `blazen-llm/src/backends/candle_embed.rs` can call
+        // them unconditionally.
+        // -------------------------------------------------------------------
+
+        /// Load the model explicitly. Idempotent -- if the model is already
+        /// loaded, this is a no-op that returns `Ok(())`.
+        ///
+        /// [`Self::from_options`] loads the model eagerly, so on a freshly
+        /// constructed provider this method is a no-op. It becomes useful
+        /// after an explicit [`Self::unload`], when the caller wants to
+        /// pay the (re-)initialisation cost up-front rather than on the
+        /// next [`Self::embed`] call.
+        ///
+        /// # Errors
+        ///
+        /// Returns [`CandleEmbedError::ModelLoad`] if the underlying model
+        /// fails to rebuild (e.g. missing weights, network failure, or an
+        /// incompatible accelerator backend).
+        pub async fn load(&self) -> Result<(), CandleEmbedError> {
+            // Reuse the existing loader logic so a concurrent `embed` call
+            // and an explicit `load` call share the same double-checked
+            // lock pattern and can never double-initialise the engine.
+            let _ = self.get_or_load_engine().await?;
+            Ok(())
+        }
+
+        /// Drop the loaded model and free its memory. Idempotent -- if the
+        /// model is already unloaded, this is a no-op that returns
+        /// `Ok(())`.
+        ///
+        /// Note: if an in-flight [`Self::embed`] call is still holding an
+        /// `Arc<Mutex<CandleEngine>>` clone, the underlying `BertModel`
+        /// will only be dropped (and its memory freed) once that task
+        /// finishes. `unload` always releases the provider's own reference
+        /// immediately so a subsequent [`Self::load`] will rebuild a
+        /// fresh engine.
+        ///
+        /// # Errors
+        ///
+        /// This method currently never returns an error; the `Result`
+        /// return type is preserved to match [`CandleEmbedError`]
+        /// conventions and the `blazen_llm::traits::LocalModel` trait
+        /// contract.
+        pub async fn unload(&self) -> Result<(), CandleEmbedError> {
+            let mut guard = self.engine.write().await;
+            // Drop the `Arc<Mutex<CandleEngine>>`. When no other clones
+            // remain (e.g. from an in-flight blocking task), the inner
+            // `BertModel`, tokenizer, and device handles are dropped by
+            // their respective `Drop` impls.
+            *guard = None;
+            Ok(())
+        }
+
+        /// Whether the model is currently loaded in memory.
+        pub async fn is_loaded(&self) -> bool {
+            self.engine.read().await.is_some()
         }
     }
 
@@ -378,6 +439,91 @@ mod engine {
         }
 
         Ok(result)
+    }
+
+    /// Build a fresh [`CandleEngine`] from options: resolves the device,
+    /// downloads model artifacts from `HuggingFace` Hub if they are not
+    /// cached, parses the config, loads the tokenizer, memory-maps the
+    /// safetensors weights, and constructs the `BertModel`.
+    ///
+    /// This is shared between the eager load in [`CandleEmbedModel::from_options`]
+    /// and the lazy re-load in [`CandleEmbedModel::get_or_load_engine`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CandleEmbedError::ModelLoad`] if any download, filesystem
+    /// read, or model construction step fails, or
+    /// [`CandleEmbedError::InvalidOptions`] if the device specifier is
+    /// unrecognised.
+    async fn build_engine(opts: &CandleEmbedOptions) -> Result<CandleEngine, CandleEmbedError> {
+        let model_id = opts.effective_model_id().to_owned();
+        let revision = opts.revision.clone().unwrap_or_else(|| "main".to_owned());
+
+        tracing::info!(
+            model = %model_id,
+            revision = %revision,
+            "loading candle embedding model"
+        );
+
+        // Resolve the candle device.
+        let device = resolve_device(opts)?;
+
+        // Download model artifacts from `HuggingFace` Hub.
+        let api = Api::new().map_err(|e| {
+            CandleEmbedError::ModelLoad(format!("failed to create HF API client: {e}"))
+        })?;
+        let repo = api.repo(hf_hub::Repo::with_revision(
+            model_id.clone(),
+            hf_hub::RepoType::Model,
+            revision,
+        ));
+
+        let config_path = repo.get("config.json").await.map_err(|e| {
+            CandleEmbedError::ModelLoad(format!("failed to download config.json: {e}"))
+        })?;
+        let tokenizer_path = repo.get("tokenizer.json").await.map_err(|e| {
+            CandleEmbedError::ModelLoad(format!("failed to download tokenizer.json: {e}"))
+        })?;
+        let weights_path = repo.get("model.safetensors").await.map_err(|e| {
+            CandleEmbedError::ModelLoad(format!("failed to download model.safetensors: {e}"))
+        })?;
+
+        // Load config.
+        let config_bytes = std::fs::read(&config_path)
+            .map_err(|e| CandleEmbedError::ModelLoad(format!("failed to read config.json: {e}")))?;
+        let config: BertConfig = serde_json::from_slice(&config_bytes).map_err(|e| {
+            CandleEmbedError::ModelLoad(format!("failed to parse config.json: {e}"))
+        })?;
+
+        let dims = config.hidden_size;
+
+        // Load tokenizer.
+        let tokenizer = Tokenizer::from_file(&tokenizer_path)
+            .map_err(|e| CandleEmbedError::ModelLoad(format!("failed to load tokenizer: {e}")))?;
+
+        // Load weights and build the model.
+        //
+        // SAFETY: Memory-mapping the safetensors file is safe as long as
+        // the file is not modified while mapped. This is the standard
+        // pattern used by candle for loading model weights.
+        #[allow(unsafe_code)]
+        let vb = unsafe {
+            VarBuilder::from_mmaped_safetensors(&[weights_path], DType::F32, &device).map_err(
+                |e| CandleEmbedError::ModelLoad(format!("failed to load model weights: {e}")),
+            )?
+        };
+
+        let model = BertModel::load(vb, &config)
+            .map_err(|e| CandleEmbedError::ModelLoad(format!("failed to build BERT model: {e}")))?;
+
+        tracing::info!(model = %model_id, dims = dims, "candle embedding model loaded");
+
+        Ok(CandleEngine {
+            model,
+            tokenizer,
+            device,
+            dims,
+        })
     }
 
     /// Validate options (shared between engine and non-engine paths).
@@ -541,6 +687,49 @@ mod stub {
             _texts: &[String],
         ) -> Result<CandleEmbedResponse, CandleEmbedError> {
             Err(CandleEmbedError::EngineNotAvailable)
+        }
+
+        // -------------------------------------------------------------------
+        // Explicit load / unload stubs
+        //
+        // These match the engine-gated `CandleEmbedModel` public surface so
+        // the `blazen_llm::LocalModel` trait bridge can call them
+        // unconditionally, regardless of whether the `engine` feature is
+        // active.
+        // -------------------------------------------------------------------
+
+        /// Load the model (stub).
+        ///
+        /// # Errors
+        ///
+        /// Always returns [`CandleEmbedError::EngineNotAvailable`] because
+        /// there is no candle runtime compiled in to load.
+        #[allow(clippy::unused_async, clippy::unused_self)]
+        pub async fn load(&self) -> Result<(), CandleEmbedError> {
+            Err(CandleEmbedError::EngineNotAvailable)
+        }
+
+        /// Unload the model (stub).
+        ///
+        /// Always succeeds as a no-op, matching the idempotent-unload
+        /// contract required by `blazen_llm::traits::LocalModel` even
+        /// when there is no engine to unload in the first place.
+        ///
+        /// # Errors
+        ///
+        /// This method never returns an error.
+        #[allow(clippy::unused_async, clippy::unused_self)]
+        pub async fn unload(&self) -> Result<(), CandleEmbedError> {
+            Ok(())
+        }
+
+        /// Whether the model is currently loaded (stub).
+        ///
+        /// Without the engine feature there is never a loaded model, so
+        /// this always returns `false`.
+        #[allow(clippy::unused_async, clippy::unused_self)]
+        pub async fn is_loaded(&self) -> bool {
+            false
         }
     }
 }

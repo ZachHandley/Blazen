@@ -961,3 +961,76 @@ mod tests {
         assert_eq!(usage.total_tokens, 10);
     }
 }
+
+// ---------------------------------------------------------------------------
+// ComputeProvider (stub — required as a supertrait for AudioGeneration)
+// ---------------------------------------------------------------------------
+
+// OpenAI's TTS is a plain POST/response, not a queue-based compute job, so
+// the queue-lifecycle methods return Unsupported. The only reason this impl
+// exists is that `AudioGeneration: ComputeProvider` is a trait bound; any
+// queue-oriented code calling into the OpenAI provider should return a
+// clear "not supported" error rather than compiling at all is unhelpful.
+
+#[async_trait]
+impl crate::compute::traits::ComputeProvider for OpenAiProvider {
+    #[allow(clippy::unnecessary_literal_bound)]
+    fn provider_id(&self) -> &str {
+        "openai"
+    }
+
+    async fn submit(
+        &self,
+        _request: crate::compute::job::ComputeRequest,
+    ) -> Result<crate::compute::job::JobHandle, BlazenError> {
+        Err(BlazenError::unsupported(
+            "OpenAI provider does not expose a queue-based compute API",
+        ))
+    }
+
+    async fn status(
+        &self,
+        _job: &crate::compute::job::JobHandle,
+    ) -> Result<crate::compute::job::JobStatus, BlazenError> {
+        Err(BlazenError::unsupported(
+            "OpenAI provider does not expose a queue-based compute API",
+        ))
+    }
+
+    async fn result(
+        &self,
+        _job: crate::compute::job::JobHandle,
+    ) -> Result<crate::compute::job::ComputeResult, BlazenError> {
+        Err(BlazenError::unsupported(
+            "OpenAI provider does not expose a queue-based compute API",
+        ))
+    }
+
+    async fn cancel(&self, _job: &crate::compute::job::JobHandle) -> Result<(), BlazenError> {
+        Err(BlazenError::unsupported(
+            "OpenAI provider does not expose a queue-based compute API",
+        ))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AudioGeneration (text-to-speech via /v1/audio/speech)
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+impl crate::compute::traits::AudioGeneration for OpenAiProvider {
+    async fn text_to_speech(
+        &self,
+        request: crate::compute::requests::SpeechRequest,
+    ) -> Result<crate::compute::results::AudioResult, BlazenError> {
+        super::openai_audio::text_to_speech_request(
+            self.client.as_ref(),
+            &self.base_url,
+            &self.api_key,
+            request,
+        )
+        .await
+    }
+    // generate_music and generate_sfx intentionally NOT overridden —
+    // they fall through to the default `Err(Unsupported)` impls in the trait.
+}

@@ -160,6 +160,49 @@ impl crate::traits::CompletionModel for LlamaCppProvider {
 }
 
 // ---------------------------------------------------------------------------
+// LocalModel implementation
+// ---------------------------------------------------------------------------
+
+/// `LocalModel` bridge: gives callers explicit `load`/`unload` control over
+/// the underlying llama.cpp engine while preserving the existing lazy
+/// auto-load-on-first-inference behavior provided by
+/// [`LlamaCppProvider::infer`] and [`LlamaCppProvider::infer_stream`].
+///
+/// The impl forwards to the inherent methods on [`LlamaCppProvider`] and
+/// wraps [`blazen_llm_llamacpp::LlamaCppError`] into
+/// [`BlazenError::Provider`] via [`BlazenError::provider`]. The upstream
+/// crate does not define a `From<LlamaCppError> for BlazenError`
+/// conversion (and cannot, because `blazen-llm-llamacpp` does not depend
+/// on `blazen-llm` -- the dependency edge runs the other way), so we do
+/// the conversion inline here.
+///
+/// Without the upstream `engine` feature, the inherent `load`,
+/// `unload`, and `is_loaded` methods on [`LlamaCppProvider`] are stubs
+/// that return [`blazen_llm_llamacpp::LlamaCppError::EngineNotAvailable`]
+/// (for `load`), succeed as no-ops (for `unload`), or return `false`
+/// (for `is_loaded`). This mirrors the behavior of `infer` /
+/// `infer_stream` and lets downstream crates depend on `LocalModel`
+/// without unconditionally pulling in the llama.cpp runtime.
+#[async_trait]
+impl crate::traits::LocalModel for LlamaCppProvider {
+    async fn load(&self) -> Result<(), BlazenError> {
+        LlamaCppProvider::load(self)
+            .await
+            .map_err(|e| BlazenError::provider("llamacpp", e.to_string()))
+    }
+
+    async fn unload(&self) -> Result<(), BlazenError> {
+        LlamaCppProvider::unload(self)
+            .await
+            .map_err(|e| BlazenError::provider("llamacpp", e.to_string()))
+    }
+
+    async fn is_loaded(&self) -> bool {
+        LlamaCppProvider::is_loaded(self).await
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 

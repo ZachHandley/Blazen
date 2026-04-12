@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 #[cfg(feature = "engine")]
-use tokio::sync::OnceCell;
+use tokio::sync::RwLock;
 
 use crate::WhisperOptions;
 
@@ -110,10 +110,18 @@ pub struct WhisperCppProvider {
     /// Full options preserved for transcription calls.
     #[cfg_attr(not(feature = "engine"), allow(dead_code))]
     options: WhisperOptions,
-    /// Lazily-loaded whisper context.  Populated on the first successful
-    /// `transcribe()` call (only present with the `engine` feature).
+    /// Lazily-loaded whisper context, wrapped in
+    /// `Arc<RwLock<Option<Arc<...>>>>` so we can both (a) auto-load on first
+    /// `transcribe()` call and (b) explicitly unload later to free memory.
+    /// The inner `Arc<WhisperContext>` is cloned out of the lock for each
+    /// transcription call so the blocking whisper inference task can own
+    /// the handle without holding the read guard across await / blocking
+    /// points.
+    ///
+    /// `whisper_rs::WhisperContext` is **not** `Clone`, so wrapping it in an
+    /// inner `Arc` gives cheap clones out of the lock.
     #[cfg(feature = "engine")]
-    engine: Arc<OnceCell<Arc<whisper_rs::WhisperContext>>>,
+    engine: Arc<RwLock<Option<Arc<whisper_rs::WhisperContext>>>>,
 }
 
 impl WhisperCppProvider {
@@ -156,7 +164,7 @@ impl WhisperCppProvider {
             Ok(Self {
                 model: opts.model,
                 options: opts,
-                engine: Arc::new(OnceCell::new()),
+                engine: Arc::new(RwLock::new(None)),
             })
         }
 
@@ -169,56 +177,125 @@ impl WhisperCppProvider {
         }
     }
 
-    /// Lazily initialize (or return the cached) whisper context.
+    // -----------------------------------------------------------------------
+    // Explicit load / unload (always in the public API)
+    //
+    // These mirror the `transcribe` cfg dual-stub pattern so that the public
+    // surface is identical with and without the `engine` feature, and so the
+    // `blazen_llm::LocalModel` trait bridge in
+    // `blazen-llm/src/backends/whispercpp.rs` can call them unconditionally.
+    // -----------------------------------------------------------------------
+
+    /// Load the whisper model explicitly. Idempotent -- if already loaded,
+    /// this is a no-op that returns `Ok(())`.
     ///
-    /// The first successful call downloads (or locates in cache) the GGML
-    /// model and calls `WhisperContext::new_with_params`.  Subsequent calls
-    /// return a clone of the cached `Arc<WhisperContext>`.
+    /// [`Self::transcribe`] still auto-loads on first call if [`Self::load`]
+    /// was never invoked, so explicit loading is only needed when the caller
+    /// wants to pay the model download / initialization cost up-front (e.g.
+    /// to avoid latency spikes during a time-sensitive transcription).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WhisperError::ModelLoad`] if the GGML model cannot be
+    /// downloaded or if `WhisperContext::new_with_params` fails.
     #[cfg(feature = "engine")]
-    async fn ensure_engine(&self) -> Result<Arc<whisper_rs::WhisperContext>, WhisperError> {
-        self.engine
-            .get_or_try_init(|| async {
-                let model_path = Self::resolve_model_path(&self.options).await?;
-                tracing::info!(
-                    model = %self.options.model,
-                    path = %model_path.display(),
-                    "loading whisper.cpp model"
-                );
-
-                let params = whisper_rs::WhisperContextParameters::default();
-                let ctx = whisper_rs::WhisperContext::new_with_params(
-                    model_path.to_str().ok_or_else(|| {
-                        WhisperError::ModelLoad("model path contains invalid UTF-8".into())
-                    })?,
-                    params,
-                )
-                .map_err(|e| WhisperError::ModelLoad(e.to_string()))?;
-
-                Ok(Arc::new(ctx))
-            })
-            .await
-            .map(Arc::clone)
+    pub async fn load(&self) -> Result<(), WhisperError> {
+        // Reuse the existing loader logic.
+        let _ = self.get_or_load_engine().await?;
+        Ok(())
     }
 
-    /// Download (or locate in cache) the GGML model file.
+    /// Stub: engine not available.
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`WhisperError::EngineNotAvailable`].
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn load(&self) -> Result<(), WhisperError> {
+        Err(WhisperError::EngineNotAvailable)
+    }
+
+    /// Drop the loaded whisper context and free its memory. Idempotent --
+    /// if the model is already unloaded, this is a no-op that returns
+    /// `Ok(())`.
+    ///
+    /// Note: if a transcription task is still holding an
+    /// `Arc<WhisperContext>` clone (e.g. inside `spawn_blocking`), the
+    /// underlying context will only be dropped once that task finishes.
+    /// `unload` always releases the provider's own reference immediately.
+    ///
+    /// # Errors
+    ///
+    /// This method currently never returns an error; the `Result` return
+    /// type is preserved to match [`WhisperError`] conventions and the
+    /// [`blazen_llm::traits::LocalModel`] trait contract.
     #[cfg(feature = "engine")]
-    async fn resolve_model_path(opts: &WhisperOptions) -> Result<PathBuf, WhisperError> {
-        let cache = if let Some(ref dir) = opts.cache_dir {
-            blazen_model_cache::ModelCache::with_dir(dir)
-        } else {
-            blazen_model_cache::ModelCache::new()
-                .map_err(|e| WhisperError::ModelLoad(e.to_string()))?
-        };
+    pub async fn unload(&self) -> Result<(), WhisperError> {
+        let mut guard = self.engine.write().await;
+        // Drop the Arc<WhisperContext>. When no other clones remain (e.g.
+        // from an in-flight `spawn_blocking` transcription task), memory
+        // is freed by the Drop impl on the underlying whisper.cpp context.
+        *guard = None;
+        Ok(())
+    }
 
-        let repo_id = opts.model.as_model_id();
-        let filename = opts.model.as_ggml_filename();
+    /// Stub: engine not available. Always succeeds as a no-op, matching
+    /// the idempotent-unload contract even when there is no engine to
+    /// unload in the first place.
+    ///
+    /// # Errors
+    ///
+    /// This method never returns an error.
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn unload(&self) -> Result<(), WhisperError> {
+        Ok(())
+    }
 
-        tracing::info!(repo = repo_id, file = filename, "downloading whisper model");
+    /// Whether the whisper model is currently loaded in memory.
+    #[cfg(feature = "engine")]
+    pub async fn is_loaded(&self) -> bool {
+        self.engine.read().await.is_some()
+    }
 
-        cache
-            .download(repo_id, filename, None)
-            .await
-            .map_err(|e| WhisperError::ModelLoad(e.to_string()))
+    /// Stub: without the engine feature there is never a loaded model,
+    /// so this always returns `false`.
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn is_loaded(&self) -> bool {
+        false
+    }
+
+    /// Return the loaded engine, loading it on first use.
+    ///
+    /// Uses a double-checked `RwLock` pattern: the fast path takes a read
+    /// lock and clones out the existing `Arc<WhisperContext>`; if the
+    /// engine is not yet loaded, it drops the read lock, acquires a write
+    /// lock, re-checks (another task may have loaded it concurrently), and
+    /// finally builds the engine.
+    ///
+    /// Returns an owned `Arc<WhisperContext>` so the caller can hold it
+    /// across await points and pass it into `spawn_blocking` without
+    /// holding the read lock.
+    #[cfg(feature = "engine")]
+    async fn get_or_load_engine(&self) -> Result<Arc<whisper_rs::WhisperContext>, WhisperError> {
+        // Fast path: acquire read lock, check if already loaded, clone Arc.
+        {
+            let guard = self.engine.read().await;
+            if let Some(ctx) = guard.as_ref() {
+                return Ok(Arc::clone(ctx));
+            }
+        }
+        // Slow path: acquire write lock, double-check, build, clone Arc.
+        let mut guard = self.engine.write().await;
+        if guard.is_none() {
+            let ctx = build_engine(&self.options).await?;
+            *guard = Some(Arc::new(ctx));
+        }
+        // SAFETY: we just set Some above (or found Some from a concurrent loader).
+        let ctx = guard.as_ref().expect("engine loaded above");
+        Ok(Arc::clone(ctx))
     }
 
     /// Transcribe an audio file (WAV, 16-bit PCM, mono, 16 kHz).
@@ -271,7 +348,7 @@ impl WhisperCppProvider {
 
         // Only AFTER audio validation succeeds do we load the engine (which
         // may download a ~500MB model on first call).
-        let ctx = self.ensure_engine().await?;
+        let ctx = self.get_or_load_engine().await?;
         let lang = language
             .map(String::from)
             .or_else(|| self.options.language.clone());
@@ -418,6 +495,55 @@ impl WhisperCppProvider {
     pub const fn model_filename(&self) -> &'static str {
         self.model.as_ggml_filename()
     }
+}
+
+// ---------------------------------------------------------------------------
+// Engine construction (only with `engine` feature)
+// ---------------------------------------------------------------------------
+
+/// Download (or locate in cache) the GGML weights and construct a fresh
+/// `whisper_rs::WhisperContext` from them.
+///
+/// Called by [`WhisperCppProvider::get_or_load_engine`] when the provider
+/// has not yet loaded (or has been explicitly unloaded).
+#[cfg(feature = "engine")]
+async fn build_engine(opts: &WhisperOptions) -> Result<whisper_rs::WhisperContext, WhisperError> {
+    let model_path = resolve_model_path(opts).await?;
+
+    tracing::info!(
+        model = %opts.model,
+        path = %model_path.display(),
+        "loading whisper.cpp model"
+    );
+
+    let params = whisper_rs::WhisperContextParameters::default();
+    whisper_rs::WhisperContext::new_with_params(
+        model_path
+            .to_str()
+            .ok_or_else(|| WhisperError::ModelLoad("model path contains invalid UTF-8".into()))?,
+        params,
+    )
+    .map_err(|e| WhisperError::ModelLoad(e.to_string()))
+}
+
+/// Download (or locate in cache) the GGML model file.
+#[cfg(feature = "engine")]
+async fn resolve_model_path(opts: &WhisperOptions) -> Result<PathBuf, WhisperError> {
+    let cache = if let Some(ref dir) = opts.cache_dir {
+        blazen_model_cache::ModelCache::with_dir(dir)
+    } else {
+        blazen_model_cache::ModelCache::new().map_err(|e| WhisperError::ModelLoad(e.to_string()))?
+    };
+
+    let repo_id = opts.model.as_model_id();
+    let filename = opts.model.as_ggml_filename();
+
+    tracing::info!(repo = repo_id, file = filename, "downloading whisper model");
+
+    cache
+        .download(repo_id, filename, None)
+        .await
+        .map_err(|e| WhisperError::ModelLoad(e.to_string()))
 }
 
 #[cfg(test)]

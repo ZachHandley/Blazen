@@ -125,3 +125,31 @@ pub struct TranscriptionResult {
     /// Arbitrary provider-specific metadata.
     pub metadata: serde_json::Value,
 }
+
+// ---------------------------------------------------------------------------
+// Voice handle (voice cloning result)
+// ---------------------------------------------------------------------------
+
+/// A persisted voice identifier returned by a `VoiceCloning` provider.
+///
+/// Can be passed as `SpeechRequest.voice` on subsequent TTS calls to use
+/// the cloned voice for synthesis.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct VoiceHandle {
+    /// Provider-specific voice identifier (e.g. `ElevenLabs` `voice_id`).
+    pub id: String,
+    /// Human-readable name for the voice.
+    pub name: String,
+    /// Which provider owns this voice (`"elevenlabs"`, `"zvoice"`, ...).
+    pub provider: String,
+    /// Optional language code if the voice is language-specific.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    /// Optional description.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Arbitrary provider-specific metadata.
+    pub metadata: serde_json::Value,
+}

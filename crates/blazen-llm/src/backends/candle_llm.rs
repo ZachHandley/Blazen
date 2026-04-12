@@ -22,7 +22,6 @@ use std::pin::Pin;
 use async_trait::async_trait;
 use blazen_llm_candle::CandleLlmProvider;
 use futures_util::Stream;
-use tokio::sync::Mutex;
 
 use crate::error::BlazenError;
 use crate::types::{ChatMessage, CompletionRequest, CompletionResponse, StreamChunk};
@@ -73,13 +72,17 @@ fn convert_messages(messages: &[ChatMessage]) -> Vec<(String, String)> {
 // CompletionModel implementation
 // ---------------------------------------------------------------------------
 
-/// Thread-safe wrapper around `CandleLlmProvider` for `CompletionModel`.
+/// Wrapper around `CandleLlmProvider` that caches a `model_id: String`
+/// suitable for the `CompletionModel::model_id(&self) -> &str` signature.
 ///
-/// `CandleLlmProvider::infer` takes `&mut self` because it lazily loads
-/// the engine. We wrap it in a `Mutex` so the `CompletionModel` trait
-/// (which takes `&self`) can be satisfied.
+/// `CandleLlmProvider::model_id` returns `Option<&str>`, which cannot
+/// satisfy the trait's non-optional return type, so we snapshot it
+/// (falling back to `"candle-local"` when no id was configured).
+/// `CandleLlmProvider::infer` and `infer_stream` already take `&self`,
+/// so no outer mutex is needed; the provider manages its own internal
+/// `tokio::sync::Mutex<Option<CandleEngine>>` for interior mutability.
 pub struct CandleLlmCompletionModel {
-    provider: Mutex<CandleLlmProvider>,
+    provider: CandleLlmProvider,
     model_id: String,
 }
 
@@ -88,10 +91,7 @@ impl CandleLlmCompletionModel {
     #[must_use]
     pub fn new(provider: CandleLlmProvider) -> Self {
         let model_id = provider.model_id().unwrap_or("candle-local").to_string();
-        Self {
-            provider: Mutex::new(provider),
-            model_id,
-        }
+        Self { provider, model_id }
     }
 }
 
@@ -110,8 +110,8 @@ impl crate::traits::CompletionModel for CandleLlmCompletionModel {
         let temperature = request.temperature.map(f64::from);
         let top_p = request.top_p.map(f64::from);
 
-        let mut provider = self.provider.lock().await;
-        let result = provider
+        let result = self
+            .provider
             .infer(messages, max_tokens, temperature, top_p)
             .await
             .map_err(|e| BlazenError::provider("candle-llm", e.to_string()))?;
@@ -160,8 +160,8 @@ impl crate::traits::CompletionModel for CandleLlmCompletionModel {
         let temperature = request.temperature.map(f64::from);
         let top_p = request.top_p.map(f64::from);
 
-        let mut provider = self.provider.lock().await;
-        let rx = provider
+        let rx = self
+            .provider
             .infer_stream(messages, max_tokens, temperature, top_p)
             .await
             .map_err(|e| BlazenError::provider("candle-llm", e.to_string()))?;
@@ -204,6 +204,49 @@ impl crate::traits::CompletionModel for CandleLlmCompletionModel {
         });
 
         Ok(Box::pin(stream))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// LocalModel implementation
+// ---------------------------------------------------------------------------
+
+/// `LocalModel` bridge: gives callers explicit `load`/`unload` control
+/// over the underlying candle engine while preserving the existing lazy
+/// auto-load-on-first-inference behavior provided by
+/// [`CandleLlmProvider::infer`] and [`CandleLlmProvider::infer_stream`].
+///
+/// The impl forwards to the inherent methods on [`CandleLlmProvider`]
+/// and wraps [`blazen_llm_candle::CandleLlmError`] into
+/// [`BlazenError::Provider`] via [`BlazenError::provider`]. The upstream
+/// crate does not define a `From<CandleLlmError> for BlazenError`
+/// conversion (and cannot, because `blazen-llm-candle` does not depend
+/// on `blazen-llm` -- the dependency edge runs the other way), so we do
+/// the conversion inline here.
+///
+/// Without the upstream `engine` feature, the inherent `load`,
+/// `unload`, and `is_loaded` methods on [`CandleLlmProvider`] are stubs
+/// that return [`blazen_llm_candle::CandleLlmError::EngineNotAvailable`]
+/// (for `load`), succeed as no-ops (for `unload`), or return `false`
+/// (for `is_loaded`). This mirrors the behavior of `infer` /
+/// `infer_stream` and lets downstream crates depend on `LocalModel`
+/// without unconditionally pulling in the heavy candle runtime.
+#[async_trait]
+impl crate::traits::LocalModel for CandleLlmProvider {
+    async fn load(&self) -> Result<(), BlazenError> {
+        CandleLlmProvider::load(self)
+            .await
+            .map_err(|e| BlazenError::provider("candle-llm", e.to_string()))
+    }
+
+    async fn unload(&self) -> Result<(), BlazenError> {
+        CandleLlmProvider::unload(self)
+            .await
+            .map_err(|e| BlazenError::provider("candle-llm", e.to_string()))
+    }
+
+    async fn is_loaded(&self) -> bool {
+        CandleLlmProvider::is_loaded(self).await
     }
 }
 

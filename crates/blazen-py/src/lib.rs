@@ -164,6 +164,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<compute::request_types::PyTranscriptionRequest>()?;
     m.add_class::<compute::request_types::PyThreeDRequest>()?;
     m.add_class::<compute::request_types::PyBackgroundRemovalRequest>()?;
+    m.add_class::<compute::request_types::PyVoiceCloneRequest>()?;
 
     // Compute result type wrappers (typed outputs from fal provider methods)
     m.add_class::<compute::PyTranscriptionSegment>()?;
@@ -173,6 +174,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<compute::PyThreeDResult>()?;
     m.add_class::<compute::PyTranscriptionResult>()?;
     m.add_class::<compute::PyComputeResult>()?;
+    m.add_class::<compute::PyVoiceHandle>()?;
 
     // Generated media output types
     m.add_class::<types::media::PyMediaOutput>()?;
@@ -180,10 +182,18 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::media::PyGeneratedVideo>()?;
     m.add_class::<types::media::PyGeneratedAudio>()?;
     m.add_class::<types::media::PyGenerated3DModel>()?;
+    m.add_class::<types::PyRequestTiming>()?;
 
     // Fal provider
     m.add_class::<providers::fal::PyFalProvider>()?;
     m.add_class::<providers::fal::PyFalEmbeddingModel>()?;
+
+    // OpenAI provider (for compute capabilities like TTS; LLM completion
+    // lives on `CompletionModel.openai`).
+    m.add_class::<providers::openai::PyOpenAiProvider>()?;
+
+    // Custom provider (user-defined Python class wrapped as a Blazen provider).
+    m.add_class::<providers::custom::PyCustomProvider>()?;
 
     // Memory
     m.add_class::<types::PyMemory>()?;

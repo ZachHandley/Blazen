@@ -294,6 +294,65 @@ impl SpeechRequest {
 }
 
 // ---------------------------------------------------------------------------
+// Voice cloning
+// ---------------------------------------------------------------------------
+
+/// Request to clone a voice from one or more reference audio clips.
+///
+/// Not implemented by any Blazen-shipped provider. Intended to be used
+/// by user-defined providers (via `CustomProvider`) that wrap services
+/// like `ElevenLabs` or `zvoice`'s voice-clone endpoint.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct VoiceCloneRequest {
+    /// Human-readable name for the new voice.
+    pub name: String,
+    /// URLs of reference audio clips. At least one required. Data URIs
+    /// (`data:audio/wav;base64,...`) are acceptable if the target provider
+    /// supports them; otherwise use the freeform `parameters` field to
+    /// pass base64 blobs.
+    pub reference_urls: Vec<String>,
+    /// Optional language hint for the cloned voice.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    /// Optional description of the voice being cloned.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Provider-specific knobs (e.g. `ElevenLabs` stability/similarity).
+    #[serde(default)]
+    pub parameters: serde_json::Value,
+}
+
+impl VoiceCloneRequest {
+    /// Create a new voice clone request with at least one reference URL.
+    #[must_use]
+    pub fn new(name: impl Into<String>, reference_urls: Vec<String>) -> Self {
+        Self {
+            name: name.into(),
+            reference_urls,
+            language: None,
+            description: None,
+            parameters: serde_json::Value::Object(serde_json::Map::new()),
+        }
+    }
+
+    /// Set the language hint.
+    #[must_use]
+    pub fn with_language(mut self, language: impl Into<String>) -> Self {
+        self.language = Some(language.into());
+        self
+    }
+
+    /// Set the description.
+    #[must_use]
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Music / SFX
 // ---------------------------------------------------------------------------
 

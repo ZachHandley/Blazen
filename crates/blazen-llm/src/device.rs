@@ -102,6 +102,10 @@ impl fmt::Display for Device {
 }
 
 #[cfg(test)]
+// The env-var tests below wrap `std::env::{set_var, remove_var}` in
+// `unsafe` blocks (required since Rust 2024). The workspace-wide
+// `unsafe_code = "warn"` lint flags them; allow it in test scope only.
+#[allow(unsafe_code)]
 mod tests {
     use super::*;
 

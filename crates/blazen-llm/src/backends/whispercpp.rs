@@ -27,6 +27,7 @@ use crate::compute::{
     TranscriptionRequest, TranscriptionResult, TranscriptionSegment,
 };
 use crate::error::BlazenError;
+use crate::traits::LocalModel;
 use crate::types::{MediaSource, RequestTiming};
 
 // ---------------------------------------------------------------------------
@@ -179,6 +180,49 @@ impl Transcription for WhisperCppProvider {
         let total_ms = start.elapsed().as_millis() as u64;
 
         Ok(to_blazen_result(engine_result, total_ms))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// LocalModel implementation
+// ---------------------------------------------------------------------------
+
+/// `LocalModel` bridge: gives callers explicit `load`/`unload` control over
+/// the underlying whisper.cpp context while preserving the existing lazy
+/// auto-load-on-first-transcribe behavior provided by
+/// [`WhisperCppProvider::transcribe`].
+///
+/// The impl forwards to the inherent methods on [`WhisperCppProvider`] and
+/// wraps [`blazen_audio_whispercpp::WhisperError`] into
+/// [`BlazenError::Provider`] via [`BlazenError::provider`]. The upstream
+/// crate does not define a `From<WhisperError> for BlazenError` conversion
+/// (and cannot, because `blazen-audio-whispercpp` does not depend on
+/// `blazen-llm` -- the dependency edge runs the other way), so we do the
+/// conversion inline here.
+///
+/// Without the upstream `engine` feature, the inherent `load`, `unload`,
+/// and `is_loaded` methods on [`WhisperCppProvider`] are stubs that return
+/// [`blazen_audio_whispercpp::WhisperError::EngineNotAvailable`] (for
+/// `load`), succeed as no-ops (for `unload`), or return `false` (for
+/// `is_loaded`). This mirrors the behavior of `transcribe` and lets
+/// downstream crates depend on `LocalModel` without unconditionally
+/// pulling in the heavy whisper.cpp runtime.
+#[async_trait]
+impl LocalModel for WhisperCppProvider {
+    async fn load(&self) -> Result<(), BlazenError> {
+        WhisperCppProvider::load(self)
+            .await
+            .map_err(|e| BlazenError::provider("whispercpp", e.to_string()))
+    }
+
+    async fn unload(&self) -> Result<(), BlazenError> {
+        WhisperCppProvider::unload(self)
+            .await
+            .map_err(|e| BlazenError::provider("whispercpp", e.to_string()))
+    }
+
+    async fn is_loaded(&self) -> bool {
+        WhisperCppProvider::is_loaded(self).await
     }
 }
 

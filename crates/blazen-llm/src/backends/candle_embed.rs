@@ -36,3 +36,48 @@ impl crate::traits::EmbeddingModel for CandleEmbedModel {
         })
     }
 }
+
+// ---------------------------------------------------------------------------
+// LocalModel implementation
+// ---------------------------------------------------------------------------
+
+/// `LocalModel` bridge: gives callers explicit `load`/`unload` control over
+/// the underlying candle embedding engine while preserving the existing
+/// eager-load behavior of
+/// [`CandleEmbedModel::from_options`](blazen_embed_candle::CandleEmbedModel::from_options)
+/// and the lazy auto-reload behavior of
+/// [`CandleEmbedModel::embed`](blazen_embed_candle::CandleEmbedModel::embed).
+///
+/// The impl forwards to the inherent methods on [`CandleEmbedModel`] and
+/// wraps [`blazen_embed_candle::CandleEmbedError`] into
+/// [`BlazenError::Provider`] via [`BlazenError::provider`]. The upstream
+/// crate does not define a `From<CandleEmbedError> for BlazenError`
+/// conversion (and cannot, because `blazen-embed-candle` does not depend
+/// on `blazen-llm` -- the dependency edge runs the other way), so we do
+/// the conversion inline here, matching the pattern used by the
+/// `mistralrs` backend bridge.
+///
+/// Without the upstream `engine` feature, the inherent `load`, `unload`,
+/// and `is_loaded` methods on [`CandleEmbedModel`] are stubs that return
+/// `EngineNotAvailable` (for `load`), succeed as no-ops (for `unload`),
+/// or return `false` (for `is_loaded`). This mirrors the behavior of
+/// `embed` and lets downstream crates depend on `LocalModel` without
+/// unconditionally pulling in the heavy candle runtime.
+#[async_trait]
+impl crate::traits::LocalModel for CandleEmbedModel {
+    async fn load(&self) -> Result<(), BlazenError> {
+        CandleEmbedModel::load(self)
+            .await
+            .map_err(|e| BlazenError::provider("candle-embed", e.to_string()))
+    }
+
+    async fn unload(&self) -> Result<(), BlazenError> {
+        CandleEmbedModel::unload(self)
+            .await
+            .map_err(|e| BlazenError::provider("candle-embed", e.to_string()))
+    }
+
+    async fn is_loaded(&self) -> bool {
+        CandleEmbedModel::is_loaded(self).await
+    }
+}

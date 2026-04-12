@@ -226,14 +226,17 @@ pub struct MistralRsProvider {
     model_id: String,
     /// Full options preserved for deferred engine initialisation.
     options: MistralRsOptions,
-    /// Lazily loaded mistral.rs model handle.
+    /// Lazily loaded mistral.rs model handle, wrapped in
+    /// `Arc<RwLock<Option<Arc<...>>>>` so we can both (a) auto-load on first
+    /// use and (b) explicitly unload later to free GPU memory. The inner
+    /// `Arc<Model>` is cloned out of the lock for each inference call so
+    /// streaming tasks can own the handle without holding the read guard
+    /// across await points.
     ///
-    /// Wrapped in `Arc<OnceCell>` so that:
-    /// - The model is loaded once on first use (not at construction time).
-    /// - Streaming can spawn a `'static` task that borrows the model
-    ///   independently of `&self`.
+    /// `mistralrs::Model` is **not** `Clone`, so wrapping it in an inner
+    /// `Arc` gives cheap clones out of the lock.
     #[cfg(feature = "engine")]
-    engine: std::sync::Arc<tokio::sync::OnceCell<mistralrs::Model>>,
+    engine: std::sync::Arc<tokio::sync::RwLock<Option<std::sync::Arc<mistralrs::Model>>>>,
 }
 
 impl MistralRsProvider {
@@ -257,7 +260,7 @@ impl MistralRsProvider {
         Ok(Self {
             model_id: opts.model_id.clone(),
             #[cfg(feature = "engine")]
-            engine: std::sync::Arc::new(tokio::sync::OnceCell::new()),
+            engine: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
             options: opts,
         })
     }
@@ -368,6 +371,99 @@ impl MistralRsProvider {
         let _ = messages;
         Err(MistralRsError::EngineNotAvailable)
     }
+
+    // -----------------------------------------------------------------------
+    // Explicit load / unload (always in the public API)
+    //
+    // These mirror the `infer` / `infer_stream` cfg dual-stub pattern so
+    // that the public surface is identical with and without the `engine`
+    // feature, and so the `blazen_llm::LocalModel` trait bridge in
+    // `blazen-llm/src/backends/mistralrs.rs` can call them unconditionally.
+    // -----------------------------------------------------------------------
+
+    /// Load the model explicitly. Idempotent -- if already loaded, this
+    /// is a no-op that returns `Ok(())`.
+    ///
+    /// Inference methods ([`Self::infer`], [`Self::infer_stream`]) will
+    /// still auto-load on first call if [`Self::load`] was never invoked,
+    /// so explicit loading is only needed when the caller wants to
+    /// pay the initialization cost up-front (e.g. to avoid latency
+    /// spikes during a time-sensitive workflow step).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MistralRsError::Init`] if the underlying model fails to
+    /// build (e.g. missing weights, unsupported architecture, or an
+    /// incompatible accelerator backend).
+    #[cfg(feature = "engine")]
+    pub async fn load(&self) -> Result<(), MistralRsError> {
+        // Reuse the existing loader logic.
+        let _ = self.get_or_load_engine().await?;
+        Ok(())
+    }
+
+    /// Stub: engine not available.
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`MistralRsError::EngineNotAvailable`].
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn load(&self) -> Result<(), MistralRsError> {
+        Err(MistralRsError::EngineNotAvailable)
+    }
+
+    /// Drop the loaded model and free its VRAM / memory. Idempotent --
+    /// if the model is already unloaded, this is a no-op that returns
+    /// `Ok(())`.
+    ///
+    /// Note: if a streaming inference task is still holding an
+    /// `Arc<Model>` clone, the underlying `Model` will only be dropped
+    /// (and its VRAM freed) once that task finishes consuming its
+    /// stream. `unload` always releases the provider's own reference
+    /// immediately.
+    ///
+    /// # Errors
+    ///
+    /// This method currently never returns an error; the `Result` return
+    /// type is preserved to match [`crate::MistralRsError`] conventions
+    /// and the [`blazen_llm::traits::LocalModel`] trait contract.
+    #[cfg(feature = "engine")]
+    pub async fn unload(&self) -> Result<(), MistralRsError> {
+        let mut guard = self.engine.write().await;
+        // Drop the Arc<Model>. When no other clones remain (e.g. from an
+        // in-flight streaming task), VRAM is freed by the Drop impl on
+        // the underlying mistral.rs runner.
+        *guard = None;
+        Ok(())
+    }
+
+    /// Stub: engine not available. Always succeeds as a no-op, matching
+    /// the idempotent-unload contract even when there is no engine to
+    /// unload in the first place.
+    ///
+    /// # Errors
+    ///
+    /// This method never returns an error.
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn unload(&self) -> Result<(), MistralRsError> {
+        Ok(())
+    }
+
+    /// Whether the model is currently loaded in memory / VRAM.
+    #[cfg(feature = "engine")]
+    pub async fn is_loaded(&self) -> bool {
+        self.engine.read().await.is_some()
+    }
+
+    /// Stub: without the engine feature there is never a loaded model,
+    /// so this always returns `false`.
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn is_loaded(&self) -> bool {
+        false
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -465,11 +561,34 @@ fn build_multimodal_messages(
 
 #[cfg(feature = "engine")]
 impl MistralRsProvider {
-    /// Lazily initialise the engine on first use.
-    async fn get_engine(&self) -> Result<&mistralrs::Model, MistralRsError> {
-        self.engine
-            .get_or_try_init(|| async { build_engine(&self.options).await })
-            .await
+    /// Return the loaded engine, loading it on first use.
+    ///
+    /// Uses a double-checked `RwLock` pattern: the fast path takes a read
+    /// lock and clones out the existing `Arc<Model>`; if the engine is not
+    /// yet loaded, it drops the read lock, acquires a write lock,
+    /// re-checks (another task may have loaded it concurrently), and
+    /// finally builds the engine.
+    ///
+    /// Returns an owned `Arc<Model>` so the caller can hold it across
+    /// await points and pass it to spawned tasks without holding the
+    /// read lock.
+    async fn get_or_load_engine(&self) -> Result<std::sync::Arc<mistralrs::Model>, MistralRsError> {
+        // Fast path: acquire read lock, check if already loaded, clone Arc.
+        {
+            let guard = self.engine.read().await;
+            if let Some(model) = guard.as_ref() {
+                return Ok(std::sync::Arc::clone(model));
+            }
+        }
+        // Slow path: acquire write lock, double-check, build, clone Arc.
+        let mut guard = self.engine.write().await;
+        if guard.is_none() {
+            let model = build_engine(&self.options).await?;
+            *guard = Some(std::sync::Arc::new(model));
+        }
+        // SAFETY: we just set Some above (or found Some from a concurrent loader).
+        let model = guard.as_ref().expect("engine loaded above");
+        Ok(std::sync::Arc::clone(model))
     }
 
     async fn infer_engine(
@@ -488,7 +607,7 @@ impl MistralRsProvider {
             ));
         }
 
-        let engine = self.get_engine().await?;
+        let engine = self.get_or_load_engine().await?;
 
         let response = if self.options.vision {
             let msgs = build_multimodal_messages(&messages)?;
@@ -552,32 +671,56 @@ impl MistralRsProvider {
     }
 
     /// Returns a `'static` stream by spawning a task that owns a clone of
-    /// the engine `Arc<OnceCell>` and the options, initialises the engine
+    /// the engine `Arc<RwLock<...>>` and the options, initialises the engine
     /// lazily, and forwards mapped chunks through a channel.
     ///
     /// Engine errors (including failure to load or start the stream) are
-    /// delivered as error items on the returned stream.
+    /// delivered as error items on the returned stream. The spawned task
+    /// holds an owned `Arc<Model>` for the entire duration of streaming,
+    /// so an explicit `unload` from another task cannot yank the model
+    /// out from under an in-flight stream — the `Model` stays alive
+    /// until this task drops its `Arc`.
     fn infer_stream_engine(&self, messages: Vec<ChatMessageInput>) -> InferenceChunkStream {
         use tokio_stream::wrappers::ReceiverStream;
 
         let (tx, rx) = tokio::sync::mpsc::channel(32);
 
         // Clone the Arc + options so the spawned task can outlive `&self`.
-        let engine_cell = std::sync::Arc::clone(&self.engine);
+        let engine_lock = std::sync::Arc::clone(&self.engine);
         let options = self.options.clone();
 
         tokio::spawn(async move {
             use mistralrs::{Response, TextMessageRole, TextMessages};
 
-            // Lazily initialise the engine inside the spawned task.
-            let engine = match engine_cell
-                .get_or_try_init(|| async { build_engine(&options).await })
-                .await
-            {
-                Ok(e) => e,
-                Err(e) => {
-                    let _ = tx.send(Err(e)).await;
-                    return;
+            // Lazily initialise the engine inside the spawned task. We
+            // inline the double-checked `RwLock` load pattern here instead
+            // of calling `get_or_load_engine` so that we can preserve the
+            // existing error-delivery contract (load errors appear as the
+            // first stream item, not as a synchronous return error).
+            let engine: std::sync::Arc<mistralrs::Model> = {
+                // Fast path: acquire read lock, check if already loaded.
+                {
+                    let guard = engine_lock.read().await;
+                    if let Some(model) = guard.as_ref() {
+                        std::sync::Arc::clone(model)
+                    } else {
+                        drop(guard);
+                        // Slow path: acquire write lock, double-check, build.
+                        let mut guard = engine_lock.write().await;
+                        if guard.is_none() {
+                            match build_engine(&options).await {
+                                Ok(model) => {
+                                    *guard = Some(std::sync::Arc::new(model));
+                                }
+                                Err(e) => {
+                                    let _ = tx.send(Err(e)).await;
+                                    return;
+                                }
+                            }
+                        }
+                        // SAFETY: we just set Some above (or found Some from a concurrent loader).
+                        std::sync::Arc::clone(guard.as_ref().expect("engine loaded above"))
+                    }
                 }
             };
 

@@ -148,17 +148,15 @@ impl PyEmbeddingModel {
     ///     >>> response = await model.embed(["Hello", "World"])
     ///     >>> print(len(response.embeddings))  # 2
     ///     >>> print(len(response.embeddings[0]))  # dimensionality
-    fn embed<'py>(&self, py: Python<'py>, texts: Vec<String>) -> PyResult<Bound<'py, PyAny>> {
+    async fn embed(&self, texts: Vec<String>) -> PyResult<Py<PyAny>> {
         let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let response = EmbeddingModel::embed(inner.as_ref(), &texts)
-                .await
-                .map_err(BlazenPyError::from)?;
-            Python::attach(|py| -> PyResult<Py<PyAny>> {
-                let obj = pythonize::pythonize(py, &response)
-                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-                Ok(obj.unbind())
-            })
+        let response = EmbeddingModel::embed(inner.as_ref(), &texts)
+            .await
+            .map_err(BlazenPyError::from)?;
+        Python::attach(|py| -> PyResult<Py<PyAny>> {
+            let obj = pythonize::pythonize(py, &response)
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            Ok(obj.unbind())
         })
     }
 

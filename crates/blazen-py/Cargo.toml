@@ -32,8 +32,8 @@ tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 base64.workspace = true
 pythonize = "0.28"
-pyo3-stub-gen = "0.21"
-pyo3-stub-gen-derive = "0.21"
+pyo3-stub-gen = "0.22"
+pyo3-stub-gen-derive = "0.22"
 
 [features]
 default = []

@@ -4,10 +4,9 @@
 //! pyclasses. They are *result types* — produced by the library, never
 //! constructed by users — so no `#[new]` constructors are provided.
 //!
-//! The nested media collections (`images`, `videos`, `audio`, `models`) are
-//! currently exposed as plain Python lists of dicts via JSON serialization.
-//! This keeps this module decoupled from the typed `PyGeneratedImage` etc.
-//! wrappers being added in a parallel task.
+//! The nested media collections (`images`, `videos`, `audio`, `models`) return
+//! typed wrappers (`PyGeneratedImage`, etc.) from `crate::types::media`.
+//! Timing fields return `PyRequestTiming` from `crate::types`.
 
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
@@ -15,6 +14,12 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use blazen_llm::compute::job::ComputeResult;
 use blazen_llm::compute::results::{
     AudioResult, ImageResult, ThreeDResult, TranscriptionResult, TranscriptionSegment, VideoResult,
+    VoiceHandle,
+};
+
+use crate::types::PyRequestTiming;
+use crate::types::media::{
+    PyGenerated3DModel, PyGeneratedAudio, PyGeneratedImage, PyGeneratedVideo,
 };
 
 // ---------------------------------------------------------------------------
@@ -110,10 +115,12 @@ impl PyTranscriptionResult {
         self.inner.language.clone()
     }
 
-    /// Request timing breakdown (as a dict).
+    /// Request timing breakdown.
     #[getter]
-    fn timing(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        serialize_to_py(py, &self.inner.timing)
+    fn timing(&self) -> PyRequestTiming {
+        PyRequestTiming {
+            inner: self.inner.timing.clone(),
+        }
     }
 
     /// Cost in USD, if reported by the provider.
@@ -124,6 +131,7 @@ impl PyTranscriptionResult {
 
     /// Arbitrary provider-specific metadata (as a dict).
     #[getter]
+    #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
     fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         crate::convert::json_to_py(py, &self.inner.metadata)
     }
@@ -143,16 +151,22 @@ pub struct PyImageResult {
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyImageResult {
-    /// The generated or upscaled images (as a list of dicts).
+    /// The generated or upscaled images.
     #[getter]
-    fn images(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        serialize_to_py(py, &self.inner.images)
+    fn images(&self) -> Vec<PyGeneratedImage> {
+        self.inner
+            .images
+            .iter()
+            .map(|i| PyGeneratedImage { inner: i.clone() })
+            .collect()
     }
 
-    /// Request timing breakdown (as a dict).
+    /// Request timing breakdown.
     #[getter]
-    fn timing(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        serialize_to_py(py, &self.inner.timing)
+    fn timing(&self) -> PyRequestTiming {
+        PyRequestTiming {
+            inner: self.inner.timing.clone(),
+        }
     }
 
     /// Cost in USD, if reported by the provider.
@@ -182,16 +196,22 @@ pub struct PyVideoResult {
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyVideoResult {
-    /// The generated videos (as a list of dicts).
+    /// The generated videos.
     #[getter]
-    fn videos(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        serialize_to_py(py, &self.inner.videos)
+    fn videos(&self) -> Vec<PyGeneratedVideo> {
+        self.inner
+            .videos
+            .iter()
+            .map(|v| PyGeneratedVideo { inner: v.clone() })
+            .collect()
     }
 
-    /// Request timing breakdown (as a dict).
+    /// Request timing breakdown.
     #[getter]
-    fn timing(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        serialize_to_py(py, &self.inner.timing)
+    fn timing(&self) -> PyRequestTiming {
+        PyRequestTiming {
+            inner: self.inner.timing.clone(),
+        }
     }
 
     /// Cost in USD, if reported by the provider.
@@ -221,16 +241,22 @@ pub struct PyAudioResult {
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyAudioResult {
-    /// The generated audio clips (as a list of dicts).
+    /// The generated audio clips.
     #[getter]
-    fn audio(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        serialize_to_py(py, &self.inner.audio)
+    fn audio(&self) -> Vec<PyGeneratedAudio> {
+        self.inner
+            .audio
+            .iter()
+            .map(|a| PyGeneratedAudio { inner: a.clone() })
+            .collect()
     }
 
-    /// Request timing breakdown (as a dict).
+    /// Request timing breakdown.
     #[getter]
-    fn timing(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        serialize_to_py(py, &self.inner.timing)
+    fn timing(&self) -> PyRequestTiming {
+        PyRequestTiming {
+            inner: self.inner.timing.clone(),
+        }
     }
 
     /// Cost in USD, if reported by the provider.
@@ -260,16 +286,22 @@ pub struct PyThreeDResult {
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyThreeDResult {
-    /// The generated 3D models (as a list of dicts).
+    /// The generated 3D models.
     #[getter]
-    fn models(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        serialize_to_py(py, &self.inner.models)
+    fn models(&self) -> Vec<PyGenerated3DModel> {
+        self.inner
+            .models
+            .iter()
+            .map(|m| PyGenerated3DModel { inner: m.clone() })
+            .collect()
     }
 
-    /// Request timing breakdown (as a dict).
+    /// Request timing breakdown.
     #[getter]
-    fn timing(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        serialize_to_py(py, &self.inner.timing)
+    fn timing(&self) -> PyRequestTiming {
+        PyRequestTiming {
+            inner: self.inner.timing.clone(),
+        }
     }
 
     /// Cost in USD, if reported by the provider.
@@ -282,6 +314,104 @@ impl PyThreeDResult {
     #[getter]
     fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         crate::convert::json_to_py(py, &self.inner.metadata)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// VoiceHandle
+// ---------------------------------------------------------------------------
+
+/// A persisted voice identifier returned by a voice-cloning provider.
+///
+/// Unlike the other result types in this module, ``VoiceHandle`` is both
+/// produced by provider methods (``clone_voice``, ``list_voices``) and
+/// passed back into provider methods (``delete_voice``), so it is
+/// constructible from Python via ``from_py_object``.
+///
+/// Example:
+///     >>> handle = await provider.clone_voice(VoiceCloneRequest(
+///     ...     name="rachel-clone",
+///     ...     reference_urls=["https://example.com/rachel.wav"],
+///     ... ))
+///     >>> await provider.delete_voice(handle)
+#[gen_stub_pyclass]
+#[pyclass(name = "VoiceHandle", from_py_object)]
+#[derive(Clone)]
+pub struct PyVoiceHandle {
+    pub(crate) inner: VoiceHandle,
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyVoiceHandle {
+    #[new]
+    #[pyo3(signature = (*, id, name, provider, language=None, description=None, metadata=None))]
+    fn new(
+        py: Python<'_>,
+        id: String,
+        name: String,
+        provider: String,
+        language: Option<String>,
+        description: Option<String>,
+        metadata: Option<Py<PyAny>>,
+    ) -> PyResult<Self> {
+        let metadata_json = match metadata {
+            Some(m) => crate::convert::py_to_json(py, m.bind(py))?,
+            None => serde_json::Value::Object(serde_json::Map::new()),
+        };
+        Ok(Self {
+            inner: VoiceHandle {
+                id,
+                name,
+                provider,
+                language,
+                description,
+                metadata: metadata_json,
+            },
+        })
+    }
+
+    /// Provider-specific voice identifier (e.g. ElevenLabs ``voice_id``).
+    #[getter]
+    fn id(&self) -> &str {
+        &self.inner.id
+    }
+
+    /// Human-readable name for the voice.
+    #[getter]
+    fn name(&self) -> &str {
+        &self.inner.name
+    }
+
+    /// Which provider owns this voice (e.g. ``"elevenlabs"``).
+    #[getter]
+    fn provider(&self) -> &str {
+        &self.inner.provider
+    }
+
+    /// Optional language code (e.g. ``"en"``) for language-specific voices.
+    #[getter]
+    fn language(&self) -> Option<String> {
+        self.inner.language.clone()
+    }
+
+    /// Optional description of the voice.
+    #[getter]
+    fn description(&self) -> Option<String> {
+        self.inner.description.clone()
+    }
+
+    /// Arbitrary provider-specific metadata (as a dict).
+    #[getter]
+    fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        crate::convert::json_to_py(py, &self.inner.metadata)
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "VoiceHandle(id={:?}, name={:?}, provider={:?})",
+            self.inner.id, self.inner.name, self.inner.provider
+        )
     }
 }
 
@@ -314,10 +444,12 @@ impl PyComputeResult {
         crate::convert::json_to_py(py, &self.inner.output)
     }
 
-    /// Request timing breakdown (as a dict).
+    /// Request timing breakdown.
     #[getter]
-    fn timing(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        serialize_to_py(py, &self.inner.timing)
+    fn timing(&self) -> PyRequestTiming {
+        PyRequestTiming {
+            inner: self.inner.timing.clone(),
+        }
     }
 
     /// Cost in USD, if reported by the provider.
