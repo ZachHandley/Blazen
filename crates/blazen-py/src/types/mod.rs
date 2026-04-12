@@ -23,7 +23,7 @@ pub use artifact::PyArtifact;
 pub use chat_window::PyChatWindow;
 pub use citation::Citation;
 pub use completion::PyCompletionResponse;
-pub use embedding::{EmbeddingResponse, PyEmbeddingModel};
+pub use embedding::{PyEmbeddingModel, PyEmbeddingResponse};
 pub use finish_reason::PyFinishReason;
 pub use media::{
     PyGenerated3DModel, PyGeneratedAudio, PyGeneratedImage, PyGeneratedVideo, PyMediaOutput,

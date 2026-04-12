@@ -132,6 +132,7 @@ impl PyMediaOutput {
 
     /// Arbitrary provider-specific metadata as a Python dict.
     #[getter]
+    #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
     fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         crate::convert::json_to_py(py, &self.inner.metadata)
     }

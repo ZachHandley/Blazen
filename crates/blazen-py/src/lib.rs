@@ -129,8 +129,9 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<providers::config::PyRetryConfig>()?;
     m.add_class::<providers::config::PyCacheConfig>()?;
 
-    // Embedding model
+    // Embedding model + response
     m.add_class::<types::PyEmbeddingModel>()?;
+    m.add_class::<types::PyEmbeddingResponse>()?;
 
     // Transcription provider
     m.add_class::<types::PyTranscription>()?;

@@ -68,6 +68,7 @@ impl PyResponseFormat {
 
     /// Serialize this response format to a JSON-compatible dict suitable for
     /// passing to ``CompletionOptions.response_format``.
+    #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
     fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let value = serde_json::to_value(&self.inner)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;

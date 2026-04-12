@@ -20,12 +20,14 @@ __all__ = [
     "CompletionOptions",
     "CompletionResponse",
     "CompletionStream",
+    "ComputeRequest",
     "ComputeResult",
     "ContentPart",
     "Context",
     "CustomProvider",
     "Device",
     "EmbeddingModel",
+    "EmbeddingResponse",
     "Event",
     "FalEmbeddingModel",
     "FalLlmEndpointKind",
@@ -39,6 +41,7 @@ __all__ = [
     "ImageRequest",
     "ImageResult",
     "InMemoryBackend",
+    "JobHandle",
     "JsonlBackend",
     "MediaOutput",
     "MediaType",
@@ -75,6 +78,7 @@ __all__ = [
     "VoiceHandle",
     "Workflow",
     "WorkflowHandler",
+    "run_agent",
 ]
 
 @typing.final
@@ -161,7 +165,7 @@ class Artifact:
         Filename hint for ``code_block`` artifacts.
         """
     @property
-    def metadata(self) -> typing.Any:
+    def metadata(self) -> dict[str, typing.Any]:
         r"""
         Provider-specific metadata for ``custom`` artifacts. Empty for other variants.
         """
@@ -234,7 +238,7 @@ class AudioResult:
         Cost in USD, if reported by the provider.
         """
     @property
-    def metadata(self) -> typing.Any:
+    def metadata(self) -> dict[str, typing.Any]:
         r"""
         Arbitrary provider-specific metadata (as a dict).
         """
@@ -915,35 +919,35 @@ class CompletionResponse:
     @property
     def finish_reason(self) -> typing.Optional[builtins.str]: ...
     @property
-    def tool_calls(self) -> typing.Any: ...
+    def tool_calls(self) -> list[dict[str, typing.Any]]: ...
     @property
-    def usage(self) -> typing.Optional[typing.Any]: ...
+    def usage(self) -> typing.Optional[dict[str, typing.Any]]: ...
     @property
     def cost(self) -> typing.Optional[builtins.float]: ...
     @property
     def timing(self) -> typing.Optional[RequestTiming]: ...
     @property
-    def images(self) -> typing.Any: ...
+    def images(self) -> builtins.list[GeneratedImage]: ...
     @property
-    def audio(self) -> typing.Any: ...
+    def audio(self) -> builtins.list[GeneratedAudio]: ...
     @property
-    def videos(self) -> typing.Any: ...
+    def videos(self) -> builtins.list[GeneratedVideo]: ...
     @property
-    def metadata_extra(self) -> typing.Any: ...
+    def metadata_extra(self) -> dict[str, typing.Any]: ...
     @property
-    def reasoning(self) -> typing.Optional[typing.Any]:
+    def reasoning(self) -> typing.Optional[dict[str, typing.Any]]:
         r"""
         Reasoning trace from models that expose one (Anthropic extended thinking,
         DeepSeek R1, OpenAI o-series, xAI Grok, Gemini thoughts).
         """
     @property
-    def citations(self) -> typing.Any:
+    def citations(self) -> list[dict[str, typing.Any]]:
         r"""
         Web/document citations backing the model's statement (Perplexity,
         Gemini grounding, Anthropic web search).
         """
     @property
-    def artifacts(self) -> typing.Any:
+    def artifacts(self) -> builtins.list[Artifact]:
         r"""
         Typed inline artifacts extracted from the response (SVG, code blocks,
         markdown, mermaid, html, latex, json, custom).
@@ -970,7 +974,24 @@ class CompletionStream:
             ...
     """
     def __aiter__(self) -> CompletionStream: ...
-    def __anext__(self) -> typing.Any: ...
+    async def __anext__(self) -> CompletionResponse:
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ComputeRequest:
+    r"""
+    Input for a raw compute job.
+    
+    Example:
+        >>> req = ComputeRequest(model="fal-ai/flux/dev", input={"prompt": "a cat"})
+    """
+    @property
+    def model(self) -> builtins.str: ...
+    @property
+    def input(self) -> dict[str, typing.Any]: ...
+    @property
+    def webhook(self) -> typing.Optional[builtins.str]: ...
+    def __new__(cls, *, model: builtins.str, input: typing.Any, webhook: typing.Optional[builtins.str] = None) -> ComputeRequest: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -984,7 +1005,7 @@ class ComputeResult:
         The job handle that produced this result, if available (as a dict).
         """
     @property
-    def output(self) -> typing.Any:
+    def output(self) -> dict[str, typing.Any]:
         r"""
         Output data (model-specific JSON).
         """
@@ -999,7 +1020,7 @@ class ComputeResult:
         Cost in USD, if reported by the provider.
         """
     @property
-    def metadata(self) -> typing.Any:
+    def metadata(self) -> dict[str, typing.Any]:
         r"""
         Raw provider-specific metadata (as a dict).
         """
@@ -1239,7 +1260,7 @@ class CustomProvider:
         [`VoiceHandle`] that can be passed as ``SpeechRequest.voice`` on
         subsequent TTS calls.
         """
-    async def list_voices(self) -> builtins.list[VoiceHandle]:
+    async def list_voices(self) -> list[VoiceHandle]:
         r"""
         List all voices known to the host by calling its ``list_voices``
         async method (which must return a list of dicts shaped like
@@ -1346,7 +1367,7 @@ class EmbeddingModel:
         Args:
             options: Optional typed ``ProviderOptions`` object.
         """
-    async def embed(self, texts: typing.Sequence[builtins.str]) -> typing.Any:
+    async def embed(self, texts: typing.Sequence[builtins.str]) -> EmbeddingResponse:
         r"""
         Embed one or more texts.
         
@@ -1360,6 +1381,51 @@ class EmbeddingModel:
             >>> response = await model.embed(["Hello", "World"])
             >>> print(len(response.embeddings))  # 2
             >>> print(len(response.embeddings[0]))  # dimensionality
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class EmbeddingResponse:
+    r"""
+    Response from an embedding operation.
+    
+    Contains the embedding vectors, model name, usage statistics, cost,
+    timing, and provider-specific metadata.
+    
+    Example:
+        >>> response = await model.embed(["Hello", "World"])
+        >>> print(response.model)
+        >>> print(len(response.embeddings))  # 2
+    """
+    @property
+    def embeddings(self) -> builtins.list[builtins.list[builtins.float]]:
+        r"""
+        The embedding vectors, one per input text.
+        """
+    @property
+    def model(self) -> builtins.str:
+        r"""
+        The model used to generate the embeddings.
+        """
+    @property
+    def usage(self) -> typing.Optional[dict[str, typing.Any]]:
+        r"""
+        Token usage statistics, if provided by the model.
+        """
+    @property
+    def cost(self) -> typing.Optional[builtins.float]:
+        r"""
+        Estimated cost in USD, if available.
+        """
+    @property
+    def timing(self) -> typing.Optional[RequestTiming]:
+        r"""
+        Request timing breakdown (queue, execution, total).
+        """
+    @property
+    def metadata(self) -> dict[str, typing.Any]:
+        r"""
+        Provider-specific metadata as a Python dict.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -1404,7 +1470,7 @@ class Event:
         r"""
         Attribute access delegates to the underlying JSON data.
         """
-    def to_dict(self) -> typing.Any:
+    def to_dict(self) -> dict[str, typing.Any]:
         r"""
         Convert the event data to a Python dict.
         """
@@ -1452,7 +1518,7 @@ class FalEmbeddingModel:
         r"""
         Get the dimensionality of the produced embedding vectors.
         """
-    async def embed(self, texts: typing.Sequence[builtins.str]) -> typing.Any:
+    async def embed(self, texts: typing.Sequence[builtins.str]) -> EmbeddingResponse:
         r"""
         Embed one or more texts.
         
@@ -1676,6 +1742,43 @@ class FalProvider:
             A [`TranscriptionResult`] with text, segments, language, timing,
             cost, and metadata.
         """
+    async def run(self, request: ComputeRequest) -> ComputeResult:
+        r"""
+        Submit a compute job and wait for the result.
+        
+        Args:
+            request: A [`ComputeRequest`] with model and input.
+        
+        Returns:
+            A [`ComputeResult`] with output, timing, cost, and metadata.
+        """
+    async def submit(self, request: ComputeRequest) -> JobHandle:
+        r"""
+        Submit a compute job without waiting.
+        
+        Args:
+            request: A [`ComputeRequest`] with model and input.
+        
+        Returns:
+            A [`JobHandle`] with id, provider, model, and submitted_at.
+        """
+    async def status(self, job: JobHandle) -> builtins.str:
+        r"""
+        Poll the status of a submitted job.
+        
+        Args:
+            job: The [`JobHandle`] returned by [`submit`].
+        
+        Returns:
+            A status string: "queued", "running", "completed", "failed", or "cancelled".
+        """
+    async def cancel(self, job: JobHandle) -> None:
+        r"""
+        Cancel a running or queued job.
+        
+        Args:
+            job: The [`JobHandle`] returned by [`submit`].
+        """
     async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
         r"""
         Perform a chat completion via fal-ai/any-llm.
@@ -1688,7 +1791,7 @@ class FalProvider:
         Returns:
             A CompletionResponse with content, model, tool_calls, usage, etc.
         """
-    def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Any, options: typing.Optional[CompletionOptions] = None) -> typing.Any:
+    async def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Any, options: typing.Optional[CompletionOptions] = None) -> None:
         r"""
         Stream a chat completion, calling a callback for each chunk.
         
@@ -1896,7 +1999,7 @@ class ImageResult:
         Cost in USD, if reported by the provider.
         """
     @property
-    def metadata(self) -> typing.Any:
+    def metadata(self) -> dict[str, typing.Any]:
         r"""
         Arbitrary provider-specific metadata (as a dict).
         """
@@ -1917,6 +2020,38 @@ class InMemoryBackend:
         r"""
         Create a new, empty in-memory backend.
         """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class JobHandle:
+    r"""
+    A handle to a submitted compute job.
+    
+    Example:
+        >>> handle = await fal.submit(model="fal-ai/flux/dev", input={...})
+        >>> print(handle.id, handle.model)
+    """
+    @property
+    def id(self) -> builtins.str:
+        r"""
+        The provider-assigned job identifier.
+        """
+    @property
+    def provider(self) -> builtins.str:
+        r"""
+        The provider name (e.g. "fal").
+        """
+    @property
+    def model(self) -> builtins.str:
+        r"""
+        The model/endpoint that was invoked.
+        """
+    @property
+    def submitted_at(self) -> builtins.str:
+        r"""
+        When the job was submitted (ISO 8601 string).
+        """
+    def __getitem__(self, key: builtins.str) -> typing.Any: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -1980,7 +2115,7 @@ class MediaOutput:
         File size in bytes, if known.
         """
     @property
-    def metadata(self) -> typing.Any:
+    def metadata(self) -> dict[str, typing.Any]:
         r"""
         Arbitrary provider-specific metadata as a Python dict.
         """
@@ -2069,7 +2204,7 @@ class Memory:
         Returns:
             The id of the stored document.
         """
-    async def add_many(self, entries: typing.Sequence[typing.Any]) -> builtins.list[builtins.str]:
+    async def add_many(self, entries: typing.Sequence[typing.Any]) -> list[builtins.str]:
         r"""
         Add multiple documents to the memory store in a single batch.
         
@@ -2079,7 +2214,7 @@ class Memory:
         Returns:
             A list of ids for the stored documents.
         """
-    async def search(self, query: builtins.str, limit: builtins.int = 5, metadata_filter: typing.Optional[typing.Any] = None) -> builtins.list[MemoryResult]:
+    async def search(self, query: builtins.str, limit: builtins.int = 5, metadata_filter: typing.Optional[typing.Any] = None) -> list[MemoryResult]:
         r"""
         Semantic search using the configured embedding model.
         
@@ -2096,7 +2231,7 @@ class Memory:
         Returns:
             A list of MemoryResult objects sorted by descending similarity.
         """
-    async def search_local(self, query: builtins.str, limit: builtins.int = 5, metadata_filter: typing.Optional[typing.Any] = None) -> builtins.list[MemoryResult]:
+    async def search_local(self, query: builtins.str, limit: builtins.int = 5, metadata_filter: typing.Optional[typing.Any] = None) -> list[MemoryResult]:
         r"""
         Local SimHash-based search (no embedding model required).
         
@@ -2113,7 +2248,7 @@ class Memory:
         Returns:
             A list of MemoryResult objects sorted by descending similarity.
         """
-    async def get(self, id: builtins.str) -> typing.Optional[typing.Any]:
+    async def get(self, id: builtins.str) -> typing.Optional[dict[str, typing.Any]]:
         r"""
         Retrieve a single entry by its id.
         
@@ -2172,7 +2307,7 @@ class MemoryResult:
         Similarity score in [0.0, 1.0], higher means more similar.
         """
     @property
-    def metadata(self) -> typing.Any:
+    def metadata(self) -> dict[str, typing.Any]:
         r"""
         Arbitrary user metadata (returned as a Python dict/value).
         """
@@ -2488,7 +2623,7 @@ class ResponseFormat:
         Whether the schema is strict (``json_schema`` variants only). Defaults
         to ``False`` for non-schema variants.
         """
-    def to_dict(self) -> typing.Any:
+    def to_dict(self) -> dict[str, typing.Any]:
         r"""
         Serialize this response format to a JSON-compatible dict suitable for
         passing to ``CompletionOptions.response_format``.
@@ -2703,7 +2838,7 @@ class ThreeDResult:
         Cost in USD, if reported by the provider.
         """
     @property
-    def metadata(self) -> typing.Any:
+    def metadata(self) -> dict[str, typing.Any]:
         r"""
         Arbitrary provider-specific metadata (as a dict).
         """
@@ -2963,7 +3098,7 @@ class VideoResult:
         Cost in USD, if reported by the provider.
         """
     @property
-    def metadata(self) -> typing.Any:
+    def metadata(self) -> dict[str, typing.Any]:
         r"""
         Arbitrary provider-specific metadata (as a dict).
         """
@@ -3031,7 +3166,7 @@ class VoiceHandle:
         Optional description of the voice.
         """
     @property
-    def metadata(self) -> typing.Any:
+    def metadata(self) -> dict[str, typing.Any]:
         r"""
         Arbitrary provider-specific metadata (as a dict).
         """
@@ -3266,7 +3401,7 @@ class _EventStream:
     event from the event loop, or when the underlying broadcast channel closes.
     """
     def __aiter__(self) -> _EventStream: ...
-    def __anext__(self) -> typing.Any: ...
+    async def __anext__(self) -> Event:
 
 @typing.final
 class _SessionRegistryHandle:
@@ -3423,4 +3558,26 @@ class SessionPausePolicy(enum.Enum):
     PickleOrSerialize = ...
     WarnDrop = ...
     HardError = ...
+
+async def run_agent(model: CompletionModel, messages: typing.Sequence[ChatMessage], *, tools: typing.Sequence[ToolDef], max_iterations: builtins.int = 10, system_prompt: typing.Optional[builtins.str] = None, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, add_finish_tool: builtins.bool = False) -> AgentResult:
+    r"""
+    Run an agentic tool execution loop.
+    
+    Sends messages to the model with tool definitions, executes tool calls,
+    feeds results back, and repeats until the model stops calling tools
+    or max_iterations is reached.
+    
+    Args:
+        model: The completion model to use.
+        messages: Initial conversation messages.
+        tools: List of ToolDef objects.
+        max_iterations: Maximum tool call rounds (default: 10).
+        system_prompt: Optional system prompt.
+        temperature: Optional sampling temperature.
+        max_tokens: Optional max tokens per call.
+        add_finish_tool: Whether to add a built-in "finish" tool (default: False).
+    
+    Returns:
+        AgentResult with the final response and full conversation history.
+    """
 

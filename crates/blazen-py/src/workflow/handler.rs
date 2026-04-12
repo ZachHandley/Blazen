@@ -78,28 +78,31 @@ impl PyWorkflowHandler {
     ///
     /// Returns:
     ///     The final Event produced by the workflow.
-    async fn result(&self) -> PyResult<super::event::PyEvent> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, Event]", imports = ("typing",)))]
+    fn result<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
-        let handler = {
-            let mut guard = inner.lock().await;
-            guard
-                .take()
-                .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?
-        };
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let handler = {
+                let mut guard = inner.lock().await;
+                guard
+                    .take()
+                    .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?
+            };
 
-        let wf_result = handler.result().await.map_err(BlazenPyError::from)?;
-        let session_refs = wf_result.session_refs;
-        let event = wf_result.event;
+            let wf_result = handler.result().await.map_err(BlazenPyError::from)?;
+            let session_refs = wf_result.session_refs;
+            let event = wf_result.event;
 
-        // Install the registry as the current session-ref scope while we
-        // build the `PyEvent`. `any_event_to_py_event` calls
-        // `current_session_registry()` to capture the Arc into the
-        // returned `PyEvent`, so attribute access (`__getattr__`) keeps
-        // working even after this future resolves.
-        let py_event =
-            with_session_registry(session_refs, async move { any_event_to_py_event(&*event) })
-                .await;
-        Ok(py_event)
+            // Install the registry as the current session-ref scope while we
+            // build the `PyEvent`. `any_event_to_py_event` calls
+            // `current_session_registry()` to capture the Arc into the
+            // returned `PyEvent`, so attribute access (`__getattr__`) keeps
+            // working even after this future resolves.
+            let py_event =
+                with_session_registry(session_refs, async move { any_event_to_py_event(&*event) })
+                    .await;
+            Ok(py_event)
+        })
     }
 
     /// Create an async iterator over intermediate events.
@@ -132,14 +135,17 @@ impl PyWorkflowHandler {
     /// or `abort()`.
     ///
     /// Raises `RuntimeError` if the handler was already consumed.
-    async fn pause(&self) -> PyResult<()> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, None]", imports = ("typing",)))]
+    fn pause<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
-        let guard = inner.lock().await;
-        let handler = guard
-            .as_ref()
-            .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
-        handler.pause().map_err(BlazenPyError::from)?;
-        Ok(())
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let guard = inner.lock().await;
+            let handler = guard
+                .as_ref()
+                .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
+            handler.pause().map_err(BlazenPyError::from)?;
+            Ok(())
+        })
     }
 
     /// Resume a paused workflow in place.
@@ -148,14 +154,17 @@ impl PyWorkflowHandler {
     /// paused.
     ///
     /// Raises `RuntimeError` if the handler was already consumed.
-    async fn resume_in_place(&self) -> PyResult<()> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, None]", imports = ("typing",)))]
+    fn resume_in_place<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
-        let guard = inner.lock().await;
-        let handler = guard
-            .as_ref()
-            .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
-        handler.resume_in_place().map_err(BlazenPyError::from)?;
-        Ok(())
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let guard = inner.lock().await;
+            let handler = guard
+                .as_ref()
+                .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
+            handler.resume_in_place().map_err(BlazenPyError::from)?;
+            Ok(())
+        })
     }
 
     /// Capture a snapshot of the current workflow state.
@@ -167,15 +176,18 @@ impl PyWorkflowHandler {
     ///
     /// Returns:
     ///     A JSON string representing the workflow snapshot.
-    async fn snapshot(&self) -> PyResult<String> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, builtins.str]", imports = ("typing", "builtins")))]
+    fn snapshot<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
-        let guard = inner.lock().await;
-        let handler = guard
-            .as_ref()
-            .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
-        let snap = handler.snapshot().await.map_err(BlazenPyError::from)?;
-        let json = snap.to_json().map_err(BlazenPyError::from)?;
-        Ok(json)
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let guard = inner.lock().await;
+            let handler = guard
+                .as_ref()
+                .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
+            let snap = handler.snapshot().await.map_err(BlazenPyError::from)?;
+            let json = snap.to_json().map_err(BlazenPyError::from)?;
+            Ok(json)
+        })
     }
 
     /// Respond to an input request from a workflow step.
@@ -186,24 +198,29 @@ impl PyWorkflowHandler {
     ///               delivered to the waiting step.
     ///
     /// Raises `RuntimeError` if the handler was already consumed.
-    async fn respond_to_input(&self, request_id: String, response: Py<PyAny>) -> PyResult<()> {
-        // Convert the Python value to JSON synchronously under the GIL
-        // before we cross any `.await` boundary. The response payload is
-        // then owned-JSON for the rest of the async body.
-        let response_json = Python::attach(|py| crate::convert::py_to_json(py, response.bind(py)))?;
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, None]", imports = ("typing",)))]
+    fn respond_to_input<'py>(
+        &self,
+        py: Python<'py>,
+        request_id: String,
+        response: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let response_json = crate::convert::py_to_json(py, response)?;
         let inner = self.inner.clone();
-        let guard = inner.lock().await;
-        let handler = guard
-            .as_ref()
-            .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
-        let input_response = blazen_events::InputResponseEvent {
-            request_id,
-            response: response_json,
-        };
-        handler
-            .respond_to_input(input_response)
-            .map_err(BlazenPyError::from)?;
-        Ok(())
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let guard = inner.lock().await;
+            let handler = guard
+                .as_ref()
+                .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
+            let input_response = blazen_events::InputResponseEvent {
+                request_id,
+                response: response_json,
+            };
+            handler
+                .respond_to_input(input_response)
+                .map_err(BlazenPyError::from)?;
+            Ok(())
+        })
     }
 
     /// Abort the running workflow.
@@ -212,14 +229,17 @@ impl PyWorkflowHandler {
     /// possible. Does **not** consume the handler.
     ///
     /// Raises `RuntimeError` if the handler was already consumed.
-    async fn abort(&self) -> PyResult<()> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, None]", imports = ("typing",)))]
+    fn abort<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
-        let guard = inner.lock().await;
-        let handler = guard
-            .as_ref()
-            .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
-        handler.abort().map_err(BlazenPyError::from)?;
-        Ok(())
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let guard = inner.lock().await;
+            let handler = guard
+                .as_ref()
+                .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
+            handler.abort().map_err(BlazenPyError::from)?;
+            Ok(())
+        })
     }
 
     fn __repr__(&self) -> String {
@@ -266,6 +286,7 @@ impl PyEventStream {
     // `async fn` returning an awaitable. Converting this method fails
     // with `IntoPyCallbackOutput` not implemented for the returned
     // future. Keep the explicit bridge here.
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, Event]", imports = ("typing",)))]
     fn __anext__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let stream = self.stream.clone();
         let session_refs = Arc::clone(&self.session_refs);

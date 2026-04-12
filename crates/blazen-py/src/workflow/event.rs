@@ -106,6 +106,7 @@ impl PyEvent {
     }
 
     /// Convert the event data to a Python dict.
+    #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
     fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         with_event_registry(self.session_refs.as_ref(), || json_to_py(py, &self.data))
     }

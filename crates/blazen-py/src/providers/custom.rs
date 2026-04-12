@@ -296,33 +296,54 @@ impl PyCustomProvider {
 
     /// Synthesize speech from text by calling the host's
     /// ``text_to_speech`` async method.
-    async fn text_to_speech(&self, request: PySpeechRequest) -> PyResult<PyAudioResult> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, AudioResult]", imports = ("typing",)))]
+    fn text_to_speech<'py>(
+        &self,
+        py: Python<'py>,
+        request: PySpeechRequest,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let rust_req = request.inner;
         let inner = self.inner.clone();
-        let result = AudioGeneration::text_to_speech(inner.as_ref(), rust_req)
-            .await
-            .map_err(blazen_error_to_pyerr)?;
-        Ok(PyAudioResult { inner: result })
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let result = AudioGeneration::text_to_speech(inner.as_ref(), rust_req)
+                .await
+                .map_err(blazen_error_to_pyerr)?;
+            Ok(PyAudioResult { inner: result })
+        })
     }
 
     /// Generate music by calling the host's ``generate_music`` async method.
-    async fn generate_music(&self, request: PyMusicRequest) -> PyResult<PyAudioResult> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, AudioResult]", imports = ("typing",)))]
+    fn generate_music<'py>(
+        &self,
+        py: Python<'py>,
+        request: PyMusicRequest,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let rust_req = request.inner;
         let inner = self.inner.clone();
-        let result = AudioGeneration::generate_music(inner.as_ref(), rust_req)
-            .await
-            .map_err(blazen_error_to_pyerr)?;
-        Ok(PyAudioResult { inner: result })
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let result = AudioGeneration::generate_music(inner.as_ref(), rust_req)
+                .await
+                .map_err(blazen_error_to_pyerr)?;
+            Ok(PyAudioResult { inner: result })
+        })
     }
 
     /// Generate sound effects by calling the host's ``generate_sfx`` async method.
-    async fn generate_sfx(&self, request: PyMusicRequest) -> PyResult<PyAudioResult> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, AudioResult]", imports = ("typing",)))]
+    fn generate_sfx<'py>(
+        &self,
+        py: Python<'py>,
+        request: PyMusicRequest,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let rust_req = request.inner;
         let inner = self.inner.clone();
-        let result = AudioGeneration::generate_sfx(inner.as_ref(), rust_req)
-            .await
-            .map_err(blazen_error_to_pyerr)?;
-        Ok(PyAudioResult { inner: result })
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let result = AudioGeneration::generate_sfx(inner.as_ref(), rust_req)
+                .await
+                .map_err(blazen_error_to_pyerr)?;
+            Ok(PyAudioResult { inner: result })
+        })
     }
 
     // -----------------------------------------------------------------
@@ -333,39 +354,56 @@ impl PyCustomProvider {
     /// ``clone_voice`` async method. Returns a persistent
     /// [`VoiceHandle`] that can be passed as ``SpeechRequest.voice`` on
     /// subsequent TTS calls.
-    async fn clone_voice(&self, request: PyVoiceCloneRequest) -> PyResult<PyVoiceHandle> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, VoiceHandle]", imports = ("typing",)))]
+    fn clone_voice<'py>(
+        &self,
+        py: Python<'py>,
+        request: PyVoiceCloneRequest,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let rust_req = request.inner;
         let inner = self.inner.clone();
-        let result = VoiceCloning::clone_voice(inner.as_ref(), rust_req)
-            .await
-            .map_err(blazen_error_to_pyerr)?;
-        Ok(PyVoiceHandle { inner: result })
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let result = VoiceCloning::clone_voice(inner.as_ref(), rust_req)
+                .await
+                .map_err(blazen_error_to_pyerr)?;
+            Ok(PyVoiceHandle { inner: result })
+        })
     }
 
     /// List all voices known to the host by calling its ``list_voices``
     /// async method (which must return a list of dicts shaped like
     /// [`VoiceHandle`]).
-    async fn list_voices(&self) -> PyResult<Vec<PyVoiceHandle>> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, list[VoiceHandle]]", imports = ("typing",)))]
+    fn list_voices<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
-        let voices = VoiceCloning::list_voices(inner.as_ref())
-            .await
-            .map_err(blazen_error_to_pyerr)?;
-        let wrapped: Vec<PyVoiceHandle> = voices
-            .into_iter()
-            .map(|v| PyVoiceHandle { inner: v })
-            .collect();
-        Ok(wrapped)
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let voices = VoiceCloning::list_voices(inner.as_ref())
+                .await
+                .map_err(blazen_error_to_pyerr)?;
+            let wrapped: Vec<PyVoiceHandle> = voices
+                .into_iter()
+                .map(|v| PyVoiceHandle { inner: v })
+                .collect();
+            Ok(wrapped)
+        })
     }
 
     /// Delete a previously cloned voice by calling the host's
     /// ``delete_voice`` async method.
-    async fn delete_voice(&self, voice: PyVoiceHandle) -> PyResult<()> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, None]", imports = ("typing",)))]
+    fn delete_voice<'py>(
+        &self,
+        py: Python<'py>,
+        voice: PyVoiceHandle,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let rust_voice = voice.inner;
         let inner = self.inner.clone();
-        VoiceCloning::delete_voice(inner.as_ref(), &rust_voice)
-            .await
-            .map_err(blazen_error_to_pyerr)?;
-        Ok(())
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            VoiceCloning::delete_voice(inner.as_ref(), &rust_voice)
+                .await
+                .map_err(blazen_error_to_pyerr)?;
+            Ok(())
+        })
     }
 
     // -----------------------------------------------------------------
@@ -373,23 +411,37 @@ impl PyCustomProvider {
     // -----------------------------------------------------------------
 
     /// Generate an image by calling the host's ``generate_image`` async method.
-    async fn generate_image(&self, request: PyImageRequest) -> PyResult<PyImageResult> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, ImageResult]", imports = ("typing",)))]
+    fn generate_image<'py>(
+        &self,
+        py: Python<'py>,
+        request: PyImageRequest,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let rust_req = request.inner;
         let inner = self.inner.clone();
-        let result = ImageGeneration::generate_image(inner.as_ref(), rust_req)
-            .await
-            .map_err(blazen_error_to_pyerr)?;
-        Ok(PyImageResult { inner: result })
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let result = ImageGeneration::generate_image(inner.as_ref(), rust_req)
+                .await
+                .map_err(blazen_error_to_pyerr)?;
+            Ok(PyImageResult { inner: result })
+        })
     }
 
     /// Upscale an image by calling the host's ``upscale_image`` async method.
-    async fn upscale_image(&self, request: PyUpscaleRequest) -> PyResult<PyImageResult> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, ImageResult]", imports = ("typing",)))]
+    fn upscale_image<'py>(
+        &self,
+        py: Python<'py>,
+        request: PyUpscaleRequest,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let rust_req = request.inner;
         let inner = self.inner.clone();
-        let result = ImageGeneration::upscale_image(inner.as_ref(), rust_req)
-            .await
-            .map_err(blazen_error_to_pyerr)?;
-        Ok(PyImageResult { inner: result })
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let result = ImageGeneration::upscale_image(inner.as_ref(), rust_req)
+                .await
+                .map_err(blazen_error_to_pyerr)?;
+            Ok(PyImageResult { inner: result })
+        })
     }
 
     // -----------------------------------------------------------------
@@ -398,24 +450,38 @@ impl PyCustomProvider {
 
     /// Generate a video from text by calling the host's ``text_to_video``
     /// async method.
-    async fn text_to_video(&self, request: PyVideoRequest) -> PyResult<PyVideoResult> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, VideoResult]", imports = ("typing",)))]
+    fn text_to_video<'py>(
+        &self,
+        py: Python<'py>,
+        request: PyVideoRequest,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let rust_req = request.inner;
         let inner = self.inner.clone();
-        let result = VideoGeneration::text_to_video(inner.as_ref(), rust_req)
-            .await
-            .map_err(blazen_error_to_pyerr)?;
-        Ok(PyVideoResult { inner: result })
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let result = VideoGeneration::text_to_video(inner.as_ref(), rust_req)
+                .await
+                .map_err(blazen_error_to_pyerr)?;
+            Ok(PyVideoResult { inner: result })
+        })
     }
 
     /// Generate a video from an image by calling the host's
     /// ``image_to_video`` async method.
-    async fn image_to_video(&self, request: PyVideoRequest) -> PyResult<PyVideoResult> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, VideoResult]", imports = ("typing",)))]
+    fn image_to_video<'py>(
+        &self,
+        py: Python<'py>,
+        request: PyVideoRequest,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let rust_req = request.inner;
         let inner = self.inner.clone();
-        let result = VideoGeneration::image_to_video(inner.as_ref(), rust_req)
-            .await
-            .map_err(blazen_error_to_pyerr)?;
-        Ok(PyVideoResult { inner: result })
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let result = VideoGeneration::image_to_video(inner.as_ref(), rust_req)
+                .await
+                .map_err(blazen_error_to_pyerr)?;
+            Ok(PyVideoResult { inner: result })
+        })
     }
 
     // -----------------------------------------------------------------
@@ -423,13 +489,20 @@ impl PyCustomProvider {
     // -----------------------------------------------------------------
 
     /// Transcribe audio by calling the host's ``transcribe`` async method.
-    async fn transcribe(&self, request: PyTranscriptionRequest) -> PyResult<PyTranscriptionResult> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, TranscriptionResult]", imports = ("typing",)))]
+    fn transcribe<'py>(
+        &self,
+        py: Python<'py>,
+        request: PyTranscriptionRequest,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let rust_req = request.inner;
         let inner = self.inner.clone();
-        let result = Transcription::transcribe(inner.as_ref(), rust_req)
-            .await
-            .map_err(blazen_error_to_pyerr)?;
-        Ok(PyTranscriptionResult { inner: result })
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let result = Transcription::transcribe(inner.as_ref(), rust_req)
+                .await
+                .map_err(blazen_error_to_pyerr)?;
+            Ok(PyTranscriptionResult { inner: result })
+        })
     }
 
     // -----------------------------------------------------------------
@@ -437,13 +510,20 @@ impl PyCustomProvider {
     // -----------------------------------------------------------------
 
     /// Generate a 3D model by calling the host's ``generate_3d`` async method.
-    async fn generate_3d(&self, request: PyThreeDRequest) -> PyResult<PyThreeDResult> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, ThreeDResult]", imports = ("typing",)))]
+    fn generate_3d<'py>(
+        &self,
+        py: Python<'py>,
+        request: PyThreeDRequest,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let rust_req = request.inner;
         let inner = self.inner.clone();
-        let result = ThreeDGeneration::generate_3d(inner.as_ref(), rust_req)
-            .await
-            .map_err(blazen_error_to_pyerr)?;
-        Ok(PyThreeDResult { inner: result })
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let result = ThreeDGeneration::generate_3d(inner.as_ref(), rust_req)
+                .await
+                .map_err(blazen_error_to_pyerr)?;
+            Ok(PyThreeDResult { inner: result })
+        })
     }
 
     // -----------------------------------------------------------------
@@ -452,16 +532,20 @@ impl PyCustomProvider {
 
     /// Remove the background from an image by calling the host's
     /// ``remove_background`` async method.
-    async fn remove_background(
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, ImageResult]", imports = ("typing",)))]
+    fn remove_background<'py>(
         &self,
+        py: Python<'py>,
         request: PyBackgroundRemovalRequest,
-    ) -> PyResult<PyImageResult> {
+    ) -> PyResult<Bound<'py, PyAny>> {
         let rust_req = request.inner;
         let inner = self.inner.clone();
-        let result = BackgroundRemoval::remove_background(inner.as_ref(), rust_req)
-            .await
-            .map_err(blazen_error_to_pyerr)?;
-        Ok(PyImageResult { inner: result })
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let result = BackgroundRemoval::remove_background(inner.as_ref(), rust_req)
+                .await
+                .map_err(blazen_error_to_pyerr)?;
+            Ok(PyImageResult { inner: result })
+        })
     }
 
     // -----------------------------------------------------------------

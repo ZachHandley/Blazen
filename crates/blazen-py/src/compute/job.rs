@@ -1,6 +1,7 @@
 //! Python wrappers for compute job types.
 
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_llm::compute::{self as compute_types};
 
@@ -45,12 +46,14 @@ impl PyJobStatus {
 /// Example:
 ///     >>> handle = await fal.submit(model="fal-ai/flux/dev", input={...})
 ///     >>> print(handle.id, handle.model)
+#[gen_stub_pyclass]
 #[pyclass(name = "JobHandle", frozen, from_py_object)]
 #[derive(Clone)]
 pub struct PyJobHandle {
     pub(crate) inner: compute_types::JobHandle,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyJobHandle {
     /// The provider-assigned job identifier.
@@ -121,12 +124,14 @@ impl PyJobHandle {
 ///
 /// Example:
 ///     >>> req = ComputeRequest(model="fal-ai/flux/dev", input={"prompt": "a cat"})
+#[gen_stub_pyclass]
 #[pyclass(name = "ComputeRequest", from_py_object)]
 #[derive(Clone)]
 pub struct PyComputeRequest {
     pub(crate) inner: compute_types::ComputeRequest,
 }
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyComputeRequest {
     #[new]
@@ -153,6 +158,7 @@ impl PyComputeRequest {
     }
 
     #[getter]
+    #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
     fn input(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         crate::convert::json_to_py(py, &self.inner.input)
     }

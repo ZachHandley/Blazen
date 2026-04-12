@@ -513,23 +513,20 @@ impl PyCompletionModel {
     ///     ... ])
     ///     >>> print(response.content)
     #[pyo3(signature = (messages, options=None))]
-    async fn complete(
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, CompletionResponse]", imports = ("typing",)))]
+    fn complete<'py>(
         &self,
-        messages: Vec<PyChatMessage>,
-        options: Option<Py<PyCompletionOptions>>,
-    ) -> PyResult<PyCompletionResponse> {
-        let rust_messages: Vec<ChatMessage> = messages.into_iter().map(|m| m.inner).collect();
-        // Build the request synchronously under the GIL so we can read the
-        // tools/response_format Python objects on `PyCompletionOptions` before
-        // the coroutine suspends.
-        let request = Python::attach(|py| {
-            let opts_ref = options.as_ref().map(|o| o.borrow(py));
-            build_request(py, rust_messages, opts_ref.as_deref())
-        })?;
-
+        py: Python<'py>,
+        messages: Vec<PyRef<'py, PyChatMessage>>,
+        options: Option<PyRef<'py, PyCompletionOptions>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
+        let request = build_request(py, rust_messages, options.as_deref())?;
         let inner = self.inner.clone();
-        let response = inner.complete(request).await.map_err(BlazenPyError::from)?;
-        Ok(PyCompletionResponse { inner: response })
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let response = inner.complete(request).await.map_err(BlazenPyError::from)?;
+            Ok(PyCompletionResponse { inner: response })
+        })
     }
 
     /// Stream a chat completion.
@@ -645,14 +642,17 @@ impl PyCompletionModel {
     ///
     /// Idempotent: calling ``load`` on an already-loaded model is a no-op
     /// that returns immediately.
-    async fn load(&self) -> PyResult<()> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, None]", imports = ("typing",)))]
+    fn load<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let local = self.local_model.clone();
-        match local {
-            Some(lm) => lm.load().await.map_err(crate::error::blazen_error_to_pyerr),
-            None => Err(pyo3::exceptions::PyNotImplementedError::new_err(
-                "load() is only supported for local in-process providers (mistral.rs, llama.cpp, candle)",
-            )),
-        }
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            match local {
+                Some(lm) => lm.load().await.map_err(crate::error::blazen_error_to_pyerr),
+                None => Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                    "load() is only supported for local in-process providers (mistral.rs, llama.cpp, candle)",
+                )),
+            }
+        })
     }
 
     /// Drop the loaded model and free its memory / VRAM.
@@ -660,40 +660,49 @@ impl PyCompletionModel {
     /// For remote providers this raises ``NotImplementedError``.
     /// For local providers this frees GPU memory so the process can
     /// load a different model. Idempotent.
-    async fn unload(&self) -> PyResult<()> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, None]", imports = ("typing",)))]
+    fn unload<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let local = self.local_model.clone();
-        match local {
-            Some(lm) => lm
-                .unload()
-                .await
-                .map_err(crate::error::blazen_error_to_pyerr),
-            None => Err(pyo3::exceptions::PyNotImplementedError::new_err(
-                "unload() is only supported for local in-process providers",
-            )),
-        }
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            match local {
+                Some(lm) => lm
+                    .unload()
+                    .await
+                    .map_err(crate::error::blazen_error_to_pyerr),
+                None => Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                    "unload() is only supported for local in-process providers",
+                )),
+            }
+        })
     }
 
     /// Whether the model is currently loaded in memory / VRAM.
     ///
     /// Always returns ``False`` for remote providers (they have no local
     /// model to load). Returns the real state for local providers.
-    async fn is_loaded(&self) -> bool {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, builtins.bool]", imports = ("typing", "builtins")))]
+    fn is_loaded<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let local = self.local_model.clone();
-        match local {
-            Some(lm) => lm.is_loaded().await,
-            None => false,
-        }
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            match local {
+                Some(lm) => Ok(lm.is_loaded().await),
+                None => Ok(false),
+            }
+        })
     }
 
     /// Approximate VRAM footprint in bytes, if the implementation can
     /// report it. Returns ``None`` for remote providers or for local
     /// providers that do not expose memory usage.
-    async fn vram_bytes(&self) -> Option<u64> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, typing.Optional[builtins.int]]", imports = ("typing", "builtins")))]
+    fn vram_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let local = self.local_model.clone();
-        match local {
-            Some(lm) => lm.vram_bytes().await,
-            None => None,
-        }
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            match local {
+                Some(lm) => Ok(lm.vram_bytes().await),
+                None => Ok(None),
+            }
+        })
     }
 }
 
@@ -745,6 +754,7 @@ impl PyLazyCompletionStream {
         slf
     }
 
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, CompletionResponse]", imports = ("typing",)))]
     fn __anext__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let state = self.state.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {

@@ -139,9 +139,14 @@ const DEFAULT_CREATIVE_UPSCALE_MODEL: &str = "fal-ai/creative-upscaler";
 
 /// Character limit for the `prompt` field on fal prompt-string endpoints
 /// (`fal-ai/any-llm`, `openrouter/router`, and their variants).
-const FAL_PROMPT_CHAR_LIMIT: usize = 4800;
+///
+/// Set to `usize::MAX` (no limit) — let fal.ai return an error if the
+/// prompt is too long rather than silently truncating user content.
+const FAL_PROMPT_CHAR_LIMIT: usize = usize::MAX;
 /// Character limit for the `system_prompt` field on the same endpoints.
-const FAL_SYSTEM_PROMPT_CHAR_LIMIT: usize = 4800;
+///
+/// Set to `usize::MAX` (no limit) — same rationale as above.
+const FAL_SYSTEM_PROMPT_CHAR_LIMIT: usize = usize::MAX;
 
 // ---------------------------------------------------------------------------
 // LLM endpoint typing
@@ -3711,26 +3716,29 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn test_collapse_evicts_oldest_to_fit_4800() {
-        let big = "x".repeat(2000);
+    fn test_collapse_preserves_all_messages_without_limit() {
+        let big = "x".repeat(20_000);
         let messages = vec![
             ChatMessage::user(&big),
             ChatMessage::assistant(&big),
-            ChatMessage::user(&big), // total ~6000 chars — too long
+            ChatMessage::user(&big),
         ];
-        let (prompt, _, _, _, _) = collapse_messages(&messages, 4800, 4800);
-        assert!(prompt.chars().count() <= 4800);
-        // Newest message should survive.
+        // With usize::MAX limits (no truncation), all messages survive.
+        let (prompt, _, _, _, _) = collapse_messages(&messages, usize::MAX, usize::MAX);
         assert!(prompt.contains(&format!("User: {big}")));
+        // All three messages present.
+        assert_eq!(prompt.matches("User: ").count(), 2);
+        assert_eq!(prompt.matches("Assistant: ").count(), 1);
     }
 
     #[test]
-    fn test_collapse_truncates_long_system_with_marker() {
-        let huge_system = "s".repeat(10000);
+    fn test_collapse_preserves_long_system_prompt() {
+        let huge_system = "s".repeat(50_000);
         let messages = vec![ChatMessage::system(&huge_system), ChatMessage::user("hi")];
-        let (_, system, _, _, _) = collapse_messages(&messages, 4800, 4800);
-        assert!(system.chars().count() <= 4800);
-        assert!(system.ends_with(" [truncated]"));
+        let (_, system, _, _, _) = collapse_messages(&messages, usize::MAX, usize::MAX);
+        // System prompt is NOT truncated.
+        assert_eq!(system.chars().count(), 50_000);
+        assert!(!system.contains("[truncated]"));
     }
 
     #[test]

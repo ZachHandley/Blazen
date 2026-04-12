@@ -105,33 +105,20 @@ Auto-routing does not trigger for `OpenAiChat`, `OpenAiResponses`,
 multimodal content via their own body format. Disable auto-routing
 explicitly with `.with_auto_route_modality(false)`.
 
-### 0.3 4800-char Prompt / System-prompt Budget
+### 0.3 Prompt-string Endpoints
 
-For all prompt-string endpoints (`OpenRouter`, `AnyLlm`, `Vision`,
+For prompt-string endpoints (`OpenRouter`, `AnyLlm`, `Vision`,
 `Audio`, `Video`), fal expects flat string fields (`prompt` and
 `system_prompt`) rather than an OpenAI-style `messages` array. Blazen's
-body builder collapses the incoming chat history into these fields and
-enforces a per-field character budget:
+body builder collapses the incoming chat history into these fields but
+does **not** impose any character limit — the full prompt and system
+prompt are sent to fal.ai as-is, and the underlying model's context
+window is the only constraint. If fal.ai rejects a request for
+exceeding a model-specific limit, the API error is returned to the
+caller.
 
-| Field | Limit |
-|---|---|
-| `prompt` | 4800 chars |
-| `system_prompt` | 4800 chars |
-
-Eviction policy:
-
-- If the collapsed `prompt` exceeds 4800 chars, the **oldest
-  non-system** message is dropped and the remainder is re-joined;
-  repeat until the limit fits.
-- If the collapsed `system_prompt` exceeds 4800 chars, it is truncated
-  from the front (earliest content dropped first).
-- The most recent user turn is always preserved — if a single message
-  would exceed the budget on its own, it is kept in full and eviction
-  stops there.
-
-This budgeting does **not** apply to `OpenAiChat`, `OpenAiResponses`,
-or `OpenAiEmbeddings`, which use proper OpenAI message arrays and have
-no per-field char limit in Blazen.
+This collapsing does **not** apply to `OpenAiChat`, `OpenAiResponses`,
+or `OpenAiEmbeddings`, which use proper OpenAI message arrays natively.
 
 ### 0.4 Streaming
 

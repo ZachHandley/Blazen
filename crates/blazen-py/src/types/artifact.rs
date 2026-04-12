@@ -101,6 +101,7 @@ impl PyArtifact {
 
     /// Provider-specific metadata for ``custom`` artifacts. Empty for other variants.
     #[getter]
+    #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
     fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         if let Artifact::Custom { metadata, .. } = &self.inner {
             crate::convert::json_to_py(py, metadata)

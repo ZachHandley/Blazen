@@ -71,12 +71,19 @@ impl PyOpenAiProvider {
     ///
     /// Returns:
     ///     An [`AudioResult`] with audio clips, timing, cost, and metadata.
-    async fn text_to_speech(&self, request: PySpeechRequest) -> PyResult<PyAudioResult> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, AudioResult]", imports = ("typing",)))]
+    fn text_to_speech<'py>(
+        &self,
+        py: Python<'py>,
+        request: PySpeechRequest,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let rust_req = request.inner;
         let inner = self.inner.clone();
-        let result = AudioGeneration::text_to_speech(inner.as_ref(), rust_req)
-            .await
-            .map_err(blazen_error_to_pyerr)?;
-        Ok(PyAudioResult { inner: result })
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let result = AudioGeneration::text_to_speech(inner.as_ref(), rust_req)
+                .await
+                .map_err(blazen_error_to_pyerr)?;
+            Ok(PyAudioResult { inner: result })
+        })
     }
 }

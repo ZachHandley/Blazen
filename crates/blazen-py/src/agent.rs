@@ -10,7 +10,7 @@
 use std::sync::Arc;
 
 use pyo3::prelude::*;
-use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
 
 use blazen_llm::agent::{AgentConfig, AgentResult as RustAgentResult, run_agent as rust_run_agent};
 use blazen_llm::error::BlazenError;
@@ -226,63 +226,55 @@ impl PyAgentResult {
 ///
 /// Returns:
 ///     AgentResult with the final response and full conversation history.
+#[gen_stub_pyfunction]
+#[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, AgentResult]", imports = ("typing",)))]
 #[pyfunction]
 #[pyo3(signature = (model, messages, *, tools, max_iterations=10, system_prompt=None, temperature=None, max_tokens=None, add_finish_tool=false))]
 #[allow(clippy::too_many_arguments)]
-pub async fn run_agent(
-    model: PyCompletionModel,
-    messages: Vec<PyChatMessage>,
-    tools: Vec<Py<PyToolDef>>,
+pub fn run_agent<'py>(
+    py: Python<'py>,
+    model: &PyCompletionModel,
+    messages: Vec<PyRef<'py, PyChatMessage>>,
+    tools: Vec<PyRef<'py, PyToolDef>>,
     max_iterations: u32,
     system_prompt: Option<String>,
     temperature: Option<f32>,
     max_tokens: Option<u32>,
     add_finish_tool: bool,
-) -> PyResult<PyAgentResult> {
+) -> PyResult<Bound<'py, PyAny>> {
     let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
 
-    // Capture task locals and build the tool wrappers synchronously under
-    // the GIL, BEFORE we cross any `.await` boundary. `TaskLocals` must be
-    // read from the active Python asyncio task, which is only possible
-    // while the GIL is held on the asyncio-loop thread. We then thread the
-    // locals into each `PyToolWrapper` so async tool handlers can be
-    // bridged back to Python coroutines inside the agent loop.
-    let rust_tools: Vec<Arc<dyn Tool>> = Python::attach(|py| -> PyResult<_> {
-        let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
-        let inspect = py.import("inspect")?;
+    // Capture task locals for async tool handler support
+    let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
+    let inspect = py.import("inspect")?;
 
-        tools
-            .iter()
-            .map(|t| {
-                let t = t.borrow(py);
-                // Detect whether the handler is an async coroutine function
-                let is_async: bool = inspect
-                    .call_method1("iscoroutinefunction", (&t.handler,))
-                    .and_then(|r| r.extract())
-                    .unwrap_or(false);
-
-                Ok(Arc::new(PyToolWrapper {
-                    name: t.name.clone(),
-                    description: t.description.clone(),
-                    parameters: t.parameters.clone(),
-                    callable: t.handler.clone_ref(py),
-                    is_async,
-                    locals: locals.clone(),
-                }) as Arc<dyn Tool>)
-            })
-            .collect()
-    })?;
+    let rust_tools: Vec<Arc<dyn Tool>> = tools
+        .iter()
+        .map(|t| {
+            let is_async: bool = inspect
+                .call_method1("iscoroutinefunction", (&t.handler,))
+                .and_then(|r| r.extract())
+                .unwrap_or(false);
+            Arc::new(PyToolWrapper {
+                name: t.name.clone(),
+                description: t.description.clone(),
+                parameters: t.parameters.clone(),
+                callable: t.handler.clone_ref(py),
+                is_async,
+                locals: locals.clone(),
+            }) as Arc<dyn Tool>
+        })
+        .collect();
 
     let mut config = AgentConfig::new(rust_tools).with_max_iterations(max_iterations);
-
-    if let Some(sp) = system_prompt {
-        config = config.with_system_prompt(sp);
+    if let Some(prompt) = system_prompt {
+        config = config.with_system_prompt(prompt);
     }
-    if let Some(t) = temperature {
-        config = config.with_temperature(t);
+    if let Some(temp) = temperature {
+        config = config.with_temperature(temp);
     }
-    if let Some(mt) = max_tokens {
-        config = config.with_max_tokens(mt);
+    if let Some(max) = max_tokens {
+        config = config.with_max_tokens(max);
     }
     if add_finish_tool {
         config = config.with_finish_tool();
@@ -290,9 +282,10 @@ pub async fn run_agent(
 
     let inner_model = model.inner.clone();
 
-    let result = rust_run_agent(inner_model.as_ref(), rust_messages, config)
-        .await
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-    Ok(PyAgentResult { inner: result })
+    pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
+        let result = rust_run_agent(inner_model.as_ref(), rust_messages, config)
+            .await
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        Ok(PyAgentResult { inner: result })
+    })
 }

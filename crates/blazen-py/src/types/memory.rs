@@ -109,11 +109,14 @@ impl PyJsonlBackend {
     ///
     /// Returns:
     ///     A new JsonlBackend instance.
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, JsonlBackend]", imports = ("typing",)))]
     #[staticmethod]
-    async fn create(path: String) -> PyResult<PyJsonlBackend> {
-        let backend = JsonlBackend::new(&path).await.map_err(memory_err)?;
-        Ok(PyJsonlBackend {
-            inner: Arc::new(backend),
+    fn create(py: Python<'_>, path: String) -> PyResult<Bound<'_, PyAny>> {
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let backend = JsonlBackend::new(&path).await.map_err(memory_err)?;
+            Ok(PyJsonlBackend {
+                inner: Arc::new(backend),
+            })
         })
     }
 
@@ -209,6 +212,7 @@ impl PyMemoryResult {
 
     /// Arbitrary user metadata (returned as a Python dict/value).
     #[getter]
+    #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
     fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         crate::convert::json_to_py(py, &self.inner.metadata)
     }
@@ -288,21 +292,29 @@ impl PyMemory {
     ///
     /// Returns:
     ///     The id of the stored document.
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, builtins.str]", imports = ("typing", "builtins")))]
     #[pyo3(signature = (id, text, metadata=None))]
-    async fn add(&self, id: String, text: String, metadata: Option<Py<PyAny>>) -> PyResult<String> {
+    fn add<'py>(
+        &self,
+        py: Python<'py>,
+        id: String,
+        text: String,
+        metadata: Option<Py<PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let memory = self.inner.clone();
         let meta = match metadata {
-            Some(obj) => Python::attach(|py| crate::convert::py_to_json(py, obj.bind(py)))?,
+            Some(obj) => crate::convert::py_to_json(py, obj.bind(py))?,
             None => serde_json::Value::Null,
         };
-
-        let entry = MemoryEntry {
-            id,
-            text,
-            metadata: meta,
-        };
-        let ids = memory.add(vec![entry]).await.map_err(memory_err)?;
-        Ok(ids.into_iter().next().unwrap_or_default())
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let entry = MemoryEntry {
+                id,
+                text,
+                metadata: meta,
+            };
+            let ids = memory.add(vec![entry]).await.map_err(memory_err)?;
+            Ok(ids.into_iter().next().unwrap_or_default())
+        })
     }
 
     /// Add multiple documents to the memory store in a single batch.
@@ -312,42 +324,44 @@ impl PyMemory {
     ///
     /// Returns:
     ///     A list of ids for the stored documents.
-    async fn add_many(&self, entries: Vec<Py<PyAny>>) -> PyResult<Vec<String>> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, list[builtins.str]]", imports = ("typing", "builtins")))]
+    fn add_many<'py>(
+        &self,
+        py: Python<'py>,
+        entries: Vec<Py<PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let memory = self.inner.clone();
+        // Convert Python dicts to MemoryEntry objects.
+        let mut rust_entries = Vec::with_capacity(entries.len());
+        for obj in &entries {
+            let bound = obj.bind(py);
+            let dict: &Bound<'_, PyDict> = bound
+                .cast()
+                .map_err(|_| PyTypeError::new_err("each entry must be a dict"))?;
 
-        // Convert Python dicts to MemoryEntry objects (needs GIL).
-        let rust_entries = Python::attach(|py| -> PyResult<Vec<MemoryEntry>> {
-            let mut rust_entries = Vec::with_capacity(entries.len());
-            for obj in &entries {
-                let bound = obj.bind(py);
-                let dict: &Bound<'_, PyDict> = bound
-                    .cast()
-                    .map_err(|_| PyTypeError::new_err("each entry must be a dict"))?;
+            let text: String = dict
+                .get_item("text")?
+                .ok_or_else(|| PyTypeError::new_err("each entry must have a 'text' key"))?
+                .extract()?;
 
-                let text: String = dict
-                    .get_item("text")?
-                    .ok_or_else(|| PyTypeError::new_err("each entry must have a 'text' key"))?
-                    .extract()?;
+            let id: String = dict
+                .get_item("id")?
+                .map(|v| v.extract::<String>())
+                .transpose()?
+                .unwrap_or_default();
 
-                let id: String = dict
-                    .get_item("id")?
-                    .map(|v| v.extract::<String>())
-                    .transpose()?
-                    .unwrap_or_default();
+            let metadata = dict
+                .get_item("metadata")?
+                .map(|v| crate::convert::py_to_json(py, &v))
+                .transpose()?
+                .unwrap_or(serde_json::Value::Null);
 
-                let metadata = dict
-                    .get_item("metadata")?
-                    .map(|v| crate::convert::py_to_json(py, &v))
-                    .transpose()?
-                    .unwrap_or(serde_json::Value::Null);
-
-                rust_entries.push(MemoryEntry { id, text, metadata });
-            }
-            Ok(rust_entries)
-        })?;
-
-        let ids = memory.add(rust_entries).await.map_err(memory_err)?;
-        Ok(ids)
+            rust_entries.push(MemoryEntry { id, text, metadata });
+        }
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let ids = memory.add(rust_entries).await.map_err(memory_err)?;
+            Ok(ids)
+        })
     }
 
     /// Semantic search using the configured embedding model.
@@ -364,29 +378,31 @@ impl PyMemory {
     ///
     /// Returns:
     ///     A list of MemoryResult objects sorted by descending similarity.
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, list[MemoryResult]]", imports = ("typing",)))]
     #[pyo3(signature = (query, limit=5, metadata_filter=None))]
-    async fn search(
+    fn search<'py>(
         &self,
+        py: Python<'py>,
         query: String,
         limit: usize,
         metadata_filter: Option<Py<PyAny>>,
-    ) -> PyResult<Vec<PyMemoryResult>> {
+    ) -> PyResult<Bound<'py, PyAny>> {
         let memory = self.inner.clone();
         let filter = match metadata_filter {
-            Some(obj) => Some(Python::attach(|py| {
-                crate::convert::py_to_json(py, obj.bind(py))
-            })?),
+            Some(obj) => Some(crate::convert::py_to_json(py, obj.bind(py))?),
             None => None,
         };
-        let results = memory
-            .search(&query, limit, filter.as_ref())
-            .await
-            .map_err(memory_err)?;
-        let py_results: Vec<PyMemoryResult> = results
-            .into_iter()
-            .map(|r| PyMemoryResult { inner: r })
-            .collect();
-        Ok(py_results)
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let results = memory
+                .search(&query, limit, filter.as_ref())
+                .await
+                .map_err(memory_err)?;
+            let py_results: Vec<PyMemoryResult> = results
+                .into_iter()
+                .map(|r| PyMemoryResult { inner: r })
+                .collect();
+            Ok(py_results)
+        })
     }
 
     /// Local SimHash-based search (no embedding model required).
@@ -403,29 +419,31 @@ impl PyMemory {
     ///
     /// Returns:
     ///     A list of MemoryResult objects sorted by descending similarity.
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, list[MemoryResult]]", imports = ("typing",)))]
     #[pyo3(signature = (query, limit=5, metadata_filter=None))]
-    async fn search_local(
+    fn search_local<'py>(
         &self,
+        py: Python<'py>,
         query: String,
         limit: usize,
         metadata_filter: Option<Py<PyAny>>,
-    ) -> PyResult<Vec<PyMemoryResult>> {
+    ) -> PyResult<Bound<'py, PyAny>> {
         let memory = self.inner.clone();
         let filter = match metadata_filter {
-            Some(obj) => Some(Python::attach(|py| {
-                crate::convert::py_to_json(py, obj.bind(py))
-            })?),
+            Some(obj) => Some(crate::convert::py_to_json(py, obj.bind(py))?),
             None => None,
         };
-        let results = memory
-            .search_local(&query, limit, filter.as_ref())
-            .await
-            .map_err(memory_err)?;
-        let py_results: Vec<PyMemoryResult> = results
-            .into_iter()
-            .map(|r| PyMemoryResult { inner: r })
-            .collect();
-        Ok(py_results)
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let results = memory
+                .search_local(&query, limit, filter.as_ref())
+                .await
+                .map_err(memory_err)?;
+            let py_results: Vec<PyMemoryResult> = results
+                .into_iter()
+                .map(|r| PyMemoryResult { inner: r })
+                .collect();
+            Ok(py_results)
+        })
     }
 
     /// Retrieve a single entry by its id.
@@ -435,27 +453,30 @@ impl PyMemory {
     ///
     /// Returns:
     ///     A dict with the entry data, or None if not found.
-    async fn get(&self, id: String) -> PyResult<Option<Py<PyAny>>> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, typing.Optional[dict[str, typing.Any]]]", imports = ("typing",)))]
+    fn get<'py>(&self, py: Python<'py>, id: String) -> PyResult<Bound<'py, PyAny>> {
         let memory = self.inner.clone();
-        let entry = memory.get(&id).await.map_err(memory_err)?;
-        match entry {
-            Some(e) => {
-                let py_dict: Py<PyAny> = Python::try_attach(|py| -> PyResult<Py<PyAny>> {
-                    let dict = PyDict::new(py);
-                    dict.set_item("id", &e.id)?;
-                    dict.set_item("text", &e.text)?;
-                    dict.set_item("metadata", crate::convert::json_to_py(py, &e.metadata)?)?;
-                    Ok(dict.unbind().into_any())
-                })
-                .ok_or_else(|| {
-                    PyErr::from(BlazenPyError::Llm(
-                        "failed to acquire Python GIL".to_string(),
-                    ))
-                })??;
-                Ok(Some(py_dict))
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let entry = memory.get(&id).await.map_err(memory_err)?;
+            match entry {
+                Some(e) => {
+                    let py_dict: Py<PyAny> = Python::try_attach(|py| -> PyResult<Py<PyAny>> {
+                        let dict = PyDict::new(py);
+                        dict.set_item("id", &e.id)?;
+                        dict.set_item("text", &e.text)?;
+                        dict.set_item("metadata", crate::convert::json_to_py(py, &e.metadata)?)?;
+                        Ok(dict.unbind().into_any())
+                    })
+                    .ok_or_else(|| {
+                        PyErr::from(BlazenPyError::Llm(
+                            "failed to acquire Python GIL".to_string(),
+                        ))
+                    })??;
+                    Ok(Some(py_dict))
+                }
+                None => Ok(None),
             }
-            None => Ok(None),
-        }
+        })
     }
 
     /// Delete a document by its id.
@@ -465,20 +486,26 @@ impl PyMemory {
     ///
     /// Returns:
     ///     True if the document existed and was deleted, False otherwise.
-    async fn delete(&self, id: String) -> PyResult<bool> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, builtins.bool]", imports = ("typing", "builtins")))]
+    fn delete<'py>(&self, py: Python<'py>, id: String) -> PyResult<Bound<'py, PyAny>> {
         let memory = self.inner.clone();
-        let deleted = memory.delete(&id).await.map_err(memory_err)?;
-        Ok(deleted)
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let deleted = memory.delete(&id).await.map_err(memory_err)?;
+            Ok(deleted)
+        })
     }
 
     /// Return the number of documents in the store.
     ///
     /// Returns:
     ///     The document count.
-    async fn count(&self) -> PyResult<usize> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, builtins.int]", imports = ("typing", "builtins")))]
+    fn count<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let memory = self.inner.clone();
-        let n = memory.len().await.map_err(memory_err)?;
-        Ok(n)
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let n = memory.len().await.map_err(memory_err)?;
+            Ok(n)
+        })
     }
 
     fn __repr__(&self) -> &'static str {

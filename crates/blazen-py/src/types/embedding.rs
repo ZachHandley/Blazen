@@ -9,8 +9,10 @@ use crate::error::{BlazenPyError, blazen_error_to_pyerr};
 #[cfg(feature = "fastembed")]
 use crate::providers::options::PyFastEmbedOptions;
 use crate::providers::options::PyProviderOptions;
+use crate::types::request_timing::PyRequestTiming;
 use blazen_llm::EmbeddingModel;
 use blazen_llm::keys::resolve_api_key;
+use blazen_llm::types::EmbeddingResponse;
 
 // ---------------------------------------------------------------------------
 // PyEmbeddingModel
@@ -148,15 +150,14 @@ impl PyEmbeddingModel {
     ///     >>> response = await model.embed(["Hello", "World"])
     ///     >>> print(len(response.embeddings))  # 2
     ///     >>> print(len(response.embeddings[0]))  # dimensionality
-    async fn embed(&self, texts: Vec<String>) -> PyResult<Py<PyAny>> {
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, EmbeddingResponse]", imports = ("typing",)))]
+    fn embed<'py>(&self, py: Python<'py>, texts: Vec<String>) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
-        let response = EmbeddingModel::embed(inner.as_ref(), &texts)
-            .await
-            .map_err(BlazenPyError::from)?;
-        Python::attach(|py| -> PyResult<Py<PyAny>> {
-            let obj = pythonize::pythonize(py, &response)
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-            Ok(obj.unbind())
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let response = EmbeddingModel::embed(inner.as_ref(), &texts)
+                .await
+                .map_err(BlazenPyError::from)?;
+            Ok(PyEmbeddingResponse { inner: response })
         })
     }
 
@@ -198,4 +199,77 @@ impl PyEmbeddingModel {
     }
 }
 
-pub use blazen_llm::types::EmbeddingResponse;
+// ---------------------------------------------------------------------------
+// PyEmbeddingResponse
+// ---------------------------------------------------------------------------
+
+/// Response from an embedding operation.
+///
+/// Contains the embedding vectors, model name, usage statistics, cost,
+/// timing, and provider-specific metadata.
+///
+/// Example:
+///     >>> response = await model.embed(["Hello", "World"])
+///     >>> print(response.model)
+///     >>> print(len(response.embeddings))  # 2
+#[gen_stub_pyclass]
+#[pyclass(name = "EmbeddingResponse")]
+pub struct PyEmbeddingResponse {
+    pub(crate) inner: EmbeddingResponse,
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyEmbeddingResponse {
+    /// The embedding vectors, one per input text.
+    #[getter]
+    fn embeddings(&self) -> Vec<Vec<f32>> {
+        self.inner.embeddings.clone()
+    }
+
+    /// The model used to generate the embeddings.
+    #[getter]
+    fn model(&self) -> &str {
+        &self.inner.model
+    }
+
+    /// Token usage statistics, if provided by the model.
+    #[getter]
+    #[gen_stub(override_return_type(type_repr = "typing.Optional[dict[str, typing.Any]]", imports = ("typing",)))]
+    fn usage(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
+        match &self.inner.usage {
+            Some(u) => Ok(Some(pythonize::pythonize(py, u)?.unbind())),
+            None => Ok(None),
+        }
+    }
+
+    /// Estimated cost in USD, if available.
+    #[getter]
+    fn cost(&self) -> Option<f64> {
+        self.inner.cost
+    }
+
+    /// Request timing breakdown (queue, execution, total).
+    #[getter]
+    fn timing(&self) -> Option<PyRequestTiming> {
+        self.inner
+            .timing
+            .clone()
+            .map(|t| PyRequestTiming { inner: t })
+    }
+
+    /// Provider-specific metadata as a Python dict.
+    #[getter]
+    #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
+    fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        crate::convert::json_to_py(py, &self.inner.metadata)
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "EmbeddingResponse(model='{}', embeddings={})",
+            self.inner.model,
+            self.inner.embeddings.len()
+        )
+    }
+}

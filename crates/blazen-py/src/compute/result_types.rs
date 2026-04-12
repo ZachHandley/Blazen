@@ -177,6 +177,7 @@ impl PyImageResult {
 
     /// Arbitrary provider-specific metadata (as a dict).
     #[getter]
+    #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
     fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         crate::convert::json_to_py(py, &self.inner.metadata)
     }
@@ -222,6 +223,7 @@ impl PyVideoResult {
 
     /// Arbitrary provider-specific metadata (as a dict).
     #[getter]
+    #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
     fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         crate::convert::json_to_py(py, &self.inner.metadata)
     }
@@ -267,6 +269,7 @@ impl PyAudioResult {
 
     /// Arbitrary provider-specific metadata (as a dict).
     #[getter]
+    #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
     fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         crate::convert::json_to_py(py, &self.inner.metadata)
     }
@@ -312,6 +315,7 @@ impl PyThreeDResult {
 
     /// Arbitrary provider-specific metadata (as a dict).
     #[getter]
+    #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
     fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         crate::convert::json_to_py(py, &self.inner.metadata)
     }
@@ -403,6 +407,7 @@ impl PyVoiceHandle {
 
     /// Arbitrary provider-specific metadata (as a dict).
     #[getter]
+    #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
     fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         crate::convert::json_to_py(py, &self.inner.metadata)
     }
@@ -440,6 +445,7 @@ impl PyComputeResult {
 
     /// Output data (model-specific JSON).
     #[getter]
+    #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
     fn output(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         crate::convert::json_to_py(py, &self.inner.output)
     }
@@ -460,6 +466,7 @@ impl PyComputeResult {
 
     /// Raw provider-specific metadata (as a dict).
     #[getter]
+    #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
     fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         crate::convert::json_to_py(py, &self.inner.metadata)
     }

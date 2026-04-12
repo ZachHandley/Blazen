@@ -5,7 +5,7 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_llm::CompletionResponse;
 
-use super::PyRequestTiming;
+use super::{PyArtifact, PyGeneratedAudio, PyGeneratedImage, PyGeneratedVideo, PyRequestTiming};
 
 // ---------------------------------------------------------------------------
 // PyCompletionResponse
@@ -43,11 +43,13 @@ impl PyCompletionResponse {
     }
 
     #[getter]
+    #[gen_stub(override_return_type(type_repr = "list[dict[str, typing.Any]]", imports = ("typing",)))]
     fn tool_calls(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         Ok(pythonize::pythonize(py, &self.inner.tool_calls)?.into())
     }
 
     #[getter]
+    #[gen_stub(override_return_type(type_repr = "typing.Optional[dict[str, typing.Any]]", imports = ("typing",)))]
     fn usage(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         match &self.inner.usage {
             Some(u) => Ok(Some(pythonize::pythonize(py, u)?.into())),
@@ -69,24 +71,34 @@ impl PyCompletionResponse {
     }
 
     #[getter]
-    fn images(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let val = serde_json::to_value(&self.inner.images).unwrap_or_default();
-        crate::convert::json_to_py(py, &val)
+    fn images(&self) -> Vec<PyGeneratedImage> {
+        self.inner
+            .images
+            .iter()
+            .map(|i| PyGeneratedImage { inner: i.clone() })
+            .collect()
     }
 
     #[getter]
-    fn audio(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let val = serde_json::to_value(&self.inner.audio).unwrap_or_default();
-        crate::convert::json_to_py(py, &val)
+    fn audio(&self) -> Vec<PyGeneratedAudio> {
+        self.inner
+            .audio
+            .iter()
+            .map(|a| PyGeneratedAudio { inner: a.clone() })
+            .collect()
     }
 
     #[getter]
-    fn videos(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let val = serde_json::to_value(&self.inner.videos).unwrap_or_default();
-        crate::convert::json_to_py(py, &val)
+    fn videos(&self) -> Vec<PyGeneratedVideo> {
+        self.inner
+            .videos
+            .iter()
+            .map(|v| PyGeneratedVideo { inner: v.clone() })
+            .collect()
     }
 
     #[getter]
+    #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
     fn metadata_extra(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         crate::convert::json_to_py(py, &self.inner.metadata)
     }
@@ -94,6 +106,7 @@ impl PyCompletionResponse {
     /// Reasoning trace from models that expose one (Anthropic extended thinking,
     /// DeepSeek R1, OpenAI o-series, xAI Grok, Gemini thoughts).
     #[getter]
+    #[gen_stub(override_return_type(type_repr = "typing.Optional[dict[str, typing.Any]]", imports = ("typing",)))]
     fn reasoning(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         match &self.inner.reasoning {
             Some(r) => Ok(Some(pythonize::pythonize(py, r)?.into())),
@@ -104,6 +117,7 @@ impl PyCompletionResponse {
     /// Web/document citations backing the model's statement (Perplexity,
     /// Gemini grounding, Anthropic web search).
     #[getter]
+    #[gen_stub(override_return_type(type_repr = "list[dict[str, typing.Any]]", imports = ("typing",)))]
     fn citations(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         Ok(pythonize::pythonize(py, &self.inner.citations)?.into())
     }
@@ -111,8 +125,8 @@ impl PyCompletionResponse {
     /// Typed inline artifacts extracted from the response (SVG, code blocks,
     /// markdown, mermaid, html, latex, json, custom).
     #[getter]
-    fn artifacts(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        Ok(pythonize::pythonize(py, &self.inner.artifacts)?.into())
+    fn artifacts(&self) -> Vec<PyArtifact> {
+        self.inner.artifacts.iter().map(PyArtifact::from).collect()
     }
 
     /// Lazily map the raw provider finish-reason string into a normalized
