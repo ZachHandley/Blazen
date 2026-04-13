@@ -255,12 +255,28 @@ impl PyFalProvider {
 
     /// Build a [`FalEmbeddingModel`] sharing this provider's HTTP client and API key.
     ///
+    /// Args:
+    ///     model: Embedding model id (default: ``"openai/text-embedding-3-small"``).
+    ///     dimensions: Dimensionality the model produces (default: ``1536``).
+    ///
     /// Returns:
     ///     A FalEmbeddingModel that can be used to embed text via fal's
     ///     OpenAI-compatible router.
-    fn embedding_model(&self) -> PyFalEmbeddingModel {
+    #[pyo3(signature = (model=None, dimensions=None))]
+    fn embedding_model(
+        &self,
+        model: Option<&str>,
+        dimensions: Option<usize>,
+    ) -> PyFalEmbeddingModel {
+        let mut em = self.inner.embedding_model();
+        if let Some(m) = model {
+            em = em.with_model(m);
+        }
+        if let Some(d) = dimensions {
+            em = em.with_dimensions(d);
+        }
         PyFalEmbeddingModel {
-            inner: Arc::new(self.inner.embedding_model()),
+            inner: Arc::new(em),
         }
     }
 

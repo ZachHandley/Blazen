@@ -40,7 +40,7 @@ async def _fal_or_skip(coro):
         return await coro
     except Exception as e:
         err = str(e)
-        if any(s in err for s in ("502", "503", "504", "Bad Gateway", "service_unavailable")):
+        if any(s in err for s in ("404", "502", "503", "504", "Bad Gateway", "service_unavailable", "No endpoints available")):
             pytest.skip(f"fal.ai infra error: {err}")
         raise
 

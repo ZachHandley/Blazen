@@ -1673,9 +1673,13 @@ class FalProvider:
         Returns:
             A [`ThreeDResult`] with the generated 3D model, timing, cost, and metadata.
         """
-    def embedding_model(self) -> FalEmbeddingModel:
+    def embedding_model(self, model: typing.Optional[builtins.str] = None, dimensions: typing.Optional[builtins.int] = None) -> FalEmbeddingModel:
         r"""
         Build a [`FalEmbeddingModel`] sharing this provider's HTTP client and API key.
+        
+        Args:
+            model: Embedding model id (default: ``"openai/text-embedding-3-small"``).
+            dimensions: Dimensionality the model produces (default: ``1536``).
         
         Returns:
             A FalEmbeddingModel that can be used to embed text via fal's
