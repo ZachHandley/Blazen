@@ -207,8 +207,8 @@ async def test_fal_embeddings():
     provider = FalProvider(options=FalOptions(api_key=FAL_API_KEY))
     em = provider.embedding_model()
     response = await _fal_or_skip(em.embed(["hello", "world"]))
-    assert len(response["embeddings"]) == 2
-    assert len(response["embeddings"][0]) == 1536
+    assert len(response.embeddings) == 2
+    assert len(response.embeddings[0]) == 1536
 
 
 @skip_without_key
