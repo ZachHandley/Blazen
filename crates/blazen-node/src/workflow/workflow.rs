@@ -536,13 +536,13 @@ fn make_step_registration(step: &JsStepRegistration) -> blazen_core::StepRegistr
         },
     );
 
-    blazen_core::StepRegistration {
-        name: step.name.clone(),
+    blazen_core::StepRegistration::new(
+        step.name.clone(),
         accepts,
-        emits: vec![], // JS steps don't declare emits statically.
+        vec![], // JS steps don't declare emits statically.
         handler,
-        max_concurrency: 0,
-    }
+        0, // unlimited concurrency
+    )
 }
 
 /// Convert a result event to a [`JsWorkflowResult`].

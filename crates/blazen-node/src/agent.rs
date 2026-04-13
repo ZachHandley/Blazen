@@ -76,6 +76,10 @@ pub struct JsAgentRunOptions {
     /// signal it has a final answer.
     #[napi(js_name = "addFinishTool")]
     pub add_finish_tool: Option<bool>,
+    /// Maximum number of tool calls to execute concurrently within a single
+    /// model response. `0` means unlimited (all in parallel). Defaults to 0.
+    #[napi(js_name = "toolConcurrency")]
+    pub tool_concurrency: Option<i32>,
 }
 
 // ---------------------------------------------------------------------------
@@ -215,6 +219,9 @@ pub async fn run_agent(
     }
     if opts.add_finish_tool.unwrap_or(false) {
         config = config.with_finish_tool();
+    }
+    if let Some(tc) = opts.tool_concurrency {
+        config = config.with_tool_concurrency(tc as usize);
     }
 
     let result = rust_run_agent(model.inner.as_ref(), rust_messages, config)

@@ -930,6 +930,7 @@ fn dispatch_to_handlers(
         let error_tx_clone = error_tx.clone();
         let counter = Arc::clone(in_flight_count);
         let event_type = event.event_type_id().to_owned();
+        let semaphore = step.semaphore.clone();
 
         // Emit StepDispatched history event.
         #[cfg(feature = "telemetry")]
@@ -966,6 +967,13 @@ fn dispatch_to_handlers(
 
         in_flight.spawn(
             async move {
+                // Acquire a concurrency permit if bounded. The permit is held
+                // for the lifetime of this handler invocation.
+                let _permit = match semaphore {
+                    Some(ref sem) => Some(sem.acquire().await.expect("semaphore closed")),
+                    None => None,
+                };
+
                 // Auto-publish step_started.
                 if let Some(ref sctx) = stream_ctx {
                     let mut data = serde_json::Map::new();

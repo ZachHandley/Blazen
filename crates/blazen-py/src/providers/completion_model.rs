@@ -816,7 +816,7 @@ impl PyLazyCompletionStream {
 // ---------------------------------------------------------------------------
 
 /// Build a [`CompletionRequest`] from messages and optional [`PyCompletionOptions`].
-fn build_request(
+pub(crate) fn build_request(
     py: Python<'_>,
     messages: Vec<ChatMessage>,
     options: Option<&PyCompletionOptions>,

@@ -10,6 +10,7 @@ __all__ = [
     "AudioResult",
     "AzureOptions",
     "BackgroundRemovalRequest",
+    "BatchResult",
     "BedrockOptions",
     "BlazenState",
     "CacheConfig",
@@ -78,6 +79,7 @@ __all__ = [
     "VoiceHandle",
     "Workflow",
     "WorkflowHandler",
+    "complete_batch",
     "run_agent",
 ]
 
@@ -297,6 +299,57 @@ class BackgroundRemovalRequest:
     def model(self) -> typing.Optional[builtins.str]: ...
     def __new__(cls, *, image_url: builtins.str, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> BackgroundRemovalRequest: ...
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class BatchResult:
+    r"""
+    Result of a batch completion run.
+    
+    Each input request maps to a positional entry in ``responses`` and
+    ``errors``. A successful request has a ``CompletionResponse`` in
+    ``responses`` and ``None`` in ``errors``; a failed request has ``None``
+    in ``responses`` and an error string in ``errors``.
+    
+    Example:
+        >>> result = await complete_batch(model, [msgs1, msgs2], concurrency=4)
+        >>> for i, resp in enumerate(result.responses):
+        ...     if resp is not None:
+        ...         print(resp.content)
+        ...     else:
+        ...         print(f"Request {i} failed: {result.errors[i]}")
+    """
+    @property
+    def responses(self) -> builtins.list[typing.Optional[CompletionResponse]]:
+        r"""
+        Per-request responses. ``None`` for requests that failed.
+        """
+    @property
+    def errors(self) -> builtins.list[typing.Optional[builtins.str]]:
+        r"""
+        Per-request error messages. ``None`` for requests that succeeded.
+        """
+    @property
+    def total_usage(self) -> typing.Optional[dict[str, typing.Any]]:
+        r"""
+        Aggregated token usage across all successful responses, as a dict.
+        """
+    @property
+    def total_cost(self) -> typing.Optional[builtins.float]:
+        r"""
+        Aggregated cost across all successful responses.
+        """
+    @property
+    def success_count(self) -> builtins.int:
+        r"""
+        Number of requests that succeeded.
+        """
+    @property
+    def failure_count(self) -> builtins.int:
+        r"""
+        Number of requests that failed.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __len__(self) -> builtins.int: ...
 
 @typing.final
 class BedrockOptions:
@@ -3563,7 +3616,39 @@ class SessionPausePolicy(enum.Enum):
     WarnDrop = ...
     HardError = ...
 
-async def run_agent(model: CompletionModel, messages: typing.Sequence[ChatMessage], *, tools: typing.Sequence[ToolDef], max_iterations: builtins.int = 10, system_prompt: typing.Optional[builtins.str] = None, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, add_finish_tool: builtins.bool = False) -> AgentResult:
+async def complete_batch(model: CompletionModel, requests: typing.Sequence[typing.Sequence[ChatMessage]], *, concurrency: builtins.int = 0, options: typing.Optional[CompletionOptions] = None) -> BatchResult:
+    r"""
+    Execute multiple completion requests in parallel with bounded concurrency.
+    
+    Each element of ``requests`` is a list of ``ChatMessage`` objects
+    representing a single conversation. All conversations are dispatched to
+    the model concurrently (up to the ``concurrency`` limit) and results
+    are returned in the same order.
+    
+    Args:
+        model: The completion model to use.
+        requests: A list of message lists. Each inner list is one conversation.
+        concurrency: Maximum number of concurrent requests. ``0`` (the default)
+            means unlimited.
+        options: Optional ``CompletionOptions`` applied to every request
+            (temperature, max_tokens, tools, etc.).
+    
+    Returns:
+        A ``BatchResult`` with per-request responses and aggregated usage/cost.
+    
+    Example:
+        >>> model = CompletionModel.openai()
+        >>> conversations = [
+        ...     [ChatMessage.user("What is 2+2?")],
+        ...     [ChatMessage.user("What is 3+3?")],
+        ... ]
+        >>> result = await complete_batch(model, conversations, concurrency=4)
+        >>> for resp in result.responses:
+        ...     if resp is not None:
+        ...         print(resp.content)
+    """
+
+async def run_agent(model: CompletionModel, messages: typing.Sequence[ChatMessage], *, tools: typing.Sequence[ToolDef], max_iterations: builtins.int = 10, system_prompt: typing.Optional[builtins.str] = None, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, add_finish_tool: builtins.bool = False, tool_concurrency: builtins.int = 0) -> AgentResult:
     r"""
     Run an agentic tool execution loop.
     
@@ -3580,6 +3665,7 @@ async def run_agent(model: CompletionModel, messages: typing.Sequence[ChatMessag
         temperature: Optional sampling temperature.
         max_tokens: Optional max tokens per call.
         add_finish_tool: Whether to add a built-in "finish" tool (default: False).
+        tool_concurrency: Maximum concurrent tool executions per round (default: 0 = unlimited).
     
     Returns:
         AgentResult with the final response and full conversation history.

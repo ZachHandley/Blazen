@@ -44,6 +44,7 @@ fn echo_step() -> StepRegistration {
         emits: vec![StopEvent::event_type()],
         handler,
         max_concurrency: 0,
+        semaphore: None,
     }
 }
 

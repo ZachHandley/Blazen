@@ -5,6 +5,7 @@
 //! # Modules
 //!
 //! - [`types`] -- Shared type definitions (messages, completions, tools, media).
+//! - [`batch`] -- Batch completion with bounded concurrency.
 //! - [`compute`] -- Compute request, result, and job types.
 //! - [`providers`] -- LLM completion model wrappers and provider factories.
 //! - [`error`] -- Error conversion utilities.
@@ -12,6 +13,7 @@
 //! - [`workflow`] -- Workflow builder, runner, context, handler, and events.
 
 pub mod agent;
+pub mod batch;
 pub mod compute;
 pub mod error;
 pub mod generated;

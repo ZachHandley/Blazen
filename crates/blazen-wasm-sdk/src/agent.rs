@@ -127,6 +127,16 @@ impl Tool for JsTool {
 /// - `handler` (function) -- called with the arguments object, should return
 ///   a string or JSON value (may be async / return a Promise)
 ///
+/// The optional `options` object supports:
+/// - `toolConcurrency` (number) -- max concurrent tool calls per round
+///   (default: 0 = unlimited)
+/// - `maxIterations` (number) -- max tool call rounds (default: 10)
+/// - `systemPrompt` (string) -- optional system prompt prepended to messages
+/// - `temperature` (number) -- sampling temperature
+/// - `maxTokens` (number) -- max tokens per completion call
+/// - `addFinishTool` (boolean) -- add built-in finish tool the model can
+///   call to exit early
+///
 /// Returns a `Promise` that resolves to a JS object with:
 /// - `content` (string | undefined) -- the final text response
 /// - `messages` (array) -- the full message history
@@ -142,13 +152,14 @@ impl Tool for JsTool {
 ///     parameters: { type: 'object', properties: { a: { type: 'number' }, b: { type: 'number' } }, required: ['a', 'b'] },
 ///     handler: (args) => JSON.stringify({ result: args.a * args.b })
 ///   }
-/// ]);
+/// ], { toolConcurrency: 2, maxIterations: 5 });
 /// ```
 #[wasm_bindgen(js_name = "runAgent")]
 pub fn run_agent(
     model: &WasmCompletionModel,
     messages: JsValue,
     tools: JsValue,
+    options: JsValue,
 ) -> js_sys::Promise {
     let model_arc = model.inner_arc();
 
@@ -195,7 +206,54 @@ pub fn run_agent(
             }));
         }
 
-        let config = AgentConfig::new(tool_impls);
+        let mut config = AgentConfig::new(tool_impls);
+
+        // Parse optional configuration from the options object.
+        if options.is_object() {
+            if let Ok(tc) = js_sys::Reflect::get(&options, &JsValue::from_str("toolConcurrency"))
+            {
+                if let Some(n) = tc.as_f64() {
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    {
+                        config = config.with_tool_concurrency(n as usize);
+                    }
+                }
+            }
+            if let Ok(mi) = js_sys::Reflect::get(&options, &JsValue::from_str("maxIterations")) {
+                if let Some(n) = mi.as_f64() {
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    {
+                        config = config.with_max_iterations(n as u32);
+                    }
+                }
+            }
+            if let Ok(sp) = js_sys::Reflect::get(&options, &JsValue::from_str("systemPrompt")) {
+                if let Some(s) = sp.as_string() {
+                    config = config.with_system_prompt(s);
+                }
+            }
+            if let Ok(t) = js_sys::Reflect::get(&options, &JsValue::from_str("temperature")) {
+                if let Some(n) = t.as_f64() {
+                    #[allow(clippy::cast_possible_truncation)]
+                    {
+                        config = config.with_temperature(n as f32);
+                    }
+                }
+            }
+            if let Ok(mt) = js_sys::Reflect::get(&options, &JsValue::from_str("maxTokens")) {
+                if let Some(n) = mt.as_f64() {
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    {
+                        config = config.with_max_tokens(n as u32);
+                    }
+                }
+            }
+            if let Ok(af) = js_sys::Reflect::get(&options, &JsValue::from_str("addFinishTool")) {
+                if af.is_truthy() {
+                    config = config.with_finish_tool();
+                }
+            }
+        }
 
         let result = blazen_llm::run_agent(model_arc.as_ref(), msgs, config)
             .await

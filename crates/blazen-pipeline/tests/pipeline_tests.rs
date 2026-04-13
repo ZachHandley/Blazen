@@ -35,6 +35,7 @@ fn echo_workflow() -> blazen_core::Workflow {
         emits: vec![StopEvent::event_type()],
         handler,
         max_concurrency: 0,
+        semaphore: None,
     };
 
     WorkflowBuilder::new("echo")
@@ -70,6 +71,7 @@ fn prefix_workflow(prefix: &'static str) -> blazen_core::Workflow {
         emits: vec![StopEvent::event_type()],
         handler,
         max_concurrency: 0,
+        semaphore: None,
     };
 
     WorkflowBuilder::new(format!("prefix-{prefix}"))
@@ -105,6 +107,7 @@ fn suffix_workflow(suffix: &'static str) -> blazen_core::Workflow {
         emits: vec![StopEvent::event_type()],
         handler,
         max_concurrency: 0,
+        semaphore: None,
     };
 
     WorkflowBuilder::new(format!("suffix-{suffix}"))
@@ -136,6 +139,7 @@ fn delayed_echo_workflow(ms: u64) -> blazen_core::Workflow {
         emits: vec![StopEvent::event_type()],
         handler,
         max_concurrency: 0,
+        semaphore: None,
     };
 
     WorkflowBuilder::new(format!("delayed-echo-{ms}ms"))
@@ -173,6 +177,7 @@ fn streaming_echo_workflow() -> blazen_core::Workflow {
         emits: vec![StopEvent::event_type()],
         handler,
         max_concurrency: 0,
+        semaphore: None,
     };
 
     WorkflowBuilder::new("streaming-echo")
@@ -198,6 +203,7 @@ fn failing_workflow() -> blazen_core::Workflow {
         emits: vec![],
         handler,
         max_concurrency: 0,
+        semaphore: None,
     };
 
     WorkflowBuilder::new("fail")

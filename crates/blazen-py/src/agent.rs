@@ -223,13 +223,14 @@ impl PyAgentResult {
 ///     temperature: Optional sampling temperature.
 ///     max_tokens: Optional max tokens per call.
 ///     add_finish_tool: Whether to add a built-in "finish" tool (default: False).
+///     tool_concurrency: Maximum concurrent tool executions per round (default: 0 = unlimited).
 ///
 /// Returns:
 ///     AgentResult with the final response and full conversation history.
 #[gen_stub_pyfunction]
 #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, AgentResult]", imports = ("typing",)))]
 #[pyfunction]
-#[pyo3(signature = (model, messages, *, tools, max_iterations=10, system_prompt=None, temperature=None, max_tokens=None, add_finish_tool=false))]
+#[pyo3(signature = (model, messages, *, tools, max_iterations=10, system_prompt=None, temperature=None, max_tokens=None, add_finish_tool=false, tool_concurrency=0))]
 #[allow(clippy::too_many_arguments)]
 pub fn run_agent<'py>(
     py: Python<'py>,
@@ -241,6 +242,7 @@ pub fn run_agent<'py>(
     temperature: Option<f32>,
     max_tokens: Option<u32>,
     add_finish_tool: bool,
+    tool_concurrency: usize,
 ) -> PyResult<Bound<'py, PyAny>> {
     let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
 
@@ -278,6 +280,9 @@ pub fn run_agent<'py>(
     }
     if add_finish_tool {
         config = config.with_finish_tool();
+    }
+    if tool_concurrency > 0 {
+        config = config.with_tool_concurrency(tool_concurrency);
     }
 
     let inner_model = model.inner.clone();

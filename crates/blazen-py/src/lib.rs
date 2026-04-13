@@ -32,6 +32,7 @@ pub(crate) mod convert;
 pub(crate) mod session_ref_serializable;
 
 pub mod agent;
+pub mod batch;
 pub mod compute;
 pub mod error;
 pub mod providers;
@@ -147,6 +148,10 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<agent::PyToolDef>()?;
     m.add_class::<agent::PyAgentResult>()?;
     m.add_function(wrap_pyfunction!(agent::run_agent, m)?)?;
+
+    // Batch completion
+    m.add_class::<batch::PyBatchResult>()?;
+    m.add_function(wrap_pyfunction!(batch::complete_batch, m)?)?;
 
     // Compute / Media -- Request types
     m.add_class::<types::PyMediaType>()?;

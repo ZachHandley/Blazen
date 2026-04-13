@@ -21,6 +21,7 @@
 //! ```
 
 pub mod agent;
+pub mod batch;
 pub mod chat_message;
 pub mod completion_model;
 pub mod context;

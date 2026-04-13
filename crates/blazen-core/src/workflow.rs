@@ -702,6 +702,7 @@ mod tests {
             emits: vec![StopEvent::event_type()],
             handler,
             max_concurrency: 0,
+            semaphore: None,
         }
     }
 
@@ -742,6 +743,7 @@ mod tests {
             emits: vec![],
             handler: handler_b,
             max_concurrency: 0,
+            semaphore: None,
         };
 
         let workflow = WorkflowBuilder::new("step-names-test")
@@ -772,6 +774,7 @@ mod tests {
             emits: vec![],
             handler,
             max_concurrency: 0,
+            semaphore: None,
         };
 
         let workflow = WorkflowBuilder::new("timeout-test")
@@ -798,6 +801,7 @@ mod tests {
             emits: vec![],
             handler,
             max_concurrency: 0,
+            semaphore: None,
         };
 
         let workflow = WorkflowBuilder::new("error-test")
@@ -873,6 +877,7 @@ mod tests {
             emits: vec![],
             handler,
             max_concurrency: 0,
+            semaphore: None,
         }
     }
 

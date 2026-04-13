@@ -55,6 +55,7 @@
 
 pub mod agent;
 pub mod artifacts;
+pub mod batch;
 pub mod cache;
 pub mod chat_window;
 pub mod compute;
@@ -101,6 +102,7 @@ pub use providers::custom::{CustomProvider, HostDispatch};
 // Re-export primary types at crate root for ergonomic imports.
 pub use agent::{AgentConfig, AgentEvent, AgentResult, run_agent, run_agent_with_callback};
 pub use artifacts::extract_inline_artifacts;
+pub use batch::{BatchConfig, BatchResult, complete_batch};
 pub use cache::{CacheConfig, CacheStrategy, CachedCompletionModel};
 pub use chat_window::ChatWindow;
 pub use compute::{

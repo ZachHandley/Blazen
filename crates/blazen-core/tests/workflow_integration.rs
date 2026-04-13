@@ -248,6 +248,7 @@ where
             })
         }),
         max_concurrency: 1,
+        semaphore: None,
     }
 }
 
@@ -334,6 +335,7 @@ async fn test_branching_workflow() {
             emits: vec![BuyEvent::event_type(), SellEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -514,6 +516,7 @@ async fn test_fan_out() {
             emits: vec![BuyEvent::event_type(), SellEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -618,6 +621,7 @@ async fn test_streaming() {
             emits: vec![StopEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -707,6 +711,7 @@ async fn test_context_state_sharing() {
             emits: vec![StepAEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -732,6 +737,7 @@ async fn test_context_state_sharing() {
             emits: vec![StopEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -840,6 +846,7 @@ async fn test_derive_event_in_workflow() {
             emits: vec![StopEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -1096,6 +1103,7 @@ async fn test_pause_captures_snapshot() {
             emits: vec![StopEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -1193,6 +1201,7 @@ async fn test_pause_and_resume() {
             emits: vec![AnalyzeEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -1227,6 +1236,7 @@ async fn test_pause_and_resume() {
             emits: vec![StopEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -1325,6 +1335,7 @@ async fn test_pause_resume_via_json() {
             emits: vec![StopEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -1419,6 +1430,7 @@ async fn test_cross_step_object_sharing() {
             emits: vec![StepAEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -1446,6 +1458,7 @@ async fn test_cross_step_object_sharing() {
             emits: vec![StopEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -1506,6 +1519,7 @@ async fn test_pause_resume_in_place() {
             emits: vec![StopEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -1558,6 +1572,7 @@ async fn test_snapshot_while_running() {
             emits: vec![StopEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -1621,6 +1636,7 @@ async fn test_abort_drops_cleanly() {
             emits: vec![StopEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -1671,6 +1687,7 @@ async fn test_workflow_result_carries_registry() {
             emits: vec![StopEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -1732,6 +1749,7 @@ async fn test_sub_workflow_session_ref_handoff_via_shared_registry() {
             emits: vec![StopEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -1778,6 +1796,7 @@ async fn test_sub_workflow_session_ref_handoff_via_shared_registry() {
             emits: vec![StopEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -1845,6 +1864,7 @@ async fn test_session_pause_policy_hard_error() {
             emits: vec![StopEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -1914,6 +1934,7 @@ async fn test_sub_workflow_hard_error_policy_sees_parent_refs() {
             })
         }),
         max_concurrency: 1,
+        semaphore: None,
     };
     let child_workflow = Arc::new(
         WorkflowBuilder::new("child-hard-error")
@@ -1961,6 +1982,7 @@ async fn test_sub_workflow_hard_error_policy_sees_parent_refs() {
             })
         },
         max_concurrency: 1,
+        semaphore: None,
     };
 
     let parent_handler = WorkflowBuilder::new("parent-shared-registry")
@@ -2070,6 +2092,7 @@ async fn test_until_snapshot_lifetime_purged_by_snapshot_walker() {
             emits: vec![StopEvent::event_type()],
             handler,
             max_concurrency: 1,
+            semaphore: None,
         }
     };
 
@@ -2194,6 +2217,7 @@ fn registry_echo_step() -> StepRegistration {
         emits: vec![StopEvent::event_type()],
         handler,
         max_concurrency: 0,
+        semaphore: None,
     }
 }
 
@@ -2209,6 +2233,7 @@ fn registry_noop_step() -> StepRegistration {
         emits: vec![],
         handler,
         max_concurrency: 0,
+        semaphore: None,
     }
 }
 

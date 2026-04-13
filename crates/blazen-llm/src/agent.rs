@@ -36,6 +36,9 @@ pub struct AgentConfig {
     pub temperature: Option<f32>,
     /// Maximum tokens per completion call.
     pub max_tokens: Option<u32>,
+    /// Maximum number of tool calls to execute concurrently within a single
+    /// model response. `0` means unlimited (all in parallel). Default: `0`.
+    pub tool_concurrency: usize,
 }
 
 impl AgentConfig {
@@ -48,6 +51,7 @@ impl AgentConfig {
             system_prompt: None,
             temperature: None,
             max_tokens: None,
+            tool_concurrency: 0,
         }
     }
 
@@ -78,6 +82,12 @@ impl AgentConfig {
     #[must_use]
     pub fn with_max_tokens(mut self, tokens: u32) -> Self {
         self.max_tokens = Some(tokens);
+        self
+    }
+
+    #[must_use]
+    pub fn with_tool_concurrency(mut self, n: usize) -> Self {
+        self.tool_concurrency = n;
         self
     }
 }
@@ -286,6 +296,7 @@ pub async fn run_agent_with_callback(
             &mut messages,
             iteration,
             &on_event,
+            config.tool_concurrency,
         )
         .await?;
 
@@ -393,25 +404,68 @@ fn check_finish_tool(
     })
 }
 
-/// Execute all tool calls from a single model response and append the results
-/// to the message history.
+/// Execute all tool calls from a single model response concurrently and append
+/// the results to the message history in the original order.
+///
+/// When `tool_concurrency` is `0`, all tool calls run in parallel with no limit.
+/// When it is a positive number, at most that many tool calls execute at once
+/// (bounded via a [`tokio::sync::Semaphore`]).
 async fn execute_tool_calls(
     tool_calls: &[ToolCall],
     all_tools: &[Arc<dyn Tool>],
     messages: &mut Vec<ChatMessage>,
     iteration: u32,
     on_event: &(impl Fn(AgentEvent) + Send + Sync),
+    tool_concurrency: usize,
 ) -> Result<(), BlazenError> {
+    // Validate all tool names up front so we fail fast before executing any.
+    let resolved_tools: Vec<Arc<dyn Tool>> = tool_calls
+        .iter()
+        .map(|tc| {
+            find_tool(all_tools, &tc.name)
+                .ok_or_else(|| BlazenError::tool_error(format!("unknown tool: {}", tc.name)))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Fire ToolCalled events for every tool before we start execution.
     for tc in tool_calls {
         on_event(AgentEvent::ToolCalled {
             iteration,
             tool_call: tc.clone(),
         });
+    }
 
-        let tool = find_tool(all_tools, &tc.name)
-            .ok_or_else(|| BlazenError::tool_error(format!("unknown tool: {}", tc.name)))?;
+    // Build a semaphore for bounded concurrency (None = unlimited).
+    let semaphore = if tool_concurrency > 0 {
+        Some(Arc::new(tokio::sync::Semaphore::new(tool_concurrency)))
+    } else {
+        None
+    };
 
-        let result = tool.execute(tc.arguments.clone()).await?;
+    // Execute all tool calls concurrently, preserving order via `join_all`.
+    let futures: Vec<_> = tool_calls
+        .iter()
+        .zip(resolved_tools.iter())
+        .map(|(tc, tool)| {
+            let tool = Arc::clone(tool);
+            let args = tc.arguments.clone();
+            let sem = semaphore.clone();
+            async move {
+                // Acquire a permit when concurrency is bounded.
+                let _permit = match sem {
+                    Some(ref s) => Some(s.acquire().await.expect("semaphore closed")),
+                    None => None,
+                };
+                tool.execute(args).await
+            }
+        })
+        .collect();
+
+    let results = futures_util::future::join_all(futures).await;
+
+    // Process results in the original order.
+    for (tc, result) in tool_calls.iter().zip(results) {
+        let result = result?;
 
         on_event(AgentEvent::ToolResult {
             iteration,
@@ -419,8 +473,6 @@ async fn execute_tool_calls(
             result: result.clone(),
         });
 
-        // Serialize the tool result and add it as a tool message with the
-        // matching tool_call_id so providers can correlate results.
         let result_str = if let Some(s) = result.as_str() {
             s.to_owned()
         } else {
@@ -428,6 +480,7 @@ async fn execute_tool_calls(
         };
         messages.push(ChatMessage::tool_result(&tc.id, &tc.name, &result_str));
     }
+
     Ok(())
 }
 

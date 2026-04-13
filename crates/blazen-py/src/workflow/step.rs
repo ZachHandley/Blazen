@@ -211,13 +211,13 @@ impl PyStepWrapper {
             },
         );
 
-        Ok(blazen_core::StepRegistration {
-            name: self.name.clone(),
+        Ok(blazen_core::StepRegistration::new(
+            self.name.clone(),
             accepts,
             emits,
             handler,
-            max_concurrency: self.max_concurrency,
-        })
+            self.max_concurrency,
+        ))
     }
 }
 

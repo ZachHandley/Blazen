@@ -1266,6 +1266,39 @@ export interface ChatMessageOptions {
 }
 
 /**
+ * Run multiple chat completions concurrently with optional concurrency limits.
+ *
+ * Each element of `messageSets` is an array of `ChatMessage` instances that
+ * forms one independent completion request. Results are returned in the same
+ * order as the input.
+ *
+ * ```typescript
+ * import { CompletionModel, ChatMessage, completeBatch } from 'blazen';
+ *
+ * const model = CompletionModel.openai({ apiKey: "sk-..." });
+ *
+ * const result = await completeBatch(
+ *   model,
+ *   [
+ *     [ChatMessage.user("What is 2 + 2?")],
+ *     [ChatMessage.user("What is 3 + 3?")],
+ *     [ChatMessage.user("What is 4 + 4?")],
+ *   ],
+ *   { concurrency: 2 }
+ * );
+ *
+ * for (let i = 0; i < result.responses.length; i++) {
+ *   if (result.responses[i]) {
+ *     console.log(`Response ${i}:`, result.responses[i].content);
+ *   } else {
+ *     console.error(`Request ${i} failed:`, result.errors[i]);
+ *   }
+ * }
+ * ```
+ */
+export declare function completeBatch(model: JsCompletionModel, messageSets: Array<Array<JsChatMessage>>, options?: JsBatchOptions | undefined | null): Promise<JsBatchResult>
+
+/**
  * Estimate the total token count for an array of chat messages.
  *
  * Includes per-message overhead (role markers, separators) and assistant
@@ -1346,6 +1379,11 @@ export interface JsAgentRunOptions {
    * signal it has a final answer.
    */
   addFinishTool?: boolean
+  /**
+   * Maximum number of tool calls to execute concurrently within a single
+   * model response. `0` means unlimited (all in parallel). Defaults to 0.
+   */
+  toolConcurrency?: number
 }
 
 /**
@@ -1420,6 +1458,31 @@ export interface JsBackgroundRemovalRequest {
   imageUrl: string
   model?: string
   parameters?: any
+}
+
+/** Options for configuring a batch completion run. */
+export interface JsBatchOptions {
+  /** Maximum number of concurrent requests. `0` or omitted means unlimited. */
+  concurrency?: number
+}
+
+/**
+ * The result of a batch completion run.
+ *
+ * Each index corresponds to the input request at the same position.
+ * On success the `responses` entry is populated and the `errors` entry is
+ * `null`; on failure the `responses` entry is `null` and `errors` contains
+ * the error message.
+ */
+export interface JsBatchResult {
+  /** One response per input request. `null` for failed requests. */
+  responses: Array<JsCompletionResponse | undefined | null>
+  /** One error message per input request. `null` for successful requests. */
+  errors: Array<string | undefined | null>
+  /** Aggregated token usage across all successful responses. */
+  totalUsage?: JsTokenUsage
+  /** Aggregated cost in USD across all successful responses. */
+  totalCost?: number
 }
 
 export interface JsBedrockOptions {

@@ -616,6 +616,7 @@ module.exports.Workflow = nativeBinding.Workflow
 module.exports.JsWorkflow = nativeBinding.JsWorkflow
 module.exports.WorkflowHandler = nativeBinding.WorkflowHandler
 module.exports.JsWorkflowHandler = nativeBinding.JsWorkflowHandler
+module.exports.completeBatch = nativeBinding.completeBatch
 module.exports.countMessageTokens = nativeBinding.countMessageTokens
 module.exports.estimateTokens = nativeBinding.estimateTokens
 module.exports.JsCacheStrategy = nativeBinding.JsCacheStrategy

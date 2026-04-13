@@ -85,8 +85,11 @@ pub fn derive_event(input: TokenStream) -> TokenStream {
 /// - `#[step]` -- no arguments
 /// - `#[step(emits = [EventA, EventB])]` -- explicit list of emitted event types
 ///   (useful when the step returns `StepOutput` directly)
+/// - `#[step(max_concurrency = 4)]` -- limit concurrent invocations (0 = unlimited)
+/// - `#[step(emits = [EventA], max_concurrency = 4)]` -- both
 struct StepAttr {
     emits: Vec<Type>,
+    max_concurrency: usize,
 }
 
 /// A bracketed, comma-separated list of types: `[TypeA, TypeB]`
@@ -109,10 +112,14 @@ impl Parse for BracketedTypes {
 impl Parse for StepAttr {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         if input.is_empty() {
-            return Ok(StepAttr { emits: Vec::new() });
+            return Ok(StepAttr {
+                emits: Vec::new(),
+                max_concurrency: 0,
+            });
         }
 
         let mut emits = Vec::new();
+        let mut max_concurrency = 0usize;
 
         while !input.is_empty() {
             let ident: syn::Ident = input.parse()?;
@@ -120,6 +127,10 @@ impl Parse for StepAttr {
                 input.parse::<Token![=]>()?;
                 let bracketed: BracketedTypes = input.parse()?;
                 emits = bracketed.types;
+            } else if ident == "max_concurrency" {
+                input.parse::<Token![=]>()?;
+                let lit: syn::LitInt = input.parse()?;
+                max_concurrency = lit.base10_parse()?;
             } else {
                 return Err(syn::Error::new(ident.span(), "unknown step attribute"));
             }
@@ -130,7 +141,10 @@ impl Parse for StepAttr {
             }
         }
 
-        Ok(StepAttr { emits })
+        Ok(StepAttr {
+            emits,
+            max_concurrency,
+        })
     }
 }
 
@@ -193,6 +207,15 @@ fn extract_result_ok_type(ty: &Type) -> Option<&Type> {
 /// ```rust,ignore
 /// #[step(emits = [BuyEvent, SellEvent])]
 /// async fn decide(event: AnalysisEvent, ctx: Context) -> Result<StepOutput, WorkflowError> {
+///     // ...
+/// }
+/// ```
+///
+/// Limit concurrent invocations with `max_concurrency` (default `0` = unlimited):
+///
+/// ```rust,ignore
+/// #[step(max_concurrency = 4)]
+/// async fn rate_limited(event: StartEvent, ctx: Context) -> Result<DoneEvent, WorkflowError> {
 ///     // ...
 /// }
 /// ```
@@ -324,16 +347,18 @@ fn step_impl(step_attr: &StepAttr, input_fn: &ItemFn) -> syn::Result<TokenStream
     // ---------------------------------------------------------------
     // 5. Emit the original function + the registration function.
     // ---------------------------------------------------------------
+    let max_concurrency_value = step_attr.max_concurrency;
+
     let expanded = quote! {
         #input_fn
 
         /// Auto-generated step registration for [`#fn_name`].
         fn #registration_fn_name() -> blazen_core::StepRegistration {
-            blazen_core::StepRegistration {
-                name: #fn_name_str.to_string(),
-                accepts: vec![<#event_type as blazen_events::Event>::event_type()],
-                emits: #emits_tokens,
-                handler: ::std::sync::Arc::new(
+            blazen_core::StepRegistration::new(
+                #fn_name_str.to_string(),
+                vec![<#event_type as blazen_events::Event>::event_type()],
+                #emits_tokens,
+                ::std::sync::Arc::new(
                     |event: Box<dyn blazen_events::AnyEvent>,
                      ctx: blazen_core::Context|
                      -> ::std::pin::Pin<Box<dyn ::std::future::Future<
@@ -347,8 +372,8 @@ fn step_impl(step_attr: &StepAttr, input_fn: &ItemFn) -> syn::Result<TokenStream
                         })
                     },
                 ),
-                max_concurrency: 1,
-            }
+                #max_concurrency_value,
+            )
         }
     };
 

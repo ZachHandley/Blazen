@@ -12,6 +12,8 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use tokio::sync::Semaphore;
+
 use blazen_events::AnyEvent;
 
 use crate::context::Context;
@@ -55,6 +57,9 @@ pub struct StepRegistration {
     pub handler: StepFn,
     /// Maximum number of concurrent invocations of this step (0 = unlimited).
     pub max_concurrency: usize,
+    /// Semaphore that enforces [`max_concurrency`](Self::max_concurrency).
+    /// `None` when `max_concurrency` is `0` (unlimited).
+    pub semaphore: Option<Arc<Semaphore>>,
 }
 
 impl std::fmt::Debug for StepRegistration {
@@ -65,5 +70,34 @@ impl std::fmt::Debug for StepRegistration {
             .field("emits", &self.emits)
             .field("max_concurrency", &self.max_concurrency)
             .finish_non_exhaustive()
+    }
+}
+
+impl StepRegistration {
+    /// Create a new step registration with an optional concurrency semaphore.
+    ///
+    /// When `max_concurrency` is `0`, the semaphore is `None` (unlimited).
+    /// When positive, a [`Semaphore`] with that many permits is created.
+    #[must_use]
+    pub fn new(
+        name: String,
+        accepts: Vec<&'static str>,
+        emits: Vec<&'static str>,
+        handler: StepFn,
+        max_concurrency: usize,
+    ) -> Self {
+        let semaphore = if max_concurrency > 0 {
+            Some(Arc::new(Semaphore::new(max_concurrency)))
+        } else {
+            None
+        };
+        Self {
+            name,
+            accepts,
+            emits,
+            handler,
+            max_concurrency,
+            semaphore,
+        }
     }
 }
