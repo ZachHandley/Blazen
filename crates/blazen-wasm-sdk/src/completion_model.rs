@@ -404,6 +404,14 @@ impl WasmCompletionModel {
     ///   `(request, onChunk)` where `onChunk` is a callback that accepts
     ///   `StreamChunk`-shaped objects. If omitted, `stream()` falls back to
     ///   calling the `complete_handler` and yielding a single chunk.
+    /// - `config` (optional) is a plain JS object with provider configuration:
+    ///   - `contextLength` (number) -- context window size in tokens
+    ///   - `maxOutputTokens` (number) -- max output tokens
+    ///   - `vramEstimateBytes` (number) -- estimated VRAM footprint in bytes
+    ///   - `pricing` (object) -- `{ inputPerMillion, outputPerMillion }` in USD
+    ///
+    ///   When `pricing` is provided, it is automatically registered in the
+    ///   global pricing registry so that `lookupPricing(modelId)` works.
     ///
     /// ```js
     /// const model = CompletionModel.fromJsHandler(
@@ -416,6 +424,8 @@ impl WasmCompletionModel {
     ///       model: 'my-local-model', metadata: {},
     ///     };
     ///   },
+    ///   undefined,
+    ///   { contextLength: 4096, pricing: { inputPerMillion: 0, outputPerMillion: 0 } },
     /// );
     /// ```
     #[wasm_bindgen(js_name = "fromJsHandler")]
@@ -423,7 +433,32 @@ impl WasmCompletionModel {
         model_id: String,
         complete_handler: js_sys::Function,
         stream_handler: Option<js_sys::Function>,
+        config: JsValue,
     ) -> Self {
+        // Extract config fields from the JS object if present.
+        if config.is_object() {
+            // Register pricing if provided.
+            if let Ok(pricing_val) = js_sys::Reflect::get(&config, &JsValue::from_str("pricing")) {
+                if pricing_val.is_object() {
+                    let input = js_sys::Reflect::get(&pricing_val, &JsValue::from_str("inputPerMillion"))
+                        .ok()
+                        .and_then(|v| v.as_f64());
+                    let output = js_sys::Reflect::get(&pricing_val, &JsValue::from_str("outputPerMillion"))
+                        .ok()
+                        .and_then(|v| v.as_f64());
+                    if let (Some(inp), Some(out)) = (input, output) {
+                        blazen_llm::register_pricing(
+                            &model_id,
+                            blazen_llm::PricingEntry {
+                                input_per_million: inp,
+                                output_per_million: out,
+                            },
+                        );
+                    }
+                }
+            }
+        }
+
         let handler = JsCompletionHandler::new(model_id, complete_handler, stream_handler);
         Self {
             inner: Arc::new(handler),
@@ -702,10 +737,16 @@ impl WasmCompletionModel {
                     request = request.with_response_format(fmt.clone());
                 }
                 if let Some(tools) = opts.get("tools").and_then(|v| v.as_array()) {
-                    let tool_defs: Vec<blazen_llm::types::ToolDefinition> = tools
-                        .iter()
-                        .filter_map(|t| serde_json::from_value(t.clone()).ok())
-                        .collect();
+                    let mut tool_defs = Vec::with_capacity(tools.len());
+                    for (i, t) in tools.iter().enumerate() {
+                        let def: blazen_llm::types::ToolDefinition =
+                            serde_json::from_value(t.clone()).map_err(|e| {
+                                JsValue::from_str(&format!(
+                                    "invalid tool definition at index {i}: {e}"
+                                ))
+                            })?;
+                        tool_defs.push(def);
+                    }
                     if !tool_defs.is_empty() {
                         request = request.with_tools(tool_defs);
                     }

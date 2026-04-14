@@ -432,3 +432,332 @@ describe("CompletionModel decorators", () => {
     assert.ok(fallback);
   });
 });
+
+// ===========================================================================
+// Tools via CompletionOptions (completeWithOptions)
+// ===========================================================================
+
+function makeSearchTool() {
+  return {
+    name: "search",
+    description: "Search the web for information",
+    parameters: {
+      type: "object",
+      properties: { query: { type: "string" } },
+      required: ["query"],
+    },
+  };
+}
+
+function makeCalculatorTool() {
+  return {
+    name: "calculator",
+    description: "Perform arithmetic calculations",
+    parameters: {
+      type: "object",
+      properties: {
+        expression: { type: "string", description: "Math expression" },
+      },
+      required: ["expression"],
+    },
+  };
+}
+
+describe("tools via CompletionOptions", () => {
+  it("completeWithOptions accepts a single tool definition", async () => {
+    const model = CompletionModel.openai({ apiKey: "fake-key" });
+    const tool = makeSearchTool();
+
+    // The call will fail at the API level (no valid key), but the tool
+    // structure must be accepted at the napi boundary without type errors.
+    await assert.rejects(
+      () =>
+        model.completeWithOptions([ChatMessage.user("Hi")], {
+          tools: [tool],
+        }),
+      // Any error is fine -- we're testing that the call doesn't throw
+      // a type/validation error about the tools structure.
+      (err) => err instanceof Error
+    );
+  });
+
+  it("completeWithOptions accepts multiple tool definitions", async () => {
+    const model = CompletionModel.openai({ apiKey: "fake-key" });
+    const search = makeSearchTool();
+    const calc = makeCalculatorTool();
+
+    await assert.rejects(
+      () =>
+        model.completeWithOptions([ChatMessage.user("Hi")], {
+          tools: [search, calc],
+        }),
+      (err) => err instanceof Error
+    );
+  });
+
+  it("completeWithOptions accepts options without tools", async () => {
+    const model = CompletionModel.openai({ apiKey: "fake-key" });
+
+    await assert.rejects(
+      () =>
+        model.completeWithOptions([ChatMessage.user("Hi")], {
+          temperature: 0.5,
+        }),
+      (err) => err instanceof Error
+    );
+  });
+
+  it("tool definition fields are preserved in the options object", () => {
+    const tool = makeSearchTool();
+    const options = { tools: [tool] };
+
+    // Verify the plain-object tool definition retains all fields.
+    assert.strictEqual(options.tools.length, 1);
+    assert.strictEqual(options.tools[0].name, "search");
+    assert.strictEqual(
+      options.tools[0].description,
+      "Search the web for information"
+    );
+    assert.strictEqual(options.tools[0].parameters.type, "object");
+    assert.ok("query" in options.tools[0].parameters.properties);
+    assert.deepStrictEqual(options.tools[0].parameters.required, ["query"]);
+  });
+
+  it("multiple tools preserve all descriptions and parameters", () => {
+    const search = makeSearchTool();
+    const calc = makeCalculatorTool();
+    const options = { tools: [search, calc] };
+
+    assert.strictEqual(options.tools.length, 2);
+
+    const names = options.tools.map((t) => t.name);
+    assert.ok(names.includes("search"));
+    assert.ok(names.includes("calculator"));
+
+    const searchTool = options.tools.find((t) => t.name === "search");
+    assert.strictEqual(
+      searchTool.description,
+      "Search the web for information"
+    );
+    assert.ok("query" in searchTool.parameters.properties);
+
+    const calcTool = options.tools.find((t) => t.name === "calculator");
+    assert.strictEqual(
+      calcTool.description,
+      "Perform arithmetic calculations"
+    );
+    assert.ok("expression" in calcTool.parameters.properties);
+  });
+});
+
+describe("subclassed CompletionModel", () => {
+  it("constructor accepts config with modelId", () => {
+    const model = new CompletionModel({ modelId: "custom-test" });
+    assert.strictEqual(model.modelId, "custom-test");
+  });
+
+  it("complete() on subclass without inner throws descriptive error", async () => {
+    const model = new CompletionModel({ modelId: "no-provider" });
+
+    await assert.rejects(
+      () => model.complete([ChatMessage.user("Hi")]),
+      /subclass must override complete/
+    );
+  });
+
+  it("completeWithOptions() on subclass without inner throws descriptive error", async () => {
+    const model = new CompletionModel({ modelId: "no-provider" });
+
+    await assert.rejects(
+      () =>
+        model.completeWithOptions([ChatMessage.user("Hi")], {
+          tools: [makeSearchTool()],
+        }),
+      /subclass must override completeWithOptions/
+    );
+  });
+});
+
+// ===========================================================================
+// Tools passthrough via CompletionOptions (subclassed CompletionModel)
+// ===========================================================================
+
+describe("tools passthrough via CompletionOptions (subclassed)", () => {
+  it("tools passed via options reach the subclass override with correct name/description", async () => {
+    const captured = [];
+
+    class ToolInspectorLLM extends CompletionModel {
+      constructor() {
+        super({ modelId: "tool-inspector" });
+      }
+      async completeWithOptions(messages, options) {
+        if (options && options.tools) {
+          for (const tool of options.tools) {
+            captured.push({
+              name: tool.name,
+              description: tool.description,
+            });
+          }
+        }
+        throw new Error("inspection-complete");
+      }
+    }
+
+    const model = new ToolInspectorLLM();
+    await assert.rejects(
+      () =>
+        model.completeWithOptions([ChatMessage.user("Hi")], {
+          tools: [
+            {
+              name: "search",
+              description: "Search the web for information.",
+              parameters: {
+                type: "object",
+                properties: { query: { type: "string" } },
+                required: ["query"],
+              },
+            },
+            {
+              name: "calculator",
+              description: "Add two numbers together.",
+              parameters: {
+                type: "object",
+                properties: {
+                  a: { type: "number" },
+                  b: { type: "number" },
+                },
+                required: ["a", "b"],
+              },
+            },
+          ],
+        }),
+      /inspection-complete/
+    );
+
+    assert.equal(captured.length, 2);
+    assert.equal(captured[0].name, "search");
+    assert.equal(captured[0].description, "Search the web for information.");
+    assert.equal(captured[1].name, "calculator");
+    assert.equal(captured[1].description, "Add two numbers together.");
+  });
+
+  it("tools is undefined or empty when CompletionOptions has no tools", async () => {
+    const captured = { tools_value: "sentinel" };
+
+    class NoToolsLLM extends CompletionModel {
+      constructor() {
+        super({ modelId: "no-tools" });
+      }
+      async completeWithOptions(messages, options) {
+        captured.tools_value = options ? options.tools : "no-options";
+        throw new Error("done");
+      }
+    }
+
+    const model = new NoToolsLLM();
+    await assert.rejects(
+      () =>
+        model.completeWithOptions([ChatMessage.user("Hi")], {
+          temperature: 0.7,
+        }),
+      /done/
+    );
+
+    // options.tools is either undefined or an empty array when no tools set.
+    const t = captured.tools_value;
+    assert.ok(
+      t === undefined || t === null || (Array.isArray(t) && t.length === 0),
+      `expected undefined/null/[] tools, got ${JSON.stringify(t)}`
+    );
+  });
+
+  it("tool parameters JSON schema is preserved end-to-end", async () => {
+    const capturedParams = [];
+
+    class ParamsCaptureLLM extends CompletionModel {
+      constructor() {
+        super({ modelId: "params-capture" });
+      }
+      async completeWithOptions(messages, options) {
+        if (options && options.tools) {
+          for (const tool of options.tools) {
+            capturedParams.push(tool.parameters);
+          }
+        }
+        throw new Error("captured");
+      }
+    }
+
+    const complexSchema = {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search query" },
+        limit: { type: "integer", minimum: 1, maximum: 100 },
+        filters: {
+          type: "array",
+          items: { type: "string" },
+        },
+      },
+      required: ["query"],
+    };
+
+    const model = new ParamsCaptureLLM();
+    await assert.rejects(
+      () =>
+        model.completeWithOptions([ChatMessage.user("Hi")], {
+          tools: [
+            {
+              name: "advanced_search",
+              description: "Complex search with filters.",
+              parameters: complexSchema,
+            },
+          ],
+        }),
+      /captured/
+    );
+
+    assert.equal(capturedParams.length, 1);
+    const params = capturedParams[0];
+    assert.equal(params.type, "object");
+    assert.ok("query" in params.properties);
+    assert.equal(params.properties.limit.minimum, 1);
+    assert.deepStrictEqual(params.required, ["query"]);
+  });
+
+  it("multiple tools each reach the subclass override independently", async () => {
+    const toolNames = [];
+
+    class MultiToolLLM extends CompletionModel {
+      constructor() {
+        super({ modelId: "multi-tool" });
+      }
+      async completeWithOptions(messages, options) {
+        if (options && options.tools) {
+          for (const tool of options.tools) {
+            toolNames.push(tool.name);
+          }
+        }
+        throw new Error("captured");
+      }
+    }
+
+    const model = new MultiToolLLM();
+    await assert.rejects(
+      () =>
+        model.completeWithOptions([ChatMessage.user("Hi")], {
+          tools: [
+            makeSearchTool(),
+            makeCalculatorTool(),
+            {
+              name: "third_tool",
+              description: "A third tool.",
+              parameters: { type: "object", properties: {} },
+            },
+          ],
+        }),
+      /captured/
+    );
+
+    assert.deepStrictEqual(toolNames, ["search", "calculator", "third_tool"]);
+  });
+});

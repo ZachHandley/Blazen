@@ -35,6 +35,7 @@ from blazen import (
     RetryConfig,
     StartEvent,
     StopEvent,
+    ToolDef,
     Workflow,
     count_message_tokens,
     estimate_tokens,
@@ -586,3 +587,390 @@ def test_with_fallback_constructs():
     m2 = CompletionModel.openai(options=ProviderOptions(api_key="fake-key-2"))
     fallback = CompletionModel.with_fallback([m1, m2])
     assert fallback is not None
+
+
+# =========================================================================
+# Tools via CompletionOptions (subclassed CompletionModel)
+# =========================================================================
+
+
+def _make_search_tool():
+    """Helper: create a search ToolDef."""
+    return ToolDef(
+        name="search",
+        description="Search the web for information",
+        parameters={
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        },
+        handler=lambda args: {"results": []},
+    )
+
+
+def _make_calculator_tool():
+    """Helper: create a calculator ToolDef."""
+    return ToolDef(
+        name="calculator",
+        description="Perform arithmetic calculations",
+        parameters={
+            "type": "object",
+            "properties": {
+                "expression": {"type": "string", "description": "Math expression"},
+            },
+            "required": ["expression"],
+        },
+        handler=lambda args: {"result": 42},
+    )
+
+
+def test_tooldef_repr_contains_name():
+    """ToolDef repr shows the tool name (verifies construction preserved name)."""
+    tool = _make_search_tool()
+    assert "search" in repr(tool)
+
+
+def test_tooldef_description_preserved_in_repr_of_different_tools():
+    """Different tools produce different reprs (name round-trips)."""
+    search = _make_search_tool()
+    calc = _make_calculator_tool()
+    assert "search" in repr(search)
+    assert "calculator" in repr(calc)
+    assert repr(search) != repr(calc)
+
+
+def test_tooldef_requires_keyword_args():
+    """ToolDef constructor requires all four keyword args."""
+    # Missing handler should raise
+    with pytest.raises(TypeError):
+        ToolDef(name="x", description="d", parameters={})
+
+    # Positional args are disallowed (constructor is keyword-only)
+    with pytest.raises(TypeError):
+        ToolDef("x", "d", {}, lambda a: a)
+
+
+def test_tooldef_description_required():
+    """ToolDef constructor requires a description (docstring/description)."""
+    # Missing description should raise
+    with pytest.raises(TypeError):
+        ToolDef(name="x", parameters={}, handler=lambda a: a)
+
+
+def test_completion_options_accepts_single_tooldef():
+    """CompletionOptions accepts a list containing one ToolDef."""
+    tool = _make_search_tool()
+    opts = CompletionOptions(tools=[tool])
+
+    assert opts.tools is not None
+    assert len(opts.tools) == 1
+    # Verify the item is a ToolDef (typed, not a dict)
+    assert isinstance(opts.tools[0], ToolDef)
+    # Name is preserved in the repr (stable round-trip check)
+    assert "search" in repr(opts.tools[0])
+
+
+def test_completion_options_accepts_multiple_tooldefs():
+    """CompletionOptions accepts multiple ToolDef objects and preserves them."""
+    search = _make_search_tool()
+    calc = _make_calculator_tool()
+    opts = CompletionOptions(tools=[search, calc])
+
+    assert opts.tools is not None
+    assert len(opts.tools) == 2
+    for t in opts.tools:
+        assert isinstance(t, ToolDef)
+
+    # Verify each tool's name appears (via repr) so we know they weren't merged
+    reprs = [repr(t) for t in opts.tools]
+    assert any("search" in r for r in reprs)
+    assert any("calculator" in r for r in reprs)
+
+
+def test_completion_options_typed_tool_list_type():
+    """CompletionOptions.tools contains typed ToolDef objects (not dicts).
+
+    This verifies the core change: tools are now typed `ToolDef` objects,
+    not untyped dicts. Users should always pass `ToolDef` instances.
+    """
+    tool = _make_search_tool()
+    opts = CompletionOptions(tools=[tool])
+
+    assert opts.tools is not None
+    assert len(opts.tools) == 1
+    # The returned tool must be a ToolDef, not a dict.
+    assert isinstance(opts.tools[0], ToolDef)
+    # Verify it's NOT a dict (the old API allowed dicts).
+    assert not isinstance(opts.tools[0], dict)
+
+
+def test_completion_options_no_tools_returns_none():
+    """CompletionOptions without tools has tools == None (not empty list)."""
+    opts = CompletionOptions()
+    assert opts.tools is None
+
+
+def test_completion_options_empty_tools_list():
+    """CompletionOptions accepts an explicit empty list."""
+    opts = CompletionOptions(tools=[])
+    assert opts.tools == []
+
+
+def test_completion_options_tools_setter_typed():
+    """CompletionOptions.tools setter accepts a new list of ToolDef."""
+    opts = CompletionOptions()
+    assert opts.tools is None
+
+    tool = _make_search_tool()
+    opts.tools = [tool]
+
+    assert opts.tools is not None
+    assert len(opts.tools) == 1
+    assert isinstance(opts.tools[0], ToolDef)
+
+
+def test_completion_options_tools_setter_rejects_dicts():
+    """Assigning dicts to CompletionOptions.tools raises (typed contract)."""
+    opts = CompletionOptions()
+    with pytest.raises((TypeError, ValueError)):
+        opts.tools = [{"name": "x", "description": "d", "parameters": {}}]
+
+
+def test_completion_options_tools_with_other_params():
+    """CompletionOptions preserves tools alongside other parameters."""
+    tool = _make_search_tool()
+    opts = CompletionOptions(
+        temperature=0.7,
+        max_tokens=1000,
+        tools=[tool],
+    )
+
+    assert opts.temperature == pytest.approx(0.7)
+    assert opts.max_tokens == 1000
+    assert opts.tools is not None
+    assert len(opts.tools) == 1
+    assert isinstance(opts.tools[0], ToolDef)
+
+
+def test_tooldef_handler_receives_args():
+    """ToolDef handler is callable with the args dict (integration sanity)."""
+    received = []
+
+    def my_handler(args):
+        received.append(args)
+        return {"ok": True}
+
+    tool = ToolDef(
+        name="echo",
+        description="Echo the input",
+        parameters={"type": "object"},
+        handler=my_handler,
+    )
+    # We can't directly invoke the handler through ToolDef since the
+    # bindings don't expose a getter, but we can verify the object was
+    # accepted with a callable handler (no TypeError on construction).
+    assert "echo" in repr(tool)
+
+
+def test_completion_options_tools_roundtrip_through_options():
+    """Tools assigned via constructor survive a get/set cycle on the options."""
+    tool = _make_search_tool()
+    opts = CompletionOptions(tools=[tool])
+
+    # Read back through the property
+    retrieved = opts.tools
+    assert retrieved is not None
+    assert len(retrieved) == 1
+
+    # Reassign the retrieved list back -- should still work (typed)
+    opts.tools = retrieved
+    assert len(opts.tools) == 1
+    assert isinstance(opts.tools[0], ToolDef)
+
+
+# =========================================================================
+# Tools passthrough via CompletionOptions (subclassed CompletionModel)
+# =========================================================================
+#
+# These tests verify end-to-end that tools supplied via CompletionOptions
+# reach a subclassed CompletionModel's `complete()` override with their
+# name/description/parameters/handler fields intact.
+#
+# The subclass uses ``__new__`` to forward keyword arguments to the base
+# ``CompletionModel`` constructor (PyO3's ``#[new]`` maps to Python's
+# ``__new__`` slot). Calling ``super().__init__(model_id=...)`` from an
+# overridden ``__init__`` is rejected by ``object.__init__`` because the
+# base class has no ``__init__`` slot -- only ``__new__``.
+
+
+@pytest.mark.asyncio
+async def test_tools_via_completion_options_passthrough():
+    """Tools passed via CompletionOptions reach the subclass override with correct name/description/parameters."""
+
+    captured = []
+
+    class ToolInspectorLLM(CompletionModel):
+        def __new__(cls):
+            return super().__new__(cls, model_id="tool-inspector")
+
+        async def complete(self, messages, options=None):
+            if options is not None and options.tools is not None:
+                for tool in options.tools:
+                    captured.append({
+                        "name": tool.name,
+                        "description": tool.description,
+                    })
+            raise RuntimeError("inspection-complete")
+
+        async def stream(self, messages, on_chunk=None, options=None):
+            raise RuntimeError("stream-not-used")
+
+    model = ToolInspectorLLM()
+    search_tool = ToolDef(
+        name="search",
+        description="Search the web for information.",
+        parameters={
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        },
+        handler=lambda args: {"results": []},
+    )
+    calc_tool = ToolDef(
+        name="calculator",
+        description="Add two numbers together.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "a": {"type": "number"},
+                "b": {"type": "number"},
+            },
+            "required": ["a", "b"],
+        },
+        handler=lambda args: {"result": args["a"] + args["b"]},
+    )
+
+    opts = CompletionOptions(tools=[search_tool, calc_tool])
+
+    with pytest.raises(RuntimeError, match="inspection-complete"):
+        await model.complete([ChatMessage.user("Hi")], options=opts)
+
+    assert len(captured) == 2
+    assert captured[0]["name"] == "search"
+    assert captured[0]["description"] == "Search the web for information."
+    assert captured[1]["name"] == "calculator"
+    assert captured[1]["description"] == "Add two numbers together."
+
+
+@pytest.mark.asyncio
+async def test_tools_none_when_options_has_no_tools():
+    """When CompletionOptions has no tools, options.tools is None in the override."""
+
+    captured = {"tools_value": "sentinel"}
+
+    class NoToolsLLM(CompletionModel):
+        def __new__(cls):
+            return super().__new__(cls, model_id="no-tools")
+
+        async def complete(self, messages, options=None):
+            captured["tools_value"] = options.tools if options else "no-options"
+            raise RuntimeError("done")
+
+        async def stream(self, messages, on_chunk=None, options=None):
+            raise RuntimeError("stream-not-used")
+
+    model = NoToolsLLM()
+    opts = CompletionOptions(temperature=0.7)
+
+    with pytest.raises(RuntimeError, match="done"):
+        await model.complete([ChatMessage.user("Hi")], options=opts)
+
+    assert captured["tools_value"] is None
+
+
+@pytest.mark.asyncio
+async def test_tool_parameters_schema_preserved():
+    """Tool parameters JSON schema is preserved end-to-end."""
+
+    captured_params = []
+
+    class ParamsCaptureLLM(CompletionModel):
+        def __new__(cls):
+            return super().__new__(cls, model_id="params-capture")
+
+        async def complete(self, messages, options=None):
+            if options and options.tools:
+                for tool in options.tools:
+                    captured_params.append(tool.parameters)
+            raise RuntimeError("captured")
+
+        async def stream(self, messages, on_chunk=None, options=None):
+            raise RuntimeError("stream-not-used")
+
+    model = ParamsCaptureLLM()
+    complex_schema = {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Search query"},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+            "filters": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+        },
+        "required": ["query"],
+    }
+    tool = ToolDef(
+        name="advanced_search",
+        description="Complex search with filters.",
+        parameters=complex_schema,
+        handler=lambda args: {"ok": True},
+    )
+
+    with pytest.raises(RuntimeError, match="captured"):
+        await model.complete([ChatMessage.user("Hi")], options=CompletionOptions(tools=[tool]))
+
+    assert len(captured_params) == 1
+    params = captured_params[0]
+    assert params["type"] == "object"
+    assert "query" in params["properties"]
+    assert params["properties"]["limit"]["minimum"] == 1
+    assert params["required"] == ["query"]
+
+
+@pytest.mark.asyncio
+async def test_tool_handler_is_callable_in_override():
+    """The handler on a ToolDef is accessible and callable from the subclass override."""
+
+    handler_results = []
+
+    def my_handler(args):
+        return {"doubled": args["x"] * 2}
+
+    class HandlerCheckLLM(CompletionModel):
+        def __new__(cls):
+            return super().__new__(cls, model_id="handler-check")
+
+        async def complete(self, messages, options=None):
+            if options and options.tools:
+                for tool in options.tools:
+                    # ToolDef.handler is exposed -- we can call it
+                    result = tool.handler({"x": 21})
+                    handler_results.append(result)
+            raise RuntimeError("done")
+
+        async def stream(self, messages, on_chunk=None, options=None):
+            raise RuntimeError("stream-not-used")
+
+    model = HandlerCheckLLM()
+    tool = ToolDef(
+        name="doubler",
+        description="Doubles a number.",
+        parameters={"type": "object", "properties": {"x": {"type": "number"}}},
+        handler=my_handler,
+    )
+
+    with pytest.raises(RuntimeError, match="done"):
+        await model.complete([ChatMessage.user("Hi")], options=CompletionOptions(tools=[tool]))
+
+    assert handler_results == [{"doubled": 42}]

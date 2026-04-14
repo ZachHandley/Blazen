@@ -28,6 +28,9 @@
 //!     print(result.to_dict())
 //! ```
 
+#[macro_use]
+mod macros;
+
 pub(crate) mod convert;
 pub(crate) mod session_ref_serializable;
 
@@ -35,6 +38,7 @@ pub mod agent;
 pub mod batch;
 pub mod compute;
 pub mod error;
+pub mod manager;
 pub mod providers;
 pub mod types;
 pub mod workflow;
@@ -48,6 +52,7 @@ pyo3_stub_gen::define_stub_info_gatherer!(stub_info);
 
 /// The top-level Python module for `Blazen`.
 #[pymodule]
+#[allow(clippy::too_many_lines)]
 fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Initialize the Rust tracing subscriber once on module load. `try_init`
     // is a no-op if a subscriber is already installed (e.g. the user supplied
@@ -201,12 +206,31 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Custom provider (user-defined Python class wrapped as a Blazen provider).
     m.add_class::<providers::custom::PyCustomProvider>()?;
 
+    // Capability providers (subclassable)
+    m.add_class::<providers::capability_providers::TTSProvider>()?;
+    m.add_class::<providers::capability_providers::MusicProvider>()?;
+    m.add_class::<providers::capability_providers::ImageProvider>()?;
+    m.add_class::<providers::capability_providers::VideoProvider>()?;
+    m.add_class::<providers::capability_providers::ThreeDProvider>()?;
+    m.add_class::<providers::capability_providers::BackgroundRemovalProvider>()?;
+    m.add_class::<providers::capability_providers::VoiceProvider>()?;
+
+    // Model manager
+    m.add_class::<manager::PyModelManager>()?;
+    m.add_class::<manager::PyModelStatus>()?;
+
     // Memory
     m.add_class::<types::PyMemory>()?;
+    m.add_class::<types::PyMemoryBackend>()?;
     m.add_class::<types::PyInMemoryBackend>()?;
     m.add_class::<types::PyJsonlBackend>()?;
     m.add_class::<types::PyValkeyBackend>()?;
     m.add_class::<types::PyMemoryResult>()?;
+
+    // Pricing
+    m.add_class::<types::pricing::PyModelPricing>()?;
+    m.add_function(wrap_pyfunction!(types::pricing::register_pricing, m)?)?;
+    m.add_function(wrap_pyfunction!(types::pricing::lookup_pricing, m)?)?;
 
     // Prompts
     m.add_class::<types::PyPromptTemplate>()?;

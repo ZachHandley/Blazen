@@ -15,6 +15,7 @@ crate-type = ["cdylib"]
 blazen-core.workspace = true
 blazen-events.workspace = true
 blazen-llm = { workspace = true, features = ["reqwest"] }
+blazen-manager.workspace = true
 blazen-memory.workspace = true
 blazen-memory-valkey.workspace = true
 blazen-prompts.workspace = true

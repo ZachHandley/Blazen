@@ -9,6 +9,7 @@ pub mod finish_reason;
 pub mod media;
 pub mod memory;
 pub mod message;
+pub mod pricing;
 pub mod prompts;
 pub mod reasoning;
 pub mod request_timing;
@@ -29,8 +30,11 @@ pub use media::{
     PyGenerated3DModel, PyGeneratedAudio, PyGeneratedImage, PyGeneratedVideo, PyMediaOutput,
     PyMediaType,
 };
-pub use memory::{PyInMemoryBackend, PyJsonlBackend, PyMemory, PyMemoryResult, PyValkeyBackend};
+pub use memory::{
+    PyInMemoryBackend, PyJsonlBackend, PyMemory, PyMemoryBackend, PyMemoryResult, PyValkeyBackend,
+};
 pub use message::{PyChatMessage, PyContentPart, PyRole};
+pub use pricing::PyModelPricing;
 pub use prompts::{PyPromptRegistry, PyPromptTemplate};
 pub use reasoning::ReasoningTrace;
 pub use request_timing::PyRequestTiming;

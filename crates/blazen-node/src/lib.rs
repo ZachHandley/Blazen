@@ -17,6 +17,7 @@ pub mod batch;
 pub mod compute;
 pub mod error;
 pub mod generated;
+pub mod manager;
 pub mod providers;
 pub mod types;
 pub mod workflow;

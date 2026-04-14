@@ -107,7 +107,12 @@ pub async fn complete_batch(
         None => BatchConfig::default(),
     };
 
-    let result = rust_complete_batch(model.inner.as_ref(), requests, config).await;
+    let inner = model.inner.as_ref().ok_or_else(|| {
+        napi::Error::from_reason(
+            "completeBatch() is not supported on subclassed CompletionModel instances",
+        )
+    })?;
+    let result = rust_complete_batch(inner.as_ref(), requests, config).await;
 
     let mut responses = Vec::with_capacity(result.responses.len());
     let mut errors = Vec::with_capacity(result.responses.len());

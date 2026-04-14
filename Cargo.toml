@@ -25,6 +25,7 @@ members = [
     "crates/blazen-llm-llamacpp",
     "crates/blazen-audio-piper",
     "crates/blazen-peer",
+    "crates/blazen-manager",
 ]
 exclude = [
     "crates/blazen-wasm",
@@ -121,6 +122,7 @@ blazen-llm-candle = { version = "0.0.0-dev", path = "crates/blazen-llm-candle", 
 blazen-llm-llamacpp = { version = "0.0.0-dev", path = "crates/blazen-llm-llamacpp", registry = "forgejo" }
 blazen-audio-piper = { version = "0.0.0-dev", path = "crates/blazen-audio-piper", registry = "forgejo" }
 blazen-peer = { version = "0.0.0-dev", path = "crates/blazen-peer", registry = "forgejo" }
+blazen-manager = { version = "0.0.0-dev", path = "crates/blazen-manager", registry = "forgejo" }
 
 # Distributed peer transport
 tonic = "0.14"

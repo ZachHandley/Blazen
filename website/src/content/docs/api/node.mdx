@@ -577,15 +577,23 @@ A step handler receives an event and a context. It can return:
 
 Returned by `Workflow.runWithHandler()` and `Workflow.resume()`. Provides control over a running workflow.
 
-**Important:** `result()` and `pause()` each consume the handler internally. You can only call one of them, and only once.
+**Important:** `result()` consumes the handler internally -- you can only call it once. The other control methods (`pause`, `resumeInPlace`, `abort`, `respondToInput`, `snapshot`) borrow the handler and can be called multiple times.
 
 ### `await handler.result(): WorkflowResult`
 
 Await the final workflow result.
 
-### `await handler.pause(): string`
+### `await handler.pause(): void`
 
-Pause the workflow and return a snapshot as a JSON string. Save this to resume later with `Workflow.resume()`.
+Signal the running workflow to pause. After pausing, use `snapshot()` to get a serializable snapshot, or `resumeInPlace()` to continue execution.
+
+### `await handler.snapshot(): string`
+
+Get a serializable snapshot of the paused workflow as a JSON string. Save this to resume later with `Workflow.resume()`.
+
+### `await handler.resumeInPlace(): void`
+
+Resume a paused workflow in place without creating a new handler.
 
 ### `await handler.streamEvents(callback: (event) => void): void`
 
@@ -1133,29 +1141,6 @@ interface Generated3DModel {
 
 ---
 
-## mediaTypes()
-
-Returns an object mapping friendly format names to MIME type strings. Useful for specifying `mediaType` when constructing image messages or compute requests.
-
-```typescript
-import { mediaTypes } from "blazen";
-
-const types = mediaTypes();
-console.log(types.png);   // "image/png"
-console.log(types.mp4);   // "video/mp4"
-console.log(types.glb);   // "model/gltf-binary"
-```
-
-| Category | Properties |
-|---|---|
-| Images | `png`, `jpeg`, `webp`, `gif`, `svg`, `bmp`, `tiff`, `avif`, `ico` |
-| Video | `mp4`, `webm`, `mov`, `avi`, `mkv` |
-| Audio | `mp3`, `wav`, `ogg`, `flac`, `aac`, `m4a` |
-| 3D Models | `glb`, `gltf`, `obj`, `fbx`, `usdz`, `stl`, `ply` |
-| Documents | `pdf` |
-
----
-
 ## EmbeddingModel
 
 Generate vector embeddings from text. Created via static factory methods. Keys are read from environment variables (`OPENAI_API_KEY`, `TOGETHER_API_KEY`, etc.) when `options` is omitted, or can be passed explicitly via `{ apiKey: "..." }`.
@@ -1242,6 +1227,283 @@ const count = countMessageTokens([
 ```
 
 `contextSize` defaults to `128000` if omitted.
+
+---
+
+## Subclassable Providers
+
+`CompletionModel`, `EmbeddingModel`, and `Transcription` can be subclassed to implement custom providers. Override the relevant methods and the framework will dispatch to your implementation.
+
+### CompletionModel
+
+```typescript
+import { CompletionModel, ChatMessage } from "blazen";
+
+class MyLLM extends CompletionModel {
+  constructor() {
+    super({ modelId: "my-llm" });
+  }
+
+  async complete(messages: ChatMessage[]) {
+    // Your inference logic here
+    return { content: "Hello from my custom model" };
+  }
+
+  async stream(messages: ChatMessage[], onChunk: (chunk: any) => void) {
+    onChunk({ delta: "Hello", finishReason: null, toolCalls: [] });
+    onChunk({ delta: null, finishReason: "stop", toolCalls: [] });
+  }
+}
+
+const model = new MyLLM();
+const response = await model.complete([ChatMessage.user("Hi")]);
+```
+
+### EmbeddingModel
+
+```typescript
+import { EmbeddingModel } from "blazen";
+
+class MyEmbedder extends EmbeddingModel {
+  constructor() {
+    super({ modelId: "my-embedder", dimensions: 128 });
+  }
+
+  async embed(texts: string[]) {
+    return {
+      embeddings: texts.map(() => new Array(128).fill(0.1)),
+      model: "my-embedder",
+    };
+  }
+}
+```
+
+### Transcription
+
+```typescript
+import { Transcription } from "blazen";
+
+class MyTranscriber extends Transcription {
+  constructor() {
+    super({ providerId: "my-stt" });
+  }
+
+  async transcribe(request: any) {
+    return { text: "transcribed text", segments: [] };
+  }
+}
+```
+
+---
+
+## Per-Capability Provider Classes
+
+Seven provider base classes let you implement a single compute capability without dealing with the full `ComputeProvider` interface. Subclass and override the relevant methods.
+
+| Class | Methods to Override | Rust Trait |
+|---|---|---|
+| `TTSProvider` | `textToSpeech(request)` | `AudioGeneration` |
+| `MusicProvider` | `generateMusic(request)`, `generateSfx(request)` | `AudioGeneration` |
+| `ImageProvider` | `generateImage(request)`, `upscaleImage(request)` | `ImageGeneration` |
+| `VideoProvider` | `textToVideo(request)`, `imageToVideo(request)` | `VideoGeneration` |
+| `ThreeDProvider` | `generate3d(request)` | `ThreeDGeneration` |
+| `BackgroundRemovalProvider` | `removeBackground(request)` | `BackgroundRemoval` |
+| `VoiceProvider` | `cloneVoice(request)`, `listVoices()`, `deleteVoice(voice)` | `VoiceCloning` |
+
+### Constructor
+
+All provider classes share the same constructor config:
+
+```typescript
+new TTSProvider({
+  providerId: string,
+  baseUrl?: string,
+  pricing?: ModelPricing,
+  vramEstimateBytes?: number,
+})
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `providerId` | `string` | Identifier for the provider instance. |
+| `baseUrl` | `string?` | Optional base URL for the provider API. |
+| `pricing` | `ModelPricing?` | Optional pricing info for cost tracking. |
+| `vramEstimateBytes` | `number?` | Optional VRAM estimate for `ModelManager` integration. |
+
+### Example
+
+```typescript
+import { TTSProvider } from "blazen";
+
+class ElevenLabsTTS extends TTSProvider {
+  private apiKey: string;
+
+  constructor(apiKey: string) {
+    super({ providerId: "elevenlabs" });
+    this.apiKey = apiKey;
+  }
+
+  async textToSpeech(request: any) {
+    // Call ElevenLabs API with this.apiKey
+    return { audio: audioBuffer, format: "mp3" };
+  }
+}
+
+const tts = new ElevenLabsTTS("sk-...");
+const result = await tts.textToSpeech({ text: "Hello world", voice: "alice" });
+```
+
+---
+
+## MemoryBackend
+
+Base class for custom memory storage backends. Subclass to implement persistence backed by Postgres, SQLite, DynamoDB, or any other store.
+
+```typescript
+import { MemoryBackend } from "blazen";
+
+class PostgresBackend extends MemoryBackend {
+  async put(entry: any): Promise<void> {
+    // Insert or update entry in Postgres
+  }
+
+  async get(id: string): Promise<any | null> {
+    // Retrieve entry by id
+  }
+
+  async delete(id: string): Promise<boolean> {
+    // Delete entry, return true if it existed
+  }
+
+  async list(): Promise<any[]> {
+    // Return all entries
+  }
+
+  async len(): Promise<number> {
+    // Return count of entries
+  }
+
+  async searchByBands(bands: any, limit: number): Promise<any[]> {
+    // Return candidates sharing LSH bands with the query
+  }
+}
+```
+
+### Methods to Override
+
+| Method | Signature | Description |
+|---|---|---|
+| `put` | `async put(entry): Promise<void>` | Insert or update a stored entry. |
+| `get` | `async get(id: string): Promise<any \| null>` | Retrieve a stored entry by id. |
+| `delete` | `async delete(id: string): Promise<boolean>` | Delete an entry by id. Returns `true` if it existed. |
+| `list` | `async list(): Promise<any[]>` | Return all stored entries. |
+| `len` | `async len(): Promise<number>` | Return the number of stored entries. |
+| `searchByBands` | `async searchByBands(bands, limit): Promise<any[]>` | Return candidate entries sharing at least one LSH band. |
+
+---
+
+## ModelManager
+
+VRAM budget-aware model manager with LRU eviction. Tracks registered local models and their estimated VRAM footprint. When loading a model that would exceed the budget, the least-recently-used loaded model is unloaded first.
+
+### Constructor
+
+```typescript
+import { ModelManager } from "blazen";
+
+const manager = new ModelManager({ budgetGb: 24 });
+// or
+const manager = new ModelManager({ budgetBytes: 24 * 1_073_741_824 });
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `budgetGb` | `number?` | VRAM budget in gigabytes. Provide exactly one of `budgetGb` or `budgetBytes`. |
+| `budgetBytes` | `number?` | VRAM budget in bytes. |
+
+### Methods
+
+| Method | Signature | Description |
+|---|---|---|
+| `register` | `await manager.register(id, model, vramEstimate)` | Register a model with its estimated VRAM footprint. Starts unloaded. |
+| `load` | `await manager.load(id)` | Load a model, evicting LRU models if needed. |
+| `unload` | `await manager.unload(id)` | Unload a model and free its VRAM. |
+| `isLoaded` | `await manager.isLoaded(id): boolean` | Check if a model is currently loaded. |
+| `ensureLoaded` | `await manager.ensureLoaded(id)` | Alias for `load()`. |
+| `usedBytes` | `await manager.usedBytes(): number` | Total VRAM currently used by loaded models. |
+| `availableBytes` | `await manager.availableBytes(): number` | Available VRAM within the budget. |
+| `status` | `await manager.status(): ModelStatus[]` | Status of all registered models. |
+
+### ModelStatus
+
+```typescript
+interface ModelStatus {
+  id: string;                // Model identifier
+  loaded: boolean;           // Whether the model is currently loaded
+  vramEstimate: number;      // Estimated VRAM footprint in bytes
+}
+```
+
+---
+
+## ModelPricing and Pricing Functions
+
+### ModelPricing
+
+Pricing metadata for cost tracking.
+
+```typescript
+interface ModelPricing {
+  inputPerMillion?: number;     // Cost per million input tokens (USD)
+  outputPerMillion?: number;    // Cost per million output tokens (USD)
+  perImage?: number;            // Cost per generated image (USD)
+  perSecond?: number;           // Cost per second of compute (USD)
+}
+```
+
+### registerPricing()
+
+Register custom pricing for a model. Overrides any existing pricing for the same model ID.
+
+```typescript
+import { registerPricing } from "blazen";
+
+registerPricing("my-model", { inputPerMillion: 1.0, outputPerMillion: 2.0 });
+```
+
+### lookupPricing()
+
+Look up pricing for a model by ID. Returns `null` if the model is unknown.
+
+```typescript
+import { lookupPricing } from "blazen";
+
+const pricing = lookupPricing("gpt-4o");
+if (pricing) {
+  console.log(`Input: $${pricing.inputPerMillion}/M tokens`);
+}
+```
+
+---
+
+## LocalModel Methods on CompletionModel
+
+`CompletionModel` instances backed by local inference (not remote APIs) support explicit load/unload lifecycle management.
+
+| Method | Signature | Description |
+|---|---|---|
+| `load` | `await model.load(): void` | Load the model into memory/VRAM. Idempotent. |
+| `unload` | `await model.unload(): void` | Free the model's memory/VRAM. Idempotent. |
+| `isLoaded` | `await model.isLoaded(): boolean` | Whether the model is currently loaded. |
+| `vramBytes` | `await model.vramBytes(): number \| null` | Approximate memory footprint in bytes, or `null` if unknown. |
+
+```typescript
+// For a local model:
+await model.load();
+console.log(await model.isLoaded());    // true
+console.log(await model.vramBytes());   // e.g. 4000000000
+await model.unload();
+```
 
 ---
 

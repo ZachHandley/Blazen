@@ -118,10 +118,6 @@ Each chunk has the shape:
 }
 ```
 
-### `await model.streamWithOptions(messages: ChatMessage[], onChunk: (chunk) => void, options: CompletionOptions): void`
-
-Stream a chat completion with additional options.
-
 ### Middleware Decorators
 
 Each decorator returns a new `CompletionModel` wrapping the original.
@@ -174,7 +170,6 @@ A class for building typed chat messages.
 | `ChatMessage.tool(content: string)` | Create a tool result message |
 | `ChatMessage.userImageUrl(text: string, url: string, mediaType?: string)` | User message with text and an image URL |
 | `ChatMessage.userImageBase64(text: string, data: string, mediaType: string)` | User message with text and a base64-encoded image |
-| `ChatMessage.userParts(parts: ContentPart[])` | User message from an explicit list of content parts |
 
 ```typescript
 const msg = ChatMessage.user('Hello');
@@ -218,7 +213,7 @@ interface CompletionResponse {
 
 ## CompletionOptions
 
-Options for `completeWithOptions()` and `streamWithOptions()`.
+Options for `completeWithOptions()`.
 
 ```typescript
 interface CompletionOptions {
@@ -283,7 +278,7 @@ interface ToolDefinition {
 Run an agentic tool-calling loop.
 
 ```typescript
-const result = await runAgent(model, messages, tools, toolHandler, options?);
+const result = await runAgent(model, messages, tools, options?);
 ```
 
 ### Parameters
@@ -292,14 +287,14 @@ const result = await runAgent(model, messages, tools, toolHandler, options?);
 |---|---|---|
 | `model` | `CompletionModel` | The completion model to use |
 | `messages` | `ChatMessage[]` | Initial conversation messages |
-| `tools` | `ToolDef[]` | Tool definitions |
-| `toolHandler` | `(toolName: string, args: object) => Promise<any>` | Callback that executes tool calls |
+| `tools` | `ToolDef[]` | Tool definitions. Each tool object has `name`, `description`, `parameters` (JSON Schema), and a `handler` function that is called with the arguments object and should return a string or JSON value (may be async). |
 | `options` | `AgentRunOptions?` | Optional configuration |
 
 ### AgentRunOptions
 
 ```typescript
 interface AgentRunOptions {
+  toolConcurrency?: number;  // Max concurrent tool calls per round (default: 0 = unlimited)
   maxIterations?: number;    // Max tool-calling iterations (default: 10)
   systemPrompt?: string;     // System prompt prepended to conversation
   temperature?: number;      // Sampling temperature
@@ -312,9 +307,10 @@ interface AgentRunOptions {
 
 ```typescript
 interface AgentResult {
-  response: CompletionResponse;    // Final completion response
+  content?: string;                // Final text response
   messages: object[];              // Full message history
   iterations: number;              // Number of iterations
+  totalUsage?: TokenUsage;         // Aggregated token usage
   totalCost?: number;              // Aggregated cost in USD
 }
 ```
@@ -337,54 +333,9 @@ wf.addStep('process', ['MyEvent'], async (event, ctx) => {
 });
 ```
 
-### `.setTimeout(seconds: number)`
+### `await wf.run(input: object): any`
 
-Set the maximum execution time in seconds.
-
-### `await wf.run(input: object): WorkflowResult`
-
-Run the workflow to completion.
-
-### `await wf.runStreaming(input: object, callback: (event) => void): WorkflowResult`
-
-Run the workflow with a streaming callback for events published via `ctx.writeEventToStream()`.
-
-### `await wf.runWithHandler(input: object): WorkflowHandler`
-
-Run the workflow and return a handler for pause/resume and streaming control.
-
-### `await wf.resume(snapshotJson: string): WorkflowHandler`
-
-Resume a previously paused workflow from a snapshot JSON string.
-
----
-
-## WorkflowResult
-
-```typescript
-interface WorkflowResult {
-  type: string;     // Event type of the final result
-  data: object;     // Result data from the StopEvent
-}
-```
-
----
-
-## WorkflowHandler
-
-Returned by `Workflow.runWithHandler()` and `Workflow.resume()`.
-
-### `await handler.result(): WorkflowResult`
-
-Await the final workflow result.
-
-### `await handler.pause(): string`
-
-Pause the workflow and return a snapshot JSON string.
-
-### `await handler.streamEvents(callback: (event) => void): void`
-
-Subscribe to intermediate events. Must be called before `result()` or `pause()`.
+Run the workflow to completion. The input is passed as the `data` field of a synthetic `StartEvent`. Returns a `Promise` that resolves to the `result` field of the final `StopEvent`.
 
 ---
 
@@ -638,6 +589,186 @@ const count = countMessageTokens([
 ```
 
 `contextSize` defaults to `128000` if omitted.
+
+---
+
+## Custom Providers via JS Handlers
+
+`CompletionModel` and `EmbeddingModel` can be created from JavaScript handler functions using static factory methods. This lets you implement custom providers without subclassing.
+
+### CompletionModel.fromJsHandler
+
+```typescript
+const model = CompletionModel.fromJsHandler("my-llm", async (request) => {
+  // request contains messages, tools, temperature, etc.
+  return {
+    content: "Hello from my custom model",
+    model: "my-llm",
+  };
+});
+
+const response = await model.complete([ChatMessage.user("Hi")]);
+```
+
+The handler receives a request object and should return a `CompletionResponse`-shaped object.
+
+### EmbeddingModel.fromJsHandler
+
+```typescript
+const embedder = EmbeddingModel.fromJsHandler("my-embedder", 128, async (texts) => {
+  return texts.map(() => new Array(128).fill(0.1));
+});
+
+const result = await embedder.embed(["Hello", "World"]);
+```
+
+The handler receives a `string[]` and should return a `number[][]` of embeddings.
+
+---
+
+## Per-Capability Provider Classes
+
+Seven provider classes let you implement a single compute capability by passing handler functions to the constructor.
+
+| Class | Constructor Handler | Description |
+|---|---|---|
+| `TTSProvider` | `(request) => Promise<any>` | Text-to-speech synthesis |
+| `MusicProvider` | `{ generateMusic, generateSfx }` | Music and sound effect generation |
+| `ImageProvider` | `{ generateImage, upscaleImage }` | Image generation and upscaling |
+| `VideoProvider` | `{ textToVideo, imageToVideo }` | Video generation |
+| `ThreeDProvider` | `(request) => Promise<any>` | 3D model generation |
+| `BackgroundRemovalProvider` | `(request) => Promise<any>` | Background removal |
+| `VoiceProvider` | `{ cloneVoice, listVoices, deleteVoice }` | Voice cloning and management |
+
+### Constructor
+
+Single-method providers take a provider ID and a handler function:
+
+```typescript
+const tts = new TTSProvider("elevenlabs", async (request) => {
+  const audio = await elevenlabs.textToSpeech(request);
+  return { audioData: audio, format: "mp3" };
+});
+
+const result = await tts.textToSpeech({ text: "Hello world", voice: "alice" });
+```
+
+Multi-method providers take a provider ID and a handlers object:
+
+```typescript
+const music = new MusicProvider("suno", {
+  generateMusic: async (request) => { /* ... */ },
+  generateSfx: async (request) => { /* ... */ },
+});
+
+const image = new ImageProvider("dalle", {
+  generateImage: async (request) => { /* ... */ },
+  upscaleImage: async (request) => { /* ... */ },
+});
+
+const video = new VideoProvider("runway", {
+  textToVideo: async (request) => { /* ... */ },
+  imageToVideo: async (request) => { /* ... */ },
+});
+
+const voice = new VoiceProvider("elevenlabs", {
+  cloneVoice: async (request) => { /* ... */ },
+  listVoices: async () => { /* ... */ },
+  deleteVoice: async (voiceId) => { /* ... */ },
+});
+```
+
+---
+
+## MemoryBackend
+
+Custom memory storage backends are created by passing handler functions to the `MemoryBackend` constructor.
+
+```typescript
+const backend = new MemoryBackend({
+  put: async (entry) => { /* store entry */ },
+  get: async (id) => { /* retrieve by id, return null if missing */ },
+  delete: async (id) => { /* delete by id, return true if existed */ },
+  list: async () => { /* return all entries */ },
+  len: async () => { /* return entry count */ },
+  searchByBands: async (bands, limit) => { /* return candidates */ },
+});
+```
+
+### Handler Methods
+
+| Method | Signature | Description |
+|---|---|---|
+| `put` | `(entry: any) => Promise<void>` | Insert or update a stored entry. |
+| `get` | `(id: string) => Promise<any \| null>` | Retrieve a stored entry by id. |
+| `delete` | `(id: string) => Promise<boolean>` | Delete an entry by id. Returns `true` if it existed. |
+| `list` | `() => Promise<any[]>` | Return all stored entries. |
+| `len` | `() => Promise<number>` | Return the number of stored entries. |
+| `searchByBands` | `(bands: any, limit: number) => Promise<any[]>` | Return candidate entries sharing at least one LSH band. |
+
+---
+
+## ModelManager
+
+VRAM budget-aware model manager with LRU eviction. Not typically used in WASM (where GPU model loading is uncommon), but available for tracking model state.
+
+### Constructor
+
+```typescript
+const manager = new ModelManager({ budgetGb: 24 });
+// or
+const manager = new ModelManager({ budgetBytes: 24 * 1_073_741_824 });
+```
+
+### Methods
+
+| Method | Signature | Description |
+|---|---|---|
+| `register` | `await manager.register(id, model, vramEstimate)` | Register a model with its estimated VRAM footprint. |
+| `load` | `await manager.load(id)` | Load a model, evicting LRU models if needed. |
+| `unload` | `await manager.unload(id)` | Unload a model and free its VRAM. |
+| `isLoaded` | `await manager.isLoaded(id): boolean` | Check if a model is currently loaded. |
+| `ensureLoaded` | `await manager.ensureLoaded(id)` | Alias for `load()`. |
+| `usedBytes` | `await manager.usedBytes(): number` | Total VRAM currently used by loaded models. |
+| `availableBytes` | `await manager.availableBytes(): number` | Available VRAM within the budget. |
+| `status` | `await manager.status(): ModelStatus[]` | Status of all registered models. |
+
+---
+
+## Pricing Functions
+
+### registerPricing()
+
+Register custom pricing for a model.
+
+```typescript
+import { registerPricing } from "@blazen/sdk";
+
+registerPricing("my-model", 1.0, 2.0);
+// Arguments: modelId, inputPerMillion, outputPerMillion
+```
+
+### lookupPricing()
+
+Look up pricing for a model by ID. Returns `null` if the model is unknown.
+
+```typescript
+import { lookupPricing } from "@blazen/sdk";
+
+const pricing = lookupPricing("gpt-4o");
+if (pricing) {
+  console.log(`Input: $${pricing.inputPerMillion}/M tokens`);
+}
+```
+
+The returned object has the shape:
+
+```typescript
+{
+  inputPerMillion: number;
+  outputPerMillion: number;
+}
+```
 
 ---
 

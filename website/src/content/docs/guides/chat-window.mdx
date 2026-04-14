@@ -1,0 +1,152 @@
+---
+title: "Chat Window (Token-Limited Conversations)"
+description: "Maintain conversation history within a fixed token budget"
+section: "guides"
+order: 27
+---
+
+`ChatWindow` is a rolling buffer of `ChatMessage` objects that enforces a token budget. When you append a message that would push the buffer over budget, the oldest **non-system** messages are evicted until the window fits. System messages are never dropped, so persistent instructions stay at the top of the context.
+
+## Overview
+
+Most chat applications accumulate conversation history indefinitely. That works until the token count hits the model's context limit, at which point completions silently truncate or fail. `ChatWindow` handles the bookkeeping for you: set a budget, append messages as they arrive, and hand the buffer to `CompletionModel.complete()` without worrying about overflow.
+
+Token counting uses a characters-per-token heuristic (3.5 chars/token by default, tunable). This is an estimate, not a tokenizer -- budget ~10% headroom below the model's hard context limit for safety.
+
+## Basic usage
+
+```python
+from blazen import ChatWindow, ChatMessage, CompletionModel
+
+window = ChatWindow(max_tokens=4000)
+window.add(ChatMessage.system("You are a terse, helpful assistant."))
+
+model = CompletionModel.openai()
+
+async def turn(user_input: str) -> str:
+    window.add(ChatMessage.user(user_input))
+    response = await model.complete(window.messages())
+    window.add(ChatMessage.assistant(response.content or ""))
+    return response.content or ""
+
+await turn("What is 2 + 2?")
+await turn("And 3 + 3?")
+# ... many turns later ...
+# The system message is still at position 0; the oldest user/assistant pairs
+# have been evicted to stay under 4000 tokens.
+```
+
+```typescript
+import { ChatWindow, ChatMessage, CompletionModel } from "blazen";
+
+const window = new ChatWindow(4000);
+window.add(ChatMessage.system("You are a terse, helpful assistant."));
+
+const model = CompletionModel.openai({ apiKey: process.env.OPENAI_API_KEY });
+
+async function turn(userInput: string): Promise<string> {
+  window.add(ChatMessage.user(userInput));
+  const response = await model.complete(window.messages());
+  window.add(ChatMessage.assistant(response.content ?? ""));
+  return response.content ?? "";
+}
+
+await turn("What is 2 + 2?");
+await turn("And 3 + 3?");
+```
+
+```rust
+use blazen_llm::chat_window::ChatWindow;
+use blazen_llm::{ChatMessage, CompletionRequest};
+use blazen_llm::providers::openai::OpenAiProvider;
+use blazen_llm::traits::CompletionModel;
+
+let mut window = ChatWindow::new(4000);
+window.add(ChatMessage::system("You are a terse, helpful assistant."));
+
+let model = OpenAiProvider::from_env()?;
+
+async fn turn(
+    window: &mut ChatWindow,
+    model: &OpenAiProvider,
+    user_input: &str,
+) -> anyhow::Result<String> {
+    window.add(ChatMessage::user(user_input));
+    let request = CompletionRequest::new(window.messages().to_vec());
+    let response = model.complete(request).await?;
+    let content = response.content.unwrap_or_default();
+    window.add(ChatMessage::assistant(&content));
+    Ok(content)
+}
+```
+
+## Inspecting the window
+
+```python
+print(window.token_count())       # current estimated token count
+print(window.remaining_tokens())  # tokens left in the budget
+print(len(window.messages()))     # message count
+window.clear()                    # drop everything, including system messages
+```
+
+```typescript
+console.log(window.tokenCount());
+console.log(window.remainingTokens());
+console.log(window.length);
+window.clear();
+```
+
+## Tuning the estimator
+
+The default 3.5 chars/token ratio matches OpenAI BPE tokenization for English text reasonably well. For code-heavy conversations, Chinese/Japanese/Korean text, or custom tokenizers, override the ratio:
+
+```rust
+use blazen_llm::chat_window::ChatWindow;
+
+let window = ChatWindow::new(8000).with_chars_per_token(2.5);
+```
+
+The Python and Node wrappers currently expose only the default estimator. If you need a provider-exact token count, run `count_message_tokens` from the top-level API or compute tokens on your side and size the window accordingly.
+
+## Eviction policy
+
+- **System messages are never evicted.** Put long system prompts at the top of the window and keep them there.
+- **Oldest non-system message first.** Eviction is strictly FIFO across user/assistant turns.
+- **No partial eviction.** The oldest message is removed in full; no half-messages appear in the buffer.
+
+If you need summarisation-based compression rather than hard eviction -- asking the model to fold older turns into a short synopsis before dropping them -- implement it as a workflow step that consumes the `ChatWindow`, writes a summary, clears the buffer, and seeds it with a fresh system+summary pair.
+
+## Integration patterns
+
+### With `Memory` for long-term recall
+
+Pair a short `ChatWindow` (recent turns verbatim) with `Memory` (embedded long-term recall). On every turn, query `Memory` for the top-k relevant past exchanges and splice them into the window between the system prompt and the live turns.
+
+```python
+from blazen import Memory, InMemoryBackend, EmbeddingModel
+
+memory = Memory(EmbeddingModel.openai(), InMemoryBackend())
+
+async def turn(user_input: str) -> str:
+    # Recall relevant history from Memory.
+    recalls = await memory.search(user_input, limit=3)
+    window.clear()
+    window.add(ChatMessage.system(SYSTEM_PROMPT))
+    for r in recalls:
+        window.add(ChatMessage.user(r.text))
+    window.add(ChatMessage.user(user_input))
+
+    response = await model.complete(window.messages())
+    await memory.add(str(uuid.uuid4()), f"Q: {user_input}\nA: {response.content}")
+    return response.content
+```
+
+### With tool-calling agents
+
+`Agent` uses a `ChatWindow` internally for its scratchpad. When you need to cap the agent's working memory, pass a pre-configured window rather than relying on the default.
+
+## See also
+
+- [Memory](/guides/memory/) -- complementary long-term semantic recall
+- [Prompt Templates](/guides/prompts/) -- render the system prompt that anchors the window
+- [Batch Completions](/guides/batch-processing/) -- build independent windows per conversation and fan them out

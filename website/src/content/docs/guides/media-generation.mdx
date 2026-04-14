@@ -1,0 +1,227 @@
+---
+title: "Media Generation"
+description: "Generate images, video, audio, and 3D models with fal.ai"
+section: "guides"
+order: 20
+---
+
+Blazen ships a unified compute provider for media generation through [fal.ai](https://fal.ai/) -- 600+ models covering image synthesis, video, TTS, music, 3D, background removal, and upscaling. The same `FalProvider` also acts as an `EmbeddingModel` and `CompletionModel`, so a single handle covers every fal capability.
+
+## Overview
+
+The provider implements a family of capability traits (`ImageGeneration`, `VideoGeneration`, `AudioGeneration`, `ThreeDGeneration`, `Transcription`, `BackgroundRemoval`). Each capability takes a typed request (`ImageRequest`, `VideoRequest`, `SpeechRequest`, `MusicRequest`, `ThreeDRequest`) and returns a typed result containing one or more `MediaOutput` objects with a URL, base64 payload, or raw text content.
+
+Authentication: pass an API key via options, or set the `FAL_KEY` environment variable.
+
+## Image generation
+
+```python
+from blazen import FalProvider, FalOptions, ImageRequest
+
+fal = FalProvider(options=FalOptions(api_key="fal-..."))
+
+result = await fal.generate_image(ImageRequest(
+    prompt="a cat astronaut on Mars, cinematic lighting",
+    width=1024,
+    height=1024,
+    num_images=2,
+))
+
+for img in result.images:
+    print(img.media.url, img.width, img.height)
+```
+
+```typescript
+import { FalProvider } from "blazen";
+
+const fal = FalProvider.create({ apiKey: "fal-..." });
+
+const result = await fal.generateImage({
+  prompt: "a cat astronaut on Mars, cinematic lighting",
+  width: 1024,
+  height: 1024,
+  numImages: 2,
+});
+
+for (const img of result.images) {
+  console.log(img.media.url, img.width, img.height);
+}
+```
+
+```rust
+use blazen_llm::compute::{ImageGeneration, ImageRequest};
+use blazen_llm::providers::fal::FalProvider;
+
+let fal = FalProvider::new(std::env::var("FAL_KEY")?);
+
+let result = fal
+    .generate_image(
+        ImageRequest::new("a cat astronaut on Mars, cinematic lighting")
+            .with_size(1024, 1024)
+            .with_count(2),
+    )
+    .await?;
+
+for img in &result.images {
+    if let Some(url) = &img.media.url {
+        println!("{url}");
+    }
+}
+```
+
+## Upscaling and background removal
+
+```python
+from blazen import UpscaleRequest, BackgroundRemovalRequest
+
+upscaled = await fal.upscale_image(UpscaleRequest(
+    image_url="https://example.com/small.png",
+    scale=4.0,
+))
+
+no_bg = await fal.remove_background(BackgroundRemovalRequest(
+    image_url="https://example.com/product.jpg",
+))
+```
+
+```typescript
+const upscaled = await fal.upscaleImage({
+  imageUrl: "https://example.com/small.png",
+  scale: 4,
+});
+
+const noBg = await fal.removeBackground({
+  imageUrl: "https://example.com/product.jpg",
+});
+```
+
+`FalProvider` also exposes `upscale_image_aura`, `upscale_image_clarity`, and `upscale_image_creative` for the respective fal upscaler apps.
+
+## Video generation
+
+Both text-to-video and image-to-video are supported:
+
+```python
+from blazen import VideoRequest
+
+clip = await fal.text_to_video(VideoRequest(
+    prompt="a drone flying through a sunlit forest",
+    duration_seconds=5.0,
+    width=1920,
+    height=1080,
+))
+print(clip.video.media.url, clip.video.duration_seconds)
+
+from_image = await fal.image_to_video(VideoRequest(
+    prompt="animate this painting",
+    image_url="https://example.com/input.png",
+    duration_seconds=4.0,
+))
+```
+
+```typescript
+const clip = await fal.textToVideo({
+  prompt: "a drone flying through a sunlit forest",
+  durationSeconds: 5,
+  width: 1920,
+  height: 1080,
+});
+
+const fromImage = await fal.imageToVideo({
+  prompt: "animate this painting",
+  imageUrl: "https://example.com/input.png",
+  durationSeconds: 4,
+});
+```
+
+## Text-to-speech, music, and sound effects
+
+```python
+from blazen import SpeechRequest, MusicRequest
+
+speech = await fal.text_to_speech(SpeechRequest(
+    text="Hello, world!",
+    voice="af_heart",
+    speed=1.0,
+))
+audio_url = speech.audio[0].media.url
+
+music = await fal.generate_music(MusicRequest(
+    prompt="upbeat lo-fi hip-hop",
+    duration_seconds=30.0,
+))
+
+sfx = await fal.generate_sfx(MusicRequest(prompt="thunder clap"))
+```
+
+```typescript
+const speech = await fal.textToSpeech({
+  text: "Hello, world!",
+  voice: "af_heart",
+  speed: 1,
+});
+
+const music = await fal.generateMusic({
+  prompt: "upbeat lo-fi hip-hop",
+  durationSeconds: 30,
+});
+
+const sfx = await fal.generateSfx({ prompt: "thunder clap" });
+```
+
+```rust
+use blazen_llm::compute::{AudioGeneration, MusicRequest, SpeechRequest};
+
+let speech = fal
+    .text_to_speech(
+        SpeechRequest::new("Hello, world!")
+            .with_voice("af_heart")
+            .with_speed(1.0),
+    )
+    .await?;
+
+let music = fal
+    .generate_music(MusicRequest::new("upbeat lo-fi hip-hop").with_duration(30.0))
+    .await?;
+```
+
+## 3D generation
+
+```python
+from blazen import ThreeDRequest
+
+mesh = await fal.generate_3d(ThreeDRequest(
+    prompt="a low-poly spaceship",
+    format="glb",
+))
+
+from_image = await fal.generate_3d(ThreeDRequest.from_image(
+    "https://example.com/photo.png",
+).with_format("obj"))
+```
+
+```typescript
+const mesh = await fal.generate3d({
+  prompt: "a low-poly spaceship",
+  format: "glb",
+});
+```
+
+## Output format
+
+Every result wraps one or more `MediaOutput` records. Each output exposes:
+
+| Field | Type | Description |
+|---|---|---|
+| `url` | `str \| None` | Downloadable URL if the provider returned one. |
+| `base64` | `str \| None` | Inline base64 payload, when the provider returned raw bytes. |
+| `raw_content` | `str \| None` | Raw text for text-based formats (SVG, GLTF JSON, OBJ). |
+| `media_type` | `MediaType` | Format enum plus `mime()` / `extension()` / `is_image()` helpers. |
+| `file_size` | `int \| None` | Byte count if reported. |
+| `metadata` | `dict` | Arbitrary provider-specific fields. |
+
+## See also
+
+- [Transcription](/guides/transcription/) -- convert audio to text with fal or whisper.cpp
+- [Custom Providers](/guides/custom-providers/) -- wrap your own image/video/audio backend
+- [Batch Completions](/guides/batch-processing/) -- run many LLM prompts concurrently

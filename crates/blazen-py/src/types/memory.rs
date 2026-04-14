@@ -2,15 +2,19 @@
 
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_memory::store::MemoryBackend;
-use blazen_memory::types::{MemoryEntry, MemoryResult};
-use blazen_memory::{InMemoryBackend, JsonlBackend, Memory, MemoryStore};
+use blazen_memory::types::{MemoryEntry, MemoryResult, StoredEntry};
+use blazen_memory::{InMemoryBackend, JsonlBackend, Memory, MemoryError, MemoryStore};
 use blazen_memory_valkey::ValkeyBackend;
+
+/// Local alias for the memory-crate result type.
+type MemResult<T> = std::result::Result<T, MemoryError>;
 
 use crate::error::BlazenPyError;
 use crate::types::embedding::PyEmbeddingModel;
@@ -30,8 +34,12 @@ fn extract_backend(obj: &Bound<'_, PyAny>) -> PyResult<Arc<dyn MemoryBackend>> {
     if let Ok(b) = obj.extract::<PyRef<'_, PyValkeyBackend>>() {
         return Ok(b.inner.clone());
     }
+    // Try MemoryBackend subclass
+    if obj.is_instance_of::<PyMemoryBackend>() {
+        return Ok(Arc::new(PyHostMemoryBackend::new(obj.clone().unbind())));
+    }
     Err(PyTypeError::new_err(
-        "expected InMemoryBackend, JsonlBackend, or ValkeyBackend",
+        "expected InMemoryBackend, JsonlBackend, ValkeyBackend, or MemoryBackend subclass",
     ))
 }
 
@@ -41,6 +49,266 @@ fn extract_backend(obj: &Bound<'_, PyAny>) -> PyResult<Arc<dyn MemoryBackend>> {
 
 fn memory_err(e: blazen_memory::MemoryError) -> PyErr {
     PyErr::from(BlazenPyError::Llm(e.to_string()))
+}
+
+// ---------------------------------------------------------------------------
+// PyMemoryBackend (subclassable base)
+// ---------------------------------------------------------------------------
+
+/// Base class for custom memory storage backends.
+///
+/// Subclass and override all methods to implement a custom backend
+/// (e.g. PostgreSQL, DynamoDB, SQLite).
+///
+/// Example:
+///     >>> class PostgresBackend(MemoryBackend):
+///     ...     async def put(self, entry): ...
+///     ...     async def get(self, id): ...
+///     ...     async def delete(self, id): ...
+///     ...     async def list(self): ...
+///     ...     async def len(self): ...
+///     ...     async def search_by_bands(self, bands, limit): ...
+#[gen_stub_pyclass]
+#[pyclass(name = "MemoryBackend", subclass)]
+pub struct PyMemoryBackend {}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyMemoryBackend {
+    #[new]
+    fn new() -> Self {
+        Self {}
+    }
+
+    /// Store an entry.
+    fn put(&self, _entry: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "subclass must override put()",
+        ))
+    }
+
+    /// Retrieve an entry by ID.
+    fn get(&self, _id: String) -> PyResult<Py<PyAny>> {
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "subclass must override get()",
+        ))
+    }
+
+    /// Delete an entry by ID.
+    fn delete(&self, _id: String) -> PyResult<Py<PyAny>> {
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "subclass must override delete()",
+        ))
+    }
+
+    /// List all entries.
+    fn list(&self) -> PyResult<Py<PyAny>> {
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "subclass must override list()",
+        ))
+    }
+
+    /// Return the number of entries.
+    fn len(&self) -> PyResult<Py<PyAny>> {
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "subclass must override len()",
+        ))
+    }
+
+    /// Search by SimHash bands.
+    fn search_by_bands(&self, _bands: Vec<String>, _limit: usize) -> PyResult<Py<PyAny>> {
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "subclass must override search_by_bands()",
+        ))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PyHostMemoryBackend (Rust trait adapter over Python subclass)
+// ---------------------------------------------------------------------------
+
+/// Adapter that implements the Rust [`MemoryBackend`] trait by calling
+/// back into a Python subclass instance.
+pub(crate) struct PyHostMemoryBackend {
+    py_obj: Py<PyAny>,
+}
+
+impl PyHostMemoryBackend {
+    pub fn new(py_obj: Py<PyAny>) -> Self {
+        Self { py_obj }
+    }
+}
+
+#[async_trait]
+impl MemoryBackend for PyHostMemoryBackend {
+    async fn put(&self, entry: StoredEntry) -> MemResult<()> {
+        let (fut, locals) = tokio::task::block_in_place(|| {
+            Python::attach(|py| -> PyResult<_> {
+                let py_entry = pythonize::pythonize(py, &entry).map_err(|e| {
+                    pyo3::exceptions::PyValueError::new_err(format!(
+                        "failed to pythonize StoredEntry: {e}"
+                    ))
+                })?;
+                let host = self.py_obj.bind(py);
+                let coro = host.call_method1("put", (py_entry,))?;
+                let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
+                let fut = pyo3_async_runtimes::into_future_with_locals(&locals, coro)?;
+                Ok((fut, locals))
+            })
+        })
+        .map_err(|e: PyErr| MemoryError::Backend(format!("put dispatch failed: {e}")))?;
+
+        pyo3_async_runtimes::tokio::scope(locals, fut)
+            .await
+            .map_err(|e: PyErr| MemoryError::Backend(format!("put raised: {e}")))?;
+
+        Ok(())
+    }
+
+    async fn get(&self, id: &str) -> MemResult<Option<StoredEntry>> {
+        let id = id.to_owned();
+        let (fut, locals) = tokio::task::block_in_place(|| {
+            Python::attach(|py| -> PyResult<_> {
+                let host = self.py_obj.bind(py);
+                let coro = host.call_method1("get", (id,))?;
+                let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
+                let fut = pyo3_async_runtimes::into_future_with_locals(&locals, coro)?;
+                Ok((fut, locals))
+            })
+        })
+        .map_err(|e: PyErr| MemoryError::Backend(format!("get dispatch failed: {e}")))?;
+
+        let py_result = pyo3_async_runtimes::tokio::scope(locals, fut)
+            .await
+            .map_err(|e: PyErr| MemoryError::Backend(format!("get raised: {e}")))?;
+
+        tokio::task::block_in_place(|| {
+            Python::attach(|py| -> MemResult<Option<StoredEntry>> {
+                let bound = py_result.bind(py);
+                if bound.is_none() {
+                    return Ok(None);
+                }
+                let entry: StoredEntry = pythonize::depythonize(bound).map_err(|e| {
+                    MemoryError::Backend(format!("failed to depythonize get result: {e}"))
+                })?;
+                Ok(Some(entry))
+            })
+        })
+    }
+
+    async fn delete(&self, id: &str) -> MemResult<bool> {
+        let id = id.to_owned();
+        let (fut, locals) = tokio::task::block_in_place(|| {
+            Python::attach(|py| -> PyResult<_> {
+                let host = self.py_obj.bind(py);
+                let coro = host.call_method1("delete", (id,))?;
+                let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
+                let fut = pyo3_async_runtimes::into_future_with_locals(&locals, coro)?;
+                Ok((fut, locals))
+            })
+        })
+        .map_err(|e: PyErr| MemoryError::Backend(format!("delete dispatch failed: {e}")))?;
+
+        let py_result = pyo3_async_runtimes::tokio::scope(locals, fut)
+            .await
+            .map_err(|e: PyErr| MemoryError::Backend(format!("delete raised: {e}")))?;
+
+        tokio::task::block_in_place(|| {
+            Python::attach(|py| -> MemResult<bool> {
+                let bound = py_result.bind(py);
+                let val: bool = pythonize::depythonize(bound).map_err(|e| {
+                    MemoryError::Backend(format!("failed to depythonize delete result: {e}"))
+                })?;
+                Ok(val)
+            })
+        })
+    }
+
+    async fn list(&self) -> MemResult<Vec<StoredEntry>> {
+        let (fut, locals) = tokio::task::block_in_place(|| {
+            Python::attach(|py| -> PyResult<_> {
+                let host = self.py_obj.bind(py);
+                let coro = host.call_method0("list")?;
+                let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
+                let fut = pyo3_async_runtimes::into_future_with_locals(&locals, coro)?;
+                Ok((fut, locals))
+            })
+        })
+        .map_err(|e: PyErr| MemoryError::Backend(format!("list dispatch failed: {e}")))?;
+
+        let py_result = pyo3_async_runtimes::tokio::scope(locals, fut)
+            .await
+            .map_err(|e: PyErr| MemoryError::Backend(format!("list raised: {e}")))?;
+
+        tokio::task::block_in_place(|| {
+            Python::attach(|py| -> MemResult<Vec<StoredEntry>> {
+                let bound = py_result.bind(py);
+                let entries: Vec<StoredEntry> = pythonize::depythonize(bound).map_err(|e| {
+                    MemoryError::Backend(format!("failed to depythonize list result: {e}"))
+                })?;
+                Ok(entries)
+            })
+        })
+    }
+
+    async fn len(&self) -> MemResult<usize> {
+        let (fut, locals) = tokio::task::block_in_place(|| {
+            Python::attach(|py| -> PyResult<_> {
+                let host = self.py_obj.bind(py);
+                let coro = host.call_method0("len")?;
+                let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
+                let fut = pyo3_async_runtimes::into_future_with_locals(&locals, coro)?;
+                Ok((fut, locals))
+            })
+        })
+        .map_err(|e: PyErr| MemoryError::Backend(format!("len dispatch failed: {e}")))?;
+
+        let py_result = pyo3_async_runtimes::tokio::scope(locals, fut)
+            .await
+            .map_err(|e: PyErr| MemoryError::Backend(format!("len raised: {e}")))?;
+
+        tokio::task::block_in_place(|| {
+            Python::attach(|py| -> MemResult<usize> {
+                let bound = py_result.bind(py);
+                let val: usize = pythonize::depythonize(bound).map_err(|e| {
+                    MemoryError::Backend(format!("failed to depythonize len result: {e}"))
+                })?;
+                Ok(val)
+            })
+        })
+    }
+
+    async fn search_by_bands(&self, bands: &[String], limit: usize) -> MemResult<Vec<StoredEntry>> {
+        let bands = bands.to_vec();
+        let (fut, locals) = tokio::task::block_in_place(|| {
+            Python::attach(|py| -> PyResult<_> {
+                let host = self.py_obj.bind(py);
+                let coro = host.call_method1("search_by_bands", (bands, limit))?;
+                let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
+                let fut = pyo3_async_runtimes::into_future_with_locals(&locals, coro)?;
+                Ok((fut, locals))
+            })
+        })
+        .map_err(|e: PyErr| {
+            MemoryError::Backend(format!("search_by_bands dispatch failed: {e}"))
+        })?;
+
+        let py_result = pyo3_async_runtimes::tokio::scope(locals, fut)
+            .await
+            .map_err(|e: PyErr| MemoryError::Backend(format!("search_by_bands raised: {e}")))?;
+
+        tokio::task::block_in_place(|| {
+            Python::attach(|py| -> MemResult<Vec<StoredEntry>> {
+                let bound = py_result.bind(py);
+                let entries: Vec<StoredEntry> = pythonize::depythonize(bound).map_err(|e| {
+                    MemoryError::Backend(format!(
+                        "failed to depythonize search_by_bands result: {e}"
+                    ))
+                })?;
+                Ok(entries)
+            })
+        })
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -257,12 +525,32 @@ impl PyMemory {
     /// Create a Memory with an embedding model for full semantic search.
     ///
     /// Args:
-    ///     embedder: An EmbeddingModel instance.
+    ///     embedder: An EmbeddingModel instance (built-in or Python subclass).
     ///     backend: A backend instance (InMemoryBackend, JsonlBackend, or ValkeyBackend).
     #[new]
-    fn new(embedder: &PyEmbeddingModel, backend: &Bound<'_, PyAny>) -> PyResult<Self> {
+    fn new(embedder: Bound<'_, PyEmbeddingModel>, backend: &Bound<'_, PyAny>) -> PyResult<Self> {
         let arc_backend = extract_backend(backend)?;
-        let memory = Memory::new_arc(embedder.inner.clone(), arc_backend);
+        let emb: Arc<dyn blazen_llm::EmbeddingModel> = {
+            let embedder_borrow = embedder.borrow();
+            if let Some(ref inner) = embedder_borrow.inner {
+                inner.clone()
+            } else {
+                // Subclassed Python `EmbeddingModel`: wrap the Python object
+                // in an adapter that dispatches `embed()` back into Python.
+                let model_id = embedder_borrow
+                    .config
+                    .as_ref()
+                    .and_then(|c| c.model_id.clone())
+                    .unwrap_or_else(|| "subclass".to_owned());
+                let dimensions = embedder_borrow.dimensions_override.unwrap_or(0);
+                drop(embedder_borrow);
+                let py_obj: Py<PyAny> = embedder.clone().into_any().unbind();
+                Arc::new(crate::types::embedding::PySubclassEmbeddingModel::new(
+                    py_obj, model_id, dimensions,
+                ))
+            }
+        };
+        let memory = Memory::new_arc(emb, arc_backend);
         Ok(Self {
             inner: Arc::new(memory),
         })

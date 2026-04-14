@@ -319,36 +319,43 @@ impl CompletionRequest {
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct CompletionResponse {
     /// The text content of the assistant's reply, if any.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
     /// Tool invocations requested by the model.
+    #[serde(default)]
     pub tool_calls: Vec<ToolCall>,
     /// Chain-of-thought / extended-thinking trace, if exposed by the provider.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<ReasoningTrace>,
+    #[serde(default)]
     pub citations: Vec<Citation>,
+    #[serde(default)]
     pub artifacts: Vec<Artifact>,
     /// Token usage statistics, if provided by the API.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usage: Option<TokenUsage>,
     /// The model that produced this response.
     pub model: String,
     /// The reason the model stopped generating (e.g. "stop", "`tool_use`").
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub finish_reason: Option<String>,
     /// Estimated cost for this request in USD, if available.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cost: Option<f64>,
     /// Request timing breakdown, if available.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timing: Option<RequestTiming>,
     /// Generated images (for multimodal models).
+    #[serde(default)]
     pub images: Vec<GeneratedImage>,
     /// Generated audio (for TTS or multimodal models).
+    #[serde(default)]
     pub audio: Vec<GeneratedAudio>,
     /// Generated videos (for video generation models).
+    #[serde(default)]
     pub videos: Vec<GeneratedVideo>,
     /// Provider-specific metadata.
+    #[serde(default)]
     pub metadata: serde_json::Value,
 }
 

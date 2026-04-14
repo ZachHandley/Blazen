@@ -147,7 +147,7 @@ impl PyBatchResult {
 #[pyo3(signature = (model, requests, *, concurrency=0, options=None))]
 pub fn complete_batch<'py>(
     py: Python<'py>,
-    model: &PyCompletionModel,
+    model: Bound<'py, PyCompletionModel>,
     requests: Vec<Vec<PyRef<'py, PyChatMessage>>>,
     concurrency: usize,
     options: Option<PyRef<'py, PyCompletionOptions>>,
@@ -162,7 +162,7 @@ pub fn complete_batch<'py>(
         .collect::<PyResult<Vec<_>>>()?;
 
     let config = BatchConfig::new(concurrency);
-    let inner_model = model.inner.clone();
+    let inner_model = crate::providers::completion_model::arc_from_bound(&model);
 
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
         let result = rust_complete_batch(inner_model.as_ref(), rust_requests, config).await;

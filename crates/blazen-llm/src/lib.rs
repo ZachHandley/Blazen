@@ -150,6 +150,7 @@ pub use media::{
     Generated3DModel, GeneratedAudio, GeneratedImage, GeneratedVideo, MediaOutput, MediaType,
 };
 pub use middleware::{CacheMiddleware, Middleware, MiddlewareStack, RetryMiddleware};
+pub use pricing::{PricingEntry, compute_cost, lookup_pricing, register_pricing};
 pub use quantization::Quantization;
 pub use retry::{RetryCompletionModel, RetryConfig};
 #[cfg(feature = "tiktoken")]
@@ -157,7 +158,7 @@ pub use tokens::TiktokenCounter;
 pub use tokens::{EstimateCounter, TokenCounter};
 pub use traits::{
     CompletionModel, EmbeddingModel, LocalModel, ModelCapabilities, ModelInfo, ModelPricing,
-    ModelRegistry, ProviderCapabilities, ProviderInfo, StructuredOutput, Tool,
+    ModelRegistry, ProviderCapabilities, ProviderConfig, ProviderInfo, StructuredOutput, Tool,
 };
 pub use types::{
     Artifact, AudioContent, ChatMessage, Citation, CompletionRequest, CompletionResponse,

@@ -1,0 +1,171 @@
+---
+title: "Local Inference"
+description: "Run LLMs, embeddings, TTS, and transcription on-device"
+section: "guides"
+order: 26
+---
+
+Blazen can run every major model class entirely on your own hardware -- no API key, no network call, no data leaving the machine. Local backends are opt-in via feature flags on the Rust crates, and the Python/Node packages ship prebuilt wheels that include the most common ones.
+
+## Overview
+
+| Capability | Backend | Rust crate | Feature flag |
+|---|---|---|---|
+| LLM chat | mistral.rs | `blazen-llm-mistralrs` | `mistralrs` |
+| LLM chat | llama.cpp | `blazen-llm-llamacpp` | `llamacpp` |
+| LLM chat | Candle | `blazen-llm-candle` | `candle` |
+| Embeddings | FastEmbed (ONNX Runtime) | `blazen-embed-fastembed` | `fastembed` |
+| Embeddings | Candle | `blazen-embed-candle` | `candle-embed` |
+| Transcription | whisper.cpp | `blazen-audio-whispercpp` | `whispercpp` |
+| TTS | Piper | `blazen-audio-piper` | `piper` |
+| Image generation | Stable Diffusion | `blazen-image-diffusion` | `diffusion` |
+
+Every local provider implements the same trait as its remote counterpart -- `CompletionModel`, `EmbeddingModel`, `Transcription`, etc. -- so they slot into the exact same workflows and can be swapped with a one-line change.
+
+## Local LLM (mistral.rs)
+
+```python
+from blazen import CompletionModel, MistralRsOptions, Quantization, Device, ChatMessage
+
+model = CompletionModel.mistralrs(options=MistralRsOptions(
+    model_id="mistralai/Mistral-7B-Instruct-v0.3",
+    quantization=Quantization.Q4KM,
+    device=Device.Cuda,
+    context_length=8192,
+))
+
+# First call downloads the GGUF weights (~4 GB for Q4KM Mistral-7B).
+# Subsequent calls reuse the cached weights.
+await model.load()
+
+response = await model.complete([ChatMessage.user("Hello!")])
+print(response.content)
+
+# Free VRAM when you need the GPU for something else.
+await model.unload()
+```
+
+```rust
+use blazen_llm_mistralrs::{MistralRsOptions, MistralRsProvider};
+use blazen_llm::{ChatMessage, CompletionRequest, LocalModel, CompletionModel};
+
+let mut provider = MistralRsProvider::new(
+    MistralRsOptions::new("mistralai/Mistral-7B-Instruct-v0.3")
+        .with_quantization("Q4KM")
+        .with_device("cuda"),
+)?;
+
+provider.load().await?;
+let response = provider
+    .complete(CompletionRequest::new(vec![ChatMessage::user("Hello!")]))
+    .await?;
+println!("{}", response.content.unwrap_or_default());
+```
+
+`CompletionModel.mistralrs`, `CompletionModel.llamacpp`, and `CompletionModel.candle` all follow the same shape: required `model_id`, optional quantization and device hints, optional context length and cache directory.
+
+## Local embeddings (FastEmbed)
+
+```python
+from blazen import EmbeddingModel, FastEmbedOptions
+
+model = EmbeddingModel.fastembed(options=FastEmbedOptions(
+    model_name="BGESmallENV15",     # 384 dims, ~33 MB download
+    cache_dir="/tmp/fastembed",
+    max_batch_size=256,
+))
+
+resp = await model.embed(["hello", "world"])
+print(len(resp.embeddings[0]))  # 384
+```
+
+```typescript
+import { EmbeddingModel } from "blazen";
+
+const model = EmbeddingModel.fastembed({
+  modelName: "BGESmallENV15",
+  cacheDir: "/tmp/fastembed",
+});
+
+const resp = await model.embed(["hello", "world"]);
+```
+
+FastEmbed runs through ONNX Runtime -- CPU-only, no GPU required, no Python ML runtime needed. Models cache locally after the first download.
+
+## Local transcription (whisper.cpp)
+
+```python
+from blazen import Transcription, TranscriptionRequest, WhisperOptions, WhisperModel
+
+transcriber = Transcription.whispercpp(options=WhisperOptions(
+    model=WhisperModel.Base,
+    language="en",
+))
+
+result = await transcriber.transcribe(
+    TranscriptionRequest.from_file("/path/to/audio.wav")
+)
+print(result.text)
+```
+
+See the dedicated [Transcription guide](/guides/transcription/) for audio format requirements and model-size tradeoffs.
+
+## VRAM budgeting with ModelManager
+
+When running several local models side by side, the `ModelManager` tracks VRAM estimates and evicts the least-recently-used model when a new load would exceed the budget.
+
+```python
+from blazen import ModelManager, CompletionModel, EmbeddingModel, MistralRsOptions
+
+manager = ModelManager(budget_gb=24)
+
+llm = CompletionModel.mistralrs(options=MistralRsOptions(
+    model_id="mistralai/Mistral-7B-Instruct-v0.3",
+))
+embedder = EmbeddingModel.fastembed()
+
+await manager.register("llm", llm, vram_estimate_bytes=6 * 1024**3)
+await manager.register("embed", embedder, vram_estimate_bytes=100 * 1024**2)
+
+await manager.load("llm")
+await manager.ensure_loaded("embed")   # fits, no eviction
+
+print(await manager.used_bytes())       # bytes currently loaded
+print(await manager.available_bytes())  # room left in the budget
+```
+
+```rust
+use blazen_manager::ModelManager;
+
+let manager = ModelManager::new(24 * 1024 * 1024 * 1024); // 24 GB
+manager.register("llm", llm, Some(6 * 1024 * 1024 * 1024)).await?;
+manager.load("llm").await?;
+```
+
+If a `register` + `load` call would blow the budget, the manager first unloads the least-recently-used model whose removal creates enough headroom. This lets you register far more models than fit in VRAM and rely on the LRU policy to keep the hot set resident.
+
+## Model cache and downloads
+
+All local backends download weights lazily on the first call to `load()` (or the first inference if you skip `load`). Weights are cached under the OS default model cache directory unless you override `cache_dir` on the options struct. Typical sizes:
+
+- **Tiny Whisper**: ~32 MB
+- **FastEmbed BGE-Small**: ~33 MB
+- **Mistral-7B Q4KM**: ~4.1 GB
+- **Stable Diffusion XL base**: ~6 GB
+- **Whisper Large-V3**: ~3.1 GB
+
+Set a shared `cache_dir` across providers to keep everything in one place and make disk usage auditable.
+
+## Choosing CPU vs GPU
+
+- **CPU-only workloads** -- FastEmbed, whisper.cpp (without `cuda`/`metal`/`coreml`), llama.cpp CPU builds, Piper. Use when the deployment target has no GPU or when latency is not critical.
+- **GPU-accelerated** -- mistral.rs (`device=Cuda`/`Metal`), llama.cpp (`cuda`/`metal`), Candle, whisper.cpp with the right feature flag, Stable Diffusion. Use when per-token latency matters or the model is too large for CPU throughput.
+
+Feature flags are selected at build time. The default Python wheels ship with `fastembed`, `whispercpp`, and `mistralrs` enabled; enable more by building from source with extra flags.
+
+## See also
+
+- [Embeddings](/guides/python/embeddings/) -- deeper dive on FastEmbed model variants
+- [Transcription](/guides/transcription/) -- whisper.cpp audio format requirements and model sizes
+- [Media Generation](/guides/media-generation/) -- for cloud-hosted counterparts to local generation
+- [Custom Providers](/guides/custom-providers/) -- wrap a local binary or gRPC service that Blazen does not ship

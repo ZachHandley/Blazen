@@ -5,6 +5,7 @@
 //! for vector indexing when an embedding model is provided, or falls back to
 //! text-level `SimHash` in local-only mode.
 
+use std::pin::Pin;
 use std::sync::Arc;
 
 use js_sys::Promise;
@@ -12,7 +13,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 
 use blazen_memory::store::MemoryStore;
-use blazen_memory::{InMemoryBackend, Memory, MemoryEntry};
+use blazen_memory::{InMemoryBackend, Memory, MemoryEntry, StoredEntry};
 
 use crate::embedding::WasmEmbeddingModel;
 
@@ -106,6 +107,93 @@ impl WasmMemory {
         Self {
             inner: Arc::new(inner),
         }
+    }
+
+    /// Create a memory store backed by a JavaScript object implementing
+    /// the storage backend methods.
+    ///
+    /// The `backend` object must implement the following async methods:
+    /// - `put(entry)` -- store or update an entry
+    /// - `get(id)` -- retrieve an entry by ID, return `null` if not found
+    /// - `delete(id)` -- delete an entry, return `true` if it existed
+    /// - `list()` -- return all stored entries as an array
+    /// - `len()` -- return the number of stored entries
+    /// - `searchByBands(bands, limit)` -- return candidate entries matching
+    ///   any of the given LSH band strings
+    ///
+    /// Each entry object has the shape:
+    /// ```ts
+    /// interface StoredEntry {
+    ///   id: string;
+    ///   text: string;
+    ///   elid: string | null;
+    ///   simhashHex: string | null;
+    ///   textSimhash: number;
+    ///   bands: string[];
+    ///   metadata: any;
+    /// }
+    /// ```
+    ///
+    /// This enables plugging in custom storage backends (IndexedDB,
+    /// localStorage, remote APIs) from JavaScript.
+    ///
+    /// ```js
+    /// const backend = {
+    ///   async put(entry) { localStorage.setItem(entry.id, JSON.stringify(entry)); },
+    ///   async get(id) { const e = localStorage.getItem(id); return e ? JSON.parse(e) : null; },
+    ///   async delete(id) { const had = !!localStorage.getItem(id); localStorage.removeItem(id); return had; },
+    ///   async list() { /* ... */ },
+    ///   async len() { return localStorage.length; },
+    ///   async searchByBands(bands, limit) { /* ... */ },
+    /// };
+    /// const memory = Memory.fromJsBackend(embedder, backend);
+    /// ```
+    #[wasm_bindgen(js_name = "fromJsBackend")]
+    pub fn from_js_backend(
+        embedder: &WasmEmbeddingModel,
+        backend: JsValue,
+    ) -> Result<WasmMemory, JsValue> {
+        // Validate that the backend has the required methods.
+        let required_methods = ["put", "get", "delete", "list", "len", "searchByBands"];
+        for method in &required_methods {
+            let val = js_sys::Reflect::get(&backend, &JsValue::from_str(method))
+                .map_err(|_| JsValue::from_str(&format!("backend missing method '{method}'")))?;
+            if !val.is_function() {
+                return Err(JsValue::from_str(&format!(
+                    "backend.{method} must be a function"
+                )));
+            }
+        }
+
+        let js_backend = JsMemoryBackend::new(backend);
+        let inner = Memory::new(embedder.inner_arc(), js_backend);
+        Ok(Self {
+            inner: Arc::new(inner),
+        })
+    }
+
+    /// Create a memory store in local-only mode backed by a JavaScript
+    /// storage backend (no embedding model).
+    ///
+    /// See [`fromJsBackend`] for the backend object interface.
+    #[wasm_bindgen(js_name = "localFromJsBackend")]
+    pub fn local_from_js_backend(backend: JsValue) -> Result<WasmMemory, JsValue> {
+        let required_methods = ["put", "get", "delete", "list", "len", "searchByBands"];
+        for method in &required_methods {
+            let val = js_sys::Reflect::get(&backend, &JsValue::from_str(method))
+                .map_err(|_| JsValue::from_str(&format!("backend missing method '{method}'")))?;
+            if !val.is_function() {
+                return Err(JsValue::from_str(&format!(
+                    "backend.{method} must be a function"
+                )));
+            }
+        }
+
+        let js_backend = JsMemoryBackend::new(backend);
+        let inner = Memory::local(js_backend);
+        Ok(Self {
+            inner: Arc::new(inner),
+        })
     }
 
     // -----------------------------------------------------------------------
@@ -340,4 +428,237 @@ struct RawAddEntry {
     id: String,
     text: String,
     metadata: Option<serde_json::Value>,
+}
+
+// ---------------------------------------------------------------------------
+// SendFuture wrapper (same pattern as agent.rs / js_completion.rs)
+// ---------------------------------------------------------------------------
+
+/// Wrapper that unsafely implements `Send` for a non-Send future.
+/// SAFETY: WASM is single-threaded.
+struct SendFuture<F>(F);
+
+unsafe impl<F> Send for SendFuture<F> {}
+
+impl<F: std::future::Future> std::future::Future for SendFuture<F> {
+    type Output = F::Output;
+
+    fn poll(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        // SAFETY: We are not moving F, just projecting through the wrapper.
+        let inner = unsafe { self.map_unchecked_mut(|s| &mut s.0) };
+        inner.poll(cx)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// JsMemoryBackend — MemoryBackend backed by a JS object
+// ---------------------------------------------------------------------------
+
+/// A [`MemoryBackend`] implementation that delegates to a JavaScript object
+/// with `put`, `get`, `delete`, `list`, `len`, and `searchByBands` methods.
+struct JsMemoryBackend {
+    backend: JsValue,
+}
+
+// SAFETY: WASM is single-threaded.
+unsafe impl Send for JsMemoryBackend {}
+unsafe impl Sync for JsMemoryBackend {}
+
+impl JsMemoryBackend {
+    fn new(backend: JsValue) -> Self {
+        Self { backend }
+    }
+
+    /// Call a method on the JS backend object with the given arguments and
+    /// await the result if it's a Promise.
+    async fn call_method(
+        &self,
+        method: &str,
+        args: &[JsValue],
+    ) -> std::result::Result<JsValue, blazen_memory::MemoryError> {
+        let func = js_sys::Reflect::get(&self.backend, &JsValue::from_str(method))
+            .map_err(|e| blazen_memory::MemoryError::Backend(format!(
+                "backend.{method} not found: {e:?}"
+            )))?;
+
+        let func: &js_sys::Function = func.unchecked_ref();
+        let result = match args.len() {
+            0 => func.call0(&self.backend),
+            1 => func.call1(&self.backend, &args[0]),
+            2 => func.call2(&self.backend, &args[0], &args[1]),
+            _ => {
+                let js_args = js_sys::Array::new();
+                for arg in args {
+                    js_args.push(arg);
+                }
+                func.apply(&self.backend, &js_args)
+            }
+        }
+        .map_err(|e| blazen_memory::MemoryError::Backend(format!(
+            "backend.{method}() threw: {e:?}"
+        )))?;
+
+        // Await if the result is a Promise.
+        if result.has_type::<js_sys::Promise>() {
+            let promise: js_sys::Promise = result.unchecked_into();
+            wasm_bindgen_futures::JsFuture::from(promise)
+                .await
+                .map_err(|e| blazen_memory::MemoryError::Backend(format!(
+                    "backend.{method}() rejected: {e:?}"
+                )))
+        } else {
+            Ok(result)
+        }
+    }
+
+    /// Convert a `StoredEntry` to a JS object for the backend.
+    fn entry_to_js(entry: &StoredEntry) -> JsValue {
+        let obj = js_sys::Object::new();
+        let _ = js_sys::Reflect::set(&obj, &"id".into(), &entry.id.clone().into());
+        let _ = js_sys::Reflect::set(&obj, &"text".into(), &entry.text.clone().into());
+        let _ = js_sys::Reflect::set(
+            &obj,
+            &"elid".into(),
+            &entry.elid.as_deref().map_or(JsValue::NULL, |s| JsValue::from_str(s)),
+        );
+        let _ = js_sys::Reflect::set(
+            &obj,
+            &"simhashHex".into(),
+            &entry.simhash_hex.as_deref().map_or(JsValue::NULL, |s| JsValue::from_str(s)),
+        );
+        let _ = js_sys::Reflect::set(
+            &obj,
+            &"textSimhash".into(),
+            &JsValue::from_f64(entry.text_simhash as f64),
+        );
+        let bands = js_sys::Array::new();
+        for band in &entry.bands {
+            bands.push(&JsValue::from_str(band));
+        }
+        let _ = js_sys::Reflect::set(&obj, &"bands".into(), &bands);
+        let meta = serde_wasm_bindgen::to_value(&entry.metadata).unwrap_or(JsValue::NULL);
+        let _ = js_sys::Reflect::set(&obj, &"metadata".into(), &meta);
+        obj.into()
+    }
+
+    /// Convert a JS object back to a `StoredEntry`.
+    fn js_to_entry(val: &JsValue) -> std::result::Result<StoredEntry, blazen_memory::MemoryError> {
+        let id = js_sys::Reflect::get(val, &"id".into())
+            .ok()
+            .and_then(|v| v.as_string())
+            .unwrap_or_default();
+        let text = js_sys::Reflect::get(val, &"text".into())
+            .ok()
+            .and_then(|v| v.as_string())
+            .unwrap_or_default();
+        let elid = js_sys::Reflect::get(val, &"elid".into())
+            .ok()
+            .and_then(|v| v.as_string());
+        let simhash_hex = js_sys::Reflect::get(val, &"simhashHex".into())
+            .ok()
+            .and_then(|v| v.as_string());
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        let text_simhash = js_sys::Reflect::get(val, &"textSimhash".into())
+            .ok()
+            .and_then(|v| v.as_f64())
+            .map_or(0, |v| v as u64);
+        let bands_val = js_sys::Reflect::get(val, &"bands".into())
+            .unwrap_or(JsValue::UNDEFINED);
+        let bands: Vec<String> = if bands_val.is_instance_of::<js_sys::Array>() {
+            let arr: &js_sys::Array = bands_val.unchecked_ref();
+            arr.iter().filter_map(|v| v.as_string()).collect()
+        } else {
+            Vec::new()
+        };
+        let metadata_val = js_sys::Reflect::get(val, &"metadata".into())
+            .unwrap_or(JsValue::NULL);
+        let metadata: serde_json::Value = if metadata_val.is_null() || metadata_val.is_undefined() {
+            serde_json::Value::Null
+        } else {
+            serde_wasm_bindgen::from_value(metadata_val).unwrap_or(serde_json::Value::Null)
+        };
+
+        Ok(StoredEntry {
+            id,
+            text,
+            elid,
+            simhash_hex,
+            text_simhash,
+            bands,
+            metadata,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl blazen_memory::store::MemoryBackend for JsMemoryBackend {
+    async fn put(&self, entry: StoredEntry) -> blazen_memory::error::Result<()> {
+        let js_entry = Self::entry_to_js(&entry);
+        SendFuture(self.call_method("put", &[js_entry])).await?;
+        Ok(())
+    }
+
+    async fn get(&self, id: &str) -> blazen_memory::error::Result<Option<StoredEntry>> {
+        let result = SendFuture(self.call_method("get", &[JsValue::from_str(id)])).await?;
+        if result.is_null() || result.is_undefined() {
+            Ok(None)
+        } else {
+            Ok(Some(Self::js_to_entry(&result)?))
+        }
+    }
+
+    async fn delete(&self, id: &str) -> blazen_memory::error::Result<bool> {
+        let result = SendFuture(self.call_method("delete", &[JsValue::from_str(id)])).await?;
+        Ok(result.is_truthy())
+    }
+
+    async fn list(&self) -> blazen_memory::error::Result<Vec<StoredEntry>> {
+        let result = SendFuture(self.call_method("list", &[])).await?;
+        let arr: &js_sys::Array = result.dyn_ref::<js_sys::Array>().ok_or_else(|| {
+            blazen_memory::MemoryError::Backend("backend.list() must return an array".into())
+        })?;
+
+        let mut entries = Vec::with_capacity(arr.length() as usize);
+        for i in 0..arr.length() {
+            entries.push(Self::js_to_entry(&arr.get(i))?);
+        }
+        Ok(entries)
+    }
+
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    async fn len(&self) -> blazen_memory::error::Result<usize> {
+        let result = SendFuture(self.call_method("len", &[])).await?;
+        Ok(result.as_f64().unwrap_or(0.0) as usize)
+    }
+
+    async fn search_by_bands(
+        &self,
+        bands: &[String],
+        limit: usize,
+    ) -> blazen_memory::error::Result<Vec<StoredEntry>> {
+        let js_bands = js_sys::Array::new();
+        for band in bands {
+            js_bands.push(&JsValue::from_str(band));
+        }
+        let result = SendFuture(self.call_method(
+            "searchByBands",
+            &[js_bands.into(), JsValue::from_f64(limit as f64)],
+        ))
+        .await?;
+
+        let arr: &js_sys::Array = result.dyn_ref::<js_sys::Array>().ok_or_else(|| {
+            blazen_memory::MemoryError::Backend(
+                "backend.searchByBands() must return an array".into(),
+            )
+        })?;
+
+        let mut entries = Vec::with_capacity(arr.length() as usize);
+        for i in 0..arr.length() {
+            entries.push(Self::js_to_entry(&arr.get(i))?);
+        }
+        Ok(entries)
+    }
 }

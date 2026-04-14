@@ -87,6 +87,87 @@ impl MemoryBackend for BackendKind {
 }
 
 // ---------------------------------------------------------------------------
+// JsMemoryBackend (subclassable base)
+// ---------------------------------------------------------------------------
+
+/// Base class for custom memory storage backends.
+///
+/// Extend and override all methods to implement a custom backend
+/// (e.g. `PostgreSQL`, `DynamoDB`, `SQLite`).
+///
+/// ```javascript
+/// class PostgresBackend extends MemoryBackend {
+///     async put(entry) { /* ... */ }
+///     async get(id) { /* ... */ }
+///     async delete(id) { /* ... */ }
+///     async list() { /* ... */ }
+///     async len() { /* ... */ }
+///     async searchByBands(bands, limit) { /* ... */ }
+/// }
+/// ```
+#[napi(js_name = "MemoryBackend")]
+pub struct JsMemoryBackend {}
+
+#[napi]
+#[allow(
+    clippy::new_without_default,
+    clippy::must_use_candidate,
+    clippy::missing_errors_doc,
+    clippy::unused_async,
+    clippy::needless_pass_by_value
+)]
+impl JsMemoryBackend {
+    /// Create a new memory backend base instance.
+    #[napi(constructor)]
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    /// Store an entry. Subclasses **must** override this method.
+    #[napi]
+    pub async fn put(&self, _entry: serde_json::Value) -> Result<()> {
+        Err(napi::Error::from_reason("subclass must override put()"))
+    }
+
+    /// Retrieve an entry by ID. Subclasses **must** override this method.
+    #[napi]
+    pub async fn get(&self, _id: String) -> Result<Option<serde_json::Value>> {
+        Err(napi::Error::from_reason("subclass must override get()"))
+    }
+
+    /// Delete an entry by ID. Subclasses **must** override this method.
+    #[napi]
+    pub async fn delete(&self, _id: String) -> Result<bool> {
+        Err(napi::Error::from_reason("subclass must override delete()"))
+    }
+
+    /// List all stored entries. Subclasses **must** override this method.
+    #[napi]
+    pub async fn list(&self) -> Result<Vec<serde_json::Value>> {
+        Err(napi::Error::from_reason("subclass must override list()"))
+    }
+
+    /// Return the number of stored entries. Subclasses **must** override this method.
+    #[napi]
+    pub async fn len(&self) -> Result<u32> {
+        Err(napi::Error::from_reason("subclass must override len()"))
+    }
+
+    /// Search for entries whose LSH bands overlap with the given bands.
+    /// Subclasses **must** override this method.
+    #[napi(js_name = "searchByBands")]
+    pub async fn search_by_bands(
+        &self,
+        _bands: Vec<String>,
+        _limit: u32,
+    ) -> Result<Vec<serde_json::Value>> {
+        Err(napi::Error::from_reason(
+            "subclass must override searchByBands()",
+        ))
+    }
+}
+
+// ---------------------------------------------------------------------------
 // JsInMemoryBackend
 // ---------------------------------------------------------------------------
 
@@ -240,32 +321,38 @@ impl JsMemory {
     /// @param embedder - The embedding model to use for vectorisation.
     /// @param backend  - An `InMemoryBackend` instance.
     #[napi(constructor)]
-    pub fn new(embedder: &JsEmbeddingModel, backend: &JsInMemoryBackend) -> Self {
-        let inner = Memory::new(
-            embedder.inner_arc(),
-            BackendKind::InMemory(Arc::clone(&backend.inner)),
-        );
-        Self { inner }
+    pub fn new(embedder: &JsEmbeddingModel, backend: &JsInMemoryBackend) -> Result<Self> {
+        let arc = embedder.inner_arc().ok_or_else(|| {
+            napi::Error::from_reason(
+                "Memory requires a concrete EmbeddingModel, not a subclassed instance without a provider",
+            )
+        })?;
+        let inner = Memory::new(arc, BackendKind::InMemory(Arc::clone(&backend.inner)));
+        Ok(Self { inner })
     }
 
     /// Create a memory store with an embedding model and a `JsonlBackend`.
     #[napi(factory)]
-    pub fn with_jsonl(embedder: &JsEmbeddingModel, backend: &JsJsonlBackend) -> Self {
-        let inner = Memory::new(
-            embedder.inner_arc(),
-            BackendKind::Jsonl(Arc::clone(&backend.inner)),
-        );
-        Self { inner }
+    pub fn with_jsonl(embedder: &JsEmbeddingModel, backend: &JsJsonlBackend) -> Result<Self> {
+        let arc = embedder.inner_arc().ok_or_else(|| {
+            napi::Error::from_reason(
+                "Memory requires a concrete EmbeddingModel, not a subclassed instance without a provider",
+            )
+        })?;
+        let inner = Memory::new(arc, BackendKind::Jsonl(Arc::clone(&backend.inner)));
+        Ok(Self { inner })
     }
 
     /// Create a memory store with an embedding model and a `ValkeyBackend`.
     #[napi(factory)]
-    pub fn with_valkey(embedder: &JsEmbeddingModel, backend: &JsValkeyBackend) -> Self {
-        let inner = Memory::new(
-            embedder.inner_arc(),
-            BackendKind::Valkey(Arc::clone(&backend.inner)),
-        );
-        Self { inner }
+    pub fn with_valkey(embedder: &JsEmbeddingModel, backend: &JsValkeyBackend) -> Result<Self> {
+        let arc = embedder.inner_arc().ok_or_else(|| {
+            napi::Error::from_reason(
+                "Memory requires a concrete EmbeddingModel, not a subclassed instance without a provider",
+            )
+        })?;
+        let inner = Memory::new(arc, BackendKind::Valkey(Arc::clone(&backend.inner)));
+        Ok(Self { inner })
     }
 
     /// Create a memory store in local-only mode (no embedding model) with an `InMemoryBackend`.

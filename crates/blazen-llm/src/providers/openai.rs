@@ -577,27 +577,6 @@ impl OpenAiEmbeddingModel {
         self
     }
 
-    /// Construct from typed [`ProviderOptions`](crate::types::provider_options::ProviderOptions).
-    ///
-    /// # Errors
-    ///
-    /// Returns [`BlazenError::Auth`] if no API key is provided and
-    /// `OPENAI_API_KEY` is not set.
-    pub fn from_options(
-        opts: crate::types::provider_options::ProviderOptions,
-    ) -> Result<Self, crate::BlazenError> {
-        let api_key = crate::keys::resolve_api_key("openai", opts.api_key)?;
-        let mut em = Self::new(api_key);
-        if let Some(url) = opts.base_url {
-            em = em.with_base_url(url);
-        }
-        if let Some(m) = opts.model {
-            let dims = em.dimensions;
-            em = em.with_model(m, dims);
-        }
-        Ok(em)
-    }
-
     /// Use a custom base URL (e.g. for local proxies).
     #[must_use]
     pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
@@ -610,6 +589,33 @@ impl OpenAiEmbeddingModel {
     pub fn with_http_client(mut self, client: Arc<dyn HttpClient>) -> Self {
         self.client = client;
         self
+    }
+}
+
+#[cfg(any(
+    all(target_arch = "wasm32", not(target_os = "wasi")),
+    feature = "reqwest"
+))]
+impl OpenAiEmbeddingModel {
+    /// Construct from typed [`ProviderOptions`](crate::types::provider_options::ProviderOptions).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BlazenError::Auth`] if no API key is provided and
+    /// `OPENAI_API_KEY` is not set.
+    pub fn from_options(
+        opts: crate::types::provider_options::ProviderOptions,
+    ) -> Result<Self, crate::BlazenError> {
+        let api_key = crate::keys::resolve_api_key("openai", opts.api_key)?;
+        let mut em = Self::new_with_client(api_key, crate::default_http_client());
+        if let Some(url) = opts.base_url {
+            em = em.with_base_url(url);
+        }
+        if let Some(m) = opts.model {
+            let dims = em.dimensions;
+            em = em.with_model(m, dims);
+        }
+        Ok(em)
     }
 }
 

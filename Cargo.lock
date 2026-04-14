@@ -742,6 +742,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "blazen-manager"
+version = "0.0.0-dev"
+dependencies = [
+ "async-trait",
+ "blazen-llm",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "blazen-memory"
 version = "0.0.0-dev"
 dependencies = [
@@ -793,6 +803,7 @@ dependencies = [
  "blazen-core",
  "blazen-events",
  "blazen-llm",
+ "blazen-manager",
  "blazen-memory",
  "blazen-memory-valkey",
  "blazen-prompts",
@@ -896,6 +907,7 @@ dependencies = [
  "blazen-core",
  "blazen-events",
  "blazen-llm",
+ "blazen-manager",
  "blazen-memory",
  "blazen-memory-valkey",
  "blazen-prompts",

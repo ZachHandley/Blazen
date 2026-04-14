@@ -121,3 +121,260 @@ wf.addStep("setup", ["blazen::StartEvent"], async (event, ctx) => {
 ```sh
 npx tsx examples/stateful_workflow.ts
 ```
+
+---
+
+## Example 7: Subclassing CompletionModel (Custom Provider)
+
+Extend `CompletionModel` in TypeScript/JavaScript to build a custom provider. Override `complete()` and/or `stream()` with any backend -- local inference, a proxy, a mock, etc. Subclass instances work with `runAgent`, `withRetry()`, `withCache()`, and every other helper.
+
+```typescript
+import {
+  ChatMessage,
+  CompletionModel,
+  runAgent,
+  type CompletionResponse,
+} from "blazen";
+
+class EchoLLM extends CompletionModel {
+  constructor() {
+    super({ modelId: "echo-llm", contextLength: 4096 });
+  }
+
+  async complete(messages: ChatMessage[]): Promise<CompletionResponse> {
+    const last = [...messages].reverse().find((m) => m.role === "user");
+    return {
+      content: `echo: ${last?.content ?? ""}`,
+      model: this.modelId,
+      toolCalls: [],
+    } as CompletionResponse;
+  }
+
+  // Override stream() when you want incremental output.
+  async *stream(messages: ChatMessage[]) {
+    const last = [...messages].reverse().find((m) => m.role === "user");
+    for (const word of `echo: ${last?.content ?? ""}`.split(" ")) {
+      yield { delta: word + " " };
+    }
+  }
+}
+
+const model = new EchoLLM();
+const result = await runAgent(
+  model,
+  [ChatMessage.user("hello world")],
+  [], // no tools
+  async () => { throw new Error("no tools"); }, // toolHandler -- not called without tools
+);
+console.log(result.response.content); // -> "echo: hello world"
+```
+
+```sh
+npx tsx examples/subclass_completion_model.ts
+```
+
+---
+
+## Example 8: Custom MemoryBackend (DictBackend)
+
+Extend `MemoryBackend` to plug in any storage layer (Postgres, DynamoDB, SQLite, a plain Map). Each async method is dispatched from Rust back into JS, so you get full control while reusing Blazen's embedding and SimHash search pipeline.
+
+```typescript
+import { EmbeddingModel, Memory, MemoryBackend } from "blazen";
+
+class DictBackend extends MemoryBackend {
+  private store = new Map<string, any>();
+
+  async put(entry: any): Promise<void> {
+    this.store.set(entry.id, entry);
+  }
+
+  async get(id: string): Promise<any | null> {
+    return this.store.get(id) ?? null;
+  }
+
+  async delete(id: string): Promise<boolean> {
+    return this.store.delete(id);
+  }
+
+  async list(): Promise<any[]> {
+    return Array.from(this.store.values());
+  }
+
+  async len(): Promise<number> {
+    return this.store.size;
+  }
+
+  async searchByBands(bands: string[], limit: number): Promise<any[]> {
+    const set = new Set(bands);
+    const hits: any[] = [];
+    for (const entry of this.store.values()) {
+      const entryBands: string[] = entry.bands ?? [];
+      if (entryBands.some((b) => set.has(b))) {
+        hits.push(entry);
+        if (hits.length >= limit) break;
+      }
+    }
+    return hits;
+  }
+}
+
+const embedder = EmbeddingModel.fastembed();
+const memory = new Memory(embedder, new DictBackend());
+
+await memory.add("fact-1", "Rust has ownership and borrowing.");
+await memory.add("fact-2", "Python uses reference counting.");
+
+const results = await memory.search("memory management", 2);
+for (const r of results) {
+  console.log(r.score, r.text);
+}
+```
+
+```sh
+npx tsx examples/custom_memory_backend.ts
+```
+
+---
+
+## Example 9: ModelManager with VRAM Budget
+
+Track VRAM across multiple local models. Register each model with an estimated footprint; when loading a new one would exceed the budget, the least-recently-used model is automatically unloaded.
+
+```typescript
+import { CompletionModel, ModelManager } from "blazen";
+
+// 24 GB budget (GPU-typical for a consumer card).
+const manager = new ModelManager({ budgetGb: 24 });
+
+const llama8b = CompletionModel.mistralrs({
+  modelId: "meta-llama/Llama-3.1-8B-Instruct",
+});
+const qwen14b = CompletionModel.mistralrs({
+  modelId: "Qwen/Qwen2.5-14B-Instruct",
+});
+const mistral24b = CompletionModel.mistralrs({
+  modelId: "mistralai/Mistral-Small-24B",
+});
+
+await manager.register("llama-8b", llama8b, 8 * 1024 ** 3);
+await manager.register("qwen-14b", qwen14b, 14 * 1024 ** 3);
+await manager.register("mistral-24b", mistral24b, 20 * 1024 ** 3);
+
+// Fits alongside qwen-14b (8 + 14 = 22 GB).
+await manager.load("llama-8b");
+await manager.load("qwen-14b");
+
+// 20 GB does not fit next to 8 + 14 = 22 GB -- LRU (llama-8b) is evicted.
+await manager.load("mistral-24b");
+
+for (const s of await manager.status()) {
+  console.log(`${s.id}: loaded=${s.loaded}, vram=${s.vramEstimate.toLocaleString()} bytes`);
+}
+```
+
+```sh
+npx tsx examples/model_manager_budget.ts
+```
+
+---
+
+## Example 10: Pricing Registration and Cost Tracking
+
+Register pricing for any model ID (your own model, a local finetune, a custom deployment). Every `CompletionResponse` then carries a `cost` field computed from the registered rate.
+
+```typescript
+import {
+  ChatMessage,
+  CompletionModel,
+  lookupPricing,
+  registerPricing,
+  type CompletionResponse,
+} from "blazen";
+
+class MyFinetune extends CompletionModel {
+  constructor() {
+    super({ modelId: "my-finetuned-model" });
+  }
+
+  async complete(messages: ChatMessage[]): Promise<CompletionResponse> {
+    return {
+      content: "Rust is a systems language with memory safety without GC.",
+      model: this.modelId,
+      toolCalls: [],
+      usage: { promptTokens: 150, completionTokens: 80, totalTokens: 230 },
+    } as CompletionResponse;
+  }
+}
+
+// Register pricing once, globally, for any model ID.
+registerPricing("my-finetuned-model", {
+  inputPerMillion: 1.0,
+  outputPerMillion: 2.0,
+});
+
+// Readback -- pricing is centrally stored.
+const pricing = lookupPricing("my-finetuned-model");
+if (pricing) {
+  console.log(
+    `input: $${pricing.inputPerMillion}/M, output: $${pricing.outputPerMillion}/M`,
+  );
+}
+
+const model = new MyFinetune();
+const response = await model.complete([
+  ChatMessage.user("Summarize Rust in one line."),
+]);
+console.log(response.content);
+console.log("usage:", response.usage);
+// cost is computed from the registered pricing + usage.
+console.log(`cost: $${response.cost?.toFixed(6)}`);
+```
+
+```sh
+npx tsx examples/pricing_and_cost.ts
+```
+
+---
+
+## Example 11: Per-Capability Provider (Custom TTS)
+
+Extend `TTSProvider` to plug in any TTS backend (ElevenLabs, Coqui, a local model). The per-capability base classes (`TTSProvider`, `ImageProvider`, `VideoProvider`, `MusicProvider`, `ThreeDProvider`, `BackgroundRemovalProvider`, `VoiceProvider`) exist for users who only need to implement one capability.
+
+```typescript
+import { TTSProvider } from "blazen";
+
+class MyElevenLabs extends TTSProvider {
+  private apiKey: string;
+
+  constructor(apiKey: string) {
+    super({
+      providerId: "elevenlabs",
+      baseUrl: "https://api.elevenlabs.io/v1",
+    });
+    this.apiKey = apiKey;
+  }
+
+  async textToSpeech(request: any): Promise<any> {
+    // In a real implementation, make an HTTP call with this.apiKey
+    // and return audio bytes. Here we just echo the request.
+    return {
+      audioData: new Uint8Array([0, 1, 2]),
+      format: "wav",
+      voice: request.voice,
+      text: request.text,
+    };
+  }
+}
+
+const tts = new MyElevenLabs("sk-...");
+const result = await tts.textToSpeech({
+  text: "Hello from Blazen!",
+  voice: "alice",
+});
+console.log(result.format, result.audioData.length, "bytes");
+```
+
+```sh
+npx tsx examples/custom_tts_provider.ts
+```

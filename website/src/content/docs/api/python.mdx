@@ -421,13 +421,27 @@ Each decorator returns a new `CompletionModel` wrapping the original with additi
 
 | Method | Signature | Description |
 |---|---|---|
-| `with_retry` | `.with_retry(*, max_retries=3, initial_delay_ms=1000, max_delay_ms=30000)` | Automatic retry with exponential backoff on transient failures. |
-| `with_cache` | `.with_cache(*, ttl_seconds=300, max_entries=1000)` | In-memory response cache for identical non-streaming requests. |
+| `with_retry` | `.with_retry(config: RetryConfig \| None = None)` | Automatic retry with exponential backoff on transient failures. |
+| `with_cache` | `.with_cache(config: CacheConfig \| None = None)` | In-memory response cache for identical non-streaming requests. |
 | `with_fallback` | `CompletionModel.with_fallback(models: list[CompletionModel])` | Static method. Tries providers in order; falls back on transient errors. |
 
+`RetryConfig` and `CacheConfig` are typed configuration objects:
+
 ```python
-# Chain decorators
-model = CompletionModel.openai().with_cache().with_retry(max_retries=5)
+RetryConfig(*, max_retries=3, initial_delay_ms=1000, max_delay_ms=30000, honor_retry_after=True, jitter=True)
+CacheConfig(*, strategy: CacheStrategy | None = None, ttl_seconds=300, max_entries=1000)
+```
+
+```python
+# Chain decorators with typed config objects
+model = (
+    CompletionModel.openai()
+    .with_cache(CacheConfig(ttl_seconds=600))
+    .with_retry(RetryConfig(max_retries=5))
+)
+
+# Or use defaults (both config args are optional)
+model = CompletionModel.openai().with_cache().with_retry()
 
 # Fallback across providers
 primary = CompletionModel.openai()
@@ -732,7 +746,7 @@ MediaType.GLB   # "model/gltf-binary"
 | `MediaType.OGG` | `audio/ogg` |
 | `MediaType.FLAC` | `audio/flac` |
 | `MediaType.AAC` | `audio/aac` |
-| `MediaType.M4A` | `audio/m4a` |
+| `MediaType.M4A` | `audio/mp4` |
 
 **3D model types**
 
@@ -1062,6 +1076,272 @@ Includes per-message overhead (role markers, separators) in addition to content 
 |---|---|---|---|
 | `messages` | `list[ChatMessage]` | required | Messages to count. |
 | `context_size` | `int` | `128000` | Context window size hint. |
+
+---
+
+## Subclassable Providers
+
+`CompletionModel`, `EmbeddingModel`, and `Transcription` can be subclassed to implement custom providers. Override the relevant methods and the framework will dispatch to your implementation.
+
+### CompletionModel
+
+```python
+from blazen import CompletionModel, ChatMessage
+
+class MyLLM(CompletionModel):
+    def __init__(self):
+        super().__init__(model_id="my-llm")
+
+    async def complete(self, messages, options=None):
+        # Your inference logic here
+        return {"content": "Hello from my custom model"}
+
+    async def stream(self, messages, on_chunk, options=None):
+        on_chunk({"delta": "Hello", "finish_reason": None, "tool_calls": []})
+        on_chunk({"delta": None, "finish_reason": "stop", "tool_calls": []})
+
+model = MyLLM()
+response = await model.complete([ChatMessage.user("Hi")])
+```
+
+### EmbeddingModel
+
+```python
+from blazen import EmbeddingModel
+
+class MyEmbedder(EmbeddingModel):
+    def __init__(self):
+        super().__init__(model_id="my-embedder", dimensions=128)
+
+    async def embed(self, texts):
+        return {"embeddings": [[0.1] * 128 for _ in texts], "model": "my-embedder"}
+```
+
+### Transcription
+
+```python
+from blazen import Transcription
+
+class MyTranscriber(Transcription):
+    def __init__(self):
+        super().__init__(provider_id="my-stt")
+
+    async def transcribe(self, request):
+        return {"text": "transcribed text", "segments": []}
+```
+
+---
+
+## Per-Capability Provider Classes
+
+Seven provider base classes let you implement a single compute capability without dealing with the full `ComputeProvider` interface. Subclass and override the relevant methods.
+
+| Class | Methods to Override | Rust Trait |
+|---|---|---|
+| `TTSProvider` | `text_to_speech(request)` | `AudioGeneration` |
+| `MusicProvider` | `generate_music(request)`, `generate_sfx(request)` | `AudioGeneration` |
+| `ImageProvider` | `generate_image(request)`, `upscale_image(request)` | `ImageGeneration` |
+| `VideoProvider` | `text_to_video(request)`, `image_to_video(request)` | `VideoGeneration` |
+| `ThreeDProvider` | `generate_3d(request)` | `ThreeDGeneration` |
+| `BackgroundRemovalProvider` | `remove_background(request)` | `BackgroundRemoval` |
+| `VoiceProvider` | `clone_voice(request)`, `list_voices()`, `delete_voice(voice)` | `VoiceCloning` |
+
+### Constructor
+
+All provider classes share the same constructor signature:
+
+```python
+TTSProvider(
+    *,
+    provider_id: str,
+    base_url: str | None = None,
+    pricing: ModelPricing | None = None,
+    vram_estimate_bytes: int | None = None,
+)
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `provider_id` | `str` | Identifier for the provider instance. |
+| `base_url` | `str \| None` | Optional base URL for the provider API. |
+| `pricing` | `ModelPricing \| None` | Optional pricing info for cost tracking. |
+| `vram_estimate_bytes` | `int \| None` | Optional VRAM estimate for `ModelManager` integration. |
+
+### Example
+
+```python
+from blazen import TTSProvider
+
+class ElevenLabsTTS(TTSProvider):
+    def __init__(self, api_key: str):
+        super().__init__(provider_id="elevenlabs")
+        self.api_key = api_key
+
+    async def text_to_speech(self, request):
+        # Call ElevenLabs API with self.api_key
+        return {"audio": audio_bytes, "format": "mp3"}
+
+tts = ElevenLabsTTS(api_key="sk-...")
+result = await tts.text_to_speech({"text": "Hello world", "voice": "alice"})
+```
+
+---
+
+## MemoryBackend
+
+Base class for custom memory storage backends. Subclass to implement persistence backed by Postgres, SQLite, DynamoDB, or any other store.
+
+```python
+from blazen import MemoryBackend
+
+class PostgresBackend(MemoryBackend):
+    async def put(self, entry):
+        # Insert or update entry in Postgres
+        ...
+
+    async def get(self, id):
+        # Retrieve entry by id
+        ...
+
+    async def delete(self, id):
+        # Delete entry, return True if it existed
+        ...
+
+    async def list(self):
+        # Return all entries
+        ...
+
+    async def len(self):
+        # Return count of entries
+        ...
+
+    async def search_by_bands(self, bands, limit):
+        # Return candidates sharing LSH bands with the query
+        ...
+```
+
+### Methods to Override
+
+| Method | Signature | Description |
+|---|---|---|
+| `put` | `async def put(self, entry) -> None` | Insert or update a stored entry. |
+| `get` | `async def get(self, id: str) -> dict \| None` | Retrieve a stored entry by id. |
+| `delete` | `async def delete(self, id: str) -> bool` | Delete an entry by id. Returns `True` if it existed. |
+| `list` | `async def list(self) -> list[dict]` | Return all stored entries. |
+| `len` | `async def len(self) -> int` | Return the number of stored entries. |
+| `search_by_bands` | `async def search_by_bands(self, bands, limit) -> list[dict]` | Return candidate entries sharing at least one LSH band. |
+
+---
+
+## ModelManager
+
+VRAM budget-aware model manager with LRU eviction. Tracks registered local models and their estimated VRAM footprint. When loading a model that would exceed the budget, the least-recently-used loaded model is unloaded first.
+
+### Constructor
+
+```python
+from blazen import ModelManager
+
+manager = ModelManager(budget_gb=24)
+# or
+manager = ModelManager(budget_bytes=24 * 1_073_741_824)
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `budget_gb` | `float \| None` | VRAM budget in gigabytes. Provide exactly one of `budget_gb` or `budget_bytes`. |
+| `budget_bytes` | `int \| None` | VRAM budget in bytes. |
+
+### Methods
+
+| Method | Signature | Description |
+|---|---|---|
+| `register` | `await manager.register(id, model, vram_estimate)` | Register a model with its estimated VRAM footprint. Starts unloaded. |
+| `load` | `await manager.load(id)` | Load a model, evicting LRU models if needed. |
+| `unload` | `await manager.unload(id)` | Unload a model and free its VRAM. |
+| `is_loaded` | `await manager.is_loaded(id) -> bool` | Check if a model is currently loaded. |
+| `ensure_loaded` | `await manager.ensure_loaded(id)` | Alias for `load()`. |
+| `used_bytes` | `await manager.used_bytes() -> int` | Total VRAM currently used by loaded models. |
+| `available_bytes` | `await manager.available_bytes() -> int` | Available VRAM within the budget. |
+| `status` | `await manager.status() -> list[ModelStatus]` | Status of all registered models. |
+
+### ModelStatus
+
+| Property | Type | Description |
+|---|---|---|
+| `.id` | `str` | Model identifier. |
+| `.loaded` | `bool` | Whether the model is currently loaded. |
+| `.vram_estimate` | `int` | Estimated VRAM footprint in bytes. |
+
+---
+
+## ModelPricing and Pricing Functions
+
+### ModelPricing
+
+Pricing metadata for cost tracking.
+
+```python
+from blazen import ModelPricing
+
+pricing = ModelPricing(
+    input_per_million=1.0,
+    output_per_million=2.0,
+    per_image=0.02,
+    per_second=0.001,
+)
+```
+
+| Property | Type | Description |
+|---|---|---|
+| `.input_per_million` | `float \| None` | Cost per million input tokens (USD). |
+| `.output_per_million` | `float \| None` | Cost per million output tokens (USD). |
+| `.per_image` | `float \| None` | Cost per generated image (USD). |
+| `.per_second` | `float \| None` | Cost per second of compute (USD). |
+
+### register_pricing()
+
+Register custom pricing for a model. Overrides any existing pricing for the same model ID.
+
+```python
+from blazen import register_pricing, ModelPricing
+
+register_pricing("my-model", ModelPricing(input_per_million=1.0, output_per_million=2.0))
+```
+
+### lookup_pricing()
+
+Look up pricing for a model by ID. Returns `None` if the model is unknown.
+
+```python
+from blazen import lookup_pricing
+
+pricing = lookup_pricing("gpt-4o")
+if pricing:
+    print(f"Input: ${pricing.input_per_million}/M tokens")
+```
+
+---
+
+## LocalModel Methods on CompletionModel
+
+`CompletionModel` instances backed by local inference (not remote APIs) support explicit load/unload lifecycle management.
+
+| Method | Signature | Description |
+|---|---|---|
+| `load` | `await model.load()` | Load the model into memory/VRAM. Idempotent. |
+| `unload` | `await model.unload()` | Free the model's memory/VRAM. Idempotent. |
+| `is_loaded` | `await model.is_loaded() -> bool` | Whether the model is currently loaded. |
+| `vram_bytes` | `await model.vram_bytes() -> int \| None` | Approximate memory footprint in bytes, or `None` if unknown. |
+
+```python
+model = CompletionModel.openai()  # Remote -- these methods are no-ops
+# For a local model:
+await model.load()
+print(await model.is_loaded())    # True
+print(await model.vram_bytes())   # e.g. 4_000_000_000
+await model.unload()
+```
 
 ---
 

@@ -42,15 +42,52 @@ use blazen_llm::compute::Transcription;
 ///     ...     TranscriptionRequest(audio_url="https://example.com/audio.mp3")
 ///     ... )
 #[gen_stub_pyclass]
-#[pyclass(name = "Transcription", from_py_object)]
+#[pyclass(name = "Transcription", subclass, from_py_object)]
 #[derive(Clone)]
 pub struct PyTranscription {
-    pub(crate) inner: Arc<dyn Transcription>,
+    pub(crate) inner: Option<Arc<dyn Transcription>>,
+    /// Configuration for subclassed models. `None` for built-in providers
+    /// (whose config lives inside the `inner` trait object).
+    pub(crate) config: Option<blazen_llm::ProviderConfig>,
 }
 
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyTranscription {
+    // -----------------------------------------------------------------
+    // Subclass constructor
+    // -----------------------------------------------------------------
+
+    /// Create a custom transcription provider by subclassing.
+    ///
+    /// Override ``transcribe()`` in your subclass to implement a custom
+    /// transcription provider.
+    ///
+    /// Args:
+    ///     provider_id: A provider identifier (e.g. ``"my-stt"``).
+    ///     base_url: Base URL for HTTP-based providers.
+    ///     pricing: Optional pricing information.
+    ///     vram_estimate_bytes: Estimated VRAM footprint in bytes.
+    #[new]
+    #[pyo3(signature = (*, provider_id=None, base_url=None, pricing=None, vram_estimate_bytes=None))]
+    fn new(
+        provider_id: Option<String>,
+        base_url: Option<String>,
+        pricing: Option<PyRef<'_, crate::types::pricing::PyModelPricing>>,
+        vram_estimate_bytes: Option<u64>,
+    ) -> Self {
+        Self {
+            inner: None,
+            config: Some(blazen_llm::ProviderConfig {
+                provider_id,
+                base_url,
+                vram_estimate_bytes,
+                pricing: pricing.map(|p| p.inner.clone()),
+                ..Default::default()
+            }),
+        }
+    }
+
     // -----------------------------------------------------------------
     // Provider constructors
     // -----------------------------------------------------------------
@@ -68,10 +105,11 @@ impl PyTranscription {
     fn fal(options: Option<PyRef<'_, PyFalOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::fal::FalProvider::from_options(opts)
                     .map_err(blazen_error_to_pyerr)?,
-            ),
+            )),
+            config: None,
         })
     }
 
@@ -82,7 +120,14 @@ impl PyTranscription {
     /// Get the provider identifier (e.g. "fal", "whispercpp").
     #[getter]
     fn provider_id(&self) -> String {
-        blazen_llm::compute::ComputeProvider::provider_id(self.inner.as_ref()).to_owned()
+        if let Some(ref inner) = self.inner {
+            blazen_llm::compute::ComputeProvider::provider_id(inner.as_ref()).to_owned()
+        } else {
+            self.config
+                .as_ref()
+                .and_then(|c| c.provider_id.clone())
+                .unwrap_or_default()
+        }
     }
 
     // -----------------------------------------------------------------
@@ -110,21 +155,24 @@ impl PyTranscription {
         py: Python<'py>,
         request: PyTranscriptionRequest,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_req = request.inner;
-        let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = Transcription::transcribe(inner.as_ref(), rust_req)
-                .await
-                .map_err(blazen_error_to_pyerr)?;
-            Ok(PyTranscriptionResult { inner: result })
-        })
+        if let Some(ref inner) = self.inner {
+            let rust_req = request.inner;
+            let inner = inner.clone();
+            pyo3_async_runtimes::tokio::future_into_py(py, async move {
+                let result = Transcription::transcribe(inner.as_ref(), rust_req)
+                    .await
+                    .map_err(blazen_error_to_pyerr)?;
+                Ok(PyTranscriptionResult { inner: result })
+            })
+        } else {
+            Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "subclass must override transcribe()",
+            ))
+        }
     }
 
     fn __repr__(&self) -> String {
-        format!(
-            "Transcription(provider_id='{}')",
-            blazen_llm::compute::ComputeProvider::provider_id(self.inner.as_ref())
-        )
+        format!("Transcription(provider_id='{}')", self.provider_id())
     }
 }
 
@@ -166,7 +214,8 @@ impl PyTranscription {
             crate::convert::block_on_context(blazen_llm::WhisperCppProvider::from_options(opts))
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Some(Arc::new(provider)),
+            config: None,
         })
     }
 }

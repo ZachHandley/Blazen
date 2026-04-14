@@ -1,0 +1,15 @@
+[package]
+name = "blazen-manager"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+blazen-llm.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+async-trait.workspace = true
+
+[lints]
+workspace = true

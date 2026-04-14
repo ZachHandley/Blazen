@@ -660,11 +660,18 @@ fn build_completion_request(
         if let Some(ref m) = opts.model {
             request = request.with_model(m.clone());
         }
-        if let Some(ref tools_py) = opts.tools {
-            let tools_bound = tools_py.bind(py);
-            let tools_list: &Bound<'_, pyo3::types::PyList> = tools_bound.cast()?;
-            let tool_vec: Vec<Bound<'_, PyAny>> = tools_list.iter().collect();
-            let rust_tools = extract_tool_definitions(py, &tool_vec)?;
+        if let Some(ref tools) = opts.tools {
+            let rust_tools: Vec<ToolDefinition> = tools
+                .iter()
+                .map(|t| {
+                    let tool = t.borrow(py);
+                    ToolDefinition {
+                        name: tool.name.clone(),
+                        description: tool.description.clone(),
+                        parameters: tool.parameters.clone(),
+                    }
+                })
+                .collect();
             request = request.with_tools(rust_tools);
         }
         if let Some(ref fmt) = opts.response_format {
@@ -674,25 +681,6 @@ fn build_completion_request(
     }
 
     Ok(request)
-}
-
-/// Extract a list of [`ToolDefinition`] from Python dicts (or dict-like objects).
-fn extract_tool_definitions(
-    py: Python<'_>,
-    tool_list: &[Bound<'_, PyAny>],
-) -> PyResult<Vec<ToolDefinition>> {
-    let mut rust_tools = Vec::with_capacity(tool_list.len());
-    for tool in tool_list {
-        let name: String = tool.get_item("name")?.extract()?;
-        let description: String = tool.get_item("description")?.extract()?;
-        let parameters = crate::convert::py_to_json(py, &tool.get_item("parameters")?)?;
-        rust_tools.push(ToolDefinition {
-            name,
-            description,
-            parameters,
-        });
-    }
-    Ok(rust_tools)
 }
 
 // ---------------------------------------------------------------------------

@@ -72,6 +72,10 @@ pub mod xai;
 /// `with_base_url` (the OpenAI-compatible wrappers).
 macro_rules! impl_simple_from_options {
     ($provider:ty, $name:expr) => {
+        #[cfg(any(
+            all(target_arch = "wasm32", not(target_os = "wasi")),
+            feature = "reqwest"
+        ))]
         impl $provider {
             /// Construct from typed [`ProviderOptions`](crate::types::provider_options::ProviderOptions).
             ///
@@ -83,7 +87,7 @@ macro_rules! impl_simple_from_options {
                 opts: $crate::types::provider_options::ProviderOptions,
             ) -> Result<Self, $crate::BlazenError> {
                 let api_key = $crate::keys::resolve_api_key($name, opts.api_key)?;
-                let mut p = Self::new(api_key);
+                let mut p = Self::new_with_client(api_key, $crate::default_http_client());
                 if let Some(m) = opts.model {
                     p = p.with_model(m);
                 }
@@ -95,6 +99,10 @@ macro_rules! impl_simple_from_options {
         }
     };
     ($provider:ty, $name:expr, no_base_url) => {
+        #[cfg(any(
+            all(target_arch = "wasm32", not(target_os = "wasi")),
+            feature = "reqwest"
+        ))]
         impl $provider {
             /// Construct from typed [`ProviderOptions`](crate::types::provider_options::ProviderOptions).
             ///
@@ -108,7 +116,7 @@ macro_rules! impl_simple_from_options {
                 opts: $crate::types::provider_options::ProviderOptions,
             ) -> Result<Self, $crate::BlazenError> {
                 let api_key = $crate::keys::resolve_api_key($name, opts.api_key)?;
-                let mut p = Self::new(api_key);
+                let mut p = Self::new_with_client(api_key, $crate::default_http_client());
                 if let Some(m) = opts.model {
                     p = p.with_model(m);
                 }

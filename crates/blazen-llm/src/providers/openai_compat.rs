@@ -853,6 +853,10 @@ const EMBEDDING_DEFAULTS: &[(&str, &str, &str, usize)] = &[
     ),
 ];
 
+#[cfg(any(
+    all(target_arch = "wasm32", not(target_os = "wasi")),
+    feature = "reqwest"
+))]
 impl OpenAiCompatEmbeddingModel {
     /// Construct an embedding model for a known provider from
     /// [`ProviderOptions`](crate::types::provider_options::ProviderOptions).
@@ -880,7 +884,7 @@ impl OpenAiCompatEmbeddingModel {
         let base_url = opts.base_url.unwrap_or_else(|| (*default_url).to_owned());
         let model = opts.model.unwrap_or_else(|| (*default_model).to_owned());
 
-        Ok(Self::new(
+        Ok(Self::new_with_client(
             OpenAiCompatConfig {
                 provider_name: provider.into(),
                 base_url,
@@ -893,6 +897,7 @@ impl OpenAiCompatEmbeddingModel {
             },
             model,
             *default_dims,
+            crate::default_http_client(),
         ))
     }
 }

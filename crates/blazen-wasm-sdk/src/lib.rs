@@ -22,13 +22,16 @@
 
 pub mod agent;
 pub mod batch;
+pub mod capability_providers;
 pub mod chat_message;
 pub mod completion_model;
 pub mod context;
 pub mod embedding;
 pub mod js_completion;
 pub mod js_embedding;
+pub mod manager;
 pub mod memory;
+pub mod pricing;
 pub mod tokens;
 pub mod types;
 pub mod workflow;

@@ -142,3 +142,278 @@ async def setup(ctx: Context, ev: StartEvent):
 ```sh
 python examples/stateful_workflow.py
 ```
+
+---
+
+## Example 7: Subclassing CompletionModel (Custom Provider)
+
+Build a custom provider by subclassing `CompletionModel`. Override `complete()` and/or `stream()` to plug in any backend (local inference, a proxy, a mock, etc.). Once subclassed the model is a first-class citizen -- it works with `run_agent`, `with_retry()`, `with_cache()`, and every other helper.
+
+```python
+import asyncio
+
+from blazen import ChatMessage, CompletionModel, run_agent
+
+
+class EchoLLM(CompletionModel):
+    """A toy provider that echoes the last user message back."""
+
+    def __init__(self):
+        super().__init__(model_id="echo-llm", context_length=4096)
+
+    async def complete(self, messages, options=None):
+        last = next(
+            (m.content for m in reversed(messages) if m.role == "user"), ""
+        )
+        # Return a dict -- the dispatcher depythonizes into CompletionResponse.
+        # Only `content` and `model` are required; every other field defaults.
+        return {"content": f"echo: {last}", "model": self.model_id}
+
+
+async def main():
+    model = EchoLLM()
+
+    # Works with run_agent just like any built-in provider.
+    result = await run_agent(
+        model,
+        [ChatMessage.user("hello world")],
+        tools=[],
+    )
+    print(result.response.content)  # -> "echo: hello world"
+
+
+asyncio.run(main())
+```
+
+```sh
+python examples/subclass_completion_model.py
+```
+
+---
+
+## Example 8: Custom MemoryBackend (DictBackend)
+
+Subclass `MemoryBackend` to plug in any storage layer -- Postgres, DynamoDB, SQLite, a plain dict. Every async method is dispatched from Rust back into Python, so you get full control while reusing Blazen's embedding and SimHash search pipeline.
+
+```python
+import asyncio
+
+from blazen import EmbeddingModel, Memory, MemoryBackend
+
+
+class DictBackend(MemoryBackend):
+    """In-process dict backed memory backend."""
+
+    def __init__(self):
+        super().__init__()
+        self._store: dict[str, dict] = {}
+
+    async def put(self, entry):
+        self._store[entry["id"]] = entry
+
+    async def get(self, entry_id):
+        return self._store.get(entry_id)
+
+    async def delete(self, entry_id):
+        return self._store.pop(entry_id, None) is not None
+
+    async def list(self):
+        return list(self._store.values())
+
+    async def len(self):
+        return len(self._store)
+
+    async def search_by_bands(self, bands, limit):
+        # Return any entry that shares at least one LSH band with the query.
+        band_set = set(bands)
+        hits = [
+            e for e in self._store.values()
+            if band_set.intersection(e.get("bands", []))
+        ]
+        return hits[:limit]
+
+
+async def main():
+    embedder = EmbeddingModel.fastembed()
+    memory = Memory(embedder, DictBackend())
+
+    await memory.add("fact-1", "Rust has ownership and borrowing.")
+    await memory.add("fact-2", "Python uses reference counting.")
+
+    results = await memory.search("memory management", limit=2)
+    for r in results:
+        print(r.score, r.text)
+
+
+asyncio.run(main())
+```
+
+```sh
+python examples/custom_memory_backend.py
+```
+
+---
+
+## Example 9: ModelManager with VRAM Budget
+
+Track VRAM across multiple local models. Register each model with an estimated footprint; when loading a new one would exceed the budget, the least-recently-used model is automatically unloaded.
+
+```python
+import asyncio
+
+from blazen import CompletionModel, MistralRsOptions, ModelManager
+
+
+async def main():
+    # 24 GB budget (GPU-typical for a consumer card).
+    manager = ModelManager(budget_gb=24)
+
+    llama_8b = CompletionModel.mistralrs(
+        options=MistralRsOptions("meta-llama/Llama-3.1-8B-Instruct"),
+    )
+    qwen_14b = CompletionModel.mistralrs(
+        options=MistralRsOptions("Qwen/Qwen2.5-14B-Instruct"),
+    )
+    mistral_24b = CompletionModel.mistralrs(
+        options=MistralRsOptions("mistralai/Mistral-Small-24B"),
+    )
+
+    await manager.register("llama-8b", llama_8b, vram_estimate_bytes=8 * 1024**3)
+    await manager.register("qwen-14b", qwen_14b, vram_estimate_bytes=14 * 1024**3)
+    await manager.register("mistral-24b", mistral_24b, vram_estimate_bytes=20 * 1024**3)
+
+    # Fits alongside qwen-14b (8 + 14 = 22 GB).
+    await manager.load("llama-8b")
+    await manager.load("qwen-14b")
+
+    # 20 GB does not fit next to 8 + 14 = 22 GB -- LRU (llama-8b) is evicted.
+    await manager.load("mistral-24b")
+
+    for s in await manager.status():
+        print(f"{s.id}: loaded={s.loaded}, vram={s.vram_estimate:,} bytes")
+
+
+asyncio.run(main())
+```
+
+```sh
+python examples/model_manager_budget.py
+```
+
+---
+
+## Example 10: Pricing Registration and Cost Tracking
+
+Register pricing for any model ID (your own model, a local finetune, a custom deployment). Every `CompletionResponse` then carries a `.cost` field computed from the registered rate.
+
+```python
+import asyncio
+
+from blazen import (
+    ChatMessage,
+    CompletionModel,
+    ModelPricing,
+    lookup_pricing,
+    register_pricing,
+)
+
+
+class MyFinetune(CompletionModel):
+    """A stand-in for a custom deployment that reports its usage."""
+
+    def __init__(self):
+        super().__init__(model_id="my-finetuned-model")
+
+    async def complete(self, messages, options=None):
+        return {
+            "content": "Rust is a systems language with memory safety without GC.",
+            "model": self.model_id,
+            "tool_calls": [],
+            "citations": [],
+            "artifacts": [],
+            "images": [],
+            "audio": [],
+            "videos": [],
+            "usage": {
+                "prompt_tokens": 150,
+                "completion_tokens": 80,
+                "total_tokens": 230,
+            },
+            "metadata": {},
+        }
+
+
+async def main():
+    # Register pricing once, globally, for any model ID.
+    register_pricing(
+        "my-finetuned-model",
+        ModelPricing(input_per_million=1.0, output_per_million=2.0),
+    )
+
+    # Readback -- pricing is centrally stored.
+    pricing = lookup_pricing("my-finetuned-model")
+    assert pricing is not None
+    print(f"input: ${pricing.input_per_million}/M, output: ${pricing.output_per_million}/M")
+
+    model = MyFinetune()
+    response = await model.complete([ChatMessage.user("Summarize Rust in one line.")])
+    print(response.content)
+    print(f"usage: {response.usage}")
+    # cost is computed from the registered pricing + usage.
+    print(f"cost: ${response.cost:.6f}")
+
+
+asyncio.run(main())
+```
+
+```sh
+python examples/pricing_and_cost.py
+```
+
+---
+
+## Example 11: Per-Capability Provider (Custom TTS)
+
+Subclass `TTSProvider` to plug in any TTS backend (ElevenLabs, Coqui, a local model). The per-capability base classes (`TTSProvider`, `ImageProvider`, `VideoProvider`, `MusicProvider`, `ThreeDProvider`, `BackgroundRemovalProvider`, `VoiceProvider`) exist for users who only need to implement one capability.
+
+```python
+import asyncio
+
+from blazen import TTSProvider, SpeechRequest
+
+
+class MyElevenLabs(TTSProvider):
+    """A minimal custom TTS provider."""
+
+    def __init__(self, api_key: str):
+        super().__init__(
+            provider_id="elevenlabs",
+            base_url="https://api.elevenlabs.io/v1",
+        )
+        self._api_key = api_key
+
+    async def text_to_speech(self, request):
+        # In a real implementation, make an HTTP call with self._api_key
+        # and return audio bytes. Here we just echo the request.
+        return {
+            "audio_data": b"<wav-bytes>",
+            "format": "wav",
+            "voice": request.voice,
+            "text": request.text,
+        }
+
+
+async def main():
+    tts = MyElevenLabs(api_key="sk-...")
+    result = await tts.text_to_speech(
+        SpeechRequest(text="Hello from Blazen!", voice="alice")
+    )
+    print(result["format"], len(result["audio_data"]), "bytes")
+
+
+asyncio.run(main())
+```
+
+```sh
+python examples/custom_tts_provider.py
+```

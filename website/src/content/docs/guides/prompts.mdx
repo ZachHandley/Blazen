@@ -1,0 +1,141 @@
+---
+title: "Prompt Templates"
+description: "Reusable prompt templates with variable interpolation and a registry"
+section: "guides"
+order: 23
+---
+
+Blazen ships a lightweight prompt templating layer for reusing system prompts and user-message scaffolds across steps, agents, and workflows. Templates use `{{variable}}` placeholders, carry a chat role, and render into `ChatMessage` objects that plug straight into `CompletionModel.complete()`.
+
+## Overview
+
+- **`PromptTemplate`** -- a named template with a role (`system` / `user` / `assistant`), a template string, and the set of variables it needs.
+- **`PromptRegistry`** -- a versioned collection of templates loadable from YAML or JSON files and indexed by name.
+
+## Basic usage
+
+```python
+from blazen import PromptTemplate, ChatMessage
+
+template = PromptTemplate(
+    "Summarise the following {{doc_type}} in {{style}} style.",
+    role="system",
+    name="summariser",
+)
+
+message = template.render({"doc_type": "article", "style": "concise"})
+print(message.content)
+# -> "Summarise the following article in concise style."
+```
+
+```typescript
+import { PromptTemplate } from "blazen";
+
+const template = new PromptTemplate(
+  "Summarise the following {{doc_type}} in {{style}} style.",
+  { role: "system", name: "summariser" },
+);
+
+const msg = template.render({ doc_type: "article", style: "concise" });
+console.log(msg.content);
+```
+
+Pass the rendered `ChatMessage` straight into the model:
+
+```python
+from blazen import CompletionModel, ChatMessage
+
+model = CompletionModel.openai()
+response = await model.complete([
+    template.render({"doc_type": "article", "style": "concise"}),
+    ChatMessage.user(document_text),
+])
+```
+
+## Registering templates
+
+A `PromptRegistry` indexes named templates and supports version pinning. Use it when your application has more than a handful of prompts or when prompts are maintained by a separate team.
+
+```python
+from blazen import PromptRegistry, PromptTemplate
+
+registry = PromptRegistry()
+registry.register("summariser", PromptTemplate(
+    "Summarise the following {{doc_type}}.",
+    role="system",
+))
+registry.register("translator", PromptTemplate(
+    "Translate the following text into {{lang}}.",
+    role="system",
+))
+
+msg = registry.render("summariser", {"doc_type": "meeting transcript"})
+```
+
+```typescript
+import { PromptRegistry, PromptTemplate } from "blazen";
+
+const registry = new PromptRegistry();
+registry.register(
+  "summariser",
+  new PromptTemplate("Summarise the following {{doc_type}}.", { role: "system" }),
+);
+registry.register(
+  "translator",
+  new PromptTemplate("Translate the following text into {{lang}}.", { role: "system" }),
+);
+
+const msg = registry.render("summariser", { doc_type: "meeting transcript" });
+```
+
+## Loading from disk
+
+YAML (or JSON) files let you keep prompts out of the codebase:
+
+```yaml
+# prompts/summariser.yaml
+name: summariser
+version: "2"
+role: system
+template: |
+  Summarise the following {{doc_type}} in {{style}} style.
+  Limit your response to {{max_words}} words.
+```
+
+```python
+from blazen import PromptRegistry
+
+registry = PromptRegistry.from_file("prompts/summariser.yaml")
+# Or load every .yaml/.yml/.json file in a directory:
+registry = PromptRegistry.from_dir("prompts")
+```
+
+```typescript
+const registry = PromptRegistry.fromFile("prompts/summariser.yaml");
+// Or:
+const dirRegistry = PromptRegistry.fromDir("prompts");
+```
+
+## Variables
+
+Templates extract variable names eagerly at construction time, so you can inspect them and validate inputs up-front:
+
+```python
+tmpl = PromptTemplate("Hello {{name}}, welcome to {{place}}!")
+tmpl.variables
+# -> ["name", "place"]
+```
+
+```typescript
+const tmpl = new PromptTemplate("Hello {{name}}, welcome to {{place}}!");
+console.log(tmpl.variables);
+// -> ["name", "place"]
+```
+
+Rendering fails loudly if a required variable is missing, so typos surface at runtime rather than producing malformed prompts.
+
+## See also
+
+- [Chat Window](/guides/chat-window/) -- token-limited conversation history that pairs naturally with rendered system prompts
+- [Custom Providers](/guides/custom-providers/) -- bring your own completion model while still using the registry
+- [Batch Completions](/guides/batch-processing/) -- fan rendered prompts across many models in parallel

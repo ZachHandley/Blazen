@@ -70,6 +70,14 @@ pub trait CompletionModel: Send + Sync {
         &self,
         request: CompletionRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>;
+
+    /// Optional configuration metadata for this provider.
+    ///
+    /// Custom providers return their stored config; built-in providers may
+    /// return `None` (the default) or construct one from internal state.
+    fn provider_config(&self) -> Option<&ProviderConfig> {
+        None
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -144,6 +152,11 @@ pub trait EmbeddingModel: Send + Sync {
 
     /// Embed one or more texts, returning one vector per input text.
     async fn embed(&self, texts: &[String]) -> Result<EmbeddingResponse, BlazenError>;
+
+    /// Optional configuration metadata for this provider.
+    fn provider_config(&self) -> Option<&ProviderConfig> {
+        None
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -266,6 +279,35 @@ pub struct ProviderCapabilities {
     pub model_listing: bool,
     /// Whether the provider supports embeddings.
     pub embeddings: bool,
+}
+
+/// Configuration metadata for a provider instance.
+///
+/// Carries identity, endpoint, pricing, and resource information that
+/// custom providers set at construction time. Built-in providers populate
+/// this from their own internal state.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct ProviderConfig {
+    /// A human-readable name for this provider instance.
+    pub name: Option<String>,
+    /// The model identifier (e.g. `"my-org/llama-3-8b"`).
+    pub model_id: Option<String>,
+    /// A provider identifier (e.g. `"elevenlabs"`, `"fal"`).
+    pub provider_id: Option<String>,
+    /// Base URL for HTTP-based providers.
+    pub base_url: Option<String>,
+    /// Context window size in tokens.
+    pub context_length: Option<u64>,
+    /// Maximum output tokens the model supports.
+    pub max_output_tokens: Option<u64>,
+    /// Estimated VRAM footprint in bytes when loaded.
+    pub vram_estimate_bytes: Option<u64>,
+    /// Pricing information for automatic cost tracking.
+    pub pricing: Option<ModelPricing>,
+    /// Capability flags.
+    pub capabilities: Option<ModelCapabilities>,
 }
 
 /// Information about a provider's identity, endpoint, and capabilities.

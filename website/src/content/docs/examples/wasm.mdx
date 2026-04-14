@@ -217,3 +217,200 @@ async function handleSend() {
 ```
 
 The WASM binary runs inside the webview's JavaScript context. No Tauri command bridge is needed for AI calls -- only for filesystem or OS-level operations.
+
+---
+
+## Custom CompletionModel via `fromJsHandler`
+
+WASM classes cannot be subclassed the way Python or Node classes can -- `wasm-bindgen` forbids it. Instead, the SDK exposes factory methods that accept JS handler functions. `CompletionModel.fromJsHandler` is the WASM equivalent of subclassing.
+
+```typescript
+import init, {
+  ChatMessage,
+  CompletionModel,
+  runAgent,
+} from "@blazen/sdk";
+
+await init();
+
+// Build a custom model by passing a complete handler (and optionally a stream handler).
+const model = CompletionModel.fromJsHandler(
+  "echo-llm",
+  async (request) => {
+    // request has the same shape as CompletionRequest.
+    const last = [...request.messages].reverse().find((m: any) => m.role === "user");
+    return {
+      content: `echo: ${last?.content ?? ""}`,
+      toolCalls: [],
+      citations: [],
+      artifacts: [],
+      images: [],
+      audio: [],
+      videos: [],
+      model: "echo-llm",
+      metadata: {},
+    };
+  },
+  // Optional stream handler -- fires the onChunk callback with StreamChunk-shaped objects.
+  async (request, onChunk) => {
+    const last = [...request.messages].reverse().find((m: any) => m.role === "user");
+    for (const word of `echo: ${last?.content ?? ""}`.split(" ")) {
+      onChunk({ delta: word + " " });
+    }
+  },
+  // Config object -- everything optional. Pricing auto-registers into the global registry.
+  {
+    contextLength: 4096,
+    maxOutputTokens: 2048,
+    pricing: { inputPerMillion: 0.0, outputPerMillion: 0.0 },
+  },
+);
+
+const result = await runAgent(
+  model,
+  [ChatMessage.user("hello world")],
+  [],      // tools -- each item has { name, description, parameters, handler }
+  {},      // options: { toolConcurrency?, maxIterations?, systemPrompt?, ... }
+);
+console.log(result.content); // -> "echo: hello world"
+```
+
+---
+
+## Custom TTSProvider via Handler
+
+Per-capability providers (`TTSProvider`, `ImageProvider`, `VideoProvider`, `MusicProvider`, `ThreeDProvider`, `BackgroundRemovalProvider`, `VoiceProvider`) follow the same handler pattern -- pass your async function to the constructor.
+
+```typescript
+import init, { TTSProvider } from "@blazen/sdk";
+
+await init();
+
+// TTSProvider takes a providerId and a single async handler.
+const tts = new TTSProvider("elevenlabs", async (request) => {
+  // request: { text, voice, voiceUrl?, language?, speed?, model?, parameters? }
+  // Replace with a real HTTP call to your TTS backend.
+  const audio = new Uint8Array([0, 1, 2]);
+  return {
+    audioData: audio,
+    format: "wav",
+    voice: request.voice,
+    text: request.text,
+  };
+});
+
+const result = await tts.textToSpeech({
+  text: "Hello from Blazen!",
+  voice: "alice",
+});
+console.log(result.format, result.audioData.length, "bytes");
+```
+
+For multi-method providers (e.g. `MusicProvider`), the constructor accepts an object of named handlers:
+
+```typescript
+import init, { MusicProvider } from "@blazen/sdk";
+
+await init();
+
+const music = new MusicProvider("local-musicgen", {
+  generateMusic: async (request) => {
+    return { audioData: new Uint8Array(), format: "wav" };
+  },
+  generateSfx: async (request) => {
+    return { audioData: new Uint8Array(), format: "wav" };
+  },
+});
+```
+
+---
+
+## ModelManager (WASM)
+
+The WASM `ModelManager` tracks VRAM across registered models and evicts the least-recently-used one when the budget would be exceeded. Because WASM classes cannot be subclassed, the manager takes an explicit `lifecycle` object with `load()` and `unload()` async methods.
+
+```typescript
+import init, { CompletionModel, ModelManager } from "@blazen/sdk";
+
+await init();
+
+// 8 GB VRAM budget (conservative for a laptop GPU).
+const manager = new ModelManager(8);
+
+// Construct models backed by @mlc-ai/web-llm (lazy-loaded at complete-time).
+const llama = CompletionModel.webLlm("Llama-3.1-8B-Instruct-q4f32_1-MLC");
+const qwen = CompletionModel.webLlm("Qwen2.5-7B-Instruct-q4f32_1-MLC");
+
+// Each model registers with a lifecycle object. In a real app, this
+// calls into the WebLLM engine to load/unload GPU resources.
+manager.register("llama-8b", llama, 4_500_000_000, {
+  load: async () => { console.log("loading llama..."); },
+  unload: async () => { console.log("unloading llama..."); },
+});
+manager.register("qwen-7b", qwen, 4_200_000_000, {
+  load: async () => { console.log("loading qwen..."); },
+  unload: async () => { console.log("unloading qwen..."); },
+});
+
+await manager.load("llama-8b");
+await manager.load("qwen-7b"); // evicts llama-8b (4.5 + 4.2 > 8 GB budget)
+
+for (const s of manager.status()) {
+  console.log(`${s.id}: loaded=${s.loaded}, vram=${s.vramEstimate}`);
+}
+console.log(`used=${manager.usedBytes}, available=${manager.availableBytes}`);
+```
+
+---
+
+## Pricing Registration and Cost Tracking (WASM)
+
+`registerPricing` attaches USD-per-million-token rates to any model ID. Completions produced with that model ID then carry a computed `cost` field.
+
+```typescript
+import init, {
+  ChatMessage,
+  CompletionModel,
+  computeCost,
+  lookupPricing,
+  registerPricing,
+} from "@blazen/sdk";
+
+await init();
+
+// Register pricing once, globally.
+registerPricing("my-finetuned-model", 1.0, 2.0); // $1/M input, $2/M output
+
+// Lookup
+const p = lookupPricing("my-finetuned-model");
+if (p) {
+  console.log(`input: $${p.inputPerMillion}/M, output: $${p.outputPerMillion}/M`);
+}
+
+// Compute a cost directly from token counts.
+const cost = computeCost("my-finetuned-model", 1500, 800);
+console.log(`estimated cost: $${cost?.toFixed(6)}`);
+
+// Or route through any model that emits the same modelId -- for example, a
+// custom handler that tags its responses with "my-finetuned-model".
+const model = CompletionModel.fromJsHandler(
+  "my-finetuned-model",
+  async (_request) => ({
+    content: "…",
+    toolCalls: [],
+    citations: [],
+    artifacts: [],
+    images: [],
+    audio: [],
+    videos: [],
+    model: "my-finetuned-model",
+    usage: { promptTokens: 1500, completionTokens: 800, totalTokens: 2300 },
+    metadata: {},
+  }),
+  undefined,
+  {},
+);
+
+const response = await model.complete([ChatMessage.user("hi")]);
+console.log(`cost: $${response.cost?.toFixed(6)}`); // populated from the global registry
+```

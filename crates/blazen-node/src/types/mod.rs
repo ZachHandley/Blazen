@@ -9,6 +9,7 @@ pub mod finish_reason;
 pub mod media;
 pub mod memory;
 pub mod message;
+pub mod pricing;
 pub mod prompts;
 pub mod reasoning;
 pub mod response_format;
@@ -32,12 +33,13 @@ pub use embedding::{JsEmbeddingModel, JsEmbeddingResponse};
 pub use finish_reason::JsFinishReason;
 pub use media::{Generated3DModel, GeneratedAudio, GeneratedImage, GeneratedVideo, MediaOutput};
 pub use memory::{
-    JsAddEntry, JsInMemoryBackend, JsJsonlBackend, JsMemory, JsMemoryEntry, JsMemoryResult,
-    JsValkeyBackend,
+    JsAddEntry, JsInMemoryBackend, JsJsonlBackend, JsMemory, JsMemoryBackend, JsMemoryEntry,
+    JsMemoryResult, JsValkeyBackend,
 };
 pub use message::{
     ChatMessageOptions, JsChatMessage, JsContentPart, JsImageContent, JsImageSource, JsRole,
 };
+pub use pricing::{JsModelPricing, lookup_pricing, register_pricing};
 pub use prompts::{JsPromptRegistry, JsPromptTemplate};
 pub use reasoning::JsReasoningTrace;
 pub use response_format::JsResponseFormat;

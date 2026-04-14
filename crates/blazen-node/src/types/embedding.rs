@@ -73,6 +73,31 @@ pub struct JsEmbeddingResponse {
 // EmbeddingModel wrapper
 // ---------------------------------------------------------------------------
 
+/// Configuration for subclassed `EmbeddingModel` instances.
+///
+/// When extending `EmbeddingModel` from JavaScript/TypeScript, pass this
+/// to `super()` so the base class can report `modelId` and other metadata
+/// without a concrete provider.
+///
+/// ```javascript
+/// class MyEmbedder extends EmbeddingModel {
+///   constructor() {
+///     super({ modelId: "my-custom-embedder", dimensions: 768 });
+///   }
+/// }
+/// ```
+#[napi(object)]
+pub struct EmbeddingModelConfig {
+    /// Model identifier (e.g. `"my-org/custom-embedder"`).
+    #[napi(js_name = "modelId")]
+    pub model_id: Option<String>,
+    /// The dimensionality of vectors produced by this model.
+    pub dimensions: Option<u32>,
+    /// Base URL for HTTP-based providers.
+    #[napi(js_name = "baseUrl")]
+    pub base_url: Option<String>,
+}
+
 /// An embedding model that produces vector representations of text.
 ///
 /// Use the static factory methods to create an instance for your provider:
@@ -82,21 +107,76 @@ pub struct JsEmbeddingResponse {
 /// const response = await model.embed(["Hello", "World"]);
 /// console.log(response.embeddings); // [[0.1, ...], [0.3, ...]]
 /// ```
+///
+/// Or extend the class to implement a custom provider:
+///
+/// ```javascript
+/// class MyEmbedder extends EmbeddingModel {
+///   constructor() {
+///     super({ modelId: "my-custom-embedder", dimensions: 768 });
+///   }
+///   async embed(texts) { /* ... */ }
+/// }
+/// ```
 #[napi(js_name = "EmbeddingModel")]
 pub struct JsEmbeddingModel {
-    inner: Arc<dyn EmbeddingModel>,
+    /// The underlying Rust `EmbeddingModel` implementation.
+    /// `None` when the instance was constructed by a JavaScript subclass
+    /// (via `new EmbeddingModel(config)` / `super(config)`).
+    inner: Option<Arc<dyn EmbeddingModel>>,
+    /// Provider configuration metadata, used by subclassed instances to
+    /// report `modelId` and other properties without a concrete inner
+    /// provider.
+    config: Option<blazen_llm::ProviderConfig>,
+    /// Dimensions override from the subclass config.
+    dimensions_override: Option<usize>,
 }
 
 impl JsEmbeddingModel {
     /// Access the inner embedding model (used by memory bindings).
-    pub(crate) fn inner_arc(&self) -> Arc<dyn EmbeddingModel> {
-        Arc::clone(&self.inner)
+    ///
+    /// Returns `None` for subclassed instances that have no concrete
+    /// Rust provider.
+    pub(crate) fn inner_arc(&self) -> Option<Arc<dyn EmbeddingModel>> {
+        self.inner.as_ref().map(Arc::clone)
     }
 }
 
 #[napi]
 #[allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 impl JsEmbeddingModel {
+    // -----------------------------------------------------------------
+    // Constructor (for JavaScript subclasses)
+    // -----------------------------------------------------------------
+
+    /// Construct a base `EmbeddingModel`.
+    ///
+    /// Called by JavaScript subclasses via `super(config)`. The `config`
+    /// parameter is optional and carries metadata such as `modelId` and
+    /// `dimensions`.
+    ///
+    /// Instances created this way have no inner Rust provider -- calling
+    /// `embed()` without overriding it in the subclass will throw.
+    #[napi(constructor)]
+    pub fn new(config: Option<EmbeddingModelConfig>) -> Self {
+        let (provider_config, dims) = match config {
+            Some(c) => (
+                Some(blazen_llm::ProviderConfig {
+                    model_id: c.model_id,
+                    base_url: c.base_url,
+                    ..Default::default()
+                }),
+                c.dimensions.map(|d| d as usize),
+            ),
+            None => (None, None),
+        };
+        Self {
+            inner: None,
+            config: provider_config,
+            dimensions_override: dims,
+        }
+    }
+
     // -----------------------------------------------------------------
     // Provider factory methods
     // -----------------------------------------------------------------
@@ -109,9 +189,11 @@ impl JsEmbeddingModel {
         let api_key = blazen_llm::keys::resolve_api_key("openai", options.and_then(|o| o.api_key))
             .map_err(blazen_error_to_napi)?;
         Ok(Self {
-            inner: Arc::new(blazen_llm::providers::openai::OpenAiEmbeddingModel::new(
-                api_key,
+            inner: Some(Arc::new(
+                blazen_llm::providers::openai::OpenAiEmbeddingModel::new(api_key),
             )),
+            config: None,
+            dimensions_override: None,
         })
     }
 
@@ -122,10 +204,12 @@ impl JsEmbeddingModel {
     pub fn together(options: Option<JsProviderOptions>) -> Result<Self> {
         let opts = options.map(Into::into).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::embedding_from_options("together", opts)
                     .map_err(blazen_error_to_napi)?,
-            ),
+            )),
+            config: None,
+            dimensions_override: None,
         })
     }
 
@@ -136,10 +220,12 @@ impl JsEmbeddingModel {
     pub fn cohere(options: Option<JsProviderOptions>) -> Result<Self> {
         let opts = options.map(Into::into).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::embedding_from_options("cohere", opts)
                     .map_err(blazen_error_to_napi)?,
-            ),
+            )),
+            config: None,
+            dimensions_override: None,
         })
     }
 
@@ -150,10 +236,12 @@ impl JsEmbeddingModel {
     pub fn fireworks(options: Option<JsProviderOptions>) -> Result<Self> {
         let opts = options.map(Into::into).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::embedding_from_options("fireworks", opts)
                     .map_err(blazen_error_to_napi)?,
-            ),
+            )),
+            config: None,
+            dimensions_override: None,
         })
     }
 
@@ -164,15 +252,24 @@ impl JsEmbeddingModel {
     /// The model identifier.
     #[napi(js_name = "modelId", getter)]
     pub fn model_id(&self) -> String {
-        self.inner.model_id().to_owned()
+        if let Some(ref inner) = self.inner {
+            inner.model_id().to_owned()
+        } else {
+            self.config
+                .as_ref()
+                .and_then(|c| c.model_id.clone())
+                .unwrap_or_default()
+        }
     }
 
     /// The dimensionality of the embedding vectors produced by this model.
     #[napi(getter)]
     pub fn dimensions(&self) -> u32 {
         #[allow(clippy::cast_possible_truncation)]
-        {
-            self.inner.dimensions() as u32
+        if let Some(ref inner) = self.inner {
+            inner.dimensions() as u32
+        } else {
+            self.dimensions_override.unwrap_or(0) as u32
         }
     }
 
@@ -183,7 +280,13 @@ impl JsEmbeddingModel {
     /// Embed one or more texts, returning one vector per input text.
     #[napi]
     pub async fn embed(&self, texts: Vec<String>) -> Result<JsEmbeddingResponse> {
-        let response = self.inner.embed(&texts).await.map_err(llm_error_to_napi)?;
+        let inner = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| napi::Error::from_reason("subclass must override embed()"))?
+            .clone();
+
+        let response = inner.embed(&texts).await.map_err(llm_error_to_napi)?;
 
         Ok(JsEmbeddingResponse {
             // napi does not support Vec<Vec<f32>>; convert to f64 for JS.
@@ -222,7 +325,9 @@ impl JsEmbeddingModel {
         let opts = options.map(Into::into).unwrap_or_default();
         let model = blazen_llm::FastEmbedModel::from_options(opts).map_err(to_napi_error)?;
         Ok(Self {
-            inner: Arc::new(model),
+            inner: Some(Arc::new(model)),
+            config: None,
+            dimensions_override: None,
         })
     }
 }

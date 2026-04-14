@@ -1,0 +1,152 @@
+---
+title: "Audio Transcription"
+description: "Convert speech to text with fal.ai or local whisper.cpp"
+section: "guides"
+order: 21
+---
+
+Blazen's `Transcription` provider converts audio into text with optional timestamped segments, language detection, and speaker diarization. Two backends ship out of the box:
+
+- **fal.ai** -- remote Whisper hosted on fal's compute platform. Accepts URL audio sources.
+- **whisper.cpp** -- fully local, offline transcription. Accepts local file paths only.
+
+Both expose the same `Transcription` handle, the same `TranscriptionRequest`, and return the same `TranscriptionResult` shape.
+
+## Overview
+
+`TranscriptionRequest` carries either a URL (`audio_url`) or a local path (via `from_file`). The result bundles the raw text, timestamped segments, and detected language along with the usual `timing` / `cost` / `metadata` block.
+
+## fal.ai (remote)
+
+```python
+from blazen import Transcription, TranscriptionRequest, FalOptions
+
+transcriber = Transcription.fal(options=FalOptions(api_key="fal-..."))
+
+result = await transcriber.transcribe(TranscriptionRequest(
+    audio_url="https://example.com/interview.mp3",
+    language="en",
+    diarize=True,
+))
+
+print(result.text)
+for seg in result.segments:
+    speaker = seg.speaker or "unknown"
+    print(f"[{seg.start_seconds:.2f}-{seg.end_seconds:.2f}] {speaker}: {seg.text}")
+```
+
+```typescript
+import { Transcription } from "blazen";
+
+const transcriber = Transcription.fal({ apiKey: "fal-..." });
+
+const result = await transcriber.transcribe({
+  audioUrl: "https://example.com/interview.mp3",
+  language: "en",
+  diarize: true,
+});
+
+console.log(result.text);
+for (const seg of result.segments) {
+  console.log(`[${seg.startSeconds}-${seg.endSeconds}]`, seg.speaker ?? "unknown", seg.text);
+}
+```
+
+```rust
+use blazen_llm::compute::{Transcription, TranscriptionRequest};
+use blazen_llm::providers::fal::FalProvider;
+
+let fal = FalProvider::new(std::env::var("FAL_KEY")?);
+
+let result = fal
+    .transcribe(
+        TranscriptionRequest::new("https://example.com/interview.mp3")
+            .with_language("en")
+            .with_diarize(true),
+    )
+    .await?;
+
+println!("{}", result.text);
+for seg in &result.segments {
+    println!("[{:.2}-{:.2}] {}", seg.start_seconds, seg.end_seconds, seg.text);
+}
+```
+
+## whisper.cpp (local)
+
+whisper.cpp runs entirely on-device. The first call downloads the GGML model file (32 MB for `Tiny`, up to 3.1 GB for `LargeV3`) into the cache directory and reuses it afterwards. No API key or network access is required for subsequent runs.
+
+Audio input must be **16-bit PCM mono WAV at 16 kHz**. URL sources are not supported -- use `TranscriptionRequest.from_file` with a local path.
+
+```python
+from blazen import Transcription, TranscriptionRequest, WhisperOptions, WhisperModel
+
+transcriber = Transcription.whispercpp(options=WhisperOptions(
+    model=WhisperModel.Base,
+    language="en",
+    cache_dir="/tmp/whisper-models",
+))
+
+result = await transcriber.transcribe(
+    TranscriptionRequest.from_file("/path/to/audio.wav")
+)
+print(result.text)
+```
+
+```typescript
+import { Transcription } from "blazen";
+
+// Node.js currently exposes whisper.cpp via the Rust crate feature flag --
+// see the Rust example below for full control over model size and device.
+const transcriber = Transcription.fal(); // for remote
+```
+
+```rust
+use blazen_audio_whispercpp::{WhisperCppProvider, WhisperOptions, WhisperModel};
+use blazen_llm::compute::{Transcription, TranscriptionRequest};
+
+let provider = WhisperCppProvider::new(
+    WhisperOptions::new()
+        .with_model(WhisperModel::Base)
+        .with_language("en"),
+)?;
+
+let result = provider
+    .transcribe(TranscriptionRequest::from_file("/path/to/audio.wav"))
+    .await?;
+
+println!("{}", result.text);
+```
+
+### Model sizes
+
+| Variant | Parameters | Download size | Relative speed |
+|---|---|---|---|
+| `Tiny` | 39 M | ~32 MB | fastest |
+| `Base` | 74 M | ~74 MB | fast |
+| `Small` | 244 M | ~244 MB | balanced |
+| `Medium` | 769 M | ~769 MB | slower |
+| `LargeV3` | 1550 M | ~3.1 GB | highest quality |
+
+Enable GPU acceleration with the `cuda`, `metal`, or `coreml` feature flags on `blazen-audio-whispercpp` at build time.
+
+## TranscriptionResult shape
+
+| Field | Type | Description |
+|---|---|---|
+| `text` | `str` | Full transcript concatenated from all segments. |
+| `segments` | `list[TranscriptionSegment]` | Timestamped utterances with optional `speaker` labels when diarization is enabled. |
+| `language` | `str \| None` | Detected ISO 639-1 language code. |
+| `timing` | `RequestTiming` | Queue, execution, and total latency breakdown. |
+| `cost` | `float \| None` | USD cost if reported by the provider. |
+| `metadata` | `dict` | Raw provider-specific fields. |
+
+## Custom backends
+
+Subclass `Transcription` (Python/Node) or implement the `Transcription` trait (Rust) to plug in your own provider -- AssemblyAI, Deepgram, a self-hosted Whisper endpoint, etc. See [Custom Providers](/guides/custom-providers/) for the full pattern.
+
+## See also
+
+- [Media Generation](/guides/media-generation/) -- TTS, music, image/video generation via the same provider family
+- [Local Inference](/guides/local-inference/) -- model loading and VRAM management for on-device backends
+- [Custom Providers](/guides/custom-providers/) -- bring your own transcription backend

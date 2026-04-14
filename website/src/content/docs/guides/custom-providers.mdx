@@ -1,0 +1,369 @@
+---
+title: "Custom Providers (Subclassing)"
+description: "Bring your own LLM, embedding, TTS, image, or memory backend to Blazen"
+section: "guides"
+order: 25
+---
+
+Blazen's capability types are subclassable from every SDK. You write an ordinary class that inherits from `CompletionModel`, `EmbeddingModel`, `TTSProvider`, `ImageProvider`, `MemoryBackend`, or any of the other base classes, override the relevant async methods, and Blazen's workflow engine, agents, retry/cache wrappers, `Memory`, and batch helpers consume your class exactly like a built-in.
+
+This is the release's flagship integration point: if an API, a local binary, a gRPC service, or a kernel-level SDK can be reached from Python, Node, or Rust, you can wire it into Blazen as a first-class provider.
+
+## Why subclass instead of wrapping?
+
+A subclassed provider is indistinguishable to Blazen from a built-in one. That unlocks:
+
+- **Workflow step compatibility** -- use your provider with `@step` / `wf.addStep` / `#[step]` without adapter code.
+- **Agent and tool integrations** -- agents, tool-calling loops, and streaming consumers all dispatch through the same trait.
+- **`with_retry`, `with_cache`, `with_fallback`** -- transient-error handling and caching compose on top of any `CompletionModel`, built-in or subclassed (with a few current limitations -- see below).
+- **`Memory` drop-in** -- swap OpenAI embeddings for a self-hosted sentence-transformers endpoint without touching any retrieval code.
+- **Batch execution** -- `complete_batch` / `completeBatch` works with subclassed models.
+
+The alternative -- wrapping your HTTP client inside a workflow step -- forfeits all of the above.
+
+## Available base classes
+
+| Capability | Python base class | Node base class | Key method(s) |
+|---|---|---|---|
+| Chat completion | `CompletionModel` | `CompletionModel` | `complete`, `stream` |
+| Embeddings | `EmbeddingModel` | `EmbeddingModel` | `embed` |
+| Text-to-speech | `TTSProvider` | via `CustomProvider` | `text_to_speech` |
+| Music / SFX | `MusicProvider` | via `CustomProvider` | `generate_music`, `generate_sfx` |
+| Image generation | `ImageProvider` | via `CustomProvider` | `generate_image`, `upscale_image` |
+| Video generation | `VideoProvider` | via `CustomProvider` | `text_to_video`, `image_to_video` |
+| 3D model generation | `ThreeDProvider` | via `CustomProvider` | `generate_3d` |
+| Background removal | `BackgroundRemovalProvider` | via `CustomProvider` | `remove_background` |
+| Transcription | `Transcription` | via `CustomProvider` | `transcribe` |
+| Voice cloning | `VoiceProvider` | via `CustomProvider` | `clone_voice`, `list_voices`, `delete_voice` |
+| Memory backend | `MemoryBackend` | `MemoryBackend` | `put`, `get`, `delete`, `list`, `len`, `search_by_bands` |
+
+Node.js wraps media providers through a single `CustomProvider` class that dispatches to whichever of the standard method names your host object implements -- the capability is inferred from the methods present, not declared upfront.
+
+## Custom completion model
+
+```python
+from blazen import CompletionModel, CompletionResponse, StreamChunk, ChatMessage
+import httpx
+
+class MyLlmProvider(CompletionModel):
+    def __init__(self, api_key: str):
+        super().__init__(model_id="my-model-v1", context_length=8192)
+        self._client = httpx.AsyncClient(
+            base_url="https://api.example.com/v1",
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+
+    async def complete(self, messages, options=None):
+        payload = {
+            "model": "my-model-v1",
+            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "temperature": options.temperature if options else 0.7,
+        }
+        resp = await self._client.post("/chat/completions", json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        return CompletionResponse(
+            content=data["choices"][0]["message"]["content"],
+            model="my-model-v1",
+            finish_reason=data["choices"][0]["finish_reason"],
+        )
+
+    async def stream(self, messages, on_chunk=None, options=None):
+        async with self._client.stream("POST", "/chat/completions", json={
+            "model": "my-model-v1",
+            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "stream": True,
+        }) as r:
+            async for line in r.aiter_lines():
+                if line.startswith("data: "):
+                    chunk = StreamChunk(delta=line[6:])
+                    if on_chunk:
+                        on_chunk(chunk)
+                    yield chunk
+
+model = MyLlmProvider(api_key="...")
+response = await model.complete([ChatMessage.user("Hello!")])
+```
+
+```typescript
+import { CompletionModel, ChatMessage } from "blazen";
+
+class MyLlmProvider extends CompletionModel {
+  constructor(apiKey: string) {
+    super({ modelId: "my-model-v1", contextLength: 8192 });
+    this._apiKey = apiKey;
+  }
+
+  async complete(messages: ChatMessage[], options?: unknown) {
+    const resp = await fetch("https://api.example.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this._apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "my-model-v1",
+        messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      }),
+    });
+    const data = await resp.json();
+    return {
+      content: data.choices[0].message.content,
+      model: "my-model-v1",
+      finishReason: data.choices[0].finish_reason,
+    };
+  }
+
+  async stream(messages: ChatMessage[], onChunk?: (c: unknown) => void) {
+    // ... SSE parsing, invoke onChunk per event ...
+  }
+
+  private _apiKey: string;
+}
+
+const model = new MyLlmProvider(process.env.MY_API_KEY!);
+const response = await model.complete([ChatMessage.user("Hello!")]);
+```
+
+```rust
+use async_trait::async_trait;
+use blazen_llm::{
+    BlazenError, ChatMessage, CompletionModel, CompletionRequest, CompletionResponse,
+    ProviderConfig, StreamChunk,
+};
+use futures_util::Stream;
+use std::pin::Pin;
+
+pub struct MyLlmProvider {
+    config: ProviderConfig,
+    api_key: String,
+}
+
+#[async_trait]
+impl CompletionModel for MyLlmProvider {
+    fn model_id(&self) -> &str {
+        "my-model-v1"
+    }
+
+    fn provider_config(&self) -> Option<&ProviderConfig> {
+        Some(&self.config)
+    }
+
+    async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, BlazenError> {
+        // Issue HTTP request, parse response, return CompletionResponse.
+        todo!()
+    }
+
+    async fn stream(
+        &self,
+        request: CompletionRequest,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
+    {
+        // Issue streaming request, adapt to Stream<Item = Result<StreamChunk, ...>>.
+        todo!()
+    }
+}
+```
+
+## Custom embedding model
+
+```python
+from blazen import EmbeddingModel, EmbeddingResponse
+
+class MyEmbeddings(EmbeddingModel):
+    def __init__(self):
+        super().__init__(model_id="mini-lm-v6", dimensions=384)
+
+    async def embed(self, texts):
+        vectors = await my_http_embed(texts)  # your API call
+        return EmbeddingResponse(
+            embeddings=vectors,
+            model="mini-lm-v6",
+        )
+
+model = MyEmbeddings()
+resp = await model.embed(["hello", "world"])
+```
+
+```typescript
+import { EmbeddingModel } from "blazen";
+
+class MyEmbeddings extends EmbeddingModel {
+  constructor() {
+    super({ modelId: "mini-lm-v6", dimensions: 384 });
+  }
+
+  async embed(texts: string[]) {
+    const vectors = await myHttpEmbed(texts);
+    return { embeddings: vectors, model: "mini-lm-v6" };
+  }
+}
+```
+
+The custom embedder plugs straight into `Memory`:
+
+```python
+from blazen import Memory, InMemoryBackend
+memory = Memory(MyEmbeddings(), InMemoryBackend())
+```
+
+## Custom TTS / image / video / 3D providers (Python)
+
+Subclass the matching base class and override exactly one method. The dispatcher wires your subclass into the relevant capability trait automatically.
+
+```python
+from blazen import TTSProvider, AudioResult, GeneratedAudio, MediaOutput
+
+class ElevenLabsTTS(TTSProvider):
+    def __init__(self, api_key: str):
+        super().__init__(provider_id="elevenlabs")
+        self._api_key = api_key
+
+    async def text_to_speech(self, request):
+        audio_bytes = await eleven_labs_tts(self._api_key, request.text, request.voice)
+        return AudioResult(
+            audio=[GeneratedAudio(
+                media=MediaOutput.from_base64(
+                    base64.b64encode(audio_bytes).decode(),
+                    media_type="mpeg",
+                ),
+            )],
+        )
+```
+
+The same pattern applies to `ImageProvider`, `VideoProvider`, `MusicProvider`, `ThreeDProvider`, `BackgroundRemovalProvider`, and `VoiceProvider`. Each exposes a `provider_id`, optional `base_url`, optional `pricing`, and optional `vram_estimate_bytes` -- fill in only the knobs that make sense for your backend.
+
+## Custom providers (Node.js)
+
+Node.js uses a single `CustomProvider` wrapper: write a plain class with `async` methods named after the capabilities you support and wrap it.
+
+```typescript
+import { CustomProvider } from "blazen";
+
+class ElevenLabsTTS {
+  constructor(private apiKey: string) {}
+
+  async textToSpeech(request: { text: string; voice?: string }) {
+    const audio = await elevenLabs(this.apiKey, request);
+    return {
+      audio: [{
+        media: {
+          base64: audio.toString("base64"),
+          mediaType: "mpeg",
+        },
+      }],
+      timing: { totalMs: 0 },
+      metadata: {},
+    };
+  }
+
+  async cloneVoice(request) { /* ... */ }
+  async listVoices() { /* ... */ }
+}
+
+const provider = new CustomProvider(new ElevenLabsTTS("..."), {
+  providerId: "elevenlabs",
+});
+
+const result = await provider.textToSpeech({ text: "hi", voice: "rachel" });
+```
+
+The wrapper inspects which methods exist on the host object; calls to missing methods surface as `UnsupportedError`, matching the behaviour of built-in providers that only implement some of the capability traits.
+
+## Custom memory backend
+
+```python
+from blazen import MemoryBackend, Memory, EmbeddingModel, ProviderOptions
+import json, sqlite3
+
+class SqliteBackend(MemoryBackend):
+    def __init__(self, path: str):
+        super().__init__()
+        self._conn = sqlite3.connect(path)
+        self._conn.execute("""
+            CREATE TABLE IF NOT EXISTS entries (
+                id TEXT PRIMARY KEY,
+                text TEXT NOT NULL,
+                metadata TEXT,
+                bands TEXT NOT NULL
+            )
+        """)
+
+    async def put(self, entry):
+        self._conn.execute(
+            "INSERT OR REPLACE INTO entries(id, text, metadata, bands) VALUES (?,?,?,?)",
+            (entry["id"], entry["text"], json.dumps(entry.get("metadata", {})), json.dumps(entry["bands"])),
+        )
+        self._conn.commit()
+
+    async def get(self, id):
+        row = self._conn.execute(
+            "SELECT id, text, metadata, bands FROM entries WHERE id = ?", (id,)
+        ).fetchone()
+        return None if row is None else {
+            "id": row[0], "text": row[1],
+            "metadata": json.loads(row[2] or "{}"),
+            "bands": json.loads(row[3]),
+        }
+
+    async def delete(self, id):
+        cur = self._conn.execute("DELETE FROM entries WHERE id = ?", (id,))
+        self._conn.commit()
+        return cur.rowcount > 0
+
+    async def list(self):
+        return [await self.get(r[0]) for r in self._conn.execute("SELECT id FROM entries")]
+
+    async def len(self):
+        return self._conn.execute("SELECT COUNT(*) FROM entries").fetchone()[0]
+
+    async def search_by_bands(self, bands, limit):
+        # Return candidate entries whose band set intersects the query bands.
+        # Blazen does the final similarity ranking.
+        ...
+
+memory = Memory(EmbeddingModel.openai(), SqliteBackend("./memory.db"))
+```
+
+## Integrating with retry, cache, and agents
+
+Subclassed `CompletionModel`s work with Blazen's workflow engine, `complete_batch`, streaming consumers, `ChatWindow`, and `Memory` out of the box. They also serve as the primary model inside an `Agent`.
+
+The wrapper decorators currently have the following behaviour on subclassed models:
+
+- **`with_fallback`** -- requires every model in the chain to be a built-in provider. Passing a subclass raises immediately with a clear error. If you need fallback for a custom provider, implement retry inside your subclass's `complete` / `stream` methods.
+- **`with_retry`** / **`with_cache`** -- not yet supported on subclassed models. The wrappers raise at construction time. Implement retry logic inside your own `complete` override (it is usually a few lines around `httpx` / `reqwest`) and cache via an external layer such as Redis.
+
+These restrictions exist because the wrappers assume a specific internal `Arc<dyn CompletionModel>` shape that subclassed models do not yet expose. Lifting them is on the roadmap; track the issue in the blazen-llm crate if you need it.
+
+Every other integration -- streaming, tool-calling, agents, workflows, batch, memory, prompts, chat window -- works identically to built-in providers.
+
+## Error handling
+
+Raise Blazen-compatible exceptions from your override and they surface as `BlazenError` to callers:
+
+```python
+from blazen import BlazenError
+
+class MyProvider(CompletionModel):
+    async def complete(self, messages, options=None):
+        try:
+            return await self._call_api(messages)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                raise BlazenError.rate_limited(f"upstream rate limit: {e}")
+            raise BlazenError.provider("my-provider", str(e))
+```
+
+For Node, throw an `Error` with a descriptive message -- it crosses the napi-rs boundary as a `BlazenError` with source attached. For Rust, return `Err(BlazenError::…)` directly; the error taxonomy is the same as for built-in providers.
+
+## When not to subclass
+
+If your backend speaks the OpenAI chat-completions wire format already (FastChat, vLLM, Ollama, LM Studio, LiteLLM), use `CompletionModel.openai` with a custom `base_url` via `ProviderOptions` instead. Subclassing is for providers that need genuinely different request/response handling, local execution, or side effects (signing, token exchange, hardware bring-up).
+
+## See also
+
+- [Batch Completions](/guides/batch-processing/) -- subclassed models work with the batch helper
+- [Memory](/guides/memory/) -- drop in custom embedders and backends
+- [Media Generation](/guides/media-generation/) -- see the built-in capability contracts you are implementing
+- [Local Inference](/guides/local-inference/) -- for in-process providers, pair subclassing with `ModelManager` for VRAM budgeting

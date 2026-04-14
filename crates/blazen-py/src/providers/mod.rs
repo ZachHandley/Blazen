@@ -1,5 +1,6 @@
 //! Provider wrappers for LLM completion models and compute providers.
 
+pub mod capability_providers;
 pub mod completion_model;
 pub mod config;
 pub mod custom;

@@ -103,6 +103,38 @@ pub(crate) type StreamChunkCallbackTsfn =
 // CompletionModel wrapper
 // ---------------------------------------------------------------------------
 
+/// Configuration for subclassed `CompletionModel` instances.
+///
+/// When extending `CompletionModel` from JavaScript/TypeScript, pass this
+/// to `super()` so the base class can report `modelId` and other metadata
+/// without a concrete provider.
+///
+/// ```javascript
+/// class MyLLM extends CompletionModel {
+///   constructor() {
+///     super({ modelId: "my-custom-model", contextLength: 8192 });
+///   }
+/// }
+/// ```
+#[napi(object)]
+pub struct CompletionModelConfig {
+    /// Model identifier (e.g. `"my-org/custom-llama"`).
+    #[napi(js_name = "modelId")]
+    pub model_id: Option<String>,
+    /// Maximum context window in tokens.
+    #[napi(js_name = "contextLength")]
+    pub context_length: Option<u32>,
+    /// Base URL for HTTP-based providers.
+    #[napi(js_name = "baseUrl")]
+    pub base_url: Option<String>,
+    /// Estimated VRAM footprint in bytes when loaded.
+    #[napi(js_name = "vramEstimateBytes")]
+    pub vram_estimate_bytes: Option<u32>,
+    /// Maximum output tokens the model supports.
+    #[napi(js_name = "maxOutputTokens")]
+    pub max_output_tokens: Option<u32>,
+}
+
 /// A chat completion model.
 ///
 /// Use the static factory methods to create an instance for your provider:
@@ -113,18 +145,65 @@ pub(crate) type StreamChunkCallbackTsfn =
 ///   ChatMessage.user("What is 2 + 2?")
 /// ]);
 /// ```
+///
+/// Or extend the class to implement a custom provider:
+///
+/// ```javascript
+/// class MyLLM extends CompletionModel {
+///   constructor() {
+///     super({ modelId: "my-custom-model" });
+///   }
+///   async complete(messages) { /* ... */ }
+/// }
+/// ```
 #[napi(js_name = "CompletionModel")]
 pub struct JsCompletionModel {
-    pub(crate) inner: Arc<dyn CompletionModel>,
+    /// The underlying Rust `CompletionModel` implementation.
+    /// `None` when the instance was constructed by a JavaScript subclass
+    /// (via `new CompletionModel(config)` / `super(config)`).
+    pub(crate) inner: Option<Arc<dyn CompletionModel>>,
     /// Present iff the underlying provider is a local in-process model
     /// (mistral.rs, llama.cpp, candle) that implements
-    /// [`blazen_llm::LocalModel`]. `None` for remote HTTP providers.
+    /// [`blazen_llm::LocalModel`]. `None` for remote HTTP providers and
+    /// subclassed instances.
     pub(crate) local_model: Option<Arc<dyn blazen_llm::LocalModel>>,
+    /// Provider configuration metadata, used by subclassed instances to
+    /// report `modelId` and other properties without a concrete inner
+    /// provider.
+    pub(crate) config: Option<blazen_llm::ProviderConfig>,
 }
 
 #[napi]
 #[allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 impl JsCompletionModel {
+    // -----------------------------------------------------------------
+    // Constructor (for JavaScript subclasses)
+    // -----------------------------------------------------------------
+
+    /// Construct a base `CompletionModel`.
+    ///
+    /// Called by JavaScript subclasses via `super(config)`. The `config`
+    /// parameter is optional and carries metadata such as `modelId`.
+    ///
+    /// Instances created this way have no inner Rust provider -- calling
+    /// `complete()` or `stream()` without overriding them in the subclass
+    /// will throw.
+    #[napi(constructor)]
+    pub fn new(config: Option<CompletionModelConfig>) -> Self {
+        Self {
+            inner: None,
+            local_model: None,
+            config: config.map(|c| blazen_llm::ProviderConfig {
+                model_id: c.model_id,
+                context_length: c.context_length.map(u64::from),
+                base_url: c.base_url,
+                vram_estimate_bytes: c.vram_estimate_bytes.map(u64::from),
+                max_output_tokens: c.max_output_tokens.map(u64::from),
+                ..Default::default()
+            }),
+        }
+    }
+
     // -----------------------------------------------------------------
     // Provider factory methods
     // -----------------------------------------------------------------
@@ -139,13 +218,14 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn openai(options: Option<JsProviderOptions>) -> Result<Self> {
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::openai::OpenAiProvider::from_options(
                     js_to_provider_options(options),
                 )
                 .map_err(blazen_error_to_napi)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -153,13 +233,14 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn anthropic(options: Option<JsProviderOptions>) -> Result<Self> {
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::anthropic::AnthropicProvider::from_options(
                     js_to_provider_options(options),
                 )
                 .map_err(blazen_error_to_napi)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -167,13 +248,14 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn gemini(options: Option<JsProviderOptions>) -> Result<Self> {
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::gemini::GeminiProvider::from_options(
                     js_to_provider_options(options),
                 )
                 .map_err(blazen_error_to_napi)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -181,11 +263,12 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn azure(options: JsAzureOptions) -> Result<Self> {
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::azure::AzureOpenAiProvider::from_options(options.into())
                     .map_err(blazen_error_to_napi)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -199,11 +282,12 @@ impl JsCompletionModel {
         let opts: blazen_llm::types::provider_options::FalOptions =
             options.map(Into::into).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::fal::FalProvider::from_options(opts)
                     .map_err(blazen_error_to_napi)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -211,13 +295,14 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn openrouter(options: Option<JsProviderOptions>) -> Result<Self> {
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::openrouter::OpenRouterProvider::from_options(
                     js_to_provider_options(options),
                 )
                 .map_err(blazen_error_to_napi)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -225,13 +310,14 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn groq(options: Option<JsProviderOptions>) -> Result<Self> {
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::groq::GroqProvider::from_options(js_to_provider_options(
                     options,
                 ))
                 .map_err(blazen_error_to_napi)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -239,13 +325,14 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn together(options: Option<JsProviderOptions>) -> Result<Self> {
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::together::TogetherProvider::from_options(
                     js_to_provider_options(options),
                 )
                 .map_err(blazen_error_to_napi)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -253,13 +340,14 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn mistral(options: Option<JsProviderOptions>) -> Result<Self> {
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::mistral::MistralProvider::from_options(
                     js_to_provider_options(options),
                 )
                 .map_err(blazen_error_to_napi)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -267,13 +355,14 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn deepseek(options: Option<JsProviderOptions>) -> Result<Self> {
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::deepseek::DeepSeekProvider::from_options(
                     js_to_provider_options(options),
                 )
                 .map_err(blazen_error_to_napi)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -281,13 +370,14 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn fireworks(options: Option<JsProviderOptions>) -> Result<Self> {
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::fireworks::FireworksProvider::from_options(
                     js_to_provider_options(options),
                 )
                 .map_err(blazen_error_to_napi)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -295,13 +385,14 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn perplexity(options: Option<JsProviderOptions>) -> Result<Self> {
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::perplexity::PerplexityProvider::from_options(
                     js_to_provider_options(options),
                 )
                 .map_err(blazen_error_to_napi)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -309,13 +400,14 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn xai(options: Option<JsProviderOptions>) -> Result<Self> {
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::xai::XaiProvider::from_options(js_to_provider_options(
                     options,
                 ))
                 .map_err(blazen_error_to_napi)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -323,13 +415,14 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn cohere(options: Option<JsProviderOptions>) -> Result<Self> {
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::cohere::CohereProvider::from_options(
                     js_to_provider_options(options),
                 )
                 .map_err(blazen_error_to_napi)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -337,11 +430,12 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn bedrock(options: JsBedrockOptions) -> Result<Self> {
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::bedrock::BedrockProvider::from_options(options.into())
                     .map_err(blazen_error_to_napi)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -352,7 +446,14 @@ impl JsCompletionModel {
     /// Get the model ID.
     #[napi(js_name = "modelId", getter)]
     pub fn model_id(&self) -> String {
-        self.inner.model_id().to_owned()
+        if let Some(ref inner) = self.inner {
+            inner.model_id().to_owned()
+        } else {
+            self.config
+                .as_ref()
+                .and_then(|c| c.model_id.clone())
+                .unwrap_or_default()
+        }
     }
 
     // -----------------------------------------------------------------
@@ -366,22 +467,27 @@ impl JsCompletionModel {
     /// const withRetry = model.withRetry({ maxRetries: 3, initialDelayMs: 1000 });
     /// ```
     #[napi(js_name = "withRetry")]
-    #[must_use]
-    pub fn with_retry(&self, config: Option<JsRetryConfig>) -> JsCompletionModel {
+    pub fn with_retry(&self, config: Option<JsRetryConfig>) -> Result<JsCompletionModel> {
+        let inner = self.inner.as_ref().ok_or_else(|| {
+            napi::Error::from_reason(
+                "withRetry() is not supported on subclassed CompletionModel instances",
+            )
+        })?;
         // `config.map(Into::into)` uses the auto-generated `From<JsRetryConfig>`
         // impl for explicit configs, and falls back to `RetryConfig::default()`
         // when no config was supplied. This avoids requiring `Default` on the
         // generated `JsRetryConfig` type.
         let retry_config: RetryConfig = config.map(Into::into).unwrap_or_default();
-        JsCompletionModel {
-            inner: Arc::new(RetryCompletionModel::from_arc(
-                Arc::clone(&self.inner),
+        Ok(JsCompletionModel {
+            inner: Some(Arc::new(RetryCompletionModel::from_arc(
+                Arc::clone(inner),
                 retry_config,
-            )),
+            ))),
             // Retry wraps a single provider; forwarding load/unload to the
             // underlying local model is still meaningful.
             local_model: self.local_model.clone(),
-        }
+            config: None,
+        })
     }
 
     /// Wrap this model with an in-memory response cache.
@@ -393,19 +499,24 @@ impl JsCompletionModel {
     /// const cached = model.withCache({ ttlSeconds: 300, maxEntries: 1000 });
     /// ```
     #[napi(js_name = "withCache")]
-    #[must_use]
-    pub fn with_cache(&self, config: Option<JsCacheConfig>) -> JsCompletionModel {
+    pub fn with_cache(&self, config: Option<JsCacheConfig>) -> Result<JsCompletionModel> {
+        let inner = self.inner.as_ref().ok_or_else(|| {
+            napi::Error::from_reason(
+                "withCache() is not supported on subclassed CompletionModel instances",
+            )
+        })?;
         // See `with_retry` for why we use `config.map(Into::into).unwrap_or_default()`.
         let cache_config: CacheConfig = config.map(Into::into).unwrap_or_default();
-        JsCompletionModel {
-            inner: Arc::new(CachedCompletionModel::from_arc(
-                Arc::clone(&self.inner),
+        Ok(JsCompletionModel {
+            inner: Some(Arc::new(CachedCompletionModel::from_arc(
+                Arc::clone(inner),
                 cache_config,
-            )),
+            ))),
             // Cache wraps a single provider; forwarding load/unload to the
             // underlying local model is still meaningful.
             local_model: self.local_model.clone(),
-        }
+            config: None,
+        })
     }
 
     /// Create a fallback model that tries multiple providers in order.
@@ -426,15 +537,23 @@ impl JsCompletionModel {
                 "withFallback requires at least one model",
             ));
         }
-        let providers: Vec<Arc<dyn CompletionModel>> =
-            models.iter().map(|m| Arc::clone(&m.inner)).collect();
+        let mut providers: Vec<Arc<dyn CompletionModel>> = Vec::with_capacity(models.len());
+        for m in &models {
+            let inner = m.inner.as_ref().ok_or_else(|| {
+                napi::Error::from_reason(
+                    "withFallback() is not supported on subclassed CompletionModel instances",
+                )
+            })?;
+            providers.push(Arc::clone(inner));
+        }
         Ok(JsCompletionModel {
-            inner: Arc::new(FallbackModel::new(providers)),
+            inner: Some(Arc::new(FallbackModel::new(providers))),
             // Fallback combines heterogeneous providers (potentially a mix of
             // local and remote). There is no single `LocalModel` to forward
             // `load`/`unload` to, so callers must manage lifecycle on the
             // component models before combining them via `withFallback`.
             local_model: None,
+            config: None,
         })
     }
 
@@ -450,14 +569,16 @@ impl JsCompletionModel {
     /// and `finishReason` fields.
     #[napi]
     pub async fn complete(&self, messages: Vec<&JsChatMessage>) -> Result<JsCompletionResponse> {
+        let inner = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| napi::Error::from_reason("subclass must override complete()"))?
+            .clone();
+
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
         let request = CompletionRequest::new(chat_messages);
 
-        let response = self
-            .inner
-            .complete(request)
-            .await
-            .map_err(llm_error_to_napi)?;
+        let response = inner.complete(request).await.map_err(llm_error_to_napi)?;
 
         Ok(build_response(response))
     }
@@ -477,6 +598,14 @@ impl JsCompletionModel {
         messages: Vec<&JsChatMessage>,
         options: JsCompletionOptions,
     ) -> Result<JsCompletionResponse> {
+        let inner = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| {
+                napi::Error::from_reason("subclass must override completeWithOptions()")
+            })?
+            .clone();
+
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
         let mut request = CompletionRequest::new(chat_messages);
 
@@ -507,11 +636,7 @@ impl JsCompletionModel {
             request = request.with_response_format(fmt);
         }
 
-        let response = self
-            .inner
-            .complete(request)
-            .await
-            .map_err(llm_error_to_napi)?;
+        let response = inner.complete(request).await.map_err(llm_error_to_napi)?;
 
         Ok(build_response(response))
     }
@@ -533,14 +658,16 @@ impl JsCompletionModel {
         messages: Vec<&JsChatMessage>,
         on_chunk: StreamChunkCallbackTsfn,
     ) -> Result<()> {
+        let inner = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| napi::Error::from_reason("subclass must override stream()"))?
+            .clone();
+
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
         let request = CompletionRequest::new(chat_messages);
 
-        let stream = self
-            .inner
-            .stream(request)
-            .await
-            .map_err(llm_error_to_napi)?;
+        let stream = inner.stream(request).await.map_err(llm_error_to_napi)?;
 
         let mut stream = std::pin::pin!(stream);
         while let Some(result) = stream.next().await {
@@ -575,6 +702,12 @@ impl JsCompletionModel {
         on_chunk: StreamChunkCallbackTsfn,
         options: JsCompletionOptions,
     ) -> Result<()> {
+        let inner = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| napi::Error::from_reason("subclass must override streamWithOptions()"))?
+            .clone();
+
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
         let mut request = CompletionRequest::new(chat_messages);
 
@@ -604,11 +737,7 @@ impl JsCompletionModel {
             request = request.with_response_format(fmt);
         }
 
-        let stream = self
-            .inner
-            .stream(request)
-            .await
-            .map_err(llm_error_to_napi)?;
+        let stream = inner.stream(request).await.map_err(llm_error_to_napi)?;
 
         let mut stream = std::pin::pin!(stream);
         while let Some(result) = stream.next().await {
@@ -726,8 +855,9 @@ impl JsCompletionModel {
                 .map_err(|e| napi::Error::from_reason(e.to_string()))?,
         );
         Ok(Self {
-            inner: concrete.clone(),
+            inner: Some(concrete.clone()),
             local_model: Some(concrete),
+            config: None,
         })
     }
 }

@@ -28,15 +28,58 @@ use blazen_llm::types::EmbeddingResponse;
 ///     >>> response = await model.embed(["Hello", "World"])
 ///     >>> print(response.embeddings)
 #[gen_stub_pyclass]
-#[pyclass(name = "EmbeddingModel", from_py_object)]
+#[pyclass(name = "EmbeddingModel", subclass, from_py_object)]
 #[derive(Clone)]
 pub struct PyEmbeddingModel {
-    pub(crate) inner: Arc<dyn EmbeddingModel>,
+    pub(crate) inner: Option<Arc<dyn EmbeddingModel>>,
+    /// Configuration for subclassed models. `None` for built-in providers
+    /// (whose config lives inside the `inner` trait object).
+    pub(crate) config: Option<blazen_llm::ProviderConfig>,
+    /// Stored separately because `ProviderConfig` has no `dimensions` field.
+    pub(crate) dimensions_override: Option<usize>,
 }
 
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyEmbeddingModel {
+    // -----------------------------------------------------------------
+    // Subclass constructor
+    // -----------------------------------------------------------------
+
+    /// Create a custom embedding model by subclassing.
+    ///
+    /// Override ``embed()`` in your subclass to implement a custom
+    /// embedding provider.
+    ///
+    /// Args:
+    ///     model_id: The model identifier.
+    ///     dimensions: Output dimensionality of the embedding vectors.
+    ///     base_url: Base URL for HTTP-based providers.
+    ///     pricing: Optional pricing information.
+    ///     vram_estimate_bytes: Estimated VRAM footprint in bytes.
+    #[new]
+    #[pyo3(signature = (*, model_id=None, dimensions=None, base_url=None, pricing=None, vram_estimate_bytes=None))]
+    fn new(
+        model_id: Option<String>,
+        dimensions: Option<usize>,
+        base_url: Option<String>,
+        pricing: Option<PyRef<'_, crate::types::pricing::PyModelPricing>>,
+        vram_estimate_bytes: Option<u64>,
+    ) -> Self {
+        Self {
+            inner: None,
+            config: Some(blazen_llm::ProviderConfig {
+                model_id,
+                context_length: dimensions.map(|d| d as u64),
+                base_url,
+                vram_estimate_bytes,
+                pricing: pricing.map(|p| p.inner.clone()),
+                ..Default::default()
+            }),
+            dimensions_override: dimensions,
+        }
+    }
+
     // -----------------------------------------------------------------
     // Provider constructors
     // -----------------------------------------------------------------
@@ -63,7 +106,9 @@ impl PyEmbeddingModel {
             provider = provider.with_model("text-embedding-3-small", d);
         }
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Some(Arc::new(provider)),
+            config: None,
+            dimensions_override: None,
         })
     }
 
@@ -78,7 +123,9 @@ impl PyEmbeddingModel {
         let provider = blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::embedding_from_options("together", opts)
             .map_err(blazen_error_to_pyerr)?;
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Some(Arc::new(provider)),
+            config: None,
+            dimensions_override: None,
         })
     }
 
@@ -93,7 +140,9 @@ impl PyEmbeddingModel {
         let provider = blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::embedding_from_options("cohere", opts)
             .map_err(blazen_error_to_pyerr)?;
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Some(Arc::new(provider)),
+            config: None,
+            dimensions_override: None,
         })
     }
 
@@ -108,7 +157,9 @@ impl PyEmbeddingModel {
         let provider = blazen_llm::providers::openai_compat::OpenAiCompatEmbeddingModel::embedding_from_options("fireworks", opts)
             .map_err(blazen_error_to_pyerr)?;
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Some(Arc::new(provider)),
+            config: None,
+            dimensions_override: None,
         })
     }
 
@@ -121,8 +172,15 @@ impl PyEmbeddingModel {
     /// Returns:
     ///     The string identifier of the embedding model.
     #[getter]
-    fn model_id(&self) -> &str {
-        self.inner.model_id()
+    fn model_id(&self) -> String {
+        if let Some(ref inner) = self.inner {
+            inner.model_id().to_owned()
+        } else {
+            self.config
+                .as_ref()
+                .and_then(|c| c.model_id.clone())
+                .unwrap_or_default()
+        }
     }
 
     /// Get the output dimensionality of the embedding model.
@@ -131,7 +189,11 @@ impl PyEmbeddingModel {
     ///     The number of dimensions in the output vectors.
     #[getter]
     fn dimensions(&self) -> usize {
-        self.inner.dimensions()
+        if let Some(ref inner) = self.inner {
+            inner.dimensions()
+        } else {
+            self.dimensions_override.unwrap_or(0)
+        }
     }
 
     // -----------------------------------------------------------------
@@ -152,20 +214,26 @@ impl PyEmbeddingModel {
     ///     >>> print(len(response.embeddings[0]))  # dimensionality
     #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, EmbeddingResponse]", imports = ("typing",)))]
     fn embed<'py>(&self, py: Python<'py>, texts: Vec<String>) -> PyResult<Bound<'py, PyAny>> {
-        let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let response = EmbeddingModel::embed(inner.as_ref(), &texts)
-                .await
-                .map_err(BlazenPyError::from)?;
-            Ok(PyEmbeddingResponse { inner: response })
-        })
+        if let Some(ref inner) = self.inner {
+            let inner = inner.clone();
+            pyo3_async_runtimes::tokio::future_into_py(py, async move {
+                let response = EmbeddingModel::embed(inner.as_ref(), &texts)
+                    .await
+                    .map_err(BlazenPyError::from)?;
+                Ok(PyEmbeddingResponse { inner: response })
+            })
+        } else {
+            Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "subclass must override embed()",
+            ))
+        }
     }
 
     fn __repr__(&self) -> String {
         format!(
             "EmbeddingModel(model_id='{}', dimensions={})",
-            self.inner.model_id(),
-            self.inner.dimensions()
+            self.model_id(),
+            self.dimensions()
         )
     }
 }
@@ -194,7 +262,9 @@ impl PyEmbeddingModel {
         let model = blazen_llm::FastEmbedModel::from_options(opts)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
-            inner: Arc::new(model),
+            inner: Some(Arc::new(model)),
+            config: None,
+            dimensions_override: None,
         })
     }
 }
@@ -271,5 +341,124 @@ impl PyEmbeddingResponse {
             self.inner.model,
             self.inner.embeddings.len()
         )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Python-subclass adapter
+// ---------------------------------------------------------------------------
+
+/// Bridges a Python `EmbeddingModel` subclass into the Rust
+/// [`blazen_llm::EmbeddingModel`] trait.
+///
+/// When a user subclasses `EmbeddingModel` in Python and overrides
+/// `embed()`, the `PyEmbeddingModel.inner` field is `None` because there
+/// is no Rust provider backing the instance. To make such subclasses usable
+/// with Rust-side consumers like [`blazen_memory::Memory`], this adapter
+/// holds the Python object itself and dispatches `embed()` calls back into
+/// Python via `pyo3_async_runtimes`.
+///
+/// The dispatch follows the same three-phase pattern as
+/// [`crate::providers::custom::PyHostDispatch`]:
+///
+/// 1. Under the GIL, call the Python subclass's `embed()` method to obtain
+///    an awaitable coroutine, capture the active asyncio task locals, and
+///    convert the coroutine into a Rust future.
+/// 2. Outside the GIL (inside `pyo3_async_runtimes::tokio::scope`), drive
+///    the future to completion so the Python coroutine runs on the correct
+///    event loop.
+/// 3. Under the GIL again, extract the returned `PyEmbeddingResponse`
+///    (preferred path) or fall back to `depythonize` if the subclass
+///    returns a compatible dict.
+pub(crate) struct PySubclassEmbeddingModel {
+    py_obj: Py<PyAny>,
+    model_id: String,
+    dimensions: usize,
+}
+
+impl PySubclassEmbeddingModel {
+    pub(crate) fn new(py_obj: Py<PyAny>, model_id: String, dimensions: usize) -> Self {
+        Self {
+            py_obj,
+            model_id,
+            dimensions,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl blazen_llm::EmbeddingModel for PySubclassEmbeddingModel {
+    fn model_id(&self) -> &str {
+        &self.model_id
+    }
+
+    fn dimensions(&self) -> usize {
+        self.dimensions
+    }
+
+    async fn embed(
+        &self,
+        texts: &[String],
+    ) -> Result<blazen_llm::EmbeddingResponse, blazen_llm::BlazenError> {
+        let texts_vec = texts.to_vec();
+
+        // Phase 1: under GIL, invoke the Python `embed` method to get a
+        // coroutine and convert it into a Rust future.
+        let (fut, locals) = tokio::task::block_in_place(|| {
+            Python::attach(|py| -> PyResult<_> {
+                let host = self.py_obj.bind(py);
+                let coro = host.call_method1("embed", (texts_vec,)).map_err(|e| {
+                    pyo3::exceptions::PyRuntimeError::new_err(format!(
+                        "subclass embed() raised before yielding a coroutine: {e}"
+                    ))
+                })?;
+                let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
+                let fut =
+                    pyo3_async_runtimes::into_future_with_locals(&locals, coro).map_err(|e| {
+                        pyo3::exceptions::PyTypeError::new_err(format!(
+                            "subclass embed() must be an async def returning a coroutine: {e}"
+                        ))
+                    })?;
+                Ok((fut, locals))
+            })
+        })
+        .map_err(|e: PyErr| {
+            blazen_llm::BlazenError::provider("subclass", format!("dispatch setup failed: {e}"))
+        })?;
+
+        // Phase 2: drive the Python coroutine to completion.
+        let py_result = pyo3_async_runtimes::tokio::scope(locals, fut)
+            .await
+            .map_err(|e: PyErr| {
+                blazen_llm::BlazenError::provider(
+                    "subclass",
+                    format!("subclass embed() raised: {e}"),
+                )
+            })?;
+
+        // Phase 3: reacquire GIL and extract the EmbeddingResponse.
+        tokio::task::block_in_place(|| {
+            Python::attach(|py| -> PyResult<blazen_llm::EmbeddingResponse> {
+                let bound = py_result.bind(py);
+                // Preferred path: the subclass returned a PyEmbeddingResponse.
+                if let Ok(resp) = bound.extract::<PyRef<'_, PyEmbeddingResponse>>() {
+                    return Ok(resp.inner.clone());
+                }
+                // Fallback: allow a compatible dict shape.
+                let response: blazen_llm::EmbeddingResponse = pythonize::depythonize(bound)
+                    .map_err(|e| {
+                        pyo3::exceptions::PyValueError::new_err(format!(
+                            "subclass embed() must return EmbeddingResponse or a compatible dict: {e}"
+                        ))
+                    })?;
+                Ok(response)
+            })
+        })
+        .map_err(|e: PyErr| {
+            blazen_llm::BlazenError::provider(
+                "subclass",
+                format!("failed to decode subclass embed() result: {e}"),
+            )
+        })
     }
 }

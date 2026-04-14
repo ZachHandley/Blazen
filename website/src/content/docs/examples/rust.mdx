@@ -80,3 +80,345 @@ ctx.set_value("embeddings", StateValue::Bytes(embedding_bytes.into()));
 ```sh
 cargo run -p blazen --example llm_rag_workflow
 ```
+
+---
+
+## Custom CompletionModel (trait impl)
+
+In Rust, custom providers are built by implementing the `CompletionModel` trait. The trait-impl is a first-class citizen -- it works with `run_agent`, `with_retry`, `with_cache`, and every other helper.
+
+```rust
+use async_trait::async_trait;
+use futures::stream::{self, Stream};
+use std::pin::Pin;
+
+use blazen_llm::{
+    BlazenError, CompletionRequest, CompletionResponse, StreamChunk,
+    traits::CompletionModel,
+    types::Role,
+};
+
+struct EchoLLM;
+
+#[async_trait]
+impl CompletionModel for EchoLLM {
+    fn model_id(&self) -> &str {
+        "echo-llm"
+    }
+
+    async fn complete(
+        &self,
+        request: CompletionRequest,
+    ) -> Result<CompletionResponse, BlazenError> {
+        let last = request
+            .messages
+            .iter()
+            .rev()
+            .find(|m| m.role == Role::User)
+            .and_then(|m| m.content.text_content())
+            .unwrap_or_default();
+
+        Ok(CompletionResponse {
+            content: Some(format!("echo: {last}")),
+            tool_calls: Vec::new(),
+            reasoning: None,
+            citations: Vec::new(),
+            artifacts: Vec::new(),
+            usage: None,
+            model: self.model_id().to_string(),
+            finish_reason: Some("stop".to_string()),
+            cost: None,
+            timing: None,
+            images: Vec::new(),
+            audio: Vec::new(),
+            videos: Vec::new(),
+            metadata: serde_json::Value::Null,
+        })
+    }
+
+    async fn stream(
+        &self,
+        request: CompletionRequest,
+    ) -> Result<
+        Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>,
+        BlazenError,
+    > {
+        let response = self.complete(request).await?;
+        let content = response.content.unwrap_or_default();
+        let chunks: Vec<Result<StreamChunk, BlazenError>> = content
+            .split(' ')
+            .map(|word| {
+                Ok(StreamChunk {
+                    delta: Some(format!("{word} ")),
+                    ..Default::default()
+                })
+            })
+            .collect();
+        Ok(Box::pin(stream::iter(chunks)))
+    }
+}
+```
+
+```sh
+cargo run -p blazen --example custom_completion_model
+```
+
+---
+
+## Custom MemoryBackend (trait impl)
+
+Implement the `MemoryBackend` trait from `blazen-memory` to plug in any storage layer (Postgres, SQLite, DynamoDB, a `DashMap`). The reference `InMemoryBackend` is already provided; this example shows the pattern for a custom one.
+
+```rust
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use tokio::sync::RwLock;
+
+use blazen_memory::{Memory, MemoryBackend, MemoryError, StoredEntry};
+
+struct DictBackend {
+    store: RwLock<HashMap<String, StoredEntry>>,
+}
+
+impl DictBackend {
+    fn new() -> Self {
+        Self {
+            store: RwLock::new(HashMap::new()),
+        }
+    }
+}
+
+#[async_trait]
+impl MemoryBackend for DictBackend {
+    async fn put(&self, entry: StoredEntry) -> Result<(), MemoryError> {
+        self.store.write().await.insert(entry.id.clone(), entry);
+        Ok(())
+    }
+
+    async fn get(&self, id: &str) -> Result<Option<StoredEntry>, MemoryError> {
+        Ok(self.store.read().await.get(id).cloned())
+    }
+
+    async fn delete(&self, id: &str) -> Result<bool, MemoryError> {
+        Ok(self.store.write().await.remove(id).is_some())
+    }
+
+    async fn list(&self) -> Result<Vec<StoredEntry>, MemoryError> {
+        Ok(self.store.read().await.values().cloned().collect())
+    }
+
+    async fn len(&self) -> Result<usize, MemoryError> {
+        Ok(self.store.read().await.len())
+    }
+
+    async fn search_by_bands(
+        &self,
+        bands: &[String],
+        limit: usize,
+    ) -> Result<Vec<StoredEntry>, MemoryError> {
+        let set: std::collections::HashSet<_> = bands.iter().cloned().collect();
+        Ok(self
+            .store
+            .read()
+            .await
+            .values()
+            .filter(|e| e.bands.iter().any(|b| set.contains(b)))
+            .take(limit)
+            .cloned()
+            .collect())
+    }
+}
+
+// Usage -- the custom backend is a drop-in for the built-in ones:
+// let embedder = Arc::new(
+//     blazen_llm::fastembed::FastEmbedProvider::bge_small_en_v1_5().await?,
+// ) as Arc<dyn blazen_llm::EmbeddingModel>;
+// let memory = Memory::new(embedder, DictBackend::new());
+```
+
+```sh
+cargo run -p blazen --example custom_memory_backend
+```
+
+---
+
+## ModelManager with VRAM Budget
+
+The `blazen-manager` crate tracks VRAM across multiple local models and runs LRU eviction when loading would exceed the budget.
+
+```rust
+use std::sync::Arc;
+
+use blazen_manager::ModelManager;
+use blazen_llm::LocalModel;
+
+// Replace with your local model constructors (mistral.rs, llama.cpp, candle).
+async fn load_local_model(_id: &str) -> Arc<dyn LocalModel> {
+    unimplemented!("construct your local model here")
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // 24 GB budget (GPU-typical for a consumer card).
+    let manager = ModelManager::with_budget_gb(24.0);
+
+    let llama_8b = load_local_model("llama-8b").await;
+    let qwen_14b = load_local_model("qwen-14b").await;
+    let mistral_24b = load_local_model("mistral-24b").await;
+
+    manager.register("llama-8b", llama_8b, 8 * 1024 * 1024 * 1024).await;
+    manager.register("qwen-14b", qwen_14b, 14 * 1024 * 1024 * 1024).await;
+    manager.register("mistral-24b", mistral_24b, 20 * 1024 * 1024 * 1024).await;
+
+    // Fits alongside qwen-14b (8 + 14 = 22 GB).
+    manager.load("llama-8b").await?;
+    manager.load("qwen-14b").await?;
+
+    // 20 GB does not fit next to 8 + 14 = 22 GB -- LRU (llama-8b) is evicted.
+    manager.load("mistral-24b").await?;
+
+    for s in manager.status().await {
+        println!(
+            "{}: loaded={}, vram={} bytes",
+            s.id, s.loaded, s.vram_estimate
+        );
+    }
+    Ok(())
+}
+```
+
+```sh
+cargo run -p blazen --example model_manager_budget
+```
+
+---
+
+## Pricing Registration and Cost Tracking
+
+Register pricing for any model ID (your own model, a local finetune, a custom deployment). Every `CompletionResponse` carries a `.cost` field computed from the registered rate.
+
+```rust
+use blazen_llm::{
+    ChatMessage, PricingEntry,
+    providers::openai_compat::{AuthMethod, OpenAiCompatConfig, OpenAiCompatProvider},
+    register_pricing, traits::CompletionModel, types::CompletionRequest,
+};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Register pricing once, globally, for any model ID.
+    register_pricing(
+        "my-finetuned-model",
+        PricingEntry {
+            input_per_million: 1.0,
+            output_per_million: 2.0,
+        },
+    );
+
+    // Point a provider at your deployment using the registered ID.
+    let model = OpenAiCompatProvider::new(OpenAiCompatConfig {
+        provider_name: "local".to_string(),
+        base_url: "http://localhost:8080/v1".to_string(),
+        api_key: "local".to_string(),
+        default_model: "my-finetuned-model".to_string(),
+        auth_method: AuthMethod::Bearer,
+        extra_headers: Vec::new(),
+        query_params: Vec::new(),
+        supports_model_listing: true,
+    });
+
+    let request = CompletionRequest::new(vec![
+        ChatMessage::user("Summarize Rust in one line."),
+    ]);
+
+    let response = model.complete(request).await?;
+    println!("{}", response.content.unwrap_or_default());
+    println!("usage: {:?}", response.usage);
+    if let Some(cost) = response.cost {
+        println!("cost: ${cost:.6}"); // computed from registered pricing
+    }
+    Ok(())
+}
+```
+
+```sh
+cargo run -p blazen --example pricing_and_cost
+```
+
+---
+
+## Custom TTS Provider (AudioGeneration trait)
+
+For Rust, per-capability custom providers are built by implementing the capability trait from `blazen-llm::compute` (e.g. `AudioGeneration`, `ImageGeneration`, `VideoGeneration`). Every capability trait extends `ComputeProvider`, so you implement both.
+
+```rust
+use async_trait::async_trait;
+
+use blazen_llm::{
+    BlazenError, GeneratedAudio, MediaOutput, MediaType, RequestTiming,
+    compute::{
+        AudioGeneration, AudioResult, ComputeProvider, ComputeRequest, ComputeResult,
+        JobHandle, JobStatus, SpeechRequest,
+    },
+};
+
+struct MyElevenLabs {
+    api_key: String,
+}
+
+#[async_trait]
+impl ComputeProvider for MyElevenLabs {
+    fn provider_id(&self) -> &str {
+        "elevenlabs"
+    }
+
+    // TTS is synchronous -- we don't use the submit/status/result flow.
+    // Mark those endpoints as unsupported so callers can't accidentally
+    // queue jobs.
+    async fn submit(&self, _r: ComputeRequest) -> Result<JobHandle, BlazenError> {
+        Err(BlazenError::unsupported("use text_to_speech() directly"))
+    }
+    async fn status(&self, _j: &JobHandle) -> Result<JobStatus, BlazenError> {
+        Err(BlazenError::unsupported("no job queue"))
+    }
+    async fn result(&self, _j: JobHandle) -> Result<ComputeResult, BlazenError> {
+        Err(BlazenError::unsupported("no job queue"))
+    }
+    async fn cancel(&self, _j: &JobHandle) -> Result<(), BlazenError> {
+        Err(BlazenError::unsupported("no job queue"))
+    }
+}
+
+#[async_trait]
+impl AudioGeneration for MyElevenLabs {
+    async fn text_to_speech(
+        &self,
+        request: SpeechRequest,
+    ) -> Result<AudioResult, BlazenError> {
+        // In a real implementation, make an HTTP call with self.api_key.
+        let _api_key = &self.api_key;
+        Ok(AudioResult {
+            audio: vec![GeneratedAudio {
+                media: MediaOutput::from_base64("AAEC", MediaType::Wav),
+                duration_seconds: None,
+                sample_rate: Some(44_100),
+                channels: Some(1),
+            }],
+            timing: RequestTiming::default(),
+            cost: None,
+            metadata: serde_json::json!({
+                "voice": request.voice,
+                "text": request.text,
+            }),
+        })
+    }
+
+    // generate_music / generate_sfx default to BlazenError::Unsupported.
+}
+```
+
+```sh
+cargo run -p blazen --example custom_tts_provider
+```

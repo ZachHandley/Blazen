@@ -7,8 +7,8 @@ import typing
 __all__ = [
     "AgentResult",
     "Artifact",
-    "AudioResult",
     "AzureOptions",
+    "BackgroundRemovalProvider",
     "BackgroundRemovalRequest",
     "BatchResult",
     "BedrockOptions",
@@ -34,25 +34,38 @@ __all__ = [
     "FalLlmEndpointKind",
     "FalOptions",
     "FalProvider",
+    "FastEmbedOptions",
     "FinishReason",
-    "Generated3DModel",
-    "GeneratedAudio",
-    "GeneratedImage",
-    "GeneratedVideo",
+    "ImageProvider",
     "ImageRequest",
-    "ImageResult",
     "InMemoryBackend",
     "JobHandle",
     "JsonlBackend",
     "MediaOutput",
     "MediaType",
     "Memory",
+    "MemoryBackend",
     "MemoryResult",
+    "MistralRsOptions",
+    "ModelManager",
+    "ModelPricing",
+    "ModelStatus",
+    "MusicProvider",
     "MusicRequest",
     "OpenAiProvider",
     "PromptRegistry",
     "PromptTemplate",
     "ProviderOptions",
+    "PyAudioResult",
+    "PyGenerated3DModel",
+    "PyGeneratedAudio",
+    "PyGeneratedImage",
+    "PyGeneratedVideo",
+    "PyImageResult",
+    "PyThreeDResult",
+    "PyTranscriptionResult",
+    "PyTranscriptionSegment",
+    "PyVideoResult",
     "Quantization",
     "RequestTiming",
     "ResponseFormat",
@@ -64,22 +77,26 @@ __all__ = [
     "StartEvent",
     "StateNamespace",
     "StopEvent",
+    "TTSProvider",
+    "ThreeDProvider",
     "ThreeDRequest",
-    "ThreeDResult",
     "ToolDef",
     "Transcription",
     "TranscriptionRequest",
-    "TranscriptionResult",
-    "TranscriptionSegment",
     "UpscaleRequest",
     "ValkeyBackend",
+    "VideoProvider",
     "VideoRequest",
-    "VideoResult",
     "VoiceCloneRequest",
     "VoiceHandle",
+    "VoiceProvider",
+    "WhisperModel",
+    "WhisperOptions",
     "Workflow",
     "WorkflowHandler",
     "complete_batch",
+    "lookup_pricing",
+    "register_pricing",
     "run_agent",
 ]
 
@@ -220,32 +237,6 @@ class Artifact:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
-class AudioResult:
-    r"""
-    Result of an audio generation or TTS operation.
-    """
-    @property
-    def audio(self) -> builtins.list[GeneratedAudio]:
-        r"""
-        The generated audio clips.
-        """
-    @property
-    def timing(self) -> RequestTiming:
-        r"""
-        Request timing breakdown.
-        """
-    @property
-    def cost(self) -> typing.Optional[builtins.float]:
-        r"""
-        Cost in USD, if reported by the provider.
-        """
-    @property
-    def metadata(self) -> dict[str, typing.Any]:
-        r"""
-        Arbitrary provider-specific metadata (as a dict).
-        """
-
-@typing.final
 class AzureOptions:
     r"""
     Options specific to Azure OpenAI.
@@ -287,6 +278,34 @@ class AzureOptions:
             api_version: API version override (e.g. "2024-02-15-preview").
         """
     def __repr__(self) -> builtins.str: ...
+
+class BackgroundRemovalProvider:
+    r"""
+    Base class for background removal providers.
+    
+    Subclass and override ``remove_background()`` to implement a custom
+    background-removal backend.
+    """
+    @property
+    def provider_id(self) -> typing.Optional[builtins.str]:
+        r"""
+        The provider identifier.
+        """
+    @property
+    def base_url(self) -> typing.Optional[builtins.str]:
+        r"""
+        The base URL, if set.
+        """
+    @property
+    def vram_estimate_bytes(self) -> typing.Optional[builtins.int]:
+        r"""
+        Estimated VRAM footprint in bytes, if set.
+        """
+    def __new__(cls, *, provider_id: builtins.str, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> BackgroundRemovalProvider: ...
+    def remove_background(self, request: BackgroundRemovalRequest) -> typing.Any:
+        r"""
+        Remove the background from an image.
+        """
 
 @typing.final
 class BackgroundRemovalRequest:
@@ -585,7 +604,6 @@ class ChatWindow:
         """
     def __repr__(self) -> builtins.str: ...
 
-@typing.final
 class CompletionModel:
     r"""
     A chat completion model.
@@ -609,6 +627,21 @@ class CompletionModel:
         
         Returns:
             The string identifier of the model.
+        """
+    def __new__(cls, *, model_id: typing.Optional[builtins.str] = None, context_length: typing.Optional[builtins.int] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None, max_output_tokens: typing.Optional[builtins.int] = None) -> CompletionModel:
+        r"""
+        Create a custom completion model by subclassing.
+        
+        Override ``complete()`` and optionally ``stream()`` in your
+        subclass to implement a custom provider.
+        
+        Args:
+            model_id: The model identifier.
+            context_length: Maximum context window in tokens.
+            base_url: Base URL for HTTP-based providers.
+            pricing: Optional pricing information.
+            vram_estimate_bytes: Estimated VRAM footprint in bytes.
+            max_output_tokens: Maximum output tokens the model supports.
         """
     @staticmethod
     def openai(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
@@ -797,13 +830,8 @@ class CompletionModel:
         
         Args:
             messages: A list of ChatMessage objects.
-            temperature: Optional sampling temperature (0.0-2.0).
-            max_tokens: Optional maximum tokens to generate.
-            top_p: Optional nucleus sampling parameter (0.0-1.0).
-            model: Optional model override for this request.
-            tools: Optional list of dicts with ``name``, ``description``, and
-                ``parameters`` keys for function calling.
-            response_format: Optional JSON schema dict for structured output.
+            options: Optional CompletionOptions for sampling parameters,
+                tools, and response format.
         
         Returns:
             A CompletionResponse with content, model, tool_calls, usage,
@@ -881,6 +909,18 @@ class CompletionModel:
         report it. Returns ``None`` for remote providers or for local
         providers that do not expose memory usage.
         """
+    @staticmethod
+    def mistralrs(*, options: MistralRsOptions) -> CompletionModel:
+        r"""
+        Create a local mistral.rs provider.
+        
+        Runs LLM inference entirely on-device using the mistral.rs engine.
+        No API key is required.
+        
+        Args:
+            options: Typed ``MistralRsOptions`` with required ``model_id``
+                (HuggingFace model ID or local GGUF path).
+        """
 
 @typing.final
 class CompletionOptions:
@@ -932,16 +972,14 @@ class CompletionOptions:
         Model override for this request.
         """
     @property
-    def tools(self) -> typing.Optional[typing.Any]:
+    def tools(self) -> typing.Optional[builtins.list[ToolDef]]:
         r"""
-        Tool definitions for function calling. Each tool is a dict with
-        ``name``, ``description``, and ``parameters`` keys.
+        Tool definitions for function calling.
         """
     @tools.setter
-    def tools(self, value: typing.Optional[typing.Any]) -> None:
+    def tools(self, value: typing.Optional[typing.Sequence[ToolDef]]) -> None:
         r"""
-        Tool definitions for function calling. Each tool is a dict with
-        ``name``, ``description``, and ``parameters`` keys.
+        Tool definitions for function calling.
         """
     @property
     def response_format(self) -> typing.Optional[typing.Any]:
@@ -953,7 +991,7 @@ class CompletionOptions:
         r"""
         JSON schema dict for structured output.
         """
-    def __new__(cls, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, top_p: typing.Optional[builtins.float] = None, model: typing.Optional[builtins.str] = None, tools: typing.Optional[typing.Any] = None, response_format: typing.Optional[typing.Any] = None) -> CompletionOptions: ...
+    def __new__(cls, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, top_p: typing.Optional[builtins.float] = None, model: typing.Optional[builtins.str] = None, tools: typing.Optional[typing.Sequence[ToolDef]] = None, response_format: typing.Optional[typing.Any] = None) -> CompletionOptions: ...
 
 @typing.final
 class CompletionResponse:
@@ -980,11 +1018,11 @@ class CompletionResponse:
     @property
     def timing(self) -> typing.Optional[RequestTiming]: ...
     @property
-    def images(self) -> builtins.list[GeneratedImage]: ...
+    def images(self) -> builtins.list[PyGeneratedImage]: ...
     @property
-    def audio(self) -> builtins.list[GeneratedAudio]: ...
+    def audio(self) -> builtins.list[PyGeneratedAudio]: ...
     @property
-    def videos(self) -> builtins.list[GeneratedVideo]: ...
+    def videos(self) -> builtins.list[PyGeneratedVideo]: ...
     @property
     def metadata_extra(self) -> dict[str, typing.Any]: ...
     @property
@@ -1357,7 +1395,6 @@ class CustomProvider:
         """
     def __repr__(self) -> builtins.str: ...
 
-@typing.final
 class EmbeddingModel:
     r"""
     A text embedding model.
@@ -1385,6 +1422,20 @@ class EmbeddingModel:
         
         Returns:
             The number of dimensions in the output vectors.
+        """
+    def __new__(cls, *, model_id: typing.Optional[builtins.str] = None, dimensions: typing.Optional[builtins.int] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> EmbeddingModel:
+        r"""
+        Create a custom embedding model by subclassing.
+        
+        Override ``embed()`` in your subclass to implement a custom
+        embedding provider.
+        
+        Args:
+            model_id: The model identifier.
+            dimensions: Output dimensionality of the embedding vectors.
+            base_url: Base URL for HTTP-based providers.
+            pricing: Optional pricing information.
+            vram_estimate_bytes: Estimated VRAM footprint in bytes.
         """
     @staticmethod
     def openai(*, options: typing.Optional[ProviderOptions] = None, model: typing.Optional[builtins.str] = None, dimensions: typing.Optional[builtins.int] = None) -> EmbeddingModel:
@@ -1436,6 +1487,18 @@ class EmbeddingModel:
             >>> print(len(response.embeddings[0]))  # dimensionality
         """
     def __repr__(self) -> builtins.str: ...
+    @staticmethod
+    def fastembed(*, options: typing.Optional[FastEmbedOptions] = None) -> EmbeddingModel:
+        r"""
+        Create a local fastembed embedding model (ONNX Runtime, no API key required).
+        
+        Args:
+            options: Optional typed ``FastEmbedOptions`` object.
+        
+        Example:
+            >>> model = EmbeddingModel.fastembed()
+            >>> model = EmbeddingModel.fastembed(options=FastEmbedOptions(model_name="BGESmallENV15"))
+        """
 
 @typing.final
 class EmbeddingResponse:
@@ -1861,6 +1924,43 @@ class FalProvider:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class FastEmbedOptions:
+    r"""
+    Options for the local fastembed embedding backend.
+    
+    Example:
+        >>> opts = FastEmbedOptions(model_name="BGESmallENV15")
+        >>> model = EmbeddingModel.fastembed(options=opts)
+    """
+    @property
+    def model_name(self) -> typing.Optional[builtins.str]: ...
+    @model_name.setter
+    def model_name(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def cache_dir(self) -> typing.Optional[builtins.str]: ...
+    @cache_dir.setter
+    def cache_dir(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def max_batch_size(self) -> typing.Optional[builtins.int]: ...
+    @max_batch_size.setter
+    def max_batch_size(self, value: typing.Optional[builtins.int]) -> None: ...
+    @property
+    def show_download_progress(self) -> typing.Optional[builtins.bool]: ...
+    @show_download_progress.setter
+    def show_download_progress(self, value: typing.Optional[builtins.bool]) -> None: ...
+    def __new__(cls, *, model_name: typing.Optional[builtins.str] = None, cache_dir: typing.Optional[builtins.str] = None, max_batch_size: typing.Optional[builtins.int] = None, show_download_progress: typing.Optional[builtins.bool] = None) -> FastEmbedOptions:
+        r"""
+        Create a new FastEmbedOptions.
+        
+        Args:
+            model_name: Fastembed model variant name (e.g. "BGESmallENV15").
+            cache_dir: Model cache directory path.
+            max_batch_size: Maximum batch size for embedding.
+            show_download_progress: Show download progress when fetching models.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class FinishReason:
     r"""
     Normalized finish reason across providers.
@@ -1902,118 +2002,37 @@ class FinishReason:
     def __repr__(self) -> builtins.str: ...
     def __eq__(self, other: FinishReason) -> builtins.bool: ...
 
-@typing.final
-class Generated3DModel:
+class ImageProvider:
     r"""
-    A single generated 3D model with optional mesh metadata.
+    Base class for image generation providers.
+    
+    Subclass and override ``generate_image()`` and ``upscale_image()`` to
+    implement a custom image backend.
     """
     @property
-    def media(self) -> MediaOutput:
+    def provider_id(self) -> typing.Optional[builtins.str]:
         r"""
-        The underlying media output.
+        The provider identifier.
         """
     @property
-    def vertex_count(self) -> typing.Optional[builtins.int]:
+    def base_url(self) -> typing.Optional[builtins.str]:
         r"""
-        Total vertex count, if known.
+        The base URL, if set.
         """
     @property
-    def face_count(self) -> typing.Optional[builtins.int]:
+    def vram_estimate_bytes(self) -> typing.Optional[builtins.int]:
         r"""
-        Total face/triangle count, if known.
+        Estimated VRAM footprint in bytes, if set.
         """
-    @property
-    def has_textures(self) -> builtins.bool:
+    def __new__(cls, *, provider_id: builtins.str, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> ImageProvider: ...
+    def generate_image(self, request: ImageRequest) -> typing.Any:
         r"""
-        Whether the model includes texture data.
+        Generate an image from a prompt.
         """
-    @property
-    def has_animations(self) -> builtins.bool:
+    def upscale_image(self, request: UpscaleRequest) -> typing.Any:
         r"""
-        Whether the model includes animation data.
+        Upscale an existing image.
         """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class GeneratedAudio:
-    r"""
-    A single generated audio clip with optional metadata.
-    """
-    @property
-    def media(self) -> MediaOutput:
-        r"""
-        The underlying media output.
-        """
-    @property
-    def duration_seconds(self) -> typing.Optional[builtins.float]:
-        r"""
-        Duration in seconds, if known.
-        """
-    @property
-    def sample_rate(self) -> typing.Optional[builtins.int]:
-        r"""
-        Sample rate in Hz, if known.
-        """
-    @property
-    def channels(self) -> typing.Optional[builtins.int]:
-        r"""
-        Number of audio channels, if known.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class GeneratedImage:
-    r"""
-    A single generated image with optional dimension metadata.
-    """
-    @property
-    def media(self) -> MediaOutput:
-        r"""
-        The underlying media output.
-        """
-    @property
-    def width(self) -> typing.Optional[builtins.int]:
-        r"""
-        Image width in pixels, if known.
-        """
-    @property
-    def height(self) -> typing.Optional[builtins.int]:
-        r"""
-        Image height in pixels, if known.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class GeneratedVideo:
-    r"""
-    A single generated video with optional metadata.
-    """
-    @property
-    def media(self) -> MediaOutput:
-        r"""
-        The underlying media output.
-        """
-    @property
-    def width(self) -> typing.Optional[builtins.int]:
-        r"""
-        Video width in pixels, if known.
-        """
-    @property
-    def height(self) -> typing.Optional[builtins.int]:
-        r"""
-        Video height in pixels, if known.
-        """
-    @property
-    def duration_seconds(self) -> typing.Optional[builtins.float]:
-        r"""
-        Duration in seconds, if known.
-        """
-    @property
-    def fps(self) -> typing.Optional[builtins.float]:
-        r"""
-        Frames per second, if known.
-        """
-    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class ImageRequest:
@@ -2034,32 +2053,6 @@ class ImageRequest:
     def model(self) -> typing.Optional[builtins.str]: ...
     def __new__(cls, *, prompt: builtins.str, negative_prompt: typing.Optional[builtins.str] = None, width: typing.Optional[builtins.int] = None, height: typing.Optional[builtins.int] = None, num_images: typing.Optional[builtins.int] = None, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> ImageRequest: ...
     def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class ImageResult:
-    r"""
-    Result of an image generation or upscale operation.
-    """
-    @property
-    def images(self) -> builtins.list[GeneratedImage]:
-        r"""
-        The generated or upscaled images.
-        """
-    @property
-    def timing(self) -> RequestTiming:
-        r"""
-        Request timing breakdown.
-        """
-    @property
-    def cost(self) -> typing.Optional[builtins.float]:
-        r"""
-        Cost in USD, if reported by the provider.
-        """
-    @property
-    def metadata(self) -> dict[str, typing.Any]:
-        r"""
-        Arbitrary provider-specific metadata (as a dict).
-        """
 
 @typing.final
 class InMemoryBackend:
@@ -2236,7 +2229,7 @@ class Memory:
         Create a Memory with an embedding model for full semantic search.
         
         Args:
-            embedder: An EmbeddingModel instance.
+            embedder: An EmbeddingModel instance (built-in or Python subclass).
             backend: A backend instance (InMemoryBackend, JsonlBackend, or ValkeyBackend).
         """
     @staticmethod
@@ -2334,6 +2327,48 @@ class Memory:
         """
     def __repr__(self) -> builtins.str: ...
 
+class MemoryBackend:
+    r"""
+    Base class for custom memory storage backends.
+    
+    Subclass and override all methods to implement a custom backend
+    (e.g. PostgreSQL, DynamoDB, SQLite).
+    
+    Example:
+        >>> class PostgresBackend(MemoryBackend):
+        ...     async def put(self, entry): ...
+        ...     async def get(self, id): ...
+        ...     async def delete(self, id): ...
+        ...     async def list(self): ...
+        ...     async def len(self): ...
+        ...     async def search_by_bands(self, bands, limit): ...
+    """
+    def __new__(cls) -> MemoryBackend: ...
+    def put(self, _entry: typing.Any) -> typing.Any:
+        r"""
+        Store an entry.
+        """
+    def get(self, _id: builtins.str) -> typing.Any:
+        r"""
+        Retrieve an entry by ID.
+        """
+    def delete(self, _id: builtins.str) -> typing.Any:
+        r"""
+        Delete an entry by ID.
+        """
+    def list(self) -> typing.Any:
+        r"""
+        List all entries.
+        """
+    def len(self) -> typing.Any:
+        r"""
+        Return the number of entries.
+        """
+    def search_by_bands(self, _bands: typing.Sequence[builtins.str], _limit: builtins.int) -> typing.Any:
+        r"""
+        Search by SimHash bands.
+        """
+
 @typing.final
 class MemoryResult:
     r"""
@@ -2369,6 +2404,204 @@ class MemoryResult:
         Arbitrary user metadata (returned as a Python dict/value).
         """
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class MistralRsOptions:
+    r"""
+    Options for the local mistral.rs LLM backend.
+    
+    The ``model_id`` argument is required (HuggingFace model ID or local
+    path to a GGUF file). All other arguments are optional.
+    
+    Example:
+        >>> opts = MistralRsOptions("mistralai/Mistral-7B-Instruct-v0.3")
+        >>> model = CompletionModel.mistralrs(options=opts)
+    """
+    @property
+    def model_id(self) -> builtins.str: ...
+    @model_id.setter
+    def model_id(self, value: builtins.str) -> None: ...
+    @property
+    def quantization(self) -> typing.Optional[builtins.str]: ...
+    @quantization.setter
+    def quantization(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def device(self) -> typing.Optional[builtins.str]: ...
+    @device.setter
+    def device(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def context_length(self) -> typing.Optional[builtins.int]: ...
+    @context_length.setter
+    def context_length(self, value: typing.Optional[builtins.int]) -> None: ...
+    @property
+    def max_batch_size(self) -> typing.Optional[builtins.int]: ...
+    @max_batch_size.setter
+    def max_batch_size(self, value: typing.Optional[builtins.int]) -> None: ...
+    @property
+    def chat_template(self) -> typing.Optional[builtins.str]: ...
+    @chat_template.setter
+    def chat_template(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def cache_dir(self) -> typing.Optional[builtins.str]: ...
+    @cache_dir.setter
+    def cache_dir(self, value: typing.Optional[builtins.str]) -> None: ...
+    def __new__(cls, model_id: builtins.str, *, quantization: typing.Optional[Quantization] = None, device: typing.Optional[Device] = None, context_length: typing.Optional[builtins.int] = None, max_batch_size: typing.Optional[builtins.int] = None, chat_template: typing.Optional[builtins.str] = None, cache_dir: typing.Optional[builtins.str] = None) -> MistralRsOptions:
+        r"""
+        Create a new MistralRsOptions.
+        
+        Args:
+            model_id: HuggingFace model ID or local GGUF path (required).
+            quantization: Quantization format enum value (e.g. ``Quantization.Q4KM``).
+            device: Hardware device enum value (e.g. ``Device.Cuda``).
+            context_length: Maximum context length in tokens.
+            max_batch_size: Maximum batch size for concurrent requests.
+            chat_template: Jinja2 chat template override.
+            cache_dir: Path to cache downloaded models.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ModelManager:
+    r"""
+    VRAM budget-aware model manager with LRU eviction.
+    
+    Tracks registered local models and their estimated VRAM footprint.
+    When loading a model that would exceed the budget, the
+    least-recently-used loaded model is unloaded first.
+    
+    Example:
+        >>> manager = ModelManager(budget_gb=24)
+        >>> manager.register("llm", my_local_model)
+        >>> await manager.load("llm")
+        >>> manager.is_loaded("llm")
+        True
+    """
+    def __new__(cls, *, budget_gb: typing.Optional[builtins.float] = None, budget_bytes: typing.Optional[builtins.int] = None) -> ModelManager:
+        r"""
+        Create a new model manager.
+        
+        Args:
+            budget_gb: VRAM budget in gigabytes.
+            budget_bytes: VRAM budget in bytes (alternative to budget_gb).
+        """
+    async def register(self, id: builtins.str, model: typing.Any, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+        r"""
+        Register a model with its estimated VRAM footprint.
+        
+        The model must be a local provider (e.g. created via
+        ``CompletionModel.mistralrs(...)`` or similar local factory).
+        
+        Args:
+            id: A unique identifier for this model.
+            model: A CompletionModel with local model support.
+            vram_estimate_bytes: Estimated VRAM footprint in bytes.
+        """
+    async def load(self, id: builtins.str) -> None:
+        r"""
+        Load a model, evicting LRU models if needed.
+        """
+    async def unload(self, id: builtins.str) -> None:
+        r"""
+        Unload a model, freeing its VRAM budget.
+        """
+    async def is_loaded(self, id: builtins.str) -> bool:
+        r"""
+        Check if a model is currently loaded.
+        """
+    async def ensure_loaded(self, id: builtins.str) -> None:
+        r"""
+        Ensure a model is loaded (load if not, update LRU if already loaded).
+        """
+    async def used_bytes(self) -> int:
+        r"""
+        Total VRAM currently used by loaded models.
+        """
+    async def available_bytes(self) -> int:
+        r"""
+        Available VRAM within the budget.
+        """
+    async def status(self) -> list[ModelStatus]:
+        r"""
+        Status of all registered models.
+        """
+
+@typing.final
+class ModelPricing:
+    r"""
+    Pricing information for a model.
+    
+    Example:
+        >>> pricing = ModelPricing(input_per_million=1.0, output_per_million=2.0)
+        >>> pricing.input_per_million
+        1.0
+    """
+    @property
+    def input_per_million(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost per million input tokens in USD.
+        """
+    @property
+    def output_per_million(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost per million output tokens in USD.
+        """
+    @property
+    def per_image(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost per image in USD.
+        """
+    @property
+    def per_second(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost per second of compute in USD.
+        """
+    def __new__(cls, *, input_per_million: typing.Optional[builtins.float] = None, output_per_million: typing.Optional[builtins.float] = None, per_image: typing.Optional[builtins.float] = None, per_second: typing.Optional[builtins.float] = None) -> ModelPricing: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ModelStatus:
+    r"""
+    Status of a registered model.
+    """
+    @property
+    def id(self) -> builtins.str: ...
+    @property
+    def loaded(self) -> builtins.bool: ...
+    @property
+    def vram_estimate(self) -> builtins.int: ...
+    def __repr__(self) -> builtins.str: ...
+
+class MusicProvider:
+    r"""
+    Base class for music generation providers.
+    
+    Subclass and override ``generate_music()`` and ``generate_sfx()`` to
+    implement a custom music/SFX backend.
+    """
+    @property
+    def provider_id(self) -> typing.Optional[builtins.str]:
+        r"""
+        The provider identifier.
+        """
+    @property
+    def base_url(self) -> typing.Optional[builtins.str]:
+        r"""
+        The base URL, if set.
+        """
+    @property
+    def vram_estimate_bytes(self) -> typing.Optional[builtins.int]:
+        r"""
+        Estimated VRAM footprint in bytes, if set.
+        """
+    def __new__(cls, *, provider_id: builtins.str, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> MusicProvider: ...
+    def generate_music(self, request: MusicRequest) -> typing.Any:
+        r"""
+        Generate music from a prompt.
+        """
+    def generate_sfx(self, request: MusicRequest) -> typing.Any:
+        r"""
+        Generate a sound effect from a prompt.
+        """
 
 @typing.final
 class MusicRequest:
@@ -2624,6 +2857,291 @@ class ProviderOptions:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class PyAudioResult:
+    r"""
+    Result of an audio generation or TTS operation.
+    """
+    @property
+    def audio(self) -> builtins.list[PyGeneratedAudio]:
+        r"""
+        The generated audio clips.
+        """
+    @property
+    def timing(self) -> RequestTiming:
+        r"""
+        Request timing breakdown.
+        """
+    @property
+    def cost(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost in USD, if reported by the provider.
+        """
+    @property
+    def metadata(self) -> dict[str, typing.Any]:
+        r"""
+        Arbitrary provider-specific metadata (as a dict).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PyGenerated3DModel:
+    r"""
+    A single generated 3D model with optional mesh metadata.
+    """
+    @property
+    def media(self) -> MediaOutput:
+        r"""
+        The underlying media output.
+        """
+    @property
+    def vertex_count(self) -> typing.Optional[builtins.int]:
+        r"""
+        Total vertex count, if known.
+        """
+    @property
+    def face_count(self) -> typing.Optional[builtins.int]:
+        r"""
+        Total face/triangle count, if known.
+        """
+    @property
+    def has_textures(self) -> builtins.bool:
+        r"""
+        Whether the model includes texture data.
+        """
+    @property
+    def has_animations(self) -> builtins.bool:
+        r"""
+        Whether the model includes animation data.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PyGeneratedAudio:
+    r"""
+    A single generated audio clip with optional metadata.
+    """
+    @property
+    def media(self) -> MediaOutput:
+        r"""
+        The underlying media output.
+        """
+    @property
+    def duration_seconds(self) -> typing.Optional[builtins.float]:
+        r"""
+        Duration in seconds, if known.
+        """
+    @property
+    def sample_rate(self) -> typing.Optional[builtins.int]:
+        r"""
+        Sample rate in Hz, if known.
+        """
+    @property
+    def channels(self) -> typing.Optional[builtins.int]:
+        r"""
+        Number of audio channels, if known.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PyGeneratedImage:
+    r"""
+    A single generated image with optional dimension metadata.
+    """
+    @property
+    def media(self) -> MediaOutput:
+        r"""
+        The underlying media output.
+        """
+    @property
+    def width(self) -> typing.Optional[builtins.int]:
+        r"""
+        Image width in pixels, if known.
+        """
+    @property
+    def height(self) -> typing.Optional[builtins.int]:
+        r"""
+        Image height in pixels, if known.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PyGeneratedVideo:
+    r"""
+    A single generated video with optional metadata.
+    """
+    @property
+    def media(self) -> MediaOutput:
+        r"""
+        The underlying media output.
+        """
+    @property
+    def width(self) -> typing.Optional[builtins.int]:
+        r"""
+        Video width in pixels, if known.
+        """
+    @property
+    def height(self) -> typing.Optional[builtins.int]:
+        r"""
+        Video height in pixels, if known.
+        """
+    @property
+    def duration_seconds(self) -> typing.Optional[builtins.float]:
+        r"""
+        Duration in seconds, if known.
+        """
+    @property
+    def fps(self) -> typing.Optional[builtins.float]:
+        r"""
+        Frames per second, if known.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PyImageResult:
+    r"""
+    Result of an image generation or upscale operation.
+    """
+    @property
+    def images(self) -> builtins.list[PyGeneratedImage]:
+        r"""
+        The generated or upscaled images.
+        """
+    @property
+    def timing(self) -> RequestTiming:
+        r"""
+        Request timing breakdown.
+        """
+    @property
+    def cost(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost in USD, if reported by the provider.
+        """
+    @property
+    def metadata(self) -> dict[str, typing.Any]:
+        r"""
+        Arbitrary provider-specific metadata (as a dict).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PyThreeDResult:
+    r"""
+    Result of a 3D model generation operation.
+    """
+    @property
+    def models(self) -> builtins.list[PyGenerated3DModel]:
+        r"""
+        The generated 3D models.
+        """
+    @property
+    def timing(self) -> RequestTiming:
+        r"""
+        Request timing breakdown.
+        """
+    @property
+    def cost(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost in USD, if reported by the provider.
+        """
+    @property
+    def metadata(self) -> dict[str, typing.Any]:
+        r"""
+        Arbitrary provider-specific metadata (as a dict).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PyTranscriptionResult:
+    r"""
+    Result of a transcription operation.
+    """
+    @property
+    def text(self) -> builtins.str:
+        r"""
+        The full transcribed text.
+        """
+    @property
+    def segments(self) -> builtins.list[PyTranscriptionSegment]:
+        r"""
+        Time-aligned segments, if available.
+        """
+    @property
+    def language(self) -> typing.Optional[builtins.str]:
+        r"""
+        Detected or specified language code (e.g. "en", "fr").
+        """
+    @property
+    def timing(self) -> RequestTiming:
+        r"""
+        Request timing breakdown.
+        """
+    @property
+    def cost(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost in USD, if reported by the provider.
+        """
+    @property
+    def metadata(self) -> dict[str, typing.Any]:
+        r"""
+        Arbitrary provider-specific metadata (as a dict).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PyTranscriptionSegment:
+    r"""
+    A single segment within a transcription.
+    """
+    @property
+    def text(self) -> builtins.str:
+        r"""
+        The transcribed text for this segment.
+        """
+    @property
+    def start(self) -> builtins.float:
+        r"""
+        Start time in seconds.
+        """
+    @property
+    def end(self) -> builtins.float:
+        r"""
+        End time in seconds.
+        """
+    @property
+    def speaker(self) -> typing.Optional[builtins.str]:
+        r"""
+        Speaker label, if diarization was enabled.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PyVideoResult:
+    r"""
+    Result of a video generation operation.
+    """
+    @property
+    def videos(self) -> builtins.list[PyGeneratedVideo]:
+        r"""
+        The generated videos.
+        """
+    @property
+    def timing(self) -> RequestTiming:
+        r"""
+        Request timing breakdown.
+        """
+    @property
+    def cost(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost in USD, if reported by the provider.
+        """
+    @property
+    def metadata(self) -> dict[str, typing.Any]:
+        r"""
+        Arbitrary provider-specific metadata (as a dict).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class RequestTiming:
     r"""
     Breakdown of request timing (queue, execution, total) in milliseconds.
@@ -2858,6 +3376,60 @@ class StopEvent(Event):
     """
     ...
 
+class TTSProvider:
+    r"""
+    Base class for text-to-speech providers.
+    
+    Subclass and override ``text_to_speech()`` to implement a custom TTS backend.
+    """
+    @property
+    def provider_id(self) -> typing.Optional[builtins.str]:
+        r"""
+        The provider identifier.
+        """
+    @property
+    def base_url(self) -> typing.Optional[builtins.str]:
+        r"""
+        The base URL, if set.
+        """
+    @property
+    def vram_estimate_bytes(self) -> typing.Optional[builtins.int]:
+        r"""
+        Estimated VRAM footprint in bytes, if set.
+        """
+    def __new__(cls, *, provider_id: builtins.str, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> TTSProvider: ...
+    def text_to_speech(self, request: SpeechRequest) -> typing.Any:
+        r"""
+        Synthesize speech from text.
+        """
+
+class ThreeDProvider:
+    r"""
+    Base class for 3D model generation providers.
+    
+    Subclass and override ``generate_3d()`` to implement a custom 3D backend.
+    """
+    @property
+    def provider_id(self) -> typing.Optional[builtins.str]:
+        r"""
+        The provider identifier.
+        """
+    @property
+    def base_url(self) -> typing.Optional[builtins.str]:
+        r"""
+        The base URL, if set.
+        """
+    @property
+    def vram_estimate_bytes(self) -> typing.Optional[builtins.int]:
+        r"""
+        Estimated VRAM footprint in bytes, if set.
+        """
+    def __new__(cls, *, provider_id: builtins.str, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> ThreeDProvider: ...
+    def generate_3d(self, request: ThreeDRequest) -> typing.Any:
+        r"""
+        Generate a 3D model from a prompt or image.
+        """
+
 @typing.final
 class ThreeDRequest:
     r"""
@@ -2875,32 +3447,6 @@ class ThreeDRequest:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
-class ThreeDResult:
-    r"""
-    Result of a 3D model generation operation.
-    """
-    @property
-    def models(self) -> builtins.list[Generated3DModel]:
-        r"""
-        The generated 3D models.
-        """
-    @property
-    def timing(self) -> RequestTiming:
-        r"""
-        Request timing breakdown.
-        """
-    @property
-    def cost(self) -> typing.Optional[builtins.float]:
-        r"""
-        Cost in USD, if reported by the provider.
-        """
-    @property
-    def metadata(self) -> dict[str, typing.Any]:
-        r"""
-        Arbitrary provider-specific metadata (as a dict).
-        """
-
-@typing.final
 class ToolDef:
     r"""
     A tool definition for the agent.
@@ -2913,10 +3459,29 @@ class ToolDef:
         ...     handler=lambda args: {"results": []}
         ... )
     """
+    @property
+    def name(self) -> builtins.str:
+        r"""
+        The tool name (as advertised to the model).
+        """
+    @property
+    def description(self) -> builtins.str:
+        r"""
+        Human-readable description of what the tool does.
+        """
+    @property
+    def parameters(self) -> typing.Any:
+        r"""
+        JSON-schema parameters dict describing the tool's arguments.
+        """
+    @property
+    def handler(self) -> typing.Any:
+        r"""
+        The Python callable that implements the tool.
+        """
     def __new__(cls, *, name: builtins.str, description: builtins.str, parameters: typing.Any, handler: typing.Any) -> ToolDef: ...
     def __repr__(self) -> builtins.str: ...
 
-@typing.final
 class Transcription:
     r"""
     An audio transcription provider.
@@ -2943,6 +3508,19 @@ class Transcription:
     def provider_id(self) -> builtins.str:
         r"""
         Get the provider identifier (e.g. "fal", "whispercpp").
+        """
+    def __new__(cls, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> Transcription:
+        r"""
+        Create a custom transcription provider by subclassing.
+        
+        Override ``transcribe()`` in your subclass to implement a custom
+        transcription provider.
+        
+        Args:
+            provider_id: A provider identifier (e.g. ``"my-stt"``).
+            base_url: Base URL for HTTP-based providers.
+            pricing: Optional pricing information.
+            vram_estimate_bytes: Estimated VRAM footprint in bytes.
         """
     @staticmethod
     def fal(*, options: typing.Optional[FalOptions] = None) -> Transcription:
@@ -2975,6 +3553,31 @@ class Transcription:
             >>> print(result.text)
         """
     def __repr__(self) -> builtins.str: ...
+    @staticmethod
+    def whispercpp(*, options: typing.Optional[WhisperOptions] = None) -> Transcription:
+        r"""
+        Create a local whisper.cpp transcription provider.
+        
+        Runs transcription entirely on-device using whisper.cpp. The first
+        call downloads the GGML model (tens to hundreds of MB depending on
+        the chosen variant) and caches it for subsequent runs. No API key
+        is required.
+        
+        whisper.cpp currently expects **16-bit PCM mono WAV at 16 kHz**.
+        URL audio sources are not supported -- use
+        :meth:`TranscriptionRequest.from_file` with a local path.
+        
+        Args:
+            options: Optional typed :class:`WhisperOptions` with model size,
+                device, language, and cache directory.
+        
+        Example:
+            >>> opts = WhisperOptions(model=WhisperModel.Base)
+            >>> transcriber = Transcription.whispercpp(options=opts)
+            >>> req = TranscriptionRequest.from_file("audio.wav")
+            >>> result = await transcriber.transcribe(req)
+            >>> print(result.text)
+        """
 
 @typing.final
 class TranscriptionRequest:
@@ -3015,69 +3618,6 @@ class TranscriptionRequest:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
-class TranscriptionResult:
-    r"""
-    Result of a transcription operation.
-    """
-    @property
-    def text(self) -> builtins.str:
-        r"""
-        The full transcribed text.
-        """
-    @property
-    def segments(self) -> builtins.list[TranscriptionSegment]:
-        r"""
-        Time-aligned segments, if available.
-        """
-    @property
-    def language(self) -> typing.Optional[builtins.str]:
-        r"""
-        Detected or specified language code (e.g. "en", "fr").
-        """
-    @property
-    def timing(self) -> RequestTiming:
-        r"""
-        Request timing breakdown.
-        """
-    @property
-    def cost(self) -> typing.Optional[builtins.float]:
-        r"""
-        Cost in USD, if reported by the provider.
-        """
-    @property
-    def metadata(self) -> dict[str, typing.Any]:
-        r"""
-        Arbitrary provider-specific metadata (as a dict).
-        """
-
-@typing.final
-class TranscriptionSegment:
-    r"""
-    A single segment within a transcription.
-    """
-    @property
-    def text(self) -> builtins.str:
-        r"""
-        The transcribed text for this segment.
-        """
-    @property
-    def start(self) -> builtins.float:
-        r"""
-        Start time in seconds.
-        """
-    @property
-    def end(self) -> builtins.float:
-        r"""
-        End time in seconds.
-        """
-    @property
-    def speaker(self) -> typing.Optional[builtins.str]:
-        r"""
-        Speaker label, if diarization was enabled.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
 class UpscaleRequest:
     r"""
     Typed wrapper for an image upscale request.
@@ -3112,6 +3652,38 @@ class ValkeyBackend:
         """
     def __repr__(self) -> builtins.str: ...
 
+class VideoProvider:
+    r"""
+    Base class for video generation providers.
+    
+    Subclass and override ``text_to_video()`` and ``image_to_video()`` to
+    implement a custom video backend.
+    """
+    @property
+    def provider_id(self) -> typing.Optional[builtins.str]:
+        r"""
+        The provider identifier.
+        """
+    @property
+    def base_url(self) -> typing.Optional[builtins.str]:
+        r"""
+        The base URL, if set.
+        """
+    @property
+    def vram_estimate_bytes(self) -> typing.Optional[builtins.int]:
+        r"""
+        Estimated VRAM footprint in bytes, if set.
+        """
+    def __new__(cls, *, provider_id: builtins.str, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> VideoProvider: ...
+    def text_to_video(self, request: VideoRequest) -> typing.Any:
+        r"""
+        Generate a video from a text prompt.
+        """
+    def image_to_video(self, request: VideoRequest) -> typing.Any:
+        r"""
+        Generate a video from an image (image-to-video).
+        """
+
 @typing.final
 class VideoRequest:
     r"""
@@ -3133,32 +3705,6 @@ class VideoRequest:
     def model(self) -> typing.Optional[builtins.str]: ...
     def __new__(cls, *, prompt: builtins.str, image_url: typing.Optional[builtins.str] = None, duration_seconds: typing.Optional[builtins.float] = None, negative_prompt: typing.Optional[builtins.str] = None, width: typing.Optional[builtins.int] = None, height: typing.Optional[builtins.int] = None, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> VideoRequest: ...
     def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class VideoResult:
-    r"""
-    Result of a video generation operation.
-    """
-    @property
-    def videos(self) -> builtins.list[GeneratedVideo]:
-        r"""
-        The generated videos.
-        """
-    @property
-    def timing(self) -> RequestTiming:
-        r"""
-        Request timing breakdown.
-        """
-    @property
-    def cost(self) -> typing.Optional[builtins.float]:
-        r"""
-        Cost in USD, if reported by the provider.
-        """
-    @property
-    def metadata(self) -> dict[str, typing.Any]:
-        r"""
-        Arbitrary provider-specific metadata (as a dict).
-        """
 
 @typing.final
 class VoiceCloneRequest:
@@ -3228,6 +3774,91 @@ class VoiceHandle:
         Arbitrary provider-specific metadata (as a dict).
         """
     def __new__(cls, *, id: builtins.str, name: builtins.str, provider: builtins.str, language: typing.Optional[builtins.str] = None, description: typing.Optional[builtins.str] = None, metadata: typing.Optional[typing.Any] = None) -> VoiceHandle: ...
+    def __repr__(self) -> builtins.str: ...
+
+class VoiceProvider:
+    r"""
+    Base class for voice cloning providers.
+    
+    Subclass and override ``clone_voice()``, ``list_voices()``, and
+    ``delete_voice()`` to implement a custom voice-cloning backend.
+    """
+    @property
+    def provider_id(self) -> typing.Optional[builtins.str]:
+        r"""
+        The provider identifier.
+        """
+    @property
+    def base_url(self) -> typing.Optional[builtins.str]:
+        r"""
+        The base URL, if set.
+        """
+    @property
+    def vram_estimate_bytes(self) -> typing.Optional[builtins.int]:
+        r"""
+        Estimated VRAM footprint in bytes, if set.
+        """
+    def __new__(cls, *, provider_id: builtins.str, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> VoiceProvider: ...
+    def clone_voice(self, request: VoiceCloneRequest) -> typing.Any:
+        r"""
+        Clone a voice from audio samples.
+        """
+    def list_voices(self) -> typing.Any:
+        r"""
+        List all available voices.
+        """
+    def delete_voice(self, voice: VoiceHandle) -> typing.Any:
+        r"""
+        Delete a previously-cloned voice.
+        """
+
+@typing.final
+class WhisperOptions:
+    r"""
+    Options for the local whisper.cpp transcription backend.
+    
+    All fields are optional. When ``model`` is omitted, defaults to
+    :class:`WhisperModel.Small`. When ``language`` is omitted, whisper.cpp
+    will auto-detect the spoken language.
+    
+    Example:
+        >>> opts = WhisperOptions()
+        >>> opts = WhisperOptions(model=WhisperModel.Base, language="en")
+        >>> transcriber = Transcription.whispercpp(options=opts)
+    """
+    @property
+    def device(self) -> typing.Optional[builtins.str]: ...
+    @device.setter
+    def device(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def language(self) -> typing.Optional[builtins.str]: ...
+    @language.setter
+    def language(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def diarize(self) -> typing.Optional[builtins.bool]: ...
+    @diarize.setter
+    def diarize(self, value: typing.Optional[builtins.bool]) -> None: ...
+    @property
+    def cache_dir(self) -> typing.Optional[builtins.str]: ...
+    @cache_dir.setter
+    def cache_dir(self, value: typing.Optional[builtins.str]) -> None: ...
+    def __new__(cls, *, model: typing.Optional[WhisperModel] = None, device: typing.Optional[builtins.str] = None, language: typing.Optional[builtins.str] = None, diarize: typing.Optional[builtins.bool] = None, cache_dir: typing.Optional[builtins.str] = None) -> WhisperOptions:
+        r"""
+        Create a new WhisperOptions.
+        
+        Args:
+            model: Whisper model size (defaults to ``WhisperModel.Small``).
+            device: Hardware device specifier string (e.g. ``"cpu"``,
+                ``"cuda:0"``, ``"metal"``). Defaults to ``"cpu"`` when ``None``.
+            language: ISO 639-1 language code (e.g. ``"en"``). When ``None``,
+                whisper auto-detects the language.
+            diarize: Enable speaker diarization. Currently unsupported by the
+                whisper.cpp backend; setting ``True`` will cause transcription
+                calls to fail.
+            cache_dir: Directory to cache downloaded models. When ``None``,
+                falls back to ``$BLAZEN_CACHE_DIR`` or
+                ``~/.cache/blazen/models``.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -3616,6 +4247,31 @@ class SessionPausePolicy(enum.Enum):
     WarnDrop = ...
     HardError = ...
 
+@typing.final
+class WhisperModel(enum.Enum):
+    r"""
+    Whisper model size variant for the local whisper.cpp backend.
+    
+    Larger models are more accurate but require more memory and are slower.
+    
+    | Variant   | Params | RAM   |
+    |-----------|--------|-------|
+    | Tiny      | 39M    | ~1GB  |
+    | Base      | 74M    | ~1GB  |
+    | Small     | 244M   | ~2GB  |
+    | Medium    | 769M   | ~5GB  |
+    | LargeV3   | 1.5B   | ~10GB |
+    
+    Example:
+        >>> WhisperModel.Base
+        >>> opts = WhisperOptions(model=WhisperModel.Base)
+    """
+    Tiny = ...
+    Base = ...
+    Small = ...
+    Medium = ...
+    LargeV3 = ...
+
 async def complete_batch(model: CompletionModel, requests: typing.Sequence[typing.Sequence[ChatMessage]], *, concurrency: builtins.int = 0, options: typing.Optional[CompletionOptions] = None) -> BatchResult:
     r"""
     Execute multiple completion requests in parallel with bounded concurrency.
@@ -3646,6 +4302,37 @@ async def complete_batch(model: CompletionModel, requests: typing.Sequence[typin
         >>> for resp in result.responses:
         ...     if resp is not None:
         ...         print(resp.content)
+    """
+
+def lookup_pricing(model_id: builtins.str) -> typing.Optional[ModelPricing]:
+    r"""
+    Look up pricing for a model ID.
+    
+    Returns ``None`` if the model is unknown.
+    
+    Args:
+        model_id: The model identifier.
+    
+    Returns:
+        Optional ``ModelPricing`` with input and output costs.
+    
+    Example:
+        >>> pricing = lookup_pricing("gpt-4o")
+        >>> if pricing:
+        ...     print(pricing.input_per_million)
+    """
+
+def register_pricing(model_id: builtins.str, pricing: ModelPricing) -> None:
+    r"""
+    Register pricing for a model ID.
+    
+    Args:
+        model_id: The model identifier (e.g. "my-custom-model").
+        pricing: A ``ModelPricing`` object with at least ``input_per_million``
+            and ``output_per_million`` set.
+    
+    Example:
+        >>> register_pricing("my-model", ModelPricing(input_per_million=1.0, output_per_million=2.0))
     """
 
 async def run_agent(model: CompletionModel, messages: typing.Sequence[ChatMessage], *, tools: typing.Sequence[ToolDef], max_iterations: builtins.int = 10, system_prompt: typing.Optional[builtins.str] = None, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, add_finish_tool: builtins.bool = False, tool_concurrency: builtins.int = 0) -> AgentResult:

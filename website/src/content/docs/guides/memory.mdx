@@ -1,0 +1,180 @@
+---
+title: "Memory & Semantic Search"
+description: "Store and retrieve documents with embedding- and SimHash-based search"
+section: "guides"
+order: 22
+---
+
+`Memory` is Blazen's document store for retrieval-augmented generation (RAG), chat history, and similarity search. It pairs an optional `EmbeddingModel` with a pluggable `MemoryBackend` and indexes entries using [ELID](https://crates.io/crates/elid) (embedding-based) plus SimHash (local) for fast approximate nearest-neighbor lookup.
+
+## Overview
+
+`Memory` operates in two modes:
+
+- **Full mode** (`Memory(embedder, backend)`) -- an embedding model produces dense vectors. Both semantic `search()` and lightweight `search_local()` are available.
+- **Local-only mode** (`Memory.local(backend)`) -- no embedder. Only `search_local()` works, using character-level SimHash. Cheap, fast, and useful for fuzzy string matching when you don't want the cost of an embedding call on every query.
+
+Every entry carries an `id`, `text`, and optional `metadata` dict. Metadata filters let you scope queries to a subset of the store.
+
+## Basic usage
+
+```python
+from blazen import Memory, InMemoryBackend, EmbeddingModel, ProviderOptions
+
+embedder = EmbeddingModel.openai(options=ProviderOptions(api_key="sk-..."))
+memory = Memory(embedder, InMemoryBackend())
+
+await memory.add("paris", "Paris is the capital of France.", {"category": "geo"})
+await memory.add("rome", "Rome is the capital of Italy.", {"category": "geo"})
+await memory.add("python", "Python is a programming language.", {"category": "tech"})
+
+results = await memory.search("capital city in Europe", limit=2)
+for r in results:
+    print(f"{r.score:.3f}  {r.id}  {r.text}")
+```
+
+```typescript
+import { Memory, InMemoryBackend, EmbeddingModel } from "blazen";
+
+const embedder = EmbeddingModel.openai({ apiKey: "sk-..." });
+const memory = new Memory(embedder, new InMemoryBackend());
+
+await memory.add("paris", "Paris is the capital of France.", { category: "geo" });
+await memory.add("rome", "Rome is the capital of Italy.", { category: "geo" });
+await memory.add("python", "Python is a programming language.", { category: "tech" });
+
+const results = await memory.search("capital city in Europe", 2);
+for (const r of results) {
+  console.log(r.score.toFixed(3), r.id, r.text);
+}
+```
+
+```rust
+use blazen_memory::{InMemoryBackend, Memory, MemoryEntry, MemoryStore};
+use blazen_llm::EmbeddingModel;
+use std::sync::Arc;
+
+let embedder: Arc<dyn EmbeddingModel> = /* ... */;
+let memory = Memory::new(embedder, InMemoryBackend::new());
+
+memory
+    .add(vec![
+        MemoryEntry::new("Paris is the capital of France.").with_id("paris"),
+        MemoryEntry::new("Rome is the capital of Italy.").with_id("rome"),
+    ])
+    .await?;
+
+let results = memory.search("capital city in Europe", 2, None).await?;
+for r in results {
+    println!("{:.3}  {}  {}", r.score, r.id, r.text);
+}
+```
+
+## Metadata filtering
+
+Metadata filters are a "superset" match: entries whose metadata contains every key/value pair in the filter are returned. Other keys are ignored.
+
+```python
+geo_only = await memory.search(
+    "European city",
+    limit=5,
+    metadata_filter={"category": "geo"},
+)
+```
+
+```typescript
+const geoOnly = await memory.search("European city", 5, { category: "geo" });
+```
+
+## Local (SimHash) search
+
+When you don't have (or don't want) an embedding model:
+
+```python
+memory = Memory.local(InMemoryBackend())
+await memory.add("greeting", "Hello world!")
+hits = await memory.search_local("hello", limit=5)
+```
+
+```typescript
+const memory = Memory.local(new InMemoryBackend());
+await memory.add("greeting", "Hello world!");
+const hits = await memory.searchLocal("hello", 5);
+```
+
+## Built-in backends
+
+| Backend | Storage | Notes |
+|---|---|---|
+| `InMemoryBackend` | Process memory | Fastest; vanishes on shutdown. |
+| `JsonlBackend` | JSONL file on disk | Loads on startup, appends on insert, rewrites on update/delete. |
+| `ValkeyBackend` | [Valkey](https://valkey.io/) / Redis | Shared across processes; durable when Valkey persists. |
+
+```python
+from blazen import JsonlBackend, ValkeyBackend
+
+jsonl = JsonlBackend("./memory.jsonl")
+valkey = await ValkeyBackend.connect("redis://localhost:6379", namespace="prod:memory")
+
+memory_a = Memory(embedder, jsonl)
+memory_b = Memory(embedder, valkey)
+```
+
+```typescript
+const jsonl = await JsonlBackend.create("./memory.jsonl");
+const memory = Memory.withJsonl(embedder, jsonl);
+```
+
+## Custom backends
+
+Subclass `MemoryBackend` to plug in Postgres, DynamoDB, SQLite, or any other store. The backend must implement `put`, `get`, `delete`, `list`, `len`, and `search_by_bands` -- Blazen calls `search_by_bands` with the LSH hashes it needs to resolve and does final similarity ranking in-process.
+
+```python
+from blazen import MemoryBackend
+
+class SqliteBackend(MemoryBackend):
+    def __init__(self, conn):
+        super().__init__()
+        self._conn = conn
+
+    async def put(self, entry):
+        self._conn.execute(
+            "INSERT OR REPLACE INTO entries(id, text, metadata, bands) VALUES (?,?,?,?)",
+            (entry["id"], entry["text"], json.dumps(entry["metadata"]), json.dumps(entry["bands"])),
+        )
+
+    async def get(self, id):
+        row = self._conn.execute("SELECT * FROM entries WHERE id=?", (id,)).fetchone()
+        return None if row is None else row_to_entry(row)
+
+    async def delete(self, id): ...
+    async def list(self): ...
+    async def len(self): ...
+    async def search_by_bands(self, bands, limit): ...
+
+memory = Memory(embedder, SqliteBackend(sqlite3.connect(":memory:")))
+```
+
+See [Custom Providers](/guides/custom-providers/) for the full subclassing pattern, including error handling and lifecycle expectations.
+
+## CRUD operations
+
+```python
+await memory.add("doc1", "text...", metadata={"tag": "v1"})
+entry = await memory.get("doc1")                 # { id, text, metadata, ... } or None
+deleted = await memory.delete("doc1")             # -> bool
+count = await memory.count()                      # -> int
+```
+
+```typescript
+await memory.add("doc1", "text...", { tag: "v1" });
+const entry = await memory.get("doc1");           // JsMemoryEntry | null
+const deleted = await memory.delete("doc1");       // boolean
+const count = await memory.count();                // number
+```
+
+## See also
+
+- [Embeddings](/guides/python/embeddings/) -- building blocks for the `Memory` embedder
+- [Custom Providers](/guides/custom-providers/) -- subclassing `MemoryBackend` and friends
+- [Local Inference](/guides/local-inference/) -- drop `EmbeddingModel.fastembed()` in for offline semantic search

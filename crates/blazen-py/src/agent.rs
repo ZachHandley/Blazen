@@ -141,6 +141,30 @@ impl PyToolDef {
         })
     }
 
+    /// The tool name (as advertised to the model).
+    #[getter]
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Human-readable description of what the tool does.
+    #[getter]
+    fn description(&self) -> &str {
+        &self.description
+    }
+
+    /// JSON-schema parameters dict describing the tool's arguments.
+    #[getter]
+    fn parameters(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        crate::convert::json_to_py(py, &self.parameters)
+    }
+
+    /// The Python callable that implements the tool.
+    #[getter]
+    fn handler(&self, py: Python<'_>) -> Py<PyAny> {
+        self.handler.clone_ref(py)
+    }
+
     fn __repr__(&self) -> String {
         format!("ToolDef(name='{}')", self.name)
     }
@@ -234,7 +258,7 @@ impl PyAgentResult {
 #[allow(clippy::too_many_arguments)]
 pub fn run_agent<'py>(
     py: Python<'py>,
-    model: &PyCompletionModel,
+    model: Bound<'py, PyCompletionModel>,
     messages: Vec<PyRef<'py, PyChatMessage>>,
     tools: Vec<PyRef<'py, PyToolDef>>,
     max_iterations: u32,
@@ -285,7 +309,7 @@ pub fn run_agent<'py>(
         config = config.with_tool_concurrency(tool_concurrency);
     }
 
-    let inner_model = model.inner.clone();
+    let inner_model = crate::providers::completion_model::arc_from_bound(&model);
 
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
         let result = rust_run_agent(inner_model.as_ref(), rust_messages, config)

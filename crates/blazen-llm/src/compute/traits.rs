@@ -81,6 +81,11 @@ pub trait ComputeProvider: Send + Sync {
         let job = self.submit(request).await?;
         self.result(job).await
     }
+
+    /// Optional configuration metadata for this provider.
+    fn provider_config(&self) -> Option<&crate::traits::ProviderConfig> {
+        None
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -1517,6 +1517,243 @@ let output = MediaOutput::from_base64("iVBORw0KGgo=", MediaType::Png);
 
 ---
 
+## LocalModel Trait
+
+The `LocalModel` trait provides explicit load/unload lifecycle management for models running in-process (llama.cpp, whisper.cpp, etc.). Remote API providers do not implement this trait.
+
+```rust
+#[async_trait]
+pub trait LocalModel: Send + Sync {
+    async fn load(&self) -> Result<(), BlazenError>;
+    async fn unload(&self) -> Result<(), BlazenError>;
+    async fn is_loaded(&self) -> bool;
+    async fn vram_bytes(&self) -> Option<u64>;
+}
+```
+
+| Method | Description |
+|--------|-------------|
+| `load()` | Load the model into memory/VRAM. Idempotent. |
+| `unload()` | Free the model's memory/VRAM. Idempotent. |
+| `is_loaded()` | Whether the model is currently loaded. |
+| `vram_bytes()` | Approximate memory footprint in bytes, or `None` if unknown. |
+
+A type can implement both `CompletionModel` and `LocalModel`:
+
+```rust
+struct MyLocalLLM { /* ... */ }
+
+#[async_trait::async_trait]
+impl CompletionModel for MyLocalLLM {
+    fn model_id(&self) -> &str { "my-local-llm" }
+    async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, BlazenError> {
+        self.load().await?; // auto-load on first call
+        // inference logic
+        todo!()
+    }
+    async fn stream(&self, request: CompletionRequest) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError> {
+        todo!()
+    }
+}
+
+#[async_trait::async_trait]
+impl LocalModel for MyLocalLLM {
+    async fn load(&self) -> Result<(), BlazenError> { /* load weights */ Ok(()) }
+    async fn unload(&self) -> Result<(), BlazenError> { /* free VRAM */ Ok(()) }
+    async fn is_loaded(&self) -> bool { true }
+    async fn vram_bytes(&self) -> Option<u64> { Some(4_000_000_000) }
+}
+```
+
+---
+
+## ModelManager
+
+VRAM budget-aware model manager with LRU eviction. Tracks registered `LocalModel` instances and their estimated VRAM footprint. When loading a model that would exceed the budget, the least-recently-used loaded model is unloaded first.
+
+```rust
+use blazen_manager::ModelManager;
+
+let manager = ModelManager::new(24 * 1_073_741_824); // 24 GiB
+// or
+let manager = ModelManager::with_budget_gb(24.0);
+```
+
+### Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `new` | `fn(budget_bytes: u64) -> Self` | Create a manager with a byte budget. |
+| `with_budget_gb` | `fn(gb: f64) -> Self` | Create a manager with a GiB budget. |
+| `register` | `async fn(&self, id, model: Arc<dyn LocalModel>, vram_estimate: u64)` | Register a model. Starts unloaded. |
+| `load` | `async fn(&self, id: &str) -> Result<()>` | Load a model, evicting LRU models if needed. |
+| `unload` | `async fn(&self, id: &str) -> Result<()>` | Unload a model and free its VRAM. |
+| `is_loaded` | `async fn(&self, id: &str) -> bool` | Check if a model is currently loaded. |
+| `ensure_loaded` | `async fn(&self, id: &str) -> Result<()>` | Alias for `load()`. |
+| `used_bytes` | `async fn(&self) -> u64` | Total VRAM used by loaded models. |
+| `available_bytes` | `async fn(&self) -> u64` | Available VRAM within the budget. |
+| `status` | `async fn(&self) -> Vec<ModelStatus>` | Status of all registered models. |
+
+### ModelStatus
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` | Model identifier. |
+| `loaded` | `bool` | Whether the model is currently loaded. |
+| `vram_estimate` | `u64` | Estimated VRAM footprint in bytes. |
+
+**Usage:**
+
+```rust
+use std::sync::Arc;
+use blazen_manager::ModelManager;
+
+let manager = ModelManager::with_budget_gb(24.0);
+manager.register("llama", Arc::new(my_llama_model), 8 * 1_073_741_824).await;
+manager.register("whisper", Arc::new(my_whisper_model), 2 * 1_073_741_824).await;
+
+manager.load("llama").await?;
+assert!(manager.is_loaded("llama").await);
+println!("Used: {} bytes", manager.used_bytes().await);
+println!("Available: {} bytes", manager.available_bytes().await);
+
+// Loading whisper may evict llama if budget is tight
+manager.load("whisper").await?;
+manager.unload("llama").await?;
+```
+
+---
+
+## Pricing
+
+The pricing module provides a global thread-safe registry of per-model pricing data, pre-seeded with defaults for well-known models.
+
+### `PricingEntry`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `input_per_million` | `f64` | Cost per million input tokens (USD). |
+| `output_per_million` | `f64` | Cost per million output tokens (USD). |
+
+### `register_pricing()`
+
+Register or override pricing for a model. Model IDs are normalized before storage.
+
+```rust
+use blazen_llm::{register_pricing, PricingEntry};
+
+register_pricing("my-model", PricingEntry {
+    input_per_million: 1.0,
+    output_per_million: 2.0,
+});
+```
+
+### `lookup_pricing()`
+
+Look up pricing for a model by ID. Returns `None` if the model is unknown.
+
+```rust
+use blazen_llm::lookup_pricing;
+
+if let Some(entry) = lookup_pricing("gpt-4o") {
+    println!("Input: ${}/M tokens", entry.input_per_million);
+}
+```
+
+### `compute_cost()`
+
+Compute the cost of a request given a model ID and token usage.
+
+```rust
+use blazen_llm::{compute_cost, TokenUsage};
+
+let usage = TokenUsage { prompt_tokens: 1000, completion_tokens: 500, total_tokens: 1500 };
+if let Some(cost) = compute_cost("gpt-4o", &usage) {
+    println!("Cost: ${:.4}", cost);
+}
+```
+
+---
+
+## MemoryBackend Trait
+
+Low-level storage backend used by `Memory`. Backends are responsible for persistence and band-based candidate retrieval. They do not perform embedding or ELID encoding.
+
+```rust
+#[async_trait]
+pub trait MemoryBackend: Send + Sync {
+    async fn put(&self, entry: StoredEntry) -> Result<()>;
+    async fn get(&self, id: &str) -> Result<Option<StoredEntry>>;
+    async fn delete(&self, id: &str) -> Result<bool>;
+    async fn list(&self) -> Result<Vec<StoredEntry>>;
+    async fn len(&self) -> Result<usize>;
+    async fn is_empty(&self) -> Result<bool>; // default: self.len() == 0
+    async fn search_by_bands(
+        &self,
+        bands: &[u64],
+        limit: usize,
+    ) -> Result<Vec<StoredEntry>>;
+}
+```
+
+### Implementing a Custom Backend
+
+```rust
+use blazen_memory::store::{MemoryBackend, StoredEntry};
+use anyhow::Result;
+
+struct PostgresBackend {
+    pool: sqlx::PgPool,
+}
+
+#[async_trait::async_trait]
+impl MemoryBackend for PostgresBackend {
+    async fn put(&self, entry: StoredEntry) -> Result<()> {
+        // INSERT or UPDATE in Postgres
+        todo!()
+    }
+
+    async fn get(&self, id: &str) -> Result<Option<StoredEntry>> {
+        // SELECT by id
+        todo!()
+    }
+
+    async fn delete(&self, id: &str) -> Result<bool> {
+        // DELETE by id, return true if row existed
+        todo!()
+    }
+
+    async fn list(&self) -> Result<Vec<StoredEntry>> {
+        // SELECT all
+        todo!()
+    }
+
+    async fn len(&self) -> Result<usize> {
+        // SELECT COUNT(*)
+        todo!()
+    }
+
+    async fn search_by_bands(
+        &self,
+        bands: &[u64],
+        limit: usize,
+    ) -> Result<Vec<StoredEntry>> {
+        // Query entries sharing at least one band
+        todo!()
+    }
+}
+```
+
+### Built-in Backends
+
+| Backend | Description |
+|---------|-------------|
+| `InMemoryBackend` | In-process `HashMap` storage. Fast, no persistence. |
+| `JsonlBackend` | Append-only JSONL file storage. |
+| `ValkeyBackend` | Redis/Valkey-backed storage. |
+
+---
+
 ## Error Handling
 
 ### `BlazenError`

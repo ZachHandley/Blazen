@@ -14,6 +14,7 @@ use blazen_llm::retry::RetryCompletionModel;
 use blazen_llm::types::ToolDefinition;
 use blazen_llm::{BlazenError, ChatMessage, CompletionModel, CompletionRequest, StreamChunk};
 
+use crate::agent::PyToolDef;
 use crate::error::BlazenPyError;
 use crate::providers::config::{PyCacheConfig, PyRetryConfig};
 use crate::providers::options::{
@@ -49,10 +50,9 @@ pub struct PyCompletionOptions {
     /// Model override for this request.
     #[pyo3(get, set)]
     pub model: Option<String>,
-    /// Tool definitions for function calling. Each tool is a dict with
-    /// ``name``, ``description``, and ``parameters`` keys.
+    /// Tool definitions for function calling.
     #[pyo3(get, set)]
-    pub tools: Option<Py<PyAny>>,
+    pub tools: Option<Vec<Py<PyToolDef>>>,
     /// JSON schema dict for structured output.
     #[pyo3(get, set)]
     pub response_format: Option<Py<PyAny>>,
@@ -68,7 +68,7 @@ impl PyCompletionOptions {
         max_tokens: Option<u32>,
         top_p: Option<f32>,
         model: Option<String>,
-        tools: Option<Py<PyAny>>,
+        tools: Option<Vec<Py<PyToolDef>>>,
         response_format: Option<Py<PyAny>>,
     ) -> Self {
         Self {
@@ -100,20 +100,64 @@ impl PyCompletionOptions {
 ///     ...     ChatMessage.user("What is 2+2?")
 ///     ... ])
 #[gen_stub_pyclass]
-#[pyclass(name = "CompletionModel", from_py_object)]
+#[pyclass(name = "CompletionModel", subclass, from_py_object)]
 #[derive(Clone)]
 pub struct PyCompletionModel {
-    pub(crate) inner: Arc<dyn CompletionModel>,
+    pub(crate) inner: Option<Arc<dyn CompletionModel>>,
     /// Present iff the underlying provider is a local in-process model
     /// (mistral.rs, llama.cpp, candle) that implements
     /// [`blazen_llm::LocalModel`]. `None` for remote HTTP providers.
     /// Populated by the provider factory methods.
     pub(crate) local_model: Option<Arc<dyn blazen_llm::LocalModel>>,
+    /// Configuration for subclassed models. `None` for built-in providers
+    /// (whose config lives inside the `inner` trait object).
+    pub(crate) config: Option<blazen_llm::ProviderConfig>,
 }
 
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyCompletionModel {
+    // -----------------------------------------------------------------
+    // Subclass constructor
+    // -----------------------------------------------------------------
+
+    /// Create a custom completion model by subclassing.
+    ///
+    /// Override ``complete()`` and optionally ``stream()`` in your
+    /// subclass to implement a custom provider.
+    ///
+    /// Args:
+    ///     model_id: The model identifier.
+    ///     context_length: Maximum context window in tokens.
+    ///     base_url: Base URL for HTTP-based providers.
+    ///     pricing: Optional pricing information.
+    ///     vram_estimate_bytes: Estimated VRAM footprint in bytes.
+    ///     max_output_tokens: Maximum output tokens the model supports.
+    #[new]
+    #[pyo3(signature = (*, model_id=None, context_length=None, base_url=None, pricing=None, vram_estimate_bytes=None, max_output_tokens=None))]
+    fn new(
+        model_id: Option<String>,
+        context_length: Option<u64>,
+        base_url: Option<String>,
+        pricing: Option<PyRef<'_, crate::types::pricing::PyModelPricing>>,
+        vram_estimate_bytes: Option<u64>,
+        max_output_tokens: Option<u64>,
+    ) -> Self {
+        Self {
+            inner: None,
+            local_model: None,
+            config: Some(blazen_llm::ProviderConfig {
+                model_id,
+                context_length,
+                base_url,
+                vram_estimate_bytes,
+                max_output_tokens,
+                pricing: pricing.map(|p| p.inner.clone()),
+                ..Default::default()
+            }),
+        }
+    }
+
     // -----------------------------------------------------------------
     // Provider constructors
     // -----------------------------------------------------------------
@@ -132,11 +176,12 @@ impl PyCompletionModel {
     fn openai(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::openai::OpenAiProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -149,11 +194,12 @@ impl PyCompletionModel {
     fn anthropic(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::anthropic::AnthropicProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -166,11 +212,12 @@ impl PyCompletionModel {
     fn gemini(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::gemini::GeminiProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -185,11 +232,12 @@ impl PyCompletionModel {
     fn azure(options: PyRef<'_, PyAzureOptions>) -> PyResult<Self> {
         let opts = options.inner.clone();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::azure::AzureOpenAiProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -202,11 +250,12 @@ impl PyCompletionModel {
     fn openrouter(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::openrouter::OpenRouterProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -219,11 +268,12 @@ impl PyCompletionModel {
     fn groq(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::groq::GroqProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -236,11 +286,12 @@ impl PyCompletionModel {
     fn together(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::together::TogetherProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -253,11 +304,12 @@ impl PyCompletionModel {
     fn mistral(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::mistral::MistralProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -270,11 +322,12 @@ impl PyCompletionModel {
     fn deepseek(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::deepseek::DeepSeekProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -287,11 +340,12 @@ impl PyCompletionModel {
     fn fireworks(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::fireworks::FireworksProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -304,11 +358,12 @@ impl PyCompletionModel {
     fn perplexity(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::perplexity::PerplexityProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -321,11 +376,12 @@ impl PyCompletionModel {
     fn xai(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::xai::XaiProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -338,11 +394,12 @@ impl PyCompletionModel {
     fn cohere(options: Option<PyRef<'_, PyProviderOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::cohere::CohereProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -356,11 +413,12 @@ impl PyCompletionModel {
     fn bedrock(options: PyRef<'_, PyBedrockOptions>) -> PyResult<Self> {
         let opts = options.inner.clone();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::bedrock::BedrockProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -376,11 +434,12 @@ impl PyCompletionModel {
     fn fal(options: Option<PyRef<'_, PyFalOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(
+            inner: Some(Arc::new(
                 blazen_llm::providers::fal::FalProvider::from_options(opts)
                     .map_err(crate::error::blazen_error_to_pyerr)?,
-            ),
+            )),
             local_model: None,
+            config: None,
         })
     }
 
@@ -393,8 +452,15 @@ impl PyCompletionModel {
     /// Returns:
     ///     The string identifier of the model.
     #[getter]
-    fn model_id(&self) -> &str {
-        self.inner.model_id()
+    fn model_id(&self) -> String {
+        if let Some(ref inner) = self.inner {
+            inner.model_id().to_owned()
+        } else {
+            self.config
+                .as_ref()
+                .and_then(|c| c.model_id.clone())
+                .unwrap_or_default()
+        }
     }
 
     // -----------------------------------------------------------------
@@ -416,12 +482,15 @@ impl PyCompletionModel {
     /// Example:
     ///     >>> model = CompletionModel.openai(options=ProviderOptions(api_key="sk-...")).with_retry(RetryConfig(max_retries=5))
     #[pyo3(signature = (config=None))]
-    fn with_retry(&self, config: Option<PyRef<'_, PyRetryConfig>>) -> Self {
+    fn with_retry(slf: Bound<'_, Self>, config: Option<PyRef<'_, PyRetryConfig>>) -> Self {
         let retry_config = config.map(|c| c.inner.clone()).unwrap_or_default();
-        let model = RetryCompletionModel::from_arc(self.inner.clone(), retry_config);
+        let local_model = slf.borrow().local_model.clone();
+        let inner = arc_from_bound(&slf);
+        let model = RetryCompletionModel::from_arc(inner, retry_config);
         Self {
-            inner: Arc::new(model),
-            local_model: self.local_model.clone(),
+            inner: Some(Arc::new(model)),
+            local_model,
+            config: None,
         }
     }
 
@@ -442,22 +511,22 @@ impl PyCompletionModel {
     ///     >>> backup = CompletionModel.anthropic(options=ProviderOptions(api_key="sk-ant-..."))
     ///     >>> model = CompletionModel.with_fallback([primary, backup])
     #[staticmethod]
-    fn with_fallback(models: Vec<PyRef<'_, PyCompletionModel>>) -> PyResult<Self> {
+    fn with_fallback(models: Vec<Bound<'_, PyCompletionModel>>) -> PyResult<Self> {
         if models.is_empty() {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "with_fallback requires at least one model",
             ));
         }
-        let providers: Vec<Arc<dyn CompletionModel>> =
-            models.iter().map(|m| m.inner.clone()).collect();
+        let providers: Vec<Arc<dyn CompletionModel>> = models.iter().map(arc_from_bound).collect();
         let model = FallbackModel::new(providers);
         // A fallback chain is a composition of heterogeneous providers, so
         // there is no single `LocalModel` to forward load/unload to. Callers
         // that need local-model control should apply it to the individual
         // component models before combining them via `with_fallback`.
         Ok(Self {
-            inner: Arc::new(model),
+            inner: Some(Arc::new(model)),
             local_model: None,
+            config: None,
         })
     }
 
@@ -477,12 +546,15 @@ impl PyCompletionModel {
     /// Example:
     ///     >>> model = CompletionModel.openai(options=ProviderOptions(api_key="sk-...")).with_cache(CacheConfig(ttl_seconds=600))
     #[pyo3(signature = (config=None))]
-    fn with_cache(&self, config: Option<PyRef<'_, PyCacheConfig>>) -> Self {
+    fn with_cache(slf: Bound<'_, Self>, config: Option<PyRef<'_, PyCacheConfig>>) -> Self {
         let cache_config = config.map(|c| c.inner.clone()).unwrap_or_default();
-        let model = CachedCompletionModel::from_arc(self.inner.clone(), cache_config);
+        let local_model = slf.borrow().local_model.clone();
+        let inner = arc_from_bound(&slf);
+        let model = CachedCompletionModel::from_arc(inner, cache_config);
         Self {
-            inner: Arc::new(model),
-            local_model: self.local_model.clone(),
+            inner: Some(Arc::new(model)),
+            local_model,
+            config: None,
         }
     }
 
@@ -494,13 +566,8 @@ impl PyCompletionModel {
     ///
     /// Args:
     ///     messages: A list of ChatMessage objects.
-    ///     temperature: Optional sampling temperature (0.0-2.0).
-    ///     max_tokens: Optional maximum tokens to generate.
-    ///     top_p: Optional nucleus sampling parameter (0.0-1.0).
-    ///     model: Optional model override for this request.
-    ///     tools: Optional list of dicts with ``name``, ``description``, and
-    ///         ``parameters`` keys for function calling.
-    ///     response_format: Optional JSON schema dict for structured output.
+    ///     options: Optional CompletionOptions for sampling parameters,
+    ///         tools, and response format.
     ///
     /// Returns:
     ///     A CompletionResponse with content, model, tool_calls, usage,
@@ -520,13 +587,22 @@ impl PyCompletionModel {
         messages: Vec<PyRef<'py, PyChatMessage>>,
         options: Option<PyRef<'py, PyCompletionOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let request = build_request(py, rust_messages, options.as_deref())?;
-        let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let response = inner.complete(request).await.map_err(BlazenPyError::from)?;
-            Ok(PyCompletionResponse { inner: response })
-        })
+        if let Some(ref inner) = self.inner {
+            // Built-in provider path
+            let rust_messages: Vec<ChatMessage> =
+                messages.iter().map(|m| m.inner.clone()).collect();
+            let request = build_request(py, rust_messages, options.as_deref())?;
+            let inner = inner.clone();
+            pyo3_async_runtimes::tokio::future_into_py(py, async move {
+                let response = inner.complete(request).await.map_err(BlazenPyError::from)?;
+                Ok(PyCompletionResponse { inner: response })
+            })
+        } else {
+            // Subclass path -- if we got here, the subclass didn't override complete()
+            Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "subclass must override complete()",
+            ))
+        }
     }
 
     /// Stream a chat completion.
@@ -564,10 +640,18 @@ impl PyCompletionModel {
         on_chunk: Option<Py<PyAny>>,
         options: Option<PyRef<'py, PyCompletionOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = match self.inner {
+            Some(ref inner) => inner.clone(),
+            None => {
+                // Subclass path -- if we got here, the subclass didn't override stream()
+                return Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                    "subclass must override stream()",
+                ));
+            }
+        };
+
         let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
         let request = build_request(py, rust_messages, options.as_deref())?;
-
-        let inner = self.inner.clone();
 
         // Callback mode: return a coroutine that drives the stream and
         // invokes the callback once per chunk.
@@ -625,7 +709,7 @@ impl PyCompletionModel {
     }
 
     fn __repr__(&self) -> String {
-        format!("CompletionModel(model_id='{}')", self.inner.model_id())
+        format!("CompletionModel(model_id='{}')", self.model_id())
     }
 
     // -----------------------------------------------------------------
@@ -836,11 +920,18 @@ pub(crate) fn build_request(
         if let Some(ref m) = opts.model {
             request = request.with_model(m.clone());
         }
-        if let Some(ref tools_py) = opts.tools {
-            let tools_bound = tools_py.bind(py);
-            let tools_list: &Bound<'_, pyo3::types::PyList> = tools_bound.cast()?;
-            let tool_vec: Vec<Bound<'_, PyAny>> = tools_list.iter().collect();
-            let rust_tools = extract_tool_definitions(py, &tool_vec)?;
+        if let Some(ref tools) = opts.tools {
+            let rust_tools: Vec<ToolDefinition> = tools
+                .iter()
+                .map(|t| {
+                    let tool = t.borrow(py);
+                    ToolDefinition {
+                        name: tool.name.clone(),
+                        description: tool.description.clone(),
+                        parameters: tool.parameters.clone(),
+                    }
+                })
+                .collect();
             request = request.with_tools(rust_tools);
         }
         if let Some(ref fmt) = opts.response_format {
@@ -852,23 +943,224 @@ pub(crate) fn build_request(
     Ok(request)
 }
 
-/// Extract a list of [`ToolDefinition`] from Python dicts (or dict-like objects).
-fn extract_tool_definitions(
-    py: Python<'_>,
-    tool_list: &[Bound<'_, PyAny>],
-) -> PyResult<Vec<ToolDefinition>> {
-    let mut rust_tools = Vec::with_capacity(tool_list.len());
-    for tool in tool_list {
-        let name: String = tool.get_item("name")?.extract()?;
-        let description: String = tool.get_item("description")?.extract()?;
-        let parameters = crate::convert::py_to_json(py, &tool.get_item("parameters")?)?;
-        rust_tools.push(ToolDefinition {
-            name,
-            description,
-            parameters,
-        });
+// ---------------------------------------------------------------------------
+// PySubclassCompletionModel -- Python-subclass adapter
+// ---------------------------------------------------------------------------
+
+/// Bridges a Python `CompletionModel` subclass into the Rust
+/// [`CompletionModel`] trait. Methods on this adapter dispatch back into
+/// the Python object's `complete()` override, so Rust-side helpers
+/// (`run_agent`, `with_retry`, `with_cache`, `with_fallback`,
+/// `complete_batch`) work uniformly for both built-in providers and
+/// Python subclasses.
+///
+/// The adapter works in three phases for each `complete()` call:
+///
+/// 1. Under the GIL, translate the Rust [`CompletionRequest`] into
+///    Python-side [`PyChatMessage`] / [`PyCompletionOptions`] values,
+///    invoke the subclass's `complete()` method to obtain a coroutine,
+///    capture the active asyncio task locals, and convert the coroutine
+///    into a Rust future.
+/// 2. Outside the GIL (inside `pyo3_async_runtimes::tokio::scope`), drive
+///    the future to completion so the Python coroutine runs on the
+///    correct event loop.
+/// 3. Under the GIL again, extract the returned
+///    [`PyCompletionResponse`] (preferred path) or fall back to
+///    `depythonize` if the subclass returns a compatible dict.
+///
+/// Streaming through the adapter is not yet supported; `stream()`
+/// returns [`BlazenError::Unsupported`]. Callers who want streaming from
+/// a subclassed model must call `stream()` directly on the Python object.
+pub(crate) struct PySubclassCompletionModel {
+    py_obj: Py<PyAny>,
+    model_id: String,
+}
+
+impl PySubclassCompletionModel {
+    pub(crate) fn new(py_obj: Py<PyAny>, model_id: String) -> Self {
+        Self { py_obj, model_id }
     }
-    Ok(rust_tools)
+}
+
+#[async_trait::async_trait]
+impl CompletionModel for PySubclassCompletionModel {
+    fn model_id(&self) -> &str {
+        &self.model_id
+    }
+
+    async fn complete(
+        &self,
+        request: blazen_llm::CompletionRequest,
+    ) -> Result<blazen_llm::CompletionResponse, BlazenError> {
+        // Phase 1: under GIL, translate the request into Python values,
+        // call `complete(messages, options)`, capture asyncio task
+        // locals, and convert the returned coroutine into a Rust future.
+        let (fut, locals) = tokio::task::block_in_place(|| {
+            Python::attach(|py| -> PyResult<_> {
+                // Convert messages into `PyChatMessage` instances.
+                let messages_py: Vec<Py<PyChatMessage>> = request
+                    .messages
+                    .iter()
+                    .map(|m| Py::new(py, PyChatMessage { inner: m.clone() }))
+                    .collect::<PyResult<_>>()?;
+
+                // Build the options dict if any field is set.
+                let options_py = build_py_options_from_request(py, &request)?;
+
+                let host = self.py_obj.bind(py);
+                let coro = match options_py {
+                    Some(opts) => host.call_method1("complete", (messages_py, opts)),
+                    None => host.call_method1("complete", (messages_py,)),
+                }
+                .map_err(|e| {
+                    pyo3::exceptions::PyRuntimeError::new_err(format!(
+                        "subclass complete() raised before yielding a coroutine: {e}"
+                    ))
+                })?;
+
+                let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
+                let fut =
+                    pyo3_async_runtimes::into_future_with_locals(&locals, coro).map_err(|e| {
+                        pyo3::exceptions::PyTypeError::new_err(format!(
+                            "subclass complete() must be an async def returning a coroutine: {e}"
+                        ))
+                    })?;
+                Ok((fut, locals))
+            })
+        })
+        .map_err(|e: PyErr| {
+            BlazenError::provider("subclass", format!("dispatch setup failed: {e}"))
+        })?;
+
+        // Phase 2: drive the Python coroutine to completion.
+        let py_result = pyo3_async_runtimes::tokio::scope(locals, fut)
+            .await
+            .map_err(|e: PyErr| {
+                BlazenError::provider("subclass", format!("subclass complete() raised: {e}"))
+            })?;
+
+        // Phase 3: under the GIL, extract a `CompletionResponse` from
+        // the Python result. Preferred path: the subclass returned a
+        // `PyCompletionResponse`. Fallback: allow a compatible dict.
+        tokio::task::block_in_place(|| {
+            Python::attach(|py| -> PyResult<blazen_llm::CompletionResponse> {
+                let bound = py_result.bind(py);
+                if let Ok(resp) = bound.extract::<PyRef<'_, PyCompletionResponse>>() {
+                    return Ok(resp.inner.clone());
+                }
+                let response: blazen_llm::CompletionResponse = pythonize::depythonize(bound)
+                    .map_err(|e| {
+                        pyo3::exceptions::PyValueError::new_err(format!(
+                            "subclass complete() must return CompletionResponse or a compatible dict: {e}"
+                        ))
+                    })?;
+                Ok(response)
+            })
+        })
+        .map_err(|e: PyErr| {
+            BlazenError::provider(
+                "subclass",
+                format!("failed to decode subclass complete() result: {e}"),
+            )
+        })
+    }
+
+    async fn stream(
+        &self,
+        _request: blazen_llm::CompletionRequest,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
+    {
+        Err(BlazenError::unsupported(
+            "stream() on subclassed CompletionModel is not yet supported from Rust-side callers; call stream() directly on the Python subclass instance",
+        ))
+    }
+
+    fn provider_config(&self) -> Option<&blazen_llm::ProviderConfig> {
+        None
+    }
+}
+
+/// Build a [`PyCompletionOptions`] instance from a [`CompletionRequest`].
+///
+/// Returns `None` if no request field is set that would populate
+/// options, so the subclass's `complete()` method can be called with
+/// only the `messages` positional argument (matching the Python
+/// signature `async def complete(self, messages, options=None)`).
+fn build_py_options_from_request(
+    py: Python<'_>,
+    request: &blazen_llm::CompletionRequest,
+) -> PyResult<Option<Py<PyCompletionOptions>>> {
+    if request.temperature.is_none()
+        && request.max_tokens.is_none()
+        && request.top_p.is_none()
+        && request.model.is_none()
+        && request.tools.is_empty()
+        && request.response_format.is_none()
+    {
+        return Ok(None);
+    }
+
+    // Translate tool definitions back into `PyToolDef` instances.
+    // Subclasses typically only inspect `name`/`description`/`parameters`
+    // on the tool; the handler is not invoked from the subclass path
+    // (tool dispatch is driven from the Rust `run_agent` loop), so we
+    // pass `py.None()` as a placeholder.
+    let tools_py = if request.tools.is_empty() {
+        None
+    } else {
+        let tools: Vec<Py<PyToolDef>> = request
+            .tools
+            .iter()
+            .map(|t| {
+                Py::new(
+                    py,
+                    PyToolDef {
+                        name: t.name.clone(),
+                        description: t.description.clone(),
+                        parameters: t.parameters.clone(),
+                        handler: py.None(),
+                    },
+                )
+            })
+            .collect::<PyResult<_>>()?;
+        Some(tools)
+    };
+
+    let response_format = match request.response_format.as_ref() {
+        Some(v) => Some(crate::convert::json_to_py(py, v)?),
+        None => None,
+    };
+
+    let opts = PyCompletionOptions {
+        temperature: request.temperature,
+        max_tokens: request.max_tokens,
+        top_p: request.top_p,
+        model: request.model.clone(),
+        tools: tools_py,
+        response_format,
+    };
+
+    Py::new(py, opts).map(Some)
+}
+
+/// Build an `Arc<dyn CompletionModel>` from a bound [`PyCompletionModel`].
+///
+/// If the model has a concrete `inner` (built-in provider), returns that
+/// directly. Otherwise constructs a [`PySubclassCompletionModel`] that
+/// dispatches back into the Python subclass object.
+pub(crate) fn arc_from_bound(bound: &Bound<'_, PyCompletionModel>) -> Arc<dyn CompletionModel> {
+    let borrow = bound.borrow();
+    if let Some(ref inner) = borrow.inner {
+        return inner.clone();
+    }
+    let model_id = borrow
+        .config
+        .as_ref()
+        .and_then(|c| c.model_id.clone())
+        .unwrap_or_else(|| "subclass".to_owned());
+    drop(borrow);
+    let py_obj: Py<PyAny> = bound.clone().into_any().unbind();
+    Arc::new(PySubclassCompletionModel::new(py_obj, model_id))
 }
 
 // ---------------------------------------------------------------------------
@@ -899,8 +1191,9 @@ impl PyCompletionModel {
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?,
         );
         Ok(Self {
-            inner: concrete.clone(),
+            inner: Some(concrete.clone()),
             local_model: Some(concrete),
+            config: None,
         })
     }
 }

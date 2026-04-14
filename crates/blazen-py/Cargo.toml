@@ -17,6 +17,7 @@ async-trait.workspace = true
 blazen-core.workspace = true
 blazen-events.workspace = true
 blazen-llm = { workspace = true, features = ["reqwest", "pyo3-serde"] }
+blazen-manager.workspace = true
 blazen-memory.workspace = true
 blazen-memory-valkey.workspace = true
 blazen-prompts.workspace = true
@@ -36,7 +37,7 @@ pyo3-stub-gen = "0.22"
 pyo3-stub-gen-derive = "0.22"
 
 [features]
-default = []
+default = ["local-all"]
 extension-module = ["pyo3/extension-module"]
 # Local inference backends (feature-gated, populated per-phase)
 fastembed = ["blazen-llm/fastembed"]
