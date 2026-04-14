@@ -641,6 +641,7 @@ module.exports.JsCacheStrategy = nativeBinding.JsCacheStrategy
 module.exports.JsFalLlmEndpointKind = nativeBinding.JsFalLlmEndpointKind
 module.exports.JsJobStatus = nativeBinding.JsJobStatus
 module.exports.JsRole = nativeBinding.JsRole
+module.exports.JsWhisperModel = nativeBinding.JsWhisperModel
 module.exports.lookupPricing = nativeBinding.lookupPricing
 module.exports.registerPricing = nativeBinding.registerPricing
 module.exports.runAgent = nativeBinding.runAgent

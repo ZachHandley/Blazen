@@ -301,6 +301,18 @@ export declare class CompletionModel {
    * types, which is effectively lossless for any realistic `VRAM` size.
    */
   vramBytes(): Promise<number | null>
+  /**
+   * Create a local mistral.rs completion model.
+   *
+   * Runs LLM inference entirely on-device -- no API key required.
+   *
+   * ```javascript
+   * const model = CompletionModel.mistralrs({
+   *   modelId: "mistralai/Mistral-7B-Instruct-v0.3",
+   * });
+   * ```
+   */
+  static mistralrs(options: JsMistralRsOptions): CompletionModel
 }
 export type JsCompletionModel = CompletionModel
 
@@ -623,6 +635,17 @@ export declare class EmbeddingModel {
   get dimensions(): number
   /** Embed one or more texts, returning one vector per input text. */
   embed(texts: Array<string>): Promise<JsEmbeddingResponse>
+  /**
+   * Create a local fastembed embedding model (ONNX Runtime, no API key).
+   *
+   * Defaults to `BAAI/bge-small-en-v1.5` (384 dimensions).
+   *
+   * ```javascript
+   * const model = EmbeddingModel.fastembed();
+   * const response = await model.embed(["Hello", "World"]);
+   * ```
+   */
+  static fastembed(options?: JsFastEmbedOptions | undefined | null): EmbeddingModel
 }
 export type JsEmbeddingModel = EmbeddingModel
 
@@ -1248,6 +1271,27 @@ export declare class Transcription {
    * path (whisper.cpp does not fetch remote URLs).
    */
   transcribe(request: JsTranscriptionRequest): Promise<JsTranscriptionResult>
+  /**
+   * Create a local whisper.cpp transcription provider.
+   *
+   * Runs transcription entirely on-device using whisper.cpp. The first
+   * call downloads the GGML model (tens to hundreds of MB depending on
+   * the chosen variant) and caches it for subsequent runs. No API key
+   * is required.
+   *
+   * whisper.cpp currently expects **16-bit PCM mono WAV at 16 kHz**.
+   * Remote URLs are not supported -- pass a local file path in
+   * `request.audioUrl`.
+   *
+   * ```javascript
+   * const transcriber = await Transcription.whispercpp({ model: "base" });
+   * const result = await transcriber.transcribe({
+   *   audioUrl: "/path/to/audio.wav",
+   * });
+   * console.log(result.text);
+   * ```
+   */
+  static whispercpp(options?: JsWhisperOptions | undefined | null): Promise<Transcription>
 }
 export type JsTranscription = Transcription
 
@@ -1968,6 +2012,26 @@ export interface JsFalOptions {
 }
 
 /**
+ * Options for creating a local fastembed embedding model.
+ *
+ * All fields are optional; defaults produce a working model using
+ * `BAAI/bge-small-en-v1.5` on CPU with fastembed's built-in cache.
+ */
+export interface JsFastEmbedOptions {
+  /** Fastembed model variant name (e.g. `"BGESmallENV15"`). */
+  modelName?: string
+  /** Model cache directory. When absent, fastembed uses its built-in cache. */
+  cacheDir?: string
+  /**
+   * Maximum batch size for embedding. When absent, fastembed uses its
+   * default (256).
+   */
+  maxBatchSize?: number
+  /** Whether to display download progress when fetching models. */
+  showDownloadProgress?: boolean
+}
+
+/**
  * Normalized finish reason across providers.
  *
  * Maps provider-specific finish-reason strings (`"stop"`, `"end_turn"`,
@@ -2100,6 +2164,37 @@ export interface JsMemoryResult {
   score: number
   /** Arbitrary user metadata. */
   metadata: any
+}
+
+/**
+ * Options for the local mistral.rs LLM backend.
+ *
+ * `modelId` is required (`HuggingFace` model ID or local GGUF path).
+ * All other fields are optional.
+ *
+ * ```javascript
+ * const model = CompletionModel.mistralrs({
+ *   modelId: "mistralai/Mistral-7B-Instruct-v0.3",
+ *   device: "cuda:0",
+ *   quantization: "q4_k_m",
+ * });
+ * ```
+ */
+export interface JsMistralRsOptions {
+  /** `HuggingFace` model ID or local GGUF path. */
+  modelId: string
+  /** Quantization format string (e.g. `"q4_k_m"`, `"f16"`, `"gptq-4bit"`). */
+  quantization?: string
+  /** Hardware device string (e.g. `"cpu"`, `"cuda:0"`, `"metal"`). */
+  device?: string
+  /** Maximum context length in tokens. */
+  contextLength?: number
+  /** Maximum batch size for concurrent requests. */
+  maxBatchSize?: number
+  /** Jinja2 chat template override. */
+  chatTemplate?: string
+  /** Path to cache downloaded models. */
+  cacheDir?: string
 }
 
 /**
@@ -2366,6 +2461,63 @@ export interface JsVoiceHandle {
   language?: string
   description?: string
   metadata: any
+}
+
+/**
+ * Whisper model size variant for the local whisper.cpp backend.
+ *
+ * Larger models are more accurate but require more memory and are slower.
+ *
+ * | Variant  | Params | RAM   |
+ * |----------|--------|-------|
+ * | tiny     | 39M    | ~1GB  |
+ * | base     | 74M    | ~1GB  |
+ * | small    | 244M   | ~2GB  |
+ * | medium   | 769M   | ~5GB  |
+ * | largeV3  | 1.5B   | ~10GB |
+ */
+export declare const enum JsWhisperModel {
+  Tiny = 'tiny',
+  Base = 'base',
+  Small = 'small',
+  Medium = 'medium',
+  LargeV3 = 'largeV3'
+}
+
+/**
+ * Options for the local whisper.cpp transcription backend.
+ *
+ * All fields are optional. When `model` is omitted, defaults to
+ * `JsWhisperModel::Small`. When `language` is omitted, whisper.cpp will
+ * auto-detect the spoken language.
+ *
+ * ```javascript
+ * const transcriber = Transcription.whispercpp({
+ *   model: "base",
+ *   language: "en",
+ * });
+ * ```
+ */
+export interface JsWhisperOptions {
+  /** Whisper model size (defaults to `"small"`). */
+  model?: JsWhisperModel
+  /** Hardware device specifier string (e.g. `"cpu"`, `"cuda:0"`, `"metal"`). */
+  device?: string
+  /**
+   * ISO 639-1 language code (e.g. `"en"`, `"es"`). When absent,
+   * whisper auto-detects the language.
+   */
+  language?: string
+  /**
+   * Enable speaker diarization. Currently unsupported by the whisper.cpp
+   * backend; setting `true` will cause transcription calls to fail.
+   */
+  diarize?: boolean
+  /**
+   * Directory to cache downloaded models. When absent, falls back to
+   * `$BLAZEN_CACHE_DIR` or `~/.cache/blazen/models`.
+   */
+  cacheDir?: string
 }
 
 /** The result of a workflow run. */
