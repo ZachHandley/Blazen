@@ -66,7 +66,7 @@ jobs:
 
       - name: Stamp version
         if: steps.check.outputs.completed != 'true'
-        run: python scripts/stamp-version.py ${{ needs.version.outputs.version }}
+        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
 
       - name: Publish crates in dependency order
         if: steps.check.outputs.completed != 'true'
@@ -201,7 +201,7 @@ jobs:
 
       - name: Stamp version
         shell: bash
-        run: python scripts/stamp-version.py ${{ needs.version.outputs.version }}
+        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
 
       # Wheel build
       - name: Build wheels (non-container)
@@ -256,7 +256,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v6
       - name: Stamp version
-        run: python scripts/stamp-version.py ${{ needs.version.outputs.version }}
+        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
       - name: Build sdist
         run: uvx maturin sdist -m crates/blazen-py/Cargo.toml
       - name: Upload sdist
@@ -423,7 +423,7 @@ jobs:
 
       - name: Stamp version
         shell: bash
-        run: python scripts/stamp-version.py ${{ needs.version.outputs.version }}
+        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
 
       - name: Install dependencies
         shell: bash
@@ -477,7 +477,7 @@ jobs:
 
       - name: Stamp version
         if: steps.check.outputs.completed != 'true'
-        run: python scripts/stamp-version.py ${{ needs.version.outputs.version }}
+        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
 
       - name: Install dependencies
         if: steps.check.outputs.completed != 'true'
@@ -559,7 +559,7 @@ jobs:
 
       - name: Stamp version
         if: steps.check.outputs.completed != 'true'
-        run: python scripts/stamp-version.py ${{ needs.version.outputs.version }}
+        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
 
       - name: Build WASM SDK
         if: steps.check.outputs.completed != 'true'
