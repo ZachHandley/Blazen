@@ -27,6 +27,7 @@ dev = [
 testpaths = ["tests/python"]
 asyncio_mode = "auto"
 timeout = 120
+addopts = "--basetemp=.pytest_tmp"
 markers = [
     "timeout: set test timeout (requires pytest-timeout)",
 ]
