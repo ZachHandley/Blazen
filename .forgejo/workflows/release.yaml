@@ -99,18 +99,24 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             runs-on: ubuntu-latest
+            container: quay.io/pypa/manylinux_2_28_x86_64
+            container-kind: manylinux
             manylinux: "2_28"
           - target: aarch64-unknown-linux-gnu
             runs-on: arm64
+            container: quay.io/pypa/manylinux_2_28_aarch64
+            container-kind: manylinux
             manylinux: "2_28"
           - target: x86_64-unknown-linux-musl
             runs-on: ubuntu-latest
             container: ghcr.io/rust-cross/rust-musl-cross:x86_64-musl
+            container-kind: musl
             manylinux: "musllinux_1_2"
             openssl-vendored: "1"
           - target: aarch64-unknown-linux-musl
             runs-on: arm64
             container: ghcr.io/rust-cross/rust-musl-cross:aarch64-musl
+            container-kind: musl
             manylinux: "musllinux_1_2"
             openssl-vendored: "1"
           - target: aarch64-apple-darwin
@@ -129,16 +135,31 @@ jobs:
       CMAKE_C_COMPILER_LAUNCHER: ccache
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
     steps:
+      - name: Bootstrap Node.js for actions (manylinux)
+        if: matrix.container-kind == 'manylinux'
+        run: |
+          curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+          yum install -y nodejs
+
+      - name: Bootstrap Node.js for actions (musl)
+        if: matrix.container-kind == 'musl'
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq curl
+          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+          apt-get install -y -qq nodejs
+
       - name: Checkout
         uses: actions/checkout@v4
 
       # System deps per platform
-      - name: Install build deps (Linux non-container)
-        if: runner.os == 'Linux' && matrix.container == ''
-        run: sudo apt-get update && sudo apt-get install -y cmake build-essential ccache pkg-config libssl-dev
+      - name: Install build deps (manylinux)
+        if: matrix.container-kind == 'manylinux'
+        run: |
+          yum install -y cmake openssl-devel ccache pkg-config curl
 
       - name: Install build deps (musl container)
-        if: matrix.container != ''
+        if: matrix.container-kind == 'musl'
         run: |
           apt-get update -qq
           apt-get install -y -qq cmake pipx python3 python3-pip python3-venv ccache pkg-config
@@ -162,10 +183,10 @@ jobs:
         shell: bash
         run: cmake --version
 
-      # Rust toolchain. Use the existing setup-rust action on non-musl targets.
-      # For musl containers, the image ships Rust already; just add the musl target.
+      # Rust toolchain. Use the existing setup-rust action on Mac/Windows targets.
+      # For musl and manylinux containers, install Rust manually inside the container.
       - name: Setup Rust (non-musl)
-        if: matrix.container == ''
+        if: matrix.container-kind == ''
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
         with:
           sccache: true
@@ -179,25 +200,39 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Setup Rust (musl container)
-        if: matrix.container != ''
+        if: matrix.container-kind == 'musl'
         run: |
           rustup target add ${{ matrix.target }} || true
 
-      # Python setup — two paths: musl container (apt python + pipx maturin) vs host (uv).
+      - name: Install Rust (manylinux)
+        if: matrix.container-kind == 'manylinux'
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable --target ${{ matrix.target }}
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      # Python setup — three paths: musl container (apt python + pipx maturin),
+      # manylinux container (pre-installed /opt/python/* + pip maturin),
+      # vs host Mac/Windows (uv).
       - name: Install Python via uv (non-container)
-        if: matrix.container == ''
+        if: matrix.container-kind == ''
         uses: astral-sh/setup-uv@v6
 
       - name: Install Python interpreters (non-container)
-        if: matrix.container == ''
+        if: matrix.container-kind == ''
         shell: bash
         run: uv python install 3.10 3.11 3.12 3.13 3.14
 
       - name: Install maturin (musl container)
-        if: matrix.container != ''
+        if: matrix.container-kind == 'musl'
         run: |
           pipx install "maturin[patchelf]"
           echo "/root/.local/bin" >> $GITHUB_PATH
+
+      - name: Install maturin (manylinux)
+        if: matrix.container-kind == 'manylinux'
+        shell: bash
+        run: /opt/python/cp312-cp312/bin/pip install 'maturin[patchelf]'
 
       - name: Stamp version
         shell: bash
@@ -205,7 +240,7 @@ jobs:
 
       # Wheel build
       - name: Build wheels (non-container)
-        if: matrix.container == ''
+        if: matrix.container-kind == ''
         shell: bash
         run: |
           INTERPRETERS=""
@@ -223,8 +258,26 @@ jobs:
             $MANYLINUX_FLAG \
             $INTERPRETERS
 
+      - name: Build wheels (manylinux)
+        if: matrix.container-kind == 'manylinux'
+        shell: bash
+        run: |
+          INTERPRETERS=""
+          for V in cp310-cp310 cp311-cp311 cp312-cp312 cp313-cp313 cp314-cp314; do
+            P="/opt/python/$V/bin/python3"
+            if [ -x "$P" ]; then
+              INTERPRETERS="$INTERPRETERS -i $P"
+            fi
+          done
+          echo "Building for ${{ matrix.target }} with: $INTERPRETERS"
+          /opt/python/cp312-cp312/bin/maturin build --release \
+            -m crates/blazen-py/Cargo.toml \
+            --target ${{ matrix.target }} \
+            --manylinux ${{ matrix.manylinux }} \
+            $INTERPRETERS
+
       - name: Build wheels (musl container)
-        if: matrix.container != ''
+        if: matrix.container-kind == 'musl'
         run: |
           # The musl container only has python3.10 from Ubuntu 22.04 apt.
           # Building a single wheel with python3.10 is fine — abi3 or not, PyPI
@@ -240,7 +293,7 @@ jobs:
             -i python3.10
 
       - name: Upload wheel artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: wheels-${{ matrix.target }}
           path: target/wheels/*.whl
@@ -260,7 +313,7 @@ jobs:
       - name: Build sdist
         run: uvx maturin sdist -m crates/blazen-py/Cargo.toml
       - name: Upload sdist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: sdist
           path: target/wheels/*.tar.gz
@@ -289,20 +342,20 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         uses: astral-sh/setup-uv@v6
 
-      - name: Download all wheels
+      - name: Download all artifacts
         if: steps.check.outputs.completed != 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           path: dist/
-          pattern: wheels-*
-          merge-multiple: true
 
-      - name: Download sdist
+      - name: Flatten wheel subdirectories
         if: steps.check.outputs.completed != 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: sdist
-          path: dist/
+        shell: bash
+        run: |
+          mkdir -p dist/flat
+          find dist/ -mindepth 2 -name '*.whl' -exec mv {} dist/flat/ \;
+          find dist/ -mindepth 2 -name '*.tar.gz' -exec mv {} dist/flat/ \;
+          ls -lh dist/flat/
 
       - name: List artifacts before upload
         if: steps.check.outputs.completed != 'true'
@@ -314,7 +367,7 @@ jobs:
           uvx twine upload \
             -u __token__ \
             -p ${{ secrets.PYPI_TOKEN }} \
-            dist/*.whl dist/*.tar.gz
+            dist/flat/*.whl dist/flat/*.tar.gz
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
@@ -336,15 +389,21 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             runs-on: ubuntu-latest
+            container: quay.io/pypa/manylinux_2_28_x86_64
+            container-kind: manylinux
           - target: aarch64-unknown-linux-gnu
             runs-on: arm64
+            container: quay.io/pypa/manylinux_2_28_aarch64
+            container-kind: manylinux
           - target: x86_64-unknown-linux-musl
             runs-on: ubuntu-latest
             container: ghcr.io/rust-cross/rust-musl-cross:x86_64-musl
+            container-kind: musl
             openssl-vendored: "1"
           - target: aarch64-unknown-linux-musl
             runs-on: arm64
             container: ghcr.io/rust-cross/rust-musl-cross:aarch64-musl
+            container-kind: musl
             openssl-vendored: "1"
           - target: aarch64-apple-darwin
             runs-on: macos-latest
@@ -362,15 +421,30 @@ jobs:
       CMAKE_C_COMPILER_LAUNCHER: ccache
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
     steps:
+      - name: Bootstrap Node.js for actions (manylinux)
+        if: matrix.container-kind == 'manylinux'
+        run: |
+          curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+          yum install -y nodejs
+
+      - name: Bootstrap Node.js for actions (musl)
+        if: matrix.container-kind == 'musl'
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq curl
+          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+          apt-get install -y -qq nodejs
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install build deps (Linux non-container)
-        if: runner.os == 'Linux' && matrix.container == ''
-        run: sudo apt-get update && sudo apt-get install -y cmake build-essential ccache pkg-config libssl-dev
+      - name: Install build deps (manylinux)
+        if: matrix.container-kind == 'manylinux'
+        run: |
+          yum install -y cmake openssl-devel ccache pkg-config curl
 
       - name: Install build deps (musl container)
-        if: matrix.container != ''
+        if: matrix.container-kind == 'musl'
         run: |
           apt-get update -qq
           apt-get install -y -qq cmake ccache pkg-config curl
@@ -395,7 +469,7 @@ jobs:
         run: cmake --version
 
       - name: Setup Rust (non-musl)
-        if: matrix.container == ''
+        if: matrix.container-kind == ''
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
         with:
           sccache: true
@@ -409,15 +483,34 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Setup Rust (musl container)
-        if: matrix.container != ''
+        if: matrix.container-kind == 'musl'
         run: rustup target add ${{ matrix.target }} || true
 
+      - name: Install Rust (manylinux)
+        if: matrix.container-kind == 'manylinux'
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable --target ${{ matrix.target }}
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
       - name: Setup Node
+        if: matrix.container-kind == ''
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
       - name: Setup pnpm
+        if: matrix.container-kind == ''
+        shell: bash
+        run: corepack enable && corepack prepare pnpm@latest --activate
+
+      - name: Setup pnpm (manylinux)
+        if: matrix.container-kind == 'manylinux'
+        shell: bash
+        run: corepack enable && corepack prepare pnpm@latest --activate
+
+      - name: Setup pnpm (musl container)
+        if: matrix.container-kind == 'musl'
         shell: bash
         run: corepack enable && corepack prepare pnpm@latest --activate
 
@@ -439,7 +532,7 @@ jobs:
             --js index.js
 
       - name: Upload napi artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: napi-${{ matrix.target }}
           path: crates/blazen-node/blazen.*.node
@@ -485,10 +578,9 @@ jobs:
 
       - name: Download napi artifacts
         if: steps.check.outputs.completed != 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           path: crates/blazen-node/artifacts
-          pattern: napi-*
 
       - name: Move napi artifacts into npm subpackages
         if: steps.check.outputs.completed != 'true'
