@@ -12,7 +12,7 @@ description = "Prompt template management for the Blazen workflow engine"
 blazen-llm.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-serde_yaml.workspace = true
+serde_yml.workspace = true
 regex.workspace = true
 thiserror.workspace = true
 

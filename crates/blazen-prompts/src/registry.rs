@@ -168,7 +168,7 @@ impl PromptRegistry {
         let contents = std::fs::read_to_string(path)?;
 
         let mut prompt_file: PromptFile = match path.extension().and_then(|ext| ext.to_str()) {
-            Some("yaml" | "yml") => serde_yaml::from_str(&contents)?,
+            Some("yaml" | "yml") => serde_yml::from_str(&contents)?,
             Some("json") => serde_json::from_str(&contents)?,
             _ => {
                 return Err(PromptError::Validation(format!(
@@ -242,7 +242,7 @@ impl PromptRegistry {
         };
 
         let contents = match path.extension().and_then(|ext| ext.to_str()) {
-            Some("yaml" | "yml") => serde_yaml::to_string(&prompt_file)?,
+            Some("yaml" | "yml") => serde_yml::to_string(&prompt_file)?,
             Some("json") => serde_json::to_string_pretty(&prompt_file)?,
             _ => {
                 return Err(PromptError::Validation(format!(

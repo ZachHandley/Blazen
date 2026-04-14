@@ -34,7 +34,7 @@ pub enum PromptError {
 
     /// A YAML parsing or serialization error occurred.
     #[error("YAML parse error: {0}")]
-    Yaml(#[from] serde_yaml::Error),
+    Yaml(#[from] serde_yml::Error),
 
     /// A JSON parsing or serialization error occurred.
     #[error("JSON parse error: {0}")]
