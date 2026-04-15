@@ -152,19 +152,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # System deps per platform
-      - name: Install build deps (manylinux)
+      - name: Install system deps (manylinux)
         if: matrix.container-kind == 'manylinux'
-        run: |
-          yum install -y cmake openssl-devel ccache pkg-config curl
+        run: yum install -y cmake openssl-devel ccache pkg-config curl
 
-      - name: Install build deps (musl container)
+      - name: Install system deps (musl)
         if: matrix.container-kind == 'musl'
         run: |
           apt-get update -qq
-          apt-get install -y -qq cmake pipx python3 python3-pip python3-venv ccache pkg-config
+          apt-get install -y -qq cmake ccache pkg-config curl
 
-      - name: Install build deps (macOS)
+      - name: Install system deps (macOS)
         if: runner.os == 'macOS'
         run: brew install cmake ccache
 
@@ -178,17 +176,10 @@ jobs:
         with:
           arch: x64
 
-      - name: Verify build deps (Windows)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: cmake --version
-
-      # Rust toolchain. Use the existing setup-rust action on Mac/Windows targets.
-      # For musl and manylinux containers, install Rust manually inside the container.
-      - name: Setup Rust (non-musl)
-        if: matrix.container-kind == ''
+      - name: Setup Rust
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
         with:
+          targets: ${{ matrix.target }}
           sccache: true
           sccache-bucket: ${{ secrets.S3_BUCKET }}
           sccache-endpoint: https://${{ secrets.S3_ENDPOINT }}
@@ -197,50 +188,37 @@ jobs:
           sccache-secret-key: ${{ secrets.S3_ACCESS_SECRET }}
           sccache-key-prefix: sccache/blazen-wheels-${{ matrix.target }}
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
-          targets: ${{ matrix.target }}
 
-      - name: Setup Rust (musl container)
-        if: matrix.container-kind == 'musl'
-        run: |
-          rustup target add ${{ matrix.target }} || true
+      - name: Setup Python 3.10
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
+        with:
+          python-version: '3.10'
+      - name: Setup Python 3.11
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
+        with:
+          python-version: '3.11'
+      - name: Setup Python 3.12
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
+        with:
+          python-version: '3.12'
+      - name: Setup Python 3.13
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
+        with:
+          python-version: '3.13'
+      - name: Setup Python 3.14
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
+        with:
+          python-version: '3.14'
 
-      - name: Install Rust (manylinux)
-        if: matrix.container-kind == 'manylinux'
+      - name: Install maturin
         shell: bash
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable --target ${{ matrix.target }}
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      # Python setup — three paths: musl container (apt python + pipx maturin),
-      # manylinux container (pre-installed /opt/python/* + pip maturin),
-      # vs host Mac/Windows (uv).
-      - name: Install Python via uv (non-container)
-        if: matrix.container-kind == ''
-        uses: astral-sh/setup-uv@v6
-
-      - name: Install Python interpreters (non-container)
-        if: matrix.container-kind == ''
-        shell: bash
-        run: uv python install 3.10 3.11 3.12 3.13 3.14
-
-      - name: Install maturin (musl container)
-        if: matrix.container-kind == 'musl'
-        run: |
-          pipx install "maturin[patchelf]"
-          echo "/root/.local/bin" >> $GITHUB_PATH
-
-      - name: Install maturin (manylinux)
-        if: matrix.container-kind == 'manylinux'
-        shell: bash
-        run: /opt/python/cp312-cp312/bin/pip install 'maturin[patchelf]'
+        run: uv tool install --with patchelf maturin
 
       - name: Stamp version
         shell: bash
         run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
 
-      # Wheel build
-      - name: Build wheels (non-container)
-        if: matrix.container-kind == ''
+      - name: Build wheels
         shell: bash
         run: |
           INTERPRETERS=""
@@ -252,45 +230,11 @@ jobs:
           if [ -n "${{ matrix.manylinux }}" ]; then
             MANYLINUX_FLAG="--manylinux ${{ matrix.manylinux }}"
           fi
-          uvx 'maturin[patchelf]' build --release \
+          maturin build --release \
             -m crates/blazen-py/Cargo.toml \
             --target ${{ matrix.target }} \
             $MANYLINUX_FLAG \
             $INTERPRETERS
-
-      - name: Build wheels (manylinux)
-        if: matrix.container-kind == 'manylinux'
-        shell: bash
-        run: |
-          INTERPRETERS=""
-          for V in cp310-cp310 cp311-cp311 cp312-cp312 cp313-cp313 cp314-cp314; do
-            P="/opt/python/$V/bin/python3"
-            if [ -x "$P" ]; then
-              INTERPRETERS="$INTERPRETERS -i $P"
-            fi
-          done
-          echo "Building for ${{ matrix.target }} with: $INTERPRETERS"
-          /opt/python/cp312-cp312/bin/maturin build --release \
-            -m crates/blazen-py/Cargo.toml \
-            --target ${{ matrix.target }} \
-            --manylinux ${{ matrix.manylinux }} \
-            $INTERPRETERS
-
-      - name: Build wheels (musl container)
-        if: matrix.container-kind == 'musl'
-        run: |
-          # The musl container only has python3.10 from Ubuntu 22.04 apt.
-          # Building a single wheel with python3.10 is fine — abi3 or not, PyPI
-          # resolves sdist for other interpreter versions. But we prefer multi-Python.
-          # Install multiple Pythons via deadsnakes or similar is non-trivial here.
-          # For now: build with python3.10, and document musl as "3.10+ abi3" target.
-          # NOTE: blazen-py/pyproject.toml does not use abi3 per latest read — ship a single
-          # cp310 musl wheel until the musl docker image is upgraded.
-          maturin build --release \
-            -m crates/blazen-py/Cargo.toml \
-            --target ${{ matrix.target }} \
-            --manylinux ${{ matrix.manylinux }} \
-            -i python3.10
 
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v3
@@ -438,18 +382,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install build deps (manylinux)
+      - name: Install system deps (manylinux)
         if: matrix.container-kind == 'manylinux'
-        run: |
-          yum install -y cmake openssl-devel ccache pkg-config curl
+        run: yum install -y cmake openssl-devel ccache pkg-config curl
 
-      - name: Install build deps (musl container)
+      - name: Install system deps (musl)
         if: matrix.container-kind == 'musl'
         run: |
           apt-get update -qq
           apt-get install -y -qq cmake ccache pkg-config curl
 
-      - name: Install build deps (macOS)
+      - name: Install system deps (macOS)
         if: runner.os == 'macOS'
         run: brew install cmake ccache
 
@@ -463,15 +406,10 @@ jobs:
         with:
           arch: x64
 
-      - name: Verify build deps (Windows)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: cmake --version
-
-      - name: Setup Rust (non-musl)
-        if: matrix.container-kind == ''
+      - name: Setup Rust
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
         with:
+          targets: ${{ matrix.target }}
           sccache: true
           sccache-bucket: ${{ secrets.S3_BUCKET }}
           sccache-endpoint: https://${{ secrets.S3_ENDPOINT }}
@@ -480,45 +418,18 @@ jobs:
           sccache-secret-key: ${{ secrets.S3_ACCESS_SECRET }}
           sccache-key-prefix: sccache/blazen-napi-${{ matrix.target }}
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
-          targets: ${{ matrix.target }}
 
-      - name: Setup Rust (musl container)
-        if: matrix.container-kind == 'musl'
-        run: rustup target add ${{ matrix.target }} || true
-
-      - name: Install Rust (manylinux)
-        if: matrix.container-kind == 'manylinux'
-        shell: bash
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable --target ${{ matrix.target }}
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Setup Node
-        if: matrix.container-kind == ''
-        uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-node@main
         with:
-          node-version: "20"
-
-      - name: Setup pnpm
-        if: matrix.container-kind == ''
-        shell: bash
-        run: corepack enable && corepack prepare pnpm@latest --activate
-
-      - name: Setup pnpm (manylinux)
-        if: matrix.container-kind == 'manylinux'
-        shell: bash
-        run: corepack enable && corepack prepare pnpm@latest --activate
-
-      - name: Setup pnpm (musl container)
-        if: matrix.container-kind == 'musl'
-        shell: bash
-        run: corepack enable && corepack prepare pnpm@latest --activate
+          node-version: '20'
+          package-manager: pnpm
 
       - name: Stamp version
         shell: bash
         run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
 
-      - name: Install dependencies
+      - name: Install npm deps
         shell: bash
         run: pnpm install
 
@@ -526,7 +437,8 @@ jobs:
         shell: bash
         run: |
           pnpm --filter blazen exec napi build \
-            --release --platform \
+            --release \
+            --platform \
             --target ${{ matrix.target }} \
             --features local-all \
             --js index.js
