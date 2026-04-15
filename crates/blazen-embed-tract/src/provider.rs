@@ -93,6 +93,23 @@ pub struct TractEmbedModel {
     input_count: usize,
 }
 
+// Manual `Debug` impl because `SimplePlan<TypedFact, Box<dyn TypedOp>, ...>`
+// can't auto-derive (trait objects don't implement `Debug`). We show the
+// user-facing identity and config fields, and elide the opaque tract graph
+// and tokenizer handles via `finish_non_exhaustive`.
+impl std::fmt::Debug for TractEmbedModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TractEmbedModel")
+            .field("model_id", &self.model_id)
+            .field("dims", &self.dims)
+            .field("pooling", &self.pooling)
+            .field("max_length", &self.max_length)
+            .field("batch_size", &self.batch_size)
+            .field("input_count", &self.input_count)
+            .finish_non_exhaustive()
+    }
+}
+
 impl TractEmbedModel {
     /// Build a [`TractEmbedModel`] from the given options.
     ///
