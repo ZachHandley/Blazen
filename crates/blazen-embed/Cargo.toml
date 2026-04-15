@@ -1,0 +1,18 @@
+[package]
+name = "blazen-embed"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "Embedding backend facade for Blazen: picks fastembed (ORT) or tract (pure Rust) per target"
+
+[target.'cfg(not(target_env = "musl"))'.dependencies]
+blazen-embed-fastembed = { workspace = true }
+
+[target.'cfg(target_env = "musl")'.dependencies]
+blazen-embed-tract = { workspace = true }
+
+[lints]
+workspace = true

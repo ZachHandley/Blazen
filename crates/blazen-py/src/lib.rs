@@ -117,8 +117,8 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<providers::options::PyBedrockOptions>()?;
     m.add_class::<providers::options::PyDevice>()?;
 
-    #[cfg(feature = "fastembed")]
-    m.add_class::<providers::options::PyFastEmbedOptions>()?;
+    #[cfg(feature = "embed")]
+    m.add_class::<providers::options::PyEmbedOptions>()?;
 
     m.add_class::<providers::options::PyQuantization>()?;
 

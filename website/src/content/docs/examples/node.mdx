@@ -219,7 +219,7 @@ class DictBackend extends MemoryBackend {
   }
 }
 
-const embedder = EmbeddingModel.fastembed();
+const embedder = EmbeddingModel.embed();
 const memory = new Memory(embedder, new DictBackend());
 
 await memory.add("fact-1", "Rust has ownership and borrowing.");

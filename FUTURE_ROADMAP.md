@@ -93,21 +93,22 @@ These extend the session ref system beyond the single-process, single-machine ca
 
 Embeddings are the highest-volume call in most RAG pipelines. Sending every document chunk to OpenAI is expensive, slow, and leaks data. Local embedding models are cheap (free), fast (GPU or even fast CPU), and private.
 
-### Tier 1: `fastembed` (highest priority)
+### Tier 1: Local embedding (ONNX) (highest priority)
 
-**Crate:** `blazen-embed-fastembed` (new)
+**Crates:** `blazen-embed` (facade) + `blazen-embed-fastembed` (glibc/mac/windows) + `blazen-embed-tract` (musl/wasm)
 
-- Wraps [`fastembed-rs`](https://github.com/Anush008/fastembed-rs) — a Rust port of the Python `fastembed` library
-- Uses ONNX Runtime under the hood (via `ort` crate)
+- The facade (`blazen-embed`) re-exports `EmbedModel` / `EmbedOptions` and picks the right underlying backend per target triple via target-cfg `Cargo.toml` deps
+- On glibc/macOS/Windows: wraps [`fastembed-rs`](https://github.com/Anush008/fastembed-rs) — a Rust port of the Python `fastembed` library — which uses ONNX Runtime under the hood (via `ort` crate)
+- On musl/wasm: wraps `tract-onnx` for a pure-Rust ONNX inference path (no C++ runtime dependency)
 - Ships pre-quantized models: `BAAI/bge-small-en-v1.5`, `BAAI/bge-base-en-v1.5`, `nomic-embed-text-v1.5`, `jina-embeddings-v2-*`, etc.
 - Downloads models on first use, caches in `~/.cache/blazen/models/`
 - Implements `EmbeddingModel` trait from `blazen-llm::traits`
 
 **API shape:**
 ```rust
-use blazen_embed_fastembed::FastEmbedModel;
+use blazen_embed::EmbedModel;
 
-let model = FastEmbedModel::from_options(FastEmbedOptions {
+let model = EmbedModel::from_options(EmbedOptions {
     model_id: Some("BAAI/bge-small-en-v1.5".into()),
     device: Device::Cpu,
     ..Default::default()
@@ -117,21 +118,22 @@ let response = model.embed(&["hello".into(), "world".into()]).await?;
 
 **Python:**
 ```python
-from blazen import EmbeddingModel, FastEmbedOptions
-model = EmbeddingModel.fastembed()  # defaults to bge-small-en-v1.5
-model = EmbeddingModel.fastembed(options=FastEmbedOptions(model_id="nomic-embed-text-v1.5"))
+from blazen import EmbeddingModel, EmbedOptions
+model = EmbeddingModel.local()  # defaults to bge-small-en-v1.5
+model = EmbeddingModel.local(options=EmbedOptions(model_id="nomic-embed-text-v1.5"))
 ```
 
 **Node:**
 ```typescript
-const model = EmbeddingModel.fastembed({ modelId: "BAAI/bge-small-en-v1.5" });
+const model = EmbeddingModel.embed({ modelId: "BAAI/bge-small-en-v1.5" });
 ```
 
 **Placement:**
-- New crate: `crates/blazen-embed-fastembed/`
-- PyO3 wrapper: `crates/blazen-py/src/types/embedding.rs` — add `fastembed()` factory behind a `fastembed` feature flag
+- Facade crate: `crates/blazen-embed/`
+- Backend crates: `crates/blazen-embed-fastembed/`, `crates/blazen-embed-tract/`
+- PyO3 wrapper: `crates/blazen-py/src/types/embedding.rs` — add `embed()` factory behind an `embed` feature flag
 - napi-rs wrapper: `crates/blazen-node/src/types/embedding.rs` — same pattern
-- WASM: **not supported** (ONNX Runtime doesn't run in browser WASM without major work — see Tier 3)
+- WASM: served by the tract backend — bundled automatically on `wasm32-*` via the facade's target-cfg dispatch
 
 ### Tier 2: Direct HuggingFace via `candle`
 
@@ -143,7 +145,7 @@ const model = EmbeddingModel.fastembed({ modelId: "BAAI/bge-small-en-v1.5" });
 - Model download via `hf-hub` crate
 - Implements `EmbeddingModel` trait
 
-**Why both this and fastembed?** `fastembed` is faster to get started (pre-packaged models, ONNX). `candle` is more flexible (any HF model, GPU support, no ORT dependency). They serve different use cases.
+**Why both this and the embed backend?** The embed backend is faster to get started (pre-packaged models, ONNX). `candle` is more flexible (any HF model, GPU support, no ORT dependency). They serve different use cases.
 
 **Placement:**
 - New crate: `crates/blazen-embed-candle/`
@@ -442,7 +444,7 @@ Lives in `blazen_llm::quantization`.
 Each local backend gets its own options struct following the same pattern as `ProviderOptions`:
 
 ```rust
-pub struct FastEmbedOptions {
+pub struct EmbedOptions {
     pub model_id: Option<String>,
     pub device: Option<Device>,
     pub cache_dir: Option<PathBuf>,
@@ -459,7 +461,9 @@ All implement `Serialize + Deserialize` and have PyO3 / napi-rs wrappers.
 ```
 crates/
 ├── blazen-llm/                    # Core traits — NO native deps
-├── blazen-embed-fastembed/        # Local embeddings via fastembed-rs
+├── blazen-embed/                  # Facade — target-cfg dispatch to the backend below
+├── blazen-embed-fastembed/        # Local embeddings via fastembed-rs (glibc/mac/windows)
+├── blazen-embed-tract/            # Local embeddings via tract-onnx (musl/wasm)
 ├── blazen-embed-candle/           # Local embeddings via candle
 ├── blazen-llm-mistralrs/          # Local LLM via mistral.rs
 ├── blazen-llm-llamacpp/           # Local LLM via llama.cpp
@@ -478,11 +482,11 @@ crates/
 [features]
 default = []
 local-all = ["local-embeddings", "local-llm", "local-image", "local-audio"]
-local-embeddings = ["fastembed", "candle-embed"]
+local-embeddings = ["embed", "candle-embed"]
 local-llm = ["mistralrs", "llamacpp", "candle-llm"]
 local-image = ["diffusion"]
 local-audio = ["whispercpp", "piper"]
-fastembed = ["dep:blazen-embed-fastembed"]
+embed = ["dep:blazen-embed"]
 candle-embed = ["dep:blazen-embed-candle"]
 mistralrs = ["dep:blazen-llm-mistralrs"]
 llamacpp = ["dep:blazen-llm-llamacpp"]
@@ -501,8 +505,8 @@ Users opt into exactly what they need. Default build stays lean.
 ### Python
 
 - Each local backend gets a feature flag in `crates/blazen-py/Cargo.toml`
-- Example: `pyo3-stub-gen` + `#[cfg(feature = "fastembed")]` for the factory method
-- Wheels built per-feature-set: `blazen`, `blazen[fastembed]`, `blazen[local-all]`, etc.
+- Example: `pyo3-stub-gen` + `#[cfg(feature = "embed")]` for the factory method
+- Wheels built per-feature-set: `blazen`, `blazen[embed]`, `blazen[local-all]`, etc.
 - GPU wheels: `blazen[cuda]`, `blazen[metal]` — pull in the matching native deps
 
 ### Node
@@ -521,11 +525,11 @@ Users opt into exactly what they need. Default build stays lean.
 
 ## 10. Priority Order
 
-1. **`fastembed` embeddings** — easiest win, highest value, no GPU required
+1. **`embed` embeddings (fastembed on glibc/mac/windows, tract on musl/wasm)** — easiest win, highest value, no GPU required
 2. **`mistral.rs` LLM** — the single biggest user-facing feature
 3. **`whisper.cpp` transcription** — near-universal demand, mature, fast
 4. **`diffusion-rs` image gen** — rounds out the media story
-5. **`candle` embeddings** — flexibility alternative to fastembed
+5. **`candle` embeddings** — flexibility alternative to the embed backend
 6. **`candle` LLM** — research / experimentation use cases
 7. **`llama.cpp` LLM** — alternative for maximum model coverage
 8. **Piper TTS** — small addition, low-priority compared to above

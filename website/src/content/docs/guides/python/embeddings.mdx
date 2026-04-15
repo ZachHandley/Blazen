@@ -68,25 +68,25 @@ print(model.model_id)    # "text-embedding-3-small"
 print(model.dimensions)  # 1536
 ```
 
-## Local Embeddings (FastEmbed)
+## Local Embeddings
 
-Blazen can generate embeddings entirely on your machine using [FastEmbed](https://github.com/qdrant/fastembed) and ONNX Runtime. No API key, no network calls after the initial model download, and completely free.
+Blazen can generate embeddings entirely on your machine using its built-in embed backend. No API key, no network calls after the initial model download, and completely free. Blazen's embed backend runs through ONNX Runtime on glibc/mac/windows and pure-Rust tract on musl -- the facade picks the right underlying implementation automatically for your target.
 
 ### Setup
 
-Local embeddings are available when Blazen is built with the `fastembed` feature. The default `pip install blazen` wheels include it.
+Local embeddings are available when Blazen is built with the `embed` feature. The default `pip install blazen` wheels include it.
 
 ### Usage
 
 ```python
-from blazen import EmbeddingModel, FastEmbedOptions
+from blazen import EmbeddingModel, EmbedOptions
 
 # Use the default model (BAAI/bge-small-en-v1.5, 384 dimensions)
-model = EmbeddingModel.fastembed()
+model = EmbeddingModel.local()
 
 # Or specify a model and other options explicitly
-model = EmbeddingModel.fastembed(
-    options=FastEmbedOptions(
+model = EmbeddingModel.local(
+    options=EmbedOptions(
         model_name="BGESmallENV15",
         cache_dir="/tmp/models",
         max_batch_size=256,
@@ -99,12 +99,12 @@ print(len(response.embeddings))       # 2
 print(len(response.embeddings[0]))    # 384
 ```
 
-### FastEmbedOptions
+### EmbedOptions
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `model_name` | `str \| None` | `"BGESmallENV15"` | FastEmbed model variant name. |
-| `cache_dir` | `str \| None` | FastEmbed default | Directory where downloaded models are cached. |
+| `model_name` | `str \| None` | `"BGESmallENV15"` | Embed model variant name. |
+| `cache_dir` | `str \| None` | backend default | Directory where downloaded models are cached. |
 | `max_batch_size` | `int \| None` | `256` | Maximum batch size for embedding. |
 | `show_download_progress` | `bool \| None` | `False` | Print a progress bar during model download. |
 
@@ -115,7 +115,7 @@ A local embedding model is a regular `EmbeddingModel` -- it plugs into `Memory` 
 ```python
 from blazen import EmbeddingModel, Memory, InMemoryBackend
 
-model = EmbeddingModel.fastembed()
+model = EmbeddingModel.local()
 memory = Memory(model, InMemoryBackend())
 
 await memory.add("doc1", "Paris is the capital of France")

@@ -1,21 +1,21 @@
-"""Local embeddings with fastembed (no API key needed).
+"""Local embeddings with the embed backend (no API key needed).
 
-fastembed runs entirely on-device using ONNX Runtime.  The default model is
-BAAI/bge-small-en-v1.5 (384 dimensions, ~33 MB download on first run).
-Subsequent runs use the cached model automatically.
+The embed backend runs entirely on-device using ONNX Runtime.  The default
+model is BAAI/bge-small-en-v1.5 (384 dimensions, ~33 MB download on first
+run).  Subsequent runs use the cached model automatically.
 
-Unlike the cloud-based embedding providers (OpenAI, Cohere, etc.), fastembed
-requires no API key, no network access after the initial model download, and
-no usage-based billing.  This makes it ideal for local development, CI
-pipelines, and air-gapped deployments.
+Unlike the cloud-based embedding providers (OpenAI, Cohere, etc.), the
+local embed backend requires no API key, no network access after the
+initial model download, and no usage-based billing.  This makes it ideal
+for local development, CI pipelines, and air-gapped deployments.
 
 Usage:
-    uv run python crates/blazen-py/examples/llm_fastembed.py
+    uv run python crates/blazen-py/examples/llm_embed.py
 """
 
 import asyncio
 
-from blazen import EmbeddingModel, FastEmbedOptions
+from blazen import EmbeddingModel, EmbedOptions
 
 
 async def main() -> None:
@@ -23,7 +23,7 @@ async def main() -> None:
     # 1. Create a local embedding model with default settings
     # ------------------------------------------------------------------
     # Default model: BAAI/bge-small-en-v1.5 (384 dimensions)
-    model = EmbeddingModel.fastembed()
+    model = EmbeddingModel.local()
 
     print(f"Model:      {model.model_id}")
     print(f"Dimensions: {model.dimensions}")
@@ -54,11 +54,11 @@ async def main() -> None:
     print("WITH EXPLICIT OPTIONS")
     print("=" * 60)
 
-    opts = FastEmbedOptions(
+    opts = EmbedOptions(
         model_name="BGESmallENV15",
         show_download_progress=True,
     )
-    custom_model = EmbeddingModel.fastembed(options=opts)
+    custom_model = EmbeddingModel.local(options=opts)
 
     print(f"Model:      {custom_model.model_id}")
     print(f"Dimensions: {custom_model.dimensions}")

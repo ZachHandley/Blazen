@@ -1,14 +1,14 @@
-"""Smoke tests for the fastembed local embedding backend.
+"""Smoke tests for the embed local embedding backend.
 
 These tests require a model download on first run (~33 MB for the default
-BAAI/bge-small-en-v1.5 model).  Gated on the BLAZEN_TEST_FASTEMBED=1
+BAAI/bge-small-en-v1.5 model).  Gated on the BLAZEN_TEST_EMBED=1
 environment variable to avoid unexpected downloads in CI.
 
-The fastembed backend is behind a Cargo feature gate.  If the wheel was not
-built with ``--features fastembed``, the entire module is skipped.
+The embed backend is behind a Cargo feature gate.  If the wheel was not
+built with ``--features embed``, the entire module is skipped.
 
 Run manually:
-    BLAZEN_TEST_FASTEMBED=1 uv run pytest tests/python/test_fastembed_smoke.py -v
+    BLAZEN_TEST_EMBED=1 uv run pytest tests/python/test_embed_smoke.py -v
 """
 
 import os
@@ -17,29 +17,29 @@ import pytest
 
 from blazen import EmbeddingModel
 
-# FastEmbedOptions lives behind the `fastembed` Cargo feature gate.
+# EmbedOptions lives behind the `embed` Cargo feature gate.
 # If the installed wheel was not built with that feature, skip the
 # entire module rather than failing with an ImportError.
 try:
-    from blazen import FastEmbedOptions
+    from blazen import EmbedOptions
 except ImportError:
     pytest.skip(
-        "blazen was not built with the fastembed feature "
-        "(rebuild with: maturin develop -m crates/blazen-py/Cargo.toml --features fastembed)",
+        "blazen was not built with the embed feature "
+        "(rebuild with: maturin develop -m crates/blazen-py/Cargo.toml --features embed)",
         allow_module_level=True,
     )
 
 skip_without_flag = pytest.mark.skipif(
-    not os.environ.get("BLAZEN_TEST_FASTEMBED"),
-    reason="BLAZEN_TEST_FASTEMBED not set",
+    not os.environ.get("BLAZEN_TEST_EMBED"),
+    reason="BLAZEN_TEST_EMBED not set",
 )
 
 
 @skip_without_flag
 @pytest.mark.asyncio
-async def test_fastembed_default_model():
-    """Default fastembed model embeds texts and reports correct dimensions."""
-    model = EmbeddingModel.fastembed()
+async def test_embed_default_model():
+    """Default embed model embeds texts and reports correct dimensions."""
+    model = EmbeddingModel.local()
     result = await model.embed(["hello", "world"])
 
     assert len(result.embeddings) == 2
@@ -50,9 +50,9 @@ async def test_fastembed_default_model():
 
 @skip_without_flag
 @pytest.mark.asyncio
-async def test_fastembed_vector_dimensionality():
+async def test_embed_vector_dimensionality():
     """Each embedding vector has exactly model.dimensions elements."""
-    model = EmbeddingModel.fastembed()
+    model = EmbeddingModel.local()
     result = await model.embed(["a single sentence"])
 
     assert len(result.embeddings) == 1
@@ -61,10 +61,10 @@ async def test_fastembed_vector_dimensionality():
 
 @skip_without_flag
 @pytest.mark.asyncio
-async def test_fastembed_with_options():
-    """FastEmbedOptions are accepted without error."""
-    opts = FastEmbedOptions(show_download_progress=True)
-    model = EmbeddingModel.fastembed(options=opts)
+async def test_embed_with_options():
+    """EmbedOptions are accepted without error."""
+    opts = EmbedOptions(show_download_progress=True)
+    model = EmbeddingModel.local(options=opts)
     result = await model.embed(["test"])
 
     assert len(result.embeddings) == 1
@@ -73,9 +73,9 @@ async def test_fastembed_with_options():
 
 @skip_without_flag
 @pytest.mark.asyncio
-async def test_fastembed_batch_ordering():
+async def test_embed_batch_ordering():
     """Embedding order matches input order (different texts give different vectors)."""
-    model = EmbeddingModel.fastembed()
+    model = EmbeddingModel.local()
     texts = ["the cat sat on the mat", "quantum mechanics is fascinating"]
     result = await model.embed(texts)
 

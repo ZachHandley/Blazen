@@ -233,7 +233,7 @@ impl MemoryBackend for DictBackend {
 
 // Usage -- the custom backend is a drop-in for the built-in ones:
 // let embedder = Arc::new(
-//     blazen_llm::fastembed::FastEmbedProvider::bge_small_en_v1_5().await?,
+//     blazen_embed::EmbedModel::from_options(blazen_embed::EmbedOptions::default()).await?,
 // ) as Arc<dyn blazen_llm::EmbeddingModel>;
 // let memory = Memory::new(embedder, DictBackend::new());
 ```

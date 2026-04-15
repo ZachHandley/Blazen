@@ -1,11 +1,11 @@
 /**
- * fastembed local embedding smoke tests.
+ * embed local embedding smoke tests.
  *
- * Gated on the BLAZEN_TEST_FASTEMBED environment variable.
- * Only runs when the native binding is compiled with the `fastembed` feature.
+ * Gated on the BLAZEN_TEST_EMBED environment variable.
+ * Only runs when the native binding is compiled with the `embed` feature.
  *
  * Build first:
- *   cd crates/blazen-node && npm install && npm run build -- --features fastembed
+ *   cd crates/blazen-node && npm install && npm run build -- --features embed
  */
 
 import { describe, it } from "node:test";
@@ -13,11 +13,11 @@ import assert from "node:assert/strict";
 
 import { EmbeddingModel } from "../../crates/blazen-node/index.js";
 
-const BLAZEN_TEST_FASTEMBED = process.env.BLAZEN_TEST_FASTEMBED;
+const BLAZEN_TEST_EMBED = process.env.BLAZEN_TEST_EMBED;
 
-describe("fastembed local embedding", { skip: !BLAZEN_TEST_FASTEMBED }, () => {
+describe("local embedding", { skip: !BLAZEN_TEST_EMBED }, () => {
   it("embeds two texts and returns correct count with non-empty vectors", async () => {
-    const model = EmbeddingModel.fastembed();
+    const model = EmbeddingModel.embed();
     const response = await model.embed(["hello world", "goodbye world"]);
 
     assert.strictEqual(response.embeddings.length, 2, "expected 2 embedding vectors");
@@ -33,7 +33,7 @@ describe("fastembed local embedding", { skip: !BLAZEN_TEST_FASTEMBED }, () => {
   });
 
   it("constructs with explicit options and embeds one text", async () => {
-    const model = EmbeddingModel.fastembed({
+    const model = EmbeddingModel.embed({
       showDownloadProgress: false,
       maxBatchSize: 32,
     });

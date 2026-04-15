@@ -636,16 +636,16 @@ export declare class EmbeddingModel {
   /** Embed one or more texts, returning one vector per input text. */
   embed(texts: Array<string>): Promise<JsEmbeddingResponse>
   /**
-   * Create a local fastembed embedding model (ONNX Runtime, no API key).
+   * Create a local embedding model (ONNX, no API key).
    *
    * Defaults to `BAAI/bge-small-en-v1.5` (384 dimensions).
    *
    * ```javascript
-   * const model = EmbeddingModel.fastembed();
+   * const model = EmbeddingModel.embed();
    * const response = await model.embed(["Hello", "World"]);
    * ```
    */
-  static fastembed(options?: JsFastEmbedOptions | undefined | null): EmbeddingModel
+  static embed(options?: JsEmbedOptions | undefined | null): EmbeddingModel
 }
 export type JsEmbeddingModel = EmbeddingModel
 
@@ -1994,6 +1994,26 @@ export interface JsEmbeddingResponse {
   metadata: any
 }
 
+/**
+ * Options for creating a local embedding model.
+ *
+ * All fields are optional; defaults produce a working model using
+ * `BAAI/bge-small-en-v1.5` on CPU with the backend's built-in cache.
+ */
+export interface JsEmbedOptions {
+  /** Embed model variant name (e.g. `"BGESmallENV15"`). */
+  modelName?: string
+  /** Model cache directory. When absent, the embedding backend uses its built-in cache. */
+  cacheDir?: string
+  /**
+   * Maximum batch size for embedding. When absent, the embedding backend uses its
+   * default (256).
+   */
+  maxBatchSize?: number
+  /** Whether to display download progress when fetching models. */
+  showDownloadProgress?: boolean
+}
+
 export declare const enum JsFalLlmEndpointKind {
   OpenAiChat = 'open_ai_chat',
   OpenAiResponses = 'open_ai_responses',
@@ -2009,26 +2029,6 @@ export interface JsFalOptions {
   endpoint?: JsFalLlmEndpointKind
   enterprise?: boolean
   autoRouteModality?: boolean
-}
-
-/**
- * Options for creating a local fastembed embedding model.
- *
- * All fields are optional; defaults produce a working model using
- * `BAAI/bge-small-en-v1.5` on CPU with fastembed's built-in cache.
- */
-export interface JsFastEmbedOptions {
-  /** Fastembed model variant name (e.g. `"BGESmallENV15"`). */
-  modelName?: string
-  /** Model cache directory. When absent, fastembed uses its built-in cache. */
-  cacheDir?: string
-  /**
-   * Maximum batch size for embedding. When absent, fastembed uses its
-   * default (256).
-   */
-  maxBatchSize?: number
-  /** Whether to display download progress when fetching models. */
-  showDownloadProgress?: boolean
 }
 
 /**

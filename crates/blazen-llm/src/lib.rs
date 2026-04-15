@@ -173,8 +173,8 @@ pub use types::{
 
 mod backends;
 
-#[cfg(feature = "fastembed")]
-pub use blazen_embed_fastembed::{FastEmbedModel, FastEmbedOptions};
+#[cfg(feature = "embed")]
+pub use blazen_embed::{EmbedError, EmbedModel, EmbedOptions, EmbedResponse};
 
 #[cfg(feature = "mistralrs")]
 pub use blazen_llm_mistralrs::{MistralRsOptions, MistralRsProvider};

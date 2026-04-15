@@ -18,7 +18,7 @@ prompts = ["blazen-prompts"]
 telemetry = ["blazen-telemetry", "blazen-core/telemetry"]
 all = ["llm", "persist", "pipeline", "prompts", "telemetry"]
 # Local inference (grouped by modality)
-local-embeddings = ["blazen-llm/fastembed", "blazen-llm/candle-embed"]
+local-embeddings = ["blazen-llm/embed", "blazen-llm/candle-embed"]
 local-llm = ["blazen-llm/mistralrs", "blazen-llm/llamacpp", "blazen-llm/candle-llm"]
 local-image = ["blazen-llm/diffusion"]
 local-audio = ["blazen-llm/whispercpp", "blazen-llm/piper", "blazen-llm/candle-audio"]

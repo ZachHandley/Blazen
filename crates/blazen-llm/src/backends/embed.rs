@@ -1,26 +1,26 @@
-//! Bridge between [`blazen_embed_fastembed::FastEmbedModel`] and
+//! Bridge between [`blazen_embed::EmbedModel`] and
 //! [`crate::EmbeddingModel`].
 
 use async_trait::async_trait;
-use blazen_embed_fastembed::FastEmbedModel;
+use blazen_embed::EmbedModel;
 
 use crate::error::BlazenError;
 use crate::types::EmbeddingResponse;
 
 #[async_trait]
-impl crate::traits::EmbeddingModel for FastEmbedModel {
+impl crate::traits::EmbeddingModel for EmbedModel {
     fn model_id(&self) -> &str {
-        FastEmbedModel::model_id(self)
+        EmbedModel::model_id(self)
     }
 
     fn dimensions(&self) -> usize {
-        FastEmbedModel::dimensions(self)
+        EmbedModel::dimensions(self)
     }
 
     async fn embed(&self, texts: &[String]) -> Result<EmbeddingResponse, BlazenError> {
-        let resp = FastEmbedModel::embed(self, texts)
+        let resp = EmbedModel::embed(self, texts)
             .await
-            .map_err(|e| BlazenError::provider("fastembed", e.to_string()))?;
+            .map_err(|e| BlazenError::provider("embed", e.to_string()))?;
 
         Ok(EmbeddingResponse {
             embeddings: resp.embeddings,

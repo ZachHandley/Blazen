@@ -10,8 +10,8 @@ pub mod candle_embed;
 #[cfg(feature = "candle-llm")]
 pub mod candle_llm;
 
-#[cfg(feature = "fastembed")]
-pub mod fastembed;
+#[cfg(feature = "embed")]
+pub mod embed;
 
 #[cfg(feature = "mistralrs")]
 pub mod mistralrs;

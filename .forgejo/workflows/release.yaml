@@ -160,7 +160,7 @@ jobs:
         if: matrix.container-kind == 'musl'
         run: |
           apt-get update -qq
-          apt-get install -y -qq cmake ccache pkg-config curl
+          apt-get install -y -qq cmake ccache pkg-config curl libssl-dev
 
       - name: Install system deps (macOS)
         if: runner.os == 'macOS'
@@ -221,7 +221,7 @@ jobs:
 
       - name: Stamp version
         shell: bash
-        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
+        run: uv run --no-project python scripts/stamp-version.py ${{ needs.version.outputs.version }}
 
       - name: Build wheels
         shell: bash
@@ -257,6 +257,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Install uv
         uses: astral-sh/setup-uv@v6
+      - name: Setup Rust
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
       - name: Stamp version
         run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
       - name: Build sdist
@@ -395,7 +397,7 @@ jobs:
         if: matrix.container-kind == 'musl'
         run: |
           apt-get update -qq
-          apt-get install -y -qq cmake ccache pkg-config curl
+          apt-get install -y -qq cmake ccache pkg-config curl libssl-dev
 
       - name: Install system deps (macOS)
         if: runner.os == 'macOS'
@@ -430,9 +432,14 @@ jobs:
           node-version: '20'
           package-manager: pnpm
 
+      - name: Setup Python (for stamping)
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
+        with:
+          python-version: '3.12'
+
       - name: Stamp version
         shell: bash
-        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
+        run: uv run --no-project python scripts/stamp-version.py ${{ needs.version.outputs.version }}
 
       - name: Install npm deps
         shell: bash

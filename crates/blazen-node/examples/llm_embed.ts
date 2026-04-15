@@ -1,23 +1,23 @@
 /**
- * Local embedding with Blazen's fastembed backend.
+ * Local embedding with Blazen's embed backend.
  *
- * Demonstrates using Blazen's EmbeddingModel with the fastembed (ONNX Runtime)
+ * Demonstrates using Blazen's EmbeddingModel with the embed (ONNX Runtime)
  * backend to produce embedding vectors entirely on-device -- no API key or
  * network access required.
  *
  * The default model is `BAAI/bge-small-en-v1.5` (384 dimensions). On the
- * first run fastembed will download and cache the ONNX weights automatically.
+ * first run the embed backend will download and cache the ONNX weights automatically.
  *
- * Run with: npx tsx llm_fastembed.ts
+ * Run with: npx tsx llm_embed.ts
  */
 
 import { EmbeddingModel } from "blazen";
 
 // ---------------------------------------------------------------------------
-// Create a local fastembed model with default options.
+// Create a local embed model with default options.
 // ---------------------------------------------------------------------------
 
-const model: EmbeddingModel = EmbeddingModel.fastembed();
+const model: EmbeddingModel = EmbeddingModel.embed();
 
 console.log(`Model ID:    ${model.modelId}`);
 console.log(`Dimensions:  ${model.dimensions}`);

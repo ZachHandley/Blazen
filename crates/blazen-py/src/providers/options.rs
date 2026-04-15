@@ -7,7 +7,7 @@ use blazen_llm::types::provider_options::{
     AzureOptions, BedrockOptions, FalLlmEndpointKind, FalOptions, ProviderOptions,
 };
 
-#[cfg(any(feature = "fastembed", feature = "mistralrs", feature = "whispercpp"))]
+#[cfg(any(feature = "embed", feature = "mistralrs", feature = "whispercpp"))]
 use std::path::PathBuf;
 
 // ---------------------------------------------------------------------------
@@ -434,30 +434,30 @@ impl From<PyDevice> for blazen_llm::Device {
 }
 
 // ---------------------------------------------------------------------------
-// FastEmbedOptions
+// EmbedOptions
 // ---------------------------------------------------------------------------
 
-/// Options for the local fastembed embedding backend.
+/// Options for the local embedding backend.
 ///
 /// Example:
-///     >>> opts = FastEmbedOptions(model_name="BGESmallENV15")
-///     >>> model = EmbeddingModel.fastembed(options=opts)
-#[cfg(feature = "fastembed")]
+///     >>> opts = EmbedOptions(model_name="BGESmallENV15")
+///     >>> model = EmbeddingModel.local(options=opts)
+#[cfg(feature = "embed")]
 #[gen_stub_pyclass]
-#[pyclass(name = "FastEmbedOptions", from_py_object)]
+#[pyclass(name = "EmbedOptions", from_py_object)]
 #[derive(Clone, Default)]
-pub struct PyFastEmbedOptions {
-    pub(crate) inner: blazen_llm::FastEmbedOptions,
+pub struct PyEmbedOptions {
+    pub(crate) inner: blazen_llm::EmbedOptions,
 }
 
-#[cfg(feature = "fastembed")]
+#[cfg(feature = "embed")]
 #[gen_stub_pymethods]
 #[pymethods]
-impl PyFastEmbedOptions {
-    /// Create a new FastEmbedOptions.
+impl PyEmbedOptions {
+    /// Create a new EmbedOptions.
     ///
     /// Args:
-    ///     model_name: Fastembed model variant name (e.g. "BGESmallENV15").
+    ///     model_name: Model variant name (e.g. "BGESmallENV15").
     ///     cache_dir: Model cache directory path.
     ///     max_batch_size: Maximum batch size for embedding.
     ///     show_download_progress: Show download progress when fetching models.
@@ -470,7 +470,7 @@ impl PyFastEmbedOptions {
         show_download_progress: Option<bool>,
     ) -> Self {
         Self {
-            inner: blazen_llm::FastEmbedOptions {
+            inner: blazen_llm::EmbedOptions {
                 model_name,
                 cache_dir: cache_dir.map(PathBuf::from),
                 max_batch_size,
@@ -520,7 +520,7 @@ impl PyFastEmbedOptions {
 
     fn __repr__(&self) -> String {
         format!(
-            "FastEmbedOptions(model_name={:?}, cache_dir={:?})",
+            "EmbedOptions(model_name={:?}, cache_dir={:?})",
             self.inner.model_name,
             self.inner
                 .cache_dir

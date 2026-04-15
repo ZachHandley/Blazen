@@ -16,7 +16,9 @@ members = [
     "crates/blazen-cli",
     "crates/blazen-telemetry",
     "crates/blazen-model-cache",
+    "crates/blazen-embed",
     "crates/blazen-embed-fastembed",
+    "crates/blazen-embed-tract",
     "crates/blazen-llm-mistralrs",
     "crates/blazen-audio-whispercpp",
     "crates/blazen-embed-candle",
@@ -113,7 +115,9 @@ blazen-prompts = { version = "0.0.0-dev", path = "crates/blazen-prompts", regist
 blazen = { version = "0.0.0-dev", path = "crates/blazen", registry = "forgejo" }
 blazen-telemetry = { version = "0.0.0-dev", path = "crates/blazen-telemetry", registry = "forgejo" }
 blazen-model-cache = { version = "0.0.0-dev", path = "crates/blazen-model-cache", registry = "forgejo" }
+blazen-embed = { version = "0.0.0-dev", path = "crates/blazen-embed", registry = "forgejo" }
 blazen-embed-fastembed = { version = "0.0.0-dev", path = "crates/blazen-embed-fastembed", registry = "forgejo" }
+blazen-embed-tract = { version = "0.0.0-dev", path = "crates/blazen-embed-tract", registry = "forgejo" }
 blazen-llm-mistralrs = { version = "0.0.0-dev", path = "crates/blazen-llm-mistralrs", registry = "forgejo" }
 blazen-audio-whispercpp = { version = "0.0.0-dev", path = "crates/blazen-audio-whispercpp", registry = "forgejo" }
 blazen-embed-candle = { version = "0.0.0-dev", path = "crates/blazen-embed-candle", registry = "forgejo" }
@@ -151,6 +155,10 @@ tokenizers = "0.21"
 fastembed = "5"
 sha2 = "0.10"
 dirs = "6"
+
+# Pure-Rust ONNX inference (for musl and other targets ORT doesn't ship)
+tract-onnx = "0.21"
+ndarray = "0.16"
 
 # Testing
 tempfile = "3"

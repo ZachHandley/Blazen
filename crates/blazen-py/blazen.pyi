@@ -27,6 +27,7 @@ __all__ = [
     "Context",
     "CustomProvider",
     "Device",
+    "EmbedOptions",
     "EmbeddingModel",
     "EmbeddingResponse",
     "Event",
@@ -34,7 +35,6 @@ __all__ = [
     "FalLlmEndpointKind",
     "FalOptions",
     "FalProvider",
-    "FastEmbedOptions",
     "FinishReason",
     "ImageProvider",
     "ImageRequest",
@@ -1395,6 +1395,43 @@ class CustomProvider:
         """
     def __repr__(self) -> builtins.str: ...
 
+@typing.final
+class EmbedOptions:
+    r"""
+    Options for the local embedding backend.
+    
+    Example:
+        >>> opts = EmbedOptions(model_name="BGESmallENV15")
+        >>> model = EmbeddingModel.local(options=opts)
+    """
+    @property
+    def model_name(self) -> typing.Optional[builtins.str]: ...
+    @model_name.setter
+    def model_name(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def cache_dir(self) -> typing.Optional[builtins.str]: ...
+    @cache_dir.setter
+    def cache_dir(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def max_batch_size(self) -> typing.Optional[builtins.int]: ...
+    @max_batch_size.setter
+    def max_batch_size(self, value: typing.Optional[builtins.int]) -> None: ...
+    @property
+    def show_download_progress(self) -> typing.Optional[builtins.bool]: ...
+    @show_download_progress.setter
+    def show_download_progress(self, value: typing.Optional[builtins.bool]) -> None: ...
+    def __new__(cls, *, model_name: typing.Optional[builtins.str] = None, cache_dir: typing.Optional[builtins.str] = None, max_batch_size: typing.Optional[builtins.int] = None, show_download_progress: typing.Optional[builtins.bool] = None) -> EmbedOptions:
+        r"""
+        Create a new EmbedOptions.
+        
+        Args:
+            model_name: Model variant name (e.g. "BGESmallENV15").
+            cache_dir: Model cache directory path.
+            max_batch_size: Maximum batch size for embedding.
+            show_download_progress: Show download progress when fetching models.
+        """
+    def __repr__(self) -> builtins.str: ...
+
 class EmbeddingModel:
     r"""
     A text embedding model.
@@ -1488,16 +1525,16 @@ class EmbeddingModel:
         """
     def __repr__(self) -> builtins.str: ...
     @staticmethod
-    def fastembed(*, options: typing.Optional[FastEmbedOptions] = None) -> EmbeddingModel:
+    def local(*, options: typing.Optional[EmbedOptions] = None) -> EmbeddingModel:
         r"""
-        Create a local fastembed embedding model (ONNX Runtime, no API key required).
+        Create a local embedding model (ONNX Runtime, no API key required).
         
         Args:
-            options: Optional typed ``FastEmbedOptions`` object.
+            options: Optional typed ``EmbedOptions`` object.
         
         Example:
-            >>> model = EmbeddingModel.fastembed()
-            >>> model = EmbeddingModel.fastembed(options=FastEmbedOptions(model_name="BGESmallENV15"))
+            >>> model = EmbeddingModel.local()
+            >>> model = EmbeddingModel.local(options=EmbedOptions(model_name="BGESmallENV15"))
         """
 
 @typing.final
@@ -1920,43 +1957,6 @@ class FalProvider:
             on_chunk: Callback function receiving each chunk as a dict.
             options: Optional [`CompletionOptions`] for sampling parameters,
                 tools, and response format.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class FastEmbedOptions:
-    r"""
-    Options for the local fastembed embedding backend.
-    
-    Example:
-        >>> opts = FastEmbedOptions(model_name="BGESmallENV15")
-        >>> model = EmbeddingModel.fastembed(options=opts)
-    """
-    @property
-    def model_name(self) -> typing.Optional[builtins.str]: ...
-    @model_name.setter
-    def model_name(self, value: typing.Optional[builtins.str]) -> None: ...
-    @property
-    def cache_dir(self) -> typing.Optional[builtins.str]: ...
-    @cache_dir.setter
-    def cache_dir(self, value: typing.Optional[builtins.str]) -> None: ...
-    @property
-    def max_batch_size(self) -> typing.Optional[builtins.int]: ...
-    @max_batch_size.setter
-    def max_batch_size(self, value: typing.Optional[builtins.int]) -> None: ...
-    @property
-    def show_download_progress(self) -> typing.Optional[builtins.bool]: ...
-    @show_download_progress.setter
-    def show_download_progress(self, value: typing.Optional[builtins.bool]) -> None: ...
-    def __new__(cls, *, model_name: typing.Optional[builtins.str] = None, cache_dir: typing.Optional[builtins.str] = None, max_batch_size: typing.Optional[builtins.int] = None, show_download_progress: typing.Optional[builtins.bool] = None) -> FastEmbedOptions:
-        r"""
-        Create a new FastEmbedOptions.
-        
-        Args:
-            model_name: Fastembed model variant name (e.g. "BGESmallENV15").
-            cache_dir: Model cache directory path.
-            max_batch_size: Maximum batch size for embedding.
-            show_download_progress: Show download progress when fetching models.
         """
     def __repr__(self) -> builtins.str: ...
 

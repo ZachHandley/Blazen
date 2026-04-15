@@ -6,8 +6,8 @@ use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use crate::error::{BlazenPyError, blazen_error_to_pyerr};
-#[cfg(feature = "fastembed")]
-use crate::providers::options::PyFastEmbedOptions;
+#[cfg(feature = "embed")]
+use crate::providers::options::PyEmbedOptions;
 use crate::providers::options::PyProviderOptions;
 use crate::types::request_timing::PyRequestTiming;
 use blazen_llm::EmbeddingModel;
@@ -239,27 +239,29 @@ impl PyEmbeddingModel {
 }
 
 // ---------------------------------------------------------------------------
-// Feature-gated fastembed factory (separate impl block so pyo3-stub-gen
-// does not try to resolve the option type when the feature is disabled)
+// Feature-gated local embedding factory (separate impl block so pyo3-stub-gen
+// does not try to resolve the option type when the feature is disabled).
+// The Rust fn is named `local` (not `embed`) to avoid collision with the
+// instance `embed` method on the same class; pyo3 rejects same-name members.
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "fastembed")]
+#[cfg(feature = "embed")]
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyEmbeddingModel {
-    /// Create a local fastembed embedding model (ONNX Runtime, no API key required).
+    /// Create a local embedding model (ONNX Runtime, no API key required).
     ///
     /// Args:
-    ///     options: Optional typed ``FastEmbedOptions`` object.
+    ///     options: Optional typed ``EmbedOptions`` object.
     ///
     /// Example:
-    ///     >>> model = EmbeddingModel.fastembed()
-    ///     >>> model = EmbeddingModel.fastembed(options=FastEmbedOptions(model_name="BGESmallENV15"))
+    ///     >>> model = EmbeddingModel.local()
+    ///     >>> model = EmbeddingModel.local(options=EmbedOptions(model_name="BGESmallENV15"))
     #[staticmethod]
     #[pyo3(signature = (*, options=None))]
-    fn fastembed(options: Option<PyRef<'_, PyFastEmbedOptions>>) -> PyResult<Self> {
+    fn local(options: Option<PyRef<'_, PyEmbedOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
-        let model = blazen_llm::FastEmbedModel::from_options(opts)
+        let model = blazen_llm::EmbedModel::from_options(opts)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             inner: Some(Arc::new(model)),

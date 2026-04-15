@@ -15,7 +15,7 @@ tiktoken = ["dep:tiktoken-rs"]
 tsify = ["dep:tsify-next", "dep:wasm-bindgen"]
 pyo3-serde = ["dep:pythonize", "dep:pyo3"]
 # Local inference backends (populated per-phase as crates land)
-fastembed = ["dep:blazen-embed-fastembed"]      # Phase 2: local embeddings via fastembed-rs
+embed = ["dep:blazen-embed"]      # Phase 2: local embeddings via blazen-embed facade
 candle-embed = ["dep:blazen-embed-candle"]   # Phase 6: local embeddings via candle
 mistralrs = ["dep:blazen-llm-mistralrs"]      # Phase 3: local LLM via mistral.rs
 llamacpp = ["dep:blazen-llm-llamacpp"]       # Phase 8: local LLM via llama.cpp
@@ -44,7 +44,7 @@ wasm-bindgen = { version = "0.2", optional = true }
 pythonize = { version = "0.28", optional = true }
 pyo3 = { version = "0.28", optional = true }
 base64 = { workspace = true }
-blazen-embed-fastembed = { workspace = true, optional = true }
+blazen-embed = { workspace = true, optional = true }
 blazen-llm-mistralrs = { workspace = true, optional = true }
 blazen-audio-whispercpp = { workspace = true, optional = true }
 blazen-embed-candle = { workspace = true, optional = true }

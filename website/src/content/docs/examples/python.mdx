@@ -234,7 +234,7 @@ class DictBackend(MemoryBackend):
 
 
 async def main():
-    embedder = EmbeddingModel.fastembed()
+    embedder = EmbeddingModel.local()
     memory = Memory(embedder, DictBackend())
 
     await memory.add("fact-1", "Rust has ownership and borrowing.")

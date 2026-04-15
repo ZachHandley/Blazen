@@ -61,13 +61,13 @@ console.log(model.modelId);     // "text-embedding-3-small"
 console.log(model.dimensions);  // 1536
 ```
 
-## Local Embeddings (FastEmbed)
+## Local Embeddings
 
-Blazen can generate embeddings entirely on your machine using [FastEmbed](https://github.com/qdrant/fastembed) and ONNX Runtime. No API key, no network calls after the initial model download, and completely free.
+Blazen can generate embeddings entirely on your machine using its built-in embed backend. No API key, no network calls after the initial model download, and completely free. Blazen's embed backend runs through ONNX Runtime on glibc/mac/windows and pure-Rust tract on musl -- the facade picks the right underlying implementation automatically for your target.
 
 ### Setup
 
-Local embeddings are available when Blazen is built with the `fastembed` feature. The default `npm install blazen` package includes it.
+Local embeddings are available when Blazen is built with the `embed` feature. The default `npm install blazen` package includes it.
 
 ### Usage
 
@@ -75,10 +75,10 @@ Local embeddings are available when Blazen is built with the `fastembed` feature
 import { EmbeddingModel } from "blazen";
 
 // Use the default model (BAAI/bge-small-en-v1.5, 384 dimensions)
-const model = EmbeddingModel.fastembed();
+const model = EmbeddingModel.embed();
 
 // Or specify a model and other options explicitly
-const model = EmbeddingModel.fastembed({
+const model = EmbeddingModel.embed({
   modelName: "BGESmallENV15",
   cacheDir: "/tmp/models",
   maxBatchSize: 256,
@@ -90,12 +90,12 @@ console.log(response.embeddings.length);       // 2
 console.log(response.embeddings[0].length);    // 384
 ```
 
-### FastEmbedOptions
+### EmbedOptions
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `modelName` | `string \| undefined` | `"BGESmallENV15"` | FastEmbed model variant name. |
-| `cacheDir` | `string \| undefined` | FastEmbed default | Directory where downloaded models are cached. |
+| `modelName` | `string \| undefined` | `"BGESmallENV15"` | Embed model variant name. |
+| `cacheDir` | `string \| undefined` | backend default | Directory where downloaded models are cached. |
 | `maxBatchSize` | `number \| undefined` | `256` | Maximum batch size for embedding. |
 | `showDownloadProgress` | `boolean \| undefined` | `false` | Print a progress bar during model download. |
 
@@ -106,7 +106,7 @@ A local embedding model is a regular `EmbeddingModel` -- it plugs into `Memory` 
 ```typescript
 import { EmbeddingModel, Memory, InMemoryBackend } from "blazen";
 
-const model = EmbeddingModel.fastembed();
+const model = EmbeddingModel.embed();
 const memory = new Memory(model, new InMemoryBackend());
 
 await memory.add("doc1", "Paris is the capital of France");
