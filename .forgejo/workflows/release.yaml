@@ -212,7 +212,12 @@ jobs:
 
       - name: Install maturin
         shell: bash
-        run: uv tool install --with patchelf maturin
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            uv tool install --with patchelf maturin
+          else
+            uv tool install maturin
+          fi
 
       - name: Stamp version
         shell: bash

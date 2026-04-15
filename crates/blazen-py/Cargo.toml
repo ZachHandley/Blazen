@@ -56,3 +56,6 @@ workspace = true
 [[example]]
 name = "stub_gen"
 path = "examples/stub_gen.rs"
+
+[target.'cfg(unix)'.dependencies]
+openssl-sys = { version = "0.9", features = ["vendored"] }
