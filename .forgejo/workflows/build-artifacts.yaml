@@ -59,6 +59,7 @@ jobs:
             deployment-target: "14.0"
           - target: x86_64-pc-windows-msvc
             runs-on: windows-latest
+            cmake-generator: Ninja
     runs-on: ${{ matrix.runs-on }}
     container: ${{ matrix.container }}
     env:
@@ -69,6 +70,7 @@ jobs:
       OPENSSL_VENDORED: ${{ matrix.openssl-vendored }}
       CMAKE_C_COMPILER_LAUNCHER: ccache
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CMAKE_GENERATOR: ${{ matrix.cmake-generator }}
     steps:
       - name: Bootstrap Node.js for actions (manylinux)
         if: matrix.container-kind == 'manylinux'
@@ -128,6 +130,10 @@ jobs:
         uses: https://forge.blackleafdigital.com/Public/actions/setup-msvc@main
         with:
           arch: x64
+
+      - name: Setup Ninja (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-ninja@main
 
       - name: Setup Rust
         if: steps.check.outputs.completed != 'true'
@@ -323,6 +329,7 @@ jobs:
             deployment-target: "14.0"
           - target: x86_64-pc-windows-msvc
             runs-on: windows-latest
+            cmake-generator: Ninja
     runs-on: ${{ matrix.runs-on }}
     container: ${{ matrix.container }}
     env:
@@ -333,6 +340,7 @@ jobs:
       OPENSSL_VENDORED: ${{ matrix.openssl-vendored }}
       CMAKE_C_COMPILER_LAUNCHER: ccache
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CMAKE_GENERATOR: ${{ matrix.cmake-generator }}
     steps:
       - name: Bootstrap Node.js for actions (manylinux)
         if: matrix.container-kind == 'manylinux'
@@ -392,6 +400,10 @@ jobs:
         uses: https://forge.blackleafdigital.com/Public/actions/setup-msvc@main
         with:
           arch: x64
+
+      - name: Setup Ninja (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-ninja@main
 
       - name: Setup Rust
         if: steps.check.outputs.completed != 'true'
