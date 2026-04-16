@@ -154,17 +154,20 @@ jobs:
 
       - name: Install system deps (manylinux)
         if: matrix.container-kind == 'manylinux'
-        run: yum install -y cmake openssl-devel ccache pkg-config curl perl-core
+        run: yum install -y cmake openssl-devel ccache pkg-config curl perl-core perl-Time-Piece clang-devel
 
       - name: Install system deps (musl)
         if: matrix.container-kind == 'musl'
         run: |
           apt-get update -qq
-          apt-get install -y -qq cmake ccache pkg-config curl libssl-dev patchelf
+          apt-get install -y -qq cmake ccache pkg-config curl libssl-dev patchelf libclang-dev
 
       - name: Ensure musl toolchain on PATH
         if: matrix.container-kind == 'musl'
-        run: echo "/usr/local/musl/bin" >> $GITHUB_PATH
+        run: |
+          for f in /usr/local/musl/bin/*; do
+            ln -sf "$f" /usr/local/bin/
+          done
 
       - name: Install system deps (macOS)
         if: runner.os == 'macOS'
@@ -179,13 +182,6 @@ jobs:
         uses: https://forge.blackleafdigital.com/Public/actions/setup-msvc@main
         with:
           arch: x64
-
-      - name: Fix Windows linker PATH conflict
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          $filtered = ($env:PATH -split ';' | Where-Object { $_ -notlike '*\Git\usr\bin*' }) -join ';'
-          "PATH=$filtered" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Setup Rust
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
@@ -393,17 +389,20 @@ jobs:
 
       - name: Install system deps (manylinux)
         if: matrix.container-kind == 'manylinux'
-        run: yum install -y cmake openssl-devel ccache pkg-config curl perl-core
+        run: yum install -y cmake openssl-devel ccache pkg-config curl perl-core perl-Time-Piece clang-devel
 
       - name: Install system deps (musl)
         if: matrix.container-kind == 'musl'
         run: |
           apt-get update -qq
-          apt-get install -y -qq cmake ccache pkg-config curl libssl-dev
+          apt-get install -y -qq cmake ccache pkg-config curl libssl-dev libclang-dev
 
       - name: Ensure musl toolchain on PATH
         if: matrix.container-kind == 'musl'
-        run: echo "/usr/local/musl/bin" >> $GITHUB_PATH
+        run: |
+          for f in /usr/local/musl/bin/*; do
+            ln -sf "$f" /usr/local/bin/
+          done
 
       - name: Install system deps (macOS)
         if: runner.os == 'macOS'
@@ -418,13 +417,6 @@ jobs:
         uses: https://forge.blackleafdigital.com/Public/actions/setup-msvc@main
         with:
           arch: x64
-
-      - name: Fix Windows linker PATH conflict
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          $filtered = ($env:PATH -split ';' | Where-Object { $_ -notlike '*\Git\usr\bin*' }) -join ';'
-          "PATH=$filtered" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Setup Rust
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
