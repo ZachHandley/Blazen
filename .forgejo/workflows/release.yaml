@@ -2,6 +2,11 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Semver to publish (no v prefix). Leave empty to auto-resolve via resolve-version.'
+        required: false
+        default: ''
 
 concurrency:
   group: release-${{ github.ref }}
@@ -16,21 +21,118 @@ jobs:
     name: Resolve Version
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.version.outputs.version }}
+      version: ${{ steps.pick.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Resolve version
-        id: version
+      - name: Resolve version (fallback if no input)
+        id: resolve
+        if: github.event.inputs.version == ''
         uses: https://forge.blackleafdigital.com/Public/actions/resolve-version@main
         with:
           tag-prefix: v
           bump: patch
 
+      - name: Pick version (input wins, else fallback)
+        id: pick
+        shell: bash
+        run: |
+          INPUT="${{ github.event.inputs.version }}"
+          FALLBACK="${{ steps.resolve.outputs.version }}"
+          if [ -n "$INPUT" ]; then
+            echo "version=${INPUT}" >> "$GITHUB_OUTPUT"
+            echo "Using dispatch input version: ${INPUT}"
+          elif [ -n "$FALLBACK" ]; then
+            echo "version=${FALLBACK}" >> "$GITHUB_OUTPUT"
+            echo "Using resolve-version fallback: ${FALLBACK}"
+          else
+            echo "::error::No version supplied via input AND resolve-version produced no output"
+            exit 1
+          fi
 
+  fetch-artifacts:
+    name: Fetch Build Artifacts
+    runs-on: ubuntu-latest
+    needs: version
+    outputs:
+      version: ${{ needs.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts from Forgejo generic package
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.version.outputs.version }}"
+          BASE="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}"
+          AUTH="zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}"
+
+          mkdir -p dist/wheels dist/sdist dist/napi dist/wasm
+
+          # List artifacts known to be produced by build-artifacts.yaml.
+          # We expect: wheels-<6 targets>.tar.gz, sdist.tar.gz, napi-<6 targets>.tar.gz, wasm.tar.gz
+          WHEEL_TARGETS=(
+            x86_64-unknown-linux-gnu
+            aarch64-unknown-linux-gnu
+            x86_64-unknown-linux-musl
+            aarch64-unknown-linux-musl
+            aarch64-apple-darwin
+            x86_64-pc-windows-msvc
+          )
+          NAPI_TARGETS=(
+            x86_64-unknown-linux-gnu
+            aarch64-unknown-linux-gnu
+            x86_64-unknown-linux-musl
+            aarch64-unknown-linux-musl
+            aarch64-apple-darwin
+            x86_64-pc-windows-msvc
+          )
+
+          fetch_or_die() {
+            local URL="$1"
+            local DEST="$2"
+            local CODE
+            CODE=$(curl --silent --output "$DEST" --write-out '%{http_code}' -u "$AUTH" "$URL")
+            if [ "$CODE" != "200" ]; then
+              echo "::error::Failed to download $URL (HTTP $CODE). Run build-artifacts.yaml for v${VERSION} first."
+              rm -f "$DEST"
+              exit 1
+            fi
+          }
+
+          for T in "${WHEEL_TARGETS[@]}"; do
+            fetch_or_die "${BASE}/wheels-${T}.tar.gz" "/tmp/wheels-${T}.tar.gz"
+            tar -xzf "/tmp/wheels-${T}.tar.gz" -C dist/wheels
+          done
+
+          # Restore the maturin sdist filename so twine/PyPI accept it (PEP 625
+          # requires {package_name}-{version}.tar.gz). build-artifacts.yaml
+          # uploaded it under a generic name; rename on the way down.
+          fetch_or_die "${BASE}/sdist.tar.gz" "dist/sdist/blazen-${VERSION}.tar.gz"
+
+          for T in "${NAPI_TARGETS[@]}"; do
+            fetch_or_die "${BASE}/napi-${T}.tar.gz" "/tmp/napi-${T}.tar.gz"
+            tar -xzf "/tmp/napi-${T}.tar.gz" -C dist/napi
+          done
+
+          fetch_or_die "${BASE}/wasm.tar.gz" "/tmp/wasm.tar.gz"
+          tar -xzf "/tmp/wasm.tar.gz" -C dist/wasm
+          # build-artifacts.yaml tars `crates/blazen-wasm-sdk/pkg` so the result is dist/wasm/pkg/
+
+          echo "Fetched artifacts:"
+          ls -lh dist/wheels/ dist/sdist/ dist/napi/ dist/wasm/ dist/wasm/pkg/ 2>/dev/null || true
+
+      - name: Upload to current run for downstream jobs
+        uses: actions/upload-artifact@v3
+        with:
+          name: release-dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
 
   publish-rust:
     name: Publish Rust Crates
@@ -56,11 +158,11 @@ jobs:
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
         with:
           sccache: true
-          sccache-bucket: ${{ secrets.S3_BUCKET }}
-          sccache-endpoint: https://${{ secrets.S3_ENDPOINT }}
-          sccache-region: ${{ secrets.S3_REGION }}
-          sccache-access-key: ${{ secrets.S3_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-s3-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-s3-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-s3-region: ${{ secrets.S3_REGION }}
+          sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
           sccache-key-prefix: sccache/blazen-publish-rust
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
@@ -90,187 +192,9 @@ jobs:
           owner: BlackLeafDigital
           auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
-  build-wheels:
-    name: Build wheels (${{ matrix.target }})
-    needs: version
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
-            runs-on: ubuntu-latest
-            container: quay.io/pypa/manylinux_2_28_x86_64
-            container-kind: manylinux
-            manylinux: "2_28"
-          - target: aarch64-unknown-linux-gnu
-            runs-on: arm64
-            container: quay.io/pypa/manylinux_2_28_aarch64
-            container-kind: manylinux
-            manylinux: "2_28"
-          - target: x86_64-unknown-linux-musl
-            runs-on: ubuntu-latest
-            container: ghcr.io/rust-cross/rust-musl-cross:x86_64-musl
-            container-kind: musl
-            manylinux: "musllinux_1_2"
-            openssl-vendored: "1"
-          - target: aarch64-unknown-linux-musl
-            runs-on: arm64
-            container: ghcr.io/rust-cross/rust-musl-cross:aarch64-musl
-            container-kind: musl
-            manylinux: "musllinux_1_2"
-            openssl-vendored: "1"
-          - target: aarch64-apple-darwin
-            runs-on: macos-latest
-            deployment-target: "14.0"
-          - target: x86_64-pc-windows-msvc
-            runs-on: windows-latest
-    runs-on: ${{ matrix.runs-on }}
-    container: ${{ matrix.container }}
-    env:
-      CARGO_TERM_COLOR: always
-      CARGO_INCREMENTAL: "0"
-      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
-      OPENSSL_STATIC: ${{ matrix.openssl-vendored }}
-      OPENSSL_VENDORED: ${{ matrix.openssl-vendored }}
-      CMAKE_C_COMPILER_LAUNCHER: ccache
-      CMAKE_CXX_COMPILER_LAUNCHER: ccache
-    steps:
-      - name: Bootstrap Node.js for actions (manylinux)
-        if: matrix.container-kind == 'manylinux'
-        run: |
-          curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-          yum install -y nodejs
-
-      - name: Bootstrap Node.js for actions (musl)
-        if: matrix.container-kind == 'musl'
-        run: |
-          apt-get update -qq
-          apt-get install -y -qq curl
-          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-          apt-get install -y -qq nodejs
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install system deps (manylinux)
-        if: matrix.container-kind == 'manylinux'
-        run: yum install -y cmake openssl-devel ccache pkg-config curl perl-core perl-Time-Piece clang-devel
-
-      - name: Install system deps (musl)
-        if: matrix.container-kind == 'musl'
-        run: |
-          apt-get update -qq
-          apt-get install -y -qq cmake ccache pkg-config curl libssl-dev patchelf libclang-dev
-
-      - name: Ensure musl toolchain on PATH
-        if: matrix.container-kind == 'musl'
-        run: |
-          for f in /usr/local/musl/bin/*; do
-            ln -sf "$f" /usr/local/bin/
-          done
-
-      - name: Install system deps (macOS)
-        if: runner.os == 'macOS'
-        run: brew install cmake ccache
-
-      - name: Install Git Bash (Windows)
-        if: runner.os == 'Windows'
-        uses: https://forge.blackleafdigital.com/Public/actions/install-git-bash@main
-
-      - name: Setup MSVC (Windows)
-        if: runner.os == 'Windows'
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-msvc@main
-        with:
-          arch: x64
-
-      - name: Setup Rust
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
-        with:
-          targets: ${{ matrix.target }}
-          sccache: true
-          sccache-bucket: ${{ secrets.S3_BUCKET }}
-          sccache-endpoint: https://${{ secrets.S3_ENDPOINT }}
-          sccache-region: ${{ secrets.S3_REGION }}
-          sccache-access-key: ${{ secrets.S3_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.S3_ACCESS_SECRET }}
-          sccache-key-prefix: sccache/blazen-wheels-${{ matrix.target }}
-          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
-
-      - name: Setup Python 3.10
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
-        with:
-          python-version: '3.10'
-      - name: Setup Python 3.11
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
-        with:
-          python-version: '3.11'
-      - name: Setup Python 3.12
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
-        with:
-          python-version: '3.12'
-      - name: Setup Python 3.13
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
-        with:
-          python-version: '3.13'
-      - name: Setup Python 3.14
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
-        with:
-          python-version: '3.14'
-
-      - name: Stamp version
-        shell: bash
-        run: uv run --no-project python scripts/stamp-version.py ${{ needs.version.outputs.version }}
-
-      - name: Build wheels
-        shell: bash
-        run: |
-          INTERPRETERS=""
-          for V in 3.10 3.11 3.12 3.13 3.14; do
-            INTERP=$(uv python find "$V" 2>/dev/null) && INTERPRETERS="$INTERPRETERS -i $INTERP" || echo "Python $V unavailable, skipping"
-          done
-          echo "Building for ${{ matrix.target }} with: $INTERPRETERS"
-          MANYLINUX_FLAG=""
-          if [ -n "${{ matrix.manylinux }}" ]; then
-            MANYLINUX_FLAG="--manylinux ${{ matrix.manylinux }}"
-          fi
-          uvx maturin build --release \
-            -m crates/blazen-py/Cargo.toml \
-            --target ${{ matrix.target }} \
-            $MANYLINUX_FLAG \
-            $INTERPRETERS
-
-      - name: Upload wheel artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: wheels-${{ matrix.target }}
-          path: target/wheels/*.whl
-          if-no-files-found: error
-
-  build-sdist:
-    name: Build sdist
-    needs: version
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-      - name: Setup Rust
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
-      - name: Stamp version
-        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
-      - name: Build sdist
-        run: uvx maturin sdist -m crates/blazen-py/Cargo.toml
-      - name: Upload sdist
-        uses: actions/upload-artifact@v3
-        with:
-          name: sdist
-          path: target/wheels/*.tar.gz
-          if-no-files-found: error
-
   publish-python:
     name: Publish Python Package
-    needs: [version, build-wheels, build-sdist]
+    needs: [version, fetch-artifacts]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -291,24 +215,16 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         uses: astral-sh/setup-uv@v6
 
-      - name: Download all artifacts
+      - name: Download release-dist artifact
         if: steps.check.outputs.completed != 'true'
         uses: actions/download-artifact@v3
         with:
-          path: dist/
-
-      - name: Flatten wheel subdirectories
-        if: steps.check.outputs.completed != 'true'
-        shell: bash
-        run: |
-          mkdir -p dist/flat
-          find dist/ -mindepth 2 -name '*.whl' -exec mv {} dist/flat/ \;
-          find dist/ -mindepth 2 -name '*.tar.gz' -exec mv {} dist/flat/ \;
-          ls -lh dist/flat/
+          name: release-dist
+          path: dist
 
       - name: List artifacts before upload
         if: steps.check.outputs.completed != 'true'
-        run: ls -lh dist/
+        run: ls -lh dist/wheels/ dist/sdist/
 
       - name: Publish to PyPI
         if: steps.check.outputs.completed != 'true'
@@ -316,7 +232,7 @@ jobs:
           uvx twine upload \
             -u __token__ \
             -p ${{ secrets.PYPI_TOKEN }} \
-            dist/flat/*.whl dist/flat/*.tar.gz
+            dist/wheels/*.whl dist/sdist/*.tar.gz
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
@@ -329,147 +245,9 @@ jobs:
           owner: BlackLeafDigital
           auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
-  build-napi:
-    name: Build napi binary (${{ matrix.target }})
-    needs: version
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
-            runs-on: ubuntu-latest
-            container: quay.io/pypa/manylinux_2_28_x86_64
-            container-kind: manylinux
-          - target: aarch64-unknown-linux-gnu
-            runs-on: arm64
-            container: quay.io/pypa/manylinux_2_28_aarch64
-            container-kind: manylinux
-          - target: x86_64-unknown-linux-musl
-            runs-on: ubuntu-latest
-            container: ghcr.io/rust-cross/rust-musl-cross:x86_64-musl
-            container-kind: musl
-            openssl-vendored: "1"
-          - target: aarch64-unknown-linux-musl
-            runs-on: arm64
-            container: ghcr.io/rust-cross/rust-musl-cross:aarch64-musl
-            container-kind: musl
-            openssl-vendored: "1"
-          - target: aarch64-apple-darwin
-            runs-on: macos-latest
-            deployment-target: "14.0"
-          - target: x86_64-pc-windows-msvc
-            runs-on: windows-latest
-    runs-on: ${{ matrix.runs-on }}
-    container: ${{ matrix.container }}
-    env:
-      CARGO_TERM_COLOR: always
-      CARGO_INCREMENTAL: "0"
-      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
-      OPENSSL_STATIC: ${{ matrix.openssl-vendored }}
-      OPENSSL_VENDORED: ${{ matrix.openssl-vendored }}
-      CMAKE_C_COMPILER_LAUNCHER: ccache
-      CMAKE_CXX_COMPILER_LAUNCHER: ccache
-    steps:
-      - name: Bootstrap Node.js for actions (manylinux)
-        if: matrix.container-kind == 'manylinux'
-        run: |
-          curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-          yum install -y nodejs
-
-      - name: Bootstrap Node.js for actions (musl)
-        if: matrix.container-kind == 'musl'
-        run: |
-          apt-get update -qq
-          apt-get install -y -qq curl
-          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-          apt-get install -y -qq nodejs
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install system deps (manylinux)
-        if: matrix.container-kind == 'manylinux'
-        run: yum install -y cmake openssl-devel ccache pkg-config curl perl-core perl-Time-Piece clang-devel
-
-      - name: Install system deps (musl)
-        if: matrix.container-kind == 'musl'
-        run: |
-          apt-get update -qq
-          apt-get install -y -qq cmake ccache pkg-config curl libssl-dev libclang-dev
-
-      - name: Ensure musl toolchain on PATH
-        if: matrix.container-kind == 'musl'
-        run: |
-          for f in /usr/local/musl/bin/*; do
-            ln -sf "$f" /usr/local/bin/
-          done
-
-      - name: Install system deps (macOS)
-        if: runner.os == 'macOS'
-        run: brew install cmake ccache
-
-      - name: Install Git Bash (Windows)
-        if: runner.os == 'Windows'
-        uses: https://forge.blackleafdigital.com/Public/actions/install-git-bash@main
-
-      - name: Setup MSVC (Windows)
-        if: runner.os == 'Windows'
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-msvc@main
-        with:
-          arch: x64
-
-      - name: Setup Rust
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
-        with:
-          targets: ${{ matrix.target }}
-          sccache: true
-          sccache-bucket: ${{ secrets.S3_BUCKET }}
-          sccache-endpoint: https://${{ secrets.S3_ENDPOINT }}
-          sccache-region: ${{ secrets.S3_REGION }}
-          sccache-access-key: ${{ secrets.S3_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.S3_ACCESS_SECRET }}
-          sccache-key-prefix: sccache/blazen-napi-${{ matrix.target }}
-          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
-
-      - name: Setup Node.js
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-node@main
-        with:
-          node-version: '20'
-          package-manager: pnpm
-
-      - name: Setup Python (for stamping)
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
-        with:
-          python-version: '3.12'
-
-      - name: Stamp version
-        shell: bash
-        run: uv run --no-project python scripts/stamp-version.py ${{ needs.version.outputs.version }}
-
-      - name: Install npm deps
-        shell: bash
-        run: pnpm install
-
-      - name: Build napi binary
-        shell: bash
-        run: |
-          pnpm --filter blazen exec napi build \
-            --release \
-            --platform \
-            --target ${{ matrix.target }} \
-            --features local-all \
-            --js index.js
-
-      - name: Upload napi artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: napi-${{ matrix.target }}
-          path: crates/blazen-node/blazen.*.node
-          if-no-files-found: error
-
   publish-node:
     name: Publish Node Package
-    needs: [version, build-napi]
+    needs: [version, fetch-artifacts]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -505,11 +283,37 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         run: pnpm install
 
-      - name: Download napi artifacts
+      - name: Download release-dist artifact
         if: steps.check.outputs.completed != 'true'
         uses: actions/download-artifact@v3
         with:
-          path: crates/blazen-node/artifacts
+          name: release-dist
+          path: dist
+
+      - name: Stage napi binaries for napi artifacts step
+        if: steps.check.outputs.completed != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p crates/blazen-node/artifacts
+          # napi-rs's `napi artifacts` command expects per-target subdirectories
+          # under artifacts/, each containing the target's blazen.*.node file.
+          # Our fetched dist/napi/ has all .node files flat (one per target,
+          # filename-encoded). napi-rs auto-detects target from filename, so
+          # we just copy each .node into a directory named after itself.
+          shopt -s nullglob
+          NODE_FILES=(dist/napi/blazen.*.node)
+          if [ ${#NODE_FILES[@]} -eq 0 ]; then
+            echo "::error::No napi .node binaries found in dist/napi/"
+            exit 1
+          fi
+          for F in "${NODE_FILES[@]}"; do
+            BASE=$(basename "$F" .node)
+            SUB="crates/blazen-node/artifacts/${BASE}"
+            mkdir -p "$SUB"
+            cp "$F" "$SUB/"
+          done
+          ls -la crates/blazen-node/artifacts/
 
       - name: Move napi artifacts into npm subpackages
         if: steps.check.outputs.completed != 'true'
@@ -545,7 +349,7 @@ jobs:
   publish-wasm:
     name: Publish WASM SDK
     runs-on: ubuntu-latest
-    needs: version
+    needs: [version, fetch-artifacts]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -561,37 +365,17 @@ jobs:
           owner: BlackLeafDigital
           auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
-      - name: Setup Rust
+      - name: Download release-dist artifact
         if: steps.check.outputs.completed != 'true'
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        uses: actions/download-artifact@v3
         with:
-          sccache: true
-          sccache-bucket: ${{ secrets.S3_BUCKET }}
-          sccache-endpoint: https://${{ secrets.S3_ENDPOINT }}
-          sccache-region: ${{ secrets.S3_REGION }}
-          sccache-access-key: ${{ secrets.S3_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.S3_ACCESS_SECRET }}
-          sccache-key-prefix: sccache/blazen-publish-wasm
-          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
-
-      - name: Install wasm-pack
-        if: steps.check.outputs.completed != 'true'
-        run: which wasm-pack || cargo install wasm-pack
-
-      - name: Stamp version
-        if: steps.check.outputs.completed != 'true'
-        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
-
-      - name: Build WASM SDK
-        if: steps.check.outputs.completed != 'true'
-        run: |
-          cd crates/blazen-wasm-sdk
-          wasm-pack build --target bundler --release
+          name: release-dist
+          path: dist
 
       - name: Publish to npm
         if: steps.check.outputs.completed != 'true'
         run: |
-          cd crates/blazen-wasm-sdk/pkg
+          cd dist/wasm/pkg
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_ACCESS_TOKEN }}" > .npmrc
           npm publish --access public
 
@@ -714,3 +498,84 @@ jobs:
             -H "Content-Type: application/json" \
             "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/actions/workflows/mirror-github.yaml/dispatches" \
             -d '{"ref": "main"}'
+
+  cleanup-artifacts:
+    name: Cleanup Build Artifacts
+    runs-on: ubuntu-latest
+    needs: [version, publish-rust, publish-python, publish-node, publish-wasm, create-release, mirror-github]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ needs.version.outputs.version }}
+          step: cleanup-artifacts
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Delete build artifacts from Forgejo generic package
+        if: steps.check.outputs.completed != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.version.outputs.version }}"
+          BASE="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}"
+          AUTH="zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}"
+
+          FILES=(
+            wheels-x86_64-unknown-linux-gnu.tar.gz
+            wheels-aarch64-unknown-linux-gnu.tar.gz
+            wheels-x86_64-unknown-linux-musl.tar.gz
+            wheels-aarch64-unknown-linux-musl.tar.gz
+            wheels-aarch64-apple-darwin.tar.gz
+            wheels-x86_64-pc-windows-msvc.tar.gz
+            sdist.tar.gz
+            napi-x86_64-unknown-linux-gnu.tar.gz
+            napi-aarch64-unknown-linux-gnu.tar.gz
+            napi-x86_64-unknown-linux-musl.tar.gz
+            napi-aarch64-unknown-linux-musl.tar.gz
+            napi-aarch64-apple-darwin.tar.gz
+            napi-x86_64-pc-windows-msvc.tar.gz
+            wasm.tar.gz
+          )
+
+          for F in "${FILES[@]}"; do
+            CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              -X DELETE -u "$AUTH" "${BASE}/${F}")
+            if [ "$CODE" = "204" ] || [ "$CODE" = "404" ]; then
+              echo "Deleted (or already gone): ${F} [${CODE}]"
+            else
+              echo "::warning::Unexpected status ${CODE} deleting ${F}; continuing"
+            fi
+          done
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ needs.version.outputs.version }}
+          step: cleanup-artifacts
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+  mark-release-complete:
+    name: Mark Release Complete
+    runs-on: ubuntu-latest
+    needs: [version, cleanup-artifacts]
+    steps:
+      - name: Mark release complete
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ needs.version.outputs.version }}
+          step: release-complete
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}

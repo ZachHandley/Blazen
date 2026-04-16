@@ -1,0 +1,578 @@
+name: Build Artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Semver to build (no v prefix), e.g. 1.2.3'
+        required: true
+
+concurrency:
+  group: build-artifacts-${{ github.event.inputs.version }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.set.outputs.version }}
+    steps:
+      - id: set
+        run: echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+
+  build-wheels:
+    name: Build wheels (${{ matrix.target }})
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runs-on: ubuntu-latest
+            container: quay.io/pypa/manylinux_2_28_x86_64
+            container-kind: manylinux
+            manylinux: "2_28"
+          - target: aarch64-unknown-linux-gnu
+            runs-on: arm64
+            container: quay.io/pypa/manylinux_2_28_aarch64
+            container-kind: manylinux
+            manylinux: "2_28"
+          - target: x86_64-unknown-linux-musl
+            runs-on: ubuntu-latest
+            container: ghcr.io/rust-cross/rust-musl-cross:x86_64-musl
+            container-kind: musl
+            manylinux: "musllinux_1_2"
+            openssl-vendored: "1"
+          - target: aarch64-unknown-linux-musl
+            runs-on: arm64
+            container: ghcr.io/rust-cross/rust-musl-cross:aarch64-musl
+            container-kind: musl
+            manylinux: "musllinux_1_2"
+            openssl-vendored: "1"
+          - target: aarch64-apple-darwin
+            runs-on: macos-latest
+            deployment-target: "14.0"
+          - target: x86_64-pc-windows-msvc
+            runs-on: windows-latest
+    runs-on: ${{ matrix.runs-on }}
+    container: ${{ matrix.container }}
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: "0"
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
+      OPENSSL_STATIC: ${{ matrix.openssl-vendored }}
+      OPENSSL_VENDORED: ${{ matrix.openssl-vendored }}
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+    steps:
+      - name: Bootstrap Node.js for actions (manylinux)
+        if: matrix.container-kind == 'manylinux'
+        run: |
+          curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+          yum install -y nodejs
+
+      - name: Bootstrap Node.js for actions (musl)
+        if: matrix.container-kind == 'musl'
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq curl
+          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+          apt-get install -y -qq nodejs
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ needs.version.outputs.version }}
+          step: build-wheels-${{ matrix.target }}
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Install system deps (manylinux)
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'manylinux'
+        run: yum install -y cmake openssl-devel ccache pkg-config curl perl-core perl-Time-Piece clang-devel
+
+      - name: Install system deps (musl)
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'musl'
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq cmake ccache pkg-config curl libssl-dev patchelf libclang-dev
+
+      - name: Ensure musl toolchain on PATH
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'musl'
+        run: |
+          for f in /usr/local/musl/bin/*; do
+            ln -sf "$f" /usr/local/bin/
+          done
+
+      - name: Install system deps (macOS)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'macOS'
+        run: brew install cmake ccache
+
+      - name: Install Git Bash (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        uses: https://forge.blackleafdigital.com/Public/actions/install-git-bash@main
+
+      - name: Setup MSVC (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-msvc@main
+        with:
+          arch: x64
+
+      - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          targets: ${{ matrix.target }}
+          sccache: true
+          sccache-s3-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-s3-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-s3-region: ${{ secrets.S3_REGION }}
+          sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/blazen-wheels-${{ matrix.target }}
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Verify sccache on PATH
+        if: steps.check.outputs.completed != 'true'
+        shell: bash
+        run: |
+          if [ -n "${RUSTC_WRAPPER:-}" ] && ! command -v sccache >/dev/null 2>&1; then
+            echo "::warning::sccache missing on PATH despite RUSTC_WRAPPER=${RUSTC_WRAPPER}; disabling for this job"
+            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+          elif [ -n "${RUSTC_WRAPPER:-}" ]; then
+            sccache --version
+          fi
+
+      - name: Setup Python 3.10
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
+        with:
+          python-version: '3.10'
+      - name: Setup Python 3.11
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
+        with:
+          python-version: '3.11'
+      - name: Setup Python 3.12
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
+        with:
+          python-version: '3.12'
+      - name: Setup Python 3.13
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
+        with:
+          python-version: '3.13'
+      - name: Setup Python 3.14
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
+        with:
+          python-version: '3.14'
+
+      - name: Stamp version
+        if: steps.check.outputs.completed != 'true'
+        shell: bash
+        run: uv run --no-project python scripts/stamp-version.py ${{ needs.version.outputs.version }}
+
+      - name: Build wheels
+        if: steps.check.outputs.completed != 'true'
+        shell: bash
+        run: |
+          INTERPRETERS=""
+          for V in 3.10 3.11 3.12 3.13 3.14; do
+            INTERP=$(uv python find "$V" 2>/dev/null) && INTERPRETERS="$INTERPRETERS -i $INTERP" || echo "Python $V unavailable, skipping"
+          done
+          echo "Building for ${{ matrix.target }} with: $INTERPRETERS"
+          MANYLINUX_FLAG=""
+          if [ -n "${{ matrix.manylinux }}" ]; then
+            MANYLINUX_FLAG="--manylinux ${{ matrix.manylinux }}"
+          fi
+          uvx maturin build --release \
+            -m crates/blazen-py/Cargo.toml \
+            --target ${{ matrix.target }} \
+            $MANYLINUX_FLAG \
+            $INTERPRETERS
+
+      - name: Upload wheels to Forgejo generic package
+        if: steps.check.outputs.completed != 'true'
+        shell: bash
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          TARGET="${{ matrix.target }}"
+          tar -czf "wheels-${TARGET}.tar.gz" -C target/wheels .
+          curl --fail -s -X PUT \
+            -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+            --upload-file "wheels-${TARGET}.tar.gz" \
+            "https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/wheels-${TARGET}.tar.gz"
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ needs.version.outputs.version }}
+          step: build-wheels-${{ matrix.target }}
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+  build-sdist:
+    name: Build sdist
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ needs.version.outputs.version }}
+          step: build-sdist
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Install uv
+        if: steps.check.outputs.completed != 'true'
+        uses: astral-sh/setup-uv@v6
+
+      - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+
+      - name: Stamp version
+        if: steps.check.outputs.completed != 'true'
+        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
+
+      - name: Build sdist
+        if: steps.check.outputs.completed != 'true'
+        run: uvx maturin sdist -m crates/blazen-py/Cargo.toml
+
+      - name: Upload sdist to Forgejo generic package
+        if: steps.check.outputs.completed != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.version.outputs.version }}"
+          shopt -s nullglob
+          SDIST_FILES=(target/wheels/*.tar.gz)
+          if [ ${#SDIST_FILES[@]} -eq 0 ]; then
+            echo "::error::No sdist tarball found in target/wheels/"
+            exit 1
+          fi
+          if [ ${#SDIST_FILES[@]} -gt 1 ]; then
+            echo "::warning::Multiple sdist tarballs found; uploading first: ${SDIST_FILES[0]}"
+          fi
+          curl --fail -s -X PUT \
+            -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+            --upload-file "${SDIST_FILES[0]}" \
+            "https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/sdist.tar.gz"
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ needs.version.outputs.version }}
+          step: build-sdist
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+  build-napi:
+    name: Build napi binary (${{ matrix.target }})
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runs-on: ubuntu-latest
+            container: quay.io/pypa/manylinux_2_28_x86_64
+            container-kind: manylinux
+          - target: aarch64-unknown-linux-gnu
+            runs-on: arm64
+            container: quay.io/pypa/manylinux_2_28_aarch64
+            container-kind: manylinux
+          - target: x86_64-unknown-linux-musl
+            runs-on: ubuntu-latest
+            container: ghcr.io/rust-cross/rust-musl-cross:x86_64-musl
+            container-kind: musl
+            openssl-vendored: "1"
+          - target: aarch64-unknown-linux-musl
+            runs-on: arm64
+            container: ghcr.io/rust-cross/rust-musl-cross:aarch64-musl
+            container-kind: musl
+            openssl-vendored: "1"
+          - target: aarch64-apple-darwin
+            runs-on: macos-latest
+            deployment-target: "14.0"
+          - target: x86_64-pc-windows-msvc
+            runs-on: windows-latest
+    runs-on: ${{ matrix.runs-on }}
+    container: ${{ matrix.container }}
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: "0"
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
+      OPENSSL_STATIC: ${{ matrix.openssl-vendored }}
+      OPENSSL_VENDORED: ${{ matrix.openssl-vendored }}
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+    steps:
+      - name: Bootstrap Node.js for actions (manylinux)
+        if: matrix.container-kind == 'manylinux'
+        run: |
+          curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+          yum install -y nodejs
+
+      - name: Bootstrap Node.js for actions (musl)
+        if: matrix.container-kind == 'musl'
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq curl
+          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+          apt-get install -y -qq nodejs
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ needs.version.outputs.version }}
+          step: build-napi-${{ matrix.target }}
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Install system deps (manylinux)
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'manylinux'
+        run: yum install -y cmake openssl-devel ccache pkg-config curl perl-core perl-Time-Piece clang-devel
+
+      - name: Install system deps (musl)
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'musl'
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq cmake ccache pkg-config curl libssl-dev libclang-dev
+
+      - name: Ensure musl toolchain on PATH
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'musl'
+        run: |
+          for f in /usr/local/musl/bin/*; do
+            ln -sf "$f" /usr/local/bin/
+          done
+
+      - name: Install system deps (macOS)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'macOS'
+        run: brew install cmake ccache
+
+      - name: Install Git Bash (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        uses: https://forge.blackleafdigital.com/Public/actions/install-git-bash@main
+
+      - name: Setup MSVC (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-msvc@main
+        with:
+          arch: x64
+
+      - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          targets: ${{ matrix.target }}
+          sccache: true
+          sccache-s3-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-s3-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-s3-region: ${{ secrets.S3_REGION }}
+          sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/blazen-napi-${{ matrix.target }}
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Verify sccache on PATH
+        if: steps.check.outputs.completed != 'true'
+        shell: bash
+        run: |
+          if [ -n "${RUSTC_WRAPPER:-}" ] && ! command -v sccache >/dev/null 2>&1; then
+            echo "::warning::sccache missing on PATH despite RUSTC_WRAPPER=${RUSTC_WRAPPER}; disabling for this job"
+            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+          elif [ -n "${RUSTC_WRAPPER:-}" ]; then
+            sccache --version
+          fi
+
+      - name: Setup Node.js
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-node@main
+        with:
+          node-version: '20'
+          package-manager: pnpm
+
+      - name: Setup Python (for stamping)
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
+        with:
+          python-version: '3.12'
+
+      - name: Stamp version
+        if: steps.check.outputs.completed != 'true'
+        shell: bash
+        run: uv run --no-project python scripts/stamp-version.py ${{ needs.version.outputs.version }}
+
+      - name: Install npm deps
+        if: steps.check.outputs.completed != 'true'
+        shell: bash
+        run: pnpm install
+
+      - name: Build napi binary
+        if: steps.check.outputs.completed != 'true'
+        shell: bash
+        run: |
+          pnpm --filter blazen exec napi build \
+            --release \
+            --platform \
+            --target ${{ matrix.target }} \
+            --features local-all \
+            --js index.js
+
+      - name: Upload napi binary to Forgejo generic package
+        if: steps.check.outputs.completed != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.version.outputs.version }}"
+          TARGET="${{ matrix.target }}"
+          cd crates/blazen-node
+          shopt -s nullglob
+          NODE_FILES=(blazen.*.node)
+          if [ ${#NODE_FILES[@]} -eq 0 ]; then
+            echo "::error::No napi .node binaries found in crates/blazen-node/ — build did not produce output"
+            exit 1
+          fi
+          tar -czf "../../napi-${TARGET}.tar.gz" "${NODE_FILES[@]}"
+          cd ../..
+          curl --fail -s -X PUT \
+            -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+            --upload-file "napi-${TARGET}.tar.gz" \
+            "https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/napi-${TARGET}.tar.gz"
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ needs.version.outputs.version }}
+          step: build-napi-${{ matrix.target }}
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+  build-wasm:
+    name: Build WASM SDK
+    runs-on: ubuntu-latest
+    needs: version
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ needs.version.outputs.version }}
+          step: build-wasm
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          sccache: true
+          sccache-s3-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-s3-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-s3-region: ${{ secrets.S3_REGION }}
+          sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/blazen-build-wasm
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Verify sccache on PATH
+        if: steps.check.outputs.completed != 'true'
+        shell: bash
+        run: |
+          if [ -n "${RUSTC_WRAPPER:-}" ] && ! command -v sccache >/dev/null 2>&1; then
+            echo "::warning::sccache missing on PATH despite RUSTC_WRAPPER=${RUSTC_WRAPPER}; disabling for this job"
+            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+          elif [ -n "${RUSTC_WRAPPER:-}" ]; then
+            sccache --version
+          fi
+
+      - name: Install wasm-pack
+        if: steps.check.outputs.completed != 'true'
+        run: which wasm-pack || cargo install wasm-pack
+
+      - name: Stamp version
+        if: steps.check.outputs.completed != 'true'
+        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
+
+      - name: Build WASM SDK
+        if: steps.check.outputs.completed != 'true'
+        run: |
+          cd crates/blazen-wasm-sdk
+          wasm-pack build --target bundler --release
+
+      - name: Upload wasm pkg to Forgejo generic package
+        if: steps.check.outputs.completed != 'true'
+        shell: bash
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          tar -czf wasm.tar.gz -C crates/blazen-wasm-sdk pkg
+          curl --fail -s -X PUT \
+            -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+            --upload-file wasm.tar.gz \
+            "https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/wasm.tar.gz"
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ needs.version.outputs.version }}
+          step: build-wasm
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+  dispatch-release:
+    name: Dispatch Release
+    runs-on: ubuntu-latest
+    needs: [version, build-wheels, build-sdist, build-napi, build-wasm]
+    steps:
+      - name: Dispatch release.yaml
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          curl -s -X POST \
+            -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/actions/workflows/release.yaml/dispatches" \
+            -d "{\"ref\": \"v${VERSION}\", \"inputs\": {\"version\": \"${VERSION}\"}}"
