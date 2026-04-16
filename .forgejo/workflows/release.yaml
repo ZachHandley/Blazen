@@ -154,13 +154,17 @@ jobs:
 
       - name: Install system deps (manylinux)
         if: matrix.container-kind == 'manylinux'
-        run: yum install -y cmake openssl-devel ccache pkg-config curl
+        run: yum install -y cmake openssl-devel ccache pkg-config curl perl-IPC-Cmd
 
       - name: Install system deps (musl)
         if: matrix.container-kind == 'musl'
         run: |
           apt-get update -qq
-          apt-get install -y -qq cmake ccache pkg-config curl libssl-dev
+          apt-get install -y -qq cmake ccache pkg-config curl libssl-dev patchelf
+
+      - name: Ensure musl toolchain on PATH
+        if: matrix.container-kind == 'musl'
+        run: echo "/usr/local/musl/bin" >> $GITHUB_PATH
 
       - name: Install system deps (macOS)
         if: runner.os == 'macOS'
@@ -175,6 +179,13 @@ jobs:
         uses: https://forge.blackleafdigital.com/Public/actions/setup-msvc@main
         with:
           arch: x64
+
+      - name: Fix Windows linker PATH conflict
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $filtered = ($env:PATH -split ';' | Where-Object { $_ -notlike '*\Git\usr\bin*' }) -join ';'
+          "PATH=$filtered" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Setup Rust
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
@@ -210,15 +221,6 @@ jobs:
         with:
           python-version: '3.14'
 
-      - name: Install maturin
-        shell: bash
-        run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            uv tool install --with patchelf maturin
-          else
-            uv tool install maturin
-          fi
-
       - name: Stamp version
         shell: bash
         run: uv run --no-project python scripts/stamp-version.py ${{ needs.version.outputs.version }}
@@ -235,7 +237,7 @@ jobs:
           if [ -n "${{ matrix.manylinux }}" ]; then
             MANYLINUX_FLAG="--manylinux ${{ matrix.manylinux }}"
           fi
-          maturin build --release \
+          uvx maturin build --release \
             -m crates/blazen-py/Cargo.toml \
             --target ${{ matrix.target }} \
             $MANYLINUX_FLAG \
@@ -391,13 +393,17 @@ jobs:
 
       - name: Install system deps (manylinux)
         if: matrix.container-kind == 'manylinux'
-        run: yum install -y cmake openssl-devel ccache pkg-config curl
+        run: yum install -y cmake openssl-devel ccache pkg-config curl perl-IPC-Cmd
 
       - name: Install system deps (musl)
         if: matrix.container-kind == 'musl'
         run: |
           apt-get update -qq
           apt-get install -y -qq cmake ccache pkg-config curl libssl-dev
+
+      - name: Ensure musl toolchain on PATH
+        if: matrix.container-kind == 'musl'
+        run: echo "/usr/local/musl/bin" >> $GITHUB_PATH
 
       - name: Install system deps (macOS)
         if: runner.os == 'macOS'
@@ -412,6 +418,13 @@ jobs:
         uses: https://forge.blackleafdigital.com/Public/actions/setup-msvc@main
         with:
           arch: x64
+
+      - name: Fix Windows linker PATH conflict
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $filtered = ($env:PATH -split ';' | Where-Object { $_ -notlike '*\Git\usr\bin*' }) -join ';'
+          "PATH=$filtered" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Setup Rust
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
