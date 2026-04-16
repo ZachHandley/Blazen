@@ -154,7 +154,7 @@ jobs:
 
       - name: Install system deps (manylinux)
         if: matrix.container-kind == 'manylinux'
-        run: yum install -y cmake openssl-devel ccache pkg-config curl perl-IPC-Cmd
+        run: yum install -y cmake openssl-devel ccache pkg-config curl perl-core
 
       - name: Install system deps (musl)
         if: matrix.container-kind == 'musl'
@@ -182,7 +182,7 @@ jobs:
 
       - name: Fix Windows linker PATH conflict
         if: runner.os == 'Windows'
-        shell: pwsh
+        shell: powershell
         run: |
           $filtered = ($env:PATH -split ';' | Where-Object { $_ -notlike '*\Git\usr\bin*' }) -join ';'
           "PATH=$filtered" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
@@ -393,7 +393,7 @@ jobs:
 
       - name: Install system deps (manylinux)
         if: matrix.container-kind == 'manylinux'
-        run: yum install -y cmake openssl-devel ccache pkg-config curl perl-IPC-Cmd
+        run: yum install -y cmake openssl-devel ccache pkg-config curl perl-core
 
       - name: Install system deps (musl)
         if: matrix.container-kind == 'musl'
@@ -421,7 +421,7 @@ jobs:
 
       - name: Fix Windows linker PATH conflict
         if: runner.os == 'Windows'
-        shell: pwsh
+        shell: powershell
         run: |
           $filtered = ($env:PATH -split ';' | Where-Object { $_ -notlike '*\Git\usr\bin*' }) -join ';'
           "PATH=$filtered" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
