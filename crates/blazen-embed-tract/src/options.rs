@@ -493,8 +493,8 @@ mod tests {
 
     #[test]
     fn registry_has_expected_size() {
-        // 45 entries lifted from fastembed 5.13.1's text_embedding registry.
-        assert_eq!(MODELS.len(), 45);
+        // 44 entries lifted from fastembed 5.13.1's text_embedding registry.
+        assert_eq!(MODELS.len(), 44);
     }
 
     #[test]

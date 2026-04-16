@@ -497,7 +497,7 @@ fn l2_normalize(v: &mut [f32]) {
 mod tests {
     use super::*;
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn embed_empty_input_returns_empty() {
         // We can construct a fake model without downloading by hand-building
         // the struct — but that's fragile. Instead, skip if the default model
