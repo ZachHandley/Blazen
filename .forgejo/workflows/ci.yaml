@@ -6,6 +6,16 @@ on:
   pull_request:
     branches: ["main"]
   workflow_dispatch:
+    inputs:
+      trigger_builds:
+        description: 'Force-dispatch build-artifacts.yaml even if no new tag is created (useful for re-running a partial release).'
+        type: boolean
+        required: false
+        default: false
+      version_override:
+        description: 'Optional explicit semver to dispatch (no v prefix). Leave empty to use resolve-version output.'
+        required: false
+        default: ''
 
 concurrency:
   group: ci-${{ github.sha }}
@@ -223,7 +233,7 @@ jobs:
     name: Auto Tag
     runs-on: ubuntu-latest
     needs: [test, test-python, test-node]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -238,7 +248,7 @@ jobs:
           bump: patch
 
       - name: Create and push tag
-        if: steps.version.outputs.is-new == 'true'
+        if: steps.version.outputs.is-new == 'true' && github.event.inputs.version_override == ''
         run: |
           TAG="v${{ steps.version.outputs.version }}"
           git config user.name "Zach Handley"
@@ -249,16 +259,32 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
 
       - name: Dispatch build-artifacts workflow
-        if: steps.version.outputs.is-new == 'true'
+        if: steps.version.outputs.is-new == 'true' || github.event.inputs.trigger_builds == 'true'
+        shell: bash
         run: |
+          set -euo pipefail
+          OVERRIDE='${{ github.event.inputs.version_override }}'
+          RESOLVED='${{ steps.version.outputs.version }}'
+          if [ -n "$OVERRIDE" ]; then
+            VERSION="$OVERRIDE"
+            echo "Using version_override input: $VERSION"
+          else
+            VERSION="$RESOLVED"
+            echo "Using resolve-version output: $VERSION"
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "::error::No version available — neither version_override nor resolve-version produced a value"
+            exit 1
+          fi
           curl -s -X POST \
             -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
             -H "Content-Type: application/json" \
             "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/actions/workflows/build-artifacts.yaml/dispatches" \
-            -d '{"ref": "v${{ steps.version.outputs.version }}", "inputs": {"version": "${{ steps.version.outputs.version }}"}}'
+            -d "{\"ref\": \"v${VERSION}\", \"inputs\": {\"version\": \"${VERSION}\"}}"
+          echo "Dispatched build-artifacts.yaml for v${VERSION}"
 
       - name: Dispatch deploy-website workflow
-        if: steps.version.outputs.is-new == 'true'
+        if: steps.version.outputs.is-new == 'true' && github.event.inputs.version_override == ''
         run: |
           curl -s -X POST \
             -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
