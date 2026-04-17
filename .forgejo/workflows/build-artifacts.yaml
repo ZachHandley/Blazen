@@ -67,8 +67,6 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
       OPENSSL_STATIC: ${{ matrix.openssl-vendored }}
       OPENSSL_VENDORED: ${{ matrix.openssl-vendored }}
-      CMAKE_C_COMPILER_LAUNCHER: ccache
-      CMAKE_CXX_COMPILER_LAUNCHER: ccache
     steps:
       - name: Bootstrap Node.js for actions (manylinux)
         if: matrix.container-kind == 'manylinux'
@@ -108,16 +106,38 @@ jobs:
           apt-get update -qq
           apt-get install -y -qq cmake ccache pkg-config curl libssl-dev patchelf libclang-dev
 
-      - name: Ensure musl toolchain on PATH
+      - name: Ensure musl toolchain on PATH and pin cargo linker
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'musl'
+        shell: bash
         run: |
           for f in /usr/local/musl/bin/*; do
             ln -sf "$f" /usr/local/bin/
           done
+          case "${{ matrix.target }}" in
+            x86_64-unknown-linux-musl)
+              echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc" >> "$GITHUB_ENV"
+              echo "CC_x86_64_unknown_linux_musl=x86_64-linux-musl-gcc" >> "$GITHUB_ENV"
+              echo "CXX_x86_64_unknown_linux_musl=x86_64-linux-musl-g++" >> "$GITHUB_ENV"
+              ;;
+            aarch64-unknown-linux-musl)
+              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
+              echo "CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
+              echo "CXX_aarch64_unknown_linux_musl=aarch64-linux-musl-g++" >> "$GITHUB_ENV"
+              ;;
+          esac
 
       - name: Install system deps (macOS)
         if: steps.check.outputs.completed != 'true' && runner.os == 'macOS'
         run: brew install cmake ccache
+
+      - name: Configure CMake to use ccache (non-Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os != 'Windows'
+        shell: bash
+        run: |
+          if command -v ccache >/dev/null 2>&1; then
+            echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+            echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+          fi
 
       - name: Install Git Bash (Windows)
         if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
@@ -157,12 +177,23 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         shell: bash
         run: |
-          if [ -n "${RUSTC_WRAPPER:-}" ] && ! command -v sccache >/dev/null 2>&1; then
-            echo "::warning::sccache missing on PATH despite RUSTC_WRAPPER=${RUSTC_WRAPPER}; disabling for this job"
-            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
-          elif [ -n "${RUSTC_WRAPPER:-}" ]; then
-            sccache --version
+          set -u
+          WRAPPER="${RUSTC_WRAPPER:-}"
+          if [ -z "$WRAPPER" ]; then
+            exit 0
           fi
+          if [[ "$WRAPPER" == /* || "$WRAPPER" == ?:* ]]; then
+            if [ ! -x "$WRAPPER" ]; then
+              echo "::warning::RUSTC_WRAPPER=$WRAPPER not executable; disabling sccache for this job"
+              echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+              exit 0
+            fi
+          elif ! command -v "$WRAPPER" >/dev/null 2>&1; then
+            echo "::warning::RUSTC_WRAPPER=$WRAPPER not found on PATH; disabling sccache for this job"
+            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          "$WRAPPER" --version
 
       - name: Setup Python 3.10
         if: steps.check.outputs.completed != 'true'
@@ -341,8 +372,6 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
       OPENSSL_STATIC: ${{ matrix.openssl-vendored }}
       OPENSSL_VENDORED: ${{ matrix.openssl-vendored }}
-      CMAKE_C_COMPILER_LAUNCHER: ccache
-      CMAKE_CXX_COMPILER_LAUNCHER: ccache
     steps:
       - name: Bootstrap Node.js for actions (manylinux)
         if: matrix.container-kind == 'manylinux'
@@ -382,16 +411,38 @@ jobs:
           apt-get update -qq
           apt-get install -y -qq cmake ccache pkg-config curl libssl-dev libclang-dev
 
-      - name: Ensure musl toolchain on PATH
+      - name: Ensure musl toolchain on PATH and pin cargo linker
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'musl'
+        shell: bash
         run: |
           for f in /usr/local/musl/bin/*; do
             ln -sf "$f" /usr/local/bin/
           done
+          case "${{ matrix.target }}" in
+            x86_64-unknown-linux-musl)
+              echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc" >> "$GITHUB_ENV"
+              echo "CC_x86_64_unknown_linux_musl=x86_64-linux-musl-gcc" >> "$GITHUB_ENV"
+              echo "CXX_x86_64_unknown_linux_musl=x86_64-linux-musl-g++" >> "$GITHUB_ENV"
+              ;;
+            aarch64-unknown-linux-musl)
+              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
+              echo "CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
+              echo "CXX_aarch64_unknown_linux_musl=aarch64-linux-musl-g++" >> "$GITHUB_ENV"
+              ;;
+          esac
 
       - name: Install system deps (macOS)
         if: steps.check.outputs.completed != 'true' && runner.os == 'macOS'
         run: brew install cmake ccache
+
+      - name: Configure CMake to use ccache (non-Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os != 'Windows'
+        shell: bash
+        run: |
+          if command -v ccache >/dev/null 2>&1; then
+            echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+            echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+          fi
 
       - name: Install Git Bash (Windows)
         if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
@@ -431,12 +482,23 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         shell: bash
         run: |
-          if [ -n "${RUSTC_WRAPPER:-}" ] && ! command -v sccache >/dev/null 2>&1; then
-            echo "::warning::sccache missing on PATH despite RUSTC_WRAPPER=${RUSTC_WRAPPER}; disabling for this job"
-            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
-          elif [ -n "${RUSTC_WRAPPER:-}" ]; then
-            sccache --version
+          set -u
+          WRAPPER="${RUSTC_WRAPPER:-}"
+          if [ -z "$WRAPPER" ]; then
+            exit 0
           fi
+          if [[ "$WRAPPER" == /* || "$WRAPPER" == ?:* ]]; then
+            if [ ! -x "$WRAPPER" ]; then
+              echo "::warning::RUSTC_WRAPPER=$WRAPPER not executable; disabling sccache for this job"
+              echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+              exit 0
+            fi
+          elif ! command -v "$WRAPPER" >/dev/null 2>&1; then
+            echo "::warning::RUSTC_WRAPPER=$WRAPPER not found on PATH; disabling sccache for this job"
+            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          "$WRAPPER" --version
 
       - name: Setup Node.js
         if: steps.check.outputs.completed != 'true'
@@ -540,12 +602,23 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         shell: bash
         run: |
-          if [ -n "${RUSTC_WRAPPER:-}" ] && ! command -v sccache >/dev/null 2>&1; then
-            echo "::warning::sccache missing on PATH despite RUSTC_WRAPPER=${RUSTC_WRAPPER}; disabling for this job"
-            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
-          elif [ -n "${RUSTC_WRAPPER:-}" ]; then
-            sccache --version
+          set -u
+          WRAPPER="${RUSTC_WRAPPER:-}"
+          if [ -z "$WRAPPER" ]; then
+            exit 0
           fi
+          if [[ "$WRAPPER" == /* || "$WRAPPER" == ?:* ]]; then
+            if [ ! -x "$WRAPPER" ]; then
+              echo "::warning::RUSTC_WRAPPER=$WRAPPER not executable; disabling sccache for this job"
+              echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+              exit 0
+            fi
+          elif ! command -v "$WRAPPER" >/dev/null 2>&1; then
+            echo "::warning::RUSTC_WRAPPER=$WRAPPER not found on PATH; disabling sccache for this job"
+            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          "$WRAPPER" --version
 
       - name: Install wasm-pack
         if: steps.check.outputs.completed != 'true'
