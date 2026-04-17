@@ -158,6 +158,18 @@ jobs:
         shell: bash
         run: echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
 
+      - name: Clear inherited CMake launcher env (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        shell: bash
+        run: |
+          # The Windows runner host has CMAKE_*_COMPILER_LAUNCHER=ccache set in
+          # its system environment, but ccache isn't installed on Windows.
+          # llama-cpp-sys-2's build.rs forwards every CMAKE_* env var to cmake,
+          # so we must explicitly clobber these to empty. CMake treats an empty
+          # CMAKE_<LANG>_COMPILER_LAUNCHER as "no launcher".
+          echo "CMAKE_C_COMPILER_LAUNCHER=" >> "$GITHUB_ENV"
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=" >> "$GITHUB_ENV"
+
       - name: Setup Rust
         if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
@@ -462,6 +474,18 @@ jobs:
         if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
         shell: bash
         run: echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
+
+      - name: Clear inherited CMake launcher env (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        shell: bash
+        run: |
+          # The Windows runner host has CMAKE_*_COMPILER_LAUNCHER=ccache set in
+          # its system environment, but ccache isn't installed on Windows.
+          # llama-cpp-sys-2's build.rs forwards every CMAKE_* env var to cmake,
+          # so we must explicitly clobber these to empty. CMake treats an empty
+          # CMAKE_<LANG>_COMPILER_LAUNCHER as "no launcher".
+          echo "CMAKE_C_COMPILER_LAUNCHER=" >> "$GITHUB_ENV"
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=" >> "$GITHUB_ENV"
 
       - name: Setup Rust
         if: steps.check.outputs.completed != 'true'
