@@ -110,21 +110,42 @@ jobs:
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'musl'
         shell: bash
         run: |
-          for f in /usr/local/musl/bin/*; do
-            ln -sf "$f" /usr/local/bin/
-          done
           case "${{ matrix.target }}" in
-            x86_64-unknown-linux-musl)
-              echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc" >> "$GITHUB_ENV"
-              echo "CC_x86_64_unknown_linux_musl=x86_64-linux-musl-gcc" >> "$GITHUB_ENV"
-              echo "CXX_x86_64_unknown_linux_musl=x86_64-linux-musl-g++" >> "$GITHUB_ENV"
-              ;;
-            aarch64-unknown-linux-musl)
-              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
-              echo "CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
-              echo "CXX_aarch64_unknown_linux_musl=aarch64-linux-musl-g++" >> "$GITHUB_ENV"
-              ;;
+            x86_64-unknown-linux-musl)   triple=x86_64-linux-musl ;;
+            aarch64-unknown-linux-musl)  triple=aarch64-linux-musl ;;
+            *) echo "::error::Unexpected musl target: ${{ matrix.target }}"; exit 1 ;;
           esac
+
+          # Probe for the cross toolchain bin dir; rust-musl-cross images differ.
+          bindir=""
+          for d in \
+            "/usr/local/musl/bin" \
+            "/opt/${triple}-cross/bin" \
+            "/usr/local/${triple}/bin"; do
+            if [ -x "$d/${triple}-gcc" ]; then
+              bindir="$d"
+              break
+            fi
+          done
+          if [ -z "$bindir" ]; then
+            echo "::error::Could not locate ${triple}-gcc; searched /usr/local/musl/bin, /opt/${triple}-cross/bin, /usr/local/${triple}/bin"
+            echo "PATH=$PATH"
+            find / -name "${triple}-gcc" -type f 2>/dev/null | head
+            exit 1
+          fi
+          echo "Found cross toolchain at $bindir"
+
+          echo "$bindir" >> "$GITHUB_PATH"
+
+          # Use absolute paths for cargo/cc env vars. napi-rs CLI / pnpm /
+          # nested spawns don't always carry $GITHUB_PATH through to cargo's
+          # linker invocation, so bare names like `aarch64-linux-musl-gcc`
+          # fail with "linker not found". Absolute paths are PATH-independent.
+          cargo_env=$(echo "${{ matrix.target }}" | tr '[:lower:]-' '[:upper:]_')
+          echo "CARGO_TARGET_${cargo_env}_LINKER=${bindir}/${triple}-gcc" >> "$GITHUB_ENV"
+          triple_under=$(echo "${{ matrix.target }}" | tr '-' '_')
+          echo "CC_${triple_under}=${bindir}/${triple}-gcc" >> "$GITHUB_ENV"
+          echo "CXX_${triple_under}=${bindir}/${triple}-g++" >> "$GITHUB_ENV"
 
       - name: Install system deps (macOS)
         if: steps.check.outputs.completed != 'true' && runner.os == 'macOS'
@@ -157,18 +178,6 @@ jobs:
         if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
         shell: bash
         run: echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
-
-      - name: Clear inherited CMake launcher env (Windows)
-        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
-        shell: bash
-        run: |
-          # The Windows runner host has CMAKE_*_COMPILER_LAUNCHER=ccache set in
-          # its system environment, but ccache isn't installed on Windows.
-          # llama-cpp-sys-2's build.rs forwards every CMAKE_* env var to cmake,
-          # so we must explicitly clobber these to empty. CMake treats an empty
-          # CMAKE_<LANG>_COMPILER_LAUNCHER as "no launcher".
-          echo "CMAKE_C_COMPILER_LAUNCHER=" >> "$GITHUB_ENV"
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=" >> "$GITHUB_ENV"
 
       - name: Setup Rust
         if: steps.check.outputs.completed != 'true'
@@ -207,6 +216,25 @@ jobs:
           fi
           "$WRAPPER" --version
 
+      - name: Configure CMake to use sccache (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # ccache's MSVC mode doesn't work as a CMAKE_*_COMPILER_LAUNCHER prefix
+          # with Ninja (ccache#1154, #1018). sccache supports launcher mode on
+          # Ninja+MSVC. The Forgejo Windows runner inherits
+          # CMAKE_*_COMPILER_LAUNCHER=ccache from the host system env; swap it
+          # to sccache here. Non-empty GITHUB_ENV writes override inherited env
+          # on this runner (empty writes are the ones that don't).
+          if ! command -v sccache >/dev/null 2>&1; then
+            echo "::error::sccache not on PATH; setup-rust with sccache:true did not install it."
+            exit 1
+          fi
+          echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
+          sccache --version
+
       - name: Setup Python 3.10
         if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
@@ -242,27 +270,6 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         shell: bash
         run: |
-          # Windows runner host persistently sets CMAKE_*_COMPILER_LAUNCHER=ccache
-          # but ccache isn't installed there. GITHUB_ENV empty-writes don't
-          # override inherited env on this runner, so unset in-shell instead.
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            unset CMAKE_C_COMPILER_LAUNCHER
-            unset CMAKE_CXX_COMPILER_LAUNCHER
-          fi
-          # musl cross-compile: pin linker and cc-rs compilers to the full path
-          # in the rust-musl-cross image so PATH resolution can't miss them.
-          case "${{ matrix.target }}" in
-            x86_64-unknown-linux-musl)
-              export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=/usr/local/musl/bin/x86_64-linux-musl-gcc
-              export CC_x86_64_unknown_linux_musl=/usr/local/musl/bin/x86_64-linux-musl-gcc
-              export CXX_x86_64_unknown_linux_musl=/usr/local/musl/bin/x86_64-linux-musl-g++
-              ;;
-            aarch64-unknown-linux-musl)
-              export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/usr/local/musl/bin/aarch64-linux-musl-gcc
-              export CC_aarch64_unknown_linux_musl=/usr/local/musl/bin/aarch64-linux-musl-gcc
-              export CXX_aarch64_unknown_linux_musl=/usr/local/musl/bin/aarch64-linux-musl-g++
-              ;;
-          esac
           INTERPRETERS=""
           for V in 3.10 3.11 3.12 3.13 3.14; do
             INTERP=$(uv python find "$V" 2>/dev/null) && INTERPRETERS="$INTERPRETERS -i $INTERP" || echo "Python $V unavailable, skipping"
@@ -448,21 +455,42 @@ jobs:
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'musl'
         shell: bash
         run: |
-          for f in /usr/local/musl/bin/*; do
-            ln -sf "$f" /usr/local/bin/
-          done
           case "${{ matrix.target }}" in
-            x86_64-unknown-linux-musl)
-              echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc" >> "$GITHUB_ENV"
-              echo "CC_x86_64_unknown_linux_musl=x86_64-linux-musl-gcc" >> "$GITHUB_ENV"
-              echo "CXX_x86_64_unknown_linux_musl=x86_64-linux-musl-g++" >> "$GITHUB_ENV"
-              ;;
-            aarch64-unknown-linux-musl)
-              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
-              echo "CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
-              echo "CXX_aarch64_unknown_linux_musl=aarch64-linux-musl-g++" >> "$GITHUB_ENV"
-              ;;
+            x86_64-unknown-linux-musl)   triple=x86_64-linux-musl ;;
+            aarch64-unknown-linux-musl)  triple=aarch64-linux-musl ;;
+            *) echo "::error::Unexpected musl target: ${{ matrix.target }}"; exit 1 ;;
           esac
+
+          # Probe for the cross toolchain bin dir; rust-musl-cross images differ.
+          bindir=""
+          for d in \
+            "/usr/local/musl/bin" \
+            "/opt/${triple}-cross/bin" \
+            "/usr/local/${triple}/bin"; do
+            if [ -x "$d/${triple}-gcc" ]; then
+              bindir="$d"
+              break
+            fi
+          done
+          if [ -z "$bindir" ]; then
+            echo "::error::Could not locate ${triple}-gcc; searched /usr/local/musl/bin, /opt/${triple}-cross/bin, /usr/local/${triple}/bin"
+            echo "PATH=$PATH"
+            find / -name "${triple}-gcc" -type f 2>/dev/null | head
+            exit 1
+          fi
+          echo "Found cross toolchain at $bindir"
+
+          echo "$bindir" >> "$GITHUB_PATH"
+
+          # Use absolute paths for cargo/cc env vars. napi-rs CLI / pnpm /
+          # nested spawns don't always carry $GITHUB_PATH through to cargo's
+          # linker invocation, so bare names like `aarch64-linux-musl-gcc`
+          # fail with "linker not found". Absolute paths are PATH-independent.
+          cargo_env=$(echo "${{ matrix.target }}" | tr '[:lower:]-' '[:upper:]_')
+          echo "CARGO_TARGET_${cargo_env}_LINKER=${bindir}/${triple}-gcc" >> "$GITHUB_ENV"
+          triple_under=$(echo "${{ matrix.target }}" | tr '-' '_')
+          echo "CC_${triple_under}=${bindir}/${triple}-gcc" >> "$GITHUB_ENV"
+          echo "CXX_${triple_under}=${bindir}/${triple}-g++" >> "$GITHUB_ENV"
 
       - name: Install system deps (macOS)
         if: steps.check.outputs.completed != 'true' && runner.os == 'macOS'
@@ -495,18 +523,6 @@ jobs:
         if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
         shell: bash
         run: echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
-
-      - name: Clear inherited CMake launcher env (Windows)
-        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
-        shell: bash
-        run: |
-          # The Windows runner host has CMAKE_*_COMPILER_LAUNCHER=ccache set in
-          # its system environment, but ccache isn't installed on Windows.
-          # llama-cpp-sys-2's build.rs forwards every CMAKE_* env var to cmake,
-          # so we must explicitly clobber these to empty. CMake treats an empty
-          # CMAKE_<LANG>_COMPILER_LAUNCHER as "no launcher".
-          echo "CMAKE_C_COMPILER_LAUNCHER=" >> "$GITHUB_ENV"
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=" >> "$GITHUB_ENV"
 
       - name: Setup Rust
         if: steps.check.outputs.completed != 'true'
@@ -545,6 +561,25 @@ jobs:
           fi
           "$WRAPPER" --version
 
+      - name: Configure CMake to use sccache (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # ccache's MSVC mode doesn't work as a CMAKE_*_COMPILER_LAUNCHER prefix
+          # with Ninja (ccache#1154, #1018). sccache supports launcher mode on
+          # Ninja+MSVC. The Forgejo Windows runner inherits
+          # CMAKE_*_COMPILER_LAUNCHER=ccache from the host system env; swap it
+          # to sccache here. Non-empty GITHUB_ENV writes override inherited env
+          # on this runner (empty writes are the ones that don't).
+          if ! command -v sccache >/dev/null 2>&1; then
+            echo "::error::sccache not on PATH; setup-rust with sccache:true did not install it."
+            exit 1
+          fi
+          echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
+          sccache --version
+
       - name: Setup Node.js
         if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/setup-node@main
@@ -572,22 +607,6 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         shell: bash
         run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            unset CMAKE_C_COMPILER_LAUNCHER
-            unset CMAKE_CXX_COMPILER_LAUNCHER
-          fi
-          case "${{ matrix.target }}" in
-            x86_64-unknown-linux-musl)
-              export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=/usr/local/musl/bin/x86_64-linux-musl-gcc
-              export CC_x86_64_unknown_linux_musl=/usr/local/musl/bin/x86_64-linux-musl-gcc
-              export CXX_x86_64_unknown_linux_musl=/usr/local/musl/bin/x86_64-linux-musl-g++
-              ;;
-            aarch64-unknown-linux-musl)
-              export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/usr/local/musl/bin/aarch64-linux-musl-gcc
-              export CC_aarch64_unknown_linux_musl=/usr/local/musl/bin/aarch64-linux-musl-gcc
-              export CXX_aarch64_unknown_linux_musl=/usr/local/musl/bin/aarch64-linux-musl-g++
-              ;;
-          esac
           pnpm --filter blazen exec napi build \
             --release \
             --platform \
