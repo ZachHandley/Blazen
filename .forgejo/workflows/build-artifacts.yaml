@@ -150,6 +150,7 @@ jobs:
           sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
           sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
           sccache-key-prefix: sccache/blazen-wheels-${{ matrix.target }}
+          ccache: true
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
       - name: Verify sccache on PATH
@@ -423,6 +424,7 @@ jobs:
           sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
           sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
           sccache-key-prefix: sccache/blazen-napi-${{ matrix.target }}
+          ccache: true
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
       - name: Verify sccache on PATH
