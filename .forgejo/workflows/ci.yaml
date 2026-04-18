@@ -269,6 +269,45 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
 
+      # On orphan-retry, force-move the tag to main HEAD so the dispatched
+      # build-artifacts workflow picks up the latest workflow fixes. Without
+      # this, the tag stays pinned at the original commit and every retry
+      # re-runs the same (broken) workflow.
+      - name: Force-move tag to main HEAD (orphan-retry)
+        if: steps.pick.outputs.reason == 'orphan-retry'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
+          VERSION: ${{ steps.pick.outputs.version }}
+        run: |
+          set -euo pipefail
+          TAG="v${VERSION}"
+          git config user.name  "Zach Handley"
+          git config user.email "zachhandley@gmail.com"
+          git tag -f "$TAG"
+          if ! git push --force origin "refs/tags/${TAG}"; then
+            echo "Force-push rejected (tag protection?); falling back to delete+recreate"
+            git push origin ":refs/tags/${TAG}"
+            git push origin "refs/tags/${TAG}"
+          fi
+
+      # Clear per-step completion markers so every matrix row re-runs against
+      # the refreshed tree. Also purge the blazen-build artifact package for
+      # this version so stale wheels/napi/sdist/wasm uploads don't coexist
+      # with the fresh ones about to be produced. release-complete marker is
+      # preserved because the orphan-probe at ci.yaml:219-238 keys on it.
+      - name: Purge stale ci-status + artifacts (orphan-retry)
+        if: steps.pick.outputs.reason == 'orphan-retry'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: purge-version
+          version: ${{ steps.pick.outputs.version }}
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+          keep-markers: release-complete
+          purge-package: blazen-build
+
       - name: Dispatch build-artifacts workflow
         if: steps.pick.outputs.version != ''
         run: |
