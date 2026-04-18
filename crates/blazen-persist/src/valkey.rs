@@ -183,7 +183,7 @@ impl CheckpointStore for ValkeyCheckpointStore {
         }
 
         // Sort by timestamp descending (most recent first).
-        checkpoints.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        checkpoints.sort_by_key(|c| std::cmp::Reverse(c.timestamp));
         Ok(checkpoints)
     }
 
