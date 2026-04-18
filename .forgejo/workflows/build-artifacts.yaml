@@ -110,9 +110,11 @@ jobs:
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'musl'
         shell: bash
         run: |
+          # rust-musl-cross images install the toolchain under the FULL rust
+          # target triple (e.g. aarch64-unknown-linux-musl-gcc), not the
+          # shortened gcc triple. Use the matrix target verbatim as the prefix.
           case "${{ matrix.target }}" in
-            x86_64-unknown-linux-musl)   triple=x86_64-linux-musl ;;
-            aarch64-unknown-linux-musl)  triple=aarch64-linux-musl ;;
+            x86_64-unknown-linux-musl|aarch64-unknown-linux-musl) triple="${{ matrix.target }}" ;;
             *) echo "::error::Unexpected musl target: ${{ matrix.target }}"; exit 1 ;;
           esac
 
@@ -216,25 +218,6 @@ jobs:
           fi
           "$WRAPPER" --version
 
-      - name: Configure CMake to use sccache (Windows)
-        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
-        shell: bash
-        run: |
-          set -euo pipefail
-          # ccache's MSVC mode doesn't work as a CMAKE_*_COMPILER_LAUNCHER prefix
-          # with Ninja (ccache#1154, #1018). sccache supports launcher mode on
-          # Ninja+MSVC. The Forgejo Windows runner inherits
-          # CMAKE_*_COMPILER_LAUNCHER=ccache from the host system env; swap it
-          # to sccache here. Non-empty GITHUB_ENV writes override inherited env
-          # on this runner (empty writes are the ones that don't).
-          if ! command -v sccache >/dev/null 2>&1; then
-            echo "::error::sccache not on PATH; setup-rust with sccache:true did not install it."
-            exit 1
-          fi
-          echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
-          sccache --version
-
       - name: Setup Python 3.10
         if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
@@ -279,7 +262,24 @@ jobs:
           if [ -n "${{ matrix.manylinux }}" ]; then
             MANYLINUX_FLAG="--manylinux ${{ matrix.manylinux }}"
           fi
-          uvx maturin build --release \
+          # ccache's MSVC mode doesn't work as a CMAKE_*_COMPILER_LAUNCHER
+          # prefix with Ninja (ccache#1154, #1018); sccache does. The Forgejo
+          # Windows runner host pre-sets CMAKE_*_COMPILER_LAUNCHER=ccache in
+          # system env and $GITHUB_ENV writes don't override that. Using
+          # `env VAR=... command` spawns maturin via execve with an explicitly
+          # set env block, bypassing the runner's env plumbing entirely.
+          LAUNCHER_ENV=()
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            if ! command -v sccache >/dev/null 2>&1; then
+              echo "::error::sccache not on PATH; setup-rust with sccache:true did not install it."
+              exit 1
+            fi
+            LAUNCHER_ENV=(
+              CMAKE_C_COMPILER_LAUNCHER=sccache
+              CMAKE_CXX_COMPILER_LAUNCHER=sccache
+            )
+          fi
+          env "${LAUNCHER_ENV[@]}" uvx maturin build --release \
             -m crates/blazen-py/Cargo.toml \
             --target ${{ matrix.target }} \
             $MANYLINUX_FLAG \
@@ -455,9 +455,11 @@ jobs:
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'musl'
         shell: bash
         run: |
+          # rust-musl-cross images install the toolchain under the FULL rust
+          # target triple (e.g. aarch64-unknown-linux-musl-gcc), not the
+          # shortened gcc triple. Use the matrix target verbatim as the prefix.
           case "${{ matrix.target }}" in
-            x86_64-unknown-linux-musl)   triple=x86_64-linux-musl ;;
-            aarch64-unknown-linux-musl)  triple=aarch64-linux-musl ;;
+            x86_64-unknown-linux-musl|aarch64-unknown-linux-musl) triple="${{ matrix.target }}" ;;
             *) echo "::error::Unexpected musl target: ${{ matrix.target }}"; exit 1 ;;
           esac
 
@@ -561,25 +563,6 @@ jobs:
           fi
           "$WRAPPER" --version
 
-      - name: Configure CMake to use sccache (Windows)
-        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
-        shell: bash
-        run: |
-          set -euo pipefail
-          # ccache's MSVC mode doesn't work as a CMAKE_*_COMPILER_LAUNCHER prefix
-          # with Ninja (ccache#1154, #1018). sccache supports launcher mode on
-          # Ninja+MSVC. The Forgejo Windows runner inherits
-          # CMAKE_*_COMPILER_LAUNCHER=ccache from the host system env; swap it
-          # to sccache here. Non-empty GITHUB_ENV writes override inherited env
-          # on this runner (empty writes are the ones that don't).
-          if ! command -v sccache >/dev/null 2>&1; then
-            echo "::error::sccache not on PATH; setup-rust with sccache:true did not install it."
-            exit 1
-          fi
-          echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
-          sccache --version
-
       - name: Setup Node.js
         if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/setup-node@main
@@ -607,7 +590,21 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         shell: bash
         run: |
-          pnpm --filter blazen exec napi build \
+          # See Build wheels step: env prefix bypasses $GITHUB_ENV and bash
+          # state to force sccache as the CMake launcher on Windows, where
+          # the runner host's inherited ccache doesn't work with Ninja+MSVC.
+          LAUNCHER_ENV=()
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            if ! command -v sccache >/dev/null 2>&1; then
+              echo "::error::sccache not on PATH; setup-rust with sccache:true did not install it."
+              exit 1
+            fi
+            LAUNCHER_ENV=(
+              CMAKE_C_COMPILER_LAUNCHER=sccache
+              CMAKE_CXX_COMPILER_LAUNCHER=sccache
+            )
+          fi
+          env "${LAUNCHER_ENV[@]}" pnpm --filter blazen exec napi build \
             --release \
             --platform \
             --target ${{ matrix.target }} \
