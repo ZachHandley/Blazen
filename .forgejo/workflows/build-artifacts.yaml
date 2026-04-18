@@ -50,8 +50,8 @@ jobs:
             openssl-vendored: "1"
           - target: aarch64-unknown-linux-musl
             runs-on: arm64
-            container: ghcr.io/rust-cross/rust-musl-cross:aarch64-musl
-            container-kind: musl
+            container: alpine:3.20
+            container-kind: alpine
             manylinux: "musllinux_1_2"
             openssl-vendored: "1"
           - target: aarch64-apple-darwin
@@ -81,6 +81,10 @@ jobs:
           apt-get install -y -qq curl
           curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
           apt-get install -y -qq nodejs
+
+      - name: Bootstrap Node.js for actions (alpine)
+        if: matrix.container-kind == 'alpine'
+        run: apk add --no-cache nodejs
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -120,6 +124,17 @@ jobs:
         run: |
           apt-get update -qq
           apt-get install -y -qq cmake ccache pkg-config curl libssl-dev patchelf libclang-dev
+
+      - name: Install system deps (alpine)
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'alpine'
+        run: |
+          apk add --no-cache \
+            bash curl git \
+            gcc g++ musl-dev linux-headers \
+            cmake make ccache \
+            pkgconf openssl-dev \
+            clang-dev llvm-dev \
+            perl patchelf libffi-dev
 
       - name: Ensure musl toolchain on PATH and pin cargo linker
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'musl'
@@ -181,6 +196,21 @@ jobs:
           triple_under=$(echo "${{ matrix.target }}" | tr '-' '_')
           echo "CC_${triple_under}=${bindir}/${triple}-gcc" >> "$GITHUB_ENV"
           echo "CXX_${triple_under}=${bindir}/${triple}-g++" >> "$GITHUB_ENV"
+
+      - name: Alias gcc as aarch64-linux-musl-gcc (alpine)
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'alpine'
+        shell: bash
+        run: |
+          # rustc's target spec for aarch64-unknown-linux-musl defaults the
+          # linker name to `aarch64-linux-musl-gcc`. On Alpine arm64, /usr/bin/gcc
+          # IS a native musl compiler -- symlink it under the expected name so
+          # rustc's default lookup resolves without env-var plumbing (which
+          # doesn't always propagate through pnpm -> napi / uvx -> maturin).
+          ln -sf /usr/bin/gcc /usr/local/bin/aarch64-linux-musl-gcc
+          ln -sf /usr/bin/g++ /usr/local/bin/aarch64-linux-musl-g++
+          echo "CC_aarch64_unknown_linux_musl=/usr/local/bin/aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
+          echo "CXX_aarch64_unknown_linux_musl=/usr/local/bin/aarch64-linux-musl-g++" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/usr/local/bin/aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
 
       - name: Install system deps (macOS)
         if: steps.check.outputs.completed != 'true' && runner.os == 'macOS'
@@ -449,8 +479,8 @@ jobs:
             openssl-vendored: "1"
           - target: aarch64-unknown-linux-musl
             runs-on: arm64
-            container: ghcr.io/rust-cross/rust-musl-cross:aarch64-musl
-            container-kind: musl
+            container: alpine:3.20
+            container-kind: alpine
             openssl-vendored: "1"
           - target: aarch64-apple-darwin
             runs-on: macos-latest
@@ -479,6 +509,10 @@ jobs:
           apt-get install -y -qq curl
           curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
           apt-get install -y -qq nodejs
+
+      - name: Bootstrap Node.js for actions (alpine)
+        if: matrix.container-kind == 'alpine'
+        run: apk add --no-cache nodejs
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -518,6 +552,17 @@ jobs:
         run: |
           apt-get update -qq
           apt-get install -y -qq cmake ccache pkg-config curl libssl-dev libclang-dev
+
+      - name: Install system deps (alpine)
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'alpine'
+        run: |
+          apk add --no-cache \
+            bash curl git \
+            gcc g++ musl-dev linux-headers \
+            cmake make ccache \
+            pkgconf openssl-dev \
+            clang-dev llvm-dev \
+            perl patchelf libffi-dev
 
       - name: Ensure musl toolchain on PATH and pin cargo linker
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'musl'
@@ -579,6 +624,21 @@ jobs:
           triple_under=$(echo "${{ matrix.target }}" | tr '-' '_')
           echo "CC_${triple_under}=${bindir}/${triple}-gcc" >> "$GITHUB_ENV"
           echo "CXX_${triple_under}=${bindir}/${triple}-g++" >> "$GITHUB_ENV"
+
+      - name: Alias gcc as aarch64-linux-musl-gcc (alpine)
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'alpine'
+        shell: bash
+        run: |
+          # rustc's target spec for aarch64-unknown-linux-musl defaults the
+          # linker name to `aarch64-linux-musl-gcc`. On Alpine arm64, /usr/bin/gcc
+          # IS a native musl compiler -- symlink it under the expected name so
+          # rustc's default lookup resolves without env-var plumbing (which
+          # doesn't always propagate through pnpm -> napi / uvx -> maturin).
+          ln -sf /usr/bin/gcc /usr/local/bin/aarch64-linux-musl-gcc
+          ln -sf /usr/bin/g++ /usr/local/bin/aarch64-linux-musl-g++
+          echo "CC_aarch64_unknown_linux_musl=/usr/local/bin/aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
+          echo "CXX_aarch64_unknown_linux_musl=/usr/local/bin/aarch64-linux-musl-g++" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/usr/local/bin/aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
 
       - name: Install system deps (macOS)
         if: steps.check.outputs.completed != 'true' && runner.os == 'macOS'
