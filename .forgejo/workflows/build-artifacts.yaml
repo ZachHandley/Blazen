@@ -204,6 +204,9 @@ jobs:
         uses: https://forge.blackleafdigital.com/Public/actions/setup-msvc@main
         with:
           arch: x64
+          year: "2022"
+          toolset: "14.4"
+          install-if-missing: "true"
 
       - name: Setup Ninja (Windows)
         if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
@@ -599,6 +602,9 @@ jobs:
         uses: https://forge.blackleafdigital.com/Public/actions/setup-msvc@main
         with:
           arch: x64
+          year: "2022"
+          toolset: "14.4"
+          install-if-missing: "true"
 
       - name: Setup Ninja (Windows)
         if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
