@@ -96,6 +96,21 @@ jobs:
           owner: BlackLeafDigital
           auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
+      - name: Diagnose inherited env (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        shell: powershell
+        run: |
+          Write-Host "=== Process env: CMAKE_* and *LAUNCHER* ==="
+          Get-ChildItem Env: | Where-Object { $_.Name -like 'CMAKE*' -or $_.Name -like '*LAUNCHER*' } | Format-List
+          Write-Host "=== Machine-scope CMAKE / LAUNCHER ==="
+          [Environment]::GetEnvironmentVariables('Machine').GetEnumerator() |
+            Where-Object { $_.Key -like 'CMAKE*' -or $_.Key -like '*LAUNCHER*' } |
+            Format-Table -AutoSize
+          Write-Host "=== User-scope CMAKE / LAUNCHER ==="
+          [Environment]::GetEnvironmentVariables('User').GetEnumerator() |
+            Where-Object { $_.Key -like 'CMAKE*' -or $_.Key -like '*LAUNCHER*' } |
+            Format-Table -AutoSize
+
       - name: Install system deps (manylinux)
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'manylinux'
         run: yum install -y cmake openssl-devel ccache pkg-config curl perl-core perl-Time-Piece clang-devel
@@ -139,10 +154,28 @@ jobs:
 
           echo "$bindir" >> "$GITHUB_PATH"
 
-          # Use absolute paths for cargo/cc env vars. napi-rs CLI / pnpm /
-          # nested spawns don't always carry $GITHUB_PATH through to cargo's
-          # linker invocation, so bare names like `aarch64-linux-musl-gcc`
-          # fail with "linker not found". Absolute paths are PATH-independent.
+          # Create short-triple symlinks so cargo's DEFAULT linker lookup works
+          # without any env-var plumbing. Rust's target spec for
+          # {arch}-unknown-linux-musl defaults the linker to the short form
+          # `{arch}-linux-musl-gcc`, which does NOT exist in this image (only
+          # the long-form `{arch}-unknown-linux-musl-gcc` is present in
+          # /usr/local/musl/bin, verified via `podman run ... ls`). Every prior
+          # attempt to fix this via env vars (CARGO_TARGET_*_LINKER / CC_* /
+          # CXX_*) failed because $GITHUB_ENV writes don't propagate through
+          # pnpm -> napi-rs / uvx -> maturin to the cargo subprocess on this
+          # Forgejo runner. Symlink both into $bindir (already on PATH) and
+          # /usr/local/bin as a second-chance hit.
+          short_triple="${triple/-unknown-/-}"   # aarch64-unknown-linux-musl -> aarch64-linux-musl
+          ln -sf "${bindir}/${triple}-gcc" "${bindir}/${short_triple}-gcc"
+          ln -sf "${bindir}/${triple}-g++" "${bindir}/${short_triple}-g++"
+          ln -sf "${bindir}/${triple}-gcc" "/usr/local/bin/${short_triple}-gcc"
+          ln -sf "${bindir}/${triple}-g++" "/usr/local/bin/${short_triple}-g++"
+          echo "Short-triple symlinks in place:"
+          ls -l "${bindir}/${short_triple}-gcc" "/usr/local/bin/${short_triple}-gcc"
+
+          # Also write absolute-path env vars as belt-and-suspenders. If they
+          # propagate, great; if they don't, the symlinks above still win via
+          # cargo's default lookup.
           cargo_env=$(echo "${{ matrix.target }}" | tr '[:lower:]-' '[:upper:]_')
           echo "CARGO_TARGET_${cargo_env}_LINKER=${bindir}/${triple}-gcc" >> "$GITHUB_ENV"
           triple_under=$(echo "${{ matrix.target }}" | tr '-' '_')
@@ -249,8 +282,8 @@ jobs:
         shell: bash
         run: uv run --no-project python scripts/stamp-version.py ${{ needs.version.outputs.version }}
 
-      - name: Build wheels
-        if: steps.check.outputs.completed != 'true'
+      - name: Build wheels (non-Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os != 'Windows'
         shell: bash
         run: |
           INTERPRETERS=""
@@ -262,28 +295,45 @@ jobs:
           if [ -n "${{ matrix.manylinux }}" ]; then
             MANYLINUX_FLAG="--manylinux ${{ matrix.manylinux }}"
           fi
-          # ccache's MSVC mode doesn't work as a CMAKE_*_COMPILER_LAUNCHER
-          # prefix with Ninja (ccache#1154, #1018); sccache does. The Forgejo
-          # Windows runner host pre-sets CMAKE_*_COMPILER_LAUNCHER=ccache in
-          # system env and $GITHUB_ENV writes don't override that. Using
-          # `env VAR=... command` spawns maturin via execve with an explicitly
-          # set env block, bypassing the runner's env plumbing entirely.
-          LAUNCHER_ENV=()
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            if ! command -v sccache >/dev/null 2>&1; then
-              echo "::error::sccache not on PATH; setup-rust with sccache:true did not install it."
-              exit 1
-            fi
-            LAUNCHER_ENV=(
-              CMAKE_C_COMPILER_LAUNCHER=sccache
-              CMAKE_CXX_COMPILER_LAUNCHER=sccache
-            )
-          fi
-          env "${LAUNCHER_ENV[@]}" uvx maturin build --release \
+          uvx maturin build --release \
             -m crates/blazen-py/Cargo.toml \
             --target ${{ matrix.target }} \
             $MANYLINUX_FLAG \
             $INTERPRETERS
+
+      - name: Build wheels (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Strip inherited CMake launcher vars from this PowerShell process.
+          # llama-cpp-sys-2/build.rs:538-543 iterates env::vars() and forwards
+          # every CMAKE_* as -D to cmake; clearing them here means child
+          # processes (maturin -> cargo -> build.rs) inherit a clean env, no
+          # -DCMAKE_*_COMPILER_LAUNCHER=ccache reaches cmake, Ninja never
+          # tries to spawn ccache.
+          Remove-Item Env:CMAKE_C_COMPILER_LAUNCHER   -ErrorAction SilentlyContinue
+          Remove-Item Env:CMAKE_CXX_COMPILER_LAUNCHER -ErrorAction SilentlyContinue
+          Get-ChildItem Env: | Where-Object Name -like 'CMAKE_*LAUNCHER*' |
+            ForEach-Object { Remove-Item "Env:$($_.Name)" -ErrorAction SilentlyContinue }
+
+          $maturinArgs = @('build','--release','-m','crates/blazen-py/Cargo.toml','--target','${{ matrix.target }}')
+          if ('${{ matrix.manylinux }}' -ne '') {
+            $maturinArgs += '--manylinux'
+            $maturinArgs += '${{ matrix.manylinux }}'
+          }
+          foreach ($V in '3.10','3.11','3.12','3.13','3.14') {
+            $p = & uv python find $V 2>$null
+            if ($LASTEXITCODE -eq 0 -and $p) {
+              $maturinArgs += '-i'
+              $maturinArgs += $p
+            } else {
+              Write-Host "Python $V unavailable, skipping"
+            }
+          }
+          Write-Host "Running: uvx maturin $($maturinArgs -join ' ')"
+          & uvx maturin @maturinArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload wheels to Forgejo generic package
         if: steps.check.outputs.completed != 'true'
@@ -441,6 +491,21 @@ jobs:
           owner: BlackLeafDigital
           auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
+      - name: Diagnose inherited env (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        shell: powershell
+        run: |
+          Write-Host "=== Process env: CMAKE_* and *LAUNCHER* ==="
+          Get-ChildItem Env: | Where-Object { $_.Name -like 'CMAKE*' -or $_.Name -like '*LAUNCHER*' } | Format-List
+          Write-Host "=== Machine-scope CMAKE / LAUNCHER ==="
+          [Environment]::GetEnvironmentVariables('Machine').GetEnumerator() |
+            Where-Object { $_.Key -like 'CMAKE*' -or $_.Key -like '*LAUNCHER*' } |
+            Format-Table -AutoSize
+          Write-Host "=== User-scope CMAKE / LAUNCHER ==="
+          [Environment]::GetEnvironmentVariables('User').GetEnumerator() |
+            Where-Object { $_.Key -like 'CMAKE*' -or $_.Key -like '*LAUNCHER*' } |
+            Format-Table -AutoSize
+
       - name: Install system deps (manylinux)
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'manylinux'
         run: yum install -y cmake openssl-devel ccache pkg-config curl perl-core perl-Time-Piece clang-devel
@@ -484,10 +549,28 @@ jobs:
 
           echo "$bindir" >> "$GITHUB_PATH"
 
-          # Use absolute paths for cargo/cc env vars. napi-rs CLI / pnpm /
-          # nested spawns don't always carry $GITHUB_PATH through to cargo's
-          # linker invocation, so bare names like `aarch64-linux-musl-gcc`
-          # fail with "linker not found". Absolute paths are PATH-independent.
+          # Create short-triple symlinks so cargo's DEFAULT linker lookup works
+          # without any env-var plumbing. Rust's target spec for
+          # {arch}-unknown-linux-musl defaults the linker to the short form
+          # `{arch}-linux-musl-gcc`, which does NOT exist in this image (only
+          # the long-form `{arch}-unknown-linux-musl-gcc` is present in
+          # /usr/local/musl/bin, verified via `podman run ... ls`). Every prior
+          # attempt to fix this via env vars (CARGO_TARGET_*_LINKER / CC_* /
+          # CXX_*) failed because $GITHUB_ENV writes don't propagate through
+          # pnpm -> napi-rs / uvx -> maturin to the cargo subprocess on this
+          # Forgejo runner. Symlink both into $bindir (already on PATH) and
+          # /usr/local/bin as a second-chance hit.
+          short_triple="${triple/-unknown-/-}"   # aarch64-unknown-linux-musl -> aarch64-linux-musl
+          ln -sf "${bindir}/${triple}-gcc" "${bindir}/${short_triple}-gcc"
+          ln -sf "${bindir}/${triple}-g++" "${bindir}/${short_triple}-g++"
+          ln -sf "${bindir}/${triple}-gcc" "/usr/local/bin/${short_triple}-gcc"
+          ln -sf "${bindir}/${triple}-g++" "/usr/local/bin/${short_triple}-g++"
+          echo "Short-triple symlinks in place:"
+          ls -l "${bindir}/${short_triple}-gcc" "/usr/local/bin/${short_triple}-gcc"
+
+          # Also write absolute-path env vars as belt-and-suspenders. If they
+          # propagate, great; if they don't, the symlinks above still win via
+          # cargo's default lookup.
           cargo_env=$(echo "${{ matrix.target }}" | tr '[:lower:]-' '[:upper:]_')
           echo "CARGO_TARGET_${cargo_env}_LINKER=${bindir}/${triple}-gcc" >> "$GITHUB_ENV"
           triple_under=$(echo "${{ matrix.target }}" | tr '-' '_')
@@ -586,30 +669,37 @@ jobs:
         shell: bash
         run: pnpm install
 
-      - name: Build napi binary
-        if: steps.check.outputs.completed != 'true'
+      - name: Build napi binary (non-Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os != 'Windows'
         shell: bash
         run: |
-          # See Build wheels step: env prefix bypasses $GITHUB_ENV and bash
-          # state to force sccache as the CMake launcher on Windows, where
-          # the runner host's inherited ccache doesn't work with Ninja+MSVC.
-          LAUNCHER_ENV=()
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            if ! command -v sccache >/dev/null 2>&1; then
-              echo "::error::sccache not on PATH; setup-rust with sccache:true did not install it."
-              exit 1
-            fi
-            LAUNCHER_ENV=(
-              CMAKE_C_COMPILER_LAUNCHER=sccache
-              CMAKE_CXX_COMPILER_LAUNCHER=sccache
-            )
-          fi
-          env "${LAUNCHER_ENV[@]}" pnpm --filter blazen exec napi build \
+          pnpm --filter blazen exec napi build \
             --release \
             --platform \
             --target ${{ matrix.target }} \
             --features local-all \
             --js index.js
+
+      - name: Build napi binary (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Strip inherited CMake launcher vars — see Build wheels (Windows)
+          # for proof chain (llama-cpp-sys-2/build.rs:538-543 forwards every
+          # CMAKE_* env var as -D to cmake).
+          Remove-Item Env:CMAKE_C_COMPILER_LAUNCHER   -ErrorAction SilentlyContinue
+          Remove-Item Env:CMAKE_CXX_COMPILER_LAUNCHER -ErrorAction SilentlyContinue
+          Get-ChildItem Env: | Where-Object Name -like 'CMAKE_*LAUNCHER*' |
+            ForEach-Object { Remove-Item "Env:$($_.Name)" -ErrorAction SilentlyContinue }
+
+          & pnpm --filter blazen exec napi build `
+            --release `
+            --platform `
+            --target ${{ matrix.target }} `
+            --features local-all `
+            --js index.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload napi binary to Forgejo generic package
         if: steps.check.outputs.completed != 'true'
