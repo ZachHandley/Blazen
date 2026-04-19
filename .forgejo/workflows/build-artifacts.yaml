@@ -238,13 +238,11 @@ jobs:
           toolset: "14.4"
           install-if-missing: "true"
 
-      - name: Install LLVM (Windows)
+      - name: Install libclang (Windows)
         if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
-        uses: https://github.com/KyleMayes/install-llvm-action@v2
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-libclang@main
         with:
-          version: "17.0"
-          directory: ${{ runner.temp }}/llvm
-          env: true
+          version: '17.0.6'
 
       - name: Setup Ninja (Windows)
         if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
@@ -255,18 +253,33 @@ jobs:
         shell: bash
         run: echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
 
+      - name: Isolate CARGO_TARGET_DIR per matrix entry (Linux containers)
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind != ''
+        shell: bash
+        run: |
+          # Single self-hosted runner = sequential matrix; $GITHUB_WORKSPACE
+          # (host bind-mount) is shared across entries. setup-rust defaults
+          # CARGO_TARGET_DIR to $GITHUB_WORKSPACE/target (setup-rust/src/
+          # index.ts:326), which lets a manylinux-glibc entry leave a
+          # build-script-build linked against /lib64/ld-linux-x86-64.so.2.
+          # A subsequent musl-container entry reuses that binary; execve
+          # ENOENTs on PT_INTERP. Per-entry isolation sidesteps the class.
+          # sccache S3 keys are rustc-hash + argv based (not target-dir
+          # based), so cache hits are preserved.
+          TARGET_DIR="${GITHUB_WORKSPACE}/target-${{ github.job }}-${{ matrix.target }}"
+          mkdir -p "${TARGET_DIR}"
+          echo "CARGO_TARGET_DIR=${TARGET_DIR}" >> "$GITHUB_ENV"
+
       - name: Isolate CARGO_HOME per job (Linux containers)
         if: steps.check.outputs.completed != 'true' && matrix.container-kind != ''
         shell: bash
         run: |
-          # Forgejo self-hosted bind-mounts the same host workspace dir into
-          # every containerized job on the host, so $GITHUB_WORKSPACE is
-          # SHARED across parallel matrix jobs on the same runs-on label.
-          # Round 2 used $GITHUB_WORKSPACE/.cargo-home and parallel jobs
-          # raced on the single sccache binary (ENOENT on cargo spawn).
-          # Include github.job AND matrix.target to get a path that is
-          # unique for every matrix entry across both build-wheels and
-          # build-napi. Still durable for the whole job; no race.
+          # setup-rust defaults CARGO_HOME to $RUNNER_TOOL_CACHE/cargo (host-
+          # shared) and /tmp isn't reliably durable inside Forgejo job
+          # containers. $GITHUB_WORKSPACE is the host-bind-mounted checkout
+          # dir and persists for the whole job. Include github.job +
+          # matrix.target so sequential matrix entries don't carry stale
+          # sccache binaries from a previous entry's $CARGO_HOME/bin.
           CARGO_HOME_DIR="${GITHUB_WORKSPACE}/.cargo-home-${{ github.job }}-${{ matrix.target }}"
           mkdir -p "${CARGO_HOME_DIR}"
           echo "CARGO_HOME=${CARGO_HOME_DIR}" >> "$GITHUB_ENV"
@@ -411,7 +424,7 @@ jobs:
         run: |
           VERSION="${{ needs.version.outputs.version }}"
           TARGET="${{ matrix.target }}"
-          tar -czf "wheels-${TARGET}.tar.gz" -C target/wheels .
+          tar -czf "wheels-${TARGET}.tar.gz" -C "${CARGO_TARGET_DIR:-target}/wheels" .
           curl --fail -s -X PUT \
             -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
             --upload-file "wheels-${TARGET}.tar.gz" \
@@ -703,13 +716,11 @@ jobs:
           toolset: "14.4"
           install-if-missing: "true"
 
-      - name: Install LLVM (Windows)
+      - name: Install libclang (Windows)
         if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
-        uses: https://github.com/KyleMayes/install-llvm-action@v2
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-libclang@main
         with:
-          version: "17.0"
-          directory: ${{ runner.temp }}/llvm
-          env: true
+          version: '17.0.6'
 
       - name: Setup Ninja (Windows)
         if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
@@ -720,18 +731,33 @@ jobs:
         shell: bash
         run: echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
 
+      - name: Isolate CARGO_TARGET_DIR per matrix entry (Linux containers)
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind != ''
+        shell: bash
+        run: |
+          # Single self-hosted runner = sequential matrix; $GITHUB_WORKSPACE
+          # (host bind-mount) is shared across entries. setup-rust defaults
+          # CARGO_TARGET_DIR to $GITHUB_WORKSPACE/target (setup-rust/src/
+          # index.ts:326), which lets a manylinux-glibc entry leave a
+          # build-script-build linked against /lib64/ld-linux-x86-64.so.2.
+          # A subsequent musl-container entry reuses that binary; execve
+          # ENOENTs on PT_INTERP. Per-entry isolation sidesteps the class.
+          # sccache S3 keys are rustc-hash + argv based (not target-dir
+          # based), so cache hits are preserved.
+          TARGET_DIR="${GITHUB_WORKSPACE}/target-${{ github.job }}-${{ matrix.target }}"
+          mkdir -p "${TARGET_DIR}"
+          echo "CARGO_TARGET_DIR=${TARGET_DIR}" >> "$GITHUB_ENV"
+
       - name: Isolate CARGO_HOME per job (Linux containers)
         if: steps.check.outputs.completed != 'true' && matrix.container-kind != ''
         shell: bash
         run: |
-          # Forgejo self-hosted bind-mounts the same host workspace dir into
-          # every containerized job on the host, so $GITHUB_WORKSPACE is
-          # SHARED across parallel matrix jobs on the same runs-on label.
-          # Round 2 used $GITHUB_WORKSPACE/.cargo-home and parallel jobs
-          # raced on the single sccache binary (ENOENT on cargo spawn).
-          # Include github.job AND matrix.target to get a path that is
-          # unique for every matrix entry across both build-wheels and
-          # build-napi. Still durable for the whole job; no race.
+          # setup-rust defaults CARGO_HOME to $RUNNER_TOOL_CACHE/cargo (host-
+          # shared) and /tmp isn't reliably durable inside Forgejo job
+          # containers. $GITHUB_WORKSPACE is the host-bind-mounted checkout
+          # dir and persists for the whole job. Include github.job +
+          # matrix.target so sequential matrix entries don't carry stale
+          # sccache binaries from a previous entry's $CARGO_HOME/bin.
           CARGO_HOME_DIR="${GITHUB_WORKSPACE}/.cargo-home-${{ github.job }}-${{ matrix.target }}"
           mkdir -p "${CARGO_HOME_DIR}"
           echo "CARGO_HOME=${CARGO_HOME_DIR}" >> "$GITHUB_ENV"
