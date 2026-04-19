@@ -734,8 +734,7 @@ impl CandleLlmProvider {
                 let prompt_token_count = engine
                     .tokenizer
                     .encode(prompt.as_str(), true)
-                    .map(|enc| enc.get_ids().len())
-                    .unwrap_or(0);
+                    .map_or(0, |enc| enc.get_ids().len());
 
                 let (text, completion_tokens) =
                     engine::generate(engine, &prompt, max_tokens, temperature, top_p)?;
