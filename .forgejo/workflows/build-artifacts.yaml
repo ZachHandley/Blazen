@@ -354,6 +354,29 @@ jobs:
         shell: bash
         run: uv run --no-project python scripts/stamp-version.py ${{ needs.version.outputs.version }}
 
+      - name: DIAGNOSTIC - sccache state immediately before wheels build
+        if: steps.check.outputs.completed != 'true' && runner.os != 'Windows'
+        shell: bash
+        run: |
+          echo "=== env dump ==="
+          echo "RUSTC_WRAPPER=[${RUSTC_WRAPPER:-UNSET}] len=${#RUSTC_WRAPPER}"
+          printf 'RUSTC_WRAPPER hex: '; printf '%s' "${RUSTC_WRAPPER:-}" | od -c | head -3
+          echo "CARGO_HOME=[${CARGO_HOME:-UNSET}]"
+          echo "CARGO_TARGET_DIR=[${CARGO_TARGET_DIR:-UNSET}]"
+          echo "PATH=${PATH}"
+          echo "=== expected sccache path ==="
+          if [ -n "${RUSTC_WRAPPER:-}" ]; then
+            ls -la "${RUSTC_WRAPPER}" 2>&1 || echo "STAT FAILED: ${RUSTC_WRAPPER}"
+            file "${RUSTC_WRAPPER}" 2>&1 || true
+            "${RUSTC_WRAPPER}" --version 2>&1 || echo "INVOKE FAILED via RUSTC_WRAPPER"
+          fi
+          echo "=== CARGO_HOME/bin listing ==="
+          ls -la "${CARGO_HOME:-/nonexistent}/bin/" 2>&1 || true
+          echo "=== pgrep sccache ==="
+          pgrep -a sccache 2>&1 || echo "no sccache processes found"
+          echo "=== find all sccache on host ==="
+          find / -name sccache -type f 2>/dev/null | head -20 || true
+
       - name: Build wheels (non-Windows)
         if: steps.check.outputs.completed != 'true' && runner.os != 'Windows'
         shell: bash
@@ -827,6 +850,29 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         shell: bash
         run: pnpm install
+
+      - name: DIAGNOSTIC - sccache state immediately before napi build
+        if: steps.check.outputs.completed != 'true' && runner.os != 'Windows'
+        shell: bash
+        run: |
+          echo "=== env dump ==="
+          echo "RUSTC_WRAPPER=[${RUSTC_WRAPPER:-UNSET}] len=${#RUSTC_WRAPPER}"
+          printf 'RUSTC_WRAPPER hex: '; printf '%s' "${RUSTC_WRAPPER:-}" | od -c | head -3
+          echo "CARGO_HOME=[${CARGO_HOME:-UNSET}]"
+          echo "CARGO_TARGET_DIR=[${CARGO_TARGET_DIR:-UNSET}]"
+          echo "PATH=${PATH}"
+          echo "=== expected sccache path ==="
+          if [ -n "${RUSTC_WRAPPER:-}" ]; then
+            ls -la "${RUSTC_WRAPPER}" 2>&1 || echo "STAT FAILED: ${RUSTC_WRAPPER}"
+            file "${RUSTC_WRAPPER}" 2>&1 || true
+            "${RUSTC_WRAPPER}" --version 2>&1 || echo "INVOKE FAILED via RUSTC_WRAPPER"
+          fi
+          echo "=== CARGO_HOME/bin listing ==="
+          ls -la "${CARGO_HOME:-/nonexistent}/bin/" 2>&1 || true
+          echo "=== pgrep sccache ==="
+          pgrep -a sccache 2>&1 || echo "no sccache processes found"
+          echo "=== find all sccache on host ==="
+          find / -name sccache -type f 2>/dev/null | head -20 || true
 
       - name: Build napi binary (non-Windows)
         if: steps.check.outputs.completed != 'true' && runner.os != 'Windows'
