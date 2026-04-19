@@ -238,6 +238,14 @@ jobs:
           toolset: "14.4"
           install-if-missing: "true"
 
+      - name: Install LLVM (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        uses: https://github.com/KyleMayes/install-llvm-action@v2
+        with:
+          version: "17.0"
+          directory: ${{ runner.temp }}/llvm
+          env: true
+
       - name: Setup Ninja (Windows)
         if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
         uses: https://forge.blackleafdigital.com/Public/actions/setup-ninja@main
@@ -251,16 +259,17 @@ jobs:
         if: steps.check.outputs.completed != 'true' && matrix.container-kind != ''
         shell: bash
         run: |
-          # setup-rust defaults CARGO_HOME to $RUNNER_TOOL_CACHE/cargo, a
-          # host-shared path that parallel matrix jobs race on (sccache
-          # reinstall -> another job's cargo spawn hits ENOENT). Round 1
-          # used $RUNNER_TEMP, but the sccache binary still disappeared
-          # between setup-rust and the build step on this runner -- /tmp
-          # inside a Forgejo job container isn't reliably durable across
-          # every step. $GITHUB_WORKSPACE is the host-bind-mounted checkout
-          # dir and persists for the whole job, so put CARGO_HOME there.
-          mkdir -p "${GITHUB_WORKSPACE}/.cargo-home"
-          echo "CARGO_HOME=${GITHUB_WORKSPACE}/.cargo-home" >> "$GITHUB_ENV"
+          # Forgejo self-hosted bind-mounts the same host workspace dir into
+          # every containerized job on the host, so $GITHUB_WORKSPACE is
+          # SHARED across parallel matrix jobs on the same runs-on label.
+          # Round 2 used $GITHUB_WORKSPACE/.cargo-home and parallel jobs
+          # raced on the single sccache binary (ENOENT on cargo spawn).
+          # Include github.job AND matrix.target to get a path that is
+          # unique for every matrix entry across both build-wheels and
+          # build-napi. Still durable for the whole job; no race.
+          CARGO_HOME_DIR="${GITHUB_WORKSPACE}/.cargo-home-${{ github.job }}-${{ matrix.target }}"
+          mkdir -p "${CARGO_HOME_DIR}"
+          echo "CARGO_HOME=${CARGO_HOME_DIR}" >> "$GITHUB_ENV"
 
       - name: Setup Rust
         if: steps.check.outputs.completed != 'true'
@@ -694,6 +703,14 @@ jobs:
           toolset: "14.4"
           install-if-missing: "true"
 
+      - name: Install LLVM (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        uses: https://github.com/KyleMayes/install-llvm-action@v2
+        with:
+          version: "17.0"
+          directory: ${{ runner.temp }}/llvm
+          env: true
+
       - name: Setup Ninja (Windows)
         if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
         uses: https://forge.blackleafdigital.com/Public/actions/setup-ninja@main
@@ -707,16 +724,17 @@ jobs:
         if: steps.check.outputs.completed != 'true' && matrix.container-kind != ''
         shell: bash
         run: |
-          # setup-rust defaults CARGO_HOME to $RUNNER_TOOL_CACHE/cargo, a
-          # host-shared path that parallel matrix jobs race on (sccache
-          # reinstall -> another job's cargo spawn hits ENOENT). Round 1
-          # used $RUNNER_TEMP, but the sccache binary still disappeared
-          # between setup-rust and the build step on this runner -- /tmp
-          # inside a Forgejo job container isn't reliably durable across
-          # every step. $GITHUB_WORKSPACE is the host-bind-mounted checkout
-          # dir and persists for the whole job, so put CARGO_HOME there.
-          mkdir -p "${GITHUB_WORKSPACE}/.cargo-home"
-          echo "CARGO_HOME=${GITHUB_WORKSPACE}/.cargo-home" >> "$GITHUB_ENV"
+          # Forgejo self-hosted bind-mounts the same host workspace dir into
+          # every containerized job on the host, so $GITHUB_WORKSPACE is
+          # SHARED across parallel matrix jobs on the same runs-on label.
+          # Round 2 used $GITHUB_WORKSPACE/.cargo-home and parallel jobs
+          # raced on the single sccache binary (ENOENT on cargo spawn).
+          # Include github.job AND matrix.target to get a path that is
+          # unique for every matrix entry across both build-wheels and
+          # build-napi. Still durable for the whole job; no race.
+          CARGO_HOME_DIR="${GITHUB_WORKSPACE}/.cargo-home-${{ github.job }}-${{ matrix.target }}"
+          mkdir -p "${CARGO_HOME_DIR}"
+          echo "CARGO_HOME=${CARGO_HOME_DIR}" >> "$GITHUB_ENV"
 
       - name: Setup Rust
         if: steps.check.outputs.completed != 'true'
