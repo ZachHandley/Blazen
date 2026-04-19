@@ -88,6 +88,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          clean: false
 
       - name: Check step status
         id: check
@@ -448,6 +450,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          clean: false
 
       - name: Check step status
         id: check
@@ -566,6 +570,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          clean: false
 
       - name: Check step status
         id: check
@@ -901,6 +907,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          clean: false
 
       - name: Check step status
         id: check
