@@ -211,6 +211,14 @@ jobs:
           echo "CC_aarch64_unknown_linux_musl=/usr/local/bin/aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
           echo "CXX_aarch64_unknown_linux_musl=/usr/local/bin/aarch64-linux-musl-g++" >> "$GITHUB_ENV"
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/usr/local/bin/aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
+          # Force host build.rs binaries to be dynamically linked so bindgen
+          # (via libloading -> dlopen) can load /usr/lib/llvm17/lib/libclang.so
+          # at build time. Without this, Alpine's musl rustc produces static
+          # host binaries whose dlopen stub returns "Dynamic loading not
+          # supported", breaking every bindgen-based build.rs (llama-cpp-sys-2,
+          # etc.). Target rustflags are already set by setup-rust via
+          # CARGO_ENCODED_RUSTFLAGS; this pins the HOST side too.
+          echo "CARGO_HOST_RUSTFLAGS=-C target-feature=-crt-static" >> "$GITHUB_ENV"
 
       - name: Install system deps (macOS)
         if: steps.check.outputs.completed != 'true' && runner.os == 'macOS'
@@ -639,6 +647,14 @@ jobs:
           echo "CC_aarch64_unknown_linux_musl=/usr/local/bin/aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
           echo "CXX_aarch64_unknown_linux_musl=/usr/local/bin/aarch64-linux-musl-g++" >> "$GITHUB_ENV"
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/usr/local/bin/aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
+          # Force host build.rs binaries to be dynamically linked so bindgen
+          # (via libloading -> dlopen) can load /usr/lib/llvm17/lib/libclang.so
+          # at build time. Without this, Alpine's musl rustc produces static
+          # host binaries whose dlopen stub returns "Dynamic loading not
+          # supported", breaking every bindgen-based build.rs (llama-cpp-sys-2,
+          # etc.). Target rustflags are already set by setup-rust via
+          # CARGO_ENCODED_RUSTFLAGS; this pins the HOST side too.
+          echo "CARGO_HOST_RUSTFLAGS=-C target-feature=-crt-static" >> "$GITHUB_ENV"
 
       - name: Install system deps (macOS)
         if: steps.check.outputs.completed != 'true' && runner.os == 'macOS'
