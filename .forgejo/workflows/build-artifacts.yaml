@@ -251,15 +251,16 @@ jobs:
         if: steps.check.outputs.completed != 'true' && matrix.container-kind != ''
         shell: bash
         run: |
-          # Forgejo matrix jobs share /opt/hostedtoolcache as a host bind
-          # mount. setup-rust defaults CARGO_HOME=$RUNNER_TOOL_CACHE/cargo and
-          # installs sccache into $CARGO_HOME/bin; parallel jobs race on that
-          # path and another job's cargo spawn can hit "No such file or
-          # directory (os error 2)" during the reinstall window. $RUNNER_TEMP
-          # is per-job, so pinning CARGO_HOME there gives each container its
-          # own sccache copy and eliminates the race.
-          mkdir -p "${RUNNER_TEMP}/cargo-home"
-          echo "CARGO_HOME=${RUNNER_TEMP}/cargo-home" >> "$GITHUB_ENV"
+          # setup-rust defaults CARGO_HOME to $RUNNER_TOOL_CACHE/cargo, a
+          # host-shared path that parallel matrix jobs race on (sccache
+          # reinstall -> another job's cargo spawn hits ENOENT). Round 1
+          # used $RUNNER_TEMP, but the sccache binary still disappeared
+          # between setup-rust and the build step on this runner -- /tmp
+          # inside a Forgejo job container isn't reliably durable across
+          # every step. $GITHUB_WORKSPACE is the host-bind-mounted checkout
+          # dir and persists for the whole job, so put CARGO_HOME there.
+          mkdir -p "${GITHUB_WORKSPACE}/.cargo-home"
+          echo "CARGO_HOME=${GITHUB_WORKSPACE}/.cargo-home" >> "$GITHUB_ENV"
 
       - name: Setup Rust
         if: steps.check.outputs.completed != 'true'
@@ -332,17 +333,6 @@ jobs:
       - name: Build wheels (non-Windows)
         if: steps.check.outputs.completed != 'true' && runner.os != 'Windows'
         shell: bash
-        env:
-          # Alpine musl rustc produces static host build.rs binaries whose
-          # dlopen stub returns "Dynamic loading not supported", breaking
-          # every bindgen-based build.rs (llama-cpp-sys-2 -> libclang via
-          # dlopen). $GITHUB_ENV writes don't reach cargo through uvx ->
-          # maturin on this runner (see alpine alias step comment). Step
-          # env: is injected by the runner onto the step process directly;
-          # maturin's own command dump (env -u CARGO ...) shows it only
-          # explicit-unsets CARGO and explicit-sets a whitelist, so any
-          # other inherited env var reaches cargo.
-          CARGO_HOST_RUSTFLAGS: ${{ matrix.container-kind == 'alpine' && '-C target-feature=-crt-static' || '' }}
         run: |
           INTERPRETERS=""
           for V in 3.10 3.11 3.12 3.13 3.14; do
@@ -353,9 +343,22 @@ jobs:
           if [ -n "${{ matrix.manylinux }}" ]; then
             MANYLINUX_FLAG="--manylinux ${{ matrix.manylinux }}"
           fi
+          # On stable cargo, RUSTFLAGS does NOT apply to build.rs scripts when
+          # --target is passed explicitly; [host] rustflags / CARGO_HOST_RUSTFLAGS
+          # are nightly-only. On alpine aarch64-musl the host triple already
+          # equals the matrix target (aarch64-unknown-linux-musl), so drop
+          # --target and export RUSTFLAGS -- cargo unifies host+target
+          # compilation and the flag reaches build.rs, making the host binary
+          # dynamically linked so bindgen can dlopen libclang (llama-cpp-sys-2
+          # etc.). Non-alpine Linux targets still cross-compile, keep --target.
+          TARGET_FLAG="--target ${{ matrix.target }}"
+          if [[ "${{ matrix.container-kind }}" == "alpine" ]]; then
+            export RUSTFLAGS="-C target-feature=-crt-static"
+            TARGET_FLAG=""
+          fi
           uvx maturin build --release \
             -m crates/blazen-py/Cargo.toml \
-            --target ${{ matrix.target }} \
+            $TARGET_FLAG \
             $MANYLINUX_FLAG \
             $INTERPRETERS
 
@@ -704,15 +707,16 @@ jobs:
         if: steps.check.outputs.completed != 'true' && matrix.container-kind != ''
         shell: bash
         run: |
-          # Forgejo matrix jobs share /opt/hostedtoolcache as a host bind
-          # mount. setup-rust defaults CARGO_HOME=$RUNNER_TOOL_CACHE/cargo and
-          # installs sccache into $CARGO_HOME/bin; parallel jobs race on that
-          # path and another job's cargo spawn can hit "No such file or
-          # directory (os error 2)" during the reinstall window. $RUNNER_TEMP
-          # is per-job, so pinning CARGO_HOME there gives each container its
-          # own sccache copy and eliminates the race.
-          mkdir -p "${RUNNER_TEMP}/cargo-home"
-          echo "CARGO_HOME=${RUNNER_TEMP}/cargo-home" >> "$GITHUB_ENV"
+          # setup-rust defaults CARGO_HOME to $RUNNER_TOOL_CACHE/cargo, a
+          # host-shared path that parallel matrix jobs race on (sccache
+          # reinstall -> another job's cargo spawn hits ENOENT). Round 1
+          # used $RUNNER_TEMP, but the sccache binary still disappeared
+          # between setup-rust and the build step on this runner -- /tmp
+          # inside a Forgejo job container isn't reliably durable across
+          # every step. $GITHUB_WORKSPACE is the host-bind-mounted checkout
+          # dir and persists for the whole job, so put CARGO_HOME there.
+          mkdir -p "${GITHUB_WORKSPACE}/.cargo-home"
+          echo "CARGO_HOME=${GITHUB_WORKSPACE}/.cargo-home" >> "$GITHUB_ENV"
 
       - name: Setup Rust
         if: steps.check.outputs.completed != 'true'
@@ -777,15 +781,19 @@ jobs:
       - name: Build napi binary (non-Windows)
         if: steps.check.outputs.completed != 'true' && runner.os != 'Windows'
         shell: bash
-        env:
-          # See "Build wheels (non-Windows)" above for the full rationale.
-          # Same host-rustflags workaround for alpine musl bindgen dlopen.
-          CARGO_HOST_RUSTFLAGS: ${{ matrix.container-kind == 'alpine' && '-C target-feature=-crt-static' || '' }}
         run: |
+          # See "Build wheels (non-Windows)" above for the full rationale on
+          # dropping --target for alpine (host == target, rustflags unify,
+          # build.rs becomes dynamic, bindgen dlopen works).
+          TARGET_FLAG="--target ${{ matrix.target }}"
+          if [[ "${{ matrix.container-kind }}" == "alpine" ]]; then
+            export RUSTFLAGS="-C target-feature=-crt-static"
+            TARGET_FLAG=""
+          fi
           pnpm --filter blazen exec napi build \
             --release \
             --platform \
-            --target ${{ matrix.target }} \
+            $TARGET_FLAG \
             --features local-all \
             --js index.js
 
