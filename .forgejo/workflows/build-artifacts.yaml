@@ -211,14 +211,6 @@ jobs:
           echo "CC_aarch64_unknown_linux_musl=/usr/local/bin/aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
           echo "CXX_aarch64_unknown_linux_musl=/usr/local/bin/aarch64-linux-musl-g++" >> "$GITHUB_ENV"
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/usr/local/bin/aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
-          # Force host build.rs binaries to be dynamically linked so bindgen
-          # (via libloading -> dlopen) can load /usr/lib/llvm17/lib/libclang.so
-          # at build time. Without this, Alpine's musl rustc produces static
-          # host binaries whose dlopen stub returns "Dynamic loading not
-          # supported", breaking every bindgen-based build.rs (llama-cpp-sys-2,
-          # etc.). Target rustflags are already set by setup-rust via
-          # CARGO_ENCODED_RUSTFLAGS; this pins the HOST side too.
-          echo "CARGO_HOST_RUSTFLAGS=-C target-feature=-crt-static" >> "$GITHUB_ENV"
 
       - name: Install system deps (macOS)
         if: steps.check.outputs.completed != 'true' && runner.os == 'macOS'
@@ -254,6 +246,20 @@ jobs:
         if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
         shell: bash
         run: echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
+
+      - name: Isolate CARGO_HOME per job (Linux containers)
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind != ''
+        shell: bash
+        run: |
+          # Forgejo matrix jobs share /opt/hostedtoolcache as a host bind
+          # mount. setup-rust defaults CARGO_HOME=$RUNNER_TOOL_CACHE/cargo and
+          # installs sccache into $CARGO_HOME/bin; parallel jobs race on that
+          # path and another job's cargo spawn can hit "No such file or
+          # directory (os error 2)" during the reinstall window. $RUNNER_TEMP
+          # is per-job, so pinning CARGO_HOME there gives each container its
+          # own sccache copy and eliminates the race.
+          mkdir -p "${RUNNER_TEMP}/cargo-home"
+          echo "CARGO_HOME=${RUNNER_TEMP}/cargo-home" >> "$GITHUB_ENV"
 
       - name: Setup Rust
         if: steps.check.outputs.completed != 'true'
@@ -326,6 +332,17 @@ jobs:
       - name: Build wheels (non-Windows)
         if: steps.check.outputs.completed != 'true' && runner.os != 'Windows'
         shell: bash
+        env:
+          # Alpine musl rustc produces static host build.rs binaries whose
+          # dlopen stub returns "Dynamic loading not supported", breaking
+          # every bindgen-based build.rs (llama-cpp-sys-2 -> libclang via
+          # dlopen). $GITHUB_ENV writes don't reach cargo through uvx ->
+          # maturin on this runner (see alpine alias step comment). Step
+          # env: is injected by the runner onto the step process directly;
+          # maturin's own command dump (env -u CARGO ...) shows it only
+          # explicit-unsets CARGO and explicit-sets a whitelist, so any
+          # other inherited env var reaches cargo.
+          CARGO_HOST_RUSTFLAGS: ${{ matrix.container-kind == 'alpine' && '-C target-feature=-crt-static' || '' }}
         run: |
           INTERPRETERS=""
           for V in 3.10 3.11 3.12 3.13 3.14; do
@@ -647,14 +664,6 @@ jobs:
           echo "CC_aarch64_unknown_linux_musl=/usr/local/bin/aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
           echo "CXX_aarch64_unknown_linux_musl=/usr/local/bin/aarch64-linux-musl-g++" >> "$GITHUB_ENV"
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/usr/local/bin/aarch64-linux-musl-gcc" >> "$GITHUB_ENV"
-          # Force host build.rs binaries to be dynamically linked so bindgen
-          # (via libloading -> dlopen) can load /usr/lib/llvm17/lib/libclang.so
-          # at build time. Without this, Alpine's musl rustc produces static
-          # host binaries whose dlopen stub returns "Dynamic loading not
-          # supported", breaking every bindgen-based build.rs (llama-cpp-sys-2,
-          # etc.). Target rustflags are already set by setup-rust via
-          # CARGO_ENCODED_RUSTFLAGS; this pins the HOST side too.
-          echo "CARGO_HOST_RUSTFLAGS=-C target-feature=-crt-static" >> "$GITHUB_ENV"
 
       - name: Install system deps (macOS)
         if: steps.check.outputs.completed != 'true' && runner.os == 'macOS'
@@ -690,6 +699,20 @@ jobs:
         if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
         shell: bash
         run: echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
+
+      - name: Isolate CARGO_HOME per job (Linux containers)
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind != ''
+        shell: bash
+        run: |
+          # Forgejo matrix jobs share /opt/hostedtoolcache as a host bind
+          # mount. setup-rust defaults CARGO_HOME=$RUNNER_TOOL_CACHE/cargo and
+          # installs sccache into $CARGO_HOME/bin; parallel jobs race on that
+          # path and another job's cargo spawn can hit "No such file or
+          # directory (os error 2)" during the reinstall window. $RUNNER_TEMP
+          # is per-job, so pinning CARGO_HOME there gives each container its
+          # own sccache copy and eliminates the race.
+          mkdir -p "${RUNNER_TEMP}/cargo-home"
+          echo "CARGO_HOME=${RUNNER_TEMP}/cargo-home" >> "$GITHUB_ENV"
 
       - name: Setup Rust
         if: steps.check.outputs.completed != 'true'
@@ -754,6 +777,10 @@ jobs:
       - name: Build napi binary (non-Windows)
         if: steps.check.outputs.completed != 'true' && runner.os != 'Windows'
         shell: bash
+        env:
+          # See "Build wheels (non-Windows)" above for the full rationale.
+          # Same host-rustflags workaround for alpine musl bindgen dlopen.
+          CARGO_HOST_RUSTFLAGS: ${{ matrix.container-kind == 'alpine' && '-C target-feature=-crt-static' || '' }}
         run: |
           pnpm --filter blazen exec napi build \
             --release \
