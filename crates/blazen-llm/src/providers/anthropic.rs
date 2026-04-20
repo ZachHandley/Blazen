@@ -1099,15 +1099,13 @@ fn parse_anthropic_event(
                     }));
                 }
             }
-            StreamEvent::MessageDelta { delta, .. } => {
-                if delta.stop_reason.is_some() {
-                    return Some(Ok(StreamChunk {
-                        delta: None,
-                        tool_calls: Vec::new(),
-                        finish_reason: delta.stop_reason,
-                        ..Default::default()
-                    }));
-                }
+            StreamEvent::MessageDelta { delta, .. } if delta.stop_reason.is_some() => {
+                return Some(Ok(StreamChunk {
+                    delta: None,
+                    tool_calls: Vec::new(),
+                    finish_reason: delta.stop_reason,
+                    ..Default::default()
+                }));
             }
             StreamEvent::MessageStop => {
                 return Some(Ok(StreamChunk {
