@@ -236,6 +236,17 @@ mod tests {
                 message: message.clone(),
                 source: None,
             },
+            BlazenError::ProviderHttp(d) => {
+                BlazenError::ProviderHttp(Box::new(crate::error::ProviderHttpDetails {
+                    provider: d.provider.clone(),
+                    endpoint: d.endpoint.clone(),
+                    status: d.status,
+                    request_id: d.request_id.clone(),
+                    detail: d.detail.clone(),
+                    raw_body: d.raw_body.clone(),
+                    retry_after_ms: d.retry_after_ms,
+                }))
+            }
             other => BlazenError::Provider {
                 provider: "mock".into(),
                 message: format!("{other}"),

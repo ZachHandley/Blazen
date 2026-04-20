@@ -16,6 +16,7 @@ use base64::Engine;
 use serde_json::{Map, Value, json};
 
 use super::openai_format::parse_retry_after;
+use super::provider_http_error;
 use crate::compute::requests::SpeechRequest;
 use crate::compute::results::AudioResult;
 use crate::error::BlazenError;
@@ -48,8 +49,7 @@ const DEFAULT_RESPONSE_FORMAT: &str = "mp3";
 /// Maps HTTP responses as follows:
 /// - 401 → [`BlazenError::auth`]
 /// - 429 → [`BlazenError::RateLimit`] with `Retry-After` if present
-/// - 5xx → [`BlazenError::provider`] with the body as context
-/// - any other non-2xx → [`BlazenError::request`]
+/// - any other non-2xx → [`BlazenError::ProviderHttp`] carrying status, endpoint, body detail
 pub(crate) async fn text_to_speech_request(
     client: &dyn HttpClient,
     base_url: &str,
@@ -99,15 +99,12 @@ pub(crate) async fn text_to_speech_request(
     let response = client.send(http_request).await?;
 
     if !response.is_success() {
-        let retry_after_ms = parse_retry_after(&response.headers);
-        let error_body = response.text();
         return Err(match response.status {
             401 => BlazenError::auth("authentication failed"),
-            429 => BlazenError::RateLimit { retry_after_ms },
-            status if (500..600).contains(&status) => {
-                BlazenError::provider("openai", format!("HTTP {status}: {error_body}"))
-            }
-            status => BlazenError::request(format!("HTTP {status}: {error_body}")),
+            429 => BlazenError::RateLimit {
+                retry_after_ms: parse_retry_after(&response.headers),
+            },
+            _ => provider_http_error("openai", &url, &response),
         });
     }
 

@@ -164,10 +164,10 @@ fn add_jitter(d: Duration) -> Duration {
 
 /// Extract `retry_after_ms` from a rate-limit error.
 fn retry_after_from_error(err: &BlazenError) -> Option<u64> {
-    if let BlazenError::RateLimit { retry_after_ms } = err {
-        *retry_after_ms
-    } else {
-        None
+    match err {
+        BlazenError::RateLimit { retry_after_ms } => *retry_after_ms,
+        BlazenError::ProviderHttp(d) => d.retry_after_ms,
+        _ => None,
     }
 }
 
@@ -378,6 +378,17 @@ mod tests {
                 message: message.clone(),
                 status_code: *status_code,
             },
+            BlazenError::ProviderHttp(d) => {
+                BlazenError::ProviderHttp(Box::new(crate::error::ProviderHttpDetails {
+                    provider: d.provider.clone(),
+                    endpoint: d.endpoint.clone(),
+                    status: d.status,
+                    request_id: d.request_id.clone(),
+                    detail: d.detail.clone(),
+                    raw_body: d.raw_body.clone(),
+                    retry_after_ms: d.retry_after_ms,
+                }))
+            }
             _ => BlazenError::request("unknown mock error"),
         }
     }

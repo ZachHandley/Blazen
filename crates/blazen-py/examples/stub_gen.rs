@@ -37,7 +37,165 @@ fn main() {
         .join("blazen.pyi");
     let content = fs::read_to_string(&pyi_path).expect("failed to read blazen.pyi");
     let processed = rewrite_coroutine_to_async(&content);
+    let processed = inject_exception_stubs(&processed);
     fs::write(&pyi_path, processed).expect("failed to write blazen.pyi");
+}
+
+/// Inject stub declarations for the 10 Blazen exception classes.
+///
+/// `pyo3::create_exception!` produces runtime-only Python exception classes
+/// that are invisible to `pyo3-stub-gen`. Without this injection step, the
+/// generated `blazen.pyi` would not declare `BlazenError`, `AuthError`,
+/// `ProviderError`, etc., which breaks IDE autocompletion and type checking
+/// for any code that does `except ProviderError as e: e.status`.
+///
+/// This function:
+/// 1. Inserts a hand-written block of class declarations AFTER the
+///    `__all__ = [...]` list, mirroring the hierarchy from
+///    `crates/blazen-py/src/error.rs`.
+/// 2. Adds the exception class names into `__all__` alphabetically.
+///
+/// `ProviderError` attributes (`provider`, `status`, etc.) are set on the
+/// exception instance via `setattr` in the Rust mapper, but declared in
+/// the stub with their typed signatures so IDE completion and type
+/// checkers understand them.
+fn inject_exception_stubs(content: &str) -> String {
+    const EXCEPTION_STUBS: &str = r#"
+
+# --- Exception hierarchy ---------------------------------------------------
+# create_exception!-produced types are invisible to pyo3-stub-gen, so they
+# are hand-declared here. Inheritance mirrors src/error.rs:
+#   BlazenError <- builtins.Exception
+#   AuthError / RateLimitError / TimeoutError / ValidationError /
+#   ContentPolicyError / ProviderError / UnsupportedError /
+#   ComputeError / MediaError  <- BlazenError
+
+class BlazenError(builtins.Exception):
+    """Base class for all Blazen runtime errors."""
+    ...
+
+class AuthError(BlazenError):
+    """Authentication failed (invalid / missing API key)."""
+    ...
+
+class RateLimitError(BlazenError):
+    """Provider rate-limited the request."""
+    ...
+
+class TimeoutError(BlazenError):
+    """The operation timed out."""
+    ...
+
+class ValidationError(BlazenError):
+    """Invalid input rejected before the provider round-trip."""
+    ...
+
+class ContentPolicyError(BlazenError):
+    """Provider rejected the request for policy reasons."""
+    ...
+
+class ProviderError(BlazenError):
+    """Provider-side error. For HTTP failures, structured attributes are
+    populated via `setattr` on the exception instance:
+    - `provider`: str (e.g. "fal", "openrouter")
+    - `status`: int | None (HTTP status, None for non-HTTP provider errors)
+    - `endpoint`: str | None (request URL)
+    - `request_id`: str | None (x-fal-request-id / x-request-id if present)
+    - `detail`: str | None (parsed from JSON error body)
+    - `raw_body`: str | None (response body, capped at 4 KiB)
+    - `retry_after_ms`: int | None (parsed Retry-After header)
+    """
+    provider: str
+    status: typing.Optional[int]
+    endpoint: typing.Optional[str]
+    request_id: typing.Optional[str]
+    detail: typing.Optional[str]
+    raw_body: typing.Optional[str]
+    retry_after_ms: typing.Optional[int]
+
+class UnsupportedError(BlazenError):
+    """Requested capability is not supported by this provider / backend."""
+    ...
+
+class ComputeError(BlazenError):
+    """Compute job error (cancelled, quota exceeded, etc)."""
+    ...
+
+class MediaError(BlazenError):
+    """Media handling error (invalid input, size exceeded, etc)."""
+    ...
+"#;
+
+    // Insert exception names into __all__ alphabetically. Existing __all__
+    // entries come from pyo3-stub-gen and are already sorted.
+    const EXTRA_ALL_NAMES: &[&str] = &[
+        "AuthError",
+        "BlazenError",
+        "ComputeError",
+        "ContentPolicyError",
+        "MediaError",
+        "ProviderError",
+        "RateLimitError",
+        "TimeoutError",
+        "UnsupportedError",
+        "ValidationError",
+    ];
+
+    let with_all = inject_into_all(content, EXTRA_ALL_NAMES);
+
+    // Append the class-stub block at the end of the file.
+    format!("{}{}", with_all.trim_end(), EXCEPTION_STUBS)
+}
+
+/// Insert `extras` into the existing `__all__ = [...]` block, keeping the
+/// list alphabetically sorted. Each name is wrapped in double quotes and
+/// matched case-sensitively.
+fn inject_into_all(content: &str, extras: &[&str]) -> String {
+    let Some(start) = content.find("__all__ = [") else {
+        return content.to_string();
+    };
+    let Some(end_rel) = content[start..].find("]") else {
+        return content.to_string();
+    };
+    let end = start + end_rel;
+
+    let block = &content[start..end];
+    // Extract existing quoted names.
+    let mut names: Vec<String> = Vec::new();
+    for piece in block.split(',') {
+        let trimmed = piece.trim().trim_matches(|c: char| c == '[' || c == ']');
+        let trimmed = trimmed
+            .trim_start_matches("__all__")
+            .trim_start_matches(" = [");
+        let trimmed = trimmed.trim();
+        if trimmed.starts_with('"') && trimmed.len() >= 2 {
+            let inner = &trimmed[1..trimmed.len() - 1];
+            if !inner.is_empty() {
+                names.push(inner.to_string());
+            }
+        }
+    }
+
+    for extra in extras {
+        if !names.iter().any(|n| n == extra) {
+            names.push((*extra).to_string());
+        }
+    }
+    names.sort();
+
+    // Rebuild the __all__ block with 4-space indentation matching the
+    // existing format.
+    let mut rebuilt = String::from("__all__ = [\n");
+    for n in &names {
+        rebuilt.push_str(&format!("    \"{n}\",\n"));
+    }
+    rebuilt.push(']');
+
+    let mut result = String::with_capacity(content.len() + 256);
+    result.push_str(&content[..start]);
+    result.push_str(&rebuilt);
+    result.push_str(&content[end + 1..]);
+    result
 }
 
 /// Rewrite `def method(...) -> typing.Coroutine[typing.Any, typing.Any, T]:`

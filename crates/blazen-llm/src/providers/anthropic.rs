@@ -21,6 +21,7 @@ use serde::Deserialize;
 use tracing::{debug, warn};
 
 use super::openai_format::parse_retry_after;
+use super::{provider_http_error, provider_http_error_parts};
 use crate::error::BlazenError;
 use crate::http::{ByteStream, HttpClient, HttpRequest, HttpResponse};
 use crate::traits::{ModelCapabilities, ModelInfo, ModelRegistry};
@@ -415,15 +416,16 @@ impl AnthropicProvider {
             return Ok(response);
         }
 
-        // Extract Retry-After before inspecting the body.
-        let retry_after_ms = parse_retry_after(&response.headers);
-        let error_body = response.text();
-
         match response.status {
             401 => Err(BlazenError::auth("authentication failed")),
-            404 => Err(BlazenError::model_not_found(error_body)),
-            429 => Err(BlazenError::RateLimit { retry_after_ms }),
-            status => Err(BlazenError::request(format!("HTTP {status}: {error_body}"))),
+            404 => Err(BlazenError::model_not_found(response.text())),
+            429 => Err(BlazenError::RateLimit {
+                retry_after_ms: parse_retry_after(&response.headers),
+            }),
+            _ => {
+                let url = format!("{}/messages", self.base_url);
+                Err(provider_http_error("anthropic", &url, &response))
+            }
         }
     }
 }
@@ -771,13 +773,24 @@ impl crate::traits::CompletionModel for AnthropicProvider {
         let (status, headers, byte_stream) = self.client.send_streaming(http_request).await?;
 
         if !(200..300).contains(&status) {
-            let retry_after_ms = parse_retry_after(&headers);
-            let error_body = String::from("streaming error");
             match status {
                 401 => return Err(BlazenError::auth("authentication failed")),
-                404 => return Err(BlazenError::model_not_found(error_body)),
-                429 => return Err(BlazenError::RateLimit { retry_after_ms }),
-                _ => return Err(BlazenError::request(format!("HTTP {status}: {error_body}"))),
+                404 => return Err(BlazenError::model_not_found("streaming error")),
+                429 => {
+                    return Err(BlazenError::RateLimit {
+                        retry_after_ms: parse_retry_after(&headers),
+                    });
+                }
+                _ => {
+                    let url = format!("{}/messages", self.base_url);
+                    return Err(provider_http_error_parts(
+                        "anthropic",
+                        &url,
+                        status,
+                        &headers,
+                        "",
+                    ));
+                }
             }
         }
 
@@ -817,11 +830,7 @@ impl ModelRegistry for AnthropicProvider {
         let response = self.client.send(request).await?;
 
         if !response.is_success() {
-            let error_body = response.text();
-            return Err(BlazenError::request(format!(
-                "HTTP {}: {error_body}",
-                response.status
-            )));
+            return Err(provider_http_error("anthropic", &url, &response));
         }
 
         let list: AnthropicModelsResponse = response

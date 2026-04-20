@@ -53,6 +53,7 @@ use serde::Deserialize;
 use tracing::{debug, warn};
 
 use super::openai_format::parse_retry_after;
+use super::{provider_http_error, provider_http_error_parts};
 use crate::compute::{
     AudioGeneration, AudioResult, BackgroundRemoval, BackgroundRemovalRequest, ComputeProvider,
     ComputeRequest, ComputeResult, ImageGeneration, ImageRequest, ImageResult, JobHandle,
@@ -1205,19 +1206,6 @@ impl FalProvider {
     }
 
     // -----------------------------------------------------------------------
-    // Shared HTTP helpers
-    // -----------------------------------------------------------------------
-
-    /// Map an HTTP error response to the appropriate `BlazenError`.
-    fn map_http_error(status: u16, body: &str, retry_after_ms: Option<u64>) -> BlazenError {
-        match status {
-            401 => BlazenError::auth("authentication failed"),
-            429 => BlazenError::RateLimit { retry_after_ms },
-            _ => BlazenError::request(format!("HTTP {status}: {body}")),
-        }
-    }
-
-    // -----------------------------------------------------------------------
     // Sync execution (for CompletionModel)
     // -----------------------------------------------------------------------
 
@@ -1233,13 +1221,13 @@ impl FalProvider {
         let response = self.client.send(request).await?;
 
         if !response.is_success() {
-            let retry_after_ms = parse_retry_after(&response.headers);
-            let error_body = response.text();
-            return Err(Self::map_http_error(
-                response.status,
-                &error_body,
-                retry_after_ms,
-            ));
+            return Err(match response.status {
+                401 => BlazenError::auth("authentication failed"),
+                429 => BlazenError::RateLimit {
+                    retry_after_ms: parse_retry_after(&response.headers),
+                },
+                _ => provider_http_error("fal", &url, &response),
+            });
         }
 
         response
@@ -1264,11 +1252,13 @@ impl FalProvider {
         let response = self.client.send(request).await?;
 
         if !response.is_success() {
-            let error_body = response.text();
-            return Err(BlazenError::request(format!(
-                "HTTP {}: {error_body}",
-                response.status
-            )));
+            return Err(match response.status {
+                401 => BlazenError::auth("authentication failed"),
+                429 => BlazenError::RateLimit {
+                    retry_after_ms: parse_retry_after(&response.headers),
+                },
+                _ => provider_http_error("fal", &submit_url, &response),
+            });
         }
 
         // Webhook mode returns the queue submission response. The actual
@@ -1298,13 +1288,13 @@ impl FalProvider {
         let response = self.client.send(request).await?;
 
         if !response.is_success() {
-            let retry_after_ms = parse_retry_after(&response.headers);
-            let error_body = response.text();
-            return Err(Self::map_http_error(
-                response.status,
-                &error_body,
-                retry_after_ms,
-            ));
+            return Err(match response.status {
+                401 => BlazenError::auth("authentication failed"),
+                429 => BlazenError::RateLimit {
+                    retry_after_ms: parse_retry_after(&response.headers),
+                },
+                _ => provider_http_error("fal", &submit_url, &response),
+            });
         }
 
         response
@@ -1327,10 +1317,13 @@ impl FalProvider {
         let response = self.client.send(request).await?;
 
         if !response.is_success() {
-            let error_body = response.text();
-            return Err(BlazenError::request(format!(
-                "status poll failed: {error_body}"
-            )));
+            return Err(match response.status {
+                401 => BlazenError::auth("authentication failed"),
+                429 => BlazenError::RateLimit {
+                    retry_after_ms: parse_retry_after(&response.headers),
+                },
+                _ => provider_http_error("fal", &status_url, &response),
+            });
         }
 
         response
@@ -1350,10 +1343,13 @@ impl FalProvider {
         let response = self.client.send(request).await?;
 
         if !response.is_success() {
-            let error_body = response.text();
-            return Err(BlazenError::request(format!(
-                "result fetch failed: {error_body}"
-            )));
+            return Err(match response.status {
+                401 => BlazenError::auth("authentication failed"),
+                429 => BlazenError::RateLimit {
+                    retry_after_ms: parse_retry_after(&response.headers),
+                },
+                _ => provider_http_error("fal", &result_url, &response),
+            });
         }
 
         response
@@ -1470,10 +1466,13 @@ impl FalProvider {
         let response = self.client.send(request).await?;
 
         if !response.is_success() {
-            let error_body = response.text();
-            return Err(BlazenError::request(format!(
-                "status poll failed: {error_body}"
-            )));
+            return Err(match response.status {
+                401 => BlazenError::auth("authentication failed"),
+                429 => BlazenError::RateLimit {
+                    retry_after_ms: parse_retry_after(&response.headers),
+                },
+                _ => provider_http_error("fal", url, &response),
+            });
         }
 
         response
@@ -1487,10 +1486,13 @@ impl FalProvider {
         let response = self.client.send(request).await?;
 
         if !response.is_success() {
-            let error_body = response.text();
-            return Err(BlazenError::request(format!(
-                "result fetch failed: {error_body}"
-            )));
+            return Err(match response.status {
+                401 => BlazenError::auth("authentication failed"),
+                429 => BlazenError::RateLimit {
+                    retry_after_ms: parse_retry_after(&response.headers),
+                },
+                _ => provider_http_error("fal", url, &response),
+            });
         }
 
         response
@@ -1596,15 +1598,16 @@ impl FalProvider {
         let mut body = self.build_openai_chat_body(&request);
         body["stream"] = serde_json::Value::Bool(true);
         let url = format!("{}/{}", self.base_sync_url, ep.path());
-        let http_request = self.apply_auth(HttpRequest::post(url).json_body(&body)?);
+        let http_request = self.apply_auth(HttpRequest::post(&url).json_body(&body)?);
         let (status, headers, byte_stream) = self.client.send_streaming(http_request).await?;
         if !(200..300).contains(&status) {
-            let retry_after_ms = parse_retry_after(&headers);
-            return Err(Self::map_http_error(
-                status,
-                "streaming request failed",
-                retry_after_ms,
-            ));
+            return Err(match status {
+                401 => BlazenError::auth("authentication failed"),
+                429 => BlazenError::RateLimit {
+                    retry_after_ms: parse_retry_after(&headers),
+                },
+                _ => provider_http_error_parts("fal", &url, status, &headers, ""),
+            });
         }
         let parser = crate::providers::sse::SseParser::new(byte_stream);
         Ok(Box::pin(parser))
@@ -1620,10 +1623,16 @@ impl FalProvider {
     {
         let body = self.build_body(&request, ep);
         let url = format!("{}/{}/stream", self.base_sync_url, ep.path());
-        let http_request = self.apply_auth(HttpRequest::post(url).json_body(&body)?);
-        let (status, _headers, byte_stream) = self.client.send_streaming(http_request).await?;
+        let http_request = self.apply_auth(HttpRequest::post(&url).json_body(&body)?);
+        let (status, headers, byte_stream) = self.client.send_streaming(http_request).await?;
         if !(200..300).contains(&status) {
-            return Err(BlazenError::request(format!("HTTP {status}")));
+            return Err(match status {
+                401 => BlazenError::auth("authentication failed"),
+                429 => BlazenError::RateLimit {
+                    retry_after_ms: parse_retry_after(&headers),
+                },
+                _ => provider_http_error_parts("fal", &url, status, &headers, ""),
+            });
         }
         Ok(Box::pin(FalCumulativeSseStream::new(byte_stream)))
     }
@@ -2450,10 +2459,7 @@ impl ComputeProvider for FalProvider {
             return Ok(());
         }
 
-        let error_body = response.text();
-        Err(BlazenError::request(format!(
-            "cancel failed (HTTP {status}): {error_body}"
-        )))
+        Err(provider_http_error("fal", &cancel_url, &response))
     }
 }
 
@@ -3326,16 +3332,18 @@ impl crate::traits::EmbeddingModel for FalEmbeddingModel {
             "model": &self.model,
             "input": texts,
         });
-        let request = HttpRequest::post(url)
+        let request = HttpRequest::post(&url)
             .header("Authorization", format!("Key {}", self.api_key))
             .json_body(&body)?;
         let response = self.client.send(request).await?;
         if !response.is_success() {
-            return Err(BlazenError::request(format!(
-                "fal embeddings HTTP {}: {}",
-                response.status,
-                response.text()
-            )));
+            return Err(match response.status {
+                401 => BlazenError::auth("authentication failed"),
+                429 => BlazenError::RateLimit {
+                    retry_after_ms: parse_retry_after(&response.headers),
+                },
+                _ => provider_http_error("fal", &url, &response),
+            });
         }
         let raw: serde_json::Value = serde_json::from_slice(&response.body)
             .map_err(|e| BlazenError::Serialization(format!("fal embeddings parse: {e}")))?;

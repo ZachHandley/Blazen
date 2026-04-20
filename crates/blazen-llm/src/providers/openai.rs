@@ -16,6 +16,7 @@ use serde::Deserialize;
 
 use super::openai_format::{content_to_openai_value, parse_retry_after};
 use super::sse::{OaiResponse, SseParser};
+use super::{provider_http_error, provider_http_error_parts};
 use crate::error::BlazenError;
 use crate::http::{HttpClient, HttpRequest, HttpResponse};
 use crate::traits::{ModelCapabilities, ModelInfo, ModelRegistry};
@@ -251,15 +252,16 @@ impl OpenAiProvider {
             return Ok(response);
         }
 
-        // Extract Retry-After before inspecting the body.
-        let retry_after_ms = parse_retry_after(&response.headers);
-        let error_body = response.text();
-
         match response.status {
             401 => Err(BlazenError::auth("authentication failed")),
-            404 => Err(BlazenError::model_not_found(error_body)),
-            429 => Err(BlazenError::RateLimit { retry_after_ms }),
-            status => Err(BlazenError::request(format!("HTTP {status}: {error_body}"))),
+            404 => Err(BlazenError::model_not_found(response.text())),
+            429 => Err(BlazenError::RateLimit {
+                retry_after_ms: parse_retry_after(&response.headers),
+            }),
+            _ => {
+                let url = format!("{}/chat/completions", self.base_url);
+                Err(provider_http_error("openai", &url, &response))
+            }
         }
     }
 }
@@ -395,12 +397,20 @@ impl crate::traits::CompletionModel for OpenAiProvider {
         if !(200..300).contains(&status) {
             // For streaming, we need to handle errors before we start parsing.
             // Read the error from the stream is not practical; use status + headers.
-            let retry_after_ms = parse_retry_after(&headers);
             match status {
                 401 => return Err(BlazenError::auth("authentication failed")),
                 404 => return Err(BlazenError::model_not_found("model not found")),
-                429 => return Err(BlazenError::RateLimit { retry_after_ms }),
-                _ => return Err(BlazenError::request(format!("HTTP {status}"))),
+                429 => {
+                    return Err(BlazenError::RateLimit {
+                        retry_after_ms: parse_retry_after(&headers),
+                    });
+                }
+                _ => {
+                    let url = format!("{}/chat/completions", self.base_url);
+                    return Err(provider_http_error_parts(
+                        "openai", &url, status, &headers, "",
+                    ));
+                }
             }
         }
 
@@ -437,11 +447,7 @@ impl ModelRegistry for OpenAiProvider {
         let response = self.client.send(request).await?;
 
         if !response.is_success() {
-            let error_body = response.text();
-            return Err(BlazenError::request(format!(
-                "HTTP {}: {error_body}",
-                response.status
-            )));
+            return Err(provider_http_error("openai", &url, &response));
         }
 
         let list: OaiModelsResponse = response
@@ -659,20 +665,20 @@ impl crate::traits::EmbeddingModel for OpenAiEmbeddingModel {
             "input": texts,
         });
 
-        let request = HttpRequest::post(url)
+        let request = HttpRequest::post(&url)
             .bearer_auth(&self.api_key)
             .json_body(&body)?;
 
         let response = self.client.send(request).await?;
 
         if !response.is_success() {
-            let retry_after_ms = parse_retry_after(&response.headers);
-            let error_body = response.text();
             return match response.status {
                 401 => Err(BlazenError::auth("authentication failed")),
-                404 => Err(BlazenError::model_not_found(error_body)),
-                429 => Err(BlazenError::RateLimit { retry_after_ms }),
-                status => Err(BlazenError::request(format!("HTTP {status}: {error_body}"))),
+                404 => Err(BlazenError::model_not_found(response.text())),
+                429 => Err(BlazenError::RateLimit {
+                    retry_after_ms: parse_retry_after(&response.headers),
+                }),
+                _ => Err(provider_http_error("openai", &url, &response)),
             };
         }
 

@@ -21,6 +21,7 @@ use serde::Deserialize;
 use tracing::{debug, warn};
 
 use super::openai_format::parse_retry_after;
+use super::{provider_http_error, provider_http_error_parts};
 use crate::error::BlazenError;
 use crate::http::{ByteStream, HttpClient, HttpRequest, HttpResponse};
 use crate::traits::{ModelCapabilities, ModelInfo, ModelRegistry};
@@ -396,15 +397,13 @@ impl GeminiProvider {
             return Ok(response);
         }
 
-        // Extract Retry-After before inspecting the body.
-        let retry_after_ms = parse_retry_after(&response.headers);
-        let error_body = response.text();
-
         match response.status {
             401 | 403 => Err(BlazenError::auth("authentication failed")),
-            404 => Err(BlazenError::model_not_found(error_body)),
-            429 => Err(BlazenError::RateLimit { retry_after_ms }),
-            status => Err(BlazenError::request(format!("HTTP {status}: {error_body}"))),
+            404 => Err(BlazenError::model_not_found(response.text())),
+            429 => Err(BlazenError::RateLimit {
+                retry_after_ms: parse_retry_after(&response.headers),
+            }),
+            _ => Err(provider_http_error("gemini", url, &response)),
         }
     }
 }
@@ -708,12 +707,19 @@ impl crate::traits::CompletionModel for GeminiProvider {
         let (status, headers, byte_stream) = self.client.send_streaming(http_request).await?;
 
         if !(200..300).contains(&status) {
-            let retry_after_ms = parse_retry_after(&headers);
             match status {
                 401 | 403 => return Err(BlazenError::auth("authentication failed")),
                 404 => return Err(BlazenError::model_not_found("model not found")),
-                429 => return Err(BlazenError::RateLimit { retry_after_ms }),
-                _ => return Err(BlazenError::request(format!("HTTP {status}"))),
+                429 => {
+                    return Err(BlazenError::RateLimit {
+                        retry_after_ms: parse_retry_after(&headers),
+                    });
+                }
+                _ => {
+                    return Err(provider_http_error_parts(
+                        "gemini", &url, status, &headers, "",
+                    ));
+                }
             }
         }
 
@@ -739,11 +745,7 @@ impl ModelRegistry for GeminiProvider {
         let response = self.client.send(request).await?;
 
         if !response.is_success() {
-            let error_body = response.text();
-            return Err(BlazenError::request(format!(
-                "HTTP {}: {error_body}",
-                response.status
-            )));
+            return Err(provider_http_error("gemini", &url, &response));
         }
 
         let models_response: GeminiModelsResponse = response

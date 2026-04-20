@@ -362,6 +362,29 @@ jobs:
         if: steps.check.outputs.completed != 'true' && runner.os != 'Windows'
         shell: bash
         run: |
+          # openssl-src's rsaz-2k-avx512.s / aes-cfb-avx512.s fail to assemble
+          # under any C-compiler cache wrapper (`character following name is
+          # not '#'` — the wrapper's preprocessor pass mangles GAS `.s`
+          # directives). Two independent injection paths need scrubbing:
+          #
+          #   1. yum `ccache` drops compiler shims under /usr/lib{,64}/ccache
+          #      which shadow real cc via PATH. Strip those dirs.
+          #   2. `setup-rust@main` with `sccache: true` exports
+          #      RUSTC_WRAPPER=/opt/cargo/bin/sccache. cc-rs 1.2.59's
+          #      `rustc_wrapper_fallback()` (src/lib.rs:3200-3212) auto-injects
+          #      that as the C-compiler wrapper when the file_stem matches
+          #      "sccache"/"cachepot"/"buildcache" — there is no per-compile
+          #      opt-out in cc-rs. Unsetting RUSTC_WRAPPER here is the only
+          #      lever; it's step-scoped, so other jobs keep sccache.
+          #
+          # Also strip CMake launcher env vars so llama-cpp-sys-2 / aws-lc-sys
+          # don't re-forward them to sub-builds (the Windows build step does
+          # the same for the same reason).
+          PATH="$(echo ":${PATH}:" | sed -e 's#:/usr/lib/ccache:#:#g' -e 's#:/usr/lib64/ccache:#:#g' -e 's#^:##' -e 's#:$##')"
+          export PATH
+          unset CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER
+          unset RUSTC_WRAPPER
+
           INTERPRETERS=""
           for V in 3.10 3.11 3.12 3.13 3.14; do
             INTERP=$(uv python find "$V" 2>/dev/null) && INTERPRETERS="$INTERPRETERS -i $INTERP" || echo "Python $V unavailable, skipping"
@@ -840,6 +863,18 @@ jobs:
         if: steps.check.outputs.completed != 'true' && runner.os != 'Windows'
         shell: bash
         run: |
+          # Strip ccache compiler shims + CMake launcher env + unset
+          # RUSTC_WRAPPER — see Build wheels (non-Windows) for the full
+          # rationale (openssl-src `.s` asm breaks under any cc wrapper; cc-rs
+          # auto-injects $RUSTC_WRAPPER as the cc wrapper when its stem is
+          # sccache/cachepot/buildcache, per cc-rs src/lib.rs:3200-3212).
+          # Mirrors what Build napi binary (Windows) does with
+          # Remove-Item Env:CMAKE_*_COMPILER_LAUNCHER.
+          PATH="$(echo ":${PATH}:" | sed -e 's#:/usr/lib/ccache:#:#g' -e 's#:/usr/lib64/ccache:#:#g' -e 's#^:##' -e 's#:$##')"
+          export PATH
+          unset CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER
+          unset RUSTC_WRAPPER
+
           # See "Build wheels (non-Windows)" above for the full rationale on
           # dropping --target for alpine (host == target, rustflags unify,
           # build.rs becomes dynamic, bindgen dlopen works).

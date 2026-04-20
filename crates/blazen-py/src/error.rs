@@ -94,6 +94,11 @@ impl From<blazen_core::WorkflowError> for BlazenPyError {
     }
 }
 
+// NOTE: `BlazenPyError` is used only for the model-manager code path
+// (`manager.rs::load`/`unload`/`ensure_loaded`). Provider HTTP errors
+// flow through `blazen_error_to_pyerr` directly from `providers/*.rs`
+// and do NOT pass through this conversion. If that ever changes,
+// add `BlazenError::ProviderHttp(_)` handling below.
 impl From<blazen_llm::BlazenError> for BlazenPyError {
     fn from(err: blazen_llm::BlazenError) -> Self {
         match err {
@@ -116,6 +121,42 @@ impl From<serde_json::Error> for BlazenPyError {
 // BlazenError -> PyErr conversion (rich exception mapping)
 // ---------------------------------------------------------------------------
 
+/// Construct a `ProviderError` exception with structured attributes attached
+/// via `setattr`. Keeps the existing `create_exception!` class hierarchy
+/// (`BlazenError -> ProviderError`) while giving Python callers typed
+/// attribute access: `e.provider`, `e.status`, `e.endpoint`, `e.request_id`,
+/// `e.detail`, `e.raw_body`, `e.retry_after_ms`.
+///
+/// Attributes that don't apply (e.g. `status` on a non-HTTP `Provider`)
+/// are set to `None`.
+#[allow(clippy::too_many_arguments)]
+fn build_provider_error(
+    message: String,
+    provider: String,
+    status: Option<u16>,
+    endpoint: Option<String>,
+    request_id: Option<String>,
+    detail: Option<String>,
+    raw_body: Option<String>,
+    retry_after_ms: Option<u64>,
+) -> PyErr {
+    Python::attach(|py| {
+        let err = ProviderError::new_err(message);
+        // setattr on the exception's value object. If the GIL call or
+        // setattr fails (should not in practice), we still return the
+        // basic exception so callers get *something* rather than a panic.
+        let value = err.value(py);
+        let _ = value.setattr("provider", provider);
+        let _ = value.setattr("status", status);
+        let _ = value.setattr("endpoint", endpoint);
+        let _ = value.setattr("request_id", request_id);
+        let _ = value.setattr("detail", detail);
+        let _ = value.setattr("raw_body", raw_body);
+        let _ = value.setattr("retry_after_ms", retry_after_ms);
+        err
+    })
+}
+
 /// Convert a [`BlazenError`] to a rich [`PyErr`] with the appropriate
 /// exception subclass.
 ///
@@ -130,7 +171,30 @@ pub fn blazen_error_to_pyerr(err: blazen_llm::BlazenError) -> PyErr {
         blazen_llm::BlazenError::ContentPolicy { message } => {
             ContentPolicyError::new_err(message.clone())
         }
-        blazen_llm::BlazenError::Provider { .. } => ProviderError::new_err(err.to_string()),
+        blazen_llm::BlazenError::Provider {
+            provider,
+            message: _,
+            status_code,
+        } => build_provider_error(
+            err.to_string(),
+            provider.clone(),
+            *status_code,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ),
+        blazen_llm::BlazenError::ProviderHttp(d) => build_provider_error(
+            err.to_string(),
+            d.provider.to_string(),
+            Some(d.status),
+            Some(d.endpoint.clone()),
+            d.request_id.clone(),
+            d.detail.clone(),
+            Some(d.raw_body.clone()),
+            d.retry_after_ms,
+        ),
         blazen_llm::BlazenError::Unsupported { message } => {
             UnsupportedError::new_err(message.clone())
         }

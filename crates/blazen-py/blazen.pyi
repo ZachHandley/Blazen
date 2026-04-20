@@ -7,11 +7,13 @@ import typing
 __all__ = [
     "AgentResult",
     "Artifact",
+    "AuthError",
     "AzureOptions",
     "BackgroundRemovalProvider",
     "BackgroundRemovalRequest",
     "BatchResult",
     "BedrockOptions",
+    "BlazenError",
     "BlazenState",
     "CacheConfig",
     "CacheStrategy",
@@ -21,9 +23,11 @@ __all__ = [
     "CompletionOptions",
     "CompletionResponse",
     "CompletionStream",
+    "ComputeError",
     "ComputeRequest",
     "ComputeResult",
     "ContentPart",
+    "ContentPolicyError",
     "Context",
     "CustomProvider",
     "Device",
@@ -41,6 +45,7 @@ __all__ = [
     "InMemoryBackend",
     "JobHandle",
     "JsonlBackend",
+    "MediaError",
     "MediaOutput",
     "MediaType",
     "Memory",
@@ -55,6 +60,7 @@ __all__ = [
     "OpenAiProvider",
     "PromptRegistry",
     "PromptTemplate",
+    "ProviderError",
     "ProviderOptions",
     "PyAudioResult",
     "PyGenerated3DModel",
@@ -67,6 +73,7 @@ __all__ = [
     "PyTranscriptionSegment",
     "PyVideoResult",
     "Quantization",
+    "RateLimitError",
     "RequestTiming",
     "ResponseFormat",
     "RetryConfig",
@@ -80,10 +87,13 @@ __all__ = [
     "TTSProvider",
     "ThreeDProvider",
     "ThreeDRequest",
+    "TimeoutError",
     "ToolDef",
     "Transcription",
     "TranscriptionRequest",
+    "UnsupportedError",
     "UpscaleRequest",
+    "ValidationError",
     "ValkeyBackend",
     "VideoProvider",
     "VideoRequest",
@@ -4358,3 +4368,65 @@ async def run_agent(model: CompletionModel, messages: typing.Sequence[ChatMessag
         AgentResult with the final response and full conversation history.
     """
 
+# --- Exception hierarchy ---------------------------------------------------
+# create_exception!-produced types are invisible to pyo3-stub-gen, so they
+# are hand-declared here. Inheritance mirrors src/error.rs:
+#   BlazenError <- builtins.Exception
+#   AuthError / RateLimitError / TimeoutError / ValidationError /
+#   ContentPolicyError / ProviderError / UnsupportedError /
+#   ComputeError / MediaError  <- BlazenError
+
+class BlazenError(builtins.Exception):
+    """Base class for all Blazen runtime errors."""
+    ...
+
+class AuthError(BlazenError):
+    """Authentication failed (invalid / missing API key)."""
+    ...
+
+class RateLimitError(BlazenError):
+    """Provider rate-limited the request."""
+    ...
+
+class TimeoutError(BlazenError):
+    """The operation timed out."""
+    ...
+
+class ValidationError(BlazenError):
+    """Invalid input rejected before the provider round-trip."""
+    ...
+
+class ContentPolicyError(BlazenError):
+    """Provider rejected the request for policy reasons."""
+    ...
+
+class ProviderError(BlazenError):
+    """Provider-side error. For HTTP failures, structured attributes are
+    populated via `setattr` on the exception instance:
+    - `provider`: str (e.g. "fal", "openrouter")
+    - `status`: int | None (HTTP status, None for non-HTTP provider errors)
+    - `endpoint`: str | None (request URL)
+    - `request_id`: str | None (x-fal-request-id / x-request-id if present)
+    - `detail`: str | None (parsed from JSON error body)
+    - `raw_body`: str | None (response body, capped at 4 KiB)
+    - `retry_after_ms`: int | None (parsed Retry-After header)
+    """
+    provider: str
+    status: typing.Optional[int]
+    endpoint: typing.Optional[str]
+    request_id: typing.Optional[str]
+    detail: typing.Optional[str]
+    raw_body: typing.Optional[str]
+    retry_after_ms: typing.Optional[int]
+
+class UnsupportedError(BlazenError):
+    """Requested capability is not supported by this provider / backend."""
+    ...
+
+class ComputeError(BlazenError):
+    """Compute job error (cancelled, quota exceeded, etc)."""
+    ...
+
+class MediaError(BlazenError):
+    """Media handling error (invalid input, size exceeded, etc)."""
+    ...
