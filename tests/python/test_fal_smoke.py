@@ -217,15 +217,16 @@ async def test_fal_embeddings():
 async def test_fal_3d_generation():
     """3D generation routes to the correct fal endpoint.
 
-    fal's workers cannot fetch files from arbitrary public CDNs in test
-    environments, so this test asserts that EITHER the call succeeds OR
-    the error is specifically a fal file-download failure (which proves
-    routing landed at the 3D endpoint correctly).
+    We deliberately use an unfetchable URL (`example.invalid`, reserved by
+    RFC 2606) to force fal's file-download error path. That proves the
+    dispatch landed at the 3D endpoint without running a full 3D generation
+    that would exceed the 300s test budget (triposr regularly takes 5+ min
+    end-to-end on fal's queue).
     """
     provider = FalProvider(options=FalOptions(api_key=FAL_API_KEY))
     request = ThreeDRequest(
         prompt="a wooden chair",
-        image_url="https://storage.googleapis.com/falserverless/example_inputs/triposr_input.jpg",
+        image_url="https://example.invalid/triposr_input.jpg",
     )
     try:
         result = await _fal_or_skip(provider.generate_3d(request))

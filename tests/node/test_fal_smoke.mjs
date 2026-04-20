@@ -19,6 +19,11 @@ const FAL_API_KEY = process.env.FAL_API_KEY;
 
 const IMAGE_URL =
   "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png";
+// 3D generation deliberately uses an unfetchable URL (`example.invalid` is
+// reserved by RFC 2606) so fal fast-fails with file_download_error rather
+// than running full triposr 3D gen, which regularly exceeds the 300s test
+// budget on fal's queue. The test only cares about routing verification.
+const UNFETCHABLE_IMAGE_URL = "https://example.invalid/triposr_input.jpg";
 const AUDIO_URL = "https://upload.wikimedia.org/wikipedia/commons/c/c8/Example.ogg";
 const VIDEO_URL =
   "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
@@ -200,7 +205,7 @@ describe("fal.ai streaming + embeddings + utilities", { skip: !FAL_API_KEY, time
   it("generates a 3D model", async () => {
     const provider = FalProvider.create({ apiKey: FAL_API_KEY });
     try {
-      const result = await provider.generate3d({ imageUrl: IMAGE_URL });
+      const result = await provider.generate3d({ imageUrl: UNFETCHABLE_IMAGE_URL });
       assert.ok(result, "expected a 3D generation result");
     } catch (e) {
       const m = String(e.message ?? e);
