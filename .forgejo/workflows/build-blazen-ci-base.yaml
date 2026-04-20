@@ -6,10 +6,12 @@ on:
       targets:
         description: 'Comma-separated targets to build. Leave blank for all four Linux targets.'
         required: false
+        type: string
         default: ''
       image-tag:
         description: 'Image tag suffix (default: the target triple itself).'
         required: false
+        type: string
         default: ''
 
 concurrency:

@@ -637,7 +637,7 @@ impl LlamaCppProvider {
             // Encode the prompt into the context.
             let mut batch = LlamaBatch::new(eng.context_length as usize, 1);
             let last_index = tokens.len() as i32 - 1;
-            for (i, token) in (0_i32..).zip(tokens.into_iter()) {
+            for (i, token) in (0_i32..).zip(tokens) {
                 let is_last = i == last_index;
                 batch.add(token, i, &[0], is_last).map_err(|e| {
                     LlamaCppError::Inference(format!("failed to add token to batch: {e}"))
@@ -828,7 +828,7 @@ impl LlamaCppProvider {
 
                 let mut batch = LlamaBatch::new(eng.context_length as usize, 1);
                 let last_index = tokens.len() as i32 - 1;
-                for (i, token) in (0_i32..).zip(tokens.into_iter()) {
+                for (i, token) in (0_i32..).zip(tokens) {
                     let is_last = i == last_index;
                     if let Err(e) = batch.add(token, i, &[0], is_last) {
                         send_err(LlamaCppError::Inference(format!(

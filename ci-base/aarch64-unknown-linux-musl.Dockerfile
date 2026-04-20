@@ -73,7 +73,7 @@ RUN set -eux; \
 # ---------------------------------------------------------------------------
 ENV RUSTUP_HOME=/opt/rustup \
     CARGO_HOME=/opt/cargo \
-    PATH=/opt/cargo/bin:/opt/rustup/bin:/usr/local/bin:/usr/bin:/bin
+    PATH=/opt/cargo/bin:/opt/rustup/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 RUN set -eux; \
     mkdir -p "${RUSTUP_HOME}" "${CARGO_HOME}/bin"; \
     curl -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh; \
@@ -137,7 +137,7 @@ RUN set -eux; \
 # ---------------------------------------------------------------------------
 ENV CARGO_HOME=/opt/cargo \
     RUSTUP_HOME=/opt/rustup \
-    PATH=/opt/cargo/bin:/opt/rustup/bin:/usr/local/bin:/usr/bin:/bin \
+    PATH=/opt/cargo/bin:/opt/rustup/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     CARGO_INCREMENTAL=0 \
     CARGO_TERM_COLOR=always \
     OPENSSL_STATIC=1 \
