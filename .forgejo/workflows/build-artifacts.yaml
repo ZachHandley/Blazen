@@ -60,7 +60,11 @@ jobs:
           - target: x86_64-pc-windows-msvc
             runs-on: windows-latest
     runs-on: ${{ matrix.runs-on }}
-    container: ${{ matrix.container }}
+    container:
+      image: ${{ matrix.container }}
+      credentials:
+        username: zachhandley
+        password: ${{ secrets.FORGEJO_ACTIONS_TOKEN }}
     env:
       CARGO_TERM_COLOR: always
       CARGO_INCREMENTAL: "0"
@@ -542,7 +546,11 @@ jobs:
           - target: x86_64-pc-windows-msvc
             runs-on: windows-latest
     runs-on: ${{ matrix.runs-on }}
-    container: ${{ matrix.container }}
+    container:
+      image: ${{ matrix.container }}
+      credentials:
+        username: zachhandley
+        password: ${{ secrets.FORGEJO_ACTIONS_TOKEN }}
     env:
       CARGO_TERM_COLOR: always
       CARGO_INCREMENTAL: "0"
