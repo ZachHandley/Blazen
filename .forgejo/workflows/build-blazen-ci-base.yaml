@@ -1,0 +1,87 @@
+name: Build Blazen CI base images
+
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: 'Comma-separated targets to build. Leave blank for all four Linux targets.'
+        required: false
+        default: ''
+      image-tag:
+        description: 'Image tag suffix (default: the target triple itself).'
+        required: false
+        default: ''
+
+concurrency:
+  group: build-blazen-ci-base
+  cancel-in-progress: false
+
+jobs:
+  build-push:
+    name: Build + push (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runs-on: ubuntu-latest
+          - target: x86_64-unknown-linux-musl
+            runs-on: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            runs-on: arm64
+          - target: aarch64-unknown-linux-musl
+            runs-on: arm64
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - name: Filter by `targets` input
+        id: filter
+        shell: bash
+        run: |
+          req='${{ inputs.targets }}'
+          if [ -z "$req" ] || echo ",$req," | grep -q ",${{ matrix.target }},"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping ${{ matrix.target }} (not in requested list: $req)"
+          fi
+
+      - name: Checkout
+        if: steps.filter.outputs.run == 'true'
+        uses: actions/checkout@v4
+
+      - name: Log in to Forgejo container registry
+        if: steps.filter.outputs.run == 'true'
+        shell: bash
+        run: |
+          echo "${{ secrets.FORGEJO_ACTIONS_TOKEN }}" | docker login \
+            forge.blackleafdigital.com \
+            --username zachhandley \
+            --password-stdin
+
+      - name: Build image
+        if: steps.filter.outputs.run == 'true'
+        shell: bash
+        run: |
+          tag="${{ inputs.image-tag }}"
+          if [ -z "$tag" ]; then tag="${{ matrix.target }}"; fi
+          image_ref="forge.blackleafdigital.com/blackleafdigital/blazen-ci-base:${tag}"
+          echo "Building $image_ref from ci-base/${{ matrix.target }}.Dockerfile"
+          docker build \
+            -f "ci-base/${{ matrix.target }}.Dockerfile" \
+            -t "$image_ref" \
+            ci-base/
+
+      - name: Push image
+        if: steps.filter.outputs.run == 'true'
+        shell: bash
+        run: |
+          tag="${{ inputs.image-tag }}"
+          if [ -z "$tag" ]; then tag="${{ matrix.target }}"; fi
+          image_ref="forge.blackleafdigital.com/blackleafdigital/blazen-ci-base:${tag}"
+          docker push "$image_ref"
+          echo "::notice::Pushed $image_ref"
+
+      - name: Log out
+        if: always()
+        shell: bash
+        run: docker logout forge.blackleafdigital.com 2>/dev/null || true
