@@ -1,4 +1,6 @@
 target/
+target-*/
+.cargo-home-*/
 *.pyc
 __pycache__/
 *.egg-info/
