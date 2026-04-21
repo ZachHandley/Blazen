@@ -875,20 +875,41 @@ jobs:
           unset CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER
           unset RUSTC_WRAPPER
 
-          # See "Build wheels (non-Windows)" above for the full rationale on
-          # dropping --target for alpine (host == target, rustflags unify,
-          # build.rs becomes dynamic, bindgen dlopen works).
-          TARGET_FLAG="--target ${{ matrix.target }}"
+          # Alpine aarch64-musl bypasses napi-rs/cli and invokes cargo directly.
+          # Why: napi-rs/cli@3.5.1 unconditionally injects `--target <triple>` via
+          # BuildCommand.setTarget() (cli.js:1363) regardless of user flags. On
+          # stable cargo, passing --target makes RUSTFLAGS apply only to the
+          # target, not to build.rs scripts ([host] rustflags is nightly-only,
+          # CARGO_HOST_RUSTFLAGS is nightly-only). So `RUSTFLAGS=-C target-feature=
+          # -crt-static` never reaches build.rs, build.rs statically links against
+          # musl+crt-static, and bindgen's libclang dlopen() fails with musl's
+          # static-binary dlfcn stub ("Dynamic loading not supported") in
+          # llama-cpp-sys-2 / ort-sys / piper-sys / whisper-rs-sys / candle-*-sys.
+          #
+          # Calling cargo directly with no --target lets cargo unify host+target
+          # (host IS aarch64-unknown-linux-musl on alpine arm64), so RUSTFLAGS
+          # reaches build.rs, build.rs is dynamic, dlopen works. napi's post-build
+          # (index.js / index.d.ts / type-defs) is regenerated at release time
+          # by `napi prepublish` in release.yaml:333 — each build-matrix entry
+          # only needs to upload the .node binary, and the upload step below
+          # tars `blazen.*.node` which is exactly what we produce via cp.
+          #
+          # Non-alpine non-Windows entries (manylinux gnu/musl on x86_64, aarch64
+          # gnu manylinux) still use napi-rs/cli because napi's --target injection
+          # is what they want (real cross or same-triple-as-host with dynamic glibc).
           if [[ "${{ matrix.container-kind }}" == "alpine" ]]; then
             export RUSTFLAGS="-C target-feature=-crt-static"
-            TARGET_FLAG=""
+            (cd crates/blazen-node && cargo build --release --features local-all)
+            cp "${CARGO_TARGET_DIR:-target}/release/libblazen_node.so" \
+               crates/blazen-node/blazen.linux-arm64-musl.node
+          else
+            pnpm --filter blazen exec napi build \
+              --release \
+              --platform \
+              --target ${{ matrix.target }} \
+              --features local-all \
+              --js index.js
           fi
-          pnpm --filter blazen exec napi build \
-            --release \
-            --platform \
-            $TARGET_FLAG \
-            --features local-all \
-            --js index.js
 
       - name: Build napi binary (Windows)
         if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
