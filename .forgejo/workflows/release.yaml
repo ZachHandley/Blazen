@@ -315,6 +315,11 @@ jobs:
           done
           ls -la crates/blazen-node/artifacts/
 
+      - name: Create npm subpackage dirs
+        if: steps.check.outputs.completed != 'true'
+        working-directory: crates/blazen-node
+        run: pnpm exec napi create-npm-dirs
+
       - name: Move napi artifacts into npm subpackages
         if: steps.check.outputs.completed != 'true'
         working-directory: crates/blazen-node
