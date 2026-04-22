@@ -45,6 +45,6 @@
     "build:debug": "napi build --platform --features local-all --js index.js",
     "test": "node --test ../../tests/node/test_workflow.mjs",
     "test:smoke": "node --test ../../tests/node/test_llm_smoke.mjs",
-    "prepublishOnly": "napi prepublish -t npm --skip-gh-release"
+    "prepublishOnly": "napi prepublish -t npm --no-gh-release"
   }
 }

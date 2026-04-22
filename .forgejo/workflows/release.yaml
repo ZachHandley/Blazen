@@ -228,12 +228,14 @@ jobs:
 
       - name: Publish to PyPI
         if: steps.check.outputs.completed != 'true'
-        run: |
-          uvx twine upload \
-            --skip-existing \
-            -u __token__ \
-            -p ${{ secrets.PYPI_TOKEN }} \
-            dist/wheels/*.whl dist/sdist/*.tar.gz
+        uses: https://forge.blackleafdigital.com/Public/actions/pypi-publish-workspace@main
+        with:
+          version: ${{ needs.version.outputs.version }}
+          package-name: blazen
+          pypi-token: ${{ secrets.PYPI_TOKEN }}
+          dist-dir: dist
+          wheel-glob: wheels/*.whl
+          sdist-glob: sdist/*.tar.gz
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
@@ -340,14 +342,17 @@ jobs:
           VERSION="${{ needs.version.outputs.version }}"
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_ACCESS_TOKEN }}" > .npmrc
 
-          # napi prepublish publishes each per-target subpackage. It has no
-          # built-in skip-existing, so we can't guard the inner publishes
-          # granularly here; rely on `|| true` per the napi-rs docs that
-          # subpackage publish failures for already-published versions are
-          # tolerable. Pass no --gh-release flag (GH release is opt-in).
-          pnpm exec napi prepublish -t npm || {
-            echo "::warning::napi prepublish returned non-zero (likely already-published subpackages); continuing"
-          }
+          # napi prepublish publishes each per-target subpackage. napi-rs's
+          # pre-publish.ts internally catches npm's "cannot publish over the
+          # previously published versions" error and continues, so duplicate
+          # subpackage versions are handled transparently. No `|| true` needed.
+          #
+          # --no-gh-release is REQUIRED on Forgejo runners: napi-rs v3 defaults
+          # ghRelease=true and fires against api.github.com whenever
+          # GITHUB_REPOSITORY is set in env. Forgejo sets that for
+          # GitHub-Actions compatibility, so without the flag napi gets 401s
+          # trying to use the Forgejo token against github.com.
+          pnpm exec napi prepublish -t npm --no-gh-release
 
           # Guard the main package publish: skip if this version is already on npm.
           if npm view "blazen@${VERSION}" version >/dev/null 2>&1; then
