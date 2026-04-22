@@ -6,6 +6,7 @@
   "types": "index.d.ts",
   "napi": {
     "binaryName": "blazen",
+    "packageName": "@blazen-dev/blazen",
     "targets": [
       "x86_64-unknown-linux-gnu",
       "x86_64-unknown-linux-musl",
@@ -14,6 +15,9 @@
       "aarch64-apple-darwin",
       "x86_64-pc-windows-msvc"
     ]
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "license": "AGPL-3.0-or-later",
   "repository": {
