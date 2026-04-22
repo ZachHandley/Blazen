@@ -230,6 +230,7 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         run: |
           uvx twine upload \
+            --skip-existing \
             -u __token__ \
             -p ${{ secrets.PYPI_TOKEN }} \
             dist/wheels/*.whl dist/sdist/*.tar.gz
@@ -333,10 +334,27 @@ jobs:
       - name: Publish subpackages and main package to npm
         if: steps.check.outputs.completed != 'true'
         working-directory: crates/blazen-node
+        shell: bash
         run: |
+          set -euo pipefail
+          VERSION="${{ needs.version.outputs.version }}"
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_ACCESS_TOKEN }}" > .npmrc
-          pnpm exec napi prepublish -t npm --skip-gh-release
-          pnpm publish --no-git-checks
+
+          # napi prepublish publishes each per-target subpackage. It has no
+          # built-in skip-existing, so we can't guard the inner publishes
+          # granularly here; rely on `|| true` per the napi-rs docs that
+          # subpackage publish failures for already-published versions are
+          # tolerable. Pass no --gh-release flag (GH release is opt-in).
+          pnpm exec napi prepublish -t npm || {
+            echo "::warning::napi prepublish returned non-zero (likely already-published subpackages); continuing"
+          }
+
+          # Guard the main package publish: skip if this version is already on npm.
+          if npm view "blazen@${VERSION}" version >/dev/null 2>&1; then
+            echo "blazen@${VERSION} already on npm; skipping publish"
+          else
+            pnpm publish --no-git-checks
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
 
@@ -379,10 +397,18 @@ jobs:
 
       - name: Publish to npm
         if: steps.check.outputs.completed != 'true'
+        shell: bash
         run: |
+          set -euo pipefail
+          VERSION="${{ needs.version.outputs.version }}"
           cd dist/wasm/pkg
+          PKG_NAME=$(node -p "require('./package.json').name")
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_ACCESS_TOKEN }}" > .npmrc
-          npm publish --access public
+          if npm view "${PKG_NAME}@${VERSION}" version >/dev/null 2>&1; then
+            echo "${PKG_NAME}@${VERSION} already on npm; skipping publish"
+          else
+            npm publish --access public
+          fi
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
