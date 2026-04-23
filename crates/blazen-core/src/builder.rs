@@ -60,7 +60,7 @@ impl WorkflowBuilder {
         Self {
             name: name.into(),
             steps: Vec::new(),
-            timeout: Some(Duration::from_secs(300)), // 5 min default
+            timeout: Some(Duration::from_mins(5)),
             input_handler: None,
             auto_publish_events: false,
             session_pause_policy: crate::session_ref::SessionPausePolicy::default(),

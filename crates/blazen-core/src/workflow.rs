@@ -442,8 +442,7 @@ impl Workflow {
 
         let snapshot: WorkflowSnapshot = checkpoint.into();
 
-        // Use a default 5-minute timeout for resumed workflows.
-        Self::resume(snapshot, steps, Some(Duration::from_secs(300))).await
+        Self::resume(snapshot, steps, Some(Duration::from_mins(5))).await
     }
 
     /// Return the unique step names registered in this workflow.
