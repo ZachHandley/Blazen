@@ -14,6 +14,7 @@ on:
         default: false
       version_override:
         description: 'Optional explicit semver to dispatch (no v prefix). Leave empty to use resolve-version output.'
+        type: string
         required: false
         default: ''
 

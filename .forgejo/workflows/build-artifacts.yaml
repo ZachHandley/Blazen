@@ -5,6 +5,7 @@ on:
     inputs:
       version:
         description: 'Semver to build (no v prefix), e.g. 1.2.3'
+        type: string
         required: true
 
 concurrency:
