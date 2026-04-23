@@ -464,7 +464,7 @@ jobs:
 
           LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -n "$LAST_TAG" ]; then
-            git-cliff "${LAST_TAG}..${VERSION}" --tag "${VERSION}" -o CHANGELOG_RELEASE.md
+            git-cliff "${LAST_TAG}..HEAD" --tag "${VERSION}" -o CHANGELOG_RELEASE.md
           else
             git-cliff --tag "${VERSION}" -o CHANGELOG_RELEASE.md
           fi
