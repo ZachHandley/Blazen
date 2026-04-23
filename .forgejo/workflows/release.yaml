@@ -6,6 +6,7 @@ on:
       version:
         description: 'Semver to publish (no v prefix). Leave empty to auto-resolve via resolve-version.'
         required: false
+        type: string
         default: ''
 
 concurrency:
