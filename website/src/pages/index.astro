@@ -3,6 +3,7 @@ import Layout from "~/layouts/Layout.astro";
 import FeatureCard from "~/components/vue/FeatureCard.vue";
 import CodeTabs from "~/components/vue/CodeTabs.vue";
 import { getCollection } from "astro:content";
+import { highlight, type CodeLang } from "~/lib/highlight";
 
 const docs = await getCollection("docs");
 const knownRoutes = ["/", ...docs.map((entry) => `/docs/${entry.id}`)];
@@ -170,6 +171,20 @@ let result = workflow.run(input).await?.result().await?;`,
   },
 ];
 
+async function renderTabs(
+  tabs: { label: string; language: string; code: string }[],
+): Promise<{ label: string; html: string }[]> {
+  return Promise.all(
+    tabs.map(async (t) => ({
+      label: t.label,
+      html: await highlight(t.code, t.language as CodeLang),
+    })),
+  );
+}
+
+const renderedWorkflowTabs = await renderTabs(workflowTabs);
+const renderedHitlTabs = await renderTabs(hitlTabs);
+
 const crates = [
   { name: "blazen", description: "Umbrella crate with prelude re-exports" },
   {
@@ -318,13 +333,13 @@ const crates = [
       <h3 class="mb-4 text-lg font-semibold text-gray-200">
         Basic Workflow
       </h3>
-      <CodeTabs client:visible tabs={workflowTabs} />
+      <CodeTabs client:visible tabs={renderedWorkflowTabs} />
     </div>
     <div>
       <h3 class="mb-4 text-lg font-semibold text-gray-200">
         Human-in-the-Loop
       </h3>
-      <CodeTabs client:visible tabs={hitlTabs} />
+      <CodeTabs client:visible tabs={renderedHitlTabs} />
     </div>
   </section>
 

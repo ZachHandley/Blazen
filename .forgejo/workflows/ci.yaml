@@ -29,9 +29,35 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  detect:
+    name: Detect commit intent
+    runs-on: ubuntu-latest
+    outputs:
+      web_only: ${{ steps.check.outputs.web_only }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Inspect HEAD commit subject
+        id: check
+        shell: bash
+        run: |
+          MSG=$(git log -1 --pretty=%s)
+          echo "HEAD subject: ${MSG}"
+          if [[ "$MSG" == \[web\]* ]]; then
+            echo "web_only=true" >> "$GITHUB_OUTPUT"
+            echo "Detected [web] prefix — Rust jobs will be skipped."
+          else
+            echo "web_only=false" >> "$GITHUB_OUTPUT"
+          fi
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    needs: detect
+    if: needs.detect.outputs.web_only != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -58,7 +84,8 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    needs: lint
+    needs: [detect, lint]
+    if: needs.detect.outputs.web_only != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -89,7 +116,8 @@ jobs:
   test-python:
     name: Test Python Bindings
     runs-on: ubuntu-latest
-    needs: lint
+    needs: [detect, lint]
+    if: needs.detect.outputs.web_only != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -137,7 +165,8 @@ jobs:
   test-node:
     name: Test Node.js Bindings
     runs-on: ubuntu-latest
-    needs: lint
+    needs: [detect, lint]
+    if: needs.detect.outputs.web_only != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -185,8 +214,8 @@ jobs:
   auto-tag:
     name: Auto Tag
     runs-on: ubuntu-latest
-    needs: [test, test-python, test-node]
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    needs: [detect, test, test-python, test-node]
+    if: needs.detect.outputs.web_only != 'true' && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -323,6 +352,20 @@ jobs:
 
       - name: Dispatch deploy-website workflow
         if: steps.pick.outputs.create_tag == 'true'
+        run: |
+          curl -s -X POST \
+            -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/actions/workflows/deploy-website.yaml/dispatches" \
+            -d '{"ref": "main"}'
+
+  deploy-web-only:
+    name: Deploy Website (web-only commit)
+    needs: detect
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.web_only == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Dispatch deploy-website workflow
         run: |
           curl -s -X POST \
             -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \

@@ -3,8 +3,9 @@ import { ref } from "vue";
 
 interface Tab {
   label: string;
-  language: string;
-  code: string;
+  language?: string;
+  code?: string;
+  html?: string;
 }
 
 interface Props {
@@ -41,10 +42,27 @@ function setActive(index: number): void {
         />
       </button>
     </div>
-    <div class="bg-[var(--color-code-bg)] p-5">
+    <div class="code-tabs-body bg-[var(--color-code-bg)] p-5">
+      <div
+        v-if="props.tabs[activeIndex].html"
+        class="code-tabs-shiki overflow-x-auto text-sm leading-relaxed"
+        v-html="props.tabs[activeIndex].html"
+      />
       <pre
+        v-else
         class="overflow-x-auto text-sm leading-relaxed text-gray-300"
       ><code>{{ props.tabs[activeIndex].code }}</code></pre>
     </div>
   </div>
 </template>
+
+<style>
+.code-tabs-shiki pre.shiki {
+  background-color: transparent !important;
+  padding: 0;
+  margin: 0;
+}
+.code-tabs-shiki pre.shiki code {
+  background-color: transparent;
+}
+</style>
