@@ -62,7 +62,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ github.sha }}
+          step: ci-lint
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
       - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
         with:
           components: rustfmt, clippy
@@ -76,10 +88,23 @@ jobs:
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
       - name: Format check
+        if: steps.check.outputs.completed != 'true'
         run: cargo fmt --all -- --check
 
       - name: Clippy
+        if: steps.check.outputs.completed != 'true'
         run: cargo clippy --workspace --all-features -- -D warnings
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ github.sha }}
+          step: ci-lint
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
   test:
     name: Test
@@ -90,7 +115,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ github.sha }}
+          step: ci-test
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
       - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
         with:
           nextest: true
@@ -104,6 +141,7 @@ jobs:
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
       - name: Workspace tests (unit + integration)
+        if: steps.check.outputs.completed != 'true'
         # Exclude blazen-py: it hardcodes pyo3/extension-module (so the
         # wheel doesn't link libpython), which means cargo can't build a
         # standalone Rust test binary for it. blazen-py is exhaustively
@@ -111,7 +149,19 @@ jobs:
         run: cargo nextest run --workspace --all-features --exclude blazen-py
 
       - name: Workspace tests (doc tests)
+        if: steps.check.outputs.completed != 'true'
         run: cargo test --workspace --doc --all-features --exclude blazen-py
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ github.sha }}
+          step: ci-test
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
   test-python:
     name: Test Python Bindings
@@ -122,7 +172,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ github.sha }}
+          step: ci-test-python
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
       - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
         with:
           sccache: true
@@ -135,14 +197,17 @@ jobs:
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
       - name: Setup Python + uv
+        if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
         with:
           python-version: '3.12'
 
       - name: Install deps and build wheel
+        if: steps.check.outputs.completed != 'true'
         run: uv sync --group dev
 
       - name: Verify Python stubs are up to date
+        if: steps.check.outputs.completed != 'true'
         # Regenerate blazen.pyi from Rust source and fail if it drifts
         # from the committed version. This enforces that stubs are
         # generated, not hand-written.
@@ -154,13 +219,26 @@ jobs:
           }
 
       - name: Run Python unit tests (parallel)
+        if: steps.check.outputs.completed != 'true'
         run: uv run pytest -v -n auto --timeout=30 tests/python/test_workflow.py tests/python/test_session_refs.py tests/python/test_e2e.py
 
       - name: Run Python API smoke tests (sequential, real HTTP)
+        if: steps.check.outputs.completed != 'true'
         run: uv run pytest -v --timeout=300 tests/python/test_fal_smoke.py tests/python/test_llm_smoke.py tests/python/test_capabilities_smoke.py tests/python/test_provider_smoke.py
         env:
           FAL_API_KEY: ${{ secrets.FAL_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ github.sha }}
+          step: ci-test-python
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
   test-node:
     name: Test Node.js Bindings
@@ -171,7 +249,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ github.sha }}
+          step: ci-test-node
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
       - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
         with:
           sccache: true
@@ -184,32 +274,49 @@ jobs:
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
       - name: Setup Node
+        if: steps.check.outputs.completed != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
       - name: Setup pnpm
+        if: steps.check.outputs.completed != 'true'
         run: corepack enable && corepack prepare pnpm@latest --activate
 
       - name: Build Node bindings
+        if: steps.check.outputs.completed != 'true'
         run: |
           pnpm install
           pnpm --filter blazen run build
 
       - name: Run Node.js E2E tests
+        if: steps.check.outputs.completed != 'true'
         run: node --test tests/node/test_workflow.mjs
 
       - name: Run Node.js free tests (no API keys)
+        if: steps.check.outputs.completed != 'true'
         run: |
           node --test tests/node/test_session_refs.mjs
           node --test tests/node/test_capabilities_smoke.mjs
           node --test tests/node/test_e2e.mjs
 
       - name: Run Node.js LLM smoke tests
+        if: steps.check.outputs.completed != 'true'
         run: node --test tests/node/test_llm_smoke.mjs tests/node/test_fal_smoke.mjs
         env:
           FAL_API_KEY: ${{ secrets.FAL_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ github.sha }}
+          step: ci-test-node
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
   auto-tag:
     name: Auto Tag
