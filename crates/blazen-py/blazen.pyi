@@ -45,6 +45,7 @@ __all__ = [
     "InMemoryBackend",
     "JobHandle",
     "JsonlBackend",
+    "LlmPayload",
     "MediaError",
     "MediaOutput",
     "MediaType",
@@ -89,6 +90,7 @@ __all__ = [
     "ThreeDRequest",
     "TimeoutError",
     "ToolDef",
+    "ToolOutput",
     "Transcription",
     "TranscriptionRequest",
     "UnsupportedError",
@@ -482,6 +484,26 @@ class ChatMessage:
     def content(self) -> typing.Optional[builtins.str]:
         r"""
         Get the message content as a string.
+        """
+    @property
+    def tool_call_id(self) -> typing.Optional[builtins.str]:
+        r"""
+        The tool-call ID this message responds to (set on `role="tool"`
+        messages). `None` for non-tool messages.
+        """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        The tool name this message responds to (set on `role="tool"`
+        messages by some providers). `None` for non-tool messages.
+        """
+    @property
+    def tool_result(self) -> typing.Optional[ToolOutput]:
+        r"""
+        The structured tool-result payload, if this message is a tool result
+        produced by a tool returning a non-string value or carrying an
+        `llm_override`. Plain-string tool results live in `content` instead
+        and this returns `None`.
         """
     def __new__(cls, role: builtins.str = 'user', content: typing.Optional[builtins.str] = None, parts: typing.Optional[typing.Sequence[ContentPart]] = None) -> ChatMessage:
         r"""
@@ -2147,6 +2169,66 @@ class JsonlBackend:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class LlmPayload:
+    r"""
+    Provider-aware override for what the LLM sees as a tool result.
+    
+    Construct via the classmethod factories — there is no public `__init__`:
+    
+    - ``LlmPayload.text("hello")`` — plain text, works on every provider.
+    - ``LlmPayload.json({"k": "v"})`` — structured JSON; Anthropic and
+      Gemini consume natively, OpenAI/Responses stringify on the wire.
+    - ``LlmPayload.provider_raw(provider="anthropic", value={...})`` —
+      provider-specific escape hatch. The named provider receives ``value``
+      verbatim; every other provider falls back to the default conversion
+      from ``ToolOutput.data``.
+    
+    Inspect the variant via ``payload.kind`` (``"text"``, ``"json"``, or
+    ``"provider_raw"``). The ``text``, ``value``, and ``provider`` getters
+    return ``None`` for variants that don't carry the corresponding field.
+    """
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        The variant tag: `"text"`, `"json"`, `"parts"`, or `"provider_raw"`.
+        """
+    @property
+    def text_value(self) -> typing.Optional[builtins.str]:
+        r"""
+        The text body for `Text` payloads. `None` for other variants.
+        """
+    @property
+    def value(self) -> typing.Optional[typing.Any]:
+        r"""
+        The structured value for `Json` and `ProviderRaw` payloads.
+        `None` for `Text` and `Parts`.
+        """
+    @property
+    def provider(self) -> typing.Optional[builtins.str]:
+        r"""
+        The provider name for `ProviderRaw` payloads. `None` otherwise.
+        """
+    @staticmethod
+    def text(text: builtins.str) -> LlmPayload:
+        r"""
+        Create a plain-text payload.
+        """
+    @staticmethod
+    def json(value: typing.Any) -> LlmPayload:
+        r"""
+        Create a structured-JSON payload from any JSON-serializable Python value.
+        """
+    @staticmethod
+    def provider_raw(*, provider: builtins.str, value: typing.Any) -> LlmPayload:
+        r"""
+        Create a provider-specific payload.
+        
+        `provider` must be one of: `"openai"`, `"openai_compat"`, `"azure"`,
+        `"anthropic"`, `"gemini"`, `"responses"`, `"fal"`.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class MediaOutput:
     r"""
     A single piece of generated media content.
@@ -3497,6 +3579,47 @@ class ToolDef:
         The Python callable that implements the tool.
         """
     def __new__(cls, *, name: builtins.str, description: builtins.str, parameters: typing.Any, handler: typing.Any) -> ToolDef: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ToolOutput:
+    r"""
+    Two-channel tool result: structured `data` for callers, optional
+    `llm_override` for what the LLM sees on the next turn.
+    
+    Returning a bare `dict`, `list`, or `str` from a tool handler is
+    equivalent to wrapping it in `ToolOutput(data=value)` — the `llm_override`
+    is left unset and each provider applies its default conversion.
+    
+    Construct an explicit override when the structured payload should differ
+    from what the LLM sees::
+    
+        return ToolOutput(
+            data={"items": [...], "total": 1234},
+            llm_override=LlmPayload.text("Found 1234 items."),
+        )
+    """
+    @property
+    def data(self) -> typing.Any:
+        r"""
+        The structured payload visible to callers.
+        """
+    @property
+    def llm_override(self) -> typing.Optional[LlmPayload]:
+        r"""
+        The optional LLM-visible override payload.
+        """
+    def __new__(cls, data: typing.Any, llm_override: typing.Optional[LlmPayload] = None) -> ToolOutput:
+        r"""
+        Create a tool output.
+        
+        Args:
+            data: Any JSON-serializable Python value (the structured result
+                visible to callers).
+            llm_override: Optional [`LlmPayload`] to override what the LLM
+                sees on the next turn. Defaults to ``None`` (provider applies
+                its default conversion from ``data``).
+        """
     def __repr__(self) -> builtins.str: ...
 
 class Transcription:

@@ -209,6 +209,7 @@ impl PromptTemplate {
             tool_call_id: None,
             name: None,
             tool_calls: Vec::new(),
+            tool_result: None,
         })
     }
 

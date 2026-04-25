@@ -122,7 +122,7 @@ impl Tool for JsToolWrapper {
     async fn execute(
         &self,
         arguments: serde_json::Value,
-    ) -> std::result::Result<serde_json::Value, BlazenError> {
+    ) -> std::result::Result<blazen_llm::types::ToolOutput<serde_json::Value>, BlazenError> {
         let name = self.def.name.clone();
 
         // Call the JS handler with (toolName, arguments).
@@ -138,8 +138,57 @@ impl Tool for JsToolWrapper {
             .await
             .map_err(|e| BlazenError::tool_error(e.to_string()))?;
 
-        Ok(result)
+        // Dispatch on shape: if the value is an object with an explicit
+        // `data` key, treat it as a structured `ToolOutput` and decode an
+        // optional `llmOverride`. The `data`-key guard prevents
+        // misinterpreting an arbitrary user dict like `{"items": [1,2,3]}`
+        // as a ToolOutput. Otherwise, auto-wrap the bare value with no
+        // override.
+        if let Some(obj) = result.as_object()
+            && obj.contains_key("data")
+        {
+            return decode_structured_tool_output(result)
+                .map_err(|e| BlazenError::tool_error(e.to_string()));
+        }
+        Ok(result.into())
     }
+}
+
+/// Decode a JS object of shape `{ data, llmOverride? }` into a Rust
+/// [`blazen_llm::types::ToolOutput`].
+///
+/// The wrapper is `#[napi(object)]` and therefore not `Deserialize`, so we
+/// pull `data` and `llmOverride` out by hand and let the inner [`LlmPayload`]
+/// (which derives `Deserialize`) parse itself. The serde tag/rename rules on
+/// [`LlmPayload`] match the JS shape: `{ kind: "text" | "json" | ... }` plus
+/// the variant-specific fields.
+fn decode_structured_tool_output(
+    value: serde_json::Value,
+) -> napi::Result<blazen_llm::types::ToolOutput<serde_json::Value>> {
+    let serde_json::Value::Object(mut obj) = value else {
+        return Err(napi::Error::from_reason(
+            "structured ToolOutput must be a JS object with a `data` field",
+        ));
+    };
+
+    let data = obj
+        .remove("data")
+        .ok_or_else(|| napi::Error::from_reason("structured ToolOutput is missing `data`"))?;
+
+    // Accept either `llmOverride` (camelCase preferred) or `llm_override`
+    // (snake_case). Strip explicit nulls so they round-trip as "no override".
+    let raw_override = obj
+        .remove("llmOverride")
+        .or_else(|| obj.remove("llm_override"));
+    let llm_override = match raw_override {
+        None | Some(serde_json::Value::Null) => None,
+        Some(v) => Some(
+            serde_json::from_value::<blazen_llm::types::LlmPayload>(v)
+                .map_err(|e| napi::Error::from_reason(format!("invalid llmOverride: {e}")))?,
+        ),
+    };
+
+    Ok(blazen_llm::types::ToolOutput { data, llm_override })
 }
 
 // ---------------------------------------------------------------------------

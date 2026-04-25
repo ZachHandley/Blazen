@@ -14,7 +14,9 @@ use tracing::debug;
 
 use serde::Deserialize;
 
-use super::openai_format::{content_to_openai_value, parse_retry_after};
+use super::openai_format::{
+    content_to_openai_value, parse_retry_after, tool_result_to_openai_string,
+};
 use super::sse::{OaiResponse, SseParser};
 use super::{provider_http_error, provider_http_error_parts};
 use crate::error::BlazenError;
@@ -116,6 +118,7 @@ impl OpenAiProvider {
     }
 
     /// Build the JSON request body for the `OpenAI` chat completions endpoint.
+    #[allow(clippy::too_many_lines)]
     fn build_body(&self, request: &CompletionRequest, stream: bool) -> serde_json::Value {
         let model = request.model.as_deref().unwrap_or(&self.default_model);
 
@@ -129,7 +132,14 @@ impl OpenAiProvider {
                     Role::Assistant => "assistant",
                     Role::Tool => "tool",
                 };
-                let content = content_to_openai_value(&m.content);
+                let content = if m.role == Role::Tool {
+                    serde_json::Value::String(tool_result_to_openai_string(
+                        m,
+                        crate::types::ProviderId::OpenAi,
+                    ))
+                } else {
+                    content_to_openai_value(&m.content)
+                };
                 let mut msg = serde_json::json!({ "role": role, "content": content });
 
                 // Tool result messages must include the tool_call_id.

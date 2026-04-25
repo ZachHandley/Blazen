@@ -65,10 +65,18 @@ impl WasmChatMessage {
     }
 
     /// Create a tool result message with an associated tool call ID and function name.
-    #[wasm_bindgen(js_name = "toolResult")]
-    pub fn tool_result(call_id: &str, name: &str, content: &str) -> Self {
+    ///
+    /// Named `toolResultMessage` to avoid colliding with the instance getter
+    /// `toolResult` that exposes the structured tool-result payload of an
+    /// existing message.
+    #[wasm_bindgen(js_name = "toolResultMessage")]
+    pub fn tool_result_message(call_id: &str, name: &str, content: &str) -> Self {
         Self {
-            inner: InnerChatMessage::tool_result(call_id, name, content),
+            inner: InnerChatMessage::tool_result(
+                call_id,
+                name,
+                serde_json::Value::String(content.to_owned()),
+            ),
         }
     }
 
@@ -157,6 +165,30 @@ impl WasmChatMessage {
     #[wasm_bindgen(getter)]
     pub fn name(&self) -> Option<String> {
         self.inner.name.clone()
+    }
+
+    /// The structured tool-result payload, if this message is a tool result
+    /// from a tool returning a non-string or carrying an `llm_override`.
+    /// Returns `null` for non-tool messages or when the tool returned a
+    /// plain string (in which case the string lives in `content` instead).
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` carrying the serializer error message if
+    /// `serde_wasm_bindgen` fails to convert the underlying `ToolOutput`
+    /// payload into a JS value (typically only on map keys that are not
+    /// strings, which Blazen never produces here).
+    #[wasm_bindgen(
+        getter,
+        js_name = "toolResult",
+        unchecked_return_type = "ToolOutput<any> | null"
+    )]
+    pub fn tool_result_payload(&self) -> Result<JsValue, JsValue> {
+        match &self.inner.tool_result {
+            Some(out) => serde_wasm_bindgen::to_value(out)
+                .map_err(|e| JsValue::from_str(&e.to_string())),
+            None => Ok(JsValue::null()),
+        }
     }
 
     /// Serialize this message to a JSON object.

@@ -42,7 +42,10 @@ pub(crate) fn messages_to_responses_input(messages: &[ChatMessage]) -> Vec<serde
             }
             Role::Tool => {
                 // Tool result -> function_call_output block.
-                let output = msg.content.text_content().unwrap_or_default();
+                let output = super::openai_format::tool_result_to_openai_string(
+                    msg,
+                    crate::types::ProviderId::Responses,
+                );
                 let call_id = msg.tool_call_id.clone().unwrap_or_default();
                 out.push(serde_json::json!({
                     "type": "function_call_output",
@@ -213,7 +216,7 @@ mod tests {
                     arguments: serde_json::json!({"expr": "2+2"}),
                 }],
             ),
-            ChatMessage::tool_result("call_1", "calculator", "4"),
+            ChatMessage::tool_result("call_1", "calculator", serde_json::json!("4")),
         ];
         let input = messages_to_responses_input(&messages);
         // user msg, assistant msg + function_call block, function_call_output block

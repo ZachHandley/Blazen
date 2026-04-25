@@ -300,13 +300,13 @@ impl AnthropicProvider {
                 // Anthropic expects tool results as a user message with
                 // tool_result content blocks.
                 if let Some(ref call_id) = msg.tool_call_id {
-                    let text = msg.content.text_content().unwrap_or_default();
+                    let content = tool_result_to_anthropic_content(msg);
                     messages.push(serde_json::json!({
                         "role": "user",
                         "content": [{
                             "type": "tool_result",
                             "tool_use_id": call_id,
-                            "content": text,
+                            "content": content,
                         }],
                     }));
                 } else {
@@ -1150,6 +1150,58 @@ impl crate::traits::ProviderInfo for AnthropicProvider {
 }
 
 // ---------------------------------------------------------------------------
+// Tool-result rendering
+// ---------------------------------------------------------------------------
+
+/// Render a tool-result payload for Anthropic's `tool_result.content` field.
+///
+/// Anthropic accepts either a plain string OR an array of content blocks.
+/// This function honours `LlmPayload::Text/Json/Parts/ProviderRaw` overrides
+/// when present, else falls back to a default conversion from `data`:
+/// strings pass through, structured values become a single `text` block
+/// containing the JSON-stringified value.
+fn tool_result_to_anthropic_content(msg: &crate::types::ChatMessage) -> serde_json::Value {
+    let Some((data, override_payload)) = msg.tool_result_view() else {
+        return serde_json::json!("");
+    };
+
+    if let Some(payload) = override_payload {
+        return match payload {
+            crate::types::LlmPayload::Text { text } => serde_json::json!(text),
+            crate::types::LlmPayload::Json { value } => match value {
+                serde_json::Value::String(s) => serde_json::json!(s),
+                other => serde_json::json!([{
+                    "type": "text",
+                    "text": serde_json::to_string(other).unwrap_or_default(),
+                }]),
+            },
+            crate::types::LlmPayload::Parts { parts } => {
+                // Anthropic accepts native multimodal content blocks here.
+                serde_json::to_value(parts).unwrap_or_else(|_| serde_json::json!(""))
+            }
+            crate::types::LlmPayload::ProviderRaw { provider, value }
+                if *provider == crate::types::ProviderId::Anthropic =>
+            {
+                value.clone()
+            }
+            crate::types::LlmPayload::ProviderRaw { .. } => default_anthropic_content(&data),
+        };
+    }
+
+    default_anthropic_content(&data)
+}
+
+fn default_anthropic_content(data: &serde_json::Value) -> serde_json::Value {
+    match data {
+        serde_json::Value::String(s) => serde_json::json!(s),
+        other => serde_json::json!([{
+            "type": "text",
+            "text": serde_json::to_string(other).unwrap_or_default(),
+        }]),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -1494,5 +1546,66 @@ mod tests {
         assert_eq!(trace.signature.as_deref(), Some("sig123"));
         assert!(!trace.redacted);
         assert!(trace.effort.is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // tool_result_to_anthropic_content helper
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn anthropic_helper_string_data_passes_through() {
+        let msg = ChatMessage::tool_result("call_1", "search", serde_json::json!("hello"));
+        assert_eq!(
+            super::tool_result_to_anthropic_content(&msg),
+            serde_json::json!("hello")
+        );
+    }
+
+    #[test]
+    fn anthropic_helper_structured_data_becomes_text_block() {
+        let msg = ChatMessage::tool_result("call_1", "search", serde_json::json!({"k":"v"}));
+        assert_eq!(
+            super::tool_result_to_anthropic_content(&msg),
+            serde_json::json!([{"type":"text","text":"{\"k\":\"v\"}"}])
+        );
+    }
+
+    #[test]
+    fn anthropic_helper_text_override_wins() {
+        use crate::types::{LlmPayload, ToolOutput};
+        let msg = ChatMessage::tool_result(
+            "call_1",
+            "search",
+            ToolOutput::with_override(
+                serde_json::json!({"k":"v"}),
+                LlmPayload::Text {
+                    text: "summary".into(),
+                },
+            ),
+        );
+        assert_eq!(
+            super::tool_result_to_anthropic_content(&msg),
+            serde_json::json!("summary")
+        );
+    }
+
+    #[test]
+    fn anthropic_helper_provider_raw_for_anthropic_passes_through() {
+        use crate::types::{LlmPayload, ProviderId, ToolOutput};
+        let msg = ChatMessage::tool_result(
+            "call_1",
+            "search",
+            ToolOutput::with_override(
+                serde_json::json!({"k":"v"}),
+                LlmPayload::ProviderRaw {
+                    provider: ProviderId::Anthropic,
+                    value: serde_json::json!([{"type":"text","text":"raw block"}]),
+                },
+            ),
+        );
+        assert_eq!(
+            super::tool_result_to_anthropic_content(&msg),
+            serde_json::json!([{"type":"text","text":"raw block"}])
+        );
     }
 }

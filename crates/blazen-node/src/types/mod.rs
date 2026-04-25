@@ -16,6 +16,7 @@ pub mod response_format;
 pub mod stream;
 pub mod tokens;
 pub mod tool;
+pub mod tool_output;
 pub mod usage;
 
 // Re-export all public types for convenient access.
@@ -47,4 +48,5 @@ pub use stream::JsStreamChunk;
 pub(crate) use stream::build_stream_chunk;
 pub use tokens::{count_message_tokens, estimate_tokens};
 pub use tool::{ToolCall, ToolDefinition};
+pub use tool_output::{LlmPayload, ToolOutput};
 pub use usage::{RequestTiming, TokenUsage};

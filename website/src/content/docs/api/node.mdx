@@ -71,7 +71,10 @@ const b64Msg = ChatMessage.userImageBase64(
 | Property | Type | Description |
 |---|---|---|
 | `.role` | `string` | The message role: `"system"`, `"user"`, `"assistant"`, or `"tool"` |
-| `.content` | `string \| undefined` | The text content of the message, if any |
+| `.content` | `string \| null` | The text content of the message, if any. For tool results that returned a plain string, the string lives here (and `.toolResult` is `null`). |
+| `.toolResult` | `ToolOutput \| null` | Structured tool-result payload. `null` for non-tool messages or when the tool returned a plain string. When non-null, `.toolResult.data` is the full structured value the caller should consume; the LLM-facing wire form is derived from `.toolResult.llmOverride` (if set) or from `.toolResult.data` via the provider's default conversion. |
+
+> **Note on `toolCallId`**: The Rust core stores a `tool_call_id` on tool messages so providers can correlate a tool result with the originating `ToolCall.id`. As of this writing the Node binding does not expose a public `.toolCallId` getter on `ChatMessage` -- correlation is handled internally by the agent loop and on the wire by each provider. If you need explicit access, file an issue and we can surface it.
 
 ---
 
@@ -331,6 +334,86 @@ A tool invocation requested by the model.
 
 ---
 
+## ToolOutput
+
+Two-channel return shape for tool handlers. Tool results have two distinct audiences. The caller (your TypeScript code) wants the full structured data; the LLM, on the next turn, may need a different shape -- sometimes shorter, sometimes provider-specific. `ToolOutput` carries both channels.
+
+```typescript
+import type { ToolOutput, LlmPayload } from "blazen";
+
+const out: ToolOutput = {
+  data: { items: [1, 2, 3] },
+};
+```
+
+### Properties
+
+| Member | Type | Description |
+|---|---|---|
+| `data` | `any` | The structured value the caller sees programmatically. Dict, array, scalar, or string. |
+| `llmOverride` | `LlmPayload \| undefined` | Optional override for what the LLM sees on the next turn. `undefined` means each provider applies its default conversion from `data`. |
+
+Both `llmOverride` (camelCase) and `llm_override` (snake_case) are accepted on input from a JS tool handler, so a hand-written object using either casing will deserialize correctly.
+
+When the agent loop appends a tool result to the conversation, the resulting `ChatMessage` exposes the structured output via `.toolResult`:
+
+```typescript
+const last = result.messages[result.messages.length - 1];
+// last.toolResult?.data is the full structured payload from your handler.
+// last.toolResult?.llmOverride is the override (if any) the LLM saw this turn.
+```
+
+For tool handlers that returned a plain string, `last.toolResult` is `null` and the string lives on `last.content` instead.
+
+---
+
+## LlmPayload
+
+A tagged union describing what the LLM sees for a tool result on the next turn. Used as the `llmOverride` field of [`ToolOutput`](#tooloutput).
+
+```typescript
+import type { LlmPayload } from "blazen";
+
+const text: LlmPayload = { kind: "text", text: "Found 3 results." };
+
+const json: LlmPayload = { kind: "json", value: { items: [1, 2, 3] } };
+
+const parts: LlmPayload = {
+  kind: "parts",
+  parts: [
+    { partType: "text", text: "Here is the table:" },
+    { partType: "text", text: "| col |\n| --- |\n| 1 |" },
+  ],
+};
+
+const raw: LlmPayload = {
+  kind: "provider_raw",
+  provider: "anthropic",
+  value: [{ type: "text", text: "Custom Anthropic-shaped payload." }],
+};
+```
+
+### Variants
+
+| `kind` | Required fields | Behavior |
+|---|---|---|
+| `"text"` | `text` | Plain text. Works on every provider. |
+| `"json"` | `value` | Structured JSON. Anthropic and Gemini natively consume the structure; OpenAI-family stringifies once at the wire boundary. |
+| `"parts"` | `parts` (`ContentPart[]`) | Multimodal content blocks; Anthropic supports natively, OpenAI falls back to text concatenation, Gemini wraps as `{ parts: [...] }`. |
+| `"provider_raw"` | `provider`, `value` | Provider-specific escape hatch. Only the named provider sees `value`; every other provider falls back to converting `ToolOutput.data` with its default. `provider` is one of `"openai"`, `"openai_compat"`, `"azure"`, `"anthropic"`, `"gemini"`, `"responses"`, `"fal"`. |
+
+### Per-provider behavior
+
+When a tool returns structured `data` and no `llmOverride`, each provider sends a sensible default to the LLM:
+
+- **OpenAI / OpenAI-compat / Azure / Responses / Fal**: the data is JSON-stringified into the `content` field of the tool message.
+- **Anthropic**: structured data becomes `[{ type: "text", text: <stringified-json> }]` inside `tool_result.content`.
+- **Gemini**: structured object data is passed natively as `functionResponse.response`. Scalars wrap as `{ result: <scalar> }`.
+
+When `llmOverride` is set, that override always wins for the variants the provider understands; `kind: "provider_raw"` is the strictest -- it's only honoured when `provider` matches the active provider, otherwise the provider falls back to converting `data` with its default.
+
+---
+
 ## ToolDefinition
 
 Describes a tool that the model may invoke.
@@ -398,7 +481,7 @@ const result = await runAgent(model, messages, tools, toolHandler, options?);
 | `model` | `CompletionModel` | The completion model to use |
 | `messages` | `ChatMessage[]` | Initial conversation messages |
 | `tools` | `ToolDef[]` | Tool definitions the agent can invoke |
-| `toolHandler` | `(toolName: string, args: object) => Promise<any>` | Callback that executes tool calls |
+| `toolHandler` | `(toolName: string, args: object) => Promise<any \| ToolOutput>` | Callback that executes tool calls. May return a bare value (auto-wrapped) or an explicit [`ToolOutput`](#tooloutput). |
 | `options` | `AgentRunOptions?` | Optional configuration |
 
 ### Example
@@ -432,6 +515,53 @@ const result = await runAgent(
 console.log(result.response.content);
 console.log(`Took ${result.iterations} iterations`);
 ```
+
+### Tool handler return shapes
+
+The handler's return value is checked for an explicit `data` key. If present and the value deserializes as a [`ToolOutput`](#tooloutput), it's used directly. Otherwise the bare value is wrapped via `ToolOutput { data: <value>, llmOverride: undefined }`.
+
+This means an arbitrary user dict like `{ items: [1, 2, 3] }` is treated as plain `data`, not as a `ToolOutput`. Only objects with a top-level `data` field are unpacked.
+
+```typescript
+import { runAgent, type ToolDef } from "blazen";
+
+// Simplest: return a value directly, auto-wrapped.
+const search: ToolDef = {
+  name: "search",
+  description: "Search for items.",
+  parameters: { type: "object", properties: { q: { type: "string" } } },
+};
+
+async function handlerSimple(toolName: string, args: any) {
+  if (toolName === "search") {
+    return { items: [1, 2, 3] }; // wrapped as ToolOutput { data: { items: [1,2,3] } }
+  }
+  throw new Error(`Unknown tool: ${toolName}`);
+}
+
+// With override: structured ToolOutput so the LLM sees a summary,
+// but the caller's `messages[messages.length-1].toolResult.data`
+// still has the full list.
+async function handlerWithOverride(toolName: string, args: any) {
+  if (toolName === "search") {
+    return {
+      data: { items: [1, 2, 3], rawResponse: "..." },
+      llmOverride: { kind: "text", text: "Found 3 items." },
+    };
+  }
+  throw new Error(`Unknown tool: ${toolName}`);
+}
+```
+
+To return a string to the caller (so it lives on `ChatMessage.content` and `toolResult` is `null`), simply return a string from the handler:
+
+```typescript
+async function handlerString(toolName: string, args: any) {
+  return "ok"; // appears as ChatMessage.content; toolResult is null
+}
+```
+
+See [ToolOutput](#tooloutput) and [LlmPayload](#llmpayload) for the full shape and per-provider wire behaviour.
 
 ---
 

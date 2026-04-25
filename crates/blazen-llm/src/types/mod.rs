@@ -7,6 +7,7 @@ mod completion;
 mod message;
 pub mod provider_options;
 mod tool;
+mod tool_output;
 mod usage;
 
 pub use completion::{
@@ -18,4 +19,5 @@ pub use message::{
     MessageContent, Role, VideoContent,
 };
 pub use tool::{ToolCall, ToolDefinition};
+pub use tool_output::{LlmPayload, ProviderId, ToolOutput};
 pub use usage::{RequestTiming, TokenUsage};

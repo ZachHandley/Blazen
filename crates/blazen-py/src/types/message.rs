@@ -195,6 +195,7 @@ impl PyChatMessage {
                 tool_call_id: None,
                 name: None,
                 tool_calls: Vec::new(),
+                tool_result: None,
             },
         })
     }
@@ -310,6 +311,32 @@ impl PyChatMessage {
     #[getter]
     fn content(&self) -> Option<&str> {
         self.inner.content.as_text()
+    }
+
+    /// The tool-call ID this message responds to (set on `role="tool"`
+    /// messages). `None` for non-tool messages.
+    #[getter]
+    fn tool_call_id(&self) -> Option<&str> {
+        self.inner.tool_call_id.as_deref()
+    }
+
+    /// The tool name this message responds to (set on `role="tool"`
+    /// messages by some providers). `None` for non-tool messages.
+    #[getter]
+    fn name(&self) -> Option<&str> {
+        self.inner.name.as_deref()
+    }
+
+    /// The structured tool-result payload, if this message is a tool result
+    /// produced by a tool returning a non-string value or carrying an
+    /// `llm_override`. Plain-string tool results live in `content` instead
+    /// and this returns `None`.
+    #[getter]
+    fn tool_result(&self) -> Option<crate::types::tool::PyToolOutput> {
+        self.inner
+            .tool_result
+            .as_ref()
+            .map(|t| crate::types::tool::PyToolOutput { inner: t.clone() })
     }
 
     fn __repr__(&self) -> String {

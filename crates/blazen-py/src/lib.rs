@@ -103,6 +103,8 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::PyArtifact>()?;
     m.add_class::<types::PyFinishReason>()?;
     m.add_class::<types::PyResponseFormat>()?;
+    m.add_class::<types::PyToolOutput>()?;
+    m.add_class::<types::PyLlmPayload>()?;
 
     // Completion model (provider)
     m.add_class::<providers::PyCompletionModel>()?;

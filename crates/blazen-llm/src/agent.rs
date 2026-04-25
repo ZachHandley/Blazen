@@ -125,10 +125,10 @@ impl Tool for FinishTool {
     async fn execute(
         &self,
         arguments: serde_json::Value,
-    ) -> Result<serde_json::Value, BlazenError> {
+    ) -> Result<crate::types::ToolOutput<serde_json::Value>, BlazenError> {
         // The finish tool doesn't really "execute" -- the loop checks for it
         // before execution happens.
-        Ok(arguments)
+        Ok(arguments.into())
     }
 }
 
@@ -465,20 +465,15 @@ async fn execute_tool_calls(
 
     // Process results in the original order.
     for (tc, result) in tool_calls.iter().zip(results) {
-        let result = result?;
+        let output = result?;
 
         on_event(AgentEvent::ToolResult {
             iteration,
             tool_name: tc.name.clone(),
-            result: result.clone(),
+            result: output.data.clone(),
         });
 
-        let result_str = if let Some(s) = result.as_str() {
-            s.to_owned()
-        } else {
-            serde_json::to_string(&result).unwrap_or_default()
-        };
-        messages.push(ChatMessage::tool_result(&tc.id, &tc.name, &result_str));
+        messages.push(ChatMessage::tool_result(&tc.id, &tc.name, output));
     }
 
     Ok(())

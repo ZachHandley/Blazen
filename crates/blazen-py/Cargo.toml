@@ -11,6 +11,12 @@ description = "Python bindings for the Blazen workflow engine"
 [lib]
 name = "blazen"
 crate-type = ["cdylib", "rlib"]
+# pyo3's `extension-module` feature strips libpython link symbols; with that
+# feature on, the empty default lib-test target fails to link. Disable the
+# test target — there are no Rust unit tests in this crate (the Python-side
+# tests live in `crates/blazen-py/python/tests/` and are run by uv/pytest).
+test = false
+doctest = false
 
 [dependencies]
 async-trait.workspace = true

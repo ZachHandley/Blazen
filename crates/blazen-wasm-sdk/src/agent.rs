@@ -62,12 +62,61 @@ impl std::fmt::Debug for JsTool {
     }
 }
 
+/// After the JS handler resolves to a `JsValue`, decide whether to treat it
+/// as a structured [`blazen_llm::types::ToolOutput`] (must be an object with
+/// a `data` key) or a bare value (wrapped in `ToolOutput::new`).
+///
+/// Accepts either `llm_override` (snake) or `llmOverride` (camel) for the
+/// optional override field — JS callers naturally produce the camelCase
+/// spelling, but the serde derive on `ToolOutput` expects the snake form, so
+/// we canonicalize before delegating to `serde_json::from_value`.
+fn js_to_tool_output(
+    js_value: JsValue,
+) -> Result<blazen_llm::types::ToolOutput<serde_json::Value>, blazen_llm::BlazenError> {
+    use blazen_llm::types::ToolOutput;
+
+    // First, normalize string results: try JSON-parse, falling back to a
+    // string-typed Value. This preserves the prior behavior so that handlers
+    // returning a JSON string of a structured ToolOutput still get unpacked.
+    let raw: serde_json::Value = if let Some(s) = js_value.as_string() {
+        serde_json::from_str(&s).unwrap_or(serde_json::Value::String(s))
+    } else {
+        serde_wasm_bindgen::from_value(js_value)
+            .map_err(|e| blazen_llm::BlazenError::tool_error(e.to_string()))?
+    };
+
+    // Heuristic: an object with a `data` key is treated as a structured
+    // ToolOutput. Anything else is wrapped as `ToolOutput::new(raw)`.
+    if let serde_json::Value::Object(map) = &raw
+        && map.contains_key("data")
+    {
+        let mut normalized = map.clone();
+        if !normalized.contains_key("llm_override")
+            && let Some(v) = normalized.remove("llmOverride")
+        {
+            normalized.insert("llm_override".into(), v);
+        }
+        let normalized_value = serde_json::Value::Object(normalized);
+        if let Ok(out) = serde_json::from_value::<ToolOutput<serde_json::Value>>(normalized_value) {
+            return Ok(out);
+        }
+    }
+
+    Ok(ToolOutput::new(raw))
+}
+
 impl JsTool {
     /// The actual async execute implementation (non-Send).
+    ///
+    /// Returns a [`blazen_llm::types::ToolOutput`] directly: if the JS
+    /// handler returned an object with a `data` key it is unpacked as a
+    /// structured tool output (with optional `llm_override` /
+    /// `llmOverride`); otherwise the entire value is treated as `data`
+    /// with no override.
     async fn execute_impl(
         &self,
         arguments: serde_json::Value,
-    ) -> Result<serde_json::Value, blazen_llm::BlazenError> {
+    ) -> Result<blazen_llm::types::ToolOutput<serde_json::Value>, blazen_llm::BlazenError> {
         // Convert arguments to JsValue.
         let js_args = serde_wasm_bindgen::to_value(&arguments)
             .map_err(|e| blazen_llm::BlazenError::tool_error(e.to_string()))?;
@@ -88,14 +137,7 @@ impl JsTool {
             result
         };
 
-        // Convert the JS result back to serde_json::Value.
-        // If the result is a string, try parsing as JSON; fall back to a string value.
-        if let Some(s) = result.as_string() {
-            serde_json::from_str(&s).or_else(|_| Ok(serde_json::Value::String(s)))
-        } else {
-            serde_wasm_bindgen::from_value(result)
-                .map_err(|e| blazen_llm::BlazenError::tool_error(e.to_string()))
-        }
+        js_to_tool_output(result)
     }
 }
 
@@ -108,7 +150,7 @@ impl Tool for JsTool {
     async fn execute(
         &self,
         arguments: serde_json::Value,
-    ) -> Result<serde_json::Value, blazen_llm::BlazenError> {
+    ) -> Result<blazen_llm::types::ToolOutput<serde_json::Value>, blazen_llm::BlazenError> {
         // SAFETY: WASM is single-threaded, Send is vacuously satisfied.
         SendFuture(self.execute_impl(arguments)).await
     }

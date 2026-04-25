@@ -54,6 +54,17 @@ export declare class ChatMessage {
   get role(): string
   /** The text content of the message, if any. */
   get content(): string | null
+  /**
+   * The structured tool-result payload, if this message is a tool result
+   * produced by a tool returning a non-string value or carrying an
+   * `llmOverride`. Plain-string tool results live in `content` instead and
+   * this returns `null`.
+   */
+  get toolResult(): ToolOutput | null
+  /** The tool call ID this message responds to, for `Role::Tool` messages. */
+  get toolCallId(): string | null
+  /** The tool/function name that produced this result, for `Role::Tool` messages. */
+  get name(): string | null
 }
 export type JsChatMessage = ChatMessage
 
@@ -2538,6 +2549,37 @@ export interface JsWorkflowResult {
 }
 
 /**
+ * Variant-tagged provider-aware override for what the LLM sees.
+ *
+ * `kind` is one of `"text"`, `"json"`, `"parts"`, or `"provider_raw"`.
+ * Other fields are populated based on the variant:
+ * - `text` for `kind: "text"`
+ * - `value` for `kind: "json"` or `kind: "provider_raw"`
+ * - `parts` for `kind: "parts"` (serialized `ContentPart[]`)
+ * - `provider` for `kind: "provider_raw"` — one of `"openai"`,
+ *   `"openai_compat"`, `"azure"`, `"anthropic"`, `"gemini"`, `"responses"`,
+ *   or `"fal"`.
+ */
+export interface LlmPayload {
+  /** Which variant: `"text"`, `"json"`, `"parts"`, or `"provider_raw"`. */
+  kind: string
+  /** Plain text body. Required for `kind: "text"`. */
+  text?: string
+  /**
+   * Structured JSON value. Required for `kind: "json"` and
+   * `kind: "provider_raw"`.
+   */
+  value?: any
+  /**
+   * Multimodal content parts (serialized `ContentPart[]`).
+   * Required for `kind: "parts"`.
+   */
+  parts?: any
+  /** Provider id string. Required for `kind: "provider_raw"`. */
+  provider?: string
+}
+
+/**
  * Look up pricing for a model by its ID.
  *
  * Returns `null` if the model is unknown. Model IDs are normalized before
@@ -2677,6 +2719,25 @@ export declare const enum SessionPausePolicy {
   PickleOrSerialize = 'PickleOrSerialize',
   WarnDrop = 'WarnDrop',
   HardError = 'HardError'
+}
+
+/**
+ * `ToolOutput` carrying both the user-visible `data` and an optional
+ * `llmOverride` controlling what the LLM sees on the next turn.
+ *
+ * Either return one from a JS tool handler:
+ *   `return { data: { items: [1,2,3] }, llmOverride: { kind: 'text', text: 'summary' } };`
+ * Or just return a plain value, which will be auto-wrapped with no override.
+ */
+export interface ToolOutput {
+  /** The full structured payload the caller sees programmatically. */
+  data: any
+  /**
+   * Optional override for what the LLM sees on the next turn.
+   * `None`/`undefined` means the provider applies its default conversion
+   * from `data`.
+   */
+  llmOverride?: LlmPayload
 }
 
 /** Returns the version of the blazen library. */

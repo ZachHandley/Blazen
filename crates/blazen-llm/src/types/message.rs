@@ -468,6 +468,11 @@ pub struct ChatMessage {
     /// Tool calls requested by the assistant in this message.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub tool_calls: Vec<ToolCall>,
+    /// Structured tool-result payload (only populated for `Role::Tool` messages
+    /// when the result is non-string or carries an `llm_override`). Plain-string
+    /// tool results live in `content` as `MessageContent::Text` instead.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub tool_result: Option<crate::types::tool_output::ToolOutput<serde_json::Value>>,
 }
 
 impl ChatMessage {
@@ -480,6 +485,7 @@ impl ChatMessage {
             tool_call_id: None,
             name: None,
             tool_calls: Vec::new(),
+            tool_result: None,
         }
     }
 
@@ -492,6 +498,7 @@ impl ChatMessage {
             tool_call_id: None,
             name: None,
             tool_calls: Vec::new(),
+            tool_result: None,
         }
     }
 
@@ -504,6 +511,7 @@ impl ChatMessage {
             tool_call_id: None,
             name: None,
             tool_calls: Vec::new(),
+            tool_result: None,
         }
     }
 
@@ -520,6 +528,7 @@ impl ChatMessage {
             tool_call_id: None,
             name: None,
             tool_calls,
+            tool_result: None,
         }
     }
 
@@ -532,6 +541,7 @@ impl ChatMessage {
             tool_call_id: None,
             name: None,
             tool_calls: Vec::new(),
+            tool_result: None,
         }
     }
 
@@ -540,19 +550,77 @@ impl ChatMessage {
     /// OpenAI-compatible APIs require each tool result message to reference the
     /// `tool_call_id` of the invocation it responds to.  Gemini requires the
     /// original function `name` in the `functionResponse` payload.
+    ///
+    /// Accepts any value convertible into [`crate::types::ToolOutput`]. A bare
+    /// `serde_json::Value` is auto-wrapped via `From<Value>` with no override.
+    /// When the resolved `data` is a plain JSON string and `llm_override` is
+    /// `None`, the string is stored in `content` as a regular text message so
+    /// that downstream consumers can read it as plain text. Otherwise the full
+    /// structured payload (including any override) lives in `tool_result`.
     #[must_use]
     pub fn tool_result(
         call_id: impl Into<String>,
         name: impl Into<String>,
-        content: impl Into<String>,
+        output: impl Into<crate::types::tool_output::ToolOutput<serde_json::Value>>,
     ) -> Self {
+        let output = output.into();
+        let (content, tool_result) = match (&output.data, &output.llm_override) {
+            (serde_json::Value::String(s), None) => (MessageContent::Text(s.clone()), None),
+            (serde_json::Value::Null, None) => (MessageContent::Text(String::new()), None),
+            _ => (MessageContent::Text(String::new()), Some(output)),
+        };
         Self {
             role: Role::Tool,
-            content: MessageContent::Text(content.into()),
+            content,
             tool_call_id: Some(call_id.into()),
             name: Some(name.into()),
             tool_calls: Vec::new(),
+            tool_result,
         }
+    }
+
+    /// Create a tool result message whose payload is a list of multimodal
+    /// content parts (text + image / audio / video / file). Useful for tools
+    /// that return images. The `tool_result` sibling field is left `None`;
+    /// the parts live in `content` as [`MessageContent::Parts`].
+    #[must_use]
+    pub fn tool_result_parts(
+        call_id: impl Into<String>,
+        name: impl Into<String>,
+        parts: Vec<ContentPart>,
+    ) -> Self {
+        Self {
+            role: Role::Tool,
+            content: MessageContent::Parts(parts),
+            tool_call_id: Some(call_id.into()),
+            name: Some(name.into()),
+            tool_calls: Vec::new(),
+            tool_result: None,
+        }
+    }
+
+    /// Return a snapshot of the tool-result payload as a `(data, override)`
+    /// pair, regardless of whether it lives in `tool_result` or in `content`
+    /// as plain text. Returns `None` only when the message is not a
+    /// `Role::Tool` message at all.
+    ///
+    /// Used by provider `build_body` paths to render the wire shape without
+    /// caring whether the tool returned a string or a structured value.
+    #[must_use]
+    pub fn tool_result_view(
+        &self,
+    ) -> Option<(
+        serde_json::Value,
+        Option<&crate::types::tool_output::LlmPayload>,
+    )> {
+        if self.role != Role::Tool {
+            return None;
+        }
+        if let Some(out) = &self.tool_result {
+            return Some((out.data.clone(), out.llm_override.as_ref()));
+        }
+        let text = self.content.text_content().unwrap_or_default();
+        Some((serde_json::Value::String(text), None))
     }
 
     /// Create a user message containing text and an image from a URL.
@@ -574,6 +642,7 @@ impl ChatMessage {
             tool_call_id: None,
             name: None,
             tool_calls: Vec::new(),
+            tool_result: None,
         }
     }
 
@@ -596,6 +665,7 @@ impl ChatMessage {
             tool_call_id: None,
             name: None,
             tool_calls: Vec::new(),
+            tool_result: None,
         }
     }
 
@@ -608,6 +678,7 @@ impl ChatMessage {
             tool_call_id: None,
             name: None,
             tool_calls: Vec::new(),
+            tool_result: None,
         }
     }
 

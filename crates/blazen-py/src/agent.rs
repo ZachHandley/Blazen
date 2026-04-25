@@ -18,7 +18,25 @@ use blazen_llm::traits::Tool;
 use blazen_llm::types::{ChatMessage, ToolDefinition};
 
 use crate::providers::PyCompletionModel;
-use crate::types::{PyChatMessage, PyCompletionResponse};
+use crate::types::{PyChatMessage, PyCompletionResponse, PyToolOutput};
+
+/// Convert a Python tool-handler return value into a Rust [`ToolOutput`].
+///
+/// If the Python object is an instance of [`PyToolOutput`] (i.e. the user
+/// explicitly returned `ToolOutput(data=..., llm_override=...)`), unpack
+/// it without re-serialising the data. Otherwise convert the value via
+/// [`crate::convert::py_to_json`] and wrap it as a default `ToolOutput`
+/// with no override (each provider applies its own conversion from `data`).
+fn py_result_to_tool_output(
+    py: Python<'_>,
+    result: &Bound<'_, PyAny>,
+) -> PyResult<blazen_llm::types::ToolOutput<serde_json::Value>> {
+    if let Ok(typed) = result.extract::<PyToolOutput>() {
+        return Ok(typed.into_inner());
+    }
+    let value = crate::convert::py_to_json(py, result)?;
+    Ok(blazen_llm::types::ToolOutput::new(value))
+}
 
 // ---------------------------------------------------------------------------
 // PyToolWrapper -- bridges a Python callable into the Rust Tool trait
@@ -51,7 +69,7 @@ impl Tool for PyToolWrapper {
     async fn execute(
         &self,
         arguments: serde_json::Value,
-    ) -> Result<serde_json::Value, BlazenError> {
+    ) -> Result<blazen_llm::types::ToolOutput<serde_json::Value>, BlazenError> {
         let args_value = arguments;
         let callable = Python::attach(|py| self.callable.clone_ref(py));
 
@@ -76,24 +94,24 @@ impl Tool for PyToolWrapper {
                 .await
                 .map_err(|e: PyErr| BlazenError::tool_error(e.to_string()))?;
 
-            let result = tokio::task::block_in_place(|| {
-                Python::attach(|py| crate::convert::py_to_json(py, py_result.bind(py)))
+            let output = tokio::task::block_in_place(|| {
+                Python::attach(|py| py_result_to_tool_output(py, py_result.bind(py)))
             })
             .map_err(|e: PyErr| BlazenError::tool_error(e.to_string()))?;
 
-            Ok(result)
+            Ok(output)
         } else {
             // Sync path: call directly and convert the result
-            let result = tokio::task::block_in_place(|| {
+            let output = tokio::task::block_in_place(|| {
                 Python::attach(|py| {
                     let args_py = crate::convert::json_to_py(py, &args_value)?;
                     let result = callable.call1(py, (args_py,))?;
-                    crate::convert::py_to_json(py, result.bind(py))
+                    py_result_to_tool_output(py, result.bind(py))
                 })
             })
             .map_err(|e: PyErr| BlazenError::tool_error(e.to_string()))?;
 
-            Ok(result)
+            Ok(output)
         }
     }
 }

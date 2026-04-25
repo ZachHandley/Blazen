@@ -527,6 +527,9 @@ msg = ChatMessage(content="Hello!")
 |---|---|---|
 | `.role` | `str` | One of `"system"`, `"user"`, `"assistant"`, `"tool"`. |
 | `.content` | `str \| None` | The message text. |
+| `.tool_call_id` | `str \| None` | For `role="tool"` messages, the call ID this message responds to. `None` otherwise. |
+| `.name` | `str \| None` | For `role="tool"` messages, the tool/function name (set by some providers). `None` otherwise. |
+| `.tool_result` | `ToolOutput \| None` | The structured tool-result payload. `None` for non-tool messages or when the tool returned a plain string (in which case the string lives in `.content` instead). See [`ToolOutput`](#tooloutput). |
 
 ---
 
@@ -578,6 +581,93 @@ Supports dict-style access: `tool_call["name"]`.
 
 ---
 
+## ToolOutput
+
+Two-channel return value from a tool handler. Tool results have two distinct audiences. The caller (your Python code) wants the full structured data; the LLM, on the next turn, may need a different shape — sometimes shorter, sometimes provider-specific. `ToolOutput` carries both channels: `data` is what the caller sees, `llm_override` is what the LLM sees.
+
+```python
+import blazen
+
+out = blazen.ToolOutput(data={"items": [1, 2, 3]})
+out.data            # {"items": [1, 2, 3]}
+out.llm_override    # None
+
+# Explicit override: the caller still gets the full dict, but the LLM
+# sees a short summary on its next turn.
+out2 = blazen.ToolOutput(
+    data={"items": [1, 2, 3], "_debug": "..."},
+    llm_override=blazen.LlmPayload.text("Found 3 items."),
+)
+```
+
+**Constructor**
+
+| Argument | Type | Description |
+|---|---|---|
+| `data` | `Any` | The structured value the caller sees programmatically. Dict, list, scalar, or string — anything JSON-serializable. |
+| `llm_override` | `LlmPayload \| None` | Optional override for what the LLM sees on the next turn. `None` means each provider applies its default conversion from `data` (see [Per-provider behavior](#per-provider-behavior)). |
+
+**Properties**
+
+| Property | Type | Description |
+|---|---|---|
+| `.data` | `Any` | The user-visible structured payload. Re-materialized as a Python value on each access. |
+| `.llm_override` | `LlmPayload \| None` | The LLM-side override, if set. |
+
+A tool handler can return a bare `dict`/`list`/`str`/scalar, in which case Blazen auto-wraps it as `ToolOutput(data=value, llm_override=None)`. Returning a `ToolOutput` instance directly is only required when you want to set `llm_override`.
+
+---
+
+## LlmPayload
+
+Provider-aware override for what the LLM sees as a tool result. Constructed only via the classmethod factories — there is no public `__init__`.
+
+```python
+import blazen
+
+blazen.LlmPayload.text("Found 3 results.")
+blazen.LlmPayload.json({"items": [1, 2, 3]})
+blazen.LlmPayload.provider_raw(
+    provider="anthropic",
+    value=[{"type": "text", "text": "..."}],
+)
+```
+
+**Variants**
+
+| Variant `kind` | Constructor | Behavior |
+|---|---|---|
+| `"text"` | `LlmPayload.text(text: str)` | Plain text. Works on every provider. |
+| `"json"` | `LlmPayload.json(value: Any)` | Structured JSON. Anthropic and Gemini natively consume the structure; OpenAI-family stringifies once at the wire boundary. |
+| `"provider_raw"` | `LlmPayload.provider_raw(*, provider: str, value: Any)` | Provider-specific escape hatch. Only the named provider sees `value`; every other provider falls back to converting `ToolOutput.data` with its default. `provider` is one of `"openai"`, `"openai_compat"`, `"azure"`, `"anthropic"`, `"gemini"`, `"responses"`, `"fal"`. |
+
+**Properties**
+
+| Property | Type | Description |
+|---|---|---|
+| `.kind` | `str` | The variant tag: `"text"`, `"json"`, `"parts"`, or `"provider_raw"`. |
+| `.text_value` | `str \| None` | The text body for `Text` payloads. `None` for other variants. |
+| `.value` | `Any \| None` | The structured value for `Json` and `ProviderRaw` payloads. `None` otherwise. |
+| `.provider` | `str \| None` | The provider name for `ProviderRaw` payloads. `None` otherwise. |
+
+### Per-provider behavior
+
+When a tool returns structured `data` and no `llm_override`, each provider sends a sensible default to the LLM:
+
+- **OpenAI / OpenAI-compat / Azure / Responses / Fal**: `data` is JSON-stringified into the `content` field of the tool message.
+- **Anthropic**: structured `data` becomes `[{"type": "text", "text": <stringified-json>}]` inside `tool_result.content`.
+- **Gemini**: structured object `data` is passed natively as `functionResponse.response`. Scalar values (numbers, booleans, strings) are wrapped as `{"result": <scalar>}`.
+
+Plain strings always pass through unchanged on every provider — a tool returning `"hello"` results in the LLM seeing `hello`, not `"hello"`.
+
+When an `llm_override` is set:
+
+- `LlmPayload.text(...)` is universally accepted.
+- `LlmPayload.json(...)` is consumed natively by Anthropic and Gemini and stringified by the OpenAI family.
+- `LlmPayload.provider_raw(provider="X", value=V)` only takes effect when the active provider matches `X`. For every other provider the dispatcher falls back to converting `ToolOutput.data` with the provider's default rule above.
+
+---
+
 ## TokenUsage
 
 Token usage statistics for a completion.
@@ -615,10 +705,18 @@ ToolDef(
 | `name` | `str` | Unique tool name exposed to the model. |
 | `description` | `str` | Description the model uses to decide when to call this tool. |
 | `parameters` | `dict` | JSON Schema describing the tool's input parameters. |
-| `handler` | `Callable` | Function called when the model invokes the tool. Can be sync or async. Receives a `dict[str, Any]` of arguments and should return a JSON-serializable value. |
+| `handler` | `Callable` | Function called when the model invokes the tool. Can be sync or async. Receives a `dict[str, Any]` of arguments and returns either a JSON-serializable value (auto-wrapped into `ToolOutput(data=value)`) or an explicit [`ToolOutput`](#tooloutput) when you want to override what the LLM sees. |
+
+A handler may return:
+
+1. **A bare `dict`, `list`, scalar, or `str`** — Blazen wraps it as `ToolOutput(data=value, llm_override=None)` and each provider applies its default conversion.
+2. **A `ToolOutput`** — full control. Set `llm_override` to send the LLM a different shape than the structured `data` your code reads back from `messages[-1].tool_result`.
 
 ```python
-# Sync handler
+import blazen
+from blazen import ToolDef
+
+# 1. Sync handler — return a bare dict, auto-wrapped.
 tool = ToolDef(
     name="search",
     description="Search the web for a query",
@@ -632,7 +730,7 @@ tool = ToolDef(
     handler=lambda args: {"results": ["result1", "result2"]},
 )
 
-# Async handler
+# 2. Async handler — return a bare dict, auto-wrapped.
 async def fetch_weather(args):
     data = await weather_api(args["city"])
     return {"temperature": data.temp, "conditions": data.conditions}
@@ -649,6 +747,37 @@ weather_tool = ToolDef(
     },
     handler=fetch_weather,
 )
+
+# 3. Explicit ToolOutput — LLM sees a short summary, but the caller's
+#    `messages[-1].tool_result.data` still has the full structured payload.
+def search_with_summary(args):
+    return blazen.ToolOutput(
+        data={"items": [1, 2, 3], "raw_response": "..."},
+        llm_override=blazen.LlmPayload.text("Found 3 items."),
+    )
+
+search_tool = ToolDef(
+    name="search",
+    description="Search for items.",
+    parameters={
+        "type": "object",
+        "properties": {"q": {"type": "string"}},
+        "required": ["q"],
+    },
+    handler=search_with_summary,
+)
+```
+
+After a tool runs, the result message in the conversation history exposes both channels:
+
+```python
+result = await run_agent(model, messages, tools=[search_tool])
+last = result.messages[-1]
+last.role          # "tool"
+last.tool_call_id  # the call ID this responded to
+last.tool_result   # ToolOutput | None — None if the handler returned a plain string
+last.tool_result.data          # full caller-visible payload
+last.tool_result.llm_override  # the LlmPayload sent to the LLM, if any
 ```
 
 ### run_agent

@@ -970,8 +970,10 @@ impl FalProvider {
     /// Produces a true `OpenAI` chat completions request body with a
     /// `messages` array, multimodal content blocks, and tool calls.
     fn build_openai_chat_body(&self, request: &CompletionRequest) -> serde_json::Value {
-        use crate::providers::openai_format::content_to_openai_value;
-        use crate::types::Role;
+        use crate::providers::openai_format::{
+            content_to_openai_value, tool_result_to_openai_string,
+        };
+        use crate::types::{ProviderId, Role};
 
         let llm_model = request.model.as_deref().unwrap_or(&self.llm_model);
 
@@ -985,7 +987,11 @@ impl FalProvider {
                     Role::Assistant => "assistant",
                     Role::Tool => "tool",
                 };
-                let content = content_to_openai_value(&msg.content);
+                let content = if msg.role == Role::Tool {
+                    serde_json::Value::String(tool_result_to_openai_string(msg, ProviderId::Fal))
+                } else {
+                    content_to_openai_value(&msg.content)
+                };
                 let mut entry = serde_json::json!({ "role": role, "content": content });
                 if let Some(id) = &msg.tool_call_id {
                     entry["tool_call_id"] = id.clone().into();

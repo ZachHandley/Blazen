@@ -172,9 +172,16 @@ pub trait Tool: Send + Sync {
     /// Return the JSON Schema definition of this tool.
     fn definition(&self) -> ToolDefinition;
 
-    /// Execute the tool with the given arguments and return the result.
-    async fn execute(&self, arguments: serde_json::Value)
-    -> Result<serde_json::Value, BlazenError>;
+    /// Execute the tool. Returns a [`ToolOutput`] carrying both the
+    /// caller-visible `data` and an optional `llm_override` controlling
+    /// what is sent to the model on the next turn.
+    ///
+    /// For the common case (no override), use `Ok(value.into())` —
+    /// `From<Value> for ToolOutput<Value>` constructs a default-shaped output.
+    async fn execute(
+        &self,
+        arguments: serde_json::Value,
+    ) -> Result<crate::types::ToolOutput<serde_json::Value>, BlazenError>;
 }
 
 // ---------------------------------------------------------------------------

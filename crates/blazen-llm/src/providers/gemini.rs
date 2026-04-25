@@ -256,9 +256,7 @@ impl GeminiProvider {
                 }
             } else if msg.role == Role::Tool && msg.tool_call_id.is_some() {
                 // Gemini expects tool results as functionResponse parts.
-                let response_text = msg.content.text_content().unwrap_or_default();
-                let response_value: serde_json::Value = serde_json::from_str(&response_text)
-                    .unwrap_or_else(|_| serde_json::json!({ "result": response_text }));
+                let response_value = tool_result_to_gemini_response(msg);
                 contents.push(serde_json::json!({
                     "role": "user",
                     "parts": [{
@@ -960,6 +958,47 @@ impl crate::traits::ProviderInfo for GeminiProvider {
 }
 
 // ---------------------------------------------------------------------------
+// Tool-result helpers
+// ---------------------------------------------------------------------------
+
+/// Render a tool-result payload for Gemini's `functionResponse.response`
+/// field, which **must** be a JSON object. Scalars are wrapped as
+/// `{"result": <scalar>}`.
+fn tool_result_to_gemini_response(msg: &crate::types::ChatMessage) -> serde_json::Value {
+    let Some((data, override_payload)) = msg.tool_result_view() else {
+        return serde_json::json!({});
+    };
+
+    if let Some(payload) = override_payload {
+        return match payload {
+            crate::types::LlmPayload::Text { text } => serde_json::json!({"result": text}),
+            crate::types::LlmPayload::Json { value } => match value {
+                serde_json::Value::Object(_) => value.clone(),
+                scalar => serde_json::json!({"result": scalar}),
+            },
+            crate::types::LlmPayload::Parts { parts } => {
+                serde_json::json!({"parts": parts})
+            }
+            crate::types::LlmPayload::ProviderRaw { provider, value }
+                if *provider == crate::types::ProviderId::Gemini =>
+            {
+                value.clone()
+            }
+            crate::types::LlmPayload::ProviderRaw { .. } => default_gemini_response(&data),
+        };
+    }
+
+    default_gemini_response(&data)
+}
+
+fn default_gemini_response(data: &serde_json::Value) -> serde_json::Value {
+    match data {
+        serde_json::Value::Object(_) => data.clone(),
+        scalar => serde_json::json!({"result": scalar}),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -1302,5 +1341,55 @@ mod tests {
         assert_eq!(reasoning.signature.as_deref(), Some("sig123"));
         assert!(!reasoning.redacted);
         assert!(reasoning.effort.is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // tool_result_to_gemini_response helper
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn gemini_helper_object_data_passes_through() {
+        let msg = ChatMessage::tool_result("call_1", "search", serde_json::json!({"k":"v"}));
+        assert_eq!(
+            super::tool_result_to_gemini_response(&msg),
+            serde_json::json!({"k":"v"})
+        );
+    }
+
+    #[test]
+    fn gemini_helper_scalar_wraps_in_result() {
+        let msg = ChatMessage::tool_result("call_1", "search", serde_json::json!("hello"));
+        assert_eq!(
+            super::tool_result_to_gemini_response(&msg),
+            serde_json::json!({"result":"hello"})
+        );
+    }
+
+    #[test]
+    fn gemini_helper_text_override_wraps_in_result() {
+        use crate::types::{LlmPayload, ToolOutput};
+        let msg = ChatMessage::tool_result(
+            "call_1",
+            "search",
+            ToolOutput::with_override(
+                serde_json::json!({"k":"v"}),
+                LlmPayload::Text {
+                    text: "summary".into(),
+                },
+            ),
+        );
+        assert_eq!(
+            super::tool_result_to_gemini_response(&msg),
+            serde_json::json!({"result":"summary"})
+        );
+    }
+
+    #[test]
+    fn gemini_helper_no_from_str_round_trip() {
+        // Smoke test: ensure that a message whose data is `Value::Object`
+        // round-trips identically without going through string parsing.
+        let original = serde_json::json!({"weather": {"temp": 72, "humidity": 0.5}});
+        let msg = ChatMessage::tool_result("call_1", "search", original.clone());
+        assert_eq!(super::tool_result_to_gemini_response(&msg), original);
     }
 }

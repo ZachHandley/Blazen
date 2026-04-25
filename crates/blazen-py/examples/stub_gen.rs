@@ -14,9 +14,27 @@
 //! `cargo build --workspace --all-features` (which enables
 //! `extension-module`) does NOT try to link it against libpython.
 //! Examples are only built when explicitly requested.
+//!
+//! The body is gated on `not(feature = "extension-module")` so that
+//! `cargo test --no-run --workspace --all-features` (which is what
+//! `cargo nextest run --workspace --all-features` invokes under the hood)
+//! does not try to link an unusable example binary against a libpython
+//! whose symbols have been stripped by `pyo3/extension-module`.
+//! When that feature is on, the example is a no-op stub.
 
+#[cfg(feature = "extension-module")]
+fn main() {
+    eprintln!(
+        "stub_gen is disabled when the `extension-module` feature is on; \
+         re-run without that feature: `cargo run --example stub_gen -p blazen-py`"
+    );
+    std::process::exit(2);
+}
+
+#[cfg(not(feature = "extension-module"))]
 use std::fs;
 
+#[cfg(not(feature = "extension-module"))]
 fn main() {
     let stub = blazen::stub_info().expect("failed to gather stub info");
     stub.generate().expect("failed to generate blazen.pyi");
@@ -59,6 +77,7 @@ fn main() {
 /// exception instance via `setattr` in the Rust mapper, but declared in
 /// the stub with their typed signatures so IDE completion and type
 /// checkers understand them.
+#[cfg(not(feature = "extension-module"))]
 fn inject_exception_stubs(content: &str) -> String {
     const EXCEPTION_STUBS: &str = r#"
 
@@ -150,6 +169,7 @@ class MediaError(BlazenError):
 /// Insert `extras` into the existing `__all__ = [...]` block, keeping the
 /// list alphabetically sorted. Each name is wrapped in double quotes and
 /// matched case-sensitively.
+#[cfg(not(feature = "extension-module"))]
 fn inject_into_all(content: &str, extras: &[&str]) -> String {
     let Some(start) = content.find("__all__ = [") else {
         return content.to_string();
@@ -200,6 +220,7 @@ fn inject_into_all(content: &str, extras: &[&str]) -> String {
 
 /// Rewrite `def method(...) -> typing.Coroutine[typing.Any, typing.Any, T]:`
 /// into `async def method(...) -> T:`.
+#[cfg(not(feature = "extension-module"))]
 fn rewrite_coroutine_to_async(content: &str) -> String {
     let mut result = String::with_capacity(content.len());
     for line in content.lines() {
@@ -213,6 +234,7 @@ fn rewrite_coroutine_to_async(content: &str) -> String {
     result
 }
 
+#[cfg(not(feature = "extension-module"))]
 fn try_rewrite_line(line: &str) -> Option<String> {
     // Match lines like:
     //   "    def foo(...) -> typing.Coroutine[typing.Any, typing.Any, SomeType]:"

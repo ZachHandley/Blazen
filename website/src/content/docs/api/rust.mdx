@@ -154,42 +154,265 @@ pub trait Tool: Send + Sync {
     async fn execute(
         &self,
         arguments: serde_json::Value,
-    ) -> Result<serde_json::Value, BlazenError>;
+    ) -> Result<ToolOutput<serde_json::Value>, BlazenError>;
 }
 ```
+
+:::note[Migration from earlier versions]
+The `Tool::execute` return type changed: it used to return a bare `Result<…Value…, BlazenError>` and now returns `Result<ToolOutput<Value>, BlazenError>`. Existing tools that returned a `Value` continue to compile by changing `Ok(value)` to `Ok(value.into())` -- the `From<Value>` impl wraps it into a `ToolOutput` with no override. The new [`ChatMessage::tool_result`](#chatmessage) constructor is also a breaking change for callers that passed a `&str`; convert via `serde_json::Value::String(s.into())` or use `serde_json::json!(s)`.
+:::
 
 **Usage:**
 
 ```rust
-use blazen_llm::{Tool, ToolDefinition, BlazenError};
+use blazen_llm::{Tool, ToolDefinition, ToolOutput, BlazenError};
+use async_trait::async_trait;
 
 struct WeatherTool;
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Tool for WeatherTool {
     fn definition(&self) -> ToolDefinition {
         ToolDefinition {
             name: "get_weather".into(),
-            description: "Get the current weather for a city".into(),
+            description: "Get the weather for a city.".into(),
             parameters: serde_json::json!({
                 "type": "object",
-                "properties": {
-                    "city": { "type": "string" }
-                },
-                "required": ["city"]
+                "properties": { "city": { "type": "string" } },
+                "required": ["city"],
             }),
         }
     }
 
     async fn execute(
         &self,
-        arguments: serde_json::Value,
-    ) -> Result<serde_json::Value, BlazenError> {
-        let city = arguments["city"].as_str().unwrap_or("unknown");
-        Ok(serde_json::json!({ "temp": 72, "city": city }))
+        args: serde_json::Value,
+    ) -> Result<ToolOutput<serde_json::Value>, BlazenError> {
+        let _city = args["city"].as_str().unwrap_or_default();
+        // Common case: return a structured value, no override.
+        Ok(serde_json::json!({ "temperature_f": 72, "conditions": "clear" }).into())
     }
 }
 ```
+
+**Sending a summary to the LLM while keeping the full payload visible to callers:**
+
+```rust
+use blazen_llm::{Tool, ToolDefinition, ToolOutput, LlmPayload, BlazenError};
+use async_trait::async_trait;
+
+# struct SearchTool;
+# #[async_trait]
+# impl Tool for SearchTool {
+#     fn definition(&self) -> ToolDefinition { unimplemented!() }
+async fn execute(
+    &self,
+    args: serde_json::Value,
+) -> Result<ToolOutput<serde_json::Value>, BlazenError> {
+    Ok(ToolOutput::with_override(
+        serde_json::json!({ "items": [1, 2, 3], "raw": "..." }),
+        LlmPayload::Text { text: "Found 3 items.".into() },
+    ))
+}
+# }
+```
+
+The full `data` payload is preserved in [`ChatMessage.tool_result`](#chatmessage) so application code can inspect the unredacted result, while only the `llm_override` is sent to the model on the next turn.
+
+---
+
+### `TypedTool`
+
+A generic wrapper that turns a typed handler `Fn(Args) -> Future<Output = Result<ToolOutput<Output>>>` into an implementation of `Tool`. Handles `serde_json::from_value` of the input and `serde_json::to_value` of the output for you, and auto-derives the JSON Schema in `ToolDefinition::parameters` via `schemars::schema_for!`.
+
+```rust
+pub struct TypedTool<Args, Output, F>
+where
+    Args: DeserializeOwned + JsonSchema + Send + 'static,
+    Output: Serialize + Send + 'static,
+    F: Fn(Args) -> BoxFut<Output> + Send + Sync + 'static,
+{ /* ... */ }
+
+impl<Args, Output, F> TypedTool<Args, Output, F> {
+    pub fn new(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        handler: F,
+    ) -> Self;
+}
+```
+
+**Usage:**
+
+```rust
+use blazen_llm::{TypedTool, ToolOutput};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize, JsonSchema)]
+struct AddArgs { a: i64, b: i64 }
+
+#[derive(Serialize)]
+struct AddOutput { sum: i64 }
+
+let add_tool = TypedTool::new(
+    "add",
+    "Add two numbers.",
+    |args: AddArgs| {
+        Box::pin(async move {
+            Ok(ToolOutput::new(AddOutput { sum: args.a + args.b }))
+        })
+    },
+);
+```
+
+#### `typed_tool_simple`
+
+Convenience constructor for the no-override common case. The handler returns `Result<Output>` directly; the wrapper applies `ToolOutput::new` for you.
+
+```rust
+pub fn typed_tool_simple<Args, Output, Fut, F>(
+    name: impl Into<String>,
+    description: impl Into<String>,
+    handler: F,
+) -> impl Tool
+where
+    Args: DeserializeOwned + JsonSchema + Send + 'static,
+    Output: Serialize + Send + 'static,
+    Fut: Future<Output = Result<Output, BlazenError>> + Send + 'static,
+    F: Fn(Args) -> Fut + Send + Sync + 'static;
+```
+
+**Usage:**
+
+```rust
+use blazen_llm::{typed_tool_simple, BlazenError};
+
+let add_tool = typed_tool_simple(
+    "add",
+    "Add two numbers.",
+    |args: AddArgs| async move {
+        Ok::<_, BlazenError>(AddOutput { sum: args.a + args.b })
+    },
+);
+```
+
+Why it exists: `TypedTool` does the `serde_json::from_value` of the input and `serde_json::to_value` of the output for you, exactly once per call. The JSON Schema in `ToolDefinition::parameters` is auto-derived from `Args` via `schemars::schema_for!`, so you do not have to hand-write the schema or repeat field names.
+
+---
+
+### `ToolOutput`
+
+The return type of `Tool::execute`. Carries the structured `data` that callers see, plus an optional `llm_override` controlling what the LLM receives on the next turn.
+
+```rust
+pub struct ToolOutput<T = Value> {
+    pub data: T,
+    pub llm_override: Option<LlmPayload>,
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `data` | `T` | Structured tool output. Visible to application code via [`ChatMessage.tool_result`](#chatmessage). |
+| `llm_override` | `Option<LlmPayload>` | If `Some`, replaces the default representation of `data` when serialised into the next prompt. If `None`, each provider applies a sensible default (see [`LlmPayload`](#llmpayload)). |
+
+**Constructors:**
+
+| Constructor | Signature | Description |
+|-------------|-----------|-------------|
+| `ToolOutput::new` | `fn(data: T) -> Self` | Wrap structured data with no override. The LLM sees the provider default. |
+| `ToolOutput::with_override` | `fn(data: T, override_payload: LlmPayload) -> Self` | Wrap structured data and pin exactly what the LLM receives next turn. |
+| `From<Value>` | `impl From<Value> for ToolOutput<Value>` | `value.into()` produces `ToolOutput { data: value, llm_override: None }`. Lets `Tool::execute` keep returning bare `Value`s with `Ok(value.into())`. |
+
+**Usage:**
+
+```rust
+use blazen_llm::{ToolOutput, LlmPayload};
+use serde_json::json;
+
+let plain = ToolOutput::new(json!({ "items": [1, 2, 3] }));
+
+let with_summary = ToolOutput::with_override(
+    json!({ "items": [1, 2, 3], "raw": "..." }),
+    LlmPayload::Text { text: "Found 3 items.".into() },
+);
+```
+
+Why it exists: many tools return large structured payloads that the application wants in full (logs, UI, downstream steps), but feeding all of it back into the next LLM call is wasteful or noisy. `ToolOutput` decouples the two channels so you can return rich `data` to the caller while pinning a compact summary for the model.
+
+---
+
+### `LlmPayload`
+
+The wire-format-agnostic shape of a tool result as it appears to the LLM. Used as `ToolOutput::llm_override` and as the second component of [`ChatMessage::tool_result_view`](#chatmessage).
+
+```rust
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum LlmPayload {
+    Text { text: String },
+    Json { value: serde_json::Value },
+    Parts { parts: Vec<ContentPart> },
+    ProviderRaw { provider: ProviderId, value: serde_json::Value },
+}
+```
+
+| Variant | Description |
+|---------|-------------|
+| `Text { text }` | Plain text. Sent as-is to providers that accept string tool results, or wrapped in `[{type: "text", text}]` for providers that require parts. |
+| `Json { value }` | Structured JSON. Each provider serialises this in its native shape (see per-provider behaviour below). |
+| `Parts { parts }` | A `Vec<ContentPart>` for multimodal tool results (text + images + files). Used together with [`ChatMessage::tool_result_parts`](#chatmessage). |
+| `ProviderRaw { provider, value }` | An exact, provider-specific payload. Bypasses Blazen's translation layer and is forwarded verbatim only when the active provider matches `provider`; other providers fall back to the default representation of `data`. |
+
+**Usage:**
+
+```rust
+use blazen_llm::{LlmPayload, ProviderId};
+use serde_json::json;
+
+LlmPayload::Text { text: "Found 3 results.".into() };
+LlmPayload::Json { value: json!({ "items": [1, 2, 3] }) };
+LlmPayload::ProviderRaw {
+    provider: ProviderId::Anthropic,
+    value: json!([{"type": "text", "text": "..."}]),
+};
+```
+
+**Per-provider behaviour for the default (no `llm_override`) case:**
+
+When a tool returns structured `data` and no `llm_override`, each provider sends a sensible default to the LLM:
+
+- **OpenAI / OpenAI-compat / Azure / Responses / Fal**: the data is JSON-stringified into the `content` field of the tool message.
+- **Anthropic**: structured data becomes `[{type: "text", text: <stringified-json>}]` inside `tool_result.content`.
+- **Gemini**: structured object data is passed natively as `functionResponse.response`. Scalars are wrapped as `{result: <scalar>}`.
+
+---
+
+### `ProviderId`
+
+Tags an [`LlmPayload::ProviderRaw`](#llmpayload) variant with the provider whose wire format the value follows. The runtime uses this to decide whether to forward the raw payload or fall back to the default representation.
+
+```rust
+pub enum ProviderId {
+    OpenAi,
+    OpenAiCompat,
+    Azure,
+    Anthropic,
+    Gemini,
+    Responses,
+    Fal,
+}
+```
+
+| Variant | Provider |
+|---------|----------|
+| `OpenAi` | `OpenAiProvider` |
+| `OpenAiCompat` | `OpenAiCompatProvider` (OpenRouter, Groq, Together, etc.) |
+| `Azure` | `AzureOpenAiProvider` |
+| `Anthropic` | `AnthropicProvider` |
+| `Gemini` | `GeminiProvider` |
+| `Responses` | OpenAI Responses API provider |
+| `Fal` | `FalProvider` |
 
 ---
 
@@ -253,7 +476,11 @@ A single message in a chat conversation.
 | Field | Type | Description |
 |-------|------|-------------|
 | `role` | `Role` | Who produced this message |
-| `content` | `MessageContent` | The message payload |
+| `content` | `MessageContent` | The message payload. For tool-result messages with a plain string return, the string lives here as `MessageContent::Text(s)`. |
+| `tool_calls` | `Vec<ToolCall>` | Tool invocations requested by the assistant on this message (empty for non-assistant roles). |
+| `tool_result` | `Option<ToolOutput<serde_json::Value>>` | Structured tool-result payload for tool-role messages. `Some` only when the tool returned non-string `data` or supplied an `llm_override`. Plain-string results live in `content` instead. |
+| `name` | `Option<String>` | Tool name (set for tool-role messages). |
+| `tool_call_id` | `Option<String>` | Provider-assigned `id` from the originating [`ToolCall`](#toolcall). |
 
 **Constructors:**
 
@@ -280,6 +507,97 @@ ChatMessage::user_parts(vec![
     }),
 ])
 ```
+
+#### `ChatMessage::tool_result`
+
+Build a tool-role message that closes a prior [`ToolCall`](#toolcall). Routes plain strings into `content` and structured payloads (or anything with an `llm_override`) onto the new `tool_result` sibling field.
+
+```rust
+pub fn tool_result(
+    call_id: impl Into<String>,
+    name: impl Into<String>,
+    output: impl Into<ToolOutput<serde_json::Value>>,
+) -> Self
+```
+
+| Argument | Description |
+|----------|-------------|
+| `call_id` | The `id` from the originating [`ToolCall`](#toolcall). Stored on `tool_call_id`. |
+| `name` | The tool name. Stored on `name`. |
+| `output` | A `ToolOutput<Value>` (or anything that converts via `From<Value>`, e.g. `serde_json::Value` directly). |
+
+**Routing rules:**
+
+- If `output.data == Value::String(s)` **and** `output.llm_override.is_none()`, the string is moved into `content` as `MessageContent::Text(s)` and `tool_result` stays `None`.
+- Otherwise, `output` is stored verbatim on `tool_result` and `content` is set to `MessageContent::Text(String::new())`.
+
+**Usage:**
+
+```rust
+use blazen_llm::{ChatMessage, ToolOutput, LlmPayload};
+use serde_json::json;
+
+// Plain string -- lives in content as a regular text message.
+ChatMessage::tool_result("call_1", "search", json!("hello"));
+
+// Structured -- lives in the tool_result sibling field.
+ChatMessage::tool_result("call_1", "search", json!({"items": [1, 2, 3]}));
+
+// With override -- full data preserved on the message,
+// summary sent to the LLM next turn.
+ChatMessage::tool_result(
+    "call_1",
+    "search",
+    ToolOutput::with_override(
+        json!({"items": [1, 2, 3], "raw": "..."}),
+        LlmPayload::Text { text: "Found 3 items.".into() },
+    ),
+);
+```
+
+:::caution[Breaking change]
+Earlier versions accepted `content: impl Into<String>` and stored the string verbatim. The new signature accepts `output: impl Into<ToolOutput<Value>>`. Callers that passed a `&str` should switch to `serde_json::Value::String(s.into())` or `serde_json::json!(s)`.
+:::
+
+#### `ChatMessage::tool_result_parts`
+
+Build a tool-role message whose result carries multimodal content (text + images + files). The parts ride on `tool_result` as `LlmPayload::Parts { parts }` so providers that support multimodal tool results (Anthropic, Gemini) can forward them natively.
+
+```rust
+pub fn tool_result_parts(
+    call_id: impl Into<String>,
+    name: impl Into<String>,
+    parts: Vec<ContentPart>,
+) -> Self
+```
+
+**Usage:**
+
+```rust
+use blazen_llm::{ChatMessage, ContentPart, ImageContent, ImageSource};
+
+ChatMessage::tool_result_parts(
+    "call_1",
+    "render_chart",
+    vec![
+        ContentPart::Text { text: "Rendered the requested chart.".into() },
+        ContentPart::Image(ImageContent {
+            source: ImageSource::Url { url: "https://example.com/chart.png".into() },
+            media_type: Some("image/png".into()),
+        }),
+    ],
+);
+```
+
+#### `ChatMessage::tool_result_view`
+
+Accessor returning both channels of a tool-result message in a single call. Used internally by provider implementations that need to choose between the structured `data` and an explicit `llm_override` when serialising to the wire format.
+
+```rust
+pub fn tool_result_view(&self) -> Option<(serde_json::Value, Option<&LlmPayload>)>
+```
+
+Returns `None` for non-tool-role messages. For tool-role messages it returns `Some((data, override))` where `data` is the raw `serde_json::Value` payload (drawn from `tool_result.data` when present, otherwise reconstructed from the plain-string `content`) and `override` is the optional `&LlmPayload` from `tool_result.llm_override`.
 
 ---
 

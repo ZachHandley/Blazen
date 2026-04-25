@@ -168,6 +168,56 @@ pub(crate) fn content_to_openai_value(content: &MessageContent) -> serde_json::V
     }
 }
 
+/// Render a tool-result message as a string for OpenAI-family wire formats.
+///
+/// Honors `LlmPayload::Text`, `Json`, `Parts`, and `ProviderRaw` overrides
+/// when present. `ProviderRaw` only applies if `self_provider` matches the
+/// payload's `provider`; otherwise it falls back to the default conversion
+/// of `data`. Plain-string `data` passes through unchanged; structured
+/// `data` is JSON-stringified once at this boundary.
+///
+/// Returns an empty string when the message is not a tool-result message
+/// (i.e. `tool_result_view` returns `None`).
+pub(crate) fn tool_result_to_openai_string(
+    msg: &crate::types::ChatMessage,
+    self_provider: crate::types::ProviderId,
+) -> String {
+    let Some((data, override_payload)) = msg.tool_result_view() else {
+        return String::new();
+    };
+
+    if let Some(payload) = override_payload {
+        return match payload {
+            crate::types::LlmPayload::Text { text } => text.clone(),
+            crate::types::LlmPayload::Json { value } => stringify_value(value),
+            crate::types::LlmPayload::Parts { parts } => parts
+                .iter()
+                .filter_map(|p| match p {
+                    crate::types::ContentPart::Text { text } => Some(text.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+            crate::types::LlmPayload::ProviderRaw { provider, value }
+                if *provider == self_provider =>
+            {
+                stringify_value(value)
+            }
+            crate::types::LlmPayload::ProviderRaw { .. } => stringify_value(&data),
+        };
+    }
+
+    stringify_value(&data)
+}
+
+#[allow(dead_code)] // Used by `tool_result_to_openai_string`; Wave 5 activates the call sites.
+fn stringify_value(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(s) => s.clone(),
+        other => serde_json::to_string(other).unwrap_or_default(),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -212,5 +262,90 @@ mod tests {
     fn parse_retry_after_zero() {
         let h = headers(&[("Retry-After", "0")]);
         assert_eq!(parse_retry_after(&h), Some(0));
+    }
+}
+
+#[cfg(test)]
+mod tool_result_string_tests {
+    use super::tool_result_to_openai_string;
+    use crate::types::{ChatMessage, ContentPart, LlmPayload, ProviderId, ToolOutput};
+
+    #[test]
+    fn structured_data_stringifies_at_boundary() {
+        let msg = ChatMessage::tool_result("call_1", "search", serde_json::json!({"k":"v"}));
+        assert_eq!(
+            tool_result_to_openai_string(&msg, ProviderId::OpenAi),
+            "{\"k\":\"v\"}"
+        );
+    }
+
+    #[test]
+    fn string_data_passes_through() {
+        let msg = ChatMessage::tool_result("call_1", "search", serde_json::json!("hello"));
+        assert_eq!(
+            tool_result_to_openai_string(&msg, ProviderId::OpenAi),
+            "hello"
+        );
+    }
+
+    #[test]
+    fn text_override_wins() {
+        let msg = ChatMessage::tool_result(
+            "call_1",
+            "search",
+            ToolOutput::with_override(
+                serde_json::json!({"items":[1,2,3]}),
+                LlmPayload::Text {
+                    text: "summary".into(),
+                },
+            ),
+        );
+        assert_eq!(
+            tool_result_to_openai_string(&msg, ProviderId::OpenAi),
+            "summary"
+        );
+    }
+
+    #[test]
+    fn provider_raw_only_applies_to_target() {
+        let msg = ChatMessage::tool_result(
+            "call_1",
+            "search",
+            ToolOutput::with_override(
+                serde_json::json!({"k":"v"}),
+                LlmPayload::ProviderRaw {
+                    provider: ProviderId::Anthropic,
+                    value: serde_json::json!("anthropic-only"),
+                },
+            ),
+        );
+        // OpenAI is not the target — falls back to default conversion of data.
+        assert_eq!(
+            tool_result_to_openai_string(&msg, ProviderId::OpenAi),
+            "{\"k\":\"v\"}"
+        );
+        // Anthropic IS the target — value passes through (stringified).
+        assert_eq!(
+            tool_result_to_openai_string(&msg, ProviderId::Anthropic),
+            "anthropic-only"
+        );
+    }
+
+    #[test]
+    fn parts_override_concatenates_text() {
+        let msg = ChatMessage::tool_result(
+            "call_1",
+            "search",
+            ToolOutput::with_override(
+                serde_json::json!({}),
+                LlmPayload::Parts {
+                    parts: vec![ContentPart::text("line1"), ContentPart::text("line2")],
+                },
+            ),
+        );
+        assert_eq!(
+            tool_result_to_openai_string(&msg, ProviderId::OpenAi),
+            "line1\nline2"
+        );
     }
 }

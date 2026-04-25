@@ -41,6 +41,6 @@ pub use request_timing::PyRequestTiming;
 pub use response_format::PyResponseFormat;
 pub use stream::StreamChunk;
 pub use tokens::{count_message_tokens, estimate_tokens};
-pub use tool::ToolCall;
+pub use tool::{PyLlmPayload, PyToolOutput, ToolCall};
 pub use transcription::PyTranscription;
 pub use usage::{RequestTiming, TokenUsage};

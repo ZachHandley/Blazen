@@ -8,9 +8,11 @@ order: 3
 
 ## Overview
 
-The `runAgent` function executes an agentic tool-calling loop entirely within the WASM module. The model decides which tools to call, the WASM runtime invokes your JavaScript handler functions, feeds the results back, and repeats until the model finishes or `maxIterations` is reached.
+The `runAgent` function executes an agentic tool-calling loop entirely within the WASM module. The model decides which tools to call, the WASM runtime invokes each tool's JavaScript `handler` function, feeds the result back, and repeats until the model finishes or `maxIterations` is reached.
 
 ## Basic agent
+
+Each tool object is `{ name, description, parameters, handler }`. The `handler` is called with the parsed argument object and may be sync or async.
 
 ```typescript
 import init, { CompletionModel, ChatMessage, runAgent } from '@blazen/sdk';
@@ -29,6 +31,10 @@ const tools = [
       properties: { city: { type: 'string' } },
       required: ['city'],
     },
+    handler: async (args) => {
+      // Bare value: dispatcher wraps as { data: <value>, llm_override: null }.
+      return { temp: 22, condition: 'cloudy', city: args.city };
+    },
   },
 ];
 
@@ -36,46 +42,123 @@ const result = await runAgent(
   model,
   [ChatMessage.user('What is the weather in Tokyo?')],
   tools,
-  async (toolName, args) => {
-    if (toolName === 'getWeather') {
-      return { temp: 22, condition: 'cloudy', city: args.city };
-    }
-    throw new Error(`Unknown tool: ${toolName}`);
-  }
+  { maxIterations: 5 },
 );
 
-console.log(result.response.content);
+console.log(result.content);
 console.log(`Iterations: ${result.iterations}`);
 ```
 
 ## Tool handlers
 
-The fourth argument to `runAgent` is a JavaScript async function. It receives:
+A tool's `handler` is called with the parsed argument object that matches the tool's JSON Schema. It must return one of the following:
 
-- `toolName` -- the name of the tool the model wants to call.
-- `args` -- parsed JSON arguments matching the tool's parameter schema.
-
-Return any JSON-serializable value. The WASM runtime serializes it back into the conversation as a tool result message.
+- **A bare value.** Anything JSON-serializable — string, number, object, array. The WASM dispatcher wraps it automatically as a `ToolOutput { data: <value>, llm_override: null }`.
+- **A structured `ToolOutput`.** A literal `{ data, llmOverride? }` object (or snake-cased `{ data, llm_override? }` — both are accepted). `data` is what your code sees programmatically; `llmOverride` is what gets sent back to the model on the next turn.
 
 ```typescript
-async function toolHandler(toolName: string, args: Record<string, unknown>) {
-  switch (toolName) {
-    case 'search':
-      return await fetch(`/api/search?q=${args.query}`).then(r => r.json());
-    case 'calculate':
-      return { result: eval(args.expression as string) };
-    default:
-      throw new Error(`Unknown tool: ${toolName}`);
+const tools = [
+  {
+    name: 'search',
+    description: 'Search the documentation',
+    parameters: {
+      type: 'object',
+      properties: { query: { type: 'string' } },
+      required: ['query'],
+    },
+    handler: async (args) => {
+      const hits = await fetch(`/api/search?q=${args.query}`).then((r) => r.json());
+      // Bare-value return: hits flow through to the model verbatim.
+      return hits;
+    },
+  },
+  {
+    name: 'calculate',
+    description: 'Evaluate an arithmetic expression',
+    parameters: {
+      type: 'object',
+      properties: { expression: { type: 'string' } },
+      required: ['expression'],
+    },
+    handler: (args) => ({ result: eval(args.expression) }),
+  },
+];
+```
+
+If a tool throws (or rejects), the runtime surfaces the error as a tool-result message containing the error text, allowing the model to recover. If the handler returns nothing (`undefined`), the dispatcher records an empty result.
+
+## Structured tool results
+
+For larger payloads, return a `ToolOutput` literal so the caller-visible `data` and the model-visible override can diverge. Both `llmOverride` (camelCase) and `llm_override` (snake_case) are accepted by the dispatcher; the spelling is normalized before deserialization.
+
+```typescript
+const tools = [
+  {
+    name: 'fetchProfile',
+    description: 'Fetch a full user profile',
+    parameters: {
+      type: 'object',
+      properties: { userId: { type: 'string' } },
+      required: ['userId'],
+    },
+    handler: async (args) => {
+      const profile = await db.users.findById(args.userId);
+      return {
+        // Caller (your application code) gets the full record.
+        data: profile,
+        // Model sees a compact text summary on the next turn.
+        llmOverride: {
+          kind: 'text',
+          text: `User ${profile.name} (id=${profile.id}, ${profile.role})`,
+        },
+      };
+    },
+  },
+];
+```
+
+The `LlmPayload` shape used by `llmOverride` has four variants — see the [WASM API reference](/docs/api/wasm#llmpayload) for the full table:
+
+```typescript
+type LlmPayload =
+  | { kind: 'text'; text: string }
+  | { kind: 'json'; value: any }
+  | { kind: 'parts'; parts: ContentPart[] }
+  | { kind: 'provider_raw'; provider: ProviderId; value: any };
+```
+
+### Inspecting `tool_result` on returned messages
+
+After `runAgent` resolves, every entry in `result.messages` matches the tsify-generated `ChatMessage` interface (snake_case fields). Tool-result messages carry a `tool_result?: ToolOutput` whenever the handler returned a non-string `data` or supplied an `llm_override`:
+
+```typescript
+const result = await runAgent(model, messages, tools, { maxIterations: 5 });
+
+for (const msg of result.messages) {
+  if (msg.role !== 'tool') continue;
+
+  if (msg.tool_result) {
+    // Structured payload: full data plus optional override.
+    console.log('tool', msg.name, 'returned', msg.tool_result.data);
+    if (msg.tool_result.llm_override) {
+      console.log('  (model saw:', msg.tool_result.llm_override, ')');
+    }
+  } else {
+    // Plain string return: the result lives in content as text.
+    console.log('tool', msg.name, 'returned', msg.content);
   }
 }
 ```
 
+> **Field naming.** The tsify-generated interface preserves Rust snake_case, so the field is `tool_result` and the override is `llm_override`. The wasm-bindgen `ChatMessage` class additionally exposes `.toolCallId` and `.name` getters in camelCase.
+
 ## Agent options
 
-Pass an options object as the fifth argument:
+Pass an options object as the fourth argument:
 
 ```typescript
-const result = await runAgent(model, messages, tools, handler, {
+const result = await runAgent(model, messages, tools, {
+  toolConcurrency: 2,
   maxIterations: 5,
   systemPrompt: 'You are a helpful research assistant.',
   temperature: 0.3,
@@ -86,6 +169,7 @@ const result = await runAgent(model, messages, tools, handler, {
 
 | Option | Type | Default | Description |
 |---|---|---|---|
+| `toolConcurrency` | `number` | `0` | Max concurrent tool calls per round (`0` = unlimited) |
 | `maxIterations` | `number` | `10` | Maximum tool-calling rounds |
 | `systemPrompt` | `string` | -- | System prompt prepended to the conversation |
 | `temperature` | `number` | -- | Sampling temperature |
@@ -110,22 +194,24 @@ const extractTools = [
       },
       required: ['name'],
     },
+    handler: async (args) => {
+      // The model fills `args` with the extracted fields; we just echo
+      // them back as the tool result so the loop can terminate.
+      return args;
+    },
   },
 ];
-
-let extracted = null;
 
 const result = await runAgent(
   model,
   [ChatMessage.user('Extract: John Doe, john@example.com, 555-1234')],
   extractTools,
-  async (toolName, args) => {
-    extracted = args;
-    return 'Extracted successfully.';
-  },
-  { maxIterations: 1 }
+  { maxIterations: 1 },
 );
 
+// The extracted fields live on the tool-result message.
+const toolMsg = result.messages.find((m) => m.role === 'tool');
+const extracted = toolMsg?.tool_result?.data ?? JSON.parse(toolMsg?.content ?? '{}');
 console.log(extracted);
 // { name: "John Doe", email: "john@example.com", phone: "555-1234" }
 ```
@@ -136,10 +222,11 @@ console.log(extracted);
 
 ```typescript
 interface AgentResult {
-  response: CompletionResponse; // Final completion response
-  messages: object[];           // Full message history
-  iterations: number;           // Number of tool-calling iterations
-  totalCost?: number;           // Aggregated cost in USD
+  content?: string;          // Final text response
+  messages: ChatMessage[];   // Full message history (tsify shape)
+  iterations: number;        // Number of tool-calling iterations
+  totalUsage?: TokenUsage;   // Aggregated token usage
+  totalCost?: number;        // Aggregated cost in USD
 }
 ```
 

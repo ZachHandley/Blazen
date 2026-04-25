@@ -131,6 +131,7 @@ impl JsChatMessage {
                 tool_call_id: None,
                 name: None,
                 tool_calls: Vec::new(),
+                tool_result: None,
             },
         })
     }
@@ -239,6 +240,30 @@ impl JsChatMessage {
     #[napi(getter)]
     pub fn content(&self) -> Option<String> {
         self.inner.content.text_content()
+    }
+
+    /// The structured tool-result payload, if this message is a tool result
+    /// produced by a tool returning a non-string value or carrying an
+    /// `llmOverride`. Plain-string tool results live in `content` instead and
+    /// this returns `null`.
+    #[napi(getter, js_name = "toolResult")]
+    pub fn tool_result(&self) -> Option<crate::types::tool_output::ToolOutput> {
+        self.inner
+            .tool_result
+            .as_ref()
+            .map(crate::types::tool_output::ToolOutput::from_rust)
+    }
+
+    /// The tool call ID this message responds to, for `Role::Tool` messages.
+    #[napi(getter, js_name = "toolCallId")]
+    pub fn tool_call_id(&self) -> Option<String> {
+        self.inner.tool_call_id.clone()
+    }
+
+    /// The tool/function name that produced this result, for `Role::Tool` messages.
+    #[napi(getter)]
+    pub fn name(&self) -> Option<String> {
+        self.inner.name.clone()
     }
 }
 

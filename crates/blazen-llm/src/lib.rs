@@ -95,6 +95,7 @@ pub mod quantization;
 pub mod retry;
 pub mod tokens;
 pub mod traits;
+pub mod typed_tool;
 pub mod types;
 
 pub use providers::custom::{CustomProvider, HostDispatch};
@@ -160,11 +161,13 @@ pub use traits::{
     CompletionModel, EmbeddingModel, LocalModel, ModelCapabilities, ModelInfo, ModelPricing,
     ModelRegistry, ProviderCapabilities, ProviderConfig, ProviderInfo, StructuredOutput, Tool,
 };
+pub use typed_tool::{TypedTool, typed_tool_simple};
 pub use types::{
     Artifact, AudioContent, ChatMessage, Citation, CompletionRequest, CompletionResponse,
     ContentPart, EmbeddingResponse, FileContent, FinishReason, ImageContent, ImageSource,
-    MediaSource, MessageContent, ReasoningTrace, RequestTiming, ResponseFormat, Role, StreamChunk,
-    StructuredResponse, TokenUsage, ToolCall, ToolDefinition, VideoContent,
+    LlmPayload, MediaSource, MessageContent, ProviderId, ReasoningTrace, RequestTiming,
+    ResponseFormat, Role, StreamChunk, StructuredResponse, TokenUsage, ToolCall, ToolDefinition,
+    ToolOutput, VideoContent,
 };
 
 // ---------------------------------------------------------------------------

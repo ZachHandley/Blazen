@@ -168,6 +168,7 @@ A class for building typed chat messages.
 | `ChatMessage.user(content: string)` | Create a user message |
 | `ChatMessage.assistant(content: string)` | Create an assistant message |
 | `ChatMessage.tool(content: string)` | Create a tool result message |
+| `ChatMessage.toolResultMessage(callId: string, name: string, content: string)` | Create a tool result message with a tool-call ID and function name. (Named `toolResultMessage` to avoid colliding with the `.toolResult` instance getter that surfaces the structured payload of an existing message.) |
 | `ChatMessage.userImageUrl(text: string, url: string, mediaType?: string)` | User message with text and an image URL |
 | `ChatMessage.userImageBase64(text: string, data: string, mediaType: string)` | User message with text and a base64-encoded image |
 
@@ -189,6 +190,160 @@ new ChatMessage({ role?: string, content?: string, parts?: ContentPart[] })
 |---|---|---|
 | `.role` | `string` | `"system"`, `"user"`, `"assistant"`, or `"tool"` |
 | `.content` | `string \| undefined` | The text content of the message |
+| `.toolCallId` | `string \| undefined` | The tool-call ID this message is responding to (only set for tool-result messages) |
+| `.name` | `string \| undefined` | The function name of the tool that produced this result (only set for tool-result messages) |
+
+### JSON Shape
+
+`ChatMessage.toJSON()` (and the entries in the `messages` array returned by `runAgent`) match the tsify-generated `ChatMessage` interface:
+
+```typescript
+interface ChatMessage {
+  role: "system" | "user" | "assistant" | "tool";
+  content: MessageContent;
+  tool_call_id?: string;
+  name?: string;
+  tool_calls?: ToolCall[];
+  tool_result?: ToolOutput;  // structured tool-result payload (see below)
+}
+```
+
+The `tool_result` field is populated when a tool handler returns a non-string value or supplies an `llm_override`. Plain-string tool results live in `content` as `MessageContent::Text` instead. The field name is `tool_result` (snake_case) because tsify preserves Rust field naming.
+
+> **Tip.** The tsify-generated interface lives in `crates/blazen-wasm-sdk/pkg/blazen_wasm_sdk.d.ts` and is regenerated on every `pnpm build` (or `wasm-pack build --target bundler`) inside `crates/blazen-wasm-sdk/`. See the [WASM Quickstart](/docs/guides/wasm/quickstart) for the build flow.
+
+---
+
+## ToolOutput
+
+The two-channel tool result emitted by JS tool handlers and surfaced on `ChatMessage.tool_result`.
+
+```typescript
+interface ToolOutput {
+  /**
+   * The full structured payload the caller sees programmatically. Any
+   * JSON-serializable value (object, array, string, number, etc).
+   */
+  data: any;
+
+  /**
+   * Optional override for the body sent back to the model on the next
+   * turn. When `null` / absent, each provider applies its default
+   * conversion from `data`.
+   */
+  llm_override?: LlmPayload | null;
+}
+```
+
+The two channels exist because what the rest of your application wants to consume from a tool (full structured data, large blobs, internal IDs) is rarely the best thing to feed back to the LLM (token-heavy, leaks internal shape). Set `data` to the rich payload your code consumes, and use `llm_override` when you want to send the model a trimmed summary or a provider-specific shape instead.
+
+The WASM dispatcher accepts either `llm_override` (snake) or `llmOverride` (camel) when a JS handler returns a structured object — both spellings are normalized before the value is parsed. This means the spelling you write in JS is up to you; both work.
+
+### Tool handler return shapes
+
+The WASM tool dispatcher (`js_to_tool_output` in `crates/blazen-wasm-sdk/src/agent.rs`) accepts two shapes from a handler:
+
+```javascript
+// 1. Bare value: wrapped automatically as { data: <value>, llm_override: null }.
+const tool = {
+  name: 'getWeather',
+  description: 'Get the current weather for a city',
+  parameters: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] },
+  handler: async (args) => ({ temp: 22, condition: 'cloudy', city: args.city }),
+};
+
+// 2. Structured ToolOutput: object literal with a `data` key.
+const structuredTool = {
+  name: 'fetchProfile',
+  description: 'Fetch a full user profile',
+  parameters: { type: 'object', properties: { userId: { type: 'string' } }, required: ['userId'] },
+  handler: async (args) => {
+    const profile = await db.users.findById(args.userId);  // huge blob
+    return {
+      data: profile,                                         // caller sees full record
+      llmOverride: {                                         // model sees compact summary
+        kind: 'text',
+        text: `User ${profile.name} (id=${profile.id})`,
+      },
+    };
+  },
+};
+```
+
+If a handler returns a string and that string happens to parse as JSON describing a `ToolOutput`, the dispatcher unpacks it. Otherwise the string is preserved as plain text. If `ToolOutput` deserialization fails (for instance, a malformed `llm_override`), the dispatcher silently falls back to wrapping the raw value as `{ data, llm_override: null }` rather than throwing.
+
+---
+
+## LlmPayload
+
+The override sent to the LLM on the next turn (the optional `llm_override` field of `ToolOutput`). Discriminated union keyed by `kind`:
+
+| `kind` | Shape | Description |
+|---|---|---|
+| `"text"` | `{ kind: "text"; text: string }` | Plain text. Works on every provider universally. |
+| `"json"` | `{ kind: "json"; value: any }` | Structured JSON. Anthropic and Gemini consume it natively; OpenAI / Responses / Azure / Fal stringify at the wire boundary. |
+| `"parts"` | `{ kind: "parts"; parts: ContentPart[] }` | Multimodal content blocks. Anthropic supports natively as `tool_result.content` blocks; OpenAI falls back to text; Gemini falls back to a JSON object. |
+| `"provider_raw"` | `{ kind: "provider_raw"; provider: ProviderId; value: any }` | Provider-specific escape hatch. Only the named provider sees `value`; every other provider falls back to the default conversion from `ToolOutput.data`. |
+
+`ProviderId` is the snake_case enum:
+
+```typescript
+type ProviderId =
+  | "openai"
+  | "openai_compat"
+  | "azure"
+  | "anthropic"
+  | "gemini"
+  | "responses"
+  | "fal";
+```
+
+### Per-provider behavior for `data` (when `llm_override` is null)
+
+When no override is set, each provider applies its default conversion to `ToolOutput.data`:
+
+- **OpenAI / OpenAI-compat / Azure / Responses / Fal:** the value is JSON-stringified once and sent as the tool-result string.
+- **Anthropic:** structured data becomes `[{ type: "text", text: <stringified> }]` so it lands inside `tool_result.content` blocks.
+- **Gemini:** a structured object passes through as the `response` field of the function-response part; scalar values (numbers, booleans, strings) are wrapped as `{ result: scalar }` to satisfy Gemini's object-only contract.
+
+### Examples
+
+```typescript
+// Send a compact text summary while keeping the full record in `data`.
+return {
+  data: { id: 42, items: bigArray, internal: '...' },
+  llmOverride: { kind: 'text', text: '42 items processed' },
+};
+
+// Force JSON semantics regardless of provider default.
+return {
+  data: { ok: true, count: 17 },
+  llmOverride: { kind: 'json', value: { ok: true, count: 17 } },
+};
+
+// Multimodal: send an image back to the model (Anthropic native; falls
+// back to text on OpenAI; falls back to a JSON object on Gemini).
+return {
+  data: { url: 'https://example.com/photo.png' },
+  llmOverride: {
+    kind: 'parts',
+    parts: [
+      { type: 'text', text: 'Here is the photo:' },
+      { type: 'image', source: { url: 'https://example.com/photo.png' } },
+    ],
+  },
+};
+
+// Anthropic-only escape hatch: send a raw provider blob.
+return {
+  data: { ok: true },
+  llmOverride: {
+    kind: 'provider_raw',
+    provider: 'anthropic',
+    value: { type: 'text', text: 'anthropic-only payload' },
+  },
+};
+```
 
 ---
 
@@ -287,7 +442,7 @@ const result = await runAgent(model, messages, tools, options?);
 |---|---|---|
 | `model` | `CompletionModel` | The completion model to use |
 | `messages` | `ChatMessage[]` | Initial conversation messages |
-| `tools` | `ToolDef[]` | Tool definitions. Each tool object has `name`, `description`, `parameters` (JSON Schema), and a `handler` function that is called with the arguments object and should return a string or JSON value (may be async). |
+| `tools` | `ToolDef[]` | Tool definitions. Each tool object has `name`, `description`, `parameters` (JSON Schema), and a `handler(args) => any \| Promise<any>` that returns either a bare JSON-serializable value or a structured [`ToolOutput`](#tooloutput) (an object with a `data` key, plus an optional `llm_override` / `llmOverride`). See the [tool handler return shapes](#tool-handler-return-shapes) above. |
 | `options` | `AgentRunOptions?` | Optional configuration |
 
 ### AgentRunOptions
@@ -308,12 +463,14 @@ interface AgentRunOptions {
 ```typescript
 interface AgentResult {
   content?: string;                // Final text response
-  messages: object[];              // Full message history
+  messages: ChatMessage[];         // Full message history (each entry matches the tsify ChatMessage interface)
   iterations: number;              // Number of iterations
   totalUsage?: TokenUsage;         // Aggregated token usage
   totalCost?: number;              // Aggregated cost in USD
 }
 ```
+
+Tool-result messages in `messages` carry a `tool_result?: ToolOutput` field whenever the handler returned a non-string `data` or supplied an `llm_override`. Plain string returns appear as `content: { Text: "..." }` on a `role: "tool"` message with no `tool_result` field.
 
 ---
 
