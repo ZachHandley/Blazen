@@ -30,11 +30,11 @@ interface UsageInfo {
 // Helper: accumulate token usage in context
 // ---------------------------------------------------------------------------
 async function trackUsage(ctx: Context, usage: UsageInfo): Promise<void> {
-  const prev: UsageInfo = (await ctx.get("total_usage")) || {
+  const prev: UsageInfo = await ctx.get("total_usage", {
     promptTokens: 0,
     completionTokens: 0,
     totalTokens: 0,
-  };
+  });
   await ctx.set("total_usage", {
     promptTokens: prev.promptTokens + (usage.promptTokens || 0),
     completionTokens: prev.completionTokens + (usage.completionTokens || 0),

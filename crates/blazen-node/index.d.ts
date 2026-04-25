@@ -333,10 +333,12 @@ export declare class Context {
   /**
    * Retrieve a value previously stored under the given key.
    *
-   * Returns `Buffer` for binary data, the original JS value for JSON data,
-   * or `null` if the key does not exist.
+   * Returns the original JS value for JSON data, an array-of-bytes
+   * representation for binary data (use `getBytes` for proper
+   * `Buffer` round-trip), or `defaultValue` if the key is missing
+   * or the stored value is `null`/`Native`.
    */
-  get(key: string): Promise<StateValue | null>
+  get(key: string, defaultValue?: StateValue): Promise<StateValue | null>
   /**
    * Emit an event into the internal routing queue.
    *
@@ -362,10 +364,11 @@ export declare class Context {
   /**
    * Retrieve raw binary data previously stored under the given key.
    *
-   * Returns `null` if the key does not exist or the stored value is
-   * not binary data.
+   * Returns `defaultValue` if the key does not exist or the stored
+   * value is not binary data; if no default is provided, returns
+   * `null`.
    */
-  getBytes(key: string): Promise<Buffer | null>
+  getBytes(key: string, defaultValue?: Buffer): Promise<Buffer | null>
   /** Get the workflow run ID. */
   runId(): Promise<string>
   /**
@@ -1187,9 +1190,9 @@ export declare class SessionNamespace {
   set(key: string, value: unknown): Promise<void>
   /**
    * Retrieve a value previously stored under the given key. Returns
-   * `null` if the key does not exist.
+   * `defaultValue` if the key is missing.
    */
-  get(key: string): Promise<unknown>
+  get(key: string, defaultValue?: unknown): Promise<unknown>
   /** Check whether a value exists under the given key. */
   has(key: string): Promise<boolean>
   /** Remove the value stored under the given key. */
@@ -1207,12 +1210,18 @@ export type JsSessionNamespace = SessionNamespace
 export declare class StateNamespace {
   /** Store a JSON-serializable value under the given key. */
   set(key: string, value: Exclude<StateValue, Buffer>): Promise<void>
-  /** Retrieve a value previously stored under the given key. */
-  get(key: string): Promise<StateValue | null>
+  /**
+   * Retrieve a value previously stored under the given key.
+   * Returns `defaultValue` if the key is missing.
+   */
+  get(key: string, defaultValue?: StateValue): Promise<StateValue | null>
   /** Store raw binary data under the given key. */
   setBytes(key: string, data: Buffer): Promise<void>
-  /** Retrieve raw binary data previously stored under the given key. */
-  getBytes(key: string): Promise<Buffer | null>
+  /**
+   * Retrieve raw binary data previously stored under the given key.
+   * Returns `defaultValue` if the key is missing.
+   */
+  getBytes(key: string, defaultValue?: Buffer): Promise<Buffer | null>
 }
 export type JsStateNamespace = StateNamespace
 

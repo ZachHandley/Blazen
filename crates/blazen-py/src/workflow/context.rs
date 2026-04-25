@@ -99,53 +99,24 @@ impl PyContext {
     ///
     /// Returns the original Python type: JSON values as their Python
     /// equivalents, binary data as `bytes`, pickled objects as their
-    /// original type, live references as-is. Returns `None` if the key
-    /// does not exist.
+    /// original type, live references as-is. If the key is missing,
+    /// or the stored value would resolve to Python `None`, the
+    /// `default` argument is returned instead (default: `None`).
     ///
     /// Args:
     ///     key: The storage key.
+    ///     default: Value to return when the key is missing. Defaults
+    ///         to `None`.
     ///
     /// Returns:
-    ///     The stored value in its original type, or None.
-    fn get(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
-        // Check for BlazenState per-field metadata.
-        {
-            let meta_key = format!("{key}.__blazen_meta__");
-            let inner = self.inner.clone();
-            if let Some(blazen_core::StateValue::Json(meta)) =
-                block_on_context(async { inner.get_value(&meta_key).await })
-            {
-                return self.get_blazen_state(py, key, &meta);
-            }
+    ///     The stored value in its original type, or `default`.
+    #[pyo3(signature = (key, default=None))]
+    fn get(&self, py: Python<'_>, key: &str, default: Option<Py<PyAny>>) -> PyResult<Py<PyAny>> {
+        let val = self.get_inner(py, key)?;
+        if val.bind(py).is_none() {
+            return Ok(default.unwrap_or_else(|| py.None()));
         }
-
-        // Fall through to Rust core (tiers 1-3).
-        let inner = self.inner.clone();
-        let key_owned = key.to_string();
-        let val = block_on_context(async { inner.get_value(&key_owned).await });
-        match val {
-            Some(blazen_core::StateValue::Json(v)) => crate::convert::json_to_py(py, &v),
-            Some(blazen_core::StateValue::Bytes(b)) => {
-                Ok(pyo3::types::PyBytes::new(py, &b.0).into_any().unbind())
-            }
-            Some(blazen_core::StateValue::Native(b)) => {
-                let pickle = py.import("pickle")?;
-                let obj = pickle.call_method1("loads", (&b.0[..],))?;
-                Ok(obj.unbind())
-            }
-            None => {
-                // Check opaque object store (tier 4 values).
-                // Stored as Arc<Py<PyAny>> because Py<PyAny> isn't Clone.
-                let inner = self.inner.clone();
-                let key_owned = key.to_string();
-                if let Some(obj) =
-                    block_on_context(async { inner.get_object::<Arc<Py<PyAny>>>(&key_owned).await })
-                {
-                    return Ok(obj.clone_ref(py));
-                }
-                Ok(py.None())
-            }
-        }
+        Ok(val)
     }
 
     /// Emit an event into the internal routing queue.
@@ -205,18 +176,21 @@ impl PyContext {
 
     /// Retrieve raw binary data previously stored under the given key.
     ///
-    /// Returns None if the key does not exist or the stored value is
-    /// not binary data.
+    /// Returns `default` (which itself defaults to `None`) if the key
+    /// does not exist or the stored value is not binary data.
     ///
     /// Args:
     ///     key: The storage key.
+    ///     default: Bytes to return when the key is missing. Defaults
+    ///         to `None`.
     ///
     /// Returns:
-    ///     The stored bytes, or None.
-    fn get_bytes(&self, _py: Python<'_>, key: &str) -> Option<Vec<u8>> {
+    ///     The stored bytes, or `default`.
+    #[pyo3(signature = (key, default=None))]
+    fn get_bytes(&self, _py: Python<'_>, key: &str, default: Option<Vec<u8>>) -> Option<Vec<u8>> {
         let inner = self.inner.clone();
         let key = key.to_string();
-        block_on_context(async { inner.get_bytes(&key).await })
+        block_on_context(async { inner.get_bytes(&key).await }).or(default)
     }
 
     /// Get the workflow run ID.
@@ -293,9 +267,11 @@ impl PyStateNamespace {
     }
 
     /// Retrieve a value previously stored under the given key.
-    fn get(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
+    /// If the key is missing, returns `default` (defaults to `None`).
+    #[pyo3(signature = (key, default=None))]
+    fn get(&self, py: Python<'_>, key: &str, default: Option<Py<PyAny>>) -> PyResult<Py<PyAny>> {
         let ctx = PyContext::new(self.inner.clone());
-        ctx.get(py, key)
+        ctx.get(py, key, default)
     }
 
     /// Store raw binary data under the given key.
@@ -306,9 +282,11 @@ impl PyStateNamespace {
     }
 
     /// Retrieve raw binary data previously stored under the given key.
-    fn get_bytes(&self, py: Python<'_>, key: &str) -> Option<Vec<u8>> {
+    /// If the key is missing, returns `default` (defaults to `None`).
+    #[pyo3(signature = (key, default=None))]
+    fn get_bytes(&self, py: Python<'_>, key: &str, default: Option<Vec<u8>>) -> Option<Vec<u8>> {
         let ctx = PyContext::new(self.inner.clone());
-        ctx.get_bytes(py, key)
+        ctx.get_bytes(py, key, default)
     }
 
     fn __setitem__(&self, py: Python<'_>, key: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
@@ -316,7 +294,7 @@ impl PyStateNamespace {
     }
 
     fn __getitem__(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
-        let val = self.get(py, key)?;
+        let val = self.get(py, key, None)?;
         if val.bind(py).is_none() {
             return Err(pyo3::exceptions::PyKeyError::new_err(key.to_owned()));
         }
@@ -324,7 +302,7 @@ impl PyStateNamespace {
     }
 
     fn __contains__(&self, py: Python<'_>, key: &str) -> PyResult<bool> {
-        let val = self.get(py, key)?;
+        let val = self.get(py, key, None)?;
         Ok(!val.bind(py).is_none())
     }
 
@@ -364,12 +342,14 @@ impl PySessionNamespace {
     }
 
     /// Retrieve a live reference previously stored under the given key.
-    /// Returns `None` if the key does not exist.
-    fn get(&self, py: Python<'_>, key: &str) -> Option<Py<PyAny>> {
+    /// If the key is missing, returns `default` (defaults to `None`).
+    #[pyo3(signature = (key, default=None))]
+    fn get(&self, py: Python<'_>, key: &str, default: Option<Py<PyAny>>) -> Option<Py<PyAny>> {
         let inner = self.inner.clone();
-        let key = key.to_string();
-        let obj = block_on_context(async { inner.get_object::<Arc<Py<PyAny>>>(&key).await })?;
-        Some(obj.clone_ref(py))
+        let key_owned = key.to_string();
+        let obj: Option<Arc<Py<PyAny>>> =
+            block_on_context(async { inner.get_object::<Arc<Py<PyAny>>>(&key_owned).await });
+        obj.map(|o| o.clone_ref(py)).or(default)
     }
 
     /// Remove a live reference stored under the given key.
@@ -391,7 +371,7 @@ impl PySessionNamespace {
     }
 
     fn __getitem__(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
-        self.get(py, key)
+        self.get(py, key, None)
             .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err(key.to_owned()))
     }
 
@@ -408,6 +388,49 @@ impl PyContext {
     /// Create a new `PyContext` wrapping a Rust `Context`.
     pub fn new(inner: blazen_core::Context) -> Self {
         Self { inner }
+    }
+
+    // 4-tier dispatch helper. Returns `py.None()` on a complete miss;
+    // the public `get` substitutes the user-supplied default.
+    fn get_inner(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
+        // Check for BlazenState per-field metadata.
+        {
+            let meta_key = format!("{key}.__blazen_meta__");
+            let inner = self.inner.clone();
+            if let Some(blazen_core::StateValue::Json(meta)) =
+                block_on_context(async { inner.get_value(&meta_key).await })
+            {
+                return self.get_blazen_state(py, key, &meta);
+            }
+        }
+
+        // Fall through to Rust core (tiers 1-3).
+        let inner = self.inner.clone();
+        let key_owned = key.to_string();
+        let val = block_on_context(async { inner.get_value(&key_owned).await });
+        match val {
+            Some(blazen_core::StateValue::Json(v)) => crate::convert::json_to_py(py, &v),
+            Some(blazen_core::StateValue::Bytes(b)) => {
+                Ok(pyo3::types::PyBytes::new(py, &b.0).into_any().unbind())
+            }
+            Some(blazen_core::StateValue::Native(b)) => {
+                let pickle = py.import("pickle")?;
+                let obj = pickle.call_method1("loads", (&b.0[..],))?;
+                Ok(obj.unbind())
+            }
+            None => {
+                // Check opaque object store (tier 4 values).
+                // Stored as Arc<Py<PyAny>> because Py<PyAny> isn't Clone.
+                let inner = self.inner.clone();
+                let key_owned = key.to_string();
+                if let Some(obj) =
+                    block_on_context(async { inner.get_object::<Arc<Py<PyAny>>>(&key_owned).await })
+                {
+                    return Ok(obj.clone_ref(py));
+                }
+                Ok(py.None())
+            }
+        }
     }
 
     /// Store a [`BlazenState`](super::state::PyBlazenState) per-field.
@@ -525,7 +548,7 @@ impl PyContext {
             }
 
             // Normal get.
-            let value = self.get(py, &field_key)?;
+            let value = self.get(py, &field_key, None)?;
             obj.setattr(field_name, value)?;
         }
 

@@ -35,11 +35,11 @@ from blazen import (
 # ---------------------------------------------------------------------------
 def track_usage(ctx: Context, usage: dict) -> None:
     """Add a single LLM response's token counts to the running totals."""
-    prev = ctx.get("total_usage") or {
+    prev = ctx.get("total_usage", {
         "prompt_tokens": 0,
         "completion_tokens": 0,
         "total_tokens": 0,
-    }
+    })
     ctx.set("total_usage", {
         "prompt_tokens": prev["prompt_tokens"] + (usage.get("prompt_tokens") or 0),
         "completion_tokens": prev["completion_tokens"] + (usage.get("completion_tokens") or 0),

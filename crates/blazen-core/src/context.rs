@@ -240,6 +240,18 @@ impl Context {
         })
     }
 
+    /// Retrieve a typed value, falling back to `default` if the key is
+    /// missing or the stored value cannot be deserialized into `T`.
+    ///
+    /// Convenience wrapper around [`get`](Self::get).
+    pub async fn get_or<T: DeserializeOwned + Send + Sync + Clone + 'static>(
+        &self,
+        key: &str,
+        default: T,
+    ) -> T {
+        self.get::<T>(key).await.unwrap_or(default)
+    }
+
     /// Store a raw [`StateValue`] directly.
     ///
     /// Used by language bindings for polymorphic dispatch (e.g. storing
@@ -379,6 +391,14 @@ impl Context {
             StateValue::Bytes(b) => Some(b.0.clone()),
             StateValue::Json(_) | StateValue::Native(_) => None,
         })
+    }
+
+    /// Retrieve raw binary data, falling back to `default` if the key is
+    /// missing or the stored value is not a `Bytes` variant.
+    ///
+    /// Convenience wrapper around [`get_bytes`](Self::get_bytes).
+    pub async fn get_bytes_or(&self, key: &str, default: Vec<u8>) -> Vec<u8> {
+        self.get_bytes(key).await.unwrap_or(default)
     }
 
     // -----------------------------------------------------------------
@@ -587,6 +607,62 @@ mod tests {
     async fn get_missing_key_returns_none() {
         let ctx = test_context();
         assert_eq!(ctx.get::<u64>("nope").await, None);
+    }
+
+    #[tokio::test]
+    async fn get_or_returns_value_when_present() {
+        let ctx = test_context();
+        ctx.set("k", 42_u64).await;
+        assert_eq!(ctx.get_or::<u64>("k", 0).await, 42);
+    }
+
+    #[tokio::test]
+    async fn get_or_returns_default_when_missing() {
+        let ctx = test_context();
+        assert_eq!(ctx.get_or::<u64>("nope", 7).await, 7);
+    }
+
+    #[tokio::test]
+    async fn get_or_returns_default_when_wrong_type() {
+        let ctx = test_context();
+        ctx.set("k", "not a number".to_string()).await;
+        assert_eq!(ctx.get_or::<u64>("k", 99).await, 99);
+    }
+
+    #[tokio::test]
+    async fn get_or_returns_default_when_native_variant() {
+        let ctx = test_context();
+        ctx.set_value("k", StateValue::Native(BytesWrapper(vec![0x80])))
+            .await;
+        assert_eq!(ctx.get_or::<u64>("k", 5).await, 5);
+    }
+
+    #[tokio::test]
+    async fn get_or_returns_default_for_stored_null() {
+        // Stored JSON null is indistinguishable from missing.
+        let ctx = test_context();
+        ctx.set("k", serde_json::Value::Null).await;
+        assert_eq!(ctx.get_or::<u64>("k", 17).await, 17);
+    }
+
+    #[tokio::test]
+    async fn get_bytes_or_returns_value_when_present() {
+        let ctx = test_context();
+        ctx.set_bytes("k", vec![1, 2, 3]).await;
+        assert_eq!(ctx.get_bytes_or("k", vec![]).await, vec![1, 2, 3]);
+    }
+
+    #[tokio::test]
+    async fn get_bytes_or_returns_default_when_missing() {
+        let ctx = test_context();
+        assert_eq!(ctx.get_bytes_or("nope", vec![9]).await, vec![9]);
+    }
+
+    #[tokio::test]
+    async fn get_bytes_or_returns_default_when_json_variant() {
+        let ctx = test_context();
+        ctx.set("k", "string".to_string()).await;
+        assert_eq!(ctx.get_bytes_or("k", vec![0xFF]).await, vec![0xFF]);
     }
 
     #[tokio::test]

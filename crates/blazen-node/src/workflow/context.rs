@@ -77,23 +77,34 @@ impl JsContext {
 
     /// Retrieve a value previously stored under the given key.
     ///
-    /// Returns `Buffer` for binary data, the original JS value for JSON data,
-    /// or `null` if the key does not exist.
-    #[napi(ts_return_type = "Promise<StateValue | null>")]
-    pub async fn get(&self, key: String) -> Result<serde_json::Value> {
-        match self.inner.get_value(&key).await {
-            Some(StateValue::Json(v)) => Ok(v),
+    /// Returns the original JS value for JSON data, an array-of-bytes
+    /// representation for binary data (use `getBytes` for proper
+    /// `Buffer` round-trip), or `defaultValue` if the key is missing
+    /// or the stored value is `null`/`Native`.
+    #[napi(
+        ts_args_type = "key: string, defaultValue?: StateValue",
+        ts_return_type = "Promise<StateValue | null>"
+    )]
+    pub async fn get(
+        &self,
+        key: String,
+        default: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value> {
+        let val = match self.inner.get_value(&key).await {
+            Some(StateValue::Json(v)) => v,
             Some(StateValue::Bytes(b)) => {
-                // Return bytes as a JSON array so the value isn't silently dropped.
-                // For proper binary round-trip, use getBytes().
                 let arr: Vec<serde_json::Value> =
                     b.0.into_iter()
                         .map(|byte| serde_json::Value::Number(byte.into()))
                         .collect();
-                Ok(serde_json::Value::Array(arr))
+                serde_json::Value::Array(arr)
             }
-            Some(StateValue::Native(_)) | None => Ok(serde_json::Value::Null),
+            Some(StateValue::Native(_)) | None => serde_json::Value::Null,
+        };
+        if val.is_null() {
+            return Ok(default.unwrap_or(serde_json::Value::Null));
         }
+        Ok(val)
     }
 
     /// Emit an event into the internal routing queue.
@@ -141,11 +152,21 @@ impl JsContext {
 
     /// Retrieve raw binary data previously stored under the given key.
     ///
-    /// Returns `null` if the key does not exist or the stored value is
-    /// not binary data.
-    #[napi(js_name = "getBytes")]
-    pub async fn get_bytes(&self, key: String) -> Result<Option<Buffer>> {
-        Ok(self.inner.get_bytes(&key).await.map(Buffer::from))
+    /// Returns `defaultValue` if the key does not exist or the stored
+    /// value is not binary data; if no default is provided, returns
+    /// `null`.
+    #[napi(
+        js_name = "getBytes",
+        ts_args_type = "key: string, defaultValue?: Buffer",
+        ts_return_type = "Promise<Buffer | null>"
+    )]
+    pub async fn get_bytes(&self, key: String, default: Option<Buffer>) -> Result<Option<Buffer>> {
+        Ok(self
+            .inner
+            .get_bytes(&key)
+            .await
+            .map(Buffer::from)
+            .or(default))
     }
 
     /// Get the workflow run ID.
@@ -301,19 +322,31 @@ impl JsStateNamespace {
     }
 
     /// Retrieve a value previously stored under the given key.
-    #[napi(ts_return_type = "Promise<StateValue | null>")]
-    pub async fn get(&self, key: String) -> Result<serde_json::Value> {
-        match self.inner.get_value(&key).await {
-            Some(StateValue::Json(v)) => Ok(v),
+    /// Returns `defaultValue` if the key is missing.
+    #[napi(
+        ts_args_type = "key: string, defaultValue?: StateValue",
+        ts_return_type = "Promise<StateValue | null>"
+    )]
+    pub async fn get(
+        &self,
+        key: String,
+        default: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value> {
+        let val = match self.inner.get_value(&key).await {
+            Some(StateValue::Json(v)) => v,
             Some(StateValue::Bytes(b)) => {
                 let arr: Vec<serde_json::Value> =
                     b.0.into_iter()
                         .map(|byte| serde_json::Value::Number(byte.into()))
                         .collect();
-                Ok(serde_json::Value::Array(arr))
+                serde_json::Value::Array(arr)
             }
-            Some(StateValue::Native(_)) | None => Ok(serde_json::Value::Null),
+            Some(StateValue::Native(_)) | None => serde_json::Value::Null,
+        };
+        if val.is_null() {
+            return Ok(default.unwrap_or(serde_json::Value::Null));
         }
+        Ok(val)
     }
 
     /// Store raw binary data under the given key.
@@ -324,9 +357,19 @@ impl JsStateNamespace {
     }
 
     /// Retrieve raw binary data previously stored under the given key.
-    #[napi(js_name = "getBytes")]
-    pub async fn get_bytes(&self, key: String) -> Result<Option<Buffer>> {
-        Ok(self.inner.get_bytes(&key).await.map(Buffer::from))
+    /// Returns `defaultValue` if the key is missing.
+    #[napi(
+        js_name = "getBytes",
+        ts_args_type = "key: string, defaultValue?: Buffer",
+        ts_return_type = "Promise<Buffer | null>"
+    )]
+    pub async fn get_bytes(&self, key: String, default: Option<Buffer>) -> Result<Option<Buffer>> {
+        Ok(self
+            .inner
+            .get_bytes(&key)
+            .await
+            .map(Buffer::from)
+            .or(default))
     }
 }
 
@@ -366,14 +409,18 @@ impl JsSessionNamespace {
     }
 
     /// Retrieve a value previously stored under the given key. Returns
-    /// `null` if the key does not exist.
-    #[napi(ts_return_type = "Promise<unknown>")]
-    pub async fn get(&self, key: String) -> Result<serde_json::Value> {
-        Ok(self
-            .inner
-            .get_object::<serde_json::Value>(&key)
-            .await
-            .unwrap_or(serde_json::Value::Null))
+    /// `defaultValue` if the key is missing.
+    #[napi(
+        ts_args_type = "key: string, defaultValue?: unknown",
+        ts_return_type = "Promise<unknown>"
+    )]
+    pub async fn get(
+        &self,
+        key: String,
+        default: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value> {
+        let val = self.inner.get_object::<serde_json::Value>(&key).await;
+        Ok(val.or(default).unwrap_or(serde_json::Value::Null))
     }
 
     /// Check whether a value exists under the given key.

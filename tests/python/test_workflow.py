@@ -420,3 +420,67 @@ async def test_context_buffer_not_mangled():
     assert result.result["ba_data"] == [0xAA, 0xBB]
     assert result.result["arr_type"] == "array"
     assert result.result["arr_data"] == [1, 2, 3]
+
+
+# =========================================================================
+# Context get default / fallback
+# =========================================================================
+
+
+@pytest.mark.asyncio
+async def test_context_get_default():
+    @step
+    def setter(ctx: Context, ev: Event):
+        ctx.set("present", 42)
+        ctx.set("none_value", None)
+        ctx.session.set("live", object())
+        return Event("NextEvent")
+
+    @step(accepts=["NextEvent"])
+    def getter(ctx: Context, ev: Event):
+        return StopEvent(
+            result={
+                "missing_default": ctx.get("missing", 99),
+                "present_default": ctx.get("present", 99),
+                "missing_no_default": ctx.get("missing"),
+                "stored_none_with_default": ctx.get("none_value", "fb"),
+                "missing_bytes_default": list(ctx.get_bytes("missing", b"\x00\x01")),
+                "state_missing_default": ctx.state.get("missing", "sd"),
+                "session_missing_default": ctx.session.get("missing", "ssd"),
+                "session_live_present": ctx.session.get("live", "ignored")
+                is not None,
+            }
+        )
+
+    wf = Workflow("get-default", [setter, getter])
+    handler = await wf.run()
+    result = await handler.result()
+
+    assert result.result["missing_default"] == 99
+    assert result.result["present_default"] == 42
+    assert result.result["missing_no_default"] is None
+    assert result.result["stored_none_with_default"] == "fb"
+    assert result.result["missing_bytes_default"] == [0x00, 0x01]
+    assert result.result["state_missing_default"] == "sd"
+    assert result.result["session_missing_default"] == "ssd"
+    assert result.result["session_live_present"] is True
+
+
+@pytest.mark.asyncio
+async def test_state_namespace_getitem_strict():
+    """`ctx.state["missing"]` MUST still raise KeyError; default does not propagate."""
+
+    @step
+    def s(ctx: Context, ev: Event):
+        try:
+            _ = ctx.state["missing"]
+            raised = False
+        except KeyError:
+            raised = True
+        assert "missing" not in ctx.state
+        return StopEvent(result={"raised": raised})
+
+    wf = Workflow("getitem-strict", [s])
+    handler = await wf.run()
+    result = await handler.result()
+    assert result.result["raised"] is True

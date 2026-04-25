@@ -39,6 +39,21 @@ export interface BlazenStateMeta {
 }
 "#;
 
+#[wasm_bindgen(typescript_custom_section)]
+const TS_GET_DEFAULTS: &str = r#"
+export interface Context {
+  get(key: string, defaultValue?: StateValue): StateValue | null;
+  getBytes(key: string, defaultValue?: Uint8Array): Uint8Array | null;
+}
+export interface StateNamespace {
+  get(key: string, defaultValue?: StateValue): StateValue | null;
+  getBytes(key: string, defaultValue?: Uint8Array): Uint8Array | null;
+}
+export interface SessionNamespace {
+  get(key: string, defaultValue?: unknown): unknown;
+}
+"#;
+
 // ---------------------------------------------------------------------------
 // WasmStateEntry
 // ---------------------------------------------------------------------------
@@ -392,10 +407,10 @@ impl WasmContext {
                     load.call2(&store_obj, &JsValue::from_str(&field_key), &ctx_js)
                         .unwrap_or(JsValue::UNDEFINED)
                 } else {
-                    self.get(field_key)
+                    self.get(field_key, JsValue::UNDEFINED)
                 }
             } else {
-                self.get(field_key)
+                self.get(field_key, JsValue::UNDEFINED)
             };
 
             let _ = js_sys::Reflect::set(&result, &field_name_val, &field_value);
@@ -464,20 +479,25 @@ impl WasmContext {
     ///
     /// - `Bytes` entries are returned as `Uint8Array`.
     /// - `Value` entries are returned as the original `JsValue`.
-    /// - Missing keys return `JsValue::NULL`.
+    /// - When the key is missing, returns `defaultValue` if supplied,
+    ///   otherwise `null`.
     #[wasm_bindgen]
-    pub fn get(&self, key: String) -> JsValue {
-        // Attempt BlazenState reconstruction first.
+    pub fn get(&self, key: String, default: JsValue) -> JsValue {
         if let Some(reconstructed) = self.get_blazen_state(&key) {
             return reconstructed;
         }
 
         let state = self.inner.state.borrow();
-        match state.get(&key) {
+        let val = match state.get(&key) {
             Some(WasmStateEntry::Value(v)) => v.clone(),
             Some(WasmStateEntry::Bytes(b)) => js_sys::Uint8Array::from(b.as_slice()).into(),
             None => JsValue::NULL,
+        };
+        drop(state);
+        if val.is_null() && !default.is_undefined() {
+            return default;
         }
+        val
     }
 
     /// Store raw binary data under the given key.
@@ -492,14 +512,19 @@ impl WasmContext {
     /// Retrieve raw binary data previously stored under the given key.
     ///
     /// Returns a `Uint8Array` if the key exists and was stored as bytes,
-    /// otherwise returns `null`.
+    /// otherwise returns `defaultValue` if supplied, else `null`.
     #[wasm_bindgen(js_name = "getBytes")]
-    pub fn get_bytes(&self, key: String) -> JsValue {
+    pub fn get_bytes(&self, key: String, default: JsValue) -> JsValue {
         let state = self.inner.state.borrow();
-        match state.get(&key) {
+        let val = match state.get(&key) {
             Some(WasmStateEntry::Bytes(b)) => js_sys::Uint8Array::from(b.as_slice()).into(),
             _ => JsValue::NULL,
+        };
+        drop(state);
+        if val.is_null() && !default.is_undefined() {
+            return default;
         }
+        val
     }
 
     /// Push an event onto the internal event queue.
@@ -574,8 +599,8 @@ impl WasmStateNamespace {
     }
 
     #[wasm_bindgen]
-    pub fn get(&self, key: String) -> JsValue {
-        self.ctx.get(key)
+    pub fn get(&self, key: String, default: JsValue) -> JsValue {
+        self.ctx.get(key, default)
     }
 
     #[wasm_bindgen(js_name = "setBytes")]
@@ -584,8 +609,8 @@ impl WasmStateNamespace {
     }
 
     #[wasm_bindgen(js_name = "getBytes")]
-    pub fn get_bytes(&self, key: String) -> JsValue {
-        self.ctx.get_bytes(key)
+    pub fn get_bytes(&self, key: String, default: JsValue) -> JsValue {
+        self.ctx.get_bytes(key, default)
     }
 }
 
@@ -614,16 +639,22 @@ impl WasmSessionNamespace {
     }
 
     /// Retrieve the value previously stored under the given key.
-    /// Returns `null` if the key does not exist.
+    /// Returns `defaultValue` if the key does not exist (or `null` if no
+    /// default is supplied).
     #[wasm_bindgen]
-    pub fn get(&self, key: String) -> JsValue {
-        self.ctx
+    pub fn get(&self, key: String, default: JsValue) -> JsValue {
+        let val = self
+            .ctx
             .inner
             .session
             .borrow()
             .get(&key)
             .cloned()
-            .unwrap_or(JsValue::NULL)
+            .unwrap_or(JsValue::NULL);
+        if val.is_null() && !default.is_undefined() {
+            return default;
+        }
+        val
     }
 
     /// Check whether a value exists under the given key.

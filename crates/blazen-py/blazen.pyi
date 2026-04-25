@@ -1219,20 +1219,23 @@ class Context:
             key: The storage key.
             value: Any Python value.
         """
-    def get(self, key: builtins.str) -> typing.Any:
+    def get(self, key: builtins.str, default: typing.Optional[typing.Any] = None) -> typing.Any:
         r"""
         Retrieve a value previously stored under the given key.
         
         Returns the original Python type: JSON values as their Python
         equivalents, binary data as `bytes`, pickled objects as their
-        original type, live references as-is. Returns `None` if the key
-        does not exist.
+        original type, live references as-is. If the key is missing,
+        or the stored value would resolve to Python `None`, the
+        `default` argument is returned instead (default: `None`).
         
         Args:
             key: The storage key.
+            default: Value to return when the key is missing. Defaults
+                to `None`.
         
         Returns:
-            The stored value in its original type, or None.
+            The stored value in its original type, or `default`.
         """
     def send_event(self, event: Event) -> None:
         r"""
@@ -1255,18 +1258,20 @@ class Context:
         Args:
             event: The event to publish to the stream.
         """
-    def get_bytes(self, key: builtins.str) -> typing.Optional[builtins.list[builtins.int]]:
+    def get_bytes(self, key: builtins.str, default: typing.Optional[typing.Sequence[builtins.int]] = None) -> typing.Optional[builtins.list[builtins.int]]:
         r"""
         Retrieve raw binary data previously stored under the given key.
         
-        Returns None if the key does not exist or the stored value is
-        not binary data.
+        Returns `default` (which itself defaults to `None`) if the key
+        does not exist or the stored value is not binary data.
         
         Args:
             key: The storage key.
+            default: Bytes to return when the key is missing. Defaults
+                to `None`.
         
         Returns:
-            The stored bytes, or None.
+            The stored bytes, or `default`.
         """
     def run_id(self) -> builtins.str:
         r"""
@@ -3295,10 +3300,10 @@ class SessionNamespace:
         Store a live reference under the given key. The value is *not*
         serialised; identity is preserved within this run.
         """
-    def get(self, key: builtins.str) -> typing.Optional[typing.Any]:
+    def get(self, key: builtins.str, default: typing.Optional[typing.Any] = None) -> typing.Optional[typing.Any]:
         r"""
         Retrieve a live reference previously stored under the given key.
-        Returns `None` if the key does not exist.
+        If the key is missing, returns `default` (defaults to `None`).
         """
     def remove(self, key: builtins.str) -> None:
         r"""
@@ -3361,13 +3366,15 @@ class StateNamespace:
         Store a value under the given key. See `Context.set` for the
         4-tier dispatch order.
         """
-    def get(self, key: builtins.str) -> typing.Any:
+    def get(self, key: builtins.str, default: typing.Optional[typing.Any] = None) -> typing.Any:
         r"""
         Retrieve a value previously stored under the given key.
+        If the key is missing, returns `default` (defaults to `None`).
         """
-    def get_bytes(self, key: builtins.str) -> typing.Optional[builtins.list[builtins.int]]:
+    def get_bytes(self, key: builtins.str, default: typing.Optional[typing.Sequence[builtins.int]] = None) -> typing.Optional[builtins.list[builtins.int]]:
         r"""
         Retrieve raw binary data previously stored under the given key.
+        If the key is missing, returns `default` (defaults to `None`).
         """
     def __setitem__(self, key: builtins.str, value: typing.Any) -> None: ...
     def __getitem__(self, key: builtins.str) -> typing.Any: ...

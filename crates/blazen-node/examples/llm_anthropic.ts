@@ -127,11 +127,12 @@ wf.addStep(
     console.log(`[fact_check] Verdict received (${verdictUsage?.totalTokens ?? "?"} tokens used)`);
 
     // Combine usage from both calls.
-    const answerUsage: Usage | null = await ctx.get("answer_usage");
+    const zeroUsage: Usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+    const answerUsage: Usage = await ctx.get("answer_usage", zeroUsage);
     const totalUsage: Record<string, number> = {
-      promptTokens: (answerUsage?.promptTokens ?? 0) + (verdictUsage?.promptTokens ?? 0),
-      completionTokens: (answerUsage?.completionTokens ?? 0) + (verdictUsage?.completionTokens ?? 0),
-      totalTokens: (answerUsage?.totalTokens ?? 0) + (verdictUsage?.totalTokens ?? 0),
+      promptTokens: answerUsage.promptTokens + (verdictUsage?.promptTokens ?? 0),
+      completionTokens: answerUsage.completionTokens + (verdictUsage?.completionTokens ?? 0),
+      totalTokens: answerUsage.totalTokens + (verdictUsage?.totalTokens ?? 0),
     };
 
     return {

@@ -308,6 +308,41 @@ describe("null / undefined handling", () => {
     assert.strictEqual(result.data.stored, null);
     assert.strictEqual(result.data.missing, null);
   });
+
+  it("returns default when key is missing or null", async () => {
+    const wf = new Workflow("get-default");
+
+    wf.addStep("defaults", ["blazen::StartEvent"], async (event, ctx) => {
+      await ctx.set("present", 5);
+      await ctx.set("nullish", null);
+      const buf = Buffer.from([1, 2]);
+      return {
+        type: "blazen::StopEvent",
+        result: {
+          missingDefault: await ctx.get("missing", "fb"),
+          missingNumber: await ctx.get("missing", 0),
+          presentIgnoresDefault: await ctx.get("present", 99),
+          nullishUsesDefault: await ctx.get("nullish", "fb"),
+          missingNoDefault: await ctx.get("missing"),
+          missingBytesDefault: Array.from(
+            await ctx.getBytes("missing", buf),
+          ),
+          stateMissingDefault: await ctx.state.get("missing", "sd"),
+          sessionMissingDefault: await ctx.session.get("missing", "ssd"),
+        },
+      };
+    });
+
+    const result = await wf.run({});
+    assert.strictEqual(result.data.missingDefault, "fb");
+    assert.strictEqual(result.data.missingNumber, 0);
+    assert.strictEqual(result.data.presentIgnoresDefault, 5);
+    assert.strictEqual(result.data.nullishUsesDefault, "fb");
+    assert.strictEqual(result.data.missingNoDefault, null);
+    assert.deepStrictEqual(result.data.missingBytesDefault, [1, 2]);
+    assert.strictEqual(result.data.stateMissingDefault, "sd");
+    assert.strictEqual(result.data.sessionMissingDefault, "ssd");
+  });
 });
 
 // =========================================================================
