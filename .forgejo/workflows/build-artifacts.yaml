@@ -455,10 +455,25 @@ jobs:
           VERSION="${{ needs.version.outputs.version }}"
           TARGET="${{ matrix.target }}"
           tar -czf "wheels-${TARGET}.tar.gz" -C "${CARGO_TARGET_DIR:-target}/wheels" .
-          curl --fail -s -X PUT \
+          URL="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/wheels-${TARGET}.tar.gz"
+          # Forgejo's generic package PUT returns 409 if the file exists. On a
+          # mark-step retry the upload already succeeded, so DELETE+PUT on 409
+          # keeps the step idempotent.
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
             -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
-            --upload-file "wheels-${TARGET}.tar.gz" \
-            "https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/wheels-${TARGET}.tar.gz"
+            --upload-file "wheels-${TARGET}.tar.gz" "$URL")
+          case "$code" in
+            200|201) echo "Uploaded (HTTP $code)" ;;
+            409)
+              echo "::warning::Package exists (HTTP 409); deleting and re-uploading"
+              curl --fail -s -X DELETE \
+                -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" "$URL"
+              curl --fail -s -X PUT \
+                -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+                --upload-file "wheels-${TARGET}.tar.gz" "$URL"
+              ;;
+            *) echo "::error::Upload failed (HTTP $code)"; exit 1 ;;
+          esac
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
@@ -523,10 +538,23 @@ jobs:
           if [ ${#SDIST_FILES[@]} -gt 1 ]; then
             echo "::warning::Multiple sdist tarballs found; uploading first: ${SDIST_FILES[0]}"
           fi
-          curl --fail -s -X PUT \
+          URL="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/sdist.tar.gz"
+          # 409 on retry → delete + re-upload (see wheels step for rationale).
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
             -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
-            --upload-file "${SDIST_FILES[0]}" \
-            "https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/sdist.tar.gz"
+            --upload-file "${SDIST_FILES[0]}" "$URL")
+          case "$code" in
+            200|201) echo "Uploaded (HTTP $code)" ;;
+            409)
+              echo "::warning::Package exists (HTTP 409); deleting and re-uploading"
+              curl --fail -s -X DELETE \
+                -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" "$URL"
+              curl --fail -s -X PUT \
+                -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+                --upload-file "${SDIST_FILES[0]}" "$URL"
+              ;;
+            *) echo "::error::Upload failed (HTTP $code)"; exit 1 ;;
+          esac
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
@@ -949,10 +977,23 @@ jobs:
           fi
           tar -czf "../../napi-${TARGET}.tar.gz" "${NODE_FILES[@]}"
           cd ../..
-          curl --fail -s -X PUT \
+          URL="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/napi-${TARGET}.tar.gz"
+          # 409 on retry → delete + re-upload (see wheels step for rationale).
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
             -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
-            --upload-file "napi-${TARGET}.tar.gz" \
-            "https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/napi-${TARGET}.tar.gz"
+            --upload-file "napi-${TARGET}.tar.gz" "$URL")
+          case "$code" in
+            200|201) echo "Uploaded (HTTP $code)" ;;
+            409)
+              echo "::warning::Package exists (HTTP 409); deleting and re-uploading"
+              curl --fail -s -X DELETE \
+                -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" "$URL"
+              curl --fail -s -X PUT \
+                -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+                --upload-file "napi-${TARGET}.tar.gz" "$URL"
+              ;;
+            *) echo "::error::Upload failed (HTTP $code)"; exit 1 ;;
+          esac
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
@@ -1041,10 +1082,23 @@ jobs:
         run: |
           VERSION="${{ needs.version.outputs.version }}"
           tar -czf wasm.tar.gz -C crates/blazen-wasm-sdk pkg
-          curl --fail -s -X PUT \
+          URL="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/wasm.tar.gz"
+          # 409 on retry → delete + re-upload (see wheels step for rationale).
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
             -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
-            --upload-file wasm.tar.gz \
-            "https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/wasm.tar.gz"
+            --upload-file wasm.tar.gz "$URL")
+          case "$code" in
+            200|201) echo "Uploaded (HTTP $code)" ;;
+            409)
+              echo "::warning::Package exists (HTTP 409); deleting and re-uploading"
+              curl --fail -s -X DELETE \
+                -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" "$URL"
+              curl --fail -s -X PUT \
+                -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+                --upload-file wasm.tar.gz "$URL"
+              ;;
+            *) echo "::error::Upload failed (HTTP $code)"; exit 1 ;;
+          esac
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
