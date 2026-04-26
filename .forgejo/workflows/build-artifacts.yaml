@@ -1119,8 +1119,11 @@ jobs:
       - name: Dispatch release.yaml
         run: |
           VERSION="${{ needs.version.outputs.version }}"
+          # Dispatch on the in-flight temp branch — the permanent v${VERSION}
+          # tag doesn't exist yet, it's cut by release.yaml#create-release
+          # only after every publish step succeeds.
           curl -s -X POST \
             -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
             -H "Content-Type: application/json" \
             "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/actions/workflows/release.yaml/dispatches" \
-            -d "{\"ref\": \"v${VERSION}\", \"inputs\": {\"version\": \"${VERSION}\"}}"
+            -d "{\"ref\": \"refs/heads/temp/v${VERSION}\", \"inputs\": {\"version\": \"${VERSION}\"}}"

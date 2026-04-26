@@ -390,9 +390,11 @@ jobs:
           # Build burned set from the committed file plus anything the
           # check-orphan-versions step burned in this run (which was just
           # committed via the Forgejo Contents API but isn't on disk yet).
+          # awk 'NF' is empty-file safe (always exits 0); grep -v under
+          # set -euo pipefail returns 1 on no matches and kills the script.
           BURNED=""
           if [ -f .forgejo/burned-versions.txt ]; then
-            BURNED=$(grep -v '^[[:space:]]*$' .forgejo/burned-versions.txt | tr '\n' ',' | sed 's/,$//')
+            BURNED=$(awk 'NF' .forgejo/burned-versions.txt | paste -sd, -)
           fi
           if [ -n "$ABANDONED" ]; then
             BURNED="${BURNED:+${BURNED},}${ABANDONED}"
