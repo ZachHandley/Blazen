@@ -329,6 +329,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Walk existing temp/v* in-flight release branches. Probe PyPI /
+      # crates.io / npm directly: any branch whose version is already on a
+      # public registry gets DELETEd and recorded in burned-versions.txt
+      # (versions on those registries are filename-immutable; retrying with
+      # new bytes is impossible). The first still-clean branch is returned
+      # as the orphan to retry.
+      - name: Probe for orphan temp/v* branches
+        id: orphan
+        uses: https://forge.blackleafdigital.com/Public/actions/check-orphan-versions@main
+        with:
+          temp-branch-prefix: temp/v
+          max-branches: '10'
+          package-name: blazen
+          registries: pypi,cargo,npm
+          burn-list-path: .forgejo/burned-versions.txt
+          forgejo-base-url: https://forge.blackleafdigital.com
+          repo: ${{ github.repository }}
+          forgejo-auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
       - name: Resolve candidate next version
         id: resolve
         uses: https://forge.blackleafdigital.com/Public/actions/resolve-version@main
@@ -336,126 +355,120 @@ jobs:
           tag-prefix: v
           bump: patch
 
-      - name: Pick version to build (orphan wins, else new tag, else override)
+      - name: Pick version to build (override > orphan > bump)
         id: pick
         shell: bash
         run: |
           set -euo pipefail
           OVERRIDE='${{ github.event.inputs.version_override }}'
+          ORPHAN_VERSION='${{ steps.orphan.outputs.orphan-version }}'
+          ORPHAN_BRANCH='${{ steps.orphan.outputs.orphan-branch }}'
+          ABANDONED='${{ steps.orphan.outputs.abandoned }}'
           RESOLVED='${{ steps.resolve.outputs.version }}'
           IS_NEW='${{ steps.resolve.outputs.is-new }}'
 
           if [ -n "$OVERRIDE" ]; then
-            echo "version=${OVERRIDE}" >> "$GITHUB_OUTPUT"
-            echo "reason=override" >> "$GITHUB_OUTPUT"
-            echo "create_tag=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "version=${OVERRIDE}"
+              echo "branch=temp/v${OVERRIDE}"
+              echo "reason=override"
+            } >> "$GITHUB_OUTPUT"
             echo "Using version_override: ${OVERRIDE}"
             exit 0
           fi
 
-          TAGS=$(git tag --list 'v*' --sort=-creatordate | head -10)
-          ORPHAN=""
-          for TAG in $TAGS; do
-            V="${TAG#v}"
-            CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-              -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
-              "https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/ci-status/${V}/release-complete")
-            if [ "$CODE" != "200" ]; then
-              ORPHAN="$V"
-              break
-            fi
-          done
-
-          if [ -n "$ORPHAN" ]; then
-            echo "version=${ORPHAN}" >> "$GITHUB_OUTPUT"
-            echo "reason=orphan-retry" >> "$GITHUB_OUTPUT"
-            echo "create_tag=false" >> "$GITHUB_OUTPUT"
-            echo "Rebuilding most recent orphaned version v${ORPHAN} (no bump)"
+          if [ -n "$ORPHAN_VERSION" ]; then
+            {
+              echo "version=${ORPHAN_VERSION}"
+              echo "branch=${ORPHAN_BRANCH}"
+              echo "reason=orphan-retry"
+            } >> "$GITHUB_OUTPUT"
+            echo "Reusing in-flight orphan ${ORPHAN_BRANCH} (v${ORPHAN_VERSION})"
             exit 0
           fi
 
+          # Build burned set from the committed file plus anything the
+          # check-orphan-versions step burned in this run (which was just
+          # committed via the Forgejo Contents API but isn't on disk yet).
+          BURNED=""
+          if [ -f .forgejo/burned-versions.txt ]; then
+            BURNED=$(grep -v '^[[:space:]]*$' .forgejo/burned-versions.txt | tr '\n' ',' | sed 's/,$//')
+          fi
+          if [ -n "$ABANDONED" ]; then
+            BURNED="${BURNED:+${BURNED},}${ABANDONED}"
+          fi
+          is_burned() {
+            case ",${BURNED}," in *,$1,*) return 0 ;; *) return 1 ;; esac
+          }
+          # Bump past any burned version.
+          while is_burned "$RESOLVED"; do
+            IFS='.' read -r MA MI PA <<< "$RESOLVED"
+            PA=$((PA + 1))
+            RESOLVED="${MA}.${MI}.${PA}"
+            IS_NEW=true
+          done
+
           if [ "$IS_NEW" = "true" ]; then
-            echo "version=${RESOLVED}" >> "$GITHUB_OUTPUT"
-            echo "reason=new-tag" >> "$GITHUB_OUTPUT"
-            echo "create_tag=true" >> "$GITHUB_OUTPUT"
-            echo "No orphans; bumping to v${RESOLVED}"
+            {
+              echo "version=${RESOLVED}"
+              echo "branch=temp/v${RESOLVED}"
+              echo "reason=new-release"
+            } >> "$GITHUB_OUTPUT"
+            echo "No orphans; new release at v${RESOLVED}"
             exit 0
           fi
 
           if [ '${{ github.event.inputs.trigger_builds }}' = 'true' ]; then
-            echo "version=${RESOLVED}" >> "$GITHUB_OUTPUT"
-            echo "reason=manual-trigger" >> "$GITHUB_OUTPUT"
-            echo "create_tag=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "version=${RESOLVED}"
+              echo "branch=temp/v${RESOLVED}"
+              echo "reason=manual-trigger"
+            } >> "$GITHUB_OUTPUT"
             echo "Manual trigger rebuild of v${RESOLVED}"
             exit 0
           fi
 
-          echo "version=" >> "$GITHUB_OUTPUT"
-          echo "reason=noop" >> "$GITHUB_OUTPUT"
-          echo "create_tag=false" >> "$GITHUB_OUTPUT"
-          echo "Nothing to build (no orphans, no new tag, no manual trigger)"
+          {
+            echo "version="
+            echo "branch="
+            echo "reason=noop"
+          } >> "$GITHUB_OUTPUT"
+          echo "Nothing to build (no orphans, no new release, no manual trigger)"
 
-      - name: Create and push tag
-        if: steps.pick.outputs.create_tag == 'true'
-        run: |
-          TAG="v${{ steps.pick.outputs.version }}"
-          git config user.name "Zach Handley"
-          git config user.email "zachhandley@gmail.com"
-          git tag -a "$TAG" -m "Release $TAG"
-          git push origin "$TAG"
-        env:
-          GITHUB_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
-
-      # On orphan-retry, force-move the tag to main HEAD so the dispatched
-      # build-artifacts workflow picks up the latest workflow fixes. Without
-      # this, the tag stays pinned at the original commit and every retry
-      # re-runs the same (broken) workflow.
-      - name: Force-move tag to main HEAD (orphan-retry)
-        if: steps.pick.outputs.reason == 'orphan-retry'
+      # Create or fast-forward the in-flight temp/v{VERSION} branch at the
+      # current main HEAD. Permanent v{VERSION} tags are never created here
+      # — release.yaml creates them only after every publish step succeeds,
+      # then deletes the temp branch. This decouples "release in flight"
+      # from "release completed" and makes orphan-retry safe (the temp
+      # branch is mutable; the permanent tag is not).
+      - name: Create or update temp/v{VERSION} branch at HEAD
+        if: steps.pick.outputs.version != ''
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
           VERSION: ${{ steps.pick.outputs.version }}
+          BR: ${{ steps.pick.outputs.branch }}
         run: |
           set -euo pipefail
-          TAG="v${VERSION}"
           git config user.name  "Zach Handley"
           git config user.email "zachhandley@gmail.com"
-          git tag -f "$TAG"
-          if ! git push --force origin "refs/tags/${TAG}"; then
-            echo "Force-push rejected (tag protection?); falling back to delete+recreate"
-            git push origin ":refs/tags/${TAG}"
-            git push origin "refs/tags/${TAG}"
-          fi
-
-      # Clear per-step completion markers so every matrix row re-runs against
-      # the refreshed tree. Also purge the blazen-build artifact package for
-      # this version so stale wheels/napi/sdist/wasm uploads don't coexist
-      # with the fresh ones about to be produced. release-complete marker is
-      # preserved because the orphan-probe at ci.yaml:219-238 keys on it.
-      - name: Purge stale ci-status + artifacts (orphan-retry)
-        if: steps.pick.outputs.reason == 'orphan-retry'
-        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
-        with:
-          mode: purge-version
-          version: ${{ steps.pick.outputs.version }}
-          base-url: https://forge.blackleafdigital.com
-          owner: BlackLeafDigital
-          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
-          keep-markers: release-complete
-          purge-package: blazen-build
+          # Pull a clean fetch so --force-with-lease can reason about the
+          # current remote tip if the branch already exists.
+          git fetch origin "${BR}" || true
+          git push origin "HEAD:refs/heads/${BR}" --force-with-lease
 
       - name: Dispatch build-artifacts workflow
         if: steps.pick.outputs.version != ''
         run: |
           VERSION='${{ steps.pick.outputs.version }}'
+          BRANCH='${{ steps.pick.outputs.branch }}'
           REASON='${{ steps.pick.outputs.reason }}'
-          echo "Dispatching build-artifacts for v${VERSION} (reason: ${REASON})"
+          echo "Dispatching build-artifacts for v${VERSION} on ${BRANCH} (reason: ${REASON})"
           curl -s -X POST \
             -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
             -H "Content-Type: application/json" \
             "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/actions/workflows/build-artifacts.yaml/dispatches" \
-            -d "{\"ref\": \"v${VERSION}\", \"inputs\": {\"version\": \"${VERSION}\"}}"
+            -d "{\"ref\": \"refs/heads/${BRANCH}\", \"inputs\": {\"version\": \"${VERSION}\"}}"
 
       - name: Dispatch deploy-website workflow
         if: steps.pick.outputs.create_tag == 'true'

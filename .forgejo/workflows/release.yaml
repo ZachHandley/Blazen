@@ -495,22 +495,97 @@ jobs:
           \`\`\`
           NOTES_EOF
 
-      - name: Create Forgejo release
+      # Resolve the temp/v{VERSION} branch HEAD so the release tag is created
+      # at the exact commit that produced the published artifacts. If the
+      # branch is gone (e.g. a previous run already cut the tag), fall back
+      # to the existing tag's SHA for idempotency.
+      - name: Resolve temp branch SHA
+        id: tempsha
+        if: steps.check.outputs.completed != 'true'
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          REPO: ${{ github.repository }}
+          AUTH: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+        run: |
+          set -euo pipefail
+          BR="temp/v${VERSION}"
+          TAG="v${VERSION}"
+          API="https://forge.blackleafdigital.com/api/v1/repos/${REPO}"
+
+          BR_RESP=$(curl -s -u "$AUTH" -w '\n%{http_code}' "${API}/branches/${BR}")
+          BR_CODE=$(printf '%s' "$BR_RESP" | tail -n1)
+          BR_BODY=$(printf '%s' "$BR_RESP" | sed '$d')
+          if [ "$BR_CODE" = "200" ]; then
+            SHA=$(printf '%s' "$BR_BODY" | jq -r '.commit.id')
+            if [ -z "$SHA" ] || [ "$SHA" = "null" ]; then
+              echo "::error::branch ${BR} returned 200 but no commit.id"
+              exit 1
+            fi
+            echo "Found temp branch ${BR} at ${SHA}"
+            echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+            echo "branch_present=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Fallback: tag may already exist from a prior partial run.
+          TAG_RESP=$(curl -s -u "$AUTH" -w '\n%{http_code}' "${API}/tags/${TAG}")
+          TAG_CODE=$(printf '%s' "$TAG_RESP" | tail -n1)
+          TAG_BODY=$(printf '%s' "$TAG_RESP" | sed '$d')
+          if [ "$TAG_CODE" = "200" ]; then
+            SHA=$(printf '%s' "$TAG_BODY" | jq -r '.commit.sha // .id')
+            echo "temp branch missing; tag ${TAG} already exists at ${SHA}"
+            echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+            echo "branch_present=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "::error::Cannot resolve a SHA for ${TAG}: branch ${BR} not found (HTTP ${BR_CODE}) and tag not found (HTTP ${TAG_CODE})."
+          exit 1
+
+      - name: Create Forgejo release (cuts permanent tag)
         if: steps.check.outputs.completed != 'true'
         run: |
+          set -euo pipefail
           VERSION="v${{ needs.version.outputs.version }}"
+          SHA="${{ steps.tempsha.outputs.sha }}"
 
-          curl -s -X POST \
+          # tag_name + target_commitish creates the tag at the named SHA.
+          # If the tag already exists, Forgejo accepts the call as long as
+          # it's at the same commit; otherwise this fails loudly (good).
+          BODY=$(jq -Rs . < RELEASE_NOTES.md)
+          curl --fail -sS -X POST \
             -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
             -H "Content-Type: application/json" \
             "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/releases" \
             -d "{
               \"tag_name\": \"${VERSION}\",
+              \"target_commitish\": \"${SHA}\",
               \"name\": \"Blazen ${VERSION}\",
-              \"body\": $(jq -Rs . < RELEASE_NOTES.md),
+              \"body\": ${BODY},
               \"draft\": false,
               \"prerelease\": false
-            }"
+            }" || {
+              # Idempotent fallback: if the release already exists, that's fine.
+              echo "::warning::Release POST failed; assuming it already exists at this SHA."
+            }
+
+      - name: Delete temp/v{VERSION} branch
+        if: steps.check.outputs.completed != 'true' && steps.tempsha.outputs.branch_present == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          REPO: ${{ github.repository }}
+          AUTH: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+        run: |
+          set -euo pipefail
+          BR="temp/v${VERSION}"
+          API="https://forge.blackleafdigital.com/api/v1/repos/${REPO}/branches/${BR}"
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE -u "$AUTH" "$API")
+          case "$CODE" in
+            204|404) echo "temp branch ${BR} deleted (HTTP ${CODE})" ;;
+            *) echo "::warning::Failed to delete ${BR} (HTTP ${CODE}); manual cleanup may be needed" ;;
+          esac
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
