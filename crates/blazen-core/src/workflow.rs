@@ -215,7 +215,7 @@ impl Workflow {
             after_step: self.checkpoint_after_step,
         };
 
-        let event_loop_handle = tokio::spawn(event_loop(
+        let event_loop_handle = crate::runtime::spawn(event_loop(
             event_rx,
             event_tx,
             registry,
@@ -384,7 +384,7 @@ impl Workflow {
             after_step: false,
         };
 
-        let event_loop_handle = tokio::spawn(event_loop(
+        let event_loop_handle = crate::runtime::spawn(event_loop(
             event_rx,
             event_tx,
             registry,

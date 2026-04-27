@@ -18,7 +18,7 @@ blazen-persist = { workspace = true, optional = true }
 blazen-telemetry = { workspace = true, optional = true, features = ["history"] }
 blazen-events.workspace = true
 blazen-macros.workspace = true
-tokio = { version = "1", default-features = false, features = ["sync", "macros", "rt", "time"] }
+tokio = { version = "1", default-features = false, features = ["sync", "macros"] }
 tokio-stream = { version = "0.1", default-features = false, features = ["sync"] }
 futures-util.workspace = true
 dashmap.workspace = true
@@ -32,6 +32,16 @@ uuid.workspace = true
 chrono.workspace = true
 async-trait.workspace = true
 anyhow.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1", default-features = false, features = ["rt", "time"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-time = "1"
+wasm-bindgen = "=0.2.118"
+wasm-bindgen-futures = "=0.4.68"
+js-sys = "=0.3.95"
+uuid = { workspace = true, features = ["js"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

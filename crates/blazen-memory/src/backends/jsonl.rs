@@ -1,3 +1,4 @@
+#![cfg(not(target_arch = "wasm32"))]
 //! JSONL file-backed memory backend.
 //!
 //! Loads all entries into RAM on construction, then appends new entries to the

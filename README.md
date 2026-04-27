@@ -144,6 +144,41 @@ const result = await workflow.run({ name: "Zach" });
 console.log(result.data); // { greeting: "Hello, Zach!" }
 ```
 
+### Cloudflare Workers
+
+Blazen runs the full workflow engine inside Cloudflare Workers via `@blazen/sdk`. Multi-step LLM workflows, agents, and pipelines all execute on workerd -- Cloudflare's production runtime -- with no special configuration beyond `wasm-pack build --target web --release` and passing the compiled `WebAssembly.Module` to `initSync` at module load.
+
+```typescript
+import { initSync, Workflow } from "@blazen/sdk";
+// Wrangler resolves `*.wasm` imports as `WebAssembly.Module` instances.
+import wasmModule from "@blazen/sdk/blazen_wasm_sdk_bg.wasm";
+
+initSync({ module: wasmModule as WebAssembly.Module });
+
+export default {
+  async fetch(): Promise<Response> {
+    const wf = new Workflow("greeter");
+
+    wf.addStep("parse", ["blazen::StartEvent"], (event: any) => ({
+      type: "GreetEvent",
+      name: event?.data?.name ?? "World",
+    }));
+
+    wf.addStep("greet", ["GreetEvent"], (event: any) => ({
+      type: "StopEvent",
+      result: { greeting: `Hello, ${event.name}!` },
+    }));
+
+    const result = await wf.run({});
+    return Response.json(result);
+  },
+};
+```
+
+A complete runnable setup -- `wrangler.toml`, `vitest` integration test exercising the worker against a real `workerd` instance, and the `wasm-pack` build wiring -- lives in [`examples/cloudflare-worker/`](examples/cloudflare-worker/). CI builds and tests it on every push, so the Workers target is a supported deployment surface, not aspirational.
+
+Note: Cloudflare Workers cap CPU time per request (10ms on the free plan, up to 30s on paid plans). Long-running multi-call LLM flows should either fit within those limits, be split across requests using Blazen's pause/resume snapshots, or run on the WASIp2 component (`blazen-wasm`) for ZLayer edge deployment without the per-request cap.
+
 ## LLM Integration
 
 Every provider implements the same `CompletionModel` trait/interface. Switch providers by changing one line.

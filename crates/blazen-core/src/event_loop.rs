@@ -7,13 +7,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use blazen_events::{AnyEvent, DynamicEvent, Event, EventEnvelope, InputRequestEvent, StopEvent};
 use chrono::Utc;
 use tokio::sync::{mpsc, oneshot};
-use tokio::task::JoinSet;
 use uuid::Uuid;
+
+use crate::runtime::{Instant, JoinSet};
 
 use tracing::Instrument;
 
@@ -300,7 +301,7 @@ async fn event_loop_inner(
                 maybe_envelope = event_rx.recv(), if !parked => {
                     maybe_envelope.ok_or(())
                 }
-                () = tokio::time::sleep(remaining) => {
+                () = crate::runtime::sleep(remaining) => {
                     #[cfg(feature = "telemetry")]
                     emit_history(
                         history_tx.as_ref(),

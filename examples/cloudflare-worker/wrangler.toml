@@ -1,0 +1,13 @@
+name = "blazen-workers-smoke"
+main = "src/worker.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# We use the wasm-pack `--target web` output and pass the imported `*_bg.wasm`
+# (resolved as a `WebAssembly.Module` by Wrangler) to `initSync` in the worker
+# entrypoint. The CompiledWasm rule below tells esbuild to treat `*.wasm`
+# imports as compiled WebAssembly modules suitable for the Workers runtime.
+[[rules]]
+type = "CompiledWasm"
+globs = ["**/*.wasm"]
+fallthrough = true

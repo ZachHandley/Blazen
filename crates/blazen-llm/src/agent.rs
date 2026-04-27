@@ -6,7 +6,10 @@
 //! tools or a maximum iteration count is reached.
 
 use std::sync::Arc;
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 
 use crate::error::BlazenError;
 use crate::traits::{CompletionModel, Tool};

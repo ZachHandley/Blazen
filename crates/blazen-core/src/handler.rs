@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
+use crate::runtime::JoinHandle;
 use blazen_events::{AnyEvent, InputResponseEvent};
 use tokio::sync::{broadcast, mpsc, oneshot};
-use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 

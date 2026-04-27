@@ -669,6 +669,7 @@ impl SessionRefRegistry {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 tokio::task_local! {
     /// Ambient current session-ref registry for code paths that run on a
     /// Tokio worker thread. Installed by [`with_session_registry`] for the
@@ -689,6 +690,84 @@ tokio::task_local! {
     /// Tokio, so the `task_local!` is sufficient on its own.
     pub static CURRENT_SESSION_REGISTRY: Arc<SessionRefRegistry>;
 }
+
+/// Wasm32 replacement for `tokio::task_local!`.
+///
+/// `tokio::task_local!` requires the `rt` feature, which is not enabled
+/// on `wasm32` (Tokio's runtime does not compile to wasm). Wasm targets
+/// run single-threaded inside one Worker isolate / one browser tab, so a
+/// `thread_local!<RefCell<Option<Arc<…>>>>` is race-free and provides
+/// the same scoping semantics: `scope` swaps a value in for the duration
+/// of a future and restores the previous value on drop (panic-safe via
+/// the `Guard`), `try_with` returns `Err` when no value is installed.
+#[cfg(target_arch = "wasm32")]
+mod wasm_task_local {
+    use std::cell::RefCell;
+    use std::future::Future;
+    use std::sync::Arc;
+
+    use super::SessionRefRegistry;
+
+    thread_local! {
+        static SLOT: RefCell<Option<Arc<SessionRefRegistry>>> = const { RefCell::new(None) };
+    }
+
+    /// Mirror of `tokio::task::AccessError`, returned by `try_with` when no
+    /// value is currently installed via `scope`.
+    #[derive(Debug)]
+    pub struct AccessError;
+
+    impl std::fmt::Display for AccessError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("task-local value not set")
+        }
+    }
+
+    impl std::error::Error for AccessError {}
+
+    /// Wasm32 mirror of the `tokio::task::LocalKey` API surface used in
+    /// this file (`scope`, `try_with`).
+    pub struct LocalKey;
+
+    impl LocalKey {
+        /// Install `value` for the duration of `fut`, restoring the previous
+        /// value (typically `None`) when `fut` completes or panics.
+        pub async fn scope<F>(&'static self, value: Arc<SessionRefRegistry>, fut: F) -> F::Output
+        where
+            F: Future,
+        {
+            struct Guard(Option<Arc<SessionRefRegistry>>);
+            impl Drop for Guard {
+                fn drop(&mut self) {
+                    SLOT.with(|s| *s.borrow_mut() = self.0.take());
+                }
+            }
+            let prev = SLOT.with(|s| s.borrow_mut().replace(value));
+            let _guard = Guard(prev);
+            fut.await
+        }
+
+        /// Run `f` against the currently installed value, returning
+        /// `Err(AccessError)` when no value is installed.
+        pub fn try_with<F, R>(&'static self, f: F) -> Result<R, AccessError>
+        where
+            F: FnOnce(&Arc<SessionRefRegistry>) -> R,
+        {
+            SLOT.with(|s| {
+                let borrow = s.borrow();
+                match borrow.as_ref() {
+                    Some(v) => Ok(f(v)),
+                    None => Err(AccessError),
+                }
+            })
+        }
+    }
+
+    pub static CURRENT_SESSION_REGISTRY: LocalKey = LocalKey;
+}
+
+#[cfg(target_arch = "wasm32")]
+pub use wasm_task_local::CURRENT_SESSION_REGISTRY;
 
 /// Install `registry` as the ambient [`CURRENT_SESSION_REGISTRY`] for the
 /// duration of `fut`. Any code running inside `fut` can look up the

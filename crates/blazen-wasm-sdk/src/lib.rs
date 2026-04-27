@@ -27,6 +27,7 @@ pub mod chat_message;
 pub mod completion_model;
 pub mod context;
 pub mod embedding;
+pub mod handler;
 pub mod js_completion;
 pub mod js_embedding;
 pub mod manager;

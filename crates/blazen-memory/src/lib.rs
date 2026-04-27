@@ -59,7 +59,7 @@ pub mod types;
 
 // Re-exports for ergonomic imports.
 pub use backends::InMemoryBackend;
-#[cfg(feature = "jsonl")]
+#[cfg(all(feature = "jsonl", not(target_arch = "wasm32")))]
 pub use backends::JsonlBackend;
 pub use error::MemoryError;
 pub use memory::Memory;

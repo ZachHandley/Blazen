@@ -142,9 +142,9 @@ impl WasmMemory {
     ///   async put(entry) { localStorage.setItem(entry.id, JSON.stringify(entry)); },
     ///   async get(id) { const e = localStorage.getItem(id); return e ? JSON.parse(e) : null; },
     ///   async delete(id) { const had = !!localStorage.getItem(id); localStorage.removeItem(id); return had; },
-    ///   async list() { /* ... */ },
+    ///   async list() { return []; },
     ///   async len() { return localStorage.length; },
-    ///   async searchByBands(bands, limit) { /* ... */ },
+    ///   async searchByBands(bands, limit) { return []; },
     /// };
     /// const memory = Memory.fromJsBackend(embedder, backend);
     /// ```

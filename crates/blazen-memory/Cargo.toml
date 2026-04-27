@@ -25,7 +25,11 @@ uuid = { workspace = true }
 
 # tokio/fs is needed for the JSONL backend (not available on WASM)
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { version = "1", default-features = false, features = ["fs"] }
+tokio = { version = "1", default-features = false, features = ["fs", "io-util"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { workspace = true, features = ["js"] }
+getrandom = { version = "0.2", features = ["js"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }

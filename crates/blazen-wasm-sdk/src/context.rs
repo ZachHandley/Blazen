@@ -1,18 +1,94 @@
-//! Lightweight WASM-compatible workflow context.
+//! WASM-bindgen wrapper around the real [`blazen_core::Context`].
 //!
-//! [`WasmContext`] mirrors the API of `blazen_core::Context` but is designed
-//! for `wasm32-unknown-unknown` where there is no tokio runtime and no
-//! `Send + Sync` requirement.
+//! Stage 2 of the wasm-bindgen rollout: the WASM SDK now drives the genuine
+//! workflow engine. This module wraps [`blazen_core::Context`] and surfaces a
+//! synchronous JS API matching the contract in `crates/blazen-wasm-sdk/README.md`
+//! ("All `Context` methods are **synchronous** in WASM").
 //!
-//! The struct uses `Rc<WasmContextInner>` so that cloning is cheap — the
-//! event loop keeps one handle while a clone is passed to JS via
-//! `JsValue::from(ctx.clone())`.
+//! ## Storage backing
+//!
+//! State, session, and metadata all delegate to the underlying
+//! [`blazen_core::Context`]. The real context stores data as
+//! [`blazen_core::StateValue`] (JSON / bytes / native), which means JS values
+//! are round-tripped through `serde-wasm-bindgen` / `serde_json::Value`. This
+//! preserves snapshot/resume semantics at the cost of object identity (see the
+//! note on [`WasmContext::session`] below).
+//!
+//! ## Sync over async
+//!
+//! [`blazen_core::Context`]'s public surface is `async` because it guards an
+//! `Arc<RwLock<…>>`. In single-threaded WASM the lock can never be contended
+//! across threads (there's only one OS thread), so a `read()` / `write()`
+//! future resolves on the first poll — no executor needed. We exploit that
+//! with [`block_on_local`], which polls a future exactly once and panics if
+//! it returns `Pending`. That guard catches accidental misuse if a future
+//! method ever grows real I/O (e.g. distributed peer RPC) and gets called
+//! through the sync API.
+//!
+//! ## What is NOT preserved from the simplified WasmContext
+//!
+//! - JS object identity through `session.set` / `session.get`. The real
+//!   context stores session entries as JSON, so the value you read back is a
+//!   structurally-equal JS object, not the same reference.
+//! - `BlazenState` field decomposition. The previous simplified context split
+//!   marker objects into per-field state entries with metadata stitching. The
+//!   real context stores the whole JSON tree under one key. Decomposition is
+//!   no longer required for correctness because the JSON serialiser handles
+//!   nested values natively.
 
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::pin::Pin;
+use std::task::{Context as TaskContext, Poll};
 
+use blazen_core::{BytesWrapper, Context, StateValue};
 use wasm_bindgen::prelude::*;
+
+// ---------------------------------------------------------------------------
+// Block-on-local: poll a future exactly once.
+// ---------------------------------------------------------------------------
+
+/// Poll a future to completion on the current thread, panicking if it returns
+/// `Pending`.
+///
+/// Used to bridge [`blazen_core::Context`]'s `async` lock-guarded API to the
+/// synchronous JS contract this module exposes. Safe for any operation that
+/// only acquires the internal `Arc<RwLock<ContextInner>>` and does not await
+/// anything else: in single-threaded WASM the lock cannot be contended.
+///
+/// # Panics
+///
+/// Panics if the future yields `Pending`. That signals a real `await` point
+/// inside the supposedly-sync method (e.g. a distributed peer RPC). The
+/// caller must use the async API instead.
+fn block_on_local<F: std::future::Future>(fut: F) -> F::Output {
+    let mut fut = Box::pin(fut);
+    let waker = noop_waker();
+    let mut cx = TaskContext::from_waker(&waker);
+    match Pin::as_mut(&mut fut).poll(&mut cx) {
+        Poll::Ready(v) => v,
+        Poll::Pending => panic!(
+            "WasmContext sync method polled future to Pending — only no-I/O \
+             operations are allowed through the sync API"
+        ),
+    }
+}
+
+/// Construct a no-op `Waker`. Replaces `futures_util::task::noop_waker` so we
+/// don't depend on its specific path.
+fn noop_waker() -> std::task::Waker {
+    use std::task::{RawWaker, RawWakerVTable, Waker};
+
+    const VTABLE: RawWakerVTable = RawWakerVTable::new(
+        |_| RawWaker::new(std::ptr::null(), &VTABLE),
+        |_| {},
+        |_| {},
+        |_| {},
+    );
+
+    // SAFETY: the vtable functions are all no-ops and never dereference the
+    // data pointer. A null pointer is therefore safe.
+    unsafe { Waker::from_raw(RawWaker::new(std::ptr::null(), &VTABLE)) }
+}
 
 // ---------------------------------------------------------------------------
 // TypeScript type augmentation
@@ -32,411 +108,144 @@ export type StateValue =
 "#;
 
 #[wasm_bindgen(typescript_custom_section)]
-const TS_BLAZEN_STATE_META: &str = r#"
-export interface BlazenStateMeta {
-  transient?: string[];
-  storeBy?: Record<string, { save(key: string, value: any, ctx: any): void; load(key: string, ctx: any): any }>;
-}
-"#;
-
-#[wasm_bindgen(typescript_custom_section)]
-const TS_GET_DEFAULTS: &str = r#"
-export interface Context {
-  get(key: string, defaultValue?: StateValue): StateValue | null;
-  getBytes(key: string, defaultValue?: Uint8Array): Uint8Array | null;
-}
+const TS_NAMESPACES: &str = r#"
 export interface StateNamespace {
   get(key: string, defaultValue?: StateValue): StateValue | null;
-  getBytes(key: string, defaultValue?: Uint8Array): Uint8Array | null;
+  set(key: string, value: StateValue): void;
+  keys(): string[];
 }
 export interface SessionNamespace {
   get(key: string, defaultValue?: unknown): unknown;
+  set(key: string, value: unknown): void;
+  keys(): string[];
+}
+export interface MetadataNamespace {
+  get(key: string, defaultValue?: unknown): unknown;
+  set(key: string, value: unknown): void;
 }
 "#;
 
 // ---------------------------------------------------------------------------
-// WasmStateEntry
+// Internal key prefixes
 // ---------------------------------------------------------------------------
 
-/// Internal discriminated storage for context state values.
-enum WasmStateEntry {
-    /// Any JS value stored as-is.
-    Value(JsValue),
-    /// Raw binary data.
-    Bytes(Vec<u8>),
-}
-
-// ---------------------------------------------------------------------------
-// UUID v4 generator (Math.random-based, no external crate)
-// ---------------------------------------------------------------------------
-
-/// Generate a UUID v4 string using `js_sys::Math::random()`.
+/// Prefix used for `session` namespace entries inside the shared state map.
 ///
-/// Follows RFC 4122 section 4.4: variant bits `10xx` and version nibble `4`.
-fn generate_uuid_v4() -> String {
-    let mut bytes = [0u8; 16];
-    for byte in &mut bytes {
-        *byte = (js_sys::Math::random() * 256.0) as u8;
+/// Session values do not have a public sync surface on
+/// [`blazen_core::Context`] — `session_refs` are Uuid-keyed and `objects`
+/// require `Send + Sync`. Storing JS-shaped session data behind this prefix
+/// lets us preserve string keys while still riding the snapshotable JSON
+/// state map.
+const SESSION_PREFIX: &str = "__wasm_session__/";
+
+/// Prefix used for the JS-writable side of the metadata namespace.
+///
+/// Reads still consult the real `Context` metadata first (engine-seeded
+/// `run_id` / `workflow_name`) and fall back to this prefix for keys that
+/// JS callers wrote themselves. Writes always land under this prefix because
+/// `Context::set_metadata` is `pub(crate)` and not callable from outside the
+/// `blazen-core` crate.
+const METADATA_PREFIX: &str = "__wasm_metadata__/";
+
+// ---------------------------------------------------------------------------
+// JsValue <-> StateValue helpers
+// ---------------------------------------------------------------------------
+
+/// Convert a `JsValue` into a [`StateValue`] suitable for the shared state map.
+///
+/// `Uint8Array` instances become [`StateValue::Bytes`]; everything else is
+/// serialised through `serde-wasm-bindgen` to JSON.
+fn js_to_state_value(value: JsValue) -> Result<StateValue, JsValue> {
+    if value.is_instance_of::<js_sys::Uint8Array>() {
+        let arr: js_sys::Uint8Array = value.unchecked_into();
+        return Ok(StateValue::Bytes(BytesWrapper(arr.to_vec())));
     }
 
-    // Set version 4 (bits 4-7 of byte 6).
-    bytes[6] = (bytes[6] & 0x0F) | 0x40;
-    // Set variant 1 (bits 6-7 of byte 8).
-    bytes[8] = (bytes[8] & 0x3F) | 0x80;
-
-    format!(
-        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        bytes[0], bytes[1], bytes[2], bytes[3],
-        bytes[4], bytes[5],
-        bytes[6], bytes[7],
-        bytes[8], bytes[9],
-        bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
-    )
+    let json: serde_json::Value = serde_wasm_bindgen::from_value(value)
+        .map_err(|e| JsValue::from_str(&format!("WasmContext: value not JSON-serialisable: {e}")))?;
+    Ok(StateValue::Json(json))
 }
 
-// ---------------------------------------------------------------------------
-// WasmContextInner
-// ---------------------------------------------------------------------------
+/// Convert a [`StateValue`] back into a `JsValue` for the JS caller.
+///
+/// `Bytes` becomes a `Uint8Array`. `Json` is round-tripped through
+/// `serde-wasm-bindgen`. `Native` (platform-serialised opaque blobs) is
+/// surfaced as a `Uint8Array` — WASM bindings have no native pickle format
+/// of their own, so this is the most useful representation.
+fn state_value_to_js(value: &StateValue) -> JsValue {
+    match value {
+        StateValue::Bytes(b) | StateValue::Native(b) => {
+            js_sys::Uint8Array::from(b.0.as_slice()).into()
+        }
+        StateValue::Json(v) => serde_wasm_bindgen::to_value(v).unwrap_or(JsValue::NULL),
+    }
+}
 
-/// Shared inner state behind `Rc`.
-struct WasmContextInner {
-    workflow_name: String,
-    run_id: String,
-    state: RefCell<HashMap<String, WasmStateEntry>>,
-    /// Session-scoped live references. Since WASM is single-threaded
-    /// there is no `Send` / `Sync` concern and JS object identity is
-    /// preserved trivially across `set`/`get`. These values are NOT
-    /// included in any snapshot.
-    session: RefCell<HashMap<String, JsValue>>,
-    event_queue: RefCell<Vec<JsValue>>,
+/// Convert a `serde_json::Value` directly into a `JsValue`.
+fn json_to_js(value: &serde_json::Value) -> JsValue {
+    serde_wasm_bindgen::to_value(value).unwrap_or(JsValue::NULL)
 }
 
 // ---------------------------------------------------------------------------
 // WasmContext
 // ---------------------------------------------------------------------------
 
-/// A lightweight workflow context for the WASM runtime.
+/// JS-facing handle to a real [`blazen_core::Context`].
 ///
-/// Cheaply clonable via `Rc` — the event loop keeps one handle while
-/// a clone is converted to `JsValue` for the JS step handler.
-#[wasm_bindgen(js_name = "Context")]
+/// Cheaply cloneable: the inner `Context` is itself an `Arc<RwLock<…>>` clone
+/// so duplicating this struct only bumps refcounts.
+///
+/// **NOTE:** This type is exported to JS as `WorkflowContext` rather than the
+/// natural `WasmContext` due to a wasm-bindgen 0.2.118 cli-support bug that
+/// mangles class names containing the substring `Wasm`. Do not change the
+/// `js_name` / `js_class` annotations until that bug is fixed upstream.
+#[wasm_bindgen(js_name = "WorkflowContext")]
 pub struct WasmContext {
-    inner: Rc<WasmContextInner>,
+    /// Underlying real context. `Context` is itself `Arc`-backed so we can
+    /// clone it freely without an outer wrapper.
+    inner: Context,
+    /// Cached workflow name, plumbed in at construction. The engine also
+    /// writes this into the underlying context's metadata under the key
+    /// `workflow_name`, but caching here avoids a lock acquisition per read.
+    workflow_name: String,
 }
 
 impl Clone for WasmContext {
     fn clone(&self) -> Self {
         Self {
-            inner: Rc::clone(&self.inner),
+            inner: self.inner.clone(),
+            workflow_name: self.workflow_name.clone(),
         }
     }
 }
 
 // ---------------------------------------------------------------------------
-// Internal (non-wasm_bindgen) API
+// Internal (non-wasm_bindgen) API used by sibling modules.
 // ---------------------------------------------------------------------------
 
 impl WasmContext {
-    /// Create a new context for the given workflow.
+    /// Wrap an existing [`blazen_core::Context`].
     ///
-    /// A UUID v4 `run_id` is generated automatically.
-    pub(crate) fn new(workflow_name: String) -> Self {
+    /// Used by the JS-callback step adapter (`workflow.rs`'s `addStep`) to
+    /// hand the running context to user-supplied step handlers. The caller
+    /// is responsible for ensuring `inner` was constructed by the real
+    /// workflow engine — this module never builds a fresh `Context` on its
+    /// own because the public `Context::new` is `pub(crate)`.
+    pub(crate) fn from_inner(inner: Context, workflow_name: String) -> Self {
         Self {
-            inner: Rc::new(WasmContextInner {
-                workflow_name,
-                run_id: generate_uuid_v4(),
-                state: RefCell::new(HashMap::new()),
-                session: RefCell::new(HashMap::new()),
-                event_queue: RefCell::new(Vec::new()),
-            }),
+            inner,
+            workflow_name,
         }
     }
 
-    /// Drain all queued events, returning them and leaving the queue empty.
-    pub(crate) fn drain_events(&self) -> Vec<JsValue> {
-        self.inner.event_queue.borrow_mut().drain(..).collect()
-    }
-}
-
-// ---------------------------------------------------------------------------
-// BlazenState helpers (non-wasm_bindgen)
-// ---------------------------------------------------------------------------
-
-/// JS property name constants used by the `BlazenState` protocol.
-mod blazen_state_keys {
-    pub const MARKER: &str = "__blazen_state__";
-    pub const META_SUFFIX: &str = ".__blazen_meta__";
-    pub const META_PROP: &str = "meta";
-    pub const TRANSIENT: &str = "transient";
-    pub const STORE_BY: &str = "storeBy";
-    pub const CLASS_NAME: &str = "className";
-    pub const FIELDS: &str = "fields";
-    pub const RESTORE: &str = "restore";
-}
-
-/// Metadata extracted from a `BlazenState` object's constructor.
-struct BlazenStateMeta {
-    /// The JS value of the `transient` array (or `UNDEFINED`).
-    transient_arr: JsValue,
-    /// Pre-parsed set of transient field names for fast lookup.
-    transient_set: std::collections::HashSet<String>,
-    /// The `storeBy` object (or `UNDEFINED`).
-    store_by: JsValue,
-    /// The resolved class name.
-    class_name: JsValue,
-    /// The restore function name (or `UNDEFINED`).
-    restore_fn_name: JsValue,
-}
-
-/// Read a property from `meta` if it is an object, otherwise return `UNDEFINED`.
-fn meta_prop(meta: &JsValue, prop: &str) -> JsValue {
-    if meta.is_object() {
-        js_sys::Reflect::get(meta, &JsValue::from_str(prop)).unwrap_or(JsValue::UNDEFINED)
-    } else {
-        JsValue::UNDEFINED
-    }
-}
-
-/// Look up a `FieldStore` in `store_by` for the given field name.
-fn field_store(store_by: &JsValue, field_name_val: &JsValue) -> Option<JsValue> {
-    if store_by.is_object() {
-        js_sys::Reflect::get(store_by, field_name_val)
-            .ok()
-            .filter(JsValue::is_object)
-    } else {
-        None
-    }
-}
-
-impl BlazenStateMeta {
-    /// Extract metadata from a `BlazenState` JS value's constructor.
-    fn from_value(value: &JsValue) -> Self {
-        let constructor = js_sys::Reflect::get(value, &JsValue::from_str("constructor"))
-            .unwrap_or(JsValue::UNDEFINED);
-
-        let meta = if constructor.is_object() || constructor.is_function() {
-            js_sys::Reflect::get(
-                &constructor,
-                &JsValue::from_str(blazen_state_keys::META_PROP),
-            )
-            .unwrap_or(JsValue::UNDEFINED)
-        } else {
-            JsValue::UNDEFINED
-        };
-
-        let transient_arr = meta_prop(&meta, blazen_state_keys::TRANSIENT);
-
-        let transient_set: std::collections::HashSet<String> =
-            if transient_arr.is_instance_of::<js_sys::Array>() {
-                let arr: &js_sys::Array = transient_arr.unchecked_ref();
-                arr.iter().filter_map(|v| v.as_string()).collect()
-            } else {
-                std::collections::HashSet::new()
-            };
-
-        let store_by = meta_prop(&meta, blazen_state_keys::STORE_BY);
-
-        let class_name: JsValue = if meta.is_object() {
-            js_sys::Reflect::get(&meta, &JsValue::from_str(blazen_state_keys::CLASS_NAME))
-                .ok()
-                .filter(JsValue::is_string)
-                .unwrap_or_else(|| {
-                    js_sys::Reflect::get(&constructor, &JsValue::from_str("name"))
-                        .unwrap_or(JsValue::from_str("BlazenState"))
-                })
-        } else {
-            js_sys::Reflect::get(&constructor, &JsValue::from_str("name"))
-                .unwrap_or(JsValue::from_str("BlazenState"))
-        };
-
-        let restore_fn_name = meta_prop(&meta, blazen_state_keys::RESTORE);
-
-        Self {
-            transient_arr,
-            transient_set,
-            store_by,
-            class_name,
-            restore_fn_name,
-        }
-    }
-}
-
-impl WasmContext {
-    /// Returns `true` if `value` is a JS object carrying the `__blazen_state__`
-    /// marker property set to a truthy value.
-    fn is_blazen_state(value: &JsValue) -> bool {
-        if !value.is_object() {
-            return false;
-        }
-        let marker_key = JsValue::from_str(blazen_state_keys::MARKER);
-        js_sys::Reflect::get(value, &marker_key)
-            .map(|v| v.is_truthy())
-            .unwrap_or(false)
-    }
-
-    /// Decompose a `BlazenState` object and store each field individually.
+    /// Borrow the underlying real context.
     ///
-    /// Stores metadata at `{key}.__blazen_meta__` so that [`get`] can
-    /// reconstruct the object later.
-    fn set_blazen_state(&self, key: &str, value: &JsValue) {
-        let sm = BlazenStateMeta::from_value(value);
-
-        // Iterate Object.keys(value), skipping the marker and transient fields.
-        let obj_keys = js_sys::Object::keys(value.unchecked_ref::<js_sys::Object>());
-        let fields_arr = js_sys::Array::new();
-        let ctx_js: JsValue = self.clone().into();
-
-        for i in 0..obj_keys.length() {
-            let field_name_val = obj_keys.get(i);
-            let Some(field_name) = field_name_val.as_string() else {
-                continue;
-            };
-
-            if field_name == blazen_state_keys::MARKER || sm.transient_set.contains(&field_name) {
-                continue;
-            }
-
-            fields_arr.push(&field_name_val);
-
-            let field_value =
-                js_sys::Reflect::get(value, &field_name_val).unwrap_or(JsValue::UNDEFINED);
-            let field_key = format!("{key}.{field_name}");
-
-            if let Some(store_obj) = field_store(&sm.store_by, &field_name_val) {
-                // Call store.save(fieldKey, fieldValue, ctx)
-                let save_fn = js_sys::Reflect::get(&store_obj, &JsValue::from_str("save"))
-                    .unwrap_or(JsValue::UNDEFINED);
-                if save_fn.is_function() {
-                    let save: &js_sys::Function = save_fn.unchecked_ref();
-                    let _ = save.call3(
-                        &store_obj,
-                        &JsValue::from_str(&field_key),
-                        &field_value,
-                        &ctx_js,
-                    );
-                }
-            } else {
-                self.set(field_key, field_value);
-            }
-        }
-
-        self.persist_blazen_meta(key, &sm, &fields_arr);
-    }
-
-    /// Write the `__blazen_meta__` entry for a decomposed `BlazenState`.
-    fn persist_blazen_meta(&self, key: &str, sm: &BlazenStateMeta, fields_arr: &js_sys::Array) {
-        let meta_obj = js_sys::Object::new();
-        let _ = js_sys::Reflect::set(
-            &meta_obj,
-            &JsValue::from_str(blazen_state_keys::CLASS_NAME),
-            &sm.class_name,
-        );
-        let _ = js_sys::Reflect::set(
-            &meta_obj,
-            &JsValue::from_str(blazen_state_keys::FIELDS),
-            fields_arr,
-        );
-        let _ = js_sys::Reflect::set(
-            &meta_obj,
-            &JsValue::from_str(blazen_state_keys::TRANSIENT),
-            &sm.transient_arr,
-        );
-        if sm.store_by.is_object() {
-            let _ = js_sys::Reflect::set(
-                &meta_obj,
-                &JsValue::from_str(blazen_state_keys::STORE_BY),
-                &sm.store_by,
-            );
-        }
-        if sm.restore_fn_name.is_string() {
-            let _ = js_sys::Reflect::set(
-                &meta_obj,
-                &JsValue::from_str(blazen_state_keys::RESTORE),
-                &sm.restore_fn_name,
-            );
-        }
-
-        let meta_key = format!("{key}{}", blazen_state_keys::META_SUFFIX);
-        self.set(meta_key, meta_obj.into());
-    }
-
-    /// Attempt to reconstruct a `BlazenState` object from its decomposed
-    /// fields.  Returns `None` if there is no `__blazen_meta__` entry for
-    /// `key`.
-    fn get_blazen_state(&self, key: &str) -> Option<JsValue> {
-        let meta_key = format!("{key}{}", blazen_state_keys::META_SUFFIX);
-
-        // Read the metadata entry.  We must drop the borrow before calling
-        // `self.get()` recursively.
-        let meta_val = {
-            let state = self.inner.state.borrow();
-            match state.get(&meta_key) {
-                Some(WasmStateEntry::Value(v)) => v.clone(),
-                _ => return None,
-            }
-        };
-
-        if !meta_val.is_object() {
-            return None;
-        }
-
-        let fields = js_sys::Reflect::get(&meta_val, &JsValue::from_str(blazen_state_keys::FIELDS))
-            .unwrap_or(JsValue::UNDEFINED);
-        let fields_arr: &js_sys::Array = fields.dyn_ref::<js_sys::Array>()?;
-
-        let store_by =
-            js_sys::Reflect::get(&meta_val, &JsValue::from_str(blazen_state_keys::STORE_BY))
-                .unwrap_or(JsValue::UNDEFINED);
-
-        let result = js_sys::Object::new();
-        let ctx_js: JsValue = self.clone().into();
-
-        for i in 0..fields_arr.length() {
-            let field_name_val = fields_arr.get(i);
-            let Some(field_name) = field_name_val.as_string() else {
-                continue;
-            };
-
-            let field_key = format!("{key}.{field_name}");
-
-            let field_value = if let Some(store_obj) = field_store(&store_by, &field_name_val) {
-                let load_fn = js_sys::Reflect::get(&store_obj, &JsValue::from_str("load"))
-                    .unwrap_or(JsValue::UNDEFINED);
-                if load_fn.is_function() {
-                    let load: &js_sys::Function = load_fn.unchecked_ref();
-                    load.call2(&store_obj, &JsValue::from_str(&field_key), &ctx_js)
-                        .unwrap_or(JsValue::UNDEFINED)
-                } else {
-                    self.get(field_key, JsValue::UNDEFINED)
-                }
-            } else {
-                self.get(field_key, JsValue::UNDEFINED)
-            };
-
-            let _ = js_sys::Reflect::set(&result, &field_name_val, &field_value);
-        }
-
-        // Set the __blazen_state__ marker on the reconstructed object.
-        let _ = js_sys::Reflect::set(
-            &result,
-            &JsValue::from_str(blazen_state_keys::MARKER),
-            &JsValue::TRUE,
-        );
-
-        // If a restore function name was saved, call it on the result object.
-        let restore_name =
-            js_sys::Reflect::get(&meta_val, &JsValue::from_str(blazen_state_keys::RESTORE))
-                .unwrap_or(JsValue::UNDEFINED);
-        if let Some(name) = restore_name.as_string() {
-            let restore_fn = js_sys::Reflect::get(&result, &JsValue::from_str(&name))
-                .unwrap_or(JsValue::UNDEFINED);
-            if restore_fn.is_function() {
-                let func: &js_sys::Function = restore_fn.unchecked_ref();
-                let _ = func.call0(&result);
-            }
-        }
-
-        Some(result.into())
+    /// Lets the step adapter and handler wrapper reach into the engine for
+    /// async-only operations (e.g. emitting events from inside an async
+    /// callback, snapshotting state for a pause request).
+    #[allow(dead_code)]
+    pub(crate) fn inner(&self) -> &Context {
+        &self.inner
     }
 }
 
@@ -444,114 +253,10 @@ impl WasmContext {
 // Public wasm_bindgen API
 // ---------------------------------------------------------------------------
 
-#[wasm_bindgen(js_class = "Context")]
+#[wasm_bindgen(js_class = "WorkflowContext")]
 impl WasmContext {
-    /// Store a value in the context state map.
-    ///
-    /// If `value` carries the `__blazen_state__` marker, the object is
-    /// decomposed: each field is stored individually and metadata is persisted
-    /// so that [`get`] can reconstruct it.
-    ///
-    /// If `value` is a `Uint8Array`, it is stored as raw bytes internally.
-    /// All other JS values are stored as-is.
-    #[wasm_bindgen]
-    pub fn set(&self, key: String, value: JsValue) {
-        // BlazenState decomposition takes priority.
-        if Self::is_blazen_state(&value) {
-            self.set_blazen_state(&key, &value);
-            return;
-        }
-
-        let entry = if value.is_instance_of::<js_sys::Uint8Array>() {
-            let arr: js_sys::Uint8Array = value.unchecked_into();
-            WasmStateEntry::Bytes(arr.to_vec())
-        } else {
-            WasmStateEntry::Value(value)
-        };
-        self.inner.state.borrow_mut().insert(key, entry);
-    }
-
-    /// Retrieve a value from the context state map.
-    ///
-    /// If `{key}.__blazen_meta__` exists the value is a decomposed
-    /// `BlazenState` — the object is reconstructed from its individual fields
-    /// and returned.
-    ///
-    /// - `Bytes` entries are returned as `Uint8Array`.
-    /// - `Value` entries are returned as the original `JsValue`.
-    /// - When the key is missing, returns `defaultValue` if supplied,
-    ///   otherwise `null`.
-    #[wasm_bindgen]
-    pub fn get(&self, key: String, default: JsValue) -> JsValue {
-        if let Some(reconstructed) = self.get_blazen_state(&key) {
-            return reconstructed;
-        }
-
-        let state = self.inner.state.borrow();
-        let val = match state.get(&key) {
-            Some(WasmStateEntry::Value(v)) => v.clone(),
-            Some(WasmStateEntry::Bytes(b)) => js_sys::Uint8Array::from(b.as_slice()).into(),
-            None => JsValue::NULL,
-        };
-        drop(state);
-        if val.is_null() && !default.is_undefined() {
-            return default;
-        }
-        val
-    }
-
-    /// Store raw binary data under the given key.
-    #[wasm_bindgen(js_name = "setBytes")]
-    pub fn set_bytes(&self, key: String, data: js_sys::Uint8Array) {
-        self.inner
-            .state
-            .borrow_mut()
-            .insert(key, WasmStateEntry::Bytes(data.to_vec()));
-    }
-
-    /// Retrieve raw binary data previously stored under the given key.
-    ///
-    /// Returns a `Uint8Array` if the key exists and was stored as bytes,
-    /// otherwise returns `defaultValue` if supplied, else `null`.
-    #[wasm_bindgen(js_name = "getBytes")]
-    pub fn get_bytes(&self, key: String, default: JsValue) -> JsValue {
-        let state = self.inner.state.borrow();
-        let val = match state.get(&key) {
-            Some(WasmStateEntry::Bytes(b)) => js_sys::Uint8Array::from(b.as_slice()).into(),
-            _ => JsValue::NULL,
-        };
-        drop(state);
-        if val.is_null() && !default.is_undefined() {
-            return default;
-        }
-        val
-    }
-
-    /// Push an event onto the internal event queue.
-    #[wasm_bindgen(js_name = "sendEvent")]
-    pub fn send_event(&self, event: JsValue) {
-        self.inner.event_queue.borrow_mut().push(event);
-    }
-
-    /// No-op in the WASM runtime (API compatibility).
-    #[wasm_bindgen(js_name = "writeEventToStream")]
-    pub fn write_event_to_stream(&self, _event: JsValue) {}
-
-    /// Return the unique run ID for this workflow execution.
-    #[wasm_bindgen(js_name = "runId")]
-    pub fn run_id(&self) -> String {
-        self.inner.run_id.clone()
-    }
-
-    /// The workflow name.
-    #[wasm_bindgen(getter, js_name = "workflowName")]
-    pub fn workflow_name(&self) -> String {
-        self.inner.workflow_name.clone()
-    }
-
-    /// Persistable workflow state. Survives snapshotting (when the WASM
-    /// runner gains snapshot support); routes through the same JS / bytes
-    /// dispatch as the legacy `ctx.set` / `ctx.get`.
+    /// Persistable workflow state. Backed by [`blazen_core::Context`]'s
+    /// JSON-typed state map; entries survive snapshotting.
     ///
     /// ```javascript
     /// ctx.state.set("counter", 5);
@@ -563,29 +268,121 @@ impl WasmContext {
         WasmStateNamespace { ctx: self.clone() }
     }
 
-    /// Live in-process references. Identity is preserved within a single
-    /// workflow run. WASM does **not** support cross-process snapshot/resume
-    /// of session entries.
+    /// In-process key/value scratch space.
+    ///
+    /// NOTE: Stage 2 wraps the real `blazen_core::Context` whose session
+    /// storage is `serde_json::Value`-backed. JS reference identity is NOT
+    /// preserved across `session.set` / `session.get` calls. The simplified
+    /// `WasmWorkflow`'s identity-preservation behaviour is gone. If users
+    /// need it back, file an issue and we'll add a separate JS-only session
+    /// store keyed alongside the real one.
     ///
     /// ```javascript
-    /// ctx.session.set("conn", openConnection());
-    /// const c = ctx.session.get("conn"); // same object
+    /// ctx.session.set("token", "abc123");
+    /// const token = ctx.session.get("token");
     /// ```
     #[must_use]
     #[wasm_bindgen(getter)]
     pub fn session(&self) -> WasmSessionNamespace {
         WasmSessionNamespace { ctx: self.clone() }
     }
+
+    /// Workflow metadata. The engine seeds this with `run_id` and
+    /// `workflow_name` before any step runs; user-written keys are stored in
+    /// a separate JS-writable side-channel because `Context::set_metadata`
+    /// is `pub(crate)` in `blazen-core`.
+    ///
+    /// Reads consult the engine-seeded metadata first, then fall back to the
+    /// JS-writable side-channel.
+    #[must_use]
+    #[wasm_bindgen(getter)]
+    pub fn metadata(&self) -> WasmMetadataNamespace {
+        WasmMetadataNamespace { ctx: self.clone() }
+    }
+
+    /// Send an event into the workflow's internal routing channel.
+    ///
+    /// Accepts either a JS object with a `type: string` discriminator (the
+    /// canonical shape used by step handlers) or a plain string treated as
+    /// the event type with an empty payload.
+    #[wasm_bindgen(js_name = "sendEvent")]
+    pub fn send_event(&self, event: JsValue) -> Result<(), JsValue> {
+        let dynamic = js_to_dynamic_event(&event)?;
+        let inner = self.inner.clone();
+        block_on_local(async move {
+            inner.send_event(dynamic).await;
+        });
+        Ok(())
+    }
+
+    /// Publish an event to the external broadcast stream.
+    ///
+    /// Same accepted shapes as [`send_event`](Self::send_event), but the
+    /// event is delivered ONLY to subscribers of the streaming channel — it
+    /// does NOT route through the internal step registry.
+    #[wasm_bindgen(js_name = "writeEventToStream")]
+    pub fn write_event_to_stream(&self, event: JsValue) -> Result<(), JsValue> {
+        let dynamic = js_to_dynamic_event(&event)?;
+        let inner = self.inner.clone();
+        block_on_local(async move {
+            inner.write_event_to_stream(dynamic).await;
+        });
+        Ok(())
+    }
+
+    /// Return the unique run ID for this workflow execution.
+    #[wasm_bindgen(js_name = "runId")]
+    pub fn run_id(&self) -> String {
+        let inner = self.inner.clone();
+        block_on_local(async move { inner.run_id().await.to_string() })
+    }
+
+    /// The workflow name.
+    #[wasm_bindgen(getter, js_name = "workflowName")]
+    pub fn workflow_name(&self) -> String {
+        self.workflow_name.clone()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// JS event -> blazen_events::DynamicEvent
+// ---------------------------------------------------------------------------
+
+/// Turn a JS event object (or string) into a [`blazen_events::DynamicEvent`]
+/// suitable for emission through [`blazen_core::Context`].
+fn js_to_dynamic_event(event: &JsValue) -> Result<blazen_events::DynamicEvent, JsValue> {
+    // Plain string => use as the event type with an empty payload.
+    if let Some(s) = event.as_string() {
+        return Ok(blazen_events::DynamicEvent {
+            event_type: s,
+            data: serde_json::Value::Null,
+        });
+    }
+
+    // Object with a `type` discriminator.
+    if event.is_object() {
+        let type_val = js_sys::Reflect::get(event, &JsValue::from_str("type"))
+            .map_err(|e| JsValue::from_str(&format!("sendEvent: cannot read .type: {e:?}")))?;
+        let event_type = type_val
+            .as_string()
+            .ok_or_else(|| JsValue::from_str("sendEvent: event.type must be a string"))?;
+
+        let data: serde_json::Value = serde_wasm_bindgen::from_value(event.clone())
+            .map_err(|e| JsValue::from_str(&format!("sendEvent: payload not JSON: {e}")))?;
+
+        return Ok(blazen_events::DynamicEvent { event_type, data });
+    }
+
+    Err(JsValue::from_str(
+        "sendEvent: argument must be a string or an object with a `type` field",
+    ))
 }
 
 // ---------------------------------------------------------------------------
 // WasmStateNamespace — persistable workflow state
 // ---------------------------------------------------------------------------
 
-/// Namespace for persistable workflow state.
-///
-/// Routes values through the same `set` / `get` / `setBytes` / `getBytes`
-/// dispatch as the legacy [`WasmContext::set`] / [`WasmContext::get`].
+/// Namespace handle for the persistable workflow state map.
 #[wasm_bindgen(js_name = "StateNamespace")]
 pub struct WasmStateNamespace {
     ctx: WasmContext,
@@ -593,37 +390,60 @@ pub struct WasmStateNamespace {
 
 #[wasm_bindgen(js_class = "StateNamespace")]
 impl WasmStateNamespace {
-    #[wasm_bindgen]
-    pub fn set(&self, key: String, value: JsValue) {
-        self.ctx.set(key, value);
-    }
-
+    /// Read a state entry. Returns `defaultValue` (or `null` if omitted) when
+    /// the key is missing.
     #[wasm_bindgen]
     pub fn get(&self, key: String, default: JsValue) -> JsValue {
-        self.ctx.get(key, default)
+        let inner = self.ctx.inner.clone();
+        let stored: Option<StateValue> =
+            block_on_local(async move { inner.get_value(&key).await });
+        match stored {
+            Some(sv) => state_value_to_js(&sv),
+            None => {
+                if default.is_undefined() {
+                    JsValue::NULL
+                } else {
+                    default
+                }
+            }
+        }
     }
 
-    #[wasm_bindgen(js_name = "setBytes")]
-    pub fn set_bytes(&self, key: String, data: js_sys::Uint8Array) {
-        self.ctx.set_bytes(key, data);
+    /// Write a state entry. `Uint8Array` values are stored as raw bytes;
+    /// other values are JSON-serialised through `serde-wasm-bindgen`.
+    #[wasm_bindgen]
+    pub fn set(&self, key: String, value: JsValue) -> Result<(), JsValue> {
+        let sv = js_to_state_value(value)?;
+        let inner = self.ctx.inner.clone();
+        block_on_local(async move {
+            inner.set_value(&key, sv).await;
+        });
+        Ok(())
     }
 
-    #[wasm_bindgen(js_name = "getBytes")]
-    pub fn get_bytes(&self, key: String, default: JsValue) -> JsValue {
-        self.ctx.get_bytes(key, default)
+    /// Return all keys currently present in the state map (excluding
+    /// session and metadata side-channel entries).
+    #[wasm_bindgen]
+    pub fn keys(&self) -> js_sys::Array {
+        let inner = self.ctx.inner.clone();
+        let snap: HashMap<String, StateValue> =
+            block_on_local(async move { inner.snapshot_state().await });
+        let arr = js_sys::Array::new();
+        for k in snap.keys() {
+            if k.starts_with(SESSION_PREFIX) || k.starts_with(METADATA_PREFIX) {
+                continue;
+            }
+            arr.push(&JsValue::from_str(k));
+        }
+        arr
     }
 }
 
 // ---------------------------------------------------------------------------
-// WasmSessionNamespace — live in-process references
+// WasmSessionNamespace — JSON-backed session scratch space
 // ---------------------------------------------------------------------------
 
-/// Namespace for live in-process JS references.
-///
-/// Values are stored as raw [`JsValue`]s in a separate map; identity is
-/// preserved within a single workflow run because the WASM runtime is
-/// single-threaded. These entries are deliberately excluded from any
-/// snapshot.
+/// Namespace handle for the session-scoped scratch space.
 #[wasm_bindgen(js_name = "SessionNamespace")]
 pub struct WasmSessionNamespace {
     ctx: WasmContext,
@@ -631,41 +451,118 @@ pub struct WasmSessionNamespace {
 
 #[wasm_bindgen(js_class = "SessionNamespace")]
 impl WasmSessionNamespace {
-    /// Store a live JS reference under the given key. The value is
-    /// kept as-is; subsequent `get` returns the same object.
-    #[wasm_bindgen]
-    pub fn set(&self, key: String, value: JsValue) {
-        self.ctx.inner.session.borrow_mut().insert(key, value);
-    }
-
-    /// Retrieve the value previously stored under the given key.
-    /// Returns `defaultValue` if the key does not exist (or `null` if no
-    /// default is supplied).
+    /// Read a session entry. Returns `defaultValue` (or `null` if omitted)
+    /// when the key is missing.
     #[wasm_bindgen]
     pub fn get(&self, key: String, default: JsValue) -> JsValue {
-        let val = self
-            .ctx
-            .inner
-            .session
-            .borrow()
-            .get(&key)
-            .cloned()
-            .unwrap_or(JsValue::NULL);
-        if val.is_null() && !default.is_undefined() {
-            return default;
+        let prefixed = format!("{SESSION_PREFIX}{key}");
+        let inner = self.ctx.inner.clone();
+        let stored: Option<StateValue> =
+            block_on_local(async move { inner.get_value(&prefixed).await });
+        match stored {
+            Some(sv) => state_value_to_js(&sv),
+            None => {
+                if default.is_undefined() {
+                    JsValue::NULL
+                } else {
+                    default
+                }
+            }
         }
-        val
     }
 
-    /// Check whether a value exists under the given key.
+    /// Write a session entry. JS reference identity is NOT preserved — the
+    /// value is serialised through `serde-wasm-bindgen` and reconstructed on
+    /// each `get`. See [`WasmContext::session`] for the rationale.
     #[wasm_bindgen]
-    pub fn has(&self, key: String) -> bool {
-        self.ctx.inner.session.borrow().contains_key(&key)
+    pub fn set(&self, key: String, value: JsValue) -> Result<(), JsValue> {
+        let prefixed = format!("{SESSION_PREFIX}{key}");
+        let sv = js_to_state_value(value)?;
+        let inner = self.ctx.inner.clone();
+        block_on_local(async move {
+            inner.set_value(&prefixed, sv).await;
+        });
+        Ok(())
     }
 
-    /// Remove the value stored under the given key.
+    /// Return all keys currently present in the session scratch space (with
+    /// the internal prefix stripped).
     #[wasm_bindgen]
-    pub fn remove(&self, key: String) {
-        self.ctx.inner.session.borrow_mut().remove(&key);
+    pub fn keys(&self) -> js_sys::Array {
+        let inner = self.ctx.inner.clone();
+        let snap: HashMap<String, StateValue> =
+            block_on_local(async move { inner.snapshot_state().await });
+        let arr = js_sys::Array::new();
+        for k in snap.keys() {
+            if let Some(stripped) = k.strip_prefix(SESSION_PREFIX) {
+                arr.push(&JsValue::from_str(stripped));
+            }
+        }
+        arr
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WasmMetadataNamespace — engine-seeded reads + JS-writable side-channel
+// ---------------------------------------------------------------------------
+
+/// Namespace handle for workflow metadata.
+#[wasm_bindgen(js_name = "MetadataNamespace")]
+pub struct WasmMetadataNamespace {
+    ctx: WasmContext,
+}
+
+#[wasm_bindgen(js_class = "MetadataNamespace")]
+impl WasmMetadataNamespace {
+    /// Read a metadata entry.
+    ///
+    /// Lookup order:
+    /// 1. The engine-seeded metadata map (e.g. `run_id`, `workflow_name`).
+    /// 2. The JS-writable side-channel under [`METADATA_PREFIX`].
+    /// 3. `defaultValue` (or `null` if omitted).
+    #[wasm_bindgen]
+    pub fn get(&self, key: String, default: JsValue) -> JsValue {
+        let inner = self.ctx.inner.clone();
+        let lookup_key = key.clone();
+        let real_meta: HashMap<String, serde_json::Value> =
+            block_on_local(async move { inner.snapshot_metadata().await });
+
+        if let Some(v) = real_meta.get(&lookup_key) {
+            return json_to_js(v);
+        }
+
+        // Fall back to the JS-writable side-channel.
+        let prefixed = format!("{METADATA_PREFIX}{key}");
+        let inner = self.ctx.inner.clone();
+        let stored: Option<StateValue> =
+            block_on_local(async move { inner.get_value(&prefixed).await });
+        match stored {
+            Some(sv) => state_value_to_js(&sv),
+            None => {
+                if default.is_undefined() {
+                    JsValue::NULL
+                } else {
+                    default
+                }
+            }
+        }
+    }
+
+    /// Write a metadata entry into the JS-writable side-channel.
+    ///
+    /// Engine-seeded metadata (`run_id`, `workflow_name`) is read-only from
+    /// JS because [`blazen_core::Context::set_metadata`] is `pub(crate)`.
+    /// Writing under those keys still succeeds but stores into the
+    /// side-channel; subsequent reads return the original engine value (the
+    /// real metadata wins on lookup).
+    #[wasm_bindgen]
+    pub fn set(&self, key: String, value: JsValue) -> Result<(), JsValue> {
+        let prefixed = format!("{METADATA_PREFIX}{key}");
+        let sv = js_to_state_value(value)?;
+        let inner = self.ctx.inner.clone();
+        block_on_local(async move {
+            inner.set_value(&prefixed, sv).await;
+        });
+        Ok(())
     }
 }
