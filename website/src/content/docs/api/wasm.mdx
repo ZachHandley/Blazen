@@ -494,6 +494,192 @@ wf.addStep('process', ['MyEvent'], async (event, ctx) => {
 
 Run the workflow to completion. The input is passed as the `data` field of a synthetic `StartEvent`. Returns a `Promise` that resolves to the `result` field of the final `StopEvent`.
 
+### `await wf.runStreaming(input: any, callback: (event: any) => void): Promise<any>`
+
+Run the workflow and forward each lifecycle event to a JS callback as it occurs, resolving with the terminal payload once the workflow completes. Mirrors the Node binding's `runStreaming(input, onEvent)`. Stream events are subscribed *before* the engine begins dispatching, so no events are missed between dispatch and subscription.
+
+```typescript
+await wf.runStreaming({ topic: 'TS' }, (event) => {
+  console.log(event.event_type, event.data);
+});
+```
+
+The callback is invoked with `{ event_type, data }` per event. Errors raised synchronously by the listener are swallowed so a misbehaving callback does not abort the run.
+
+### `await wf.runWithHandler(input: any): Promise<WorkflowHandler>`
+
+Build and dispatch the workflow, returning the live [`WorkflowHandler`](#workflowhandler) instead of awaiting the terminal event. Use this when you want to drive the run yourself: call `awaitResult()` for the final payload, `pause()` / `snapshot()` for mid-flight state, `nextEvent()` / `streamEvents()` for events, or `cancel()` / `abort()` to tear it down. Functionally equivalent to `runHandler(input)` — the JS-side name `runWithHandler` exists for parity with the Node binding.
+
+```typescript
+const handler = await wf.runWithHandler({ topic: 'TS' });
+await handler.streamEvents((ev) => console.log(ev));
+const result = await handler.awaitResult();
+```
+
+### `wf.setSessionPausePolicy(policy: string): void`
+
+Configure how live session refs are treated when the workflow is paused or snapshotted. Mirrors the Node binding's `setSessionPausePolicy`. The policy is applied when the workflow is dispatched via `run` / `runHandler` / `runStreaming` / `runWithHandler` / `resumeFromSnapshot` / `resumeWithSerializableRefs`.
+
+| Policy | Behavior |
+|---|---|
+| `"pickle_or_error"` (default) | Pickle live refs if the binding supports it; error otherwise. |
+| `"pickle_or_serialize"` | Pickle if possible; fall back to user-supplied byte serialization. |
+| `"warn_drop"` | Log a warning and drop live refs from the snapshot. |
+| `"hard_error"` | Always error if any live refs are present. |
+
+PascalCase spellings (`PickleOrError`, `PickleOrSerialize`, `WarnDrop`, `HardError`) are also accepted.
+
+`WorkflowBuilder` exposes the same method (chainable, returns `WorkflowBuilder`).
+
+### `await wf.resumeWithSerializableRefs(snapshot: any, deserializers: Record<string, (bytes: Uint8Array) => unknown>): Promise<WorkflowHandler>`
+
+Resume a workflow from a snapshot whose `__blazen_serialized_session_refs` sidecar carries JS-serialized session refs. The `deserializers` object maps `type_tag` strings to `(bytes: Uint8Array) => unknown` callbacks. For every entry in the sidecar whose tag appears in `deserializers`, the callback is invoked synchronously with the captured bytes; the return value is ignored (callbacks should populate any application state they need).
+
+The snapshot's bytes are also exposed inside step handlers via `ctx.getSessionRefSerializable(key)` after resume, mirroring the Node binding's path.
+
+```typescript
+const handler = await wf.resumeWithSerializableRefs(snapshot, {
+  'app::EmbeddingHandle': (bytes) => {
+    myStore.rehydrate(bytes); // populate user-side state
+  },
+});
+const result = await handler.awaitResult();
+```
+
+Snapshots without serialized session refs work fine with `resumeFromSnapshot()`; this method is only required when the original pause used `SessionPausePolicy::PickleOrSerialize`.
+
+---
+
+## WorkflowHandler
+
+Live handle to an in-flight workflow run, returned by `runHandler()` / `runWithHandler()` / `resumeFromSnapshot()` / `resumeWithSerializableRefs()`. The handler lets JS callers drive a workflow run beyond the simple "fire and forget" pattern of `run()`.
+
+### Methods
+
+| Method | Signature | Description |
+|---|---|---|
+| `awaitResult` | `() => Promise<any>` | Await the workflow's terminal payload. Consumes the inner handler. |
+| `pause` | `() => Promise<any>` | Park the event loop and capture a quiescent snapshot. |
+| `snapshot` | `() => Promise<any>` | Capture the current snapshot **without** halting the loop. Use this for logging or telemetry; pair `pause()` -> `snapshot()` -> `resumeInPlace()` for a quiescent view. |
+| `resumeInPlace` | `() => void` | Resume a paused event loop. The same handler instance remains valid for `awaitResult` / `nextEvent` etc. |
+| `cancel` | `() => void` | Tear down the event loop. Best-effort; errors if the loop has already exited. |
+| `abort` | `() => void` | Pure alias for `cancel()`. Matches `JsWorkflowHandler::abort` in the Node bindings — use whichever name reads better. |
+| `runId` | `() => Promise<any>` | Return the run's UUID as a string. First call captures a snapshot to read it, then caches. |
+| `nextEvent` | `() => Promise<any>` | Pull the next event from the broadcast stream. Resolves with `null` when the stream closes. |
+| `streamEvents` | `(callback: (event: any) => void) => Promise<void>` | Subscribe to the broadcast stream and forward each event to a JS callback until the stream closes. Mirrors the Node binding. Single Promise drives the subscription — no need to wrap repeated `nextEvent()` calls. |
+| `respondToInput` | `(requestId: string, response: any) => void` | Deliver a human-in-the-loop response to a workflow that auto-parked on an `InputRequestEvent`. Pass the matching `request_id` and a JSON-serializable response value. |
+
+### Streaming events
+
+```typescript
+const handler = await wf.runWithHandler({ topic: 'WASM' });
+await handler.streamEvents((event) => {
+  console.log(event.event_type, event.data);
+});
+const result = await handler.awaitResult();
+```
+
+Events emitted before `streamEvents()` is called are not replayed — call it before `awaitResult()` to avoid races.
+
+### Pause and snapshot
+
+```typescript
+const handler = await wf.runWithHandler({ topic: 'WASM' });
+await handler.pause();
+const snap = await handler.snapshot();
+localStorage.setItem('snap', JSON.stringify(snap));
+handler.resumeInPlace();
+const result = await handler.awaitResult();
+```
+
+### Human-in-the-loop
+
+```typescript
+const handler = await wf.runWithHandler({});
+const event = await handler.nextEvent();
+if (event?.event_type === 'InputRequestEvent') {
+  const userInput = await prompt(event.data.prompt);
+  handler.respondToInput(event.data.request_id, { answer: userInput });
+}
+const result = await handler.awaitResult();
+```
+
+---
+
+## Pipeline
+
+Pipelines compose multiple `Workflow`s into a sequential or parallel chain. Each `Stage` wraps one workflow plus optional input-mapping and conditional-execution callbacks; the resulting `Pipeline` runs the stages in order, threading the previous stage's output into the next stage's input.
+
+### `new PipelineBuilder(name: string)`
+
+Construct a new builder with the given pipeline name.
+
+### Methods
+
+| Method | Signature | Description |
+|---|---|---|
+| `pipelineBuilder.stage(stage)` | `(stage: Stage) => void` | Append a sequential stage. Consumes the stage — the same `Stage` instance cannot be added to two pipelines. |
+| `pipelineBuilder.parallel(parallel)` | `(parallel: ParallelStage) => void` | Append a parallel stage that fans out across multiple branches. |
+| `pipelineBuilder.timeoutPerStage(seconds)` | `(seconds: number) => void` | Set a per-stage timeout. Exceeding it surfaces as a stage failure with `WorkflowError::Timeout`. |
+| `pipelineBuilder.onPersist(callback)` | `(callback: (snapshot: any) => Promise<void>) => void` | Persist callback that receives a typed `PipelineSnapshot` (serialized to a JS object via `serde-wasm-bindgen`) after each stage completes. The engine awaits the returned `Promise` before continuing. |
+| `pipelineBuilder.onPersistJson(callback)` | `(callback: (json: string) => Promise<void>) => void` | Persist callback that receives the snapshot serialized as a JSON string. The engine awaits the returned `Promise` before continuing. |
+| `pipelineBuilder.build()` | `() => Pipeline` | Finalize and return a runnable `Pipeline`. |
+
+### IndexedDB persistence example
+
+```typescript
+const builder = new PipelineBuilder('research');
+builder.stage(new Stage('outline', outlineWf));
+builder.stage(new Stage('draft', draftWf, (state) => ({ outline: state.outline })));
+builder.onPersistJson(async (json) => {
+  const db = await openDb();
+  await db.put('snapshots', { id: 'research', json });
+});
+const pipeline = builder.build();
+```
+
+### Stage
+
+```typescript
+new Stage(
+  name: string,
+  workflow: Workflow,
+  input_mapper?: ((state: BlazenState) => unknown) | null,
+  condition?: ((state: BlazenState) => boolean) | null,
+);
+```
+
+`input_mapper` is an optional `(state: BlazenState) => unknown` JS callable invoked before the stage runs. Its return value becomes the workflow's input. When `null` / `undefined`, the previous stage's output (or the pipeline input for the first stage) is passed through directly.
+
+`condition` is an optional `(state: BlazenState) => boolean` JS callable that decides whether the stage runs. When `null` / `undefined` the stage always runs; when the callable returns `false` the stage is skipped (its `StageResult.skipped` is `true` and `output` is `null`).
+
+```typescript
+const stage = new Stage(
+  'summarize',
+  summarizeWf,
+  (state) => ({ text: state.draft, maxWords: 100 }),
+  (state) => state.draft != null && state.draft.length > 200,
+);
+```
+
+### ParallelStage
+
+```typescript
+new ParallelStage(name: string, branches: Stage[], join_strategy?: JoinStrategy | null);
+```
+
+Each branch is a `Stage`; branches execute concurrently and are joined according to `JoinStrategy.WaitAll` (default) or `JoinStrategy.FirstCompletes`. Branch `Stage` instances are consumed when the parallel stage is constructed.
+
+```typescript
+import { ParallelStage, Stage, JoinStrategy } from '@blazen/sdk';
+
+const fanOut = new ParallelStage(
+  'fan-out',
+  [new Stage('a', wfA), new Stage('b', wfB)],
+  JoinStrategy.WaitAll,
+);
+```
+
 ---
 
 ## Context (WasmContext)
@@ -519,6 +705,25 @@ type StateValue = string | number | boolean | null | Uint8Array | StateValue[] |
 | `ctx.sendEvent(event)` | `(event: object) => void` | Queue an event into the workflow event loop. |
 | `ctx.writeEventToStream(event)` | `(event: object) => void` | No-op in WASM. Present for API compatibility with the Node.js and Rust SDKs. |
 | `ctx.runId()` | `() => string` | Returns the unique UUID v4 for the current workflow run. |
+| `ctx.insertSessionRefSerializable(typeName, bytes)` | `(typeName: string, bytes: Uint8Array) => string` | Store an opaque, user-serialized payload in the session-ref registry under a fresh registry key. `typeName` is a stable identifier the caller chooses (e.g. `"app::EmbeddingHandle"`); it is captured into snapshot metadata along with the bytes when the workflow is paused under `SessionPausePolicy::PickleOrSerialize`. Returns the registry key as a string. JS code must serialize the value itself (typically into a `Uint8Array`) before calling and deserialize on retrieval. |
+| `ctx.getSessionRefSerializable(key)` | `(key: string) => { typeName: string; bytes: Uint8Array } \| null` | Retrieve a previously inserted opaque payload. Returns `null` if the registry has no entry under `key`, or if the entry exists but was inserted via the non-serializable path (`set` / `setBytes` / language-specific live refs). |
+
+The session-ref-serializable wire format is **cross-binding compatible** with the Node binding's `NodeSessionRefSerializable`: the same `typeName` / `bytes` pair round-trips through a snapshot taken on one binding and resumed on the other.
+
+```typescript
+// Inside a step handler.
+const key = ctx.insertSessionRefSerializable(
+  'app::EmbeddingHandle',
+  new TextEncoder().encode(JSON.stringify({ id: 42 })),
+);
+ctx.state.set('embedding_key', key);
+
+// In a later step (or after resume).
+const stored = ctx.getSessionRefSerializable(ctx.state.get('embedding_key') as string);
+if (stored) {
+  const obj = JSON.parse(new TextDecoder().decode(stored.bytes));
+}
+```
 
 ### Properties
 
@@ -716,6 +921,73 @@ console.log(result.length);       // 2
 console.log(result[0].length);    // 1536
 ```
 
+### `EmbeddingModel.tract(modelUrl: string, tokenizerUrl: string, options?: TractOptions | null): Promise<EmbeddingModel>`
+
+Local embedding via `tract-onnx` — pure-Rust ONNX inference that runs entirely inside the WASM module with no JS libraries required. Both URLs are fetched via `web_sys::fetch` because the `hf-hub` crate is not available on `wasm32`; both endpoints must respond with CORS headers permitting the calling origin.
+
+```typescript
+import { EmbeddingModel, TractOptions } from '@blazen/sdk';
+
+const opts = new TractOptions();
+opts.modelName = 'BGESmallENV15';
+const embedder = await EmbeddingModel.tract(
+  'https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main/onnx/model.onnx',
+  'https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main/tokenizer.json',
+  opts,
+);
+const vecs = await embedder.embed(['Hello world']);
+```
+
+---
+
+## TractEmbedModel
+
+Standalone wasm-only ONNX embedding model. The same backend powers `EmbeddingModel.tract(...)`, but `TractEmbedModel` is exposed directly for callers who want the typed class without going through the generic `EmbeddingModel` factory.
+
+### `TractEmbedModel.create(modelUrl: string, tokenizerUrl: string, options?: TractOptions | null): Promise<TractEmbedModel>`
+
+Async constructor. The ONNX weights and `tokenizer.json` are fetched over HTTP via `web_sys::fetch` (the `hf-hub` crate doesn't compile to `wasm32`). `modelUrl` should point to a raw ONNX protobuf; `tokenizerUrl` to a HuggingFace-format `tokenizer.json`. Both URLs must be CORS-enabled.
+
+```typescript
+import { TractEmbedModel, TractOptions } from '@blazen/sdk';
+
+const opts = new TractOptions();
+opts.modelName = 'BGESmallENV15';
+opts.maxBatchSize = 32;
+
+const model = await TractEmbedModel.create(
+  'https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main/onnx/model.onnx',
+  'https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main/tokenizer.json',
+  opts,
+);
+
+console.log(model.modelId, model.dimensions);
+const vectors = await model.embed(['hello', 'world']);
+```
+
+### Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `.modelId` | `string` | The Hugging Face model id this instance was loaded from. |
+| `.dimensions` | `number` | Output embedding dimensionality. |
+
+### `await model.embed(texts: string[]): Promise<Float32Array[]>`
+
+Embed one or more texts. Returns a nested array of `Float32Array` vectors.
+
+---
+
+## MediaSource
+
+Top-level type alias re-exporting `ImageSource` so the same `Url` / `Base64` shape is reused across image, audio, video, and file modalities:
+
+```typescript
+type MediaSource = ImageSource;
+```
+
+Use `MediaSource` in your own type annotations whenever the modality is generic; the runtime shape is identical to `ImageSource`.
+
 ---
 
 ## Token Estimation
@@ -865,9 +1137,72 @@ const backend = new MemoryBackend({
 
 ---
 
+## InMemoryBackend
+
+A typed, Rust-native in-memory `MemoryBackend` implementation. Unlike `MemoryBackend` (which round-trips every call through user-supplied JS callbacks), `InMemoryBackend` keeps reads and writes inside the WASM linear memory — no JS overhead per call.
+
+```typescript
+import { InMemoryBackend, Memory, EmbeddingModel } from '@blazen/sdk';
+
+const backend = new InMemoryBackend();
+const embedder = EmbeddingModel.openai();
+const memory = Memory.fromBackend(embedder, backend);
+await memory.add('doc1', 'hello world', null);
+```
+
+### Methods
+
+| Method | Signature | Description |
+|---|---|---|
+| `put` | `(entry: WasmStoredEntry) => Promise<void>` | Insert or update a stored entry. |
+| `get` | `(id: string) => Promise<WasmStoredEntry \| null>` | Retrieve a stored entry by id. |
+| `delete` | `(id: string) => Promise<boolean>` | Delete an entry by id. Returns `true` if it existed. |
+| `list` | `() => Promise<WasmStoredEntry[]>` | Return all stored entries. |
+| `len` | `() => Promise<number>` | Return the number of stored entries. |
+| `isEmpty` | `() => Promise<boolean>` | `true` if the backend contains no entries. |
+| `searchByBands` | `(bands: string[], limit: number) => Promise<WasmStoredEntry[]>` | Return candidate entries sharing at least one LSH band. |
+
+### Memory factory methods
+
+| Factory | Signature | Description |
+|---|---|---|
+| `Memory.fromBackend` | `(embedder: EmbeddingModel, backend: InMemoryBackend) => Memory` | Full-mode memory (embedding-based search) backed by a typed `InMemoryBackend`. |
+| `Memory.localFromBackend` | `(backend: InMemoryBackend) => Memory` | Local-only mode (`SimHash` only, `searchLocal()` available; `search()` rejects) backed by a typed `InMemoryBackend`. |
+
+```typescript
+const localMem = Memory.localFromBackend(new InMemoryBackend());
+await localMem.add('doc', 'hello world', null);
+const hits = await localMem.searchLocal('hello', 5, null);
+```
+
+---
+
+## MemoryResult
+
+Standalone class representing a single result returned by `Memory.search()` / `Memory.searchLocal()`. Exposed primarily as a typed return value for downstream code that wants to construct `MemoryResult`s from JS (e.g. when implementing a custom `MemoryStore`).
+
+### Constructor
+
+```typescript
+new MemoryResult(id: string, text: string, score: number, metadata: any);
+```
+
+### Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `.id` | `string` | The entry identifier. |
+| `.text` | `string` | The stored text content. |
+| `.score` | `number` | Similarity score in `[0, 1]`, higher means more similar. |
+| `.metadata` | `any` | Arbitrary metadata, decoded from JSON to a JS value. |
+
+---
+
 ## ModelManager
 
 VRAM budget-aware model manager with LRU eviction. Not typically used in WASM (where GPU model loading is uncommon), but available for tracking model state.
+
+> **Backed by the real `blazen_manager::ModelManager`.** Earlier WASM builds shipped a `HashMap` reimpl with the same surface; the binding now wraps the real Rust manager, so eviction order, budget accounting, and concurrent-access semantics match the native and Node bindings exactly. The JS API surface (`register`, `unregister`, `load`, `unload`, `isLoaded`, `usedBytes`, `availableBytes`, `budgetBytes`, `status`) is unchanged.
 
 ### Constructor
 
@@ -926,6 +1261,36 @@ The returned object has the shape:
   outputPerMillion: number;
 }
 ```
+
+---
+
+## OTLP Telemetry
+
+OpenTelemetry trace export over HTTP/protobuf. Behind the `otlp-http` Cargo feature on the `blazen-wasm-sdk` crate (the default `opentelemetry-otlp/grpc-tonic` transport is wasm-incompatible because `tonic` requires `tokio` networking that does not exist on `wasm32`). The WASM build instead routes spans through a custom `WasmFetchHttpClient` that posts protobuf bodies via `web_sys::fetch`.
+
+### `new OtlpConfig(endpoint: string, serviceName: string)`
+
+| Argument | Type | Description |
+|---|---|---|
+| `endpoint` | `string` | Full HTTP/protobuf traces endpoint, e.g. `"http://localhost:4318/v1/traces"`. |
+| `serviceName` | `string` | Reported to the backend as the `service.name` resource attribute. |
+
+Read-only getters: `.endpoint`, `.serviceName`.
+
+### `initOtlp(config: OtlpConfig): void`
+
+Install the global OTLP exporter and a `tracing-subscriber` stack with an OpenTelemetry layer. Must be called **once** at startup; subsequent calls fail because the global subscriber can only be installed a single time.
+
+```typescript
+import init, { OtlpConfig, initOtlp } from '@blazen/sdk';
+
+await init();
+const cfg = new OtlpConfig('http://localhost:4318/v1/traces', 'my-wasm-app');
+initOtlp(cfg);
+// All subsequent workflow / pipeline / completion spans are exported.
+```
+
+If the collector is unreachable the export simply drops spans; it never blocks the calling workflow.
 
 ---
 

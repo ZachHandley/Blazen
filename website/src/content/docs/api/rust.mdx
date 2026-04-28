@@ -8,6 +8,8 @@ order: 1
 
 ## Feature Flags
 
+`blazen-llm` providers:
+
 | Feature | Description |
 |---------|-------------|
 | `openai` | Enables `OpenAiProvider` and `OpenAiCompatProvider` (covers OpenRouter, Groq, Together, Mistral, DeepSeek, Fireworks, Perplexity, xAI, Cohere, Bedrock) |
@@ -16,6 +18,31 @@ order: 1
 | `fal` | Enables `FalProvider` (compute: image, video, audio, 3D) |
 | `azure` | Enables `AzureOpenAiProvider` |
 | `all-providers` | Enables all provider implementations |
+
+`blazen-llm` local-inference backends (each gated behind its own feature, all bundled in the `all-local` umbrella):
+
+| Feature | Re-exports from `blazen_llm::*` |
+|---------|---------------------------------|
+| `mistralrs` | `MistralRsProvider`, `ChatMessageInput`, `ChatRole`, `InferenceChunk`, `InferenceChunkStream`, `InferenceImage`, `InferenceImageSource`, `InferenceResult`, `InferenceToolCall`, `InferenceUsage`, `MistralRsError`, `MistralRsOptions` |
+| `llamacpp` | `LlamaCppProvider`, `LlamaCppChatMessageInput`, `LlamaCppChatRole`, `LlamaCppInferenceChunk`, `LlamaCppInferenceChunkStream`, `LlamaCppInferenceResult`, `LlamaCppInferenceUsage`, `LlamaCppError`, `LlamaCppOptions` |
+| `candle-llm` | `CandleLlmProvider`, `CandleLlmCompletionModel`, `CandleInferenceResult`, `CandleLlmError`, `CandleLlmOptions` |
+| `candle-embed` | `CandleEmbedModel`, `CandleEmbedOptions`, `CandleEmbedError` |
+| `embed` | `EmbedModel`, `EmbedOptions`, `EmbedResponse`, `EmbedError` |
+| `whispercpp` | `WhisperCppProvider`, `WhisperModel`, `WhisperOptions`, `WhisperError` |
+| `piper` | `PiperProvider`, `PiperOptions`, `PiperError` |
+| `diffusion` | `DiffusionProvider`, `DiffusionOptions`, `DiffusionScheduler`, `DiffusionError` |
+
+`blazen-telemetry` exporters:
+
+| Feature | Description |
+|---------|-------------|
+| `spans` (default) | Enables `TracingCompletionModel` and per-span instrumentation hooks |
+| `history` | Enables `WorkflowHistory`, `HistoryEvent`, `HistoryEventKind`, `PauseReason` |
+| `otlp` | OTLP **gRPC** exporter via `tonic` (`init_otlp` + `OtlpConfig`). Native targets only |
+| `otlp-http` | OTLP **HTTP/protobuf** exporter via a custom `HttpClient` (`init_otlp_http` + `OtlpConfig`). Works on native **and** wasm32 |
+| `prometheus` | Enables `init_prometheus` + `MetricsLayer` |
+| `langfuse` | Enables `LangfuseConfig`, `LangfuseLayer`, `init_langfuse` |
+| `all` | Enables `spans`, `history`, `otlp`, `otlp-http`, `prometheus`, `langfuse` |
 
 ---
 
@@ -2276,3 +2303,222 @@ let xai = OpenAiCompatProvider::xai("...");
 let cohere = OpenAiCompatProvider::cohere("...");
 let bedrock = OpenAiCompatProvider::bedrock("...", "us-east-1");
 ```
+
+---
+
+## Telemetry Exporters
+
+Re-exported from `blazen_telemetry` at the crate root and gated by the corresponding Cargo features (see [Feature Flags](#feature-flags)). All exporters return a `tracing_subscriber::Layer` (or install one globally) that is composed into a `tracing_subscriber::registry()`.
+
+### `LangfuseConfig`
+
+Builder-style configuration for the Langfuse exporter. Shipping `langfuse` pulls in `reqwest` for the native ingestion client; on wasm32 the dispatcher is a no-op (events are dropped) because Langfuse export is a native-target feature.
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `new` | `fn new(public_key: impl Into<String>, secret_key: impl Into<String>) -> Self` | Construct with the required Langfuse public + secret keys. Defaults host to `https://cloud.langfuse.com`, batch size to `100`, flush interval to `5000` ms |
+| `with_host` | `fn with_host(self, host: impl Into<String>) -> Self` | Override the Langfuse host URL (e.g. `https://eu.langfuse.com`) |
+| `with_batch_size` | `fn with_batch_size(self, batch_size: usize) -> Self` | Maximum number of envelopes buffered before an automatic flush |
+| `with_flush_interval_ms` | `fn with_flush_interval_ms(self, ms: u64) -> Self` | Background flush cadence in milliseconds |
+
+`LangfuseConfig` derives `Debug`, `Clone`, `Serialize`, `Deserialize`, and `Default` so it can be loaded from configuration files. Public/secret-key fields are required; host, `batch_size`, and `flush_interval_ms` are populated with defaults during deserialization.
+
+### `LangfuseLayer`
+
+A `tracing_subscriber::Layer<S>` (where `S: Subscriber + for<'a> LookupSpan<'a>`) that maps Blazen spans to Langfuse ingestion events:
+
+| Blazen span name | Langfuse concept | Ingestion event |
+|------------------|------------------|-----------------|
+| `workflow.run`, `pipeline.run` | Trace | `trace-create` |
+| `workflow.step`, `pipeline.stage`, `pipeline.stage.sequential`, `pipeline.stage.parallel` | Span | `span-create` |
+| `llm.complete`, `llm.stream` | Generation | `generation-create` |
+
+Construct via [`init_langfuse`](#init_langfuse). The layer owns an unbounded `mpsc` sender into a background dispatcher that batches and POSTs to `{host}/api/public/ingestion` with HTTP basic auth (`public_key:secret_key`).
+
+### `init_langfuse`
+
+```rust
+pub fn init_langfuse(config: LangfuseConfig) -> Result<LangfuseLayer, TelemetryError>;
+```
+
+Builds the HTTP client and spawns the background dispatcher on the current Tokio runtime, then returns a `LangfuseLayer` ready to compose into a subscriber registry. Returns `TelemetryError::Langfuse` if no Tokio runtime is available (native targets) or if the underlying `reqwest::Client` cannot be built.
+
+```rust
+use blazen_telemetry::{LangfuseConfig, init_langfuse};
+use tracing_subscriber::prelude::*;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = LangfuseConfig::new("pk-lf-...", "sk-lf-...")
+        .with_host("https://cloud.langfuse.com")
+        .with_batch_size(50)
+        .with_flush_interval_ms(2_500);
+
+    let layer = init_langfuse(config)?;
+    tracing_subscriber::registry().with(layer).init();
+    Ok(())
+}
+```
+
+### `OtlpConfig`
+
+Shared configuration for both OTLP transports.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `endpoint` | `String` | OTLP endpoint URL. For `otlp` (gRPC): `http://localhost:4317`. For `otlp-http`: `http://localhost:4318/v1/traces` |
+| `service_name` | `String` | Reported as the `service.name` resource attribute on every span |
+
+Derives `Debug`, `Clone`, `Serialize`, `Deserialize`.
+
+### `init_otlp` (gRPC, `otlp` feature, native only)
+
+```rust
+pub fn init_otlp(config: OtlpConfig) -> Result<(), Box<dyn std::error::Error>>;
+```
+
+Builds a tonic-backed `SpanExporter`, installs it into a global `SdkTracerProvider`, and registers a `tracing_subscriber::registry()` with `EnvFilter`, the OTel layer, and a `fmt` layer in one call. Native targets only — `opentelemetry-otlp/grpc-tonic` does not compile to `wasm32-unknown-unknown`.
+
+### `init_otlp_http` (HTTP/protobuf, `otlp-http` feature)
+
+```rust
+pub fn init_otlp_http(config: OtlpConfig) -> Result<(), Box<dyn std::error::Error>>;
+```
+
+Same shape as [`init_otlp`](#init_otlp-grpc-otlp-feature-native-only) but speaks OTLP/HTTP with the binary protobuf encoding. Works on **both** native and wasm32:
+
+- **Native**: registers an internal `ReqwestHttpClient` (a thin `reqwest::Client` wrapper) via `with_http_client`.
+- **wasm32**: registers `WasmFetchHttpClient`, a `web_sys::fetch`-backed `opentelemetry_http::HttpClient` impl that ships in the `blazen_telemetry::exporters::wasm_otlp_client` module.
+
+The reason for the indirection: `opentelemetry-otlp`'s built-in `reqwest-client` / `reqwest-blocking-client` features compile a wasm32 `reqwest::Client` whose `send` future is `!Send`, which violates the `HttpClient: Send + Sync` bound and breaks the build. Pinning our own `HttpClient` impls per target keeps the trait satisfied without enabling those upstream features.
+
+```rust
+use blazen_telemetry::{OtlpConfig, init_otlp_http};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    init_otlp_http(OtlpConfig {
+        endpoint: "http://localhost:4318/v1/traces".to_string(),
+        service_name: "my-blazen-app".to_string(),
+    })?;
+    // ... run workflow; spans flush via OTLP/HTTP ...
+    Ok(())
+}
+```
+
+### `TelemetryError`
+
+Returned by `init_langfuse`. Variants include `Langfuse(String)` (HTTP-client construction or runtime-lookup failure). Re-exported from `blazen_telemetry::TelemetryError`.
+
+---
+
+## WASM Embeddings (`blazen-embed-tract`)
+
+The `blazen-embed-tract` crate ships **two** ONNX-runtime-backed embedding providers built on `tract`:
+
+| Type | Target | Source of weights |
+|------|--------|-------------------|
+| `TractEmbedModel` | native | `hf-hub` (Hugging Face download cache, filesystem-backed) |
+| `WasmTractEmbedModel` | `wasm32` only | `web_sys::fetch` (URLs supplied by the caller) |
+
+The wasm variant exists because `hf-hub` requires a filesystem and Tokio, neither of which is available in `wasm32-unknown-unknown`. Both providers share the same [`TractOptions`](https://docs.rs/blazen-embed-tract) and pooling logic so callers generic over `EmbeddingModel` work unchanged.
+
+### `WasmTractEmbedModel`
+
+```rust
+#[cfg(target_arch = "wasm32")]
+use blazen_embed_tract::wasm_provider::{WasmTractEmbedModel, WasmTractError, WasmTractResponse};
+use blazen_embed_tract::options::TractOptions;
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `create` | `async fn create(model_url: &str, tokenizer_url: &str, options: TractOptions) -> Result<Self, WasmTractError>` | Fetch ONNX weights and a HuggingFace `tokenizer.json` from the supplied URLs and build a runnable model. `options.cache_dir` and `options.show_download_progress` are ignored on wasm32 |
+| `embed` | `async fn embed(&self, texts: &[String]) -> Result<WasmTractResponse, WasmTractError>` | Returns one L2-normalized vector per input. Inference runs synchronously on the wasm main thread |
+| `model_id` | `fn model_id(&self) -> &str` | Hugging Face model id resolved from the `TractOptions::model_name` registry entry |
+| `dimensions` | `fn dimensions(&self) -> usize` | Output embedding dimensionality |
+
+`WasmTractResponse` exposes `embeddings: Vec<Vec<f32>>` and `model: String`. `WasmTractError` variants: `UnknownModel(String)`, `Fetch { url, message }`, `Init(String)`, `Embed(String)`.
+
+```rust
+#[cfg(target_arch = "wasm32")]
+{
+    use blazen_embed_tract::options::TractOptions;
+    use blazen_embed_tract::wasm_provider::WasmTractEmbedModel;
+
+    let opts = TractOptions {
+        model_name: Some("bge-small-en-v1.5".to_string()),
+        ..Default::default()
+    };
+    let model = WasmTractEmbedModel::create(
+        "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main/onnx/model.onnx",
+        "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main/tokenizer.json",
+        opts,
+    ).await?;
+    let out = model.embed(&["hello world".into()]).await?;
+}
+```
+
+The fetch loop resolves either `window.fetch` (browser) or `globalThis.fetch` (Workers, Deno, Node) so the same provider runs in every wasm host.
+
+`Send + Sync` are implemented vacuously (`unsafe impl`) because `wasm32-unknown-unknown` is single-threaded; this lets `WasmTractEmbedModel` sit behind `Arc<dyn EmbeddingModel>` in target-generic code.
+
+---
+
+## Local Inference Backend Re-exports
+
+When you enable a local-inference feature on `blazen-llm`, the per-backend crate's public types are re-exported at the `blazen_llm` crate root so callers do not need to depend on the backend crate directly. Each group of types is gated by its respective feature.
+
+### `mistralrs` feature
+
+Re-exported **un-prefixed** (the mistralrs backend was the first local provider added and owns the canonical names):
+
+```rust
+#[cfg(feature = "mistralrs")]
+use blazen_llm::{
+    MistralRsProvider, MistralRsOptions, MistralRsError,
+    ChatMessageInput, ChatRole,
+    InferenceChunk, InferenceChunkStream,
+    InferenceImage, InferenceImageSource,
+    InferenceResult, InferenceToolCall, InferenceUsage,
+};
+```
+
+### `llamacpp` feature
+
+Re-exported with a `LlamaCpp` prefix to avoid colliding with the mistralrs names when both features are enabled simultaneously:
+
+```rust
+#[cfg(feature = "llamacpp")]
+use blazen_llm::{
+    LlamaCppProvider, LlamaCppOptions, LlamaCppError,
+    LlamaCppChatMessageInput, LlamaCppChatRole,
+    LlamaCppInferenceChunk, LlamaCppInferenceChunkStream,
+    LlamaCppInferenceResult, LlamaCppInferenceUsage,
+};
+```
+
+### `candle-llm` feature
+
+Candle exposes its result type as `CandleInferenceResult` (already prefixed upstream). The `CandleLlmCompletionModel` adapter wraps the raw provider in the `CompletionModel` trait:
+
+```rust
+#[cfg(feature = "candle-llm")]
+use blazen_llm::{
+    CandleLlmProvider, CandleLlmCompletionModel,
+    CandleLlmOptions, CandleLlmError,
+    CandleInferenceResult,
+};
+```
+
+### Other local backends
+
+| Feature | Re-exports |
+|---------|-----------|
+| `candle-embed` | `CandleEmbedModel`, `CandleEmbedOptions`, `CandleEmbedError` |
+| `embed` | `EmbedModel`, `EmbedOptions`, `EmbedResponse`, `EmbedError` (from `blazen-embed`) |
+| `whispercpp` | `WhisperCppProvider`, `WhisperModel`, `WhisperOptions`, `WhisperError` |
+| `piper` | `PiperProvider`, `PiperOptions`, `PiperError` |
+| `diffusion` | `DiffusionProvider`, `DiffusionOptions`, `DiffusionScheduler`, `DiffusionError` |
+
+All five additional backends follow the same convention — enable the feature on `blazen-llm`, then import directly from `blazen_llm::*`.

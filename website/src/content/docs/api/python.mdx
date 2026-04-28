@@ -894,6 +894,18 @@ MediaType.GLB   # "model/gltf-binary"
 |---|---|
 | `MediaType.PDF` | `application/pdf` |
 
+### MediaSource alias
+
+`MediaSource` is a module-level alias for `ImageSource`, exported from `blazen` so callers writing media-source-typed code can use the more descriptive name:
+
+```python
+from blazen import MediaSource  # alias of ImageSource
+
+src = MediaSource.from_path("./photo.png")
+```
+
+The two names refer to the same class -- `isinstance(src, ImageSource)` is `True`.
+
 ---
 
 ## Compute Request Types
@@ -1474,49 +1486,258 @@ await model.unload()
 
 ---
 
-## Error Handling
+## ProgressCallback
 
-All errors from `blazen` are raised as standard Python exceptions. LLM and compute errors originate from a unified `BlazenError` hierarchy internally, which is mapped to Python exceptions as follows:
+`ProgressCallback` is a subclassable abstract base class for receiving model-download progress notifications from `ModelCache.download(...)`. Subclass it and override `on_progress`; the default implementation is a no-op so subclasses can ignore total-byte updates they do not care about.
 
-| Error Condition | Python Exception | Description |
+| Method | Signature | Description |
 |---|---|---|
-| Invalid arguments, auth failure, validation | `ValueError` | Bad input, missing/invalid API keys, schema violations. |
-| Timeout | `TimeoutError` | The operation exceeded its time limit. |
-| All other errors | `RuntimeError` | Provider errors, rate limits, content policy, model not found, job failures, etc. |
-
-The error message includes a descriptive prefix indicating the category:
+| `__new__` | `ProgressCallback()` | Construct an instance. Subclass to override `on_progress`. |
+| `on_progress` | `on_progress(downloaded: int, total: int \| None) -> None` | Called repeatedly during a download with current byte counts. `total` is `None` if the size is unknown. No-op default. |
 
 ```python
-try:
-    response = await model.complete([ChatMessage.user("Hello")])
-except ValueError as e:
-    # Authentication, validation errors
-    print(f"Invalid input: {e}")
-except TimeoutError as e:
-    # Request timed out
-    print(f"Timed out: {e}")
-except RuntimeError as e:
-    # Provider errors, rate limits, content policy, etc.
-    print(f"Error: {e}")
+from blazen import ProgressCallback
+
+class MyProgress(ProgressCallback):
+    def on_progress(self, downloaded: int, total: int | None) -> None:
+        pct = (downloaded / total * 100) if total else 0
+        print(f"{pct:.1f}%")
+
+cb = MyProgress()
+await cache.download("bert-base-uncased", "config.json", cb)
 ```
 
-**Underlying error categories** (reflected in the error message string):
+You may also pass a plain `Callable[[int, int | None], None]` to `download(progress=...)` for the same effect; this ABC simply gives type-checked callers a typed base to inherit from.
 
-| Category | Scope | Example Message |
+---
+
+## Local Inference Types
+
+The local-inference backends expose typed message, chunk, image, and result classes for use with the inherent `infer` / `infer_stream` APIs on each `*Provider`. There are three parallel families: the canonical un-prefixed `Inference*` types for **mistral.rs**, the `LlamaCpp*`-prefixed family for **llama.cpp**, and a single `CandleInferenceResult` for **Candle** (single-shot only -- no streaming).
+
+Streaming on both mistral.rs and llama.cpp returns an async iterator (`InferenceChunkStream` and `LlamaCppInferenceChunkStream` respectively) that you consume with `async for chunk in stream: ...`. Both implement the `__aiter__` / `__anext__` protocol and terminate with `StopAsyncIteration` once the underlying engine stream is exhausted.
+
+### mistral.rs inference types
+
+| Class | Purpose |
+|---|---|
+| `ChatMessageInput` | A chat message for mistral.rs inference, optionally carrying image attachments. |
+| `ChatRole` | Enum: `System`, `User`, `Assistant`, `Tool`. |
+| `InferenceImage` | Image payload attached to a `ChatMessageInput`. Build with `from_bytes(...)` or `from_path(...)`. |
+| `InferenceImageSource` | Underlying image source. Variants: `bytes` and `path`. Inspect via `kind` plus the per-variant getters. |
+| `InferenceResult` | Result of a single non-streaming call: `content`, `reasoning_content`, `tool_calls`, `finish_reason`, `model`, `usage`. |
+| `InferenceChunk` | Streaming delta: `delta`, `reasoning_delta`, `tool_calls`, `finish_reason`. |
+| `InferenceChunkStream` | Async iterator over `InferenceChunk` items. Implements `__aiter__` / `__anext__`. |
+| `InferenceToolCall` | A tool call returned by the engine: `id`, `name`, `arguments` (JSON string). |
+| `InferenceUsage` | Token usage stats: `prompt_tokens`, `completion_tokens`, `total_tokens`, `total_time_sec`. |
+
+```python
+from blazen import ChatMessageInput, ChatRole, InferenceImage
+
+msg = ChatMessageInput.with_images(
+    role=ChatRole.User,
+    text="Describe this image.",
+    images=[InferenceImage.from_path("./photo.png")],
+)
+stream = await provider.infer_stream([msg])
+async for chunk in stream:
+    if chunk.delta:
+        print(chunk.delta, end="")
+```
+
+### llama.cpp inference types
+
+llama.cpp messages are text-only; multimodal inputs are not supported by this backend.
+
+| Class | Purpose |
+|---|---|
+| `LlamaCppChatMessageInput` | A text-only chat message for llama.cpp inference. |
+| `LlamaCppChatRole` | Enum: `System`, `User`, `Assistant`, `Tool`. |
+| `LlamaCppInferenceResult` | Result of a single non-streaming call: `content`, `finish_reason`, `model`, `usage`. |
+| `LlamaCppInferenceChunk` | Streaming delta: `delta`, `finish_reason`. |
+| `LlamaCppInferenceChunkStream` | Async iterator over `LlamaCppInferenceChunk` items. Implements `__aiter__` / `__anext__`. |
+| `LlamaCppInferenceUsage` | Token usage stats: `prompt_tokens`, `completion_tokens`, `total_tokens`, `total_time_sec`. |
+
+```python
+from blazen import LlamaCppChatMessageInput, LlamaCppChatRole
+
+msg = LlamaCppChatMessageInput(role=LlamaCppChatRole.User, text="Hello")
+stream = await llama_provider.infer_stream([msg])
+async for chunk in stream:
+    if chunk.delta:
+        print(chunk.delta, end="")
+```
+
+### Candle inference types
+
+Candle exposes a single non-streaming result type. Streaming is not currently supported on this backend.
+
+| Class | Purpose |
+|---|---|
+| `CandleInferenceResult` | Result of a non-streaming candle call: `content`, `prompt_tokens`, `completion_tokens`, `total_time_secs`. |
+
+```python
+from blazen import CandleInferenceResult
+
+result: CandleInferenceResult = await candle_provider.infer(messages)
+print(result.content, result.prompt_tokens, result.completion_tokens)
+```
+
+---
+
+## Telemetry
+
+Blazen ships three optional exporters for tracing and metrics: `init_langfuse` (LLM observability), `init_otlp` (generic OpenTelemetry), and `init_prometheus` (HTTP-scraped metrics). Each is gated behind a Cargo feature and installs a global subscriber on first call -- invoke once at process startup, before any traced work. Calling more than one is allowed only in the documented order; install Langfuse before any other exporter if you want both.
+
+| Function | Config type | Cargo feature | Purpose |
+|---|---|---|---|
+| `init_langfuse(config)` | `LangfuseConfig` | `langfuse` | LLM call traces, token usage, latency to Langfuse. |
+| `init_otlp(config)` | `OtlpConfig` | `otlp` | Generic OpenTelemetry OTLP gRPC span exporter. |
+| `init_prometheus(port)` | `int` (no config object) | `prometheus` | Prometheus metrics over HTTP `/metrics`. |
+
+Initialization functions raise a `BlazenError` subclass on failure (e.g. an invalid endpoint or port already in use).
+
+### LangfuseConfig
+
+LLM-observability exporter for [Langfuse](https://langfuse.com). Behind the `langfuse` Cargo feature.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `public_key` | `str` | required | Langfuse public API key (Basic-auth username). |
+| `secret_key` | `str` | required | Langfuse secret API key (Basic-auth password). |
+| `host` | `str \| None` | `None` | Langfuse host URL. Defaults to `https://cloud.langfuse.com`. |
+| `batch_size` | `int` | `100` | Maximum events buffered before an automatic flush. |
+| `flush_interval_ms` | `int` | `5000` | Background flush interval in milliseconds. |
+
+```python
+from blazen import LangfuseConfig, init_langfuse
+
+init_langfuse(LangfuseConfig(
+    public_key="pk-lf-...",
+    secret_key="sk-lf-...",
+    host="https://cloud.langfuse.com",
+))
+```
+
+`init_langfuse(config)` spawns a background tokio task that periodically flushes buffered LLM call traces, token usage, and latency data to the Langfuse ingestion API. If a global tracing subscriber is already installed, it is a soft failure: the underlying dispatcher is constructed (so background flushing still runs) and the function returns without overwriting the existing subscriber.
+
+### OtlpConfig
+
+Generic OpenTelemetry OTLP exporter. Behind the `otlp` Cargo feature.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `endpoint` | `str` | required | OTLP gRPC endpoint URL (e.g. `"http://localhost:4317"`). |
+| `service_name` | `str` | required | Service name reported to the backend. |
+
+```python
+from blazen import OtlpConfig, init_otlp
+
+init_otlp(OtlpConfig(endpoint="http://localhost:4317", service_name="my-app"))
+```
+
+`init_otlp(config)` sets up an OTLP gRPC span exporter and installs a combined tracing subscriber (env-filter + OTel layer + fmt layer).
+
+### Prometheus metrics
+
+Behind the `prometheus` Cargo feature.
+
+```python
+from blazen import init_prometheus
+
+init_prometheus(9090)  # serves /metrics on 0.0.0.0:9090
+```
+
+`init_prometheus(port)` installs a global `metrics` recorder backed by Prometheus and starts an HTTP listener on `0.0.0.0:{port}` serving the `/metrics` endpoint. After calling this, any code using the `metrics` macros (`counter!`, `histogram!`, `gauge!`) is exposed at the Prometheus endpoint.
+
+---
+
+## Error Handling
+
+All Blazen failures are raised as subclasses of `BlazenError`, a typed exception hierarchy rooted at `builtins.Exception`. Catching `BlazenError` will catch every error raised from any Blazen API; catch a specific subclass to react to one category.
+
+```python
+from blazen import BlazenError, RateLimitError, ProviderError, AuthError
+
+try:
+    response = await model.complete([ChatMessage.user("Hello")])
+except RateLimitError as e:
+    # Provider rate-limited the request -- back off and retry.
+    print(f"slow down: {e}")
+except AuthError as e:
+    print(f"bad credentials: {e}")
+except BlazenError as e:
+    print(f"blazen failed: {e}")
+```
+
+### Base hierarchy
+
+Every class below derives directly from `BlazenError`, which itself derives from `builtins.Exception`.
+
+| Class | Description |
+|---|---|
+| `BlazenError` | Base class for all Blazen runtime errors. Catches everything. |
+| `AuthError` | Authentication failed (invalid or missing API key). |
+| `RateLimitError` | Provider rate-limited the request. |
+| `TimeoutError` | The operation exceeded its time limit. Distinct from the builtin `TimeoutError` -- import from `blazen`. |
+| `ValidationError` | Invalid input rejected before the provider round-trip. |
+| `ContentPolicyError` | Provider rejected the request for policy reasons. |
+| `ProviderError` | Provider-side error. Carries structured HTTP attributes (see below). |
+| `UnsupportedError` | Requested capability is not supported by this provider or backend. |
+| `ComputeError` | Compute job error (cancelled, quota exceeded, etc). |
+| `MediaError` | Media handling error (invalid input, size exceeded, etc). |
+
+### ProviderError attributes
+
+For HTTP-attributable failures, `ProviderError` instances are populated with the following typed attributes (set via `setattr` on the instance, mirrored in the stub for static type-checking):
+
+| Attribute | Type | Description |
 |---|---|---|
-| Auth | Shared | `"authentication failed: invalid API key"` |
-| RateLimit | Shared | `"rate limited: retry after 1000ms"` |
-| Timeout | Shared | `"timed out after 30000ms"` |
-| Provider | Shared | `"openai error: server overloaded"` |
-| Validation | Shared | `"invalid input: temperature must be >= 0"` |
-| ContentPolicy | Shared | `"content policy violation: ..."` |
-| Unsupported | Shared | `"unsupported: model does not support streaming"` |
-| NoContent | Completion | `"model returned no content"` |
-| ModelNotFound | Completion | `"model not found: gpt-5-turbo"` |
-| InvalidResponse | Completion | `"invalid response: malformed JSON"` |
-| Stream | Completion | `"stream error: connection reset"` |
-| JobFailed | Compute | `"job failed: out of memory"` |
-| Cancelled | Compute | `"job cancelled"` |
-| QuotaExceeded | Compute | `"quota exceeded: monthly limit reached"` |
-| Invalid | Media | `"invalid media: unsupported format"` |
-| TooLarge | Media | `"media too large: 52428800 bytes (max 10485760)"` |
+| `provider` | `str` | Provider tag (e.g. `"fal"`, `"openrouter"`). |
+| `status` | `int \| None` | HTTP status code; `None` for non-HTTP provider errors. |
+| `endpoint` | `str \| None` | Request URL. |
+| `request_id` | `str \| None` | `x-fal-request-id` / `x-request-id` header if present. |
+| `detail` | `str \| None` | Parsed error message extracted from the JSON body. |
+| `raw_body` | `str \| None` | Response body, capped at 4 KiB. |
+| `retry_after_ms` | `int \| None` | Parsed `Retry-After` header in milliseconds. |
+
+```python
+from blazen import ProviderError
+
+try:
+    await model.complete([ChatMessage.user("Hello")])
+except ProviderError as e:
+    print(f"{e.provider} {e.status} on {e.endpoint}")
+    if e.retry_after_ms:
+        await asyncio.sleep(e.retry_after_ms / 1000)
+```
+
+### Per-backend ProviderError subclasses
+
+Each local-inference backend raises its own `ProviderError` subclass so callers can route errors per-backend. The classes are always declared in the type stub, but only registered at runtime when the corresponding Cargo feature is enabled in your wheel build.
+
+| Class | Cargo feature | Backend |
+|---|---|---|
+| `LlamaCppError` | `llamacpp` | llama.cpp local LLM inference. |
+| `CandleLlmError` | `candle-llm` | Candle local LLM inference. |
+| `CandleEmbedError` | `candle-embed` | Candle local embedding backend. |
+| `MistralRsError` | `mistralrs` | mistral.rs local LLM inference. |
+| `WhisperError` | `whispercpp` | whisper.cpp transcription. |
+| `PiperError` | `piper` | Piper text-to-speech. |
+| `DiffusionError` | `diffusion` | Diffusion image generation. |
+| `FastEmbedError` | `embed` | fastembed embedding (non-musl only). |
+| `TractError` | `tract` | Tract ONNX embedding. |
+
+Because they all derive from `ProviderError`, `except ProviderError` catches every backend-attributable error, including these subclasses. Use `except LlamaCppError` (etc.) when you need to react to a single backend.
+
+```python
+from blazen import LlamaCppError, ProviderError
+
+try:
+    await llama_provider.infer(messages)
+except LlamaCppError as e:
+    print(f"llama.cpp blew up: {e}")
+except ProviderError as e:
+    # Any other backend
+    print(f"{e.provider}: {e}")
+```

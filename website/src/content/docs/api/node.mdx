@@ -114,7 +114,15 @@ interface ImageSource {
   url?: string;           // Required when sourceType is "url"
   data?: string;          // Required when sourceType is "base64"
 }
+
+// `MediaSource` is a type alias for `ImageSource` re-exported for compute APIs
+// that accept any media (image / video frame / audio cover-art) using the same shape.
+// All compute requests that take a `MediaSource` accept exactly the same value
+// you would pass to `ImageSource` — `MediaSource` exists only as an aliasing affordance.
+export type MediaSource = ImageSource;
 ```
+
+> **Note on `MediaSource`:** prefer `MediaSource` in compute / generation APIs (image upscaling, video frames, audio cover art) and `ImageSource` in chat-message APIs. The two are interchangeable at the type level — `MediaSource` is just the structurally identical alias for `ImageSource`.
 
 ```typescript
 // Text part
@@ -597,18 +605,118 @@ interface AgentRunOptions {
 
 ## AgentResult
 
-The result of an agent run, returned by `runAgent()`.
+The result of an agent run, returned by `runAgent()`. `AgentResult` is a typed class with getter properties (not a plain object) so it carries identity across the FFI boundary and supports `instanceof` checks.
+
+### Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `.response` | `string` | Final assistant text from the last completion. |
+| `.messages` | `ChatMessage[]` | Full message history (all tool calls and results). |
+| `.iterations` | `number` | Number of tool-calling iterations that occurred. |
+| `.totalCost` | `number \| null` | Aggregated cost in USD across all iterations, or `null` if pricing is unknown. |
+| `.toString()` | `string` | Human-readable summary, mirrors the Python `__repr__`. |
 
 ```typescript
-interface AgentResult {
-  response: CompletionResponse;    // Final completion response from the model
-  messages: object[];              // Full message history (all tool calls and results)
-  iterations: number;              // Number of tool-calling iterations that occurred
-  totalCost?: number;              // Aggregated cost across all iterations (USD)
+const result = await runAgent(model, [ChatMessage.user("Hi")], tools);
+console.log(result.response);            // "Hello!"
+console.log(result.messages.length);     // e.g. 3
+console.log(result.iterations);          // e.g. 1
+console.log(result.totalCost);           // e.g. 0.00012 or null
+```
+
+---
+
+## BatchResult
+
+Returned by `completeBatch()` / `completeBatchConfig()`. A typed class wrapping per-request outcomes plus aggregates.
+
+### Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `.responses` | `(CompletionResponse \| null)[]` | One entry per input request. `null` for failed requests. |
+| `.errors` | `(string \| null)[]` | Per-request error message, or `null` for successful requests. |
+| `.totalUsage` | `TokenUsage \| null` | Aggregated token usage across all successful responses. |
+| `.totalCost` | `number \| null` | Aggregated cost in USD across all successful responses. |
+| `.successCount` | `number` | Number of requests that succeeded. |
+| `.failureCount` | `number` | Number of requests that failed. |
+| `.length` | `number` | Total number of requests in the batch (= responses.length = errors.length). |
+| `.toString()` | `string` | Human-readable batch summary. |
+
+```typescript
+const batch = await completeBatch(model, [
+  [ChatMessage.user("What's 2+2?")],
+  [ChatMessage.user("Capital of France?")],
+]);
+console.log(`${batch.successCount}/${batch.length} succeeded`);
+for (let i = 0; i < batch.length; i++) {
+  if (batch.errors[i]) console.error(`req ${i}:`, batch.errors[i]);
+  else console.log(`req ${i}:`, batch.responses[i]?.content);
 }
 ```
 
-Each entry in `messages` has the shape `{ role: string, content: string | null }`.
+---
+
+## Pipeline
+
+A `Pipeline` is a sequence of named `Stage`s built with `PipelineBuilder`. Each stage runs as its own workflow; on completion, an optional persist callback fires with a typed snapshot so the caller can durably store progress for later resumption.
+
+### `new PipelineBuilder(name: string)`
+
+```typescript
+import { PipelineBuilder } from "blazen";
+
+const pipeline = new PipelineBuilder("ingest")
+  .stage(stageA)
+  .stage(stageB)
+  .timeoutPerStage(120)
+  .build();
+```
+
+### `.onPersist(callback)`
+
+Register a TSFN-based persist callback that receives a typed `PipelineSnapshot` after each stage completes. The callback must return `Promise<void>` (or be `async`). A rejected promise aborts the pipeline with a `PipelineError`.
+
+```typescript
+import { PipelineBuilder, PipelineSnapshot } from "blazen";
+
+const pipeline = new PipelineBuilder("ingest")
+  .stage(stage)
+  .onPersist(async (snapshot: PipelineSnapshot) => {
+    await db.put(`pipeline:${snapshot.runId}`, snapshot.toJsonPretty());
+  })
+  .build();
+```
+
+### `.onPersistJson(callback)`
+
+Same as `onPersist`, but the callback receives the snapshot pre-serialized as a JSON string. Useful for backends that store opaque blobs (IndexedDB, Redis, S3).
+
+```typescript
+const pipeline = new PipelineBuilder("ingest")
+  .stage(stage)
+  .onPersistJson(async (json: string) => {
+    await idb.put("snapshots", json, runId);
+  })
+  .build();
+```
+
+The snapshot can later be replayed via `pipeline.resume(PipelineSnapshot.fromJson(json))`.
+
+If your `onPersist` (or `onPersistJson`) callback throws or returns a rejected promise, the rejection is wrapped as a `PersistError` (a `BlazenError` subclass) and propagated to the running pipeline, aborting it. Catch the error from `await handler.result()` and inspect with `instanceof PersistError` to distinguish persistence failures from stage failures.
+
+```typescript
+import { PersistError } from "blazen";
+
+try {
+  await handler.result();
+} catch (e) {
+  if (e instanceof PersistError) {
+    console.error("snapshot persistence failed:", e.message);
+  }
+}
+```
 
 ---
 
@@ -1532,6 +1640,36 @@ class PostgresBackend extends MemoryBackend {
 
 ---
 
+## ProgressCallback
+
+Subclassable base for download progress callbacks. Pass an instance to `ModelCache.download()` (and other download-capable APIs) to receive byte-count progress updates.
+
+`onProgress` takes `bigint` byte counts so multi-gigabyte downloads keep full precision. `total` is `null` when the server does not send `Content-Length`.
+
+```typescript
+import { ModelCache, ProgressCallback } from "blazen";
+
+class MyProgress extends ProgressCallback {
+  onProgress(downloaded: bigint, total?: bigint | null): void {
+    if (total != null) {
+      const pct = Number((downloaded * 100n) / total);
+      console.log(`${pct}%`);
+    } else {
+      console.log(`${downloaded} bytes`);
+    }
+  }
+}
+
+const cache = ModelCache.create();
+await cache.download("bert-base-uncased", "config.json", new MyProgress());
+```
+
+The base `onProgress` always throws — overriding it is mandatory. `super()` must be called from the subclass constructor.
+
+`ProgressCallback` instances are accepted anywhere the SDK exposes a download hook — `ModelCache.download()`, the local-inference `Provider.create()` paths that pull weights from HuggingFace, and the `ProgressCallback`-aware variants of dataset loaders. Pass the same `ProgressCallback` instance to multiple downloads to centralise reporting (e.g. for a TUI progress bar).
+
+---
+
 ## ModelManager
 
 VRAM budget-aware model manager with LRU eviction. Tracks registered local models and their estimated VRAM footprint. When loading a model that would exceed the budget, the least-recently-used loaded model is unloaded first.
@@ -1639,43 +1777,277 @@ await model.unload();
 
 ## Error Handling
 
-All errors from the SDK are thrown as JavaScript `Error` objects with descriptive message strings. The error message format indicates the error category:
+Errors thrown across the FFI boundary are surfaced as instances of typed `BlazenError` subclasses. Every error class extends the base `BlazenError`, which extends the standard JavaScript `Error`, so existing `instanceof Error` checks keep working while gaining structural classification.
 
-| Error Pattern | Description |
+The `BlazenError` hierarchy is what makes typed error routing possible — any caught value can be matched against `BlazenError` (catch-all for anything from the SDK), against the direct subclass (broad category like `RateLimitError`), or against a leaf class (specific failure like `LlamaCppModelLoadError`). Use whichever level of specificity your handler needs.
+
+### Root and direct subclasses
+
+`BlazenError` is the root. The following 18 classes extend it directly:
+
+| Class | When it's thrown |
 |---|---|
-| `"authentication failed: ..."` | Invalid or expired API key |
-| `"rate limited"` / `"rate limited: retry after {ms}ms"` | Provider rate limit hit |
-| `"timed out after {ms}ms"` | Request timed out |
-| `"{provider} error: ..."` | Provider-specific error (may include HTTP status) |
-| `"invalid input: ..."` | Validation error in request parameters |
-| `"content policy violation: ..."` | Content moderated by the provider |
-| `"unsupported: ..."` | Feature not supported by the chosen provider |
-| `"serialization error: ..."` | JSON serialization/deserialization failure |
-| `"request failed: ..."` | Network or HTTP request failure |
-| `"completion error: model returned no content"` | Model returned an empty response |
-| `"completion error: model not found: ..."` | Invalid model identifier |
-| `"completion error: invalid response: ..."` | Malformed response from provider |
-| `"completion error: stream error: ..."` | Error during streaming |
-| `"compute error: job failed: ..."` | Compute job execution failure |
-| `"compute error: job cancelled"` | Compute job was cancelled |
-| `"compute error: quota exceeded: ..."` | Provider quota exhausted |
-| `"media error: invalid media: ..."` | Invalid media content |
-| `"media error: media too large: ..."` | Media exceeds size limit |
-| `"tool error: ..."` | Error in tool execution (agent system) |
+| `AuthError` | Invalid or expired API key. |
+| `RateLimitError` | Provider rate limit reached. |
+| `TimeoutError` | Request exceeded its deadline. |
+| `ValidationError` | Invalid request parameters or option set. |
+| `ContentPolicyError` | Content moderated by the provider. |
+| `ProviderError` | Provider-specific error (HTTP status / endpoint detail attached — see below). |
+| `UnsupportedError` | Feature not supported by the chosen provider. |
+| `ComputeError` | Compute job failure (cancelled, quota exhausted, runtime failure). |
+| `MediaError` | Invalid or oversized media content. |
+| `PeerEncodeError` | Failed to encode a peer envelope. |
+| `PeerTransportError` | Network failure between peers. |
+| `PeerEnvelopeVersionError` | Peer protocol version mismatch. |
+| `PeerWorkflowError` | Remote peer workflow failed. |
+| `PeerTlsError` | TLS handshake or cert validation failed for a peer connection. |
+| `PeerUnknownStepError` | Peer requested an unknown workflow step. |
+| `PersistError` | Snapshot persistence backend failure. |
+| `PromptError` | Prompt registry / template failure. |
+| `MemoryError` | Memory store / embedder failure. |
+| `CacheError` | Model cache / download failure. |
+
+### `ProviderError` structured fields
+
+`ProviderError` carries structured context in addition to the message string. All fields are nullable.
+
+| Field | Type | Description |
+|---|---|---|
+| `.provider` | `string \| null` | Provider name (e.g. `"openai"`, `"anthropic"`). |
+| `.status` | `number \| null` | HTTP status code, when the call reached the provider. |
+| `.endpoint` | `string \| null` | The endpoint that returned the error. |
+| `.requestId` | `string \| null` | Provider-assigned request id (use this when filing support tickets). |
+| `.detail` | `string \| null` | Provider-supplied error detail / body. |
+| `.retryAfterMs` | `number \| null` | Suggested back-off when the provider returned a `Retry-After` hint. |
+
+### Per-backend `ProviderError` subclasses
+
+Each local-inference and provider-side backend has its own `ProviderError` subclass with narrower variants. Use `instanceof` to route to backend-specific handling.
+
+| Class | Backend | Representative narrower subclasses |
+|---|---|---|
+| `LlamaCppError` | llama.cpp | `LlamaCppInvalidOptionsError`, `LlamaCppModelLoadError`, `LlamaCppInferenceError`, `LlamaCppEngineNotAvailableError` |
+| `MistralRsError` | mistral.rs | `MistralRsInvalidOptionsError`, `MistralRsInitError`, `MistralRsInferenceError`, `MistralRsEngineNotAvailableError` |
+| `CandleLlmError` | candle (LLM) | `CandleLlmInvalidOptionsError`, `CandleLlmModelLoadError`, `CandleLlmInferenceError`, `CandleLlmEngineNotAvailableError` |
+| `CandleEmbedError` | candle (embeddings) | `CandleEmbedModelLoadError`, `CandleEmbedEmbeddingError`, `CandleEmbedEngineNotAvailableError`, `CandleEmbedTaskPanickedError` |
+| `WhisperError` | whisper.cpp | `WhisperModelLoadError`, `WhisperTranscriptionError`, `WhisperEngineNotAvailableError`, `WhisperIoError` |
+| `PiperError` | Piper TTS | `PiperModelLoadError`, `PiperSynthesisError`, `PiperEngineNotAvailableError` |
+| `DiffusionError` | diffusion image gen | `DiffusionModelLoadError`, `DiffusionGenerationError` |
+| `FastEmbedError` | fastembed | `EmbedUnknownModelError`, `EmbedInitError`, `EmbedEmbedError`, `EmbedMutexPoisonedError`, `EmbedTaskPanickedError` |
+| `TractError` | tract ONNX runtime | (no narrower variants) |
+
+`PromptError` similarly has narrower variants like `PromptMissingVariableError`, `PromptNotFoundError`, `PromptVersionNotFoundError`, `PromptIoError`, `PromptYamlError`, `PromptJsonError`, `PromptValidationError`. `MemoryError` exposes `MemoryNoEmbedderError`, `MemoryEmbeddingError`, `MemoryNotFoundError`, `MemorySerializationError`, `MemoryIoError`, `MemoryBackendError`. `CacheError` exposes `DownloadError`, `CacheDirError`, `IoError`. There are around 80 narrower subclasses in total — every public Rust error variant gets its own JS class.
+
+### `enrichError(err: unknown): unknown`
+
+Plain `Error` instances thrown across the FFI boundary lose their original Rust type. Pass any caught value through `enrichError` to re-classify it into the proper `BlazenError` subclass before further inspection. It's a no-op when the error is already typed.
 
 ```typescript
+import { enrichError, BlazenError } from "blazen";
+
+try {
+  await model.complete([ChatMessage.user("Hi")]);
+} catch (raw) {
+  const err = enrichError(raw);
+  if (err instanceof BlazenError) {
+    // typed handling
+  }
+  throw err;
+}
+```
+
+### Example: routing on the typed hierarchy
+
+```typescript
+import {
+  RateLimitError, AuthError, TimeoutError,
+  ProviderError, LlamaCppEngineNotAvailableError,
+} from "blazen";
+
 try {
   const response = await model.complete([ChatMessage.user("Hello")]);
 } catch (e) {
-  if (e.message.startsWith("rate limited")) {
-    // Back off and retry
-  } else if (e.message.startsWith("authentication failed")) {
-    // Check API key
+  if (e instanceof RateLimitError) {
+    await sleep(e instanceof ProviderError && e.retryAfterMs ? e.retryAfterMs : 1000);
+  } else if (e instanceof AuthError) {
+    refreshApiKey();
+  } else if (e instanceof TimeoutError) {
+    // safe to retry once
+  } else if (e instanceof LlamaCppEngineNotAvailableError) {
+    console.error("Build was compiled without llama.cpp support");
+  } else if (e instanceof ProviderError) {
+    console.error(`[${e.provider} ${e.status ?? "?"}] ${e.detail ?? e.message}`);
+  } else {
+    throw e;
   }
 }
 ```
 
-Rate limit, timeout, and request errors are generally transient and safe to retry. Provider errors with 5xx status codes are also retryable.
+`RateLimitError`, `TimeoutError`, transient `ProviderError`s with `status >= 500`, and most `PeerTransportError`s are safe to retry. `AuthError`, `ValidationError`, `ContentPolicyError`, and `UnsupportedError` are not.
+
+### When to call `enrichError`
+
+The Rust core always emits typed `BlazenError` subclasses, but errors that originate in JS callbacks (tool handlers, persist callbacks, custom providers) and bubble back through Rust come out as plain `Error` instances. If you want uniform `instanceof BlazenError` matching everywhere, run every caught value through `enrichError` at the catch site:
+
+```typescript
+import { enrichError, BlazenError, ProviderError } from "blazen";
+
+async function safeCall<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (raw) {
+    const err = enrichError(raw);
+    if (err instanceof ProviderError && err.retryAfterMs) {
+      await new Promise(r => setTimeout(r, err.retryAfterMs!));
+    }
+    throw err;
+  }
+}
+```
+
+`enrichError` is idempotent — passing it an already-typed `BlazenError` returns the same value unchanged, so it's safe to layer.
+
+---
+
+## Local Inference Types
+
+Local backends (`MistralRsProvider`, `LlamaCppProvider`, `CandleLlmProvider`) expose typed input/output classes for direct use without going through the generic `CompletionModel` surface. Two parallel families exist — un-prefixed `*` for mistral.rs (the canonical surface) and `LlamaCpp*` for llama.cpp — plus a single `CandleInferenceResult` for the candle backend.
+
+### mistral.rs (canonical, un-prefixed)
+
+| Class / enum | Purpose |
+|---|---|
+| `ChatMessageInput` | Inference-side chat message. Constructor: `new ChatMessageInput(role, text, images?)`; static `ChatMessageInput.fromText(role, text)`. Getters: `.role`, `.text`, `.images`, `.hasImages`. |
+| `ChatRole` | Const enum: `System`, `User`, `Assistant`, `Tool`. |
+| `InferenceImage` | Image attachment for vision-capable models. Static factories: `fromBytes(buf)`, `fromPath(path)`, `fromSource(src)`. |
+| `InferenceImageSource` | Tagged-union source. Static factories: `bytes(buf)`, `path(p)`. Getters: `.kind` (`"bytes"` or `"path"`), `.data`, `.filePath`. |
+| `InferenceResult` | Non-streaming result. Getters: `.content`, `.reasoningContent`, `.toolCalls`, `.finishReason`, `.model`, `.usage`. |
+| `InferenceChunk` | Streaming chunk. Getters: `.delta`, `.reasoningDelta`, `.toolCalls`, `.finishReason`. |
+| `InferenceChunkStream` | Async chunk source. Pull with `await stream.next()`; returns `null` when exhausted. |
+| `InferenceToolCall` | Tool call requested by the model. Constructor `new InferenceToolCall(id, name, arguments)`; getters `.id`, `.name`, `.arguments` (JSON string). |
+| `InferenceUsage` | Token usage. Getters: `.promptTokens`, `.completionTokens`, `.totalTokens`, `.totalTimeSec`. |
+
+```typescript
+import { ChatMessageInput, ChatRole, InferenceImage, InferenceChunkStream, MistralRsProvider } from "blazen";
+
+const provider = await MistralRsProvider.create({ modelId: "..." });
+const stream: InferenceChunkStream = await provider.inferStream([
+  ChatMessageInput.fromText(ChatRole.User, "Describe this image"),
+]);
+for (let chunk = await stream.next(); chunk !== null; chunk = await stream.next()) {
+  process.stdout.write(chunk.delta ?? "");
+}
+```
+
+`InferenceChunkStream` is single-pass — once you've reached the terminating `null`, the stream is exhausted. Errors raised from inside `InferenceChunkStream.next()` are typed `BlazenError` subclasses (`MistralRsInferenceError`, etc.) so they can be matched alongside the rest of the error hierarchy.
+
+### llama.cpp (`LlamaCpp` prefix)
+
+The llama.cpp surface mirrors the mistral.rs one with a narrower feature set (no reasoning content, no images on the message input itself).
+
+| Class / enum | Purpose |
+|---|---|
+| `LlamaCppChatMessageInput` | Constructor: `new LlamaCppChatMessageInput(role, text)`. Getters: `.role`, `.text`. |
+| `LlamaCppChatRole` | Const enum: `System`, `User`, `Assistant`, `Tool` (capitalised — distinct from `ChatRole`). |
+| `LlamaCppInferenceResult` | Non-streaming result. Getters: `.content`, `.finishReason`, `.model`, `.usage`. |
+| `LlamaCppInferenceChunk` | Streaming chunk. Getters: `.delta`, `.finishReason`. |
+| `LlamaCppInferenceChunkStream` | Async chunk source. Same `await stream.next()` pattern. |
+| `LlamaCppInferenceUsage` | Getters: `.promptTokens`, `.completionTokens`, `.totalTokens`, `.totalTimeSec`. |
+
+```typescript
+import {
+  LlamaCppChatMessageInput, LlamaCppChatRole,
+  LlamaCppInferenceChunkStream, LlamaCppProvider,
+} from "blazen";
+
+const provider = await LlamaCppProvider.create({ modelPath: "/models/llama.gguf" });
+const stream: LlamaCppInferenceChunkStream = await provider.inferStream([
+  new LlamaCppChatMessageInput(LlamaCppChatRole.User, "What is 2+2?"),
+]);
+for (let chunk = await stream.next(); chunk !== null; chunk = await stream.next()) {
+  process.stdout.write(chunk.delta ?? "");
+}
+```
+
+Like the mistral.rs `InferenceChunkStream`, `LlamaCppInferenceChunkStream` is single-pass; mid-stream failures throw a typed `LlamaCppInferenceError`.
+
+### candle
+
+The candle backend exposes a single non-streaming result class.
+
+| Class | Purpose |
+|---|---|
+| `CandleInferenceResult` | Constructor: `new CandleInferenceResult(content, promptTokens, completionTokens, totalTimeSecs)`. Getters: `.content`, `.promptTokens`, `.completionTokens`, `.totalTimeSecs`. |
+
+The candle backend has no streaming counterpart to `InferenceChunkStream` / `LlamaCppInferenceChunkStream` — pull `CandleInferenceResult` once per call. If you need token-by-token streaming on candle, swap the provider to mistral.rs or llama.cpp.
+
+### Errors raised from local inference
+
+All three families propagate errors as typed `BlazenError` subclasses. The mapping is documented in the [Error Handling](#error-handling) section above. As elsewhere, run callbacks through `enrichError` to re-classify any plain `Error` that bubbles back through Rust from JS-side code (custom samplers, custom token decoders, etc.).
+
+---
+
+## Telemetry
+
+OpenTelemetry-compatible tracing flows through the standard `tracing` subscriber. Blazen ships an optional Langfuse exporter that ships span batches to the Langfuse ingestion API. This is gated by the `langfuse` Cargo feature on the underlying crate, so it's only available in builds that opted in at compile time.
+
+### `LangfuseConfig`
+
+```typescript
+import { LangfuseConfig } from "blazen";
+
+const config = new LangfuseConfig(
+  process.env.LANGFUSE_PUBLIC_KEY!,
+  process.env.LANGFUSE_SECRET_KEY!,
+  "https://cloud.langfuse.com",  // host (optional, defaults to cloud)
+  100,                             // batchSize (optional, default 100)
+  5000,                            // flushIntervalMs (optional, default 5000)
+);
+```
+
+| Property | Type | Description |
+|---|---|---|
+| `.publicKey` | `string` | The Langfuse public API key. |
+| `.secretKey` | `string` | The Langfuse secret API key. |
+| `.host` | `string \| null` | The configured host URL, or `null` when defaulted. |
+| `.batchSize` | `number` | Maximum events buffered before an automatic flush. |
+| `.flushIntervalMs` | `number` | Background flush interval in milliseconds. |
+
+### `initLangfuse(config: LangfuseConfig): void`
+
+Install the global tracing subscriber. Spawns a background tokio task that flushes buffered span envelopes to Langfuse on the configured interval. Calling this more than once per process is safe — subsequent calls no-op because the global subscriber is already registered.
+
+```typescript
+import { initLangfuse, LangfuseConfig } from "blazen";
+
+initLangfuse(new LangfuseConfig(
+  process.env.LANGFUSE_PUBLIC_KEY!,
+  process.env.LANGFUSE_SECRET_KEY!,
+));
+```
+
+Available only when the host build was compiled with the `langfuse` feature on the underlying telemetry crate. In builds without it, the symbol is still exported but the configured exporter is a no-op.
+
+### Wiring `LangfuseConfig` from environment
+
+Most deployments construct `LangfuseConfig` directly from environment variables at startup. Tune `batchSize` and `flushIntervalMs` to balance ingestion latency against the per-request overhead of HTTP flushes:
+
+```typescript
+import { initLangfuse, LangfuseConfig } from "blazen";
+
+const cfg = new LangfuseConfig(
+  process.env.LANGFUSE_PUBLIC_KEY!,
+  process.env.LANGFUSE_SECRET_KEY!,
+  process.env.LANGFUSE_HOST,                                  // null → cloud default
+  Number(process.env.LANGFUSE_BATCH_SIZE ?? 100),
+  Number(process.env.LANGFUSE_FLUSH_INTERVAL_MS ?? 5000),
+);
+initLangfuse(cfg);
+```
+
+A `LangfuseConfig` instance is purely declarative — it carries no IO state — so it's safe to construct, inspect, log (with secrets redacted), and pass to `initLangfuse` independently.
+
+You can keep multiple `LangfuseConfig` objects around (e.g. one per environment) and choose which one to install at startup; only the first `initLangfuse` call wins per process.
 
 ---
 
