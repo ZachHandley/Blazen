@@ -414,3 +414,126 @@ const model = CompletionModel.fromJsHandler(
 const response = await model.complete([ChatMessage.user("hi")]);
 console.log(`cost: $${response.cost?.toFixed(6)}`); // populated from the global registry
 ```
+
+---
+
+## In-Browser RAG with `TractEmbedModel` + `InMemoryBackend`
+
+`TractEmbedModel` runs ONNX-format sentence-transformers entirely in the browser via [tract](https://github.com/sonos/tract) -- no remote embedding API required. Pair it with a typed `InMemoryBackend` and the high-level `Memory` facade for a fully client-side semantic search store.
+
+```typescript
+import init, { TractEmbedModel, Memory, InMemoryBackend } from "@blazen/sdk";
+
+await init();
+
+// Both URLs must be CORS-enabled. HuggingFace's `resolve/main/...` paths
+// serve the right headers out of the box.
+const embedder = await TractEmbedModel.create(
+  "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model.onnx",
+  "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json",
+);
+
+// `fromBackend` keeps reads/writes inside WASM linear memory --
+// no JS round-trips per call (unlike `fromJsBackend`).
+const memory = Memory.fromBackend(embedder, new InMemoryBackend());
+
+await memory.addMany([
+  { id: "doc1", text: "Blazen is a Rust workflow engine." },
+  { id: "doc2", text: "WebAssembly runs in browsers, Node.js, and edge runtimes." },
+  { id: "doc3", text: "Tract is a tiny ONNX inference engine written in Rust." },
+]);
+
+const results = await memory.search("What is Blazen?", 3, null);
+results.forEach((r) => console.log(r.id, r.score, r.text));
+```
+
+For cross-tab durability, swap `InMemoryBackend` for a JS-side IndexedDB backend via `Memory.fromJsBackend(embedder, backend)` -- the backend object just needs to implement `put`, `get`, `delete`, `list`, `len`, and `searchByBands`.
+
+---
+
+## Pipeline Snapshot Persistence to IndexedDB
+
+`PipelineBuilder.onPersistJson` hands you a JSON-shaped snapshot every time the pipeline reaches a checkpoint. Persist it to IndexedDB (or any other store) so a refresh or tab close does not lose progress.
+
+```typescript
+import init, { PipelineBuilder, Stage, Context } from "@blazen/sdk";
+
+await init();
+
+// `idb` here is an `IDBPDatabase` from the `idb` npm package; substitute your
+// favourite IndexedDB wrapper. The callback fires after each successful stage
+// commit, so it doubles as a place to update progress UI.
+const pipeline = new PipelineBuilder("ingest-pipeline")
+  .addStage(
+    new Stage("normalize", async (input: any, _ctx: Context) => ({
+      text: String(input.text ?? "").trim().toLowerCase(),
+    })),
+  )
+  .addStage(
+    new Stage("tokenize", async (input: any, _ctx: Context) => ({
+      tokens: input.text.split(/\s+/).filter(Boolean),
+    })),
+  )
+  .onPersistJson(async (snapshot: unknown) => {
+    const tx = idb.transaction("checkpoints", "readwrite");
+    await tx.objectStore("checkpoints").put(snapshot, "current");
+    await tx.done;
+  })
+  .build();
+
+const result = await pipeline.run({ text: "  Hello WASM World  " });
+console.log("tokens:", result.tokens);
+```
+
+On the next page load, read `checkpoints/current` back out and feed it to `PipelineBuilder.fromSnapshot(...)` to resume mid-flight instead of restarting from stage zero.
+
+---
+
+## Human-in-the-Loop with `runWithHandler` + `streamEvents`
+
+`Workflow.runWithHandler` returns a live `WorkflowHandler` instead of awaiting the terminal event. Pair it with `streamEvents` to react to every event the engine publishes -- including `InputRequestEvent`, which is the WASM SDK's hook for human-in-the-loop prompts. Send the answer back through `respondToInput(requestId, response)` and the parked event loop unparks immediately.
+
+```typescript
+import init, { Workflow } from "@blazen/sdk";
+
+await init();
+
+const workflow = new Workflow("topic-researcher");
+
+workflow.addStep("clarify", ["blazen::StartEvent"], async (event, _ctx) => {
+  // Ask the human to confirm or refine the research topic before we burn
+  // tokens. The engine auto-parks on this event until `respondToInput` lands.
+  return {
+    type: "blazen::InputRequestEvent",
+    request_id: crypto.randomUUID(),
+    prompt: `Confirm the topic to research: "${event.topic}"`,
+    metadata: null,
+  };
+});
+
+workflow.addStep("research", ["blazen::InputResponseEvent"], async (event, _ctx) => {
+  // `event.response` is whatever the JS side passed to `respondToInput`.
+  return {
+    type: "blazen::StopEvent",
+    result: { confirmed_topic: event.response },
+  };
+});
+
+const handler = await workflow.runWithHandler({ topic: "tract embeddings" });
+
+// `streamEvents` resolves when the workflow ends; events emitted before this
+// call are NOT replayed, so subscribe before you await the terminal result.
+const streaming = handler.streamEvents((event: { event_type: string; data: any }) => {
+  if (event.event_type === "blazen::InputRequestEvent") {
+    const answer = window.prompt(event.data.prompt) ?? "";
+    handler.respondToInput(event.data.request_id, answer);
+  } else {
+    console.log("event:", event.event_type, event.data);
+  }
+});
+
+const [, finalResult] = await Promise.all([streaming, handler.awaitResult()]);
+console.log("done:", finalResult);
+```
+
+Outside the browser (Node, Deno, edge runtimes) just swap `window.prompt` for whatever input source you have -- a WebSocket message, a CLI readline, an HTTP form post -- and call `respondToInput` from there. The handler is thread-safe in the sense that it's a single-owner JS object, so as long as the `respondToInput` call happens on the same JS event loop that owns the handler, the workflow unparks correctly.

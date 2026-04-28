@@ -422,3 +422,66 @@ impl AudioGeneration for MyElevenLabs {
 ```sh
 cargo run -p blazen --example custom_tts_provider
 ```
+
+---
+
+## Langfuse Exporter
+
+The `blazen-telemetry` crate ships a `tracing_subscriber::Layer` that maps Blazen's `workflow.run`, `workflow.step`, and `llm.complete` spans to Langfuse traces, spans, and generations. `init_langfuse` returns the `LangfuseLayer` -- you compose it into the registry yourself, which lets you stack it alongside `fmt`, `EnvFilter`, or other exporters.
+
+`LangfuseConfig::new(public_key, secret_key)` defaults to the `cloud.langfuse.com` host, batch size 100, and a 5 s flush interval. Override any of those with the chained builders.
+
+```rust
+use blazen_telemetry::{LangfuseConfig, init_langfuse};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let cfg = LangfuseConfig::new(
+        std::env::var("LANGFUSE_PUBLIC_KEY")?,
+        std::env::var("LANGFUSE_SECRET_KEY")?,
+    )
+    .with_host("https://cloud.langfuse.com")
+    .with_batch_size(100)
+    .with_flush_interval_ms(5000);
+
+    let layer = init_langfuse(cfg)?;
+    tracing_subscriber::registry().with(layer).init();
+
+    // ... your workflow code ...
+    Ok(())
+}
+```
+
+```sh
+cargo run -p blazen --example langfuse_exporter
+```
+
+---
+
+## OTLP HTTP Exporter
+
+`init_otlp_http` is the wasm-compatible variant of `init_otlp` (which uses gRPC + tonic). It is gated behind the `otlp-http` Cargo feature and builds the OpenTelemetry HTTP/protobuf span exporter with a target-appropriate `HttpClient` (reqwest on native, `web_sys::fetch` on `wasm32`). Unlike `init_langfuse`, this function installs the global `tracing` subscriber internally -- you do **not** need to call `tracing_subscriber::registry().init()` yourself.
+
+`OtlpConfig` is a plain struct -- there is no `::new()` constructor; populate `endpoint` and `service_name` directly. For HTTP, point `endpoint` at the `/v1/traces` path on your collector.
+
+```rust
+use blazen_telemetry::{OtlpConfig, init_otlp_http};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let cfg = OtlpConfig {
+        endpoint: "https://otel-collector.example.com:4318/v1/traces".to_string(),
+        service_name: "my-service".to_string(),
+    };
+    init_otlp_http(cfg)?;
+
+    // ... workflow code ...
+    Ok(())
+}
+```
+
+```sh
+cargo run -p blazen --example otlp_http_exporter
+```

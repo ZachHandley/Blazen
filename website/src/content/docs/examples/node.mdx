@@ -378,3 +378,111 @@ console.log(result.format, result.audioData.length, "bytes");
 ```sh
 npx tsx examples/custom_tts_provider.ts
 ```
+
+---
+
+## Example 12: Typed Error Handling
+
+Blazen exports a typed error hierarchy so you can branch on failure modes with `instanceof` instead of string-matching messages. `ProviderError` carries structured fields (`provider`, `status`, `endpoint`, `requestId`, `detail`, `retryAfterMs`) populated from the underlying HTTP response. `RateLimitError`, `AuthError`, `TimeoutError`, `ContentPolicyError`, and the per-provider classes (`MistralRsError`, `WhisperError`, `PiperError`, ...) all extend `BlazenError`, so a single `instanceof BlazenError` check catches everything Blazen raises while letting unrelated runtime errors keep propagating.
+
+```typescript
+import {
+  CompletionModel,
+  ChatMessage,
+  RateLimitError,
+  ProviderError,
+  BlazenError,
+} from "blazen";
+
+const model = CompletionModel.openai();
+try {
+  const response = await model.complete([ChatMessage.user("Hello")]);
+  console.log(response.content);
+} catch (e) {
+  if (e instanceof RateLimitError) {
+    // Backoff and retry -- retryAfterMs is populated from the Retry-After header
+    // when the upstream provider supplies one.
+    console.warn("Rate limited; retry later");
+  } else if (e instanceof ProviderError) {
+    console.error(
+      `Provider ${e.provider} returned ${e.status}: ${e.detail}`,
+    );
+  } else if (e instanceof BlazenError) {
+    console.error("Blazen error:", e.message);
+  } else {
+    throw e;
+  }
+}
+```
+
+```sh
+npx tsx examples/typed_error_handling.ts
+```
+
+---
+
+## Example 13: Custom Progress Reporting via ProgressCallback
+
+Subclass `ProgressCallback` to plug structured download progress into any UI. The base class exists as a real Rust-backed type so subclass instances can be passed straight into `ModelCache.download` (and any other Blazen API that accepts a progress hook). `onProgress` receives byte counts as `bigint` to safely represent multi-gigabyte downloads; `total` is `null` when the server does not advertise `Content-Length`.
+
+```typescript
+import { ModelCache, ProgressCallback } from "blazen";
+
+class TerminalProgress extends ProgressCallback {
+  override onProgress(downloaded: bigint, total?: bigint | null): void {
+    if (total) {
+      const pct = ((Number(downloaded) / Number(total)) * 100).toFixed(1);
+      process.stderr.write(`\r${pct}% (${downloaded}/${total})`);
+    } else {
+      process.stderr.write(`\r${downloaded} bytes`);
+    }
+  }
+}
+
+const cache = ModelCache.create();
+const path = await cache.download(
+  "mistralai/Mistral-7B-Instruct-v0.3",
+  "config.json",
+  new TerminalProgress(),
+);
+console.log(`\ncached at ${path}`);
+```
+
+```sh
+npx tsx examples/progress_callback.ts
+```
+
+---
+
+## Example 14: Pipeline State Persistence
+
+Pipelines are multi-stage workflows with built-in checkpoint support. Register a JSON persistence callback with `onPersistJson` and Blazen will hand you a snapshot string after each stage completes -- ideal for shipping checkpoints to durable storage (S3, Postgres, an HTTP service) so a crashed run can be resumed later via `Pipeline.resume(snapshot)`. Use `onPersist` instead if you'd rather receive the typed `PipelineSnapshot` object directly.
+
+```typescript
+import { PipelineBuilder, Stage, Workflow } from "blazen";
+
+const workflowA = new Workflow("step-1");
+// ... addStep(...) calls populating workflowA ...
+const workflowB = new Workflow("step-2");
+// ... addStep(...) calls populating workflowB ...
+
+const pipeline = new PipelineBuilder("ingest")
+  .stage(new Stage("step-1", workflowA))
+  .stage(new Stage("step-2", workflowB))
+  .onPersistJson(async (snapshot: string) => {
+    await fetch("/api/checkpoint", {
+      method: "POST",
+      body: snapshot,
+      headers: { "Content-Type": "application/json" },
+    });
+  })
+  .build();
+
+const handler = await pipeline.start({ input: "..." });
+const result = await handler.result();
+console.log(result.finalOutput);
+```
+
+```sh
+npx tsx examples/pipeline_persistence.ts
+```

@@ -417,3 +417,108 @@ asyncio.run(main())
 ```sh
 python examples/custom_tts_provider.py
 ```
+
+---
+
+## Example 12: Typed Error Handling
+
+Blazen exposes a typed exception hierarchy rooted at `BlazenError`. `ProviderError` carries structured HTTP context (`provider`, `status`, `endpoint`, `request_id`, `detail`, `raw_body`, `retry_after_ms`) so callers can branch on the failure mode instead of regex-matching error strings.
+
+```python
+import asyncio
+
+from blazen import (
+    BlazenError,
+    ChatMessage,
+    CompletionModel,
+    ProviderError,
+    RateLimitError,
+)
+
+
+async def main():
+    model = CompletionModel.openai()
+    try:
+        response = await model.complete([ChatMessage.user("Hello")])
+        print(response.content)
+    except RateLimitError:
+        print("rate limited; backing off")
+    except ProviderError as e:
+        print(f"provider {e.provider} returned {e.status}: {e.detail}")
+    except BlazenError as e:
+        print(f"blazen error: {e}")
+
+
+asyncio.run(main())
+```
+
+```sh
+python examples/typed_error_handling.py
+```
+
+---
+
+## Example 13: Custom Progress Reporting via ProgressCallback
+
+Subclass `ProgressCallback` to receive download progress notifications from `ModelCache.download()`. The same instance can be reused across multiple downloads -- the cache calls `on_progress(downloaded, total)` repeatedly as bytes arrive.
+
+```python
+import asyncio
+
+from blazen import ModelCache, ProgressCallback
+
+
+class TerminalProgress(ProgressCallback):
+    def on_progress(self, downloaded: int, total: int | None) -> None:
+        if total:
+            pct = downloaded / total * 100
+            print(f"\r{pct:.1f}% ({downloaded}/{total})", end="", flush=True)
+        else:
+            print(f"\r{downloaded} bytes", end="", flush=True)
+
+
+async def main():
+    cache = ModelCache()
+    path = await cache.download(
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "config.json",
+        TerminalProgress(),
+    )
+    print(f"\ndownloaded to {path}")
+
+
+asyncio.run(main())
+```
+
+```sh
+python examples/progress_callback.py
+```
+
+---
+
+## Example 14: Telemetry -- Langfuse Trace Export
+
+Wire Blazen into Langfuse with a single `init_langfuse()` call. Once configured, every workflow run, agent step, and LLM call ships traces to Langfuse in the background. Tune `batch_size` and `flush_interval_ms` to balance latency against API request volume.
+
+```python
+import os
+
+from blazen import LangfuseConfig, init_langfuse
+
+
+init_langfuse(
+    LangfuseConfig(
+        public_key=os.environ["LANGFUSE_PUBLIC_KEY"],
+        secret_key=os.environ["LANGFUSE_SECRET_KEY"],
+        host="https://cloud.langfuse.com",
+        batch_size=100,
+        flush_interval_ms=5000,
+    )
+)
+
+# All subsequent workflow runs ship traces to Langfuse.
+```
+
+```sh
+python examples/langfuse_telemetry.py
+```
