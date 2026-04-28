@@ -189,6 +189,18 @@ msg = ChatMessage.user_parts([
 ])
 ```
 
+### Media Sources
+
+For APIs that take generic media inputs (vision, OCR, audio-paired pipelines), use `ImageSource` directly or its alias `MediaSource`. The alias is provided so callers can spell intent at the call site without changing the underlying type.
+
+```python
+from blazen import ImageSource, MediaSource  # MediaSource is ImageSource
+
+src1 = ImageSource.url("https://example.com/photo.jpg")
+src2 = MediaSource.path("/tmp/scan.png")        # same class, ergonomic alias
+src3 = MediaSource.base64(b64_bytes, "image/png")
+```
+
 ### Supported Providers
 
 | Provider | Constructor | Default Model |
@@ -236,6 +248,126 @@ async def main():
     handler = await wf.run(prompt="Explain gravity in one sentence.")
     result = await handler.result()
     print(result.result)
+```
+
+## Local Inference
+
+Blazen ships first-class bindings for several local-inference backends. They share a common shape: build an engine, call `generate(...)` for one-shot output, or `stream(...)` for an async iterator of typed chunks. Each backend has its own message and result types so you can keep them straight in mixed pipelines.
+
+### mistral.rs
+
+```python
+from blazen import ChatMessageInput, ChatRole, InferenceResult, InferenceChunkStream
+
+messages = [
+    ChatMessageInput(role=ChatRole.SYSTEM, content="You are concise."),
+    ChatMessageInput(role=ChatRole.USER, content="Explain entropy."),
+]
+
+result: InferenceResult = await engine.generate(messages, max_tokens=256)
+print(result.text)
+
+stream: InferenceChunkStream = await engine.stream(messages)
+async for chunk in stream:
+    if chunk.delta:
+        print(chunk.delta, end="", flush=True)
+    if chunk.reasoning_delta:
+        ...  # optional reasoning trace
+    if chunk.tool_calls:
+        for call in chunk.tool_calls:  # list[InferenceToolCall]
+            ...
+    if chunk.finish_reason:
+        break
+```
+
+Vision-capable models accept `InferenceImage` parts built from `InferenceImageSource` (URL, path, or base64). `InferenceUsage` is attached to both `InferenceResult` and the final chunk.
+
+### llama.cpp
+
+Symmetric API with its own type family so the two backends never alias:
+
+```python
+from blazen import (
+    LlamaCppChatMessageInput,
+    LlamaCppChatRole,
+    LlamaCppInferenceResult,
+    LlamaCppInferenceChunkStream,
+)
+
+messages = [
+    LlamaCppChatMessageInput(role=LlamaCppChatRole.USER, content="Hi!"),
+]
+
+result: LlamaCppInferenceResult = await engine.generate(messages)
+print(result.text, result.usage)  # usage is LlamaCppInferenceUsage
+
+stream: LlamaCppInferenceChunkStream = await engine.stream(messages)
+async for chunk in stream:  # LlamaCppInferenceChunk
+    if chunk.delta:
+        print(chunk.delta, end="", flush=True)
+```
+
+### candle
+
+Candle returns a `CandleInferenceResult` from its non-streaming path:
+
+```python
+from blazen import CandleInferenceResult
+
+result: CandleInferenceResult = await engine.generate(prompt="Once upon a time", max_tokens=128)
+print(result.text)
+```
+
+### Progress Reporting
+
+Long downloads and model loads accept a progress callback. Subclass `ProgressCallback` and override `on_progress`. The default implementation is a no-op, so partial overrides are safe.
+
+```python
+from blazen import ProgressCallback
+
+class TqdmProgress(ProgressCallback):
+    def __init__(self):
+        super().__init__()
+        self._bar = None
+
+    def on_progress(self, downloaded: int, total: int | None) -> None:
+        # total is None when the upstream doesn't report Content-Length
+        if total is not None:
+            pct = 100.0 * downloaded / total
+            print(f"\r{pct:5.1f}%  {downloaded}/{total} bytes", end="", flush=True)
+        else:
+            print(f"\r{downloaded} bytes", end="", flush=True)
+
+# Pass instances to APIs that accept callbacks (model-cache download paths, etc.)
+await cache.download(model_id="...", progress=TqdmProgress())
+```
+
+## Telemetry
+
+Blazen exposes opt-in telemetry initializers. Each one is gated behind a Cargo feature on the underlying wheel (`langfuse`, `otlp`, `prometheus`); calling an initializer for a feature that wasn't compiled in raises an `UnsupportedError`.
+
+### Langfuse
+
+```python
+from blazen import LangfuseConfig, init_langfuse
+
+init_langfuse(LangfuseConfig(public_key="pk-...", secret_key="sk-...", host="https://cloud.langfuse.com"))
+```
+
+### OpenTelemetry (OTLP)
+
+```python
+from blazen import OtlpConfig, init_otlp
+
+init_otlp(OtlpConfig(endpoint="http://localhost:4317", service_name="my-app"))
+```
+
+### Prometheus
+
+```python
+from blazen import init_prometheus
+
+init_prometheus(9090)  # exposes /metrics on the given port
 ```
 
 ## Branching / Fan-Out
@@ -305,6 +437,76 @@ result = await handler.result()
 ```
 
 > **Note on `ctx.session` and pause/resume.** Values in `ctx.session` are live references and are deliberately **excluded** from snapshots. If you store live objects there and then call `handler.snapshot()`, the workflow's `session_pause_policy` decides what happens: the default (`pickle_or_error`) attempts to pickle each entry into the snapshot and raises a clear error if any entry can't be serialised. For workflows that explicitly want ephemeral runs, use `ctx.state` for anything that must survive pause/resume, and `ctx.session` for everything else.
+
+## Errors
+
+All Blazen-raised exceptions inherit from `BlazenError`, so a single `except BlazenError` catches everything the SDK throws while leaving unrelated `Exception`s to propagate. Catch narrower bases when you want to react differently per category.
+
+### Base classes
+
+| Class | Raised when |
+|---|---|
+| `BlazenError` | Root of the hierarchy. |
+| `AuthError` | Missing/invalid credentials. |
+| `RateLimitError` | Provider rate-limited the request. Inspect `retry_after_ms`. |
+| `TimeoutError` | Request or workflow exceeded its deadline. |
+| `ValidationError` | Bad input shape (events, options, snapshots). |
+| `ContentPolicyError` | Provider refused the prompt or output for policy reasons. |
+| `ProviderError` | Generic upstream/provider failure. Base for backend-specific errors. |
+| `UnsupportedError` | Feature not compiled into this wheel (e.g. telemetry without the feature). |
+| `ComputeError` | Local-inference compute failure (CUDA OOM, kernel error, etc.). |
+| `MediaError` | Decode/encode failure for image/audio inputs. |
+
+### Per-backend `ProviderError` subclasses
+
+These are feature-gated at runtime — they exist on `blazen` but are only raised when the corresponding backend is bundled in the wheel.
+
+| Class | Backend |
+|---|---|
+| `LlamaCppError` | llama.cpp |
+| `CandleLlmError` | candle (LLM) |
+| `CandleEmbedError` | candle (embeddings) |
+| `MistralRsError` | mistral.rs |
+| `WhisperError` | whisper.cpp |
+| `PiperError` | piper |
+| `DiffusionError` | diffusion (image generation) |
+| `FastEmbedError` | fastembed |
+| `TractError` | tract |
+
+### Structured attributes
+
+`ProviderError` (and every per-backend subclass) carries structured fields you can read in `except` blocks:
+
+- `provider` — short provider name (`"openai"`, `"llama_cpp"`, ...)
+- `status` — HTTP status code if applicable, else `None`
+- `endpoint` — request URL/route if applicable
+- `request_id` — provider-supplied request id if available
+- `detail` — human-readable detail string
+- `raw_body` — raw response body as `bytes` if captured
+- `retry_after_ms` — milliseconds the provider asked you to wait (mirrored on `RateLimitError`)
+
+```python
+from blazen import (
+    BlazenError, AuthError, RateLimitError, ProviderError,
+    LlamaCppError, MistralRsError, ContentPolicyError,
+)
+
+try:
+    response = await model.complete(messages)
+except AuthError as e:
+    print("bad key:", e)
+except RateLimitError as e:
+    print(f"slow down; retry in {e.retry_after_ms} ms")
+except ContentPolicyError:
+    print("provider refused the prompt")
+except (LlamaCppError, MistralRsError) as e:
+    # Local-inference specific handling
+    print(f"local backend {e.provider} failed: {e.detail}")
+except ProviderError as e:
+    print(f"upstream {e.provider} returned {e.status}: {e.detail}")
+except BlazenError:
+    raise
+```
 
 ## Context API
 

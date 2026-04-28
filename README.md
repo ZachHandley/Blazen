@@ -24,7 +24,9 @@
 - **Prompt management** -- Versioned prompt templates with `{{variable}}` interpolation, YAML/JSON registries, and multimodal attachments
 - **Persistence** -- Embedded persistence via redb, or bring-your-own via callbacks. Pause a workflow, serialize state to JSON, resume later
 - **Identity-preserving live state** -- Pass DB connections, Pydantic models, and other live objects through events and the new `ctx.state` / `ctx.session` namespaces. `StopEvent(result=obj)` round-trips non-JSON Python values with `is`-identity preserved -- the engine no longer silently stringifies unpicklable results
-- **Observability** -- OpenTelemetry, Prometheus metrics, and Langfuse integration via the telemetry crate
+- **Typed error hierarchies** -- Both Python and Node ship a full subclass tree (`BlazenError` plus ~87 leaves like `RateLimitError`, `LlamaCppError`, `MistralRsError`, `CandleLlmError`, `WhisperCppError`, `PiperError`, `DiffusionError`) so callers can write idiomatic `except RateLimitError` / `catch (e instanceof RateLimitError)` instead of string-matching messages
+- **Bindings parity** -- `tools/audit_bindings.py` walks every public Rust symbol across all `blazen-*` crates and verifies the Python, Node, and WASM-SDK surfaces mirror it 1:1. The current report is `0 / 0 / 0` gaps, and CI fails on regression, so the bindings stay in lockstep with the Rust core
+- **Observability** -- OpenTelemetry spans (OTLP gRPC and OTLP HTTP, the latter wasm-eligible), Prometheus metrics, and Langfuse all ship as opt-in features in `blazen-telemetry` -- enable an exporter, point it at your collector, and every step, LLM call, and pipeline stage is instrumented automatically
 
 ## Installation
 
@@ -178,6 +180,18 @@ export default {
 A complete runnable setup -- `wrangler.toml`, `vitest` integration test exercising the worker against a real `workerd` instance, and the `wasm-pack` build wiring -- lives in [`examples/cloudflare-worker/`](examples/cloudflare-worker/). CI builds and tests it on every push, so the Workers target is a supported deployment surface, not aspirational.
 
 Note: Cloudflare Workers cap CPU time per request (10ms on the free plan, up to 30s on paid plans). Long-running multi-call LLM flows should either fit within those limits, be split across requests using Blazen's pause/resume snapshots, or run on the WASIp2 component (`blazen-wasm`) for ZLayer edge deployment without the per-request cap.
+
+### WASM SDK feature parity
+
+`@blazen/sdk` is no longer the "lite" sibling. It now matches the Node binding for every workflow, pipeline, and handler primitive that makes sense in a browser or Worker:
+
+- **Pipelines** -- `input_mapper`, `condition`, `onPersist`, and `onPersistJson` callbacks for sequential and parallel stages
+- **Workflows** -- `setSessionPausePolicy`, `runStreaming(input, onEvent)`, `runWithHandler(input)`, and `resumeWithSerializableRefs(snapshot, refs)`
+- **Handlers** -- `respondToInput`, `snapshot`, `resumeInPlace`, `streamEvents(callback)`, and `abort` on the returned handle
+- **Context** -- session-ref serialization round-trips opaque host values across pause/resume the same way the Node and Python bindings do
+- **In-browser embeddings** -- `TractEmbedModel.create(modelUrl, tokenizerUrl)` loads an ONNX embedding model and a HuggingFace tokenizer from URLs and runs inference on the CPU via `tract`, so RAG and semantic-memory flows work in the browser with no server round-trip
+
+If a workflow runs against the Node binding, the same code path runs under `@blazen/sdk` -- the only differences are the runtime-specific wiring (Node `fs` vs. browser `fetch`).
 
 ## LLM Integration
 
@@ -349,6 +363,49 @@ const result = await handler.result();
 | fal.ai | `FalProvider::new` / `.fal()` | (image generation) |
 
 All OpenAI-compatible providers are accessible through `OpenAiCompatProvider` in Rust, or through static factory methods on `CompletionModel` in Python and TypeScript.
+
+## Typed Errors
+
+Every error the engine, the LLM layer, or a backend can raise has a dedicated subclass in both Python and Node, so callers branch on type instead of parsing strings. The hierarchy is rooted at `BlazenError` (extending the host language's base `Error` / `Exception`) and fans out to ~87 leaves covering provider failures (`RateLimitError`, `AuthError`, `ContextLengthError`), local-inference backends (`LlamaCppError`, `MistralRsError`, `CandleLlmError`, `WhisperCppError`, `PiperError`, `DiffusionError`), persistence (`PersistError`, `SnapshotError`), and workflow control flow (`StepNotFoundError`, `EventTypeMismatchError`, `WorkflowAbortedError`).
+
+```python
+from blazen import CompletionModel, RateLimitError, AuthError, BlazenError
+
+try:
+    response = await model.complete(messages)
+except RateLimitError as e:
+    await asyncio.sleep(e.retry_after or 5)
+except AuthError:
+    rotate_api_key()
+except BlazenError as e:
+    log.exception("blazen failure", err=e)
+```
+
+```typescript
+import { RateLimitError, AuthError, BlazenError } from "blazen";
+
+try {
+  const response = await model.complete(messages);
+} catch (e) {
+  if (e instanceof RateLimitError) await sleep(e.retryAfter ?? 5_000);
+  else if (e instanceof AuthError) rotateApiKey();
+  else if (e instanceof BlazenError) log.error("blazen failure", e);
+  else throw e;
+}
+```
+
+## Telemetry Exporters
+
+`blazen-telemetry` ships four exporters as opt-in Cargo features. Enable the ones you need; the rest stay out of your binary.
+
+| Exporter | Feature flag | Notes |
+|----------|--------------|-------|
+| OTLP gRPC | `otlp-grpc` | Standard tonic-based exporter for native deployments |
+| OTLP HTTP | `otlp-http` | Pure-`reqwest` exporter; works under `wasm32` for browser/Worker telemetry |
+| Langfuse | `langfuse` | Native Langfuse trace and observation API for LLM-call attribution |
+| Prometheus | `prometheus` | Pull-based metrics endpoint for token counts, step latency, and pipeline stage timings |
+
+All exporters share the same `TelemetryConfig` and per-exporter config structs (`OtlpConfig`, `LangfuseConfig`, `PrometheusConfig`), so swapping backends is a config change, not a code rewrite.
 
 ## Documentation
 
