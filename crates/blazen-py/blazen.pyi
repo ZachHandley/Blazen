@@ -33,9 +33,11 @@ __all__ = [
     "CacheMiddleware",
     "CacheStrategy",
     "CachedCompletionModel",
+    "CandleEmbedError",
     "CandleEmbedModel",
     "CandleEmbedOptions",
     "CandleInferenceResult",
+    "CandleLlmError",
     "CandleLlmOptions",
     "CandleLlmProvider",
     "ChatMessage",
@@ -62,6 +64,7 @@ __all__ = [
     "DerefRequest",
     "DerefResponse",
     "Device",
+    "DiffusionError",
     "DiffusionOptions",
     "DiffusionProvider",
     "DiffusionScheduler",
@@ -77,6 +80,7 @@ __all__ = [
     "FalOptions",
     "FalProvider",
     "FallbackModel",
+    "FastEmbedError",
     "FastEmbedModel",
     "FastEmbedOptions",
     "FileContent",
@@ -107,8 +111,10 @@ __all__ = [
     "JobStatus",
     "JoinStrategy",
     "JsonlBackend",
+    "LangfuseConfig",
     "LlamaCppChatMessageInput",
     "LlamaCppChatRole",
+    "LlamaCppError",
     "LlamaCppInferenceChunk",
     "LlamaCppInferenceChunkStream",
     "LlamaCppInferenceResult",
@@ -130,6 +136,7 @@ __all__ = [
     "Middleware",
     "MiddlewareStack",
     "MistralProvider",
+    "MistralRsError",
     "MistralRsOptions",
     "MistralRsProvider",
     "ModelCache",
@@ -147,8 +154,10 @@ __all__ = [
     "OpenAiEmbeddingModel",
     "OpenAiProvider",
     "OpenRouterProvider",
+    "OtlpConfig",
     "ParallelStage",
     "PauseReason",
+    "PeerClient",
     "PeerRemoteRefDescriptor",
     "PerplexityProvider",
     "PersistedEvent",
@@ -159,6 +168,7 @@ __all__ = [
     "PipelineResult",
     "PipelineSnapshot",
     "PipelineState",
+    "PiperError",
     "PiperOptions",
     "PiperProvider",
     "PricingEntry",
@@ -191,6 +201,8 @@ __all__ = [
     "ReleaseRequest",
     "ReleaseResponse",
     "RemoteRefDescriptor",
+    "RemoteWorkflowRequest",
+    "RemoteWorkflowResponse",
     "RequestTiming",
     "ResponseFormat",
     "RetryCompletionModel",
@@ -232,6 +244,10 @@ __all__ = [
     "ToolDef",
     "ToolDefinition",
     "ToolOutput",
+    "TractEmbedModel",
+    "TractError",
+    "TractOptions",
+    "TractResponse",
     "Transcription",
     "TranscriptionRequest",
     "TypedTool",
@@ -247,6 +263,7 @@ __all__ = [
     "VoiceHandle",
     "VoiceProvider",
     "WhisperCppProvider",
+    "WhisperError",
     "WhisperModel",
     "WhisperOptions",
     "Workflow",
@@ -267,6 +284,9 @@ __all__ = [
     "extract_inline_artifacts",
     "format_provider_http_tail",
     "get_context_window",
+    "init_langfuse",
+    "init_otlp",
+    "init_prometheus",
     "intern_event_type",
     "load_client_tls",
     "load_server_tls",
@@ -4357,6 +4377,55 @@ class JsonlBackend:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class LangfuseConfig:
+    r"""
+    Configuration for the Langfuse LLM observability exporter.
+    
+    Example:
+        >>> from blazen import LangfuseConfig, init_langfuse
+        >>> cfg = LangfuseConfig(
+        ...     public_key="pk-lf-...",
+        ...     secret_key="sk-lf-...",
+        ...     host="https://cloud.langfuse.com",
+        ...     batch_size=100,
+        ...     flush_interval_ms=5000,
+        ... )
+        >>> init_langfuse(cfg)
+    """
+    @property
+    def public_key(self) -> builtins.str: ...
+    @public_key.setter
+    def public_key(self, value: builtins.str) -> None: ...
+    @property
+    def secret_key(self) -> builtins.str: ...
+    @secret_key.setter
+    def secret_key(self, value: builtins.str) -> None: ...
+    @property
+    def host(self) -> typing.Optional[builtins.str]: ...
+    @host.setter
+    def host(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def batch_size(self) -> builtins.int: ...
+    @batch_size.setter
+    def batch_size(self, value: builtins.int) -> None: ...
+    @property
+    def flush_interval_ms(self) -> builtins.int: ...
+    @flush_interval_ms.setter
+    def flush_interval_ms(self, value: builtins.int) -> None: ...
+    def __new__(cls, public_key: builtins.str, secret_key: builtins.str, host: typing.Optional[builtins.str] = None, batch_size: builtins.int = 100, flush_interval_ms: builtins.int = 5000) -> LangfuseConfig:
+        r"""
+        Create a new Langfuse configuration.
+        
+        Args:
+            public_key: Langfuse public API key (Basic-auth username).
+            secret_key: Langfuse secret API key (Basic-auth password).
+            host: Optional Langfuse host URL. Defaults to ``https://cloud.langfuse.com``.
+            batch_size: Maximum number of events buffered before an automatic flush.
+            flush_interval_ms: Background flush interval in milliseconds.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class LlamaCppChatMessageInput:
     r"""
     A single chat message for llama.cpp inference.
@@ -5838,6 +5907,34 @@ class OpenRouterProvider:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class OtlpConfig:
+    r"""
+    Configuration for the OpenTelemetry OTLP exporter.
+    
+    Example:
+        >>> from blazen import OtlpConfig, init_otlp
+        >>> cfg = OtlpConfig(endpoint="http://localhost:4317", service_name="my-app")
+        >>> init_otlp(cfg)
+    """
+    @property
+    def endpoint(self) -> builtins.str: ...
+    @endpoint.setter
+    def endpoint(self, value: builtins.str) -> None: ...
+    @property
+    def service_name(self) -> builtins.str: ...
+    @service_name.setter
+    def service_name(self, value: builtins.str) -> None: ...
+    def __new__(cls, *, endpoint: builtins.str, service_name: builtins.str) -> OtlpConfig:
+        r"""
+        Create a new OTLP configuration.
+        
+        Args:
+            endpoint: The OTLP gRPC endpoint URL (e.g. ``"http://localhost:4317"``).
+            service_name: The service name reported to the backend.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class ParallelStage:
     r"""
     A parallel stage running multiple branches concurrently.
@@ -5873,6 +5970,28 @@ class ParallelStage:
                 `JoinStrategy.WaitAll`.
         """
     def __repr__(self) -> builtins.str: ...
+
+class PeerClient:
+    r"""
+    Abstract base class mirroring the [`PeerClient`] trait.
+    
+    Subclass this from Python and override `invoke_sub_workflow(request)`
+    to plug a custom transport into `Workflow.run_remote`. The subclass
+    method may return either a [`PyRemoteWorkflowResponse`] directly or a
+    coroutine that resolves to one.
+    
+    Concrete bindings (such as the gRPC `BlazenPeerClient` exposed under
+    the peer module) implement [`PeerClient`] on the Rust side and bypass
+    this Python-facing shim.
+    """
+    def __new__(cls) -> PeerClient: ...
+    def invoke_sub_workflow(self, request: RemoteWorkflowRequest) -> RemoteWorkflowResponse:
+        r"""
+        Invoke a sub-workflow on a remote peer.
+        
+        The default implementation raises `NotImplementedError`. Override
+        this in a subclass.
+        """
 
 @typing.final
 class PeerRemoteRefDescriptor:
@@ -7174,6 +7293,67 @@ class RemoteRefDescriptor:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class RemoteWorkflowRequest:
+    r"""
+    Python wrapper around [`RemoteWorkflowRequest`].
+    
+    Held by callers that build sub-workflow invocations directly rather
+    than going through the higher-level `BlazenPeerClient` -- e.g. tests
+    that mock out a [`PyPeerClient`].
+    """
+    @property
+    def workflow_name(self) -> builtins.str: ...
+    @property
+    def step_ids(self) -> builtins.list[builtins.str]: ...
+    @property
+    def timeout_secs(self) -> typing.Optional[builtins.int]: ...
+    def __new__(cls, workflow_name: builtins.str, step_ids: typing.Optional[typing.Sequence[builtins.str]] = None, input: typing.Optional[dict] = None, timeout_secs: typing.Optional[builtins.int] = None) -> RemoteWorkflowRequest:
+        r"""
+        Build a request.
+        
+        Args:
+            workflow_name: Symbolic name of the workflow on the remote
+                peer.
+            step_ids: Ordered list of step IDs to execute.
+            input: Mapping passed as the workflow's initial input. Encoded
+                as JSON internally.
+            timeout_secs: Optional wall-clock timeout. `None` means "use
+                the server's default deadline".
+        """
+    def input_value(self) -> typing.Any:
+        r"""
+        Decode the JSON-encoded input back to a Python value.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class RemoteWorkflowResponse:
+    r"""
+    Python wrapper around [`RemoteWorkflowResponse`].
+    """
+    @property
+    def error(self) -> typing.Optional[builtins.str]: ...
+    def __new__(cls, result: typing.Optional[typing.Any] = None, remote_refs: typing.Optional[dict] = None, error: typing.Optional[builtins.str] = None) -> RemoteWorkflowResponse:
+        r"""
+        Build a response.
+        
+        Args:
+            result: Optional terminal result encoded as a Python value.
+            remote_refs: Mapping from session-ref UUID string to
+                in-process descriptor.
+            error: Error message if the sub-workflow failed.
+        """
+    def result_value(self) -> typing.Any:
+        r"""
+        Decode the optional result value back to a Python object.
+        """
+    def remote_refs(self) -> dict[str, RemoteRefDescriptor]:
+        r"""
+        Map of session-ref UUID strings to descriptors.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class RequestTiming:
     r"""
     Breakdown of request timing (queue, execution, total) in milliseconds.
@@ -8466,6 +8646,116 @@ class ToolOutput:
             llm_override: Optional [`LlmPayload`] to override what the LLM
                 sees on the next turn. Defaults to ``None`` (provider applies
                 its default conversion from ``data``).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class TractEmbedModel:
+    r"""
+    A local tract (pure-Rust ONNX) embedding model.
+    
+    Loads the same fastembed model catalog via tract-onnx instead of the
+    ONNX Runtime native library. Use this when the ``fastembed`` feature
+    is unavailable for your target -- typically musl-libc Linux builds.
+    
+    Example:
+        >>> opts = TractOptions(model_name="BGESmallENV15")
+        >>> model = TractEmbedModel(options=opts)
+        >>> response = await model.embed(["hello", "world"])
+    """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        Get the model identifier (Hugging Face repo id).
+        """
+    @property
+    def dimensions(self) -> builtins.int:
+        r"""
+        Get the dimensionality of the produced embedding vectors.
+        """
+    def __new__(cls, *, options: typing.Optional[TractOptions] = None) -> TractEmbedModel:
+        r"""
+        Create a new tract embedding model.
+        
+        Args:
+            options: Optional :class:`TractOptions` for model name, cache
+                directory, batch size, and download progress.
+        """
+    async def embed(self, texts: typing.Sequence[builtins.str]) -> TractResponse:
+        r"""
+        Embed one or more texts.
+        
+        Args:
+            texts: A list of strings to embed.
+        
+        Returns:
+            A :class:`TractResponse` with embeddings and model id.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class TractOptions:
+    r"""
+    Options for the local tract (pure-Rust ONNX) embedding backend.
+    
+    Mirrors :class:`FastEmbedOptions`; the underlying crate is
+    ``blazen-embed-tract``. Available on every target the ``tract``
+    feature is enabled for -- including musl and other environments
+    where fastembed's prebuilt ONNX Runtime binaries are unavailable.
+    
+    Example:
+        >>> opts = TractOptions(model_name="BGESmallENV15")
+        >>> model = TractEmbedModel(options=opts)
+    """
+    @property
+    def model_name(self) -> typing.Optional[builtins.str]: ...
+    @model_name.setter
+    def model_name(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def cache_dir(self) -> typing.Optional[builtins.str]: ...
+    @cache_dir.setter
+    def cache_dir(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def max_batch_size(self) -> typing.Optional[builtins.int]: ...
+    @max_batch_size.setter
+    def max_batch_size(self, value: typing.Optional[builtins.int]) -> None: ...
+    @property
+    def show_download_progress(self) -> typing.Optional[builtins.bool]: ...
+    @show_download_progress.setter
+    def show_download_progress(self, value: typing.Optional[builtins.bool]) -> None: ...
+    def __new__(cls, *, model_name: typing.Optional[builtins.str] = None, cache_dir: typing.Optional[builtins.str] = None, max_batch_size: typing.Optional[builtins.int] = None, show_download_progress: typing.Optional[builtins.bool] = None) -> TractOptions:
+        r"""
+        Create a new TractOptions.
+        
+        Args:
+            model_name: Embedding model variant name (e.g. ``"BGESmallENV15"``).
+            cache_dir: Model cache directory path.
+            max_batch_size: Maximum batch size for embedding.
+            show_download_progress: Show download progress when fetching models.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class TractResponse:
+    r"""
+    Result of a [`TractEmbedModel.embed`] call.
+    
+    Mirrors [`blazen_embed_tract::TractResponse`] -- the embedding vectors
+    plus the model id that produced them. Provided as a typed class so
+    callers that gate on the ``tract`` feature can keep their type
+    annotations precise; for cross-backend code prefer the umbrella
+    :class:`EmbeddingResponse` returned by :class:`EmbeddingModel`.
+    """
+    @property
+    def embeddings(self) -> builtins.list[builtins.list[builtins.float]]:
+        r"""
+        One L2-normalized embedding vector per input text.
+        """
+    @property
+    def model(self) -> builtins.str:
+        r"""
+        The model identifier (Hugging Face repo id) that produced these
+        embeddings.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -10106,6 +10396,45 @@ def get_context_window(model: builtins.str) -> builtins.int:
     pattern.
     """
 
+def init_langfuse(config: LangfuseConfig) -> None:
+    r"""
+    Initialize the Langfuse exporter and install it as the global tracing
+    subscriber layer.
+    
+    Spawns a background tokio task that periodically flushes buffered LLM call
+    traces, token usage, and latency data to the Langfuse ingestion API.
+    
+    Call this once at process startup, before any traced work. If a global
+    tracing subscriber is already installed, this is a soft failure: the
+    underlying `LangfuseLayer` is constructed (so its background dispatcher is
+    running) and the function returns ``Ok(())`` without overwriting the
+    existing subscriber. Composing Langfuse with an existing subscriber from
+    Python is not supported; install Langfuse before any other exporter.
+    """
+
+def init_otlp(config: OtlpConfig) -> None:
+    r"""
+    Initialize the OTLP trace exporter and install it as the global tracing
+    subscriber layer.
+    
+    Sets up an OTLP gRPC span exporter pointed at ``config.endpoint`` and
+    installs a combined ``tracing`` subscriber (env-filter + OTel layer +
+    fmt layer). Call this once at process startup, before any traced work.
+    """
+
+def init_prometheus(port: builtins.int) -> None:
+    r"""
+    Initialize the Prometheus metrics exporter and start the HTTP listener.
+    
+    Installs a global ``metrics`` recorder backed by Prometheus and starts an
+    HTTP server on ``0.0.0.0:{port}`` serving the ``/metrics`` endpoint. After
+    calling this, any code using the ``metrics`` macros (``counter!``,
+    ``histogram!``, ``gauge!``) will be exposed at the Prometheus endpoint.
+    
+    Args:
+        port: TCP port to bind the metrics HTTP listener on.
+    """
+
 def intern_event_type(name: builtins.str) -> builtins.str:
     r"""
     Intern a dynamic event-type name so it can be referenced as a stable
@@ -10365,6 +10694,12 @@ def wrap_with_tracing(model: CompletionModel, provider_name: builtins.str) -> Co
 #   AuthError / RateLimitError / TimeoutError / ValidationError /
 #   ContentPolicyError / ProviderError / UnsupportedError /
 #   ComputeError / MediaError  <- BlazenError
+#
+# Plus 9 per-backend subclasses of ProviderError (LlamaCppError,
+# CandleLlmError, CandleEmbedError, MistralRsError, WhisperError,
+# PiperError, DiffusionError, FastEmbedError, TractError) that are
+# feature-gated at runtime in src/error.rs but always declared here for
+# static type-checking.
 
 class BlazenError(builtins.Exception):
     """Base class for all Blazen runtime errors."""
@@ -10419,6 +10754,48 @@ class ComputeError(BlazenError):
 
 class MediaError(BlazenError):
     """Media handling error (invalid input, size exceeded, etc)."""
+    ...
+
+# Per-backend ProviderError subclasses. Mirrors src/error.rs feature-gated
+# create_exception! invocations (LlamaCppError, MistralRsError, etc.).
+# Whether the class is actually registered at runtime depends on the
+# corresponding Cargo feature being enabled (llamacpp, candle-llm, etc.),
+# but they are always declared in the stub for static type-checking.
+
+class LlamaCppError(ProviderError):
+    """llama.cpp local-inference backend error (feature: `llamacpp`)."""
+    ...
+
+class CandleLlmError(ProviderError):
+    """Candle local-LLM backend error (feature: `candle-llm`)."""
+    ...
+
+class CandleEmbedError(ProviderError):
+    """Candle local-embedding backend error (feature: `candle-embed`)."""
+    ...
+
+class MistralRsError(ProviderError):
+    """mistral.rs local-inference backend error (feature: `mistralrs`)."""
+    ...
+
+class WhisperError(ProviderError):
+    """whisper.cpp transcription backend error (feature: `whispercpp`)."""
+    ...
+
+class PiperError(ProviderError):
+    """Piper TTS backend error (feature: `piper`)."""
+    ...
+
+class DiffusionError(ProviderError):
+    """Diffusion image-generation backend error (feature: `diffusion`)."""
+    ...
+
+class FastEmbedError(ProviderError):
+    """fastembed embedding backend error (feature: `embed`, non-musl only)."""
+    ...
+
+class TractError(ProviderError):
+    """Tract ONNX embedding backend error (feature: `tract`)."""
     ...
 
 # --- Module-level type aliases -----------------------------------------

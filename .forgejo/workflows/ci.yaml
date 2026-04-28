@@ -212,9 +212,9 @@ jobs:
         # from the committed version. This enforces that stubs are
         # generated, not hand-written.
         run: |
-          cargo run --example stub_gen -p blazen-py
+          cargo run --example stub_gen -p blazen-py --features langfuse,otlp,prometheus,tract,distributed
           git diff --exit-code crates/blazen-py/blazen.pyi || {
-            echo "::error::blazen.pyi is stale. Run 'cargo run --example stub_gen -p blazen-py' and commit the result."
+            echo "::error::blazen.pyi is stale. Run 'cargo run --example stub_gen -p blazen-py --features langfuse,otlp,prometheus,tract,distributed' and commit the result."
             exit 1
           }
 
@@ -375,9 +375,9 @@ jobs:
       - name: Regenerate Python pyi stub + drift check
         if: steps.check.outputs.completed != 'true'
         run: |
-          cargo run --example stub_gen -p blazen-py
+          cargo run --example stub_gen -p blazen-py --features langfuse,otlp,prometheus,tract,distributed
           git diff --exit-code crates/blazen-py/blazen.pyi || {
-            echo "::error::blazen.pyi is stale; regenerate via 'cargo run --example stub_gen -p blazen-py'"
+            echo "::error::blazen.pyi is stale; regenerate via 'cargo run --example stub_gen -p blazen-py --features langfuse,otlp,prometheus,tract,distributed'"
             exit 1
           }
 

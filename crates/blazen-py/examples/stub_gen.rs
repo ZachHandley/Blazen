@@ -116,6 +116,12 @@ fn inject_exception_stubs(content: &str) -> String {
 #   AuthError / RateLimitError / TimeoutError / ValidationError /
 #   ContentPolicyError / ProviderError / UnsupportedError /
 #   ComputeError / MediaError  <- BlazenError
+#
+# Plus 9 per-backend subclasses of ProviderError (LlamaCppError,
+# CandleLlmError, CandleEmbedError, MistralRsError, WhisperError,
+# PiperError, DiffusionError, FastEmbedError, TractError) that are
+# feature-gated at runtime in src/error.rs but always declared here for
+# static type-checking.
 
 class BlazenError(builtins.Exception):
     """Base class for all Blazen runtime errors."""
@@ -171,6 +177,48 @@ class ComputeError(BlazenError):
 class MediaError(BlazenError):
     """Media handling error (invalid input, size exceeded, etc)."""
     ...
+
+# Per-backend ProviderError subclasses. Mirrors src/error.rs feature-gated
+# create_exception! invocations (LlamaCppError, MistralRsError, etc.).
+# Whether the class is actually registered at runtime depends on the
+# corresponding Cargo feature being enabled (llamacpp, candle-llm, etc.),
+# but they are always declared in the stub for static type-checking.
+
+class LlamaCppError(ProviderError):
+    """llama.cpp local-inference backend error (feature: `llamacpp`)."""
+    ...
+
+class CandleLlmError(ProviderError):
+    """Candle local-LLM backend error (feature: `candle-llm`)."""
+    ...
+
+class CandleEmbedError(ProviderError):
+    """Candle local-embedding backend error (feature: `candle-embed`)."""
+    ...
+
+class MistralRsError(ProviderError):
+    """mistral.rs local-inference backend error (feature: `mistralrs`)."""
+    ...
+
+class WhisperError(ProviderError):
+    """whisper.cpp transcription backend error (feature: `whispercpp`)."""
+    ...
+
+class PiperError(ProviderError):
+    """Piper TTS backend error (feature: `piper`)."""
+    ...
+
+class DiffusionError(ProviderError):
+    """Diffusion image-generation backend error (feature: `diffusion`)."""
+    ...
+
+class FastEmbedError(ProviderError):
+    """fastembed embedding backend error (feature: `embed`, non-musl only)."""
+    ...
+
+class TractError(ProviderError):
+    """Tract ONNX embedding backend error (feature: `tract`)."""
+    ...
 "#;
 
     // Insert exception names into __all__ alphabetically. Existing __all__
@@ -178,14 +226,23 @@ class MediaError(BlazenError):
     const EXTRA_ALL_NAMES: &[&str] = &[
         "AuthError",
         "BlazenError",
+        "CandleEmbedError",
+        "CandleLlmError",
         "ComputeError",
         "ContentPolicyError",
+        "DiffusionError",
+        "FastEmbedError",
+        "LlamaCppError",
         "MediaError",
+        "MistralRsError",
+        "PiperError",
         "ProviderError",
         "RateLimitError",
         "TimeoutError",
+        "TractError",
         "UnsupportedError",
         "ValidationError",
+        "WhisperError",
     ];
 
     let with_all = inject_into_all(content, EXTRA_ALL_NAMES);

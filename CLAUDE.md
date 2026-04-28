@@ -29,7 +29,10 @@ After any change to a binding (`blazen-py`, `blazen-node`, or `blazen-wasm-sdk`)
 
 ```bash
 # Python — regenerates crates/blazen-py/blazen.pyi
-cargo run --example stub_gen -p blazen-py
+# NOTE: --features flags are required so feature-gated bindings (langfuse, otlp,
+# prometheus, tract embedder, distributed peer types) actually appear in the stub.
+# Without them, those symbols silently disappear from blazen.pyi.
+cargo run --example stub_gen -p blazen-py --features langfuse,otlp,prometheus,tract,distributed
 
 # Node — regenerates crates/blazen-node/index.d.ts (and runs the post-build error-classes shim)
 pnpm --filter blazen run build
