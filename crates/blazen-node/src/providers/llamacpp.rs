@@ -7,8 +7,6 @@
 //! Runs LLM inference entirely on-device using the llama.cpp engine.
 //! No API key is required.
 
-#![cfg(feature = "llamacpp")]
-
 use std::sync::Arc;
 
 use napi::bindgen_prelude::*;

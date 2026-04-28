@@ -7,8 +7,6 @@
 //! Runs LLM inference entirely on-device using the candle engine.
 //! No API key is required.
 
-#![cfg(feature = "candle-llm")]
-
 use std::sync::Arc;
 
 use napi::bindgen_prelude::*;

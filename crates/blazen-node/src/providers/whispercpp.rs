@@ -11,8 +11,6 @@
 //! whisper.cpp currently expects 16-bit PCM mono WAV at 16 kHz. Remote URLs
 //! are not supported -- pass a local file path in `request.audioUrl`.
 
-#![cfg(feature = "whispercpp")]
-
 use std::sync::Arc;
 
 use napi::bindgen_prelude::*;

@@ -9,8 +9,6 @@
 //! Phase 5.3 engine integration. Once that lands, `generateImage` will be
 //! added here.
 
-#![cfg(feature = "diffusion")]
-
 use std::sync::Arc;
 
 use napi::bindgen_prelude::*;

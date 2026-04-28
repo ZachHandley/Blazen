@@ -17,8 +17,6 @@
 //! `#[napi(object)]` plain-object types that mirror the
 //! transport-agnostic shapes in `blazen_core::distributed`.
 
-#![cfg(feature = "distributed")]
-
 use std::collections::HashMap;
 
 use napi::bindgen_prelude::*;

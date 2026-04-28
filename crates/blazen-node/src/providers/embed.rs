@@ -13,8 +13,6 @@
 //! The Node binding only sees the unified `EmbedModel` / `EmbedOptions`
 //! surface -- backend selection is invisible.
 
-#![cfg(feature = "embed")]
-
 use std::sync::Arc;
 
 use napi::bindgen_prelude::*;

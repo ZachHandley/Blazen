@@ -7,8 +7,6 @@
 //! Runs embedding inference entirely on-device using the candle engine.
 //! No API key is required.
 
-#![cfg(feature = "candle-embed")]
-
 use std::sync::Arc;
 
 use napi::bindgen_prelude::*;

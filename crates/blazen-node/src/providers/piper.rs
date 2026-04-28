@@ -8,8 +8,6 @@
 //! crate currently validates options and stages the engine handle for the
 //! Phase 9 wiring. Once that lands, `textToSpeech` will be added here.
 
-#![cfg(feature = "piper")]
-
 use std::sync::Arc;
 
 use napi::bindgen_prelude::*;

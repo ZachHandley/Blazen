@@ -5,8 +5,6 @@
 //! single [`JsEmbedResponse`] napi mirror so JS callers see a unified
 //! shape regardless of the platform's chosen backend.
 
-#![cfg(feature = "embed")]
-
 use napi_derive::napi;
 
 use blazen_llm::EmbedResponse as RustEmbedResponse;

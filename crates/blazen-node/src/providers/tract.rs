@@ -12,8 +12,6 @@
 //! callers opt into tract explicitly when they need a smaller binary
 //! or want to avoid linking the ONNX Runtime native library.
 
-#![cfg(feature = "tract")]
-
 use std::sync::Arc;
 
 use napi::bindgen_prelude::*;

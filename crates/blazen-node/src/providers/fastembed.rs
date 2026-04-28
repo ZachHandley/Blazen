@@ -18,8 +18,6 @@
 //! automatically; this provider exists so callers can opt into
 //! fastembed explicitly when they need the typed standalone class.
 
-#![cfg(feature = "fastembed")]
-
 use std::sync::Arc;
 
 use napi::bindgen_prelude::*;

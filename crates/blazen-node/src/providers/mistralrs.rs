@@ -7,8 +7,6 @@
 //! Runs LLM inference entirely on-device using the mistral.rs engine.
 //! No API key is required.
 
-#![cfg(feature = "mistralrs")]
-
 use std::path::PathBuf;
 use std::sync::Arc;
 
