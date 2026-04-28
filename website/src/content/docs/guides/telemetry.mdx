@@ -1,0 +1,199 @@
+---
+title: "Telemetry & Observability"
+description: "Export traces, spans, and metrics with OTLP, Langfuse, or Prometheus"
+section: "guides"
+order: 28
+---
+
+Blazen emits structured tracing data via the standard `tracing` crate ecosystem -- workflow runs, steps, LLM calls, pipeline stages, and provider IO are all instrumented as spans with typed fields. Multiple exporters are available, each behind a Cargo feature on `blazen-telemetry`. Pick the one that matches your destination and runtime.
+
+## Exporter matrix
+
+| Exporter | Feature | Transport | Wasm-eligible | Use case |
+|---|---|---|---|---|
+| OTLP gRPC | `otlp` | gRPC (tonic) | No (native only) | OpenTelemetry collectors, native services |
+| OTLP HTTP | `otlp-http` | HTTP/protobuf | Yes | Wasm, restricted-egress networks, Cloudflare Workers |
+| Langfuse | `langfuse` | HTTP REST | No (native only) | LLM-call observability + evals |
+| Prometheus | `prometheus` | HTTP scrape | No (native only) | Metric dashboards, alerting |
+
+The Python and Node bindings ship prebuilt with `langfuse`, `otlp`, and `prometheus` compiled in. The wasm SDK only exposes the OTLP HTTP transport (gRPC's `tonic` does not compile for `wasm32`).
+
+## OTLP gRPC
+
+Best for native services exporting to a local OpenTelemetry Collector, Grafana Tempo, Honeycomb, Datadog, or any other gRPC-compatible OTLP backend.
+
+```rust
+use blazen_telemetry::{OtlpConfig, init_otlp};
+
+let cfg = OtlpConfig {
+    endpoint: "http://localhost:4317".to_string(),
+    service_name: "my-service".to_string(),
+};
+init_otlp(cfg)?;
+```
+
+Python:
+
+```python
+from blazen import OtlpConfig, init_otlp
+
+init_otlp(OtlpConfig(endpoint="http://localhost:4317", service_name="my-service"))
+```
+
+`init_otlp` installs a combined `tracing-subscriber` stack (env-filter + OpenTelemetry layer + fmt layer) and registers it as the global subscriber. Call it once at process startup, before any traced work.
+
+## OTLP HTTP (wasm-eligible)
+
+Use when gRPC is blocked (corporate proxies, Cloudflare Workers) or when you are running inside the browser / a wasm runtime. The endpoint should point at the collector's HTTP/protobuf traces ingest path (typically `:4318/v1/traces`).
+
+```rust
+use blazen_telemetry::{OtlpConfig, init_otlp_http};
+
+let cfg = OtlpConfig {
+    endpoint: "https://otel-collector.example.com:4318/v1/traces".to_string(),
+    service_name: "my-worker".to_string(),
+};
+init_otlp_http(cfg)?;
+```
+
+Wasm SDK (`@blazen/sdk`):
+
+```typescript
+import { OtlpConfig, initOtlp } from "@blazen/sdk";
+
+const cfg = new OtlpConfig(
+  "https://otel-collector.example.com:4318/v1/traces",
+  "my-worker",
+);
+initOtlp(cfg);
+```
+
+The wasm SDK ships a custom `WasmFetchHttpClient` because `opentelemetry-otlp/grpc-tonic` is not wasm-compatible and `reqwest`'s wasm32 client is `!Send`. The wrapper backs onto `web_sys::fetch` so Workers, browsers, and Deno all work.
+
+## Langfuse
+
+Langfuse maps Blazen's span hierarchy onto its trace / span / generation primitives:
+
+| Blazen span | Langfuse object | Ingestion event |
+|---|---|---|
+| `workflow.run`, `pipeline.run` | Trace | `trace-create` |
+| `workflow.step`, `pipeline.stage` | Span | `span-create` |
+| `llm.complete`, `llm.stream` | Generation | `generation-create` |
+
+Token usage (`prompt_tokens`, `completion_tokens`, `total_tokens`) and model metadata are extracted into the generation's `usage` and `model` fields.
+
+```rust
+use blazen_telemetry::{LangfuseConfig, init_langfuse};
+use tracing_subscriber::prelude::*;
+
+let cfg = LangfuseConfig::new("pk-lf-...", "sk-lf-...")
+    .with_host("https://cloud.langfuse.com")
+    .with_batch_size(100)
+    .with_flush_interval_ms(5000);
+
+let layer = init_langfuse(cfg)?;
+tracing_subscriber::registry().with(layer).init();
+```
+
+Python:
+
+```python
+from blazen import LangfuseConfig, init_langfuse
+
+init_langfuse(LangfuseConfig(
+    public_key="pk-lf-...",
+    secret_key="sk-lf-...",
+    host="https://cloud.langfuse.com",
+    batch_size=100,
+    flush_interval_ms=5000,
+))
+```
+
+Node:
+
+```typescript
+import { LangfuseConfig, initLangfuse } from "blazen";
+
+initLangfuse(new LangfuseConfig(
+  "pk-lf-...",
+  "sk-lf-...",
+  "https://cloud.langfuse.com",
+  100,
+  5000,
+));
+```
+
+In the Python and Node bindings `init_langfuse` / `initLangfuse` install the layer as the global subscriber for you and spawn the background flush task on the napi-rs / pyo3 tokio runtime. In Rust you compose the returned `LangfuseLayer` into your own `Registry`.
+
+## Prometheus
+
+Native-only. Installs a global `metrics` recorder and starts an HTTP listener on `0.0.0.0:{port}` that serves the `/metrics` endpoint for Prometheus to scrape. After init, any code using the `metrics` macros (`counter!`, `histogram!`, `gauge!`) is exposed automatically.
+
+```rust
+use blazen_telemetry::init_prometheus;
+
+init_prometheus(9090)?;
+```
+
+Python:
+
+```python
+from blazen import init_prometheus
+
+init_prometheus(9090)
+```
+
+Then point Prometheus at `http://your-host:9090/metrics`.
+
+## Composing multiple exporters
+
+Only one global `tracing` subscriber can be installed per process. The single-call helpers (`init_otlp`, `init_otlp_http`, `init_prometheus`, and the Python/Node `init_langfuse`) each install their own subscriber, so the second call is a soft no-op -- the underlying layer's background dispatcher still runs (events are batched and sent), but the global subscriber stays as it was first installed.
+
+To run multiple span exporters off a single subscriber, build the layers manually in Rust and compose them:
+
+```rust
+use blazen_telemetry::{LangfuseConfig, init_langfuse};
+use tracing_subscriber::{EnvFilter, prelude::*};
+
+let langfuse = init_langfuse(LangfuseConfig::new("pk-lf-...", "sk-lf-..."))?;
+let env_filter = EnvFilter::try_from_default_env()
+    .unwrap_or_else(|_| EnvFilter::new("info"));
+
+tracing_subscriber::registry()
+    .with(env_filter)
+    .with(langfuse)
+    .with(tracing_subscriber::fmt::layer())
+    // .with(otel_layer) // build OTLP layer manually if you want both
+    .init();
+```
+
+Prometheus is independent of the tracing subscriber (it installs a `metrics` recorder, not a `tracing::Subscriber`), so `init_prometheus` composes cleanly with any of the trace exporters.
+
+## Feature flag setup
+
+Cargo:
+
+```toml
+[dependencies]
+blazen-telemetry = { version = "...", features = ["langfuse", "otlp-http", "prometheus"] }
+```
+
+Pick `otlp` instead of `otlp-http` if you want gRPC. Both can be enabled together; they expose `init_otlp` and `init_otlp_http` as separate entry points.
+
+Python:
+
+```bash
+# Wheels ship with langfuse, otlp, and prometheus compiled in.
+pip install blazen
+```
+
+Node:
+
+```bash
+# Prebuilt binaries include langfuse, otlp, and prometheus.
+# Node bindings currently expose only LangfuseConfig / initLangfuse;
+# OTLP and Prometheus are reachable from Rust or Python.
+npm install blazen
+```
+
+Wasm SDK (`@blazen/sdk`) exposes `OtlpConfig` + `initOtlp` (HTTP transport only).

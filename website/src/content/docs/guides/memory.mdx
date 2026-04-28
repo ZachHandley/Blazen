@@ -102,6 +102,42 @@ await memory.add("greeting", "Hello world!");
 const hits = await memory.searchLocal("hello", 5);
 ```
 
+## Browser / WASM construction
+
+The `@blazen/sdk` package ships a standalone `InMemoryBackend` class plus convenience factory methods on `Memory` that take an explicit backend instance. This is the recommended construction path in the browser, since it lets you hold a reference to the backend (for inspection, replacement, or sharing) instead of having `Memory` own it implicitly.
+
+```typescript
+import { InMemoryBackend, Memory } from "@blazen/sdk";
+
+const backend = new InMemoryBackend();
+const memory = Memory.fromBackend(embeddingModel, backend);
+```
+
+For SimHash-only local search without an embedder, use `Memory.localFromBackend`:
+
+```typescript
+import { InMemoryBackend, Memory } from "@blazen/sdk";
+
+const backend = new InMemoryBackend();
+const localMemory = Memory.localFromBackend(backend);
+await localMemory.add("greeting", "Hello world!");
+```
+
+Queries return `MemoryResult` instances -- a typed value class with `id`, `content`, `score`, and metadata fields. Prefer it over loose objects when you want the TypeScript compiler to catch typos in result handling:
+
+```typescript
+import type { MemoryResult } from "@blazen/sdk";
+
+const results: MemoryResult[] = await memory.query("capital city in Europe", 2);
+for (const r of results) {
+  console.log(r.score.toFixed(3), r.id, r.content);
+}
+```
+
+The full `MemoryResult` field list is in the generated types at `crates/blazen-wasm-sdk/pkg/blazen_wasm_sdk.d.ts`.
+
+This shape is wasm-sdk specific. Node, Python, and Rust use the existing `MemoryBackend` trait/class hierarchy described below, with their own `Memory` constructors.
+
 ## Built-in backends
 
 | Backend | Storage | Notes |

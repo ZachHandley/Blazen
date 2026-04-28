@@ -6,11 +6,15 @@ section: "guides"
 order: 5
 ---
 
-The Blazen WASM SDK can run AI models entirely in the browser -- no API key required after the initial model download. This guide covers local embeddings with [transformers.js](https://huggingface.co/docs/transformers.js) and local LLM chat with [WebLLM](https://webllm.mlc.ai/).
+The Blazen WASM SDK can run AI models entirely in the browser -- no API key required after the initial model download. This guide covers three options:
+
+1. **Built-in `TractEmbedModel`** -- ONNX embeddings shipped directly inside the SDK, no extra JS dependency.
+2. **transformers.js** -- bring-your-own embedding pipeline via `EmbeddingModel.fromJsHandler()`.
+3. **WebLLM** -- WebGPU-accelerated chat models via `CompletionModel.fromJsHandler()`.
 
 ## What is possible
 
-The `EmbeddingModel.fromJsHandler()` and `CompletionModel.fromJsHandler()` factories let you plug any JavaScript inference library into the Blazen pipeline. The model runs on the user's device while Blazen's `Memory`, `CompletionModel.withFallback()`, `withRetry()`, and `withCache()` work exactly the same as they do with hosted APIs.
+`TractEmbedModel.create()` runs ONNX models inside the WASM module via the [tract](https://github.com/sonos/tract) inference engine. The `EmbeddingModel.fromJsHandler()` and `CompletionModel.fromJsHandler()` factories let you plug any JavaScript inference library into the Blazen pipeline. The model runs on the user's device while Blazen's `Memory`, `CompletionModel.withFallback()`, `withRetry()`, and `withCache()` work exactly the same as they do with hosted APIs.
 
 Use cases:
 
@@ -30,6 +34,50 @@ Local inference relies on WebGPU (for LLMs) and WebAssembly (for embeddings). Cu
 | Firefox | 141 Windows / 145 macOS ARM | Linux support in progress |
 
 Approximately 65% of global users have WebGPU support. Embeddings via WASM (CPU) work in all modern browsers regardless of WebGPU.
+
+## Built-in embeddings with `TractEmbedModel`
+
+`TractEmbedModel` runs ONNX embedding models directly inside the WASM module -- no extra npm dependency, no `pipeline()` call. The model and tokenizer are fetched from any URL (typically Hugging Face) using `web_sys::fetch`, so the URLs must be reachable with browser-compatible CORS.
+
+### Installation
+
+```bash
+npm install @blazen/sdk
+```
+
+### Usage
+
+```typescript
+import { TractEmbedModel, init } from "@blazen/sdk";
+
+await init();
+
+const model = await TractEmbedModel.create(
+  "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model.onnx",
+  "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json",
+);
+
+const result = await model.embed(["hello", "world"]);
+console.log(result.embeddings); // (number[])[]
+console.log(model.dimensions);  // e.g. 384
+```
+
+The returned `embeddings` is a `number[][]` (one vector per input). `model.dimensions` reports the model's output size after the first inference.
+
+### When to pick `TractEmbedModel` vs transformers.js
+
+| Concern | `TractEmbedModel` | transformers.js |
+|---|---|---|
+| Dependencies | Just `@blazen/sdk` | `+ @huggingface/transformers` |
+| Model fetch | Direct `web_sys::fetch` of ONNX + tokenizer URLs | Hugging Face Hub via JS loader |
+| GPU acceleration | CPU only (tract WASM) | WebGPU when available, WASM fallback |
+| Bundle impact | None beyond the SDK | ~1.2 MB JS + ~3.5 MB ORT WASM lazy-loaded |
+
+Use `TractEmbedModel` when you want the smallest bundle and full control of the model URL. Use transformers.js when you want WebGPU acceleration or richer pre/post-processing.
+
+### CORS requirement
+
+Because the SDK fetches the ONNX file from the browser, the host must serve `Access-Control-Allow-Origin` headers that permit your origin. Hugging Face's `resolve/main` URLs already do this. If you self-host weights, configure CORS on your CDN.
 
 ## Local embeddings with transformers.js
 
@@ -227,36 +275,42 @@ const response = await model.complete([ChatMessage.user('Hello!')]);
 
 ## In-browser RAG
 
-Combine local embeddings with `Memory` for full retrieval-augmented generation that runs entirely on the device:
+Combine local embeddings with `Memory` for full retrieval-augmented generation that runs entirely on the device. The simplest in-browser store is `InMemoryBackend`, which keeps vectors in a `Map` for the lifetime of the page:
 
 ```typescript
-import init, { EmbeddingModel, Memory, CompletionModel, ChatMessage } from '@blazen/sdk';
-import { pipeline } from '@huggingface/transformers';
+import { Memory, InMemoryBackend, TractEmbedModel } from "@blazen/sdk";
+
+const embedder = await TractEmbedModel.create(modelUrl, tokenizerUrl);
+const memory = Memory.fromBackend(embedder, new InMemoryBackend());
+
+await memory.upsert([{ id: "doc1", content: "..." }]);
+const results = await memory.query("question", 5);
+```
+
+`Memory.fromBackend(embedder, backend)` is the wasm equivalent of the native `MemoryBuilder` -- it pairs any embedding model with any backend that implements the memory backend trait. `InMemoryBackend` is ideal for ephemeral session state and demos; swap in a persistent backend (IndexedDB-backed, server-side, etc.) when the session needs to survive a reload.
+
+### Full RAG pipeline with the built-in embedder
+
+```typescript
+import init, { Memory, InMemoryBackend, TractEmbedModel, CompletionModel, ChatMessage } from '@blazen/sdk';
 
 await init();
 
-// 1. Local embeddings
-const pipe = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-const embedder = EmbeddingModel.fromJsHandler('MiniLM', 384, async (texts) => {
-  const output = await pipe(texts, { pooling: 'mean', normalize: true });
-  return Array.from({ length: texts.length }, (_, i) => {
-    const row = output[i];
-    return row.data instanceof Float32Array ? row.data : new Float32Array(row.data);
-  });
-});
+const embedder = await TractEmbedModel.create(
+  'https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model.onnx',
+  'https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json',
+);
+const memory = Memory.fromBackend(embedder, new InMemoryBackend());
 
-// 2. Memory store
-const memory = new Memory(embedder);
-await memory.add('faq-1', 'Refunds are processed within 5-7 business days.');
-await memory.add('faq-2', 'Free shipping on orders over $50.');
-await memory.add('faq-3', 'Contact support at help@example.com.');
+await memory.upsert([
+  { id: 'faq-1', content: 'Refunds are processed within 5-7 business days.' },
+  { id: 'faq-2', content: 'Free shipping on orders over $50.' },
+  { id: 'faq-3', content: 'Contact support at help@example.com.' },
+]);
 
-// 3. Search + generate
-async function answerQuestion(question) {
-  const context = await memory.search(question, 3);
-  const contextText = context.map((r) => r.text).join('\n');
-
-  // Use a hosted model for generation (or a local one via WebLLM)
+async function answerQuestion(question: string) {
+  const context = await memory.query(question, 3);
+  const contextText = context.map((r) => r.content).join('\n');
   const llm = CompletionModel.openrouter();
   const response = await llm.complete([
     ChatMessage.system(`Answer using only this context:\n${contextText}`),
@@ -266,7 +320,67 @@ async function answerQuestion(question) {
 }
 ```
 
-The embedding search runs locally. Only the final generation call hits the API, and even that can be replaced with a local WebLLM model.
+The embedding + similarity search runs locally. Only the final generation call hits the API, and even that can be replaced with a local WebLLM model.
+
+### Same pipeline with a transformers.js embedder
+
+```typescript
+import init, { EmbeddingModel, Memory, InMemoryBackend, CompletionModel, ChatMessage } from '@blazen/sdk';
+import { pipeline } from '@huggingface/transformers';
+
+await init();
+
+const pipe = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+const embedder = EmbeddingModel.fromJsHandler('MiniLM', 384, async (texts) => {
+  const output = await pipe(texts, { pooling: 'mean', normalize: true });
+  return Array.from({ length: texts.length }, (_, i) => {
+    const row = output[i];
+    return row.data instanceof Float32Array ? row.data : new Float32Array(row.data);
+  });
+});
+
+const memory = Memory.fromBackend(embedder, new InMemoryBackend());
+await memory.upsert([{ id: 'doc1', content: 'Paris is the capital of France' }]);
+const results = await memory.query("What is France's capital?", 5);
+```
+
+Either embedder slots into the same `Memory.fromBackend(...)` call -- pick whichever fits your bundle and acceleration constraints.
+
+## Managing memory pressure with `ModelManager`
+
+`ModelManager` wraps the same `blazen_manager::ModelManager` used by the native runtime -- an LRU that evicts the least-recently-used model when the byte budget is exceeded. In a long-running browser session that loads several Tract models (e.g. one embedder, one reranker, one classifier), `ModelManager` prevents the page from accumulating unbounded GPU/heap memory.
+
+The JS-facing API matches the native one:
+
+| Method | Purpose |
+|---|---|
+| `register(id, sizeBytes, loader)` | Declare a model and how to load it on demand |
+| `unregister(id)` | Drop a registration (and any loaded weights) |
+| `load(id)` | Load (or reuse) and mark as MRU |
+| `unload(id)` | Free without unregistering |
+| `isLoaded(id)` | Check whether weights are currently resident |
+| `usedBytes()` / `availableBytes()` / `budgetBytes()` | Budget telemetry |
+| `status()` | Snapshot of every registration |
+
+```typescript
+import init, { ModelManager, TractEmbedModel } from '@blazen/sdk';
+
+await init();
+
+const manager = new ModelManager(512 * 1024 * 1024); // 512 MB budget
+
+manager.register('mini-lm', 90 * 1024 * 1024, async () => {
+  return await TractEmbedModel.create(miniLmOnnx, miniLmTokenizer);
+});
+manager.register('bge-small', 130 * 1024 * 1024, async () => {
+  return await TractEmbedModel.create(bgeOnnx, bgeTokenizer);
+});
+
+const embedder = await manager.load('mini-lm');  // loads + marks MRU
+console.log(manager.usedBytes(), '/', manager.budgetBytes());
+```
+
+When a `load()` call would push `usedBytes()` past `budgetBytes()`, the manager evicts the LRU entry first. Use it whenever your app might keep more than one Tract model alive at a time.
 
 ## COOP/COEP trap
 

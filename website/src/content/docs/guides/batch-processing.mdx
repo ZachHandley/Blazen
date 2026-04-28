@@ -135,6 +135,38 @@ print(f"{len(failed_indices)} of {len(conversations)} requests failed")
 
 The Rust version returns `BatchResult` with `responses: Vec<Result<CompletionResponse, BlazenError>>` instead -- it does not split success and error into separate vectors.
 
+### Node `BatchResult` class
+
+The Node binding returns a typed `BatchResult` class. Field access works through getters, so the snippet above (`result.responses[i]`, `result.errors[i]`) reads exactly like a plain object, but you also get richer summary accessors and a printable form:
+
+| Accessor | Type | Description |
+|---|---|---|
+| `.responses` | `(CompletionResponse \| null)[]` | Per-request results in input order. |
+| `.errors` | `(BlazenError \| null)[]` | Per-request errors. `null` when the request succeeded. |
+| `.totalUsage` | `TokenUsage` | Summed `promptTokens`, `completionTokens`, and `totalTokens` across successes. |
+| `.totalCost` | `number` | Summed USD cost across successes (zero when no provider in the flight reports pricing). |
+| `.successCount` | `number` | Number of requests that produced a `CompletionResponse`. |
+| `.failureCount` | `number` | Number of requests that produced a `BlazenError`. |
+| `.length` | `number` | Total request count -- always `successCount + failureCount`. |
+| `.toString()` | `string` | Human-readable summary, useful for logs. |
+
+```typescript
+import { BatchResult, completeBatch } from "blazen";
+
+const result = await completeBatch(model, conversations, { concurrency: 8 });
+
+if (result instanceof BatchResult) {
+  console.log(`${result.successCount}/${result.length} succeeded`);
+  console.log("usage:", result.totalUsage);
+  console.log("cost:  $", result.totalCost);
+  console.log(result.toString());
+}
+```
+
+`instanceof BatchResult` narrows the value for TypeScript and is the canonical way to discriminate the result from any wrapping union you build around it.
+
+The Python `BatchResult` mirrors the same shape: `.responses`, `.errors`, `.total_usage`, `.total_cost`, `.success_count`, `.failure_count`, plus `__len__` so `len(result)` returns the total request count.
+
 ## Choosing a concurrency level
 
 - `0` (unlimited) is fine for fast providers with generous rate limits and small batches (under 100 requests).

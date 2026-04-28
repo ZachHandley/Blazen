@@ -248,7 +248,7 @@ class AppState {
 
 ## Streaming events
 
-In the WASM SDK, `ctx.writeEventToStream()` is a **no-op** -- it exists for API compatibility with the Node.js and Rust SDKs but does not emit events to an external stream. You can still use `wf.runStreaming()` to receive events routed via `ctx.sendEvent()`:
+In the WASM SDK, `ctx.writeEventToStream()` is a **no-op** -- it exists for API compatibility with the Node.js and Rust SDKs but does not emit events to an external stream. You can still use `Workflow.runStreaming()` to receive events routed via `ctx.sendEvent()`:
 
 ```typescript
 wf.addStep('process', ['blazen::StartEvent'], async (event, ctx) => {
@@ -258,10 +258,111 @@ wf.addStep('process', ['blazen::StartEvent'], async (event, ctx) => {
   return { type: 'blazen::StopEvent', result: { done: true } };
 });
 
+// Callback-style streaming: invoke the callback for every event the
+// workflow emits. The promise resolves with the final StopEvent payload.
 const result = await wf.runStreaming({}, (event) => {
-  console.log(`Progress: step ${event.step}`);
+  console.log(event.eventType, event);
 });
 ```
+
+`Workflow.runStreaming(input, callback)` is the callback-driven counterpart to the handler-based API below. The callback fires synchronously from the WASM event loop for each emitted event (start, custom, stop, input requests, errors). Use it when you do not need fine-grained control -- only observation.
+
+## Handler-based execution
+
+For workflows that need pause/resume, snapshotting, human-in-the-loop input, or external cancellation, use `Workflow.runWithHandler(input)`. It returns a `WorkflowHandler` immediately while the workflow runs in the background:
+
+```typescript
+const handler = await wf.runWithHandler({ url: 'https://example.com' });
+
+// Stream events through the handler instead of waiting for a final result.
+await handler.streamEvents((ev) => {
+  console.log(ev.eventType);
+});
+```
+
+### Human-in-the-loop input
+
+Steps can request input from the host by emitting an `InputRequested` event. The handler's `respondToInput(requestId, response)` method delivers the answer back to the paused step:
+
+```typescript
+const handler = await wf.runWithHandler(input);
+
+await handler.streamEvents((ev) => {
+  if (ev.eventType === 'InputRequested') {
+    // Reply to the specific request by id. The step's awaiter resumes
+    // with the supplied response value.
+    handler.respondToInput(ev.requestId, 'answer');
+  }
+});
+```
+
+### Snapshot, pause, and resume
+
+`handler.snapshot()` captures the current workflow state (queued events, context state, step progress) without halting execution. To pause and later resume in the same process, call `handler.resumeInPlace()` after the workflow has paused:
+
+```typescript
+const handler = await wf.runWithHandler(input);
+
+// Capture state mid-run without affecting execution.
+const snap = await handler.snapshot();
+
+// ...later, after the workflow has paused itself...
+await handler.resumeInPlace();
+```
+
+To cancel a run outright, call `handler.abort()`. Any in-flight step handlers will see the cancellation propagate as the next event-loop tick.
+
+### WorkflowHandler method summary
+
+| Method | Description |
+|---|---|
+| `handler.streamEvents(callback)` | Callback-style event stream covering all emitted events |
+| `handler.respondToInput(requestId, response)` | Answer a HITL `InputRequested` event |
+| `handler.snapshot()` | Capture serializable workflow state without pausing |
+| `handler.resumeInPlace()` | Resume a paused workflow in the current process |
+| `handler.abort()` | Cancel the running workflow |
+
+## Session pause policy
+
+By default, a workflow's `ctx.session` map is cleared whenever the workflow pauses, since live JS references generally cannot survive a snapshot/resume boundary. If your steps store handles that remain valid across pauses (e.g. a long-lived database client owned by the host), opt into preservation with the session pause policy:
+
+```typescript
+// On the builder before constructing the workflow:
+const workflow = builder.setSessionPausePolicy('pause').build();
+
+// Or directly on an already-built workflow:
+wf.setSessionPausePolicy('continue');
+```
+
+Accepted values:
+
+- `"continue"` (default) -- session-ref state is dropped on pause. Safe; matches snapshot semantics.
+- `"pause"` -- session-ref state is preserved across pauses, surviving until the workflow resumes in the same process.
+
+Both `Workflow.setSessionPausePolicy(policy)` and `WorkflowBuilder.setSessionPausePolicy(policy)` accept the same policy strings, so you can configure the behavior at whichever construction stage is convenient.
+
+## Resuming from a serialized snapshot
+
+`handler.snapshot()` returns a structure that can be persisted (e.g. to KV, IndexedDB, or a Durable Object). To bring it back to life in a fresh process, rebuild the workflow with `Workflow.fromBuilder(...)` and call `resumeWithSerializableRefs(snapshot, deserializers)`:
+
+```typescript
+// Persist the snapshot somewhere durable.
+const snap = await handler.snapshot();
+await kv.put('wf-snap', JSON.stringify(snap));
+
+// Later, in a new process or worker invocation:
+const restored = await Workflow.fromBuilder(builder).resumeWithSerializableRefs(
+  snap,
+  {
+    // Map session-ref type names to their deserializers. Each callback
+    // receives the bytes that were captured at snapshot time and must
+    // return the live JS value to reinstall into ctx.session.
+    MyType: (bytes) => myDeserialize(bytes),
+  },
+);
+```
+
+The `deserializers` map is keyed by the type tag recorded for each session entry at snapshot time. Any session-ref types you have registered as serializable must have a matching entry in the map -- unknown types are skipped and logged.
 
 ## Branching
 

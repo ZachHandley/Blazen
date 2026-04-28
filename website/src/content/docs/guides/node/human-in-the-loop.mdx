@@ -38,6 +38,38 @@ const result = await handler2.result();
 
 This lets you persist the snapshot to a database or message queue and pick the workflow back up in a separate process or after a deployment.
 
+## Responding to Input Requests
+
+When a step emits an `InputRequestEvent`, the workflow auto-pauses and surfaces the event on the handler's stream. Subscribe to it and call `handler.respondToInput(requestId, response)` to inject the answer; the workflow resumes with that value as the step result:
+
+```typescript
+const handler = await wf.runWithHandler(input);
+
+await handler.streamEvents((event) => {
+  if (event.type === "blazen::InputRequestEvent") {
+    const answer = await prompt(event.prompt);
+    handler.respondToInput(event.request_id, answer);
+  }
+});
+
+const result = await handler.result();
+```
+
+The streamed event uses serde's snake_case fields, so read `event.request_id`, `event.prompt`, and `event.metadata` directly off the object. The `requestId` you pass to `respondToInput` is the camelCase napi argument name, but the value itself is whatever string the step assigned to `request_id`.
+
+If you already constructed an `InputResponseEvent` object elsewhere, prefer `respondToInputTyped(event)` -- it accepts the typed `{ requestId, response }` shape and skips the per-field positional call:
+
+```typescript
+handler.respondToInputTyped({
+  requestId: event.request_id,
+  response: { approved: true, note: "looks good" },
+});
+```
+
+Both methods borrow the handler (they do **not** consume it), so you can answer multiple input requests over the lifetime of one workflow run before finally calling `handler.result()`.
+
+The same `respondToInput(requestId, response)` API is also exposed on `WasmWorkflowHandler` in the `blazen-wasm-sdk` package, so browser HITL flows use an identical pattern -- see the WASM workflows guide for the in-browser variant.
+
 :::caution[ctx.session and pause/resume]
 Values stored via `ctx.session.set(...)` are deliberately **excluded** from snapshots. Use `ctx.state.set(...)` for anything that must survive `pause()` / `resume()`, and `ctx.session.set(...)` for ephemeral values (request IDs, rate-limit counters, caches).
 

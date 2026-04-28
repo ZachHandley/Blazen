@@ -64,6 +64,31 @@ println!("{}", response.content.unwrap_or_default());
 
 `CompletionModel.mistralrs`, `CompletionModel.llamacpp`, and `CompletionModel.candle` all follow the same shape: required `model_id`, optional quantization and device hints, optional context length and cache directory.
 
+### Typed streaming chunks
+
+Streaming local completions yield named classes rather than anonymous objects, so editor autocomplete and type-checkers know exactly what fields are available.
+
+- **mistral.rs (un-prefixed)**: `ChatMessageInput`, `InferenceChunk`, `InferenceChunkStream`, `InferenceResult`, `InferenceUsage`.
+- **llama.cpp (`LlamaCpp` prefix)**: parallel surface -- `LlamaCppChatMessageInput`, `LlamaCppInferenceChunk`, `LlamaCppInferenceChunkStream`, `LlamaCppInferenceResult`, `LlamaCppInferenceUsage`.
+- **Candle**: `CandleInferenceResult` only -- single-shot, no streaming.
+
+```typescript
+const stream: InferenceChunkStream = await model.completeStream([
+  { role: "user", content: "Hello!" } satisfies ChatMessageInput,
+]);
+for await (const chunk of stream) {
+  process.stdout.write(chunk.content ?? "");
+}
+```
+
+Swap `InferenceChunkStream` for `LlamaCppInferenceChunkStream` when you build the model via `CompletionModel.llamacpp` -- the surface is identical, only the prefix changes.
+
+```python
+stream = await model.complete_stream([ChatMessage.user("Hello!")])
+async for chunk in stream:
+    print(chunk.content or "", end="")
+```
+
 ## Local embeddings
 
 ```python
@@ -91,6 +116,22 @@ const resp = await model.embed(["hello", "world"]);
 ```
 
 Blazen's embed backend runs through ONNX Runtime on glibc/mac/windows and pure-Rust tract on musl -- CPU-only, no GPU required, no Python ML runtime needed. Models cache locally after the first download.
+
+### Browser embeddings (WASM tract)
+
+In the browser there is no `hf-hub` and no filesystem cache, so `TractEmbedModel.create(modelUrl, tokenizerUrl, options)` fetches the ONNX weights and the `tokenizer.json` directly over HTTP via `web_sys::fetch`. Host the two files on any CDN (or your own origin with permissive CORS) and pass the URLs in:
+
+```typescript
+import { TractEmbedModel } from "@blazen/sdk";
+
+const model = await TractEmbedModel.create(
+  "https://example.com/all-MiniLM-L6-v2.onnx",
+  "https://example.com/tokenizer.json",
+);
+const result = await model.embed(["hello", "world"]);
+```
+
+Inference runs entirely on the main thread (or a Web Worker if you spawn one) using pure-Rust tract -- no WebGPU, no ONNX Runtime Web, no server round-trip.
 
 ## Local transcription (whisper.cpp)
 

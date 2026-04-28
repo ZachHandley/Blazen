@@ -325,6 +325,35 @@ class SqliteBackend(MemoryBackend):
 memory = Memory(EmbeddingModel.openai(), SqliteBackend("./memory.db"))
 ```
 
+## Custom progress callback
+
+`ProgressCallback` is the subclassable hook for download and load progress reporting -- model weight downloads, GGUF/safetensors loads, and any other long-running fetch path inside Blazen accept an instance and call its progress method as bytes arrive. The base class ships with a no-op default, so subclasses only need to override the one method they care about.
+
+```python
+from blazen import ProgressCallback
+
+class LoggingProgress(ProgressCallback):
+    def on_progress(self, downloaded: int, total: int | None) -> None:
+        if total:
+            pct = downloaded / total * 100
+            print(f"{pct:.1f}% ({downloaded}/{total})")
+```
+
+```typescript
+import { ProgressCallback } from "blazen";
+
+class LoggingProgress extends ProgressCallback {
+  override onProgress(downloaded: bigint, total?: bigint): void {
+    if (total) {
+      const pct = (Number(downloaded) / Number(total) * 100).toFixed(1);
+      console.log(`${pct}% (${downloaded}/${total})`);
+    }
+  }
+}
+```
+
+Pass the instance to any API that accepts a `ProgressCallback` -- most commonly the model-cache download paths driven by `ModelManager` and the local-inference loaders. The default `on_progress` / `onProgress` is a no-op, so subclasses only override the method (no `super().__init__(...)` arguments required) and the dispatcher takes care of the rest. `total` is `None` / `undefined` whenever the upstream source does not advertise a `Content-Length`, so always guard on it before computing a percentage.
+
 ## Integrating with retry, cache, and agents
 
 Subclassed `CompletionModel`s work with Blazen's workflow engine, `complete_batch`, streaming consumers, `ChatWindow`, and `Memory` out of the box. They also serve as the primary model inside an `Agent`.
