@@ -62,6 +62,7 @@ distributed = ["blazen-core/distributed", "blazen-peer/server", "blazen-peer/cli
 # Telemetry exporters
 otlp = ["blazen-telemetry/otlp"]
 prometheus = ["blazen-telemetry/prometheus"]
+langfuse = ["blazen-telemetry/langfuse"]
 
 [build-dependencies]
 napi-build = "2"

@@ -211,6 +211,10 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::PyVideoContent>()?;
     m.add_class::<types::PyFileContent>()?;
     m.add_class::<types::PyImageSource>()?;
+    // `MediaSource` is a type alias for `ImageSource` in the Rust crate
+    // (`pub type MediaSource = ImageSource;`). Surface the same alias to
+    // Python so `from blazen import MediaSource` works.
+    m.add("MediaSource", m.py().get_type::<types::PyImageSource>())?;
     m.add_class::<types::PyStreamChunk>()?;
     m.add_class::<types::PyStreamChunkEvent>()?;
     m.add_class::<types::PyStreamCompleteEvent>()?;
@@ -419,13 +423,34 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Local backend providers (feature-gated standalone wrappers).
     #[cfg(feature = "llamacpp")]
-    m.add_class::<providers::llamacpp::PyLlamaCppProvider>()?;
+    {
+        m.add_class::<providers::llamacpp::PyLlamaCppProvider>()?;
+        m.add_class::<providers::llamacpp::PyLlamaCppChatMessageInput>()?;
+        m.add_class::<providers::llamacpp::PyLlamaCppChatRole>()?;
+        m.add_class::<providers::llamacpp::PyLlamaCppInferenceChunk>()?;
+        m.add_class::<providers::llamacpp::PyLlamaCppInferenceChunkStream>()?;
+        m.add_class::<providers::llamacpp::PyLlamaCppInferenceResult>()?;
+        m.add_class::<providers::llamacpp::PyLlamaCppInferenceUsage>()?;
+    }
     #[cfg(feature = "candle-llm")]
     m.add_class::<providers::candle_llm::PyCandleLlmProvider>()?;
+    #[cfg(feature = "candle-llm")]
+    m.add_class::<providers::candle_llm::PyCandleInferenceResult>()?;
     #[cfg(feature = "candle-embed")]
     m.add_class::<providers::candle_embed::PyCandleEmbedModel>()?;
     #[cfg(feature = "mistralrs")]
-    m.add_class::<providers::mistralrs::PyMistralRsProvider>()?;
+    {
+        m.add_class::<providers::mistralrs::PyMistralRsProvider>()?;
+        m.add_class::<providers::mistralrs::PyChatMessageInput>()?;
+        m.add_class::<providers::mistralrs::PyChatRole>()?;
+        m.add_class::<providers::mistralrs::PyInferenceChunk>()?;
+        m.add_class::<providers::mistralrs::PyInferenceChunkStream>()?;
+        m.add_class::<providers::mistralrs::PyInferenceImage>()?;
+        m.add_class::<providers::mistralrs::PyInferenceImageSource>()?;
+        m.add_class::<providers::mistralrs::PyInferenceResult>()?;
+        m.add_class::<providers::mistralrs::PyInferenceToolCall>()?;
+        m.add_class::<providers::mistralrs::PyInferenceUsage>()?;
+    }
     #[cfg(feature = "whispercpp")]
     m.add_class::<providers::whispercpp::PyWhisperCppProvider>()?;
     #[cfg(feature = "piper")]
@@ -457,6 +482,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Model cache (HuggingFace Hub downloader / on-disk cache)
     m.add_class::<model_cache::PyModelCache>()?;
+    m.add_class::<model_cache::PyProgressCallback>()?;
     model_cache::register_exceptions(m)?;
 
     // Memory
@@ -511,6 +537,12 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Telemetry -- Prometheus exporter (feature-gated)
     #[cfg(feature = "prometheus")]
     m.add_function(wrap_pyfunction!(telemetry::prometheus::init_prometheus, m)?)?;
+
+    // Telemetry -- Langfuse exporter (feature-gated)
+    #[cfg(feature = "langfuse")]
+    m.add_class::<telemetry::langfuse::PyLangfuseConfig>()?;
+    #[cfg(feature = "langfuse")]
+    m.add_function(wrap_pyfunction!(telemetry::langfuse::init_langfuse, m)?)?;
 
     // Error exception types
     error::register_exceptions(m)?;

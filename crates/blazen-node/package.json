@@ -35,7 +35,8 @@
   ],
   "files": [
     "index.js",
-    "index.d.ts"
+    "index.d.ts",
+    "error-classes.js"
   ],
   "devDependencies": {
     "@napi-rs/cli": "^3.0.0",
@@ -45,8 +46,8 @@
     "node": ">= 18"
   },
   "scripts": {
-    "build": "napi build --release --platform --features local-all --js index.js",
-    "build:debug": "napi build --platform --features local-all --js index.js",
+    "build": "napi build --release --platform --features local-all,langfuse --js index.js && node scripts/post-build.mjs",
+    "build:debug": "napi build --platform --features local-all,langfuse --js index.js && node scripts/post-build.mjs",
     "test": "node --test ../../tests/node/test_workflow.mjs",
     "test:smoke": "node --test ../../tests/node/test_llm_smoke.mjs",
     "prepublishOnly": "napi prepublish -t npm --no-gh-release"

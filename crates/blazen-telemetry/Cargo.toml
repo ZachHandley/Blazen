@@ -27,15 +27,34 @@ futures-util = { workspace = true }
 # OTLP (feature-gated)
 opentelemetry = { version = "0.31", optional = true }
 opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"], optional = true }
-opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic"], optional = true }
+opentelemetry-otlp = { version = "0.31", default-features = false, optional = true }
+opentelemetry-http = { version = "0.31", default-features = false, optional = true }
 tracing-opentelemetry = { version = "0.32", optional = true }
+http = { version = "1.1", default-features = false, features = ["std"], optional = true }
+bytes = { workspace = true, optional = true }
 
 # Prometheus (feature-gated)
 metrics = { version = "0.24", optional = true, package = "metrics" }
 metrics-exporter-prometheus = { version = "0.18", features = ["http-listener"], optional = true }
 
-# Langfuse (feature-gated)
+# Reqwest is shared between langfuse (native-only) and the native otlp-http
+# transport client. On wasm32 we ship a `web_sys::fetch`-backed HttpClient
+# instead, so reqwest is not pulled into wasm builds via this crate.
 reqwest = { workspace = true, optional = true }
+
+# wasm32-only: web-sys + wasm-bindgen primitives for the fetch-backed
+# `HttpClient` implementation used by the OTLP HTTP exporter.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { version = "=0.2.118", optional = true }
+wasm-bindgen-futures = { version = "=0.4.68", optional = true }
+js-sys = { version = "=0.3.95", optional = true }
+web-sys = { version = "=0.3.95", optional = true, features = [
+    "Request",
+    "RequestInit",
+    "Response",
+    "Headers",
+    "Window",
+] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", default-features = false, features = ["rt", "rt-multi-thread", "time"] }
@@ -44,10 +63,32 @@ tokio = { version = "1", default-features = false, features = ["rt", "rt-multi-t
 default = ["spans"]
 spans = ["dep:blazen-llm"]
 history = []
-otlp = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-otlp", "dep:tracing-opentelemetry"]
+otlp = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-otlp", "opentelemetry-otlp/grpc-tonic", "opentelemetry-otlp/trace", "opentelemetry-otlp/internal-logs", "dep:tracing-opentelemetry"]
+# Note: `otlp-http` deliberately does NOT pull `opentelemetry-otlp/reqwest-blocking-client`
+# (or `reqwest-client`). On wasm32 those reqwest-backed `HttpClient`s are `!Send`,
+# which violates the trait's `Send + Sync` bound. Instead this crate provides its
+# own `HttpClient` impls: `ReqwestHttpClient` on native (thin wrapper around
+# `reqwest::Client`) and `WasmFetchHttpClient` on wasm32 (`web_sys::fetch`-backed).
+otlp-http = [
+    "dep:opentelemetry",
+    "dep:opentelemetry_sdk",
+    "dep:opentelemetry-otlp",
+    "dep:opentelemetry-http",
+    "opentelemetry-otlp/http-proto",
+    "opentelemetry-otlp/trace",
+    "opentelemetry-otlp/internal-logs",
+    "dep:tracing-opentelemetry",
+    "dep:reqwest",
+    "dep:http",
+    "dep:bytes",
+    "dep:wasm-bindgen",
+    "dep:wasm-bindgen-futures",
+    "dep:js-sys",
+    "dep:web-sys",
+]
 prometheus = ["dep:metrics", "dep:metrics-exporter-prometheus"]
 langfuse = ["dep:reqwest"]
-all = ["spans", "history", "otlp", "prometheus", "langfuse"]
+all = ["spans", "history", "otlp", "otlp-http", "prometheus", "langfuse"]
 
 [lints]
 workspace = true

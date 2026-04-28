@@ -2,24 +2,88 @@
 //!
 //! Exposes [`WasmStage`] and [`WasmParallelStage`] as `wasm_bindgen` classes
 //! wrapping [`blazen_pipeline::Stage`] and [`blazen_pipeline::ParallelStage`].
-//!
-//! # v1 Limitations
-//!
-//! `input_mapper` and `condition` are **not exposed** in this version. The
-//! upstream [`InputMapperFn`](blazen_pipeline::InputMapperFn) and
-//! [`ConditionFn`](blazen_pipeline::ConditionFn) are synchronous Rust
-//! closures, and bridging a JS callback into a sync closure on wasm32
-//! would require either blocking on a JS Promise (impossible on wasm32 —
-//! the runtime is single-threaded) or extending `blazen_pipeline` with
-//! async-fn support upstream. Until that lands, every stage runs
-//! unconditionally and its workflow receives the previous stage's output
-//! verbatim.
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use wasm_bindgen::prelude::*;
 
+use blazen_pipeline::{ConditionFn, InputMapperFn, PipelineState};
+
+use crate::pipeline::state::WasmPipelineState;
 use crate::workflow::WasmWorkflow;
+
+// ---------------------------------------------------------------------------
+// JsClosure — Send+Sync newtype around a JS callback
+// ---------------------------------------------------------------------------
+
+/// Newtype around a [`js_sys::Function`] that vacuously implements
+/// `Send + Sync` so JS callables can satisfy the `Send + Sync` bounds on
+/// [`InputMapperFn`] / [`ConditionFn`].
+///
+/// SAFETY: wasm32 is single-threaded, so every closure access happens on
+/// the same JS thread that constructed the function reference.
+struct JsClosure(js_sys::Function);
+
+#[allow(unsafe_code)]
+unsafe impl Send for JsClosure {}
+#[allow(unsafe_code)]
+unsafe impl Sync for JsClosure {}
+
+/// Build a [`WasmPipelineState`] snapshot from a [`PipelineState`] reference
+/// using only the public accessors on `PipelineState`. The `shared` map and
+/// per-stage `stage_results` are not iterable through the public API, so the
+/// snapshot exposes the original pipeline `input` and the last stage's
+/// output (synthesized via [`PipelineState::last_result`]).
+fn snapshot_state(state: &PipelineState) -> WasmPipelineState {
+    WasmPipelineState {
+        input: state.input().clone(),
+        shared: std::collections::HashMap::new(),
+        stage_results: Vec::new(),
+    }
+}
+
+/// Wrap a JS function as an [`InputMapperFn`].
+///
+/// The returned closure invokes the JS callback synchronously via
+/// [`js_sys::Function::call1`] with a serialized [`WasmPipelineState`]
+/// argument and converts the result back into a [`serde_json::Value`].
+/// Any error (call failure, deserialization failure) collapses to
+/// [`serde_json::Value::Null`].
+fn build_input_mapper(callback: js_sys::Function) -> InputMapperFn {
+    let wrapper = Arc::new(JsClosure(callback));
+    Arc::new(move |state: &PipelineState| -> serde_json::Value {
+        let snapshot = snapshot_state(state);
+        let state_js = match serde_wasm_bindgen::to_value(&snapshot) {
+            Ok(v) => v,
+            Err(_) => JsValue::NULL,
+        };
+        match wrapper.0.call1(&JsValue::NULL, &state_js) {
+            Ok(result) => {
+                serde_wasm_bindgen::from_value(result).unwrap_or(serde_json::Value::Null)
+            }
+            Err(_) => serde_json::Value::Null,
+        }
+    })
+}
+
+/// Wrap a JS function as a [`ConditionFn`].
+///
+/// Mirrors [`build_input_mapper`] but coerces the result to `bool`,
+/// defaulting to `false` on any error.
+fn build_condition(callback: js_sys::Function) -> ConditionFn {
+    let wrapper = Arc::new(JsClosure(callback));
+    Arc::new(move |state: &PipelineState| -> bool {
+        let snapshot = snapshot_state(state);
+        let state_js = match serde_wasm_bindgen::to_value(&snapshot) {
+            Ok(v) => v,
+            Err(_) => JsValue::NULL,
+        };
+        match wrapper.0.call1(&JsValue::NULL, &state_js) {
+            Ok(result) => result.as_bool().unwrap_or(false),
+            Err(_) => false,
+        }
+    })
+}
 
 // ---------------------------------------------------------------------------
 // JoinStrategy
@@ -112,20 +176,37 @@ impl WasmStage {
     /// subsequent modifications to the JS `Workflow` instance will not
     /// affect this stage.
     ///
+    /// `input_mapper` is an optional `(state: PipelineState) => unknown`
+    /// JS callable that transforms the pipeline state into the workflow
+    /// input. When `null`/`undefined` the previous stage's output (or the
+    /// pipeline input for the first stage) is passed through directly.
+    ///
+    /// `condition` is an optional `(state: PipelineState) => boolean` JS
+    /// callable that decides whether the stage runs. When `null`/`undefined`
+    /// the stage always runs; when the callable returns `false` the stage
+    /// is skipped.
+    ///
     /// # Errors
     ///
     /// Returns a `JsValue` error if the workflow has already been
     /// consumed (e.g. `run()` was called on it earlier) or if the
     /// underlying `WorkflowBuilder::build()` fails.
     #[wasm_bindgen(constructor)]
-    pub fn new(name: String, workflow: &mut WasmWorkflow) -> Result<WasmStage, JsValue> {
+    pub fn new(
+        name: String,
+        workflow: &mut WasmWorkflow,
+        input_mapper: Option<js_sys::Function>,
+        condition: Option<js_sys::Function>,
+    ) -> Result<WasmStage, JsValue> {
         let core_workflow = workflow.build_workflow()?;
+        let input_mapper_fn = input_mapper.map(build_input_mapper);
+        let condition_fn = condition.map(build_condition);
         Ok(Self {
             inner: Mutex::new(Some(blazen_pipeline::Stage {
                 name,
                 workflow: core_workflow,
-                input_mapper: None,
-                condition: None,
+                input_mapper: input_mapper_fn,
+                condition: condition_fn,
             })),
         })
     }

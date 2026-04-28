@@ -7,10 +7,11 @@
 
 use napi_derive::napi;
 
-use blazen_llm::batch::{BatchConfig, complete_batch as rust_complete_batch};
+use blazen_llm::batch::{
+    BatchConfig, BatchResult as RustBatchResult, complete_batch as rust_complete_batch,
+};
 use blazen_llm::types::CompletionRequest;
 
-use crate::error::llm_error_to_napi;
 use crate::generated::JsTokenUsage;
 use crate::providers::JsCompletionModel;
 use crate::types::{JsChatMessage, JsCompletionResponse, build_response};
@@ -86,18 +87,98 @@ impl JsBatchConfig {
 /// On success the `responses` entry is populated and the `errors` entry is
 /// `null`; on failure the `responses` entry is `null` and `errors` contains
 /// the error message.
-#[napi(object)]
+#[napi(js_name = "BatchResult")]
 pub struct JsBatchResult {
+    inner: RustBatchResult,
+    // Cached error strings, generated once at construction.
+    error_strings: Vec<Option<String>>,
+}
+
+#[napi]
+#[allow(clippy::must_use_candidate)]
+impl JsBatchResult {
     /// One response per input request. `null` for failed requests.
-    pub responses: Vec<Option<JsCompletionResponse>>,
+    #[napi(getter)]
+    pub fn responses(&self) -> Vec<Option<JsCompletionResponse>> {
+        self.inner
+            .responses
+            .iter()
+            .map(|r| r.as_ref().ok().cloned().map(build_response))
+            .collect()
+    }
+
     /// One error message per input request. `null` for successful requests.
-    pub errors: Vec<Option<String>>,
+    #[napi(getter)]
+    pub fn errors(&self) -> Vec<Option<String>> {
+        self.error_strings.clone()
+    }
+
     /// Aggregated token usage across all successful responses.
-    #[napi(js_name = "totalUsage")]
-    pub total_usage: Option<JsTokenUsage>,
+    #[napi(getter, js_name = "totalUsage")]
+    pub fn total_usage(&self) -> Option<JsTokenUsage> {
+        self.inner.total_usage.as_ref().map(|u| u.clone().into())
+    }
+
     /// Aggregated cost in USD across all successful responses.
-    #[napi(js_name = "totalCost")]
-    pub total_cost: Option<f64>,
+    #[napi(getter, js_name = "totalCost")]
+    pub fn total_cost(&self) -> Option<f64> {
+        self.inner.total_cost
+    }
+
+    /// Number of successful requests in the batch.
+    #[napi(getter, js_name = "successCount")]
+    pub fn success_count(&self) -> u32 {
+        self.inner
+            .responses
+            .iter()
+            .filter(|r| r.is_ok())
+            .count()
+            .try_into()
+            .unwrap_or(u32::MAX)
+    }
+
+    /// Number of failed requests in the batch.
+    #[napi(getter, js_name = "failureCount")]
+    pub fn failure_count(&self) -> u32 {
+        self.inner
+            .responses
+            .iter()
+            .filter(|r| r.is_err())
+            .count()
+            .try_into()
+            .unwrap_or(u32::MAX)
+    }
+
+    /// Total number of requests in the batch.
+    #[napi(getter)]
+    pub fn length(&self) -> u32 {
+        self.inner.responses.len().try_into().unwrap_or(u32::MAX)
+    }
+
+    /// Human-readable summary of the batch result.
+    #[napi(js_name = "toString")]
+    pub fn display_string(&self) -> String {
+        format!(
+            "BatchResult(length={}, successCount={}, totalCost={:?})",
+            self.length(),
+            self.success_count(),
+            self.inner.total_cost
+        )
+    }
+}
+
+impl JsBatchResult {
+    pub(crate) fn from_rust(inner: RustBatchResult) -> Self {
+        let error_strings = inner
+            .responses
+            .iter()
+            .map(|r| r.as_ref().err().map(ToString::to_string))
+            .collect();
+        Self {
+            inner,
+            error_strings,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -163,28 +244,7 @@ pub async fn complete_batch(
     })?;
     let result = rust_complete_batch(inner.as_ref(), requests, config).await;
 
-    let mut responses = Vec::with_capacity(result.responses.len());
-    let mut errors = Vec::with_capacity(result.responses.len());
-
-    for res in result.responses {
-        match res {
-            Ok(response) => {
-                responses.push(Some(build_response(response)));
-                errors.push(None);
-            }
-            Err(e) => {
-                responses.push(None);
-                errors.push(Some(llm_error_to_napi(e).to_string()));
-            }
-        }
-    }
-
-    Ok(JsBatchResult {
-        responses,
-        errors,
-        total_usage: result.total_usage.map(Into::into),
-        total_cost: result.total_cost,
-    })
+    Ok(JsBatchResult::from_rust(result))
 }
 
 /// Run a batch using a typed [`JsBatchConfig`] instance instead of an options
@@ -224,26 +284,5 @@ pub async fn complete_batch_config(
     })?;
     let result = rust_complete_batch(inner.as_ref(), requests, cfg).await;
 
-    let mut responses = Vec::with_capacity(result.responses.len());
-    let mut errors = Vec::with_capacity(result.responses.len());
-
-    for res in result.responses {
-        match res {
-            Ok(response) => {
-                responses.push(Some(build_response(response)));
-                errors.push(None);
-            }
-            Err(e) => {
-                responses.push(None);
-                errors.push(Some(llm_error_to_napi(e).to_string()));
-            }
-        }
-    }
-
-    Ok(JsBatchResult {
-        responses,
-        errors,
-        total_usage: result.total_usage.map(Into::into),
-        total_cost: result.total_cost,
-    })
+    Ok(JsBatchResult::from_rust(result))
 }

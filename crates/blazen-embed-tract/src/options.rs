@@ -64,12 +64,17 @@ pub(crate) struct ModelInfo {
     pub model_code: &'static str,
 
     /// Path to the primary ONNX file within the HF repo
-    /// (e.g. `"onnx/model.onnx"`).
+    /// (e.g. `"onnx/model.onnx"`). Only used by the native provider; on
+    /// wasm32 the caller passes a fully-resolved URL to `create()`, so this
+    /// field is unused on that target.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub model_file: &'static str,
 
     /// Sibling files that must be downloaded alongside `model_file`. Typically
     /// `onnx/model.onnx_data` for models too large to fit in a single
-    /// protobuf, or sparse tensor value files.
+    /// protobuf, or sparse tensor value files. Only used by the native
+    /// provider; see [`Self::model_file`] for why this is dead on wasm32.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub additional_files: &'static [&'static str],
 
     /// Output embedding dimensionality.

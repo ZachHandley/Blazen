@@ -5,20 +5,21 @@
 //!
 //! # Span mapping
 //!
-//! | Blazen span name  | Langfuse concept | Ingestion event type     |
-//! |--------------------|------------------|--------------------------|
-//! | `workflow.run`     | **Trace**        | `trace-create`           |
-//! | `workflow.step`    | **Span**         | `span-create`            |
-//! | `llm.complete`     | **Generation**   | `generation-create`      |
-//! | `pipeline.run`     | **Trace**        | `trace-create`           |
-//! | `pipeline.stage`   | **Span**         | `span-create`            |
+//! | Blazen span name        | Langfuse concept | Ingestion event type     |
+//! |-------------------------|------------------|--------------------------|
+//! | `workflow.run`          | **Trace**        | `trace-create`           |
+//! | `workflow.step`         | **Span**         | `span-create`            |
+//! | `llm.complete`          | **Generation**   | `generation-create`      |
+//! | `pipeline.run`          | **Trace**        | `trace-create`           |
+//! | `pipeline.stage`        | **Span**         | `span-create`            |
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::sync::Arc;
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
+use tokio::sync::mpsc;
 use tracing::Subscriber;
 use tracing::field::{Field, Visit};
 use tracing::span::{Attributes, Id};
@@ -26,6 +27,12 @@ use tracing_subscriber::Layer;
 use tracing_subscriber::layer::Context;
 use tracing_subscriber::registry::LookupSpan;
 use uuid::Uuid;
+
+use crate::error::TelemetryError;
+
+const DEFAULT_HOST: &str = "https://cloud.langfuse.com";
+const DEFAULT_BATCH_SIZE: usize = 100;
+const DEFAULT_FLUSH_INTERVAL_MS: u64 = 5000;
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -38,25 +45,60 @@ pub struct LangfuseConfig {
     pub public_key: String,
     /// Langfuse secret API key (used as Basic-auth password).
     pub secret_key: String,
-    /// Langfuse host URL (defaults to `https://cloud.langfuse.com`).
-    #[serde(default = "default_host")]
-    pub host: String,
+    /// Langfuse host URL. `None` resolves to `https://cloud.langfuse.com`.
+    #[serde(default)]
+    pub host: Option<String>,
     /// Maximum number of events buffered before an automatic flush.
     #[serde(default = "default_batch_size")]
     pub batch_size: usize,
-    /// How often the background task flushes buffered events.
-    #[serde(default = "default_flush_interval")]
-    pub flush_interval: Duration,
+    /// Background flush interval in milliseconds.
+    #[serde(default = "default_flush_interval_ms")]
+    pub flush_interval_ms: u64,
 }
 
-fn default_host() -> String {
-    "https://cloud.langfuse.com".into()
-}
 fn default_batch_size() -> usize {
-    10
+    DEFAULT_BATCH_SIZE
 }
-fn default_flush_interval() -> Duration {
-    Duration::from_secs(5)
+
+fn default_flush_interval_ms() -> u64 {
+    DEFAULT_FLUSH_INTERVAL_MS
+}
+
+impl LangfuseConfig {
+    /// Create a new config with the required public and secret keys, defaulting
+    /// host to `https://cloud.langfuse.com`, batch size to 100, and flush
+    /// interval to 5000 ms.
+    #[must_use]
+    pub fn new(public_key: impl Into<String>, secret_key: impl Into<String>) -> Self {
+        Self {
+            public_key: public_key.into(),
+            secret_key: secret_key.into(),
+            host: None,
+            batch_size: DEFAULT_BATCH_SIZE,
+            flush_interval_ms: DEFAULT_FLUSH_INTERVAL_MS,
+        }
+    }
+
+    /// Override the Langfuse host URL.
+    #[must_use]
+    pub fn with_host(mut self, host: impl Into<String>) -> Self {
+        self.host = Some(host.into());
+        self
+    }
+
+    /// Override the maximum batch size before an automatic flush.
+    #[must_use]
+    pub fn with_batch_size(mut self, batch_size: usize) -> Self {
+        self.batch_size = batch_size;
+        self
+    }
+
+    /// Override the background flush interval (in milliseconds).
+    #[must_use]
+    pub fn with_flush_interval_ms(mut self, flush_interval_ms: u64) -> Self {
+        self.flush_interval_ms = flush_interval_ms;
+        self
+    }
 }
 
 impl Default for LangfuseConfig {
@@ -64,9 +106,9 @@ impl Default for LangfuseConfig {
         Self {
             public_key: String::new(),
             secret_key: String::new(),
-            host: default_host(),
-            batch_size: default_batch_size(),
-            flush_interval: default_flush_interval(),
+            host: None,
+            batch_size: DEFAULT_BATCH_SIZE,
+            flush_interval_ms: DEFAULT_FLUSH_INTERVAL_MS,
         }
     }
 }
@@ -78,13 +120,10 @@ impl Default for LangfuseConfig {
 /// Data we stash in span extensions so we can read it back at close time.
 #[derive(Debug, Clone, Default)]
 struct SpanData {
-    /// The tracing span name (e.g. `workflow.run`, `llm.complete`).
     name: String,
-    /// Arbitrary key-value fields recorded on the span.
     fields: HashMap<String, serde_json::Value>,
-    /// When the span was opened (wall-clock).
     start_time: Option<chrono::DateTime<Utc>>,
-    /// Langfuse trace ID propagated from a parent `workflow.run` span.
+    /// Langfuse trace ID propagated from the root span.
     trace_id: Option<String>,
     /// The Langfuse ID assigned to this span's parent (for nesting).
     parent_langfuse_id: Option<String>,
@@ -132,47 +171,98 @@ impl Visit for FieldVisitor<'_> {
 }
 
 // ---------------------------------------------------------------------------
-// Shared buffer
+// Envelope channel
 // ---------------------------------------------------------------------------
 
-/// Thread-safe event buffer shared between the layer and the flush task.
-#[derive(Debug, Clone)]
-struct EventBuffer {
-    inner: Arc<Mutex<Vec<serde_json::Value>>>,
-}
+/// One ingestion event (already shaped per Langfuse v1.2 wire format) heading
+/// to the dispatcher task.
+type Envelope = serde_json::Value;
 
-impl EventBuffer {
-    fn new() -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(Vec::new())),
+// ---------------------------------------------------------------------------
+// Dispatcher
+// ---------------------------------------------------------------------------
+
+#[cfg(not(target_arch = "wasm32"))]
+fn spawn_dispatcher(
+    client: reqwest::Client,
+    host: String,
+    public_key: String,
+    secret_key: String,
+    batch_size: usize,
+    flush_interval_ms: u64,
+    mut rx: mpsc::UnboundedReceiver<Envelope>,
+) -> Result<(), TelemetryError> {
+    // `tokio::spawn` requires an active runtime; surface that as a typed error
+    // instead of panicking inside the binding boundaries.
+    let handle = tokio::runtime::Handle::try_current()
+        .map_err(|e| TelemetryError::Langfuse(format!("no tokio runtime available: {e}")))?;
+
+    let interval = std::time::Duration::from_millis(flush_interval_ms.max(1));
+
+    handle.spawn(async move {
+        let buffer: Arc<Mutex<Vec<Envelope>>> =
+            Arc::new(Mutex::new(Vec::with_capacity(batch_size)));
+        let mut tick = tokio::time::interval(interval);
+        // Skip the immediate first tick.
+        tick.tick().await;
+
+        loop {
+            tokio::select! {
+                msg = rx.recv() => {
+                    if let Some(env) = msg {
+                        let mut buf = buffer.lock().await;
+                        buf.push(env);
+                        if buf.len() >= batch_size {
+                            let drained = std::mem::take(&mut *buf);
+                            drop(buf);
+                            send_batch(&client, &host, &public_key, &secret_key, drained).await;
+                        }
+                    } else {
+                        // Channel closed: drain and exit.
+                        let mut buf = buffer.lock().await;
+                        let drained = std::mem::take(&mut *buf);
+                        drop(buf);
+                        send_batch(&client, &host, &public_key, &secret_key, drained).await;
+                        break;
+                    }
+                }
+                _ = tick.tick() => {
+                    let mut buf = buffer.lock().await;
+                    if !buf.is_empty() {
+                        let drained = std::mem::take(&mut *buf);
+                        drop(buf);
+                        send_batch(&client, &host, &public_key, &secret_key, drained).await;
+                    }
+                }
+            }
         }
-    }
+    });
 
-    /// Push an event into the buffer and return the current buffer length.
-    fn push(&self, event: serde_json::Value) -> usize {
-        let mut buf = self.inner.lock().expect("langfuse buffer poisoned");
-        buf.push(event);
-        buf.len()
-    }
-
-    /// Drain all buffered events and return them.
-    fn drain(&self) -> Vec<serde_json::Value> {
-        let mut buf = self.inner.lock().expect("langfuse buffer poisoned");
-        std::mem::take(&mut *buf)
-    }
+    Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// Flush logic
-// ---------------------------------------------------------------------------
+#[cfg(target_arch = "wasm32")]
+fn spawn_dispatcher(
+    _client: reqwest::Client,
+    _host: String,
+    _public_key: String,
+    _secret_key: String,
+    _batch_size: usize,
+    _flush_interval_ms: u64,
+    _rx: mpsc::UnboundedReceiver<Envelope>,
+) -> Result<(), TelemetryError> {
+    // No background dispatcher on wasm32; events accumulate in the channel and
+    // are dropped when the receiver is dropped. Native targets are the primary
+    // surface for Langfuse export.
+    Ok(())
+}
 
-/// Send a batch of events to Langfuse.
-async fn flush_to_langfuse(
+async fn send_batch(
     client: &reqwest::Client,
     host: &str,
     public_key: &str,
     secret_key: &str,
-    events: Vec<serde_json::Value>,
+    events: Vec<Envelope>,
 ) {
     if events.is_empty() {
         return;
@@ -190,11 +280,7 @@ async fn flush_to_langfuse(
 
     match result {
         Ok(resp) if resp.status().is_success() => {
-            tracing::debug!(
-                count = events.len(),
-                "langfuse: flushed {} events",
-                events.len()
-            );
+            tracing::debug!(count = events.len(), "langfuse: flushed batch");
         }
         Ok(resp) => {
             let status = resp.status();
@@ -214,52 +300,6 @@ async fn flush_to_langfuse(
     }
 }
 
-/// Spawn a background tokio task that periodically flushes the buffer.
-fn spawn_flush_task(
-    client: reqwest::Client,
-    config: LangfuseConfig,
-    buffer: EventBuffer,
-) -> tokio::sync::mpsc::Sender<()> {
-    let (shutdown_tx, mut shutdown_rx) = tokio::sync::mpsc::channel::<()>(1);
-
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(config.flush_interval);
-        // First tick completes immediately; skip it.
-        interval.tick().await;
-
-        loop {
-            tokio::select! {
-                _ = interval.tick() => {
-                    let events = buffer.drain();
-                    flush_to_langfuse(
-                        &client,
-                        &config.host,
-                        &config.public_key,
-                        &config.secret_key,
-                        events,
-                    )
-                    .await;
-                }
-                _ = shutdown_rx.recv() => {
-                    // Final flush on shutdown.
-                    let events = buffer.drain();
-                    flush_to_langfuse(
-                        &client,
-                        &config.host,
-                        &config.public_key,
-                        &config.secret_key,
-                        events,
-                    )
-                    .await;
-                    break;
-                }
-            }
-        }
-    });
-
-    shutdown_tx
-}
-
 // ---------------------------------------------------------------------------
 // The Layer
 // ---------------------------------------------------------------------------
@@ -268,19 +308,10 @@ fn spawn_flush_task(
 /// spans to Langfuse as traces, spans, and generations respectively.
 ///
 /// Constructed via [`init_langfuse`].
+#[derive(Debug)]
 pub struct LangfuseLayer {
-    client: reqwest::Client,
-    config: LangfuseConfig,
-    buffer: EventBuffer,
-    /// Sends a shutdown signal to the periodic flush task.
-    _shutdown_tx: tokio::sync::mpsc::Sender<()>,
-}
-
-impl Drop for LangfuseLayer {
-    fn drop(&mut self) {
-        // The `_shutdown_tx` is dropped here, which closes the channel and
-        // causes the background task to perform its final flush and exit.
-    }
+    tx: mpsc::UnboundedSender<Envelope>,
+    batch_size: usize,
 }
 
 impl<S> Layer<S> for LangfuseLayer
@@ -288,7 +319,7 @@ where
     S: Subscriber + for<'lookup> LookupSpan<'lookup>,
 {
     fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
-        let span = ctx.span(id).expect("span not found in on_new_span");
+        let Some(span) = ctx.span(id) else { return };
         let span_name = attrs.metadata().name().to_owned();
 
         let mut data = SpanData {
@@ -297,26 +328,28 @@ where
             ..Default::default()
         };
 
-        // Record all fields from the span attributes.
         let mut visitor = FieldVisitor {
             fields: &mut data.fields,
         };
         attrs.record(&mut visitor);
 
-        // Propagate trace_id from parent spans.
+        // Inherit trace context from the parent (if any).
         if let Some(parent) = span.parent() {
             let extensions = parent.extensions();
             if let Some(parent_data) = extensions.get::<SpanData>() {
-                // If the parent is a workflow.run / pipeline.run, use its run_id
-                // as the Langfuse trace ID. Otherwise inherit the parent's trace_id.
-                if parent_data.name == "workflow.run" || parent_data.name == "pipeline.run" {
+                if is_root_span_name(&parent_data.name) {
                     data.trace_id = parent_data
                         .fields
                         .get("run_id")
                         .and_then(|v| v.as_str())
                         .map(ToOwned::to_owned)
-                        .or_else(|| Some(Uuid::new_v4().to_string()));
-                    // The parent's Langfuse ID is the trace_id itself for root traces.
+                        .or_else(|| {
+                            parent_data
+                                .fields
+                                .get("_langfuse_id")
+                                .and_then(|v| v.as_str())
+                                .map(ToOwned::to_owned)
+                        });
                     data.parent_langfuse_id.clone_from(&data.trace_id);
                 } else {
                     data.trace_id.clone_from(&parent_data.trace_id);
@@ -329,24 +362,22 @@ where
             }
         }
 
-        // Assign a Langfuse ID for this span so children can reference it.
-        let langfuse_id = match span_name.as_str() {
-            "workflow.run" | "pipeline.run" => {
-                // Use run_id / pipeline_name as the trace id if available.
-                data.fields
-                    .get("run_id")
-                    .and_then(|v| v.as_str())
-                    .map_or_else(|| Uuid::new_v4().to_string(), ToOwned::to_owned)
-            }
-            _ => Uuid::new_v4().to_string(),
+        // Assign this span's Langfuse ID.
+        let langfuse_id = if is_root_span_name(&span_name) {
+            data.fields
+                .get("run_id")
+                .and_then(|v| v.as_str())
+                .map_or_else(|| Uuid::new_v4().to_string(), ToOwned::to_owned)
+        } else {
+            Uuid::new_v4().to_string()
         };
         data.fields.insert(
             "_langfuse_id".to_owned(),
             serde_json::Value::String(langfuse_id),
         );
 
-        // For workflow.run, set trace_id to itself (it IS the trace).
-        if (data.name == "workflow.run" || data.name == "pipeline.run") && data.trace_id.is_none() {
+        // Root spans are their own trace.
+        if is_root_span_name(&data.name) && data.trace_id.is_none() {
             data.trace_id = data
                 .fields
                 .get("_langfuse_id")
@@ -359,16 +390,17 @@ where
     }
 
     fn on_record(&self, id: &Id, values: &tracing::span::Record<'_>, ctx: Context<'_, S>) {
-        if let Some(span) = ctx.span(id) {
-            let mut extensions = span.extensions_mut();
-            if let Some(data) = extensions.get_mut::<SpanData>() {
-                let mut visitor = FieldVisitor {
-                    fields: &mut data.fields,
-                };
-                values.record(&mut visitor);
-            }
+        let Some(span) = ctx.span(id) else { return };
+        let mut extensions = span.extensions_mut();
+        if let Some(data) = extensions.get_mut::<SpanData>() {
+            let mut visitor = FieldVisitor {
+                fields: &mut data.fields,
+            };
+            values.record(&mut visitor);
         }
     }
+
+    // TODO: accumulate `on_event` log lines into trailing span metadata.
 
     fn on_close(&self, id: Id, ctx: Context<'_, S>) {
         let Some(span) = ctx.span(&id) else { return };
@@ -403,25 +435,22 @@ where
         };
 
         if let Some(evt) = event {
-            let len = self.buffer.push(evt);
-            if len >= self.config.batch_size {
-                // Eagerly flush when we hit the batch size threshold.
-                let client = self.client.clone();
-                let host = self.config.host.clone();
-                let pk = self.config.public_key.clone();
-                let sk = self.config.secret_key.clone();
-                let buffer = self.buffer.clone();
-                tokio::spawn(async move {
-                    let events = buffer.drain();
-                    flush_to_langfuse(&client, &host, &pk, &sk, events).await;
-                });
-            }
+            // The receiver lives on a background task; a send error means the
+            // dispatcher already shut down and we silently drop the envelope.
+            let _ = self.tx.send(evt);
         }
+
+        // batch_size is enforced by the dispatcher; touch the field so the
+        // compiler keeps it (and so callers can introspect).
+        let _ = self.batch_size;
     }
 }
 
+fn is_root_span_name(name: &str) -> bool {
+    matches!(name, "workflow.run" | "pipeline.run")
+}
+
 impl LangfuseLayer {
-    /// Build a `trace-create` event for `workflow.run` / `pipeline.run` spans.
     fn build_trace_create(data: &SpanData, start_time: &str) -> serde_json::Value {
         let trace_id = data
             .fields
@@ -436,12 +465,7 @@ impl LangfuseLayer {
             .and_then(|v| v.as_str())
             .unwrap_or(&data.name);
 
-        let mut metadata = serde_json::Map::new();
-        for (k, v) in &data.fields {
-            if !k.starts_with('_') {
-                metadata.insert(k.clone(), v.clone());
-            }
-        }
+        let metadata = collect_metadata(&data.fields, &[]);
 
         serde_json::json!({
             "id": Uuid::new_v4().to_string(),
@@ -456,7 +480,6 @@ impl LangfuseLayer {
         })
     }
 
-    /// Build a `span-create` event for `workflow.step` / `pipeline.stage` spans.
     fn build_span_create(data: &SpanData, start_time: &str, end_time: &str) -> serde_json::Value {
         let langfuse_id = data
             .fields
@@ -473,18 +496,19 @@ impl LangfuseLayer {
             .and_then(|v| v.as_str())
             .unwrap_or(&data.name);
 
-        let status = data
+        let level = data
             .fields
             .get("otel.status_code")
             .and_then(|v| v.as_str())
-            .unwrap_or("UNSET");
+            .map_or("DEFAULT", |s| {
+                if s.eq_ignore_ascii_case("error") {
+                    "ERROR"
+                } else {
+                    "DEFAULT"
+                }
+            });
 
-        let mut metadata = serde_json::Map::new();
-        for (k, v) in &data.fields {
-            if !k.starts_with('_') {
-                metadata.insert(k.clone(), v.clone());
-            }
-        }
+        let metadata = collect_metadata(&data.fields, &[]);
 
         let mut body = serde_json::json!({
             "id": langfuse_id,
@@ -492,7 +516,7 @@ impl LangfuseLayer {
             "name": name,
             "startTime": start_time,
             "endTime": end_time,
-            "statusMessage": status,
+            "level": level,
             "metadata": metadata,
         });
 
@@ -508,7 +532,6 @@ impl LangfuseLayer {
         })
     }
 
-    /// Build a `generation-create` event for `llm.complete` / `llm.stream` spans.
     fn build_generation_create(
         data: &SpanData,
         start_time: &str,
@@ -534,7 +557,6 @@ impl LangfuseLayer {
             .and_then(|v| v.as_str())
             .map_or_else(|| model.to_owned(), |p| format!("{p}/{model}"));
 
-        // Build usage details from token fields.
         let mut usage = serde_json::Map::new();
         if let Some(v) = data.fields.get("prompt_tokens") {
             usage.insert("input".to_owned(), v.clone());
@@ -546,18 +568,16 @@ impl LangfuseLayer {
             usage.insert("total".to_owned(), v.clone());
         }
 
-        let mut metadata = serde_json::Map::new();
-        for (k, v) in &data.fields {
-            if !k.starts_with('_')
-                && k != "prompt_tokens"
-                && k != "completion_tokens"
-                && k != "total_tokens"
-                && k != "model"
-                && k != "provider"
-            {
-                metadata.insert(k.clone(), v.clone());
-            }
-        }
+        let metadata = collect_metadata(
+            &data.fields,
+            &[
+                "prompt_tokens",
+                "completion_tokens",
+                "total_tokens",
+                "model",
+                "provider",
+            ],
+        );
 
         let mut body = serde_json::json!({
             "id": langfuse_id,
@@ -570,7 +590,7 @@ impl LangfuseLayer {
         });
 
         if !usage.is_empty() {
-            body["usageDetails"] = serde_json::Value::Object(usage);
+            body["usage"] = serde_json::Value::Object(usage);
         }
 
         if let Some(parent_id) = &data.parent_langfuse_id {
@@ -586,6 +606,20 @@ impl LangfuseLayer {
     }
 }
 
+fn collect_metadata(
+    fields: &HashMap<String, serde_json::Value>,
+    excluded: &[&str],
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut metadata = serde_json::Map::new();
+    for (k, v) in fields {
+        if k.starts_with('_') || excluded.contains(&k.as_str()) {
+            continue;
+        }
+        metadata.insert(k.clone(), v.clone());
+    }
+    metadata
+}
+
 // ---------------------------------------------------------------------------
 // Public constructor
 // ---------------------------------------------------------------------------
@@ -593,41 +627,59 @@ impl LangfuseLayer {
 /// Initialize the Langfuse exporter layer.
 ///
 /// Returns a [`LangfuseLayer`] that should be composed into a
-/// `tracing_subscriber::Registry` via `.with()`.
+/// `tracing_subscriber::Registry` via `.with()`. A background tokio task is
+/// spawned (on non-wasm32 targets) to periodically flush buffered events to
+/// the Langfuse ingestion API.
 ///
-/// A background tokio task is spawned to periodically flush buffered events
-/// to the Langfuse ingestion API. The task is shut down when the layer is
-/// dropped (performing a final flush).
+/// # Errors
+///
+/// Returns [`TelemetryError::Langfuse`] when no tokio runtime is available
+/// to host the background dispatcher (native targets only), or when the
+/// underlying HTTP client cannot be constructed.
 ///
 /// # Example
 ///
 /// ```rust,no_run
-/// use blazen_telemetry::exporters::langfuse::{init_langfuse, LangfuseConfig};
+/// use blazen_telemetry::{LangfuseConfig, init_langfuse};
 /// use tracing_subscriber::prelude::*;
 ///
-/// let config = LangfuseConfig {
-///     public_key: "pk-lf-...".into(),
-///     secret_key: "sk-lf-...".into(),
-///     ..Default::default()
-/// };
+/// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+/// let config = LangfuseConfig::new("pk-lf-...", "sk-lf-...")
+///     .with_batch_size(50)
+///     .with_flush_interval_ms(2_500);
 ///
-/// tracing_subscriber::registry()
-///     .with(init_langfuse(config))
-///     .init();
+/// let layer = init_langfuse(config)?;
+/// tracing_subscriber::registry().with(layer).init();
+/// # Ok(())
+/// # }
 /// ```
-#[must_use]
-pub fn init_langfuse(config: LangfuseConfig) -> LangfuseLayer {
-    let client = reqwest::Client::new();
-    let buffer = EventBuffer::new();
+pub fn init_langfuse(config: LangfuseConfig) -> Result<LangfuseLayer, TelemetryError> {
+    let client = reqwest::Client::builder()
+        .build()
+        .map_err(|e| TelemetryError::Langfuse(format!("failed to build HTTP client: {e}")))?;
 
-    let shutdown_tx = spawn_flush_task(client.clone(), config.clone(), buffer.clone());
+    let host = config.host.unwrap_or_else(|| DEFAULT_HOST.to_owned());
+    let LangfuseConfig {
+        public_key,
+        secret_key,
+        batch_size,
+        flush_interval_ms,
+        ..
+    } = config;
 
-    LangfuseLayer {
+    let (tx, rx) = mpsc::unbounded_channel::<Envelope>();
+
+    spawn_dispatcher(
         client,
-        config,
-        buffer,
-        _shutdown_tx: shutdown_tx,
-    }
+        host,
+        public_key,
+        secret_key,
+        batch_size,
+        flush_interval_ms,
+        rx,
+    )?;
+
+    Ok(LangfuseLayer { tx, batch_size })
 }
 
 // ---------------------------------------------------------------------------
@@ -636,63 +688,69 @@ pub fn init_langfuse(config: LangfuseConfig) -> LangfuseLayer {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        DEFAULT_BATCH_SIZE, DEFAULT_FLUSH_INTERVAL_MS, DEFAULT_HOST, LangfuseConfig, init_langfuse,
+        is_root_span_name,
+    };
 
     #[test]
-    fn test_default_config() {
-        let config = LangfuseConfig::default();
-        assert_eq!(config.host, "https://cloud.langfuse.com");
-        assert_eq!(config.batch_size, 10);
-        assert_eq!(config.flush_interval, Duration::from_secs(5));
-        assert!(config.public_key.is_empty());
-        assert!(config.secret_key.is_empty());
+    fn default_config_uses_constants() {
+        let cfg = LangfuseConfig::default();
+        assert!(cfg.host.is_none());
+        assert_eq!(cfg.batch_size, DEFAULT_BATCH_SIZE);
+        assert_eq!(cfg.flush_interval_ms, DEFAULT_FLUSH_INTERVAL_MS);
+        let resolved = cfg.host.unwrap_or_else(|| DEFAULT_HOST.to_owned());
+        assert_eq!(resolved, DEFAULT_HOST);
     }
 
     #[test]
-    fn test_config_serde_roundtrip() {
-        let config = LangfuseConfig {
-            public_key: "pk-lf-test".into(),
-            secret_key: "sk-lf-test".into(),
-            host: "https://custom.langfuse.com".into(),
-            batch_size: 20,
-            flush_interval: Duration::from_secs(10),
-        };
-        let json = serde_json::to_string(&config).unwrap();
-        let deserialized: LangfuseConfig = serde_json::from_str(&json).unwrap();
-        assert_eq!(deserialized.public_key, "pk-lf-test");
-        assert_eq!(deserialized.secret_key, "sk-lf-test");
-        assert_eq!(deserialized.host, "https://custom.langfuse.com");
-        assert_eq!(deserialized.batch_size, 20);
+    fn builder_chains() {
+        let cfg = LangfuseConfig::new("pk", "sk")
+            .with_host("https://eu.langfuse.com")
+            .with_batch_size(25)
+            .with_flush_interval_ms(1_000);
+        assert_eq!(cfg.public_key, "pk");
+        assert_eq!(cfg.secret_key, "sk");
+        assert_eq!(cfg.host.as_deref(), Some("https://eu.langfuse.com"));
+        assert_eq!(cfg.batch_size, 25);
+        assert_eq!(cfg.flush_interval_ms, 1_000);
     }
 
     #[test]
-    fn test_event_buffer_push_and_drain() {
-        let buffer = EventBuffer::new();
-        assert_eq!(buffer.push(serde_json::json!({"test": 1})), 1);
-        assert_eq!(buffer.push(serde_json::json!({"test": 2})), 2);
-
-        let drained = buffer.drain();
-        assert_eq!(drained.len(), 2);
-
-        // Buffer should be empty after drain.
-        let drained_again = buffer.drain();
-        assert!(drained_again.is_empty());
+    fn config_serde_roundtrip() {
+        let cfg = LangfuseConfig::new("pk-lf-test", "sk-lf-test")
+            .with_host("https://custom.langfuse.com")
+            .with_batch_size(20)
+            .with_flush_interval_ms(7_500);
+        let json = serde_json::to_string(&cfg).expect("serialize");
+        let de: LangfuseConfig = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(de.public_key, "pk-lf-test");
+        assert_eq!(de.secret_key, "sk-lf-test");
+        assert_eq!(de.host.as_deref(), Some("https://custom.langfuse.com"));
+        assert_eq!(de.batch_size, 20);
+        assert_eq!(de.flush_interval_ms, 7_500);
     }
 
     #[test]
-    fn test_field_visitor_records_types() {
-        let mut fields = HashMap::new();
-        let visitor = FieldVisitor {
-            fields: &mut fields,
-        };
+    fn root_span_names() {
+        assert!(is_root_span_name("workflow.run"));
+        assert!(is_root_span_name("pipeline.run"));
+        assert!(!is_root_span_name("workflow.step"));
+        assert!(!is_root_span_name("llm.complete"));
+    }
 
-        // We can't easily construct Field instances outside of tracing internals,
-        // so we verify the visitor implements the right trait methods by checking
-        // the type implements Visit.
-        fn assert_visit<T: Visit>(_v: &T) {}
-        assert_visit(&visitor);
+    #[tokio::test]
+    async fn init_succeeds_in_runtime() {
+        let cfg = LangfuseConfig::new("pk", "sk").with_flush_interval_ms(60_000);
+        let layer = init_langfuse(cfg).expect("init succeeds inside a tokio runtime");
+        // Drop the layer; channel closes and dispatcher exits cleanly.
+        drop(layer);
+    }
 
-        // Just verify the HashMap starts empty.
-        assert!(visitor.fields.is_empty());
+    #[test]
+    fn init_fails_without_runtime() {
+        let cfg = LangfuseConfig::new("pk", "sk");
+        let err = init_langfuse(cfg).expect_err("must fail outside a tokio runtime");
+        assert!(format!("{err}").contains("langfuse"));
     }
 }

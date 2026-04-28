@@ -13,6 +13,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 blazen-core = { version = "0.0.0-dev", path = "../blazen-core", default-features = false }
+blazen-embed-tract = { version = "0.0.0-dev", path = "../blazen-embed-tract" }
 blazen-events = { version = "0.0.0-dev", path = "../blazen-events" }
 blazen-llm = { version = "0.0.0-dev", path = "../blazen-llm", default-features = false, features = ["tsify"] }
 blazen-memory = { version = "0.0.0-dev", path = "../blazen-memory", default-features = false }
@@ -20,7 +21,7 @@ elid = { version = "0.4.3", default-features = false, features = ["embeddings"] 
 blazen-prompts = { version = "0.0.0-dev", path = "../blazen-prompts", default-features = false }
 blazen-pipeline = { version = "0.0.0-dev", path = "../blazen-pipeline", default-features = false }
 blazen-manager = { version = "0.0.0-dev", path = "../blazen-manager", default-features = false }
-blazen-telemetry = { version = "0.0.0-dev", path = "../blazen-telemetry", default-features = false, features = ["history"] }
+blazen-telemetry = { version = "0.0.0-dev", path = "../blazen-telemetry", default-features = false, features = ["history", "otlp-http"] }
 tsify-next = { version = "0.5", features = ["js", "json"] }
 wasm-bindgen = "=0.2.118"
 wasm-bindgen-futures = "=0.4.68"

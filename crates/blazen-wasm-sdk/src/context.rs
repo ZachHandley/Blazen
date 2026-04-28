@@ -36,10 +36,15 @@
 //!   no longer required for correctness because the JSON serialiser handles
 //!   nested values natively.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::pin::Pin;
+use std::sync::{Arc, LazyLock, Mutex};
 use std::task::{Context as TaskContext, Poll};
 
+use blazen_core::session_ref::{
+    RegistryKey, SessionRefError, SessionRefSerializable,
+};
 use blazen_core::{BytesWrapper, Context, StateValue};
 use wasm_bindgen::prelude::*;
 
@@ -390,6 +395,114 @@ impl WasmContext {
     pub fn workflow_name(&self) -> String {
         self.workflow_name.clone()
     }
+
+    /// Store an opaque, user-serialized payload in the session-ref
+    /// registry under a fresh [`RegistryKey`].
+    ///
+    /// `typeName` is a stable identifier the caller chooses for this
+    /// payload (e.g. `"app::EmbeddingHandle"`). It is captured into
+    /// snapshot metadata along with the bytes when the workflow is
+    /// paused under
+    /// [`SessionPausePolicy::PickleOrSerialize`](blazen_core::session_ref::SessionPausePolicy).
+    ///
+    /// Returns the registry key as a string. JS callers use this key
+    /// with [`Self::get_session_ref_serializable`] to retrieve the
+    /// bytes within the same run or after a snapshot/resume cycle.
+    ///
+    /// **Note.** JS code must serialize the value itself (typically
+    /// into a `Uint8Array`) before calling this method, and must
+    /// deserialize the bytes returned by `getSessionRefSerializable`
+    /// back into a runtime object in user code. This mirrors the Node
+    /// binding's bytes-in / bytes-out contract.
+    ///
+    /// # Errors
+    ///
+    /// Returns a JS error if the registry insertion fails.
+    #[wasm_bindgen(js_name = "insertSessionRefSerializable")]
+    pub fn insert_session_ref_serializable(
+        &self,
+        type_name: String,
+        bytes: js_sys::Uint8Array,
+    ) -> Result<String, JsValue> {
+        let inner = self.inner.clone();
+        let payload = bytes.to_vec();
+        block_on_local(async move {
+            let registry = inner.session_refs_arc().await;
+            let serializable =
+                Arc::new(WasmSessionRefSerializable::new(&type_name, payload));
+            registry
+                .insert_serializable(serializable)
+                .await
+                .map(|k| k.to_string())
+                .map_err(|e| JsValue::from_str(&e.to_string()))
+        })
+    }
+
+    /// Retrieve a payload previously stored via
+    /// [`Self::insert_session_ref_serializable`].
+    ///
+    /// Returns `null` if the registry has no entry under `key`, or if
+    /// the entry exists but was inserted via the non-serializable
+    /// path (`set` / `setBytes` / language-specific live refs).
+    /// Otherwise returns `{ typeName, bytes }` matching the arguments
+    /// the caller originally passed in.
+    ///
+    /// # Errors
+    ///
+    /// Returns a JS error if `key` is not a valid registry key UUID
+    /// or if a foreign serializable adapter fails to serialize.
+    #[wasm_bindgen(js_name = "getSessionRefSerializable")]
+    pub fn get_session_ref_serializable(&self, key: String) -> Result<JsValue, JsValue> {
+        let parsed = RegistryKey::parse(&key)
+            .map_err(|e| JsValue::from_str(&format!("invalid registry key `{key}`: {e}")))?;
+        let inner = self.inner.clone();
+        block_on_local(async move {
+            let registry = inner.session_refs_arc().await;
+            let Some(serializable) = registry.get_serializable(parsed).await else {
+                return Ok(JsValue::NULL);
+            };
+
+            // Try to downcast to the concrete `WasmSessionRefSerializable`
+            // adapter so we can return the original user bytes (not the
+            // length-prefixed wire format produced by `blazen_serialize`).
+            let trait_ref: &dyn SessionRefSerializable = &*serializable;
+            let any_ref: &dyn Any = trait_ref;
+            if let Some(wasm_ser) = any_ref.downcast_ref::<WasmSessionRefSerializable>() {
+                return Ok(serializable_payload_to_js(
+                    wasm_ser.type_tag(),
+                    wasm_ser.user_bytes(),
+                ));
+            }
+
+            // Foreign serializable adapter (e.g. inserted via a
+            // different language binding sharing the same registry).
+            // Fall back to the wire-format bytes so the caller still
+            // has something to work with.
+            let wire_bytes = serializable
+                .blazen_serialize()
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            Ok(serializable_payload_to_js(
+                serializable.blazen_type_tag(),
+                &wire_bytes,
+            ))
+        })
+    }
+}
+
+/// Build a `{ typeName, bytes }` JS object from a type tag and a byte slice.
+///
+/// Used by [`WasmContext::get_session_ref_serializable`] to construct
+/// the return value handed back to JS callers.
+fn serializable_payload_to_js(type_name: &str, bytes: &[u8]) -> JsValue {
+    let obj = js_sys::Object::new();
+    let _ = js_sys::Reflect::set(
+        &obj,
+        &JsValue::from_str("typeName"),
+        &JsValue::from_str(type_name),
+    );
+    let buf = js_sys::Uint8Array::from(bytes);
+    let _ = js_sys::Reflect::set(&obj, &JsValue::from_str("bytes"), &buf.into());
+    obj.into()
 }
 
 // ---------------------------------------------------------------------------
@@ -614,3 +727,127 @@ impl WasmMetadataNamespace {
         Ok(())
     }
 }
+
+// ---------------------------------------------------------------------------
+// Session ref serializable: WASM adapter
+// ---------------------------------------------------------------------------
+
+/// TypeScript shape returned by [`WasmContext::get_session_ref_serializable`].
+///
+/// Mirrors the Node binding's `SerializableRefPayload` so JS code can
+/// share a structural type across runtimes.
+#[wasm_bindgen(typescript_custom_section)]
+const TS_SERIALIZABLE_REF_PAYLOAD: &str = r#"
+export interface SerializableRefPayload {
+  /** Stable identifier the JS caller passed to `insertSessionRefSerializable`. */
+  typeName: string;
+  /** Raw bytes the JS caller passed to `insertSessionRefSerializable`. */
+  bytes: Uint8Array;
+}
+"#;
+
+/// Process-global intern pool that turns dynamic JS-supplied type names
+/// into the `&'static str` values required by
+/// [`SessionRefSerializable::blazen_type_tag`].
+///
+/// Strings are leaked on first insertion and reused thereafter, so the
+/// total memory cost is bounded by the number of distinct serializable
+/// type names used by the host process — not by the number of live
+/// instances.
+static TYPE_TAG_POOL: LazyLock<Mutex<HashMap<String, &'static str>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Intern a string and return a `&'static str` reference. Subsequent
+/// calls with the same string return the same pointer.
+fn intern_type_tag(s: &str) -> &'static str {
+    let mut pool = TYPE_TAG_POOL.lock().expect("type tag intern pool poisoned");
+    if let Some(&existing) = pool.get(s) {
+        return existing;
+    }
+    let owned: String = s.to_owned();
+    let leaked: &'static str = Box::leak(owned.into_boxed_str());
+    pool.insert(leaked.to_owned(), leaked);
+    leaked
+}
+
+/// Adapter that wraps a serialized-bytes payload plus the type-tag
+/// string the JS caller supplied at insertion time, satisfying the
+/// [`SessionRefSerializable`] trait so the snapshot walker can capture
+/// it under the
+/// [`SessionPausePolicy::PickleOrSerialize`](blazen_core::session_ref::SessionPausePolicy)
+/// policy.
+///
+/// The serialized representation produced by [`Self::blazen_serialize`]
+/// is the user-supplied bytes prefixed with `[4-byte BE
+/// tag_len][tag_bytes]`, mirroring the Node binding's
+/// `NodeSessionRefSerializable`. The wire format is intentionally
+/// identical so snapshots written by one binding can be resumed by
+/// another.
+pub struct WasmSessionRefSerializable {
+    /// Interned type tag, kept as `&'static str` to satisfy
+    /// [`SessionRefSerializable::blazen_type_tag`].
+    type_tag: &'static str,
+    /// Raw bytes the JS caller passed to
+    /// `ctx.insertSessionRefSerializable(typeName, bytes)`.
+    user_bytes: Vec<u8>,
+}
+
+impl WasmSessionRefSerializable {
+    /// Build a new adapter from a JS-supplied type name and the bytes
+    /// the user already serialized.
+    #[must_use]
+    pub fn new(type_name: &str, serialized: Vec<u8>) -> Self {
+        let type_tag = intern_type_tag(type_name);
+        Self {
+            type_tag,
+            user_bytes: serialized,
+        }
+    }
+
+    /// Return the type tag without going through the trait method.
+    #[must_use]
+    pub fn type_tag(&self) -> &'static str {
+        self.type_tag
+    }
+
+    /// Return a slice over the user-supplied bytes (the original
+    /// payload, **not** the prefixed wire format).
+    #[must_use]
+    pub fn user_bytes(&self) -> &[u8] {
+        &self.user_bytes
+    }
+}
+
+impl SessionRefSerializable for WasmSessionRefSerializable {
+    fn blazen_serialize(&self) -> Result<Vec<u8>, SessionRefError> {
+        // Self-describing wire format identical to the Node adapter:
+        // [4-byte BE tag_len][tag bytes...][user bytes...]
+        let tag_bytes = self.type_tag.as_bytes();
+        let tag_len: u32 =
+            u32::try_from(tag_bytes.len()).map_err(|_| SessionRefError::SerializationFailed {
+                type_tag: self.type_tag.to_owned(),
+                source: Box::<dyn std::error::Error + Send + Sync>::from(
+                    "type tag longer than u32::MAX bytes",
+                ),
+            })?;
+        let mut out = Vec::with_capacity(4 + tag_bytes.len() + self.user_bytes.len());
+        out.extend_from_slice(&tag_len.to_be_bytes());
+        out.extend_from_slice(tag_bytes);
+        out.extend_from_slice(&self.user_bytes);
+        Ok(out)
+    }
+
+    fn blazen_type_tag(&self) -> &'static str {
+        self.type_tag
+    }
+}
+
+/// Compile-time assertion that [`WasmSessionRefSerializable`] satisfies
+/// the bounds required by `Arc<dyn SessionRefSerializable>` and by the
+/// `Arc<dyn Any + Send + Sync>` main registry map.
+const _ASSERT_BOUNDS: () = {
+    fn assert_send_sync_any<T: Any + Send + Sync>() {}
+    fn _bounds() {
+        assert_send_sync_any::<WasmSessionRefSerializable>();
+    }
+};

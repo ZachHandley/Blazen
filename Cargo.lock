@@ -649,6 +649,8 @@ name = "blazen-embed-tract"
 version = "0.0.0-dev"
 dependencies = [
  "blazen-model-cache",
+ "getrandom 0.2.17",
+ "js-sys",
  "ndarray 0.16.1",
  "serde",
  "serde_json",
@@ -657,6 +659,9 @@ dependencies = [
  "tokio",
  "tracing",
  "tract-onnx",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -995,11 +1000,15 @@ dependencies = [
  "async-trait",
  "blazen-events",
  "blazen-llm",
+ "bytes",
  "chrono",
  "futures-util",
+ "http",
+ "js-sys",
  "metrics",
  "metrics-exporter-prometheus",
  "opentelemetry",
+ "opentelemetry-http",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
  "reqwest 0.13.2",
@@ -1010,6 +1019,9 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber",
  "uuid 1.22.0",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -5235,7 +5247,6 @@ dependencies = [
  "bytes",
  "http",
  "opentelemetry",
- "reqwest 0.12.28",
 ]
 
 [[package]]
@@ -5250,7 +5261,6 @@ dependencies = [
  "opentelemetry-proto",
  "opentelemetry_sdk",
  "prost 0.14.3",
- "reqwest 0.12.28",
  "thiserror 2.0.18",
  "tokio",
  "tonic",

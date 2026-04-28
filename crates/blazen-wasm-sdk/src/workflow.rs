@@ -18,14 +18,18 @@
 //! shape is intentionally not exposed yet — the smoke-test JS surface
 //! returns the payload directly and that's what existing callers expect.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;
 
 use blazen_core::{
-    Context, StepFn, StepOutput, StepRegistration, Workflow, WorkflowBuilder, WorkflowError,
-    WorkflowSnapshot,
+    Context, SERIALIZED_SESSION_REFS_META_KEY, SessionPausePolicy, SessionRefDeserializerFn,
+    SessionRefError, SessionRefSerializable, StepFn, StepOutput, StepRegistration, Workflow,
+    WorkflowBuilder, WorkflowError, WorkflowSnapshot,
 };
 use blazen_events::{AnyEvent, DynamicEvent, StopEvent};
+use futures_util::StreamExt;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -68,6 +72,11 @@ pub struct WasmWorkflow {
     /// for the direct `new()` constructor) preserves the legacy behavior
     /// where every invocation runs without a timeout.
     timeout_user_configured: bool,
+    /// Session-ref pause policy. `None` leaves the engine default
+    /// (`PickleOrError`) in place; `Some(policy)` applies the chosen
+    /// policy on `run`/`runHandler`/`build_workflow`. Mirrors the
+    /// `setSessionPausePolicy` knob on the Node binding.
+    session_pause_policy: Option<SessionPausePolicy>,
 }
 
 /// A JS step registration that has not yet been adapted into a native
@@ -96,6 +105,7 @@ impl WasmWorkflow {
             builder: Some(WorkflowBuilder::new(name)),
             pending_steps: Vec::new(),
             timeout_user_configured: false,
+            session_pause_policy: None,
         }
     }
 
@@ -172,6 +182,31 @@ impl WasmWorkflow {
         Ok(())
     }
 
+    /// Configure how live session refs are treated when this workflow is
+    /// paused or snapshotted. Mirrors the Node binding's
+    /// `setSessionPausePolicy`.
+    ///
+    /// `policy` must be one of: `"pickle_or_error"` (default),
+    /// `"pickle_or_serialize"`, `"warn_drop"`, `"hard_error"`. The
+    /// `PascalCase` spellings used by the Node binding's enum
+    /// (`PickleOrError`, `PickleOrSerialize`, `WarnDrop`, `HardError`)
+    /// are also accepted.
+    ///
+    /// The policy is applied to the engine builder when the workflow is
+    /// dispatched via `run` / `runHandler` / `runStreaming` /
+    /// `runWithHandler` / `resumeFromSnapshot` /
+    /// `resumeWithSerializableRefs`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if `policy` is not one of the
+    /// supported strings.
+    #[wasm_bindgen(js_name = "setSessionPausePolicy")]
+    pub fn set_session_pause_policy(&mut self, policy: &str) -> Result<(), JsValue> {
+        self.session_pause_policy = Some(parse_session_pause_policy(policy)?);
+        Ok(())
+    }
+
     /// Execute the workflow with the given input data.
     ///
     /// Returns a `Promise` that resolves to the final result (the `result`
@@ -213,6 +248,10 @@ impl WasmWorkflow {
         // on a `WasmWorkflowBuilder` when the user opted into one.
         if !self.timeout_user_configured {
             builder = builder.no_timeout();
+        }
+
+        if let Some(policy) = self.session_pause_policy {
+            builder = builder.session_pause_policy(policy);
         }
 
         let workflow = builder
@@ -302,6 +341,10 @@ impl WasmWorkflow {
             builder = builder.no_timeout();
         }
 
+        if let Some(policy) = self.session_pause_policy {
+            builder = builder.session_pause_policy(policy);
+        }
+
         let workflow = builder
             .build()
             .map_err(|e| JsValue::from_str(&format!("workflow build failed: {e}")))?;
@@ -379,6 +422,307 @@ impl WasmWorkflow {
 
         Ok(crate::handler::WasmWorkflowHandler::new(handler))
     }
+
+    /// Run the workflow and forward each event published by the engine
+    /// to a JS callback as it occurs, resolving with the terminal
+    /// payload once the workflow completes.
+    ///
+    /// Mirrors the Node binding's `runStreaming(input, onEvent)`. The
+    /// callback is invoked with a single `{ event_type, data }` JS
+    /// object per event. Stream events are subscribed *before* the
+    /// engine begins dispatching, so no events are missed between
+    /// dispatch and subscription.
+    ///
+    /// Like `run`/`runHandler`, this method consumes the workflow's
+    /// internal builder; calling any `run*` method on the same
+    /// instance afterwards returns the standard "already run" error.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error under the same conditions as
+    /// [`run`](Self::run): the workflow was already run, the input is
+    /// not JSON-serialisable, the build failed, or the engine rejected
+    /// the initial dispatch. Errors raised synchronously by the JS
+    /// callback are swallowed so a misbehaving listener does not abort
+    /// the run; the run still resolves with the terminal payload.
+    #[wasm_bindgen(js_name = "runStreaming")]
+    pub async fn run_streaming(
+        &mut self,
+        input: JsValue,
+        callback: js_sys::Function,
+    ) -> Result<JsValue, JsValue> {
+        let mut builder = self
+            .builder
+            .take()
+            .ok_or_else(|| JsValue::from_str("Workflow already run; reuse not supported"))?;
+
+        let workflow_name = self.name.clone();
+
+        let pending = std::mem::take(&mut self.pending_steps);
+        for pending_step in pending {
+            let registration = step_registration_from_js(pending_step, workflow_name.clone());
+            builder = builder.step(registration);
+        }
+
+        if !self.timeout_user_configured {
+            builder = builder.no_timeout();
+        }
+        if let Some(policy) = self.session_pause_policy {
+            builder = builder.session_pause_policy(policy);
+        }
+
+        let workflow = builder
+            .build()
+            .map_err(|e| JsValue::from_str(&format!("workflow build failed: {e}")))?;
+
+        let input_json: serde_json::Value = if input.is_undefined() || input.is_null() {
+            serde_json::Value::Null
+        } else {
+            serde_wasm_bindgen::from_value(input)
+                .map_err(|e| JsValue::from_str(&format!("input must be JSON-serializable: {e}")))?
+        };
+
+        let handler = workflow
+            .run(input_json)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("workflow run failed: {e}")))?;
+
+        // Subscribe to the broadcast stream before kicking off the
+        // forwarding task so no events emitted between dispatch and
+        // subscription are dropped.
+        let mut stream = handler.stream_events();
+
+        // Spawn a single-threaded local task to drain the stream into
+        // the JS callback. wasm32 has only one OS thread, so
+        // `spawn_local` is the correct primitive here. The task
+        // captures the callback and runs concurrently with the result
+        // future below.
+        wasm_bindgen_futures::spawn_local(async move {
+            while let Some(event) = stream.next().await {
+                // Match the Node binding's stream-end sentinel so JS
+                // listeners stop receiving events at the same point
+                // across bindings.
+                if event.event_type_id() == "blazen::StreamEnd" {
+                    break;
+                }
+                let envelope = serde_json::json!({
+                    "event_type": event.event_type_id(),
+                    "data": event.to_json(),
+                });
+                let serializer =
+                    serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true);
+                let Ok(event_js) = envelope.serialize(&serializer) else {
+                    continue;
+                };
+                // Fire-and-forget. Errors raised synchronously by the
+                // JS callback are intentionally ignored so a buggy
+                // listener can't abort the run.
+                let _ = callback.call1(&JsValue::NULL, &event_js);
+            }
+        });
+
+        let result = handler
+            .result()
+            .await
+            .map_err(|e| JsValue::from_str(&format!("workflow result failed: {e}")))?;
+
+        let payload = if let Some(stop) = result.event.as_any().downcast_ref::<StopEvent>() {
+            stop.result.clone()
+        } else if let Some(dynamic) = result.event.as_any().downcast_ref::<DynamicEvent>() {
+            dynamic.data.clone()
+        } else {
+            result.event.to_json()
+        };
+
+        marshal_to_js(&payload)
+    }
+
+    /// Build and dispatch the workflow, returning the live
+    /// [`WasmWorkflowHandler`] without awaiting the terminal event.
+    ///
+    /// Functionally equivalent to [`run_handler`](Self::run_handler);
+    /// exposed under the JS name `runWithHandler` for naming parity
+    /// with the Node binding's `runWithHandler` entry point. Use
+    /// either method interchangeably.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error under the same conditions as
+    /// [`run`](Self::run): the workflow was already run, the input is
+    /// not JSON-serialisable, the build failed, or the engine
+    /// rejected the initial dispatch.
+    #[wasm_bindgen(js_name = "runWithHandler")]
+    pub async fn run_with_handler(
+        &mut self,
+        input: JsValue,
+    ) -> Result<crate::handler::WasmWorkflowHandler, JsValue> {
+        self.run_handler(input).await
+    }
+
+    /// Resume a workflow from a snapshot whose
+    /// `__blazen_serialized_session_refs` sidecar carries
+    /// JS-serialized session refs, optionally invoking a per-tag JS
+    /// deserializer callback on the captured bytes before resuming.
+    ///
+    /// `deserializers` is an object mapping `type_tag` strings to
+    /// `(bytes: Uint8Array) => unknown` JS functions. For every entry
+    /// in the snapshot's serialized-refs sidecar whose `type_tag`
+    /// appears in the object, the corresponding callback is invoked
+    /// synchronously with the captured bytes; the callback's return
+    /// value is ignored (callbacks should populate any application
+    /// state they need to expose to step handlers themselves). The
+    /// snapshot's bytes are then handed to the engine's
+    /// [`Workflow::resume_with_deserializers`] under a built-in
+    /// trampoline that re-wraps each payload as opaque bytes — so JS
+    /// callers can additionally retrieve them via
+    /// `ctx.getSessionRefSerializable(key)` from inside step handlers
+    /// after resume, mirroring the Node binding's resume path.
+    ///
+    /// Snapshots that do not contain any serialized session refs work
+    /// fine with the plain [`resume_from_snapshot`](Self::resume_from_snapshot)
+    /// entry point; this method is only required when the original
+    /// pause used [`SessionPausePolicy::PickleOrSerialize`].
+    ///
+    /// Like the other run/resume entry points, this method consumes
+    /// the workflow's internal builder; reuse returns an error.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if:
+    ///
+    /// - the workflow was already run or resumed,
+    /// - the snapshot can't be deserialised from JS,
+    /// - `deserializers` is provided but is not a JS object,
+    /// - a value in `deserializers` is not callable,
+    /// - the step set rejects rebuild (e.g. duplicate names),
+    /// - the engine fails to rehydrate the registry from the
+    ///   serialized-refs sidecar.
+    #[wasm_bindgen(js_name = "resumeWithSerializableRefs")]
+    pub async fn resume_with_serializable_refs(
+        &mut self,
+        snapshot_js: JsValue,
+        deserializers: JsValue,
+    ) -> Result<crate::handler::WasmWorkflowHandler, JsValue> {
+        let _builder = self
+            .builder
+            .take()
+            .ok_or_else(|| JsValue::from_str("Workflow already run; reuse not supported"))?;
+
+        let snapshot: WorkflowSnapshot = serde_wasm_bindgen::from_value(snapshot_js)
+            .map_err(|e| JsValue::from_str(&format!("snapshot deserialize failed: {e}")))?;
+
+        // Parse the user-provided JS deserializer map (if any) into a
+        // tag -> Function lookup. `undefined` / `null` is treated as
+        // an empty map so callers can omit the second argument from
+        // JS.
+        let user_callbacks: HashMap<String, js_sys::Function> = if deserializers.is_undefined()
+            || deserializers.is_null()
+        {
+            HashMap::new()
+        } else {
+            let obj = deserializers
+                .dyn_ref::<js_sys::Object>()
+                .ok_or_else(|| JsValue::from_str("deserializers must be a JS object"))?;
+            let mut map = HashMap::new();
+            let entries = js_sys::Object::entries(obj);
+            for i in 0..entries.length() {
+                let pair: js_sys::Array = entries.get(i).unchecked_into();
+                let key = pair
+                    .get(0)
+                    .as_string()
+                    .ok_or_else(|| JsValue::from_str("deserializer key must be a string"))?;
+                let value = pair.get(1);
+                let func: js_sys::Function = value.dyn_into().map_err(|_| {
+                    JsValue::from_str(&format!(
+                        "deserializer for '{key}' must be a function"
+                    ))
+                })?;
+                map.insert(key, func);
+            }
+            map
+        };
+
+        // Walk the snapshot's serialized-refs sidecar to discover
+        // every tag we need to register a trampoline for, and to
+        // eagerly invoke each user-provided JS deserializer with the
+        // raw bytes captured in the snapshot. This gives JS callers a
+        // chance to do app-level rehydration (e.g. populating an
+        // external cache) before the engine takes over.
+        let mut tags_seen: Vec<String> = Vec::new();
+        if let Some(serde_json::Value::Object(entries)) =
+            snapshot.metadata.get(SERIALIZED_SESSION_REFS_META_KEY)
+        {
+            for record in entries.values() {
+                let Some(type_tag) = record.get("type_tag").and_then(serde_json::Value::as_str)
+                else {
+                    continue;
+                };
+                if !tags_seen.iter().any(|t| t == type_tag) {
+                    tags_seen.push(type_tag.to_owned());
+                }
+                // If the JS caller supplied a deserializer for this
+                // tag, fire it with the captured bytes. The bytes
+                // live under either `bytes` (raw byte array) or
+                // `payload` (snake_case mirror of the trait wire
+                // format) depending on how the snapshot was
+                // produced; we accept both for robustness.
+                if let Some(callback) = user_callbacks.get(type_tag) {
+                    let raw = record
+                        .get("bytes")
+                        .or_else(|| record.get("payload"))
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null);
+                    let serializer =
+                        serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true);
+                    if let Ok(bytes_js) = raw.serialize(&serializer) {
+                        // Errors raised synchronously by the JS
+                        // callback are swallowed: the resume still
+                        // proceeds because the engine's own
+                        // trampoline re-wraps the bytes regardless,
+                        // and surfacing partial JS-side failures
+                        // here would make resume non-atomic.
+                        let _ = callback.call1(&JsValue::NULL, &bytes_js);
+                    }
+                }
+            }
+        }
+
+        // Register the built-in trampoline for every observed tag so
+        // the core resume path can repopulate the registry. This
+        // mirrors the Node binding's strategy: the trampoline wraps
+        // the raw bytes in an opaque `WasmSessionRefSerializable`
+        // adapter; JS step handlers can pull them back out via
+        // `ctx.getSessionRefSerializable(key)`.
+        let mut core_deserializers: HashMap<&'static str, SessionRefDeserializerFn> =
+            HashMap::new();
+        for tag in &tags_seen {
+            let interned: &'static str = Box::leak(tag.clone().into_boxed_str());
+            core_deserializers.insert(interned, WASM_SESSION_REF_DESERIALIZER);
+        }
+
+        let workflow_name = self.name.clone();
+
+        let pending = std::mem::take(&mut self.pending_steps);
+        let mut steps = Vec::with_capacity(pending.len());
+        for pending_step in pending {
+            steps.push(step_registration_from_js(pending_step, workflow_name.clone()));
+        }
+
+        let handler =
+            Workflow::resume_with_deserializers(snapshot, steps, core_deserializers, None)
+                .await
+                .map_err(|e| JsValue::from_str(&format!("workflow resume failed: {e}")))?;
+
+        // Hold the JS callback map alive for the duration of the
+        // resumed run so any captured closures stay valid. Stash it
+        // in a thread-local so the handler keeps it alive without
+        // requiring `WasmWorkflowHandler` to grow a new field.
+        ACTIVE_RESUME_CALLBACKS.with(|cell| {
+            cell.borrow_mut().push(user_callbacks);
+        });
+
+        Ok(crate::handler::WasmWorkflowHandler::new(handler))
+    }
 }
 
 impl WasmWorkflow {
@@ -412,6 +756,10 @@ impl WasmWorkflow {
 
         if !self.timeout_user_configured {
             builder = builder.no_timeout();
+        }
+
+        if let Some(policy) = self.session_pause_policy {
+            builder = builder.session_pause_policy(policy);
         }
 
         builder
@@ -450,6 +798,10 @@ pub struct WasmWorkflowBuilder {
     /// [`WorkflowBuilder::auto_publish_events`]). `None` leaves the engine
     /// default in place.
     auto_publish_events: Option<bool>,
+    /// Session-ref pause policy. Mirrors
+    /// [`WorkflowBuilder::session_pause_policy`]. `None` leaves the
+    /// engine default (`PickleOrError`) in place.
+    session_pause_policy: Option<SessionPausePolicy>,
 }
 
 impl WasmWorkflowBuilder {
@@ -460,6 +812,7 @@ impl WasmWorkflowBuilder {
             pending_steps: Vec::new(),
             timeout: None,
             auto_publish_events: None,
+            session_pause_policy: None,
         }
     }
 }
@@ -552,6 +905,29 @@ impl WasmWorkflowBuilder {
         self
     }
 
+    /// Configure how live session refs are treated when the workflow is
+    /// paused or snapshotted. Mirrors the Node binding's
+    /// `setSessionPausePolicy`.
+    ///
+    /// `policy` must be one of: `"pickle_or_error"` (default),
+    /// `"pickle_or_serialize"`, `"warn_drop"`, `"hard_error"`. The
+    /// `PickleOrError` / `PickleOrSerialize` / `WarnDrop` /
+    /// `HardError` `PascalCase` spellings used by the Node binding's
+    /// enum are also accepted.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if `policy` is not one of the
+    /// supported strings.
+    #[wasm_bindgen(js_name = "setSessionPausePolicy")]
+    pub fn set_session_pause_policy(
+        mut self,
+        policy: &str,
+    ) -> Result<WasmWorkflowBuilder, JsValue> {
+        self.session_pause_policy = Some(parse_session_pause_policy(policy)?);
+        Ok(self)
+    }
+
     /// Finalise the builder and return a [`WasmWorkflow`] ready to `run`.
     ///
     /// Applies the buffered configuration to a real
@@ -571,6 +947,7 @@ impl WasmWorkflowBuilder {
             pending_steps,
             timeout,
             auto_publish_events,
+            session_pause_policy,
         } = self;
 
         let timeout_user_configured = timeout.is_some();
@@ -587,12 +964,16 @@ impl WasmWorkflowBuilder {
         if let Some(enabled) = auto_publish_events {
             core_builder = core_builder.auto_publish_events(enabled);
         }
+        if let Some(policy) = session_pause_policy {
+            core_builder = core_builder.session_pause_policy(policy);
+        }
 
         Ok(WasmWorkflow {
             name,
             builder: Some(core_builder),
             pending_steps,
             timeout_user_configured,
+            session_pause_policy,
         })
     }
 }
@@ -673,6 +1054,31 @@ fn marshal_event_to_js(event: &dyn AnyEvent) -> Result<JsValue, WorkflowError> {
     let serializer = serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true);
     json.serialize(&serializer)
         .map_err(|e| WorkflowError::Context(format!("event marshal failed: {e}")))
+}
+
+/// Parse a JS-supplied policy string into a [`SessionPausePolicy`].
+///
+/// Accepts the canonical `snake_case` names matching the Rust serde
+/// representation (`pickle_or_error`, `pickle_or_serialize`, `warn_drop`,
+/// `hard_error`) as well as the `camelCase` / `PascalCase` aliases used
+/// by the Node binding (`PickleOrError`, `PickleOrSerialize`, `WarnDrop`,
+/// `HardError`) so JS callers can use whichever spelling matches the
+/// surrounding code style.
+fn parse_session_pause_policy(s: &str) -> Result<SessionPausePolicy, JsValue> {
+    match s {
+        "pickle_or_error" | "PickleOrError" | "pickleOrError" => {
+            Ok(SessionPausePolicy::PickleOrError)
+        }
+        "pickle_or_serialize" | "PickleOrSerialize" | "pickleOrSerialize" => {
+            Ok(SessionPausePolicy::PickleOrSerialize)
+        }
+        "warn_drop" | "WarnDrop" | "warnDrop" => Ok(SessionPausePolicy::WarnDrop),
+        "hard_error" | "HardError" | "hardError" => Ok(SessionPausePolicy::HardError),
+        other => Err(JsValue::from_str(&format!(
+            "unknown SessionPausePolicy '{other}' (expected one of: pickle_or_error, \
+             pickle_or_serialize, warn_drop, hard_error)"
+        ))),
+    }
 }
 
 /// Convert a buffered [`PendingStep`] into a real
@@ -827,3 +1233,120 @@ async fn dispatch_js_step(
     };
     Ok(StepOutput::Single(Box::new(dynamic)))
 }
+
+// ---------------------------------------------------------------------------
+// Serializable session-ref support for `resume_with_serializable_refs`
+// ---------------------------------------------------------------------------
+
+thread_local! {
+    /// JS-supplied deserializer callbacks pinned alive for the
+    /// lifetime of the wasm module. Each call to
+    /// [`WasmWorkflow::resume_with_serializable_refs`] appends its
+    /// callback map here so any JS closures captured by the user
+    /// remain valid across awaited engine progress. The vector is
+    /// never drained — the wasm module's lifetime bounds the total
+    /// size, and the cost (one `js_sys::Function` per registered tag
+    /// per resume) is proportional to the number of resumes performed
+    /// in a session.
+    static ACTIVE_RESUME_CALLBACKS: RefCell<Vec<HashMap<String, js_sys::Function>>> =
+        const { RefCell::new(Vec::new()) };
+}
+
+/// Adapter that satisfies [`SessionRefSerializable`] by holding the
+/// raw bytes captured in a snapshot's serialized-refs sidecar
+/// alongside the originating type tag.
+///
+/// Identical in shape to the Node binding's
+/// `NodeSessionRefSerializable`: the serialized wire format is
+/// `[4-byte BE tag_len][tag bytes][user bytes]` so the deserializer
+/// trampoline can recover both halves from the bytes alone.
+struct WasmSessionRefSerializable {
+    type_tag: &'static str,
+    user_bytes: Vec<u8>,
+}
+
+// SAFETY: wasm32 is single-threaded — `Send`/`Sync` are required by
+// the core `SessionRefRegistry` map's `Arc<dyn Any + Send + Sync>`
+// element type but are never actually exercised across threads on
+// this target.
+unsafe impl Send for WasmSessionRefSerializable {}
+// SAFETY: see comment on the `Send` impl above.
+unsafe impl Sync for WasmSessionRefSerializable {}
+
+impl SessionRefSerializable for WasmSessionRefSerializable {
+    fn blazen_serialize(&self) -> Result<Vec<u8>, SessionRefError> {
+        let tag_bytes = self.type_tag.as_bytes();
+        let tag_len: u32 = u32::try_from(tag_bytes.len()).map_err(|_| {
+            SessionRefError::SerializationFailed {
+                type_tag: self.type_tag.to_owned(),
+                source: Box::<dyn std::error::Error + Send + Sync>::from(
+                    "type tag longer than u32::MAX bytes",
+                ),
+            }
+        })?;
+        let mut out = Vec::with_capacity(4 + tag_bytes.len() + self.user_bytes.len());
+        out.extend_from_slice(&tag_len.to_be_bytes());
+        out.extend_from_slice(tag_bytes);
+        out.extend_from_slice(&self.user_bytes);
+        Ok(out)
+    }
+
+    fn blazen_type_tag(&self) -> &'static str {
+        self.type_tag
+    }
+}
+
+/// Parse the self-describing prefix produced by
+/// [`WasmSessionRefSerializable::blazen_serialize`] and return
+/// `(type_tag, user_bytes)` slices. Mirrors the Node binding's
+/// `split_prefix` helper so both bindings agree on the wire format.
+fn wasm_split_prefix(bytes: &[u8]) -> Result<(&str, &[u8]), SessionRefError> {
+    if bytes.len() < 4 {
+        return Err(SessionRefError::SerializationFailed {
+            type_tag: "<unknown>".to_owned(),
+            source: Box::<dyn std::error::Error + Send + Sync>::from(
+                "payload too short to contain type tag prefix",
+            ),
+        });
+    }
+    let mut tag_len_bytes = [0_u8; 4];
+    tag_len_bytes.copy_from_slice(&bytes[..4]);
+    let tag_len = u32::from_be_bytes(tag_len_bytes) as usize;
+    if bytes.len() < 4 + tag_len {
+        return Err(SessionRefError::SerializationFailed {
+            type_tag: "<unknown>".to_owned(),
+            source: Box::<dyn std::error::Error + Send + Sync>::from(
+                "payload shorter than declared type tag length",
+            ),
+        });
+    }
+    let tag = std::str::from_utf8(&bytes[4..4 + tag_len]).map_err(|e| {
+        SessionRefError::SerializationFailed {
+            type_tag: "<unknown>".to_owned(),
+            source: Box::new(e),
+        }
+    })?;
+    Ok((tag, &bytes[4 + tag_len..]))
+}
+
+/// Static-fn-pointer trampoline registered with the core resume
+/// path. Re-wraps the bytes captured in the snapshot's
+/// serialized-refs sidecar in a fresh
+/// [`WasmSessionRefSerializable`] so the engine can repopulate the
+/// session-ref registry; JS step handlers retrieve the raw bytes
+/// afterwards via `ctx.getSessionRefSerializable(key)`.
+fn wasm_session_ref_deserializer(
+    bytes: &[u8],
+) -> Result<Arc<dyn SessionRefSerializable>, SessionRefError> {
+    let (type_tag, user_bytes) = wasm_split_prefix(bytes)?;
+    let interned: &'static str = Box::leak(type_tag.to_owned().into_boxed_str());
+    Ok(Arc::new(WasmSessionRefSerializable {
+        type_tag: interned,
+        user_bytes: user_bytes.to_vec(),
+    }))
+}
+
+/// Static reference to [`wasm_session_ref_deserializer`] coerced to
+/// the core [`SessionRefDeserializerFn`] alias. Re-used by every tag
+/// observed in a `resumeWithSerializableRefs` call.
+const WASM_SESSION_REF_DESERIALIZER: SessionRefDeserializerFn = wasm_session_ref_deserializer;

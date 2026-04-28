@@ -7,6 +7,21 @@ export declare class ActiveWorkflowSnapshot {
 }
 export type JsActiveWorkflowSnapshot = ActiveWorkflowSnapshot
 
+/** The result of an agent run. */
+export declare class AgentResult {
+  /** The final completion response from the model. */
+  get response(): JsCompletionResponse
+  /** Full message history including all tool calls and results. */
+  get messages(): Array<any>
+  /** Number of tool-calling iterations that occurred. */
+  get iterations(): number
+  /** Aggregated cost across all iterations, if available. */
+  get totalCost(): number | null
+  /** String representation matching the Python `AgentResult.__repr__`. */
+  toString(): string
+}
+export type JsAgentResult = AgentResult
+
 /**
  * An Anthropic chat completion provider.
  *
@@ -110,6 +125,34 @@ export declare class BatchConfig {
   get concurrency(): number
 }
 export type JsBatchConfig = BatchConfig
+
+/**
+ * The result of a batch completion run.
+ *
+ * Each index corresponds to the input request at the same position.
+ * On success the `responses` entry is populated and the `errors` entry is
+ * `null`; on failure the `responses` entry is `null` and `errors` contains
+ * the error message.
+ */
+export declare class BatchResult {
+  /** One response per input request. `null` for failed requests. */
+  get responses(): Array<JsCompletionResponse | undefined | null>
+  /** One error message per input request. `null` for successful requests. */
+  get errors(): Array<string | undefined | null>
+  /** Aggregated token usage across all successful responses. */
+  get totalUsage(): JsTokenUsage | null
+  /** Aggregated cost in USD across all successful responses. */
+  get totalCost(): number | null
+  /** Number of successful requests in the batch. */
+  get successCount(): number
+  /** Number of failed requests in the batch. */
+  get failureCount(): number
+  /** Total number of requests in the batch. */
+  get length(): number
+  /** Human-readable summary of the batch result. */
+  toString(): string
+}
+export type JsBatchResult = BatchResult
 
 /**
  * An AWS Bedrock chat completion provider.
@@ -331,6 +374,37 @@ export declare class CandleEmbedProvider {
 export type JsCandleEmbedProvider = CandleEmbedProvider
 
 /**
+ * Result from a non-streaming candle inference call.
+ *
+ * Mirrors the underlying `blazen_llm::CandleInferenceResult` struct and
+ * exposes the generated text alongside token-count and timing metadata.
+ *
+ * ```javascript
+ * const result = new CandleInferenceResult("hello", 12, 4, 0.42);
+ * console.log(result.content, result.promptTokens, result.completionTokens);
+ * ```
+ */
+export declare class CandleInferenceResult {
+  /**
+   * Construct a new `CandleInferenceResult`.
+   *
+   * `promptTokens` and `completionTokens` are token counts; pass `0`
+   * when unknown. `totalTimeSecs` is the wall-clock duration of the
+   * inference in seconds.
+   */
+  constructor(content: string, promptTokens: number, completionTokens: number, totalTimeSecs: number)
+  /** The generated text content. */
+  get content(): string
+  /** Number of prompt tokens consumed. */
+  get promptTokens(): number
+  /** Number of completion tokens generated. */
+  get completionTokens(): number
+  /** Wall-clock time for the inference in seconds. */
+  get totalTimeSecs(): number
+}
+export type JsCandleInferenceResult = CandleInferenceResult
+
+/**
  * A local candle LLM provider with completion and streaming.
  *
  * ```javascript
@@ -431,6 +505,26 @@ export declare class ChatMessage {
   get name(): string | null
 }
 export type JsChatMessage = ChatMessage
+
+/**
+ * A single chat message for the local mistral.rs / llama.cpp inference path,
+ * optionally carrying image attachments for vision-capable models.
+ */
+export declare class ChatMessageInput {
+  /** Build a chat message with text and optional image attachments. */
+  constructor(role: ChatRole, text: string, images?: Array<InferenceImage> | undefined | null)
+  /** Build a text-only chat message. */
+  static fromText(role: ChatRole, text: string): ChatMessageInput
+  /** The role of the message author. */
+  get role(): ChatRole
+  /** The textual content of the message. */
+  get text(): string
+  /** The image attachments on this message. */
+  get images(): Array<InferenceImage>
+  /** Whether this message has any image attachments. */
+  get hasImages(): boolean
+}
+export type JsChatMessageInput = ChatMessageInput
 
 /**
  * A token-windowed conversation memory.
@@ -1720,6 +1814,126 @@ export declare class ImageProvider {
 }
 export type JsImageProvider = ImageProvider
 
+/** A single chunk from a streaming local inference call. */
+export declare class InferenceChunk {
+  /** Incremental text content for this chunk, if any. */
+  get delta(): string | null
+  /** Incremental reasoning content for this chunk, if any. */
+  get reasoningDelta(): string | null
+  /** Tool calls completed in this chunk. */
+  get toolCalls(): Array<InferenceToolCall>
+  /** Present in the final chunk when generation stops. */
+  get finishReason(): string | null
+}
+export type JsInferenceChunk = InferenceChunk
+
+/**
+ * Async stream of [`InferenceChunk`] values.
+ *
+ * Drive the stream by repeatedly awaiting [`InferenceChunkStream.next`].
+ * Each call returns the next chunk, or `null` once the stream is exhausted.
+ * Errors from the underlying engine are surfaced as awaited rejections.
+ *
+ * ```javascript
+ * const stream = await provider.inferStream(messages);
+ * while (true) {
+ *   const chunk = await stream.next();
+ *   if (chunk === null) break;
+ *   process.stdout.write(chunk.delta ?? "");
+ * }
+ * ```
+ */
+export declare class InferenceChunkStream {
+  /**
+   * Pull the next chunk from the stream. Returns `null` once the stream
+   * is exhausted. Any engine error is raised as a thrown exception.
+   *
+   * # Errors
+   *
+   * Returns a JS error if the underlying mistral.rs engine reports an
+   * inference failure on this chunk.
+   */
+  next(): Promise<InferenceChunk | null>
+}
+export type JsInferenceChunkStream = InferenceChunkStream
+
+/** An image payload attached to a chat message. */
+export declare class InferenceImage {
+  /** Build an image from raw encoded bytes (PNG/JPEG/WebP). */
+  static fromBytes(bytes: Buffer): InferenceImage
+  /** Build an image from a local file path. */
+  static fromPath(path: string): InferenceImage
+  /** Build an image from an existing [`InferenceImageSource`]. */
+  static fromSource(source: InferenceImageSource): InferenceImage
+  /** The image source. */
+  get source(): InferenceImageSource
+}
+export type JsInferenceImage = InferenceImage
+
+/**
+ * Source of an image payload attached to a chat message.
+ *
+ * Construct with [`InferenceImageSource.bytes`] or
+ * [`InferenceImageSource.path`]. Inspect with the `kind` getter
+ * (`"bytes"` or `"path"`) and the appropriate value getter.
+ */
+export declare class InferenceImageSource {
+  /** Build an image source from raw encoded image bytes (PNG/JPEG/WebP). */
+  static bytes(data: Buffer): InferenceImageSource
+  /** Build an image source from a local file path. */
+  static path(path: string): InferenceImageSource
+  /** Discriminant: `"bytes"` or `"path"`. */
+  get kind(): string
+  /** The raw image bytes, if this source is a `bytes` variant. */
+  get data(): Buffer | null
+  /** The file path, if this source is a `path` variant. */
+  get filePath(): string | null
+}
+export type JsInferenceImageSource = InferenceImageSource
+
+/** Result of a non-streaming local inference call. */
+export declare class InferenceResult {
+  /** The generated text content, if any. */
+  get content(): string | null
+  /** Reasoning / chain-of-thought content, if the model exposes it. */
+  get reasoningContent(): string | null
+  /** Tool calls requested by the model. */
+  get toolCalls(): Array<InferenceToolCall>
+  /** Why the model stopped generating. */
+  get finishReason(): string
+  /** The model identifier that produced this result. */
+  get model(): string
+  /** Token usage statistics for this call. */
+  get usage(): InferenceUsage
+}
+export type JsInferenceResult = InferenceResult
+
+/** A tool call requested by the model during local inference. */
+export declare class InferenceToolCall {
+  /** Build a tool call explicitly. Mainly useful for tests / replays. */
+  constructor(id: string, name: string, arguments: string)
+  /** Provider-assigned call identifier. */
+  get id(): string
+  /** Function name to invoke. */
+  get name(): string
+  /** JSON-encoded arguments string. */
+  get arguments(): string
+}
+export type JsInferenceToolCall = InferenceToolCall
+
+/** Token usage statistics from a local inference call. */
+export declare class InferenceUsage {
+  /** Number of prompt tokens consumed. */
+  get promptTokens(): number
+  /** Number of completion tokens generated. */
+  get completionTokens(): number
+  /** Total tokens (prompt + completion). */
+  get totalTokens(): number
+  /** Total wall-clock inference time in seconds. */
+  get totalTimeSec(): number
+}
+export type JsInferenceUsage = InferenceUsage
+
 /**
  * An in-memory backend for the memory store.
  *
@@ -1801,6 +2015,125 @@ export declare class JsonlBackend {
   static create(path: string): Promise<JsonlBackend>
 }
 export type JsJsonlBackend = JsonlBackend
+
+/**
+ * Configuration for the Langfuse exporter.
+ *
+ * Wraps [`blazen_telemetry::LangfuseConfig`]. Construct with the public and
+ * secret API keys; optionally override host, batch size, and flush interval.
+ */
+export declare class LangfuseConfig {
+  /**
+   * Create a new Langfuse configuration.
+   *
+   * `public_key` / `secret_key` are required. `host` defaults to
+   * `https://cloud.langfuse.com`. `batch_size` defaults to 100 events.
+   * `flush_interval_ms` defaults to 5000 ms.
+   */
+  constructor(publicKey: string, secretKey: string, host?: string | undefined | null, batchSize?: number | undefined | null, flushIntervalMs?: number | undefined | null)
+  /** The Langfuse public API key. */
+  get publicKey(): string
+  /** The Langfuse secret API key. */
+  get secretKey(): string
+  /** The configured Langfuse host URL, or `null` when defaulted. */
+  get host(): string | null
+  /**
+   * Maximum number of events buffered before an automatic flush.
+   * Clamped to `u32::MAX` if the underlying `usize` exceeds it.
+   */
+  get batchSize(): number
+  /**
+   * Background flush interval in milliseconds.
+   * Clamped to `u32::MAX` if the underlying `u64` exceeds it.
+   */
+  get flushIntervalMs(): number
+}
+export type JsLangfuseConfig = LangfuseConfig
+
+/**
+ * A single chat message for input to the llama.cpp provider.
+ *
+ * ```javascript
+ * const msg = new LlamaCppChatMessageInput(LlamaCppChatRole.User, "Hello");
+ * ```
+ */
+export declare class LlamaCppChatMessageInput {
+  /** Build a chat message from a role and text body. */
+  constructor(role: LlamaCppChatRole, text: string)
+  /** Who produced this message. */
+  get role(): LlamaCppChatRole
+  /** The textual content of the message. */
+  get text(): string
+}
+export type JsLlamaCppChatMessageInput = LlamaCppChatMessageInput
+
+/** A single chunk from a streaming llama.cpp inference call. */
+export declare class LlamaCppInferenceChunk {
+  /** Incremental text content, if any. */
+  get delta(): string | null
+  /**
+   * Present in the final chunk when generation stops (e.g. `"stop"`,
+   * `"length"`).
+   */
+  get finishReason(): string | null
+}
+export type JsLlamaCppInferenceChunk = LlamaCppInferenceChunk
+
+/**
+ * An async iterator over llama.cpp streaming inference chunks.
+ *
+ * Wraps the underlying `Pin<Box<dyn Stream<Item = Result<...>> + Send>>`
+ * behind a `tokio::sync::Mutex` so it can be polled from JavaScript via
+ * `next()`. Each successful poll yields the next `LlamaCppInferenceChunk`
+ * (or `null` when the stream ends); a stream-level error is thrown.
+ *
+ * ```javascript
+ * for (let chunk = await stream.next(); chunk !== null; chunk = await stream.next()) {
+ *   process.stdout.write(chunk.delta ?? "");
+ * }
+ * ```
+ */
+export declare class LlamaCppInferenceChunkStream {
+  /**
+   * Pull the next chunk from the stream.
+   *
+   * Returns `null` once the stream is exhausted.
+   *
+   * # Errors
+   *
+   * Returns a JavaScript error if the underlying llama.cpp inference fails
+   * partway through generation (e.g. tokenization failure or a context
+   * decode error).
+   */
+  next(): Promise<LlamaCppInferenceChunk | null>
+}
+export type JsLlamaCppInferenceChunkStream = LlamaCppInferenceChunkStream
+
+/** Result of a single non-streaming llama.cpp inference call. */
+export declare class LlamaCppInferenceResult {
+  /** The generated text content, if any. */
+  get content(): string | null
+  /** Why the model stopped generating (e.g. `"stop"`, `"length"`). */
+  get finishReason(): string
+  /** The model identifier that produced this result. */
+  get model(): string
+  /** Token usage statistics. */
+  get usage(): LlamaCppInferenceUsage
+}
+export type JsLlamaCppInferenceResult = LlamaCppInferenceResult
+
+/** Token usage statistics from a llama.cpp inference call. */
+export declare class LlamaCppInferenceUsage {
+  /** Tokens in the prompt. */
+  get promptTokens(): number
+  /** Tokens generated. */
+  get completionTokens(): number
+  /** Total tokens (prompt + completion). */
+  get totalTokens(): number
+  /** Total wall-clock inference time in seconds. */
+  get totalTimeSec(): number
+}
+export type JsLlamaCppInferenceUsage = LlamaCppInferenceUsage
 
 /**
  * A local llama.cpp LLM provider with completion and streaming.
@@ -2256,11 +2589,17 @@ export declare class ModelCache {
    *
    * Returns the local filesystem path to the cached file.
    *
-   * The optional `onProgress` callback receives `(downloaded, total)` where
+   * The optional `onProgress` argument accepts either:
+   * - A raw callback `(downloaded: number, total: number | null) => void`
+   *   for a quick inline progress hook, or
+   * - A [`JsProgressCallback`] subclass instance (recommended for stateful
+   *   reporters), whose `onProgress(downloaded, total)` method receives
+   *   byte counts as `bigint` values.
+   *
    * `total` is `null` when the server does not report the file size up
    * front.
    */
-  download(repo: string, file: string, onProgress?: ProgressTsfn | undefined | null): Promise<string>
+  download(repo: string, file: string, onProgress?: ProgressTsfn | object | undefined | null): Promise<string>
 }
 export type JsModelCache = ModelCache
 
@@ -2575,6 +2914,24 @@ export declare class PipelineBuilder {
   parallel(parallel: JsParallelStage): this
   /** Set a per-stage timeout in seconds. Each stage's workflow gets this duration. */
   timeoutPerStage(seconds: number): this
+  /**
+   * Register a persist callback that receives a typed `PipelineSnapshot`
+   * after each stage completes.
+   *
+   * The JS callback must return a `Promise<void>` (or be `async`). If the
+   * promise rejects, the rejection is wrapped as a `PipelineError` and
+   * propagated to the running pipeline, aborting it.
+   */
+  onPersist(callback: PersistTsfn): this
+  /**
+   * Register a persist callback that receives the snapshot as a JSON
+   * string after each stage completes.
+   *
+   * The JS callback must return a `Promise<void>` (or be `async`). If the
+   * promise rejects, the rejection is wrapped as a `PipelineError` and
+   * propagated to the running pipeline, aborting it.
+   */
+  onPersistJson(callback: PersistJsonTsfn): this
   /** Validate and build the pipeline. Throws if no stages or duplicate names. */
   build(): JsPipeline
 }
@@ -2653,6 +3010,52 @@ export declare class PiperProvider {
   get engineAvailable(): boolean
 }
 export type JsPiperProvider = PiperProvider
+
+/**
+ * Subclassable base for download progress callbacks.
+ *
+ * Extend this class and override `onProgress(downloaded, total)` to receive
+ * progress updates from [`JsModelCache::download`]. Byte counts are `bigint`
+ * values so large downloads (multi-gigabyte model files) keep full precision.
+ *
+ * `total` is `null` when the server does not report `Content-Length` up
+ * front (e.g. streaming responses without a known size).
+ *
+ * ```javascript
+ * import { ModelCache, ProgressCallback } from 'blazen';
+ *
+ * class LoggingProgress extends ProgressCallback {
+ *     onProgress(downloaded, total) {
+ *         if (total !== null) {
+ *             const pct = Number(downloaded * 100n / total);
+ *             console.log(`${pct}%`);
+ *         } else {
+ *             console.log(`${downloaded} bytes`);
+ *         }
+ *     }
+ * }
+ *
+ * const cache = ModelCache.create();
+ * await cache.download('bert-base-uncased', 'config.json', new LoggingProgress());
+ * ```
+ */
+export declare class ProgressCallback {
+  /**
+   * Create a new `ProgressCallback` base instance.
+   *
+   * Subclasses should call `super()` and override `onProgress`.
+   */
+  constructor()
+  /**
+   * Receive a progress update. Subclasses **must** override this method.
+   *
+   * Calling the base implementation always throws so that forgetting to
+   * override is caught loudly rather than silently swallowing progress
+   * events.
+   */
+  onProgress(downloaded: bigint, total?: bigint | undefined | null): void
+}
+export type JsProgressCallback = ProgressCallback
 
 /**
  * A serializable collection of prompt templates.
@@ -4406,6 +4809,14 @@ export interface ChatMessageOptions {
   parts?: Array<JsContentPart>
 }
 
+/** Role of a chat message in the local mistral.rs / llama.cpp inference path. */
+export declare const enum ChatRole {
+  System = 'system',
+  User = 'user',
+  Assistant = 'assistant',
+  Tool = 'tool'
+}
+
 /** Options for constructing a [`JsCitationClass`] from JavaScript. */
 export interface CitationOptions {
   /** The cited URL. */
@@ -4449,7 +4860,7 @@ export interface CitationOptions {
  * }
  * ```
  */
-export declare function completeBatch(model: JsCompletionModel, messageSets: Array<Array<JsChatMessage>>, options?: JsBatchOptions | undefined | null): Promise<JsBatchResult>
+export declare function completeBatch(model: JsCompletionModel, messageSets: Array<Array<JsChatMessage>>, options?: JsBatchOptions | undefined | null): Promise<BatchResult>
 
 /**
  * Run a batch using a typed [`JsBatchConfig`] instance instead of an options
@@ -4466,7 +4877,7 @@ export declare function completeBatch(model: JsCompletionModel, messageSets: Arr
  * const result = await completeBatchConfig(model, messageSets, cfg);
  * ```
  */
-export declare function completeBatchConfig(model: JsCompletionModel, messageSets: Array<Array<JsChatMessage>>, config: BatchConfig): Promise<JsBatchResult>
+export declare function completeBatchConfig(model: JsCompletionModel, messageSets: Array<Array<JsChatMessage>>, config: BatchConfig): Promise<BatchResult>
 
 /**
  * Configuration for subclassed `CompletionModel` instances.
@@ -4743,6 +5154,19 @@ export declare const enum HistoryEventKindTag {
 }
 
 /**
+ * Initialize the Langfuse exporter and install it as a layer on the global
+ * `tracing` subscriber.
+ *
+ * A background tokio task is spawned to periodically flush buffered span
+ * envelopes to the Langfuse ingestion API; this requires an active tokio
+ * runtime (always true under napi-rs).
+ *
+ * Calling this more than once in a single process is safe: the second
+ * install is a no-op because a global subscriber is already registered.
+ */
+export declare function initLangfuse(config: LangfuseConfig): void
+
+/**
  * A request for human input emitted by a workflow step.
  *
  * Mirrors [`blazen_events::InputRequestEvent`]. Workflows publish this
@@ -4812,18 +5236,6 @@ export interface JsAddEntry {
   text: string
   /** Optional arbitrary metadata. */
   metadata?: any
-}
-
-/** The result of an agent run. */
-export interface JsAgentResult {
-  /** The final completion response from the model. */
-  response: JsCompletionResponse
-  /** Full message history including all tool calls and results. */
-  messages: Array<any>
-  /** Number of tool-calling iterations that occurred. */
-  iterations: number
-  /** Aggregated cost across all iterations, if available. */
-  totalCost?: number
 }
 
 /** Options for configuring an agent run. */
@@ -4939,25 +5351,6 @@ export interface JsBackgroundRemovalRequest {
 export interface JsBatchOptions {
   /** Maximum number of concurrent requests. `0` or omitted means unlimited. */
   concurrency?: number
-}
-
-/**
- * The result of a batch completion run.
- *
- * Each index corresponds to the input request at the same position.
- * On success the `responses` entry is populated and the `errors` entry is
- * `null`; on failure the `responses` entry is `null` and `errors` contains
- * the error message.
- */
-export interface JsBatchResult {
-  /** One response per input request. `null` for failed requests. */
-  responses: Array<JsCompletionResponse | undefined | null>
-  /** One error message per input request. `null` for successful requests. */
-  errors: Array<string | undefined | null>
-  /** Aggregated token usage across all successful responses. */
-  totalUsage?: JsTokenUsage
-  /** Aggregated cost in USD across all successful responses. */
-  totalCost?: number
 }
 
 export interface JsBedrockOptions {
@@ -6091,6 +6484,20 @@ export interface JsWorkflowResult {
 }
 
 /**
+ * Simplified chat role for the llama.cpp bridge layer.
+ *
+ * Mirrors `blazen_llm::LlamaCppChatRole` (re-exported from
+ * `blazen-llm-llamacpp`). Distinct from the framework-wide `JsRole` because
+ * the llama.cpp bridge layer uses its own simplified four-variant enum.
+ */
+export declare const enum LlamaCppChatRole {
+  System = 'System',
+  User = 'User',
+  Assistant = 'Assistant',
+  Tool = 'Tool'
+}
+
+/**
  * Variant-tagged provider-aware override for what the LLM sees.
  *
  * `kind` is one of `"text"`, `"json"`, `"parts"`, or `"provider_raw"`.
@@ -6536,7 +6943,7 @@ export declare function resolveBeerToken(): string | null
  * );
  * ```
  */
-export declare function runAgent(model: JsCompletionModel, messages: Array<JsChatMessage>, tools: Array<JsToolDef>, toolHandler: ToolHandlerTsfn, options?: JsAgentRunOptions | undefined | null): Promise<JsAgentResult>
+export declare function runAgent(model: JsCompletionModel, messages: Array<JsChatMessage>, tools: Array<JsToolDef>, toolHandler: ToolHandlerTsfn, options?: JsAgentRunOptions | undefined | null): Promise<AgentResult>
 
 /**
  * Run an agent loop with an event-observer callback.
@@ -6563,7 +6970,7 @@ export declare function runAgent(model: JsCompletionModel, messages: Array<JsCha
  * );
  * ```
  */
-export declare function runAgentWithCallback(model: JsCompletionModel, messages: Array<JsChatMessage>, tools: Array<JsToolDef>, toolHandler: ToolHandlerTsfn, onEvent: AgentEventCallbackTsfn, options?: JsAgentRunOptions | undefined | null): Promise<JsAgentResult>
+export declare function runAgentWithCallback(model: JsCompletionModel, messages: Array<JsChatMessage>, tools: Array<JsToolDef>, toolHandler: ToolHandlerTsfn, onEvent: AgentEventCallbackTsfn, options?: JsAgentRunOptions | undefined | null): Promise<AgentResult>
 
 /**
  * Payload returned by [`JsContext::get_session_ref_serializable`].
@@ -6834,3 +7241,97 @@ export declare function typedToolSimple(name: string, description: string, param
 
 /** Returns the version of the blazen library. */
 export declare function version(): string
+
+// --- post-build: type aliases mirroring blazen-llm ---
+export type MediaSource = JsImageSource
+export type ImageSource = JsImageSource
+
+// --- post-build: typed error classes ---
+export class BlazenError extends Error {}
+export class AuthError extends BlazenError {}
+export class RateLimitError extends BlazenError {}
+export class TimeoutError extends BlazenError {}
+export class ValidationError extends BlazenError {}
+export class ContentPolicyError extends BlazenError {}
+export class UnsupportedError extends BlazenError {}
+export class ComputeError extends BlazenError {}
+export class MediaError extends BlazenError {}
+export class ProviderError extends BlazenError {
+  provider: string | null
+  status: number | null
+  endpoint: string | null
+  requestId: string | null
+  detail: string | null
+  retryAfterMs: number | null
+}
+export class LlamaCppError extends ProviderError {}
+export class LlamaCppInvalidOptionsError extends LlamaCppError {}
+export class LlamaCppModelLoadError extends LlamaCppError {}
+export class LlamaCppInferenceError extends LlamaCppError {}
+export class LlamaCppEngineNotAvailableError extends LlamaCppError {}
+export class CandleLlmError extends ProviderError {}
+export class CandleLlmInvalidOptionsError extends CandleLlmError {}
+export class CandleLlmModelLoadError extends CandleLlmError {}
+export class CandleLlmInferenceError extends CandleLlmError {}
+export class CandleLlmEngineNotAvailableError extends CandleLlmError {}
+export class CandleEmbedError extends ProviderError {}
+export class CandleEmbedInvalidOptionsError extends CandleEmbedError {}
+export class CandleEmbedModelLoadError extends CandleEmbedError {}
+export class CandleEmbedEmbeddingError extends CandleEmbedError {}
+export class CandleEmbedEngineNotAvailableError extends CandleEmbedError {}
+export class CandleEmbedTaskPanickedError extends CandleEmbedError {}
+export class MistralRsError extends ProviderError {}
+export class MistralRsInvalidOptionsError extends MistralRsError {}
+export class MistralRsInitError extends MistralRsError {}
+export class MistralRsInferenceError extends MistralRsError {}
+export class MistralRsEngineNotAvailableError extends MistralRsError {}
+export class WhisperError extends ProviderError {}
+export class WhisperInvalidOptionsError extends WhisperError {}
+export class WhisperModelLoadError extends WhisperError {}
+export class WhisperTranscriptionError extends WhisperError {}
+export class WhisperEngineNotAvailableError extends WhisperError {}
+export class WhisperIoError extends WhisperError {}
+export class PiperError extends ProviderError {}
+export class PiperInvalidOptionsError extends PiperError {}
+export class PiperModelLoadError extends PiperError {}
+export class PiperSynthesisError extends PiperError {}
+export class PiperEngineNotAvailableError extends PiperError {}
+export class DiffusionError extends ProviderError {}
+export class DiffusionInvalidOptionsError extends DiffusionError {}
+export class DiffusionModelLoadError extends DiffusionError {}
+export class DiffusionGenerationError extends DiffusionError {}
+export class FastEmbedError extends ProviderError {}
+export class EmbedUnknownModelError extends FastEmbedError {}
+export class EmbedInitError extends FastEmbedError {}
+export class EmbedEmbedError extends FastEmbedError {}
+export class EmbedMutexPoisonedError extends FastEmbedError {}
+export class EmbedTaskPanickedError extends FastEmbedError {}
+export class TractError extends ProviderError {}
+export class PeerEncodeError extends BlazenError {}
+export class PeerTransportError extends BlazenError {}
+export class PeerEnvelopeVersionError extends BlazenError {}
+export class PeerWorkflowError extends BlazenError {}
+export class PeerTlsError extends BlazenError {}
+export class PeerUnknownStepError extends BlazenError {}
+export class PersistError extends BlazenError {}
+export class PromptError extends BlazenError {}
+export class PromptMissingVariableError extends PromptError {}
+export class PromptNotFoundError extends PromptError {}
+export class PromptVersionNotFoundError extends PromptError {}
+export class PromptIoError extends PromptError {}
+export class PromptYamlError extends PromptError {}
+export class PromptJsonError extends PromptError {}
+export class PromptValidationError extends PromptError {}
+export class MemoryError extends BlazenError {}
+export class MemoryNoEmbedderError extends MemoryError {}
+export class MemoryElidError extends MemoryError {}
+export class MemoryEmbeddingError extends MemoryError {}
+export class MemoryNotFoundError extends MemoryError {}
+export class MemorySerializationError extends MemoryError {}
+export class MemoryIoError extends MemoryError {}
+export class MemoryBackendError extends MemoryError {}
+export class CacheError extends BlazenError {}
+export class DownloadError extends CacheError {}
+export class CacheDirError extends CacheError {}
+export class IoError extends CacheError {}
+export declare function enrichError(err: unknown): unknown

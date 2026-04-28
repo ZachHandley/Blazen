@@ -32,13 +32,7 @@ pub mod compute_provider;
 pub mod context;
 pub mod core_types;
 pub mod decorators;
-// `embed_tract` is intentionally omitted on wasm32: the upstream
-// `blazen-embed-tract` crate's `provider` module (which owns
-// `TractEmbedModel`) is gated native-only because its `from_options`
-// constructor relies on `tokio` `rt`/`fs` features and on the HuggingFace Hub
-// downloader (`hf-hub`), neither of which compiles to wasm32. A future
-// iteration can re-introduce a wasm-friendly tract binding once weights are
-// fed in via `fetch()` instead of `hf-hub`.
+pub mod embed_tract;
 pub mod embedding;
 pub mod events;
 pub mod handler;
@@ -61,6 +55,27 @@ pub mod workflow;
 pub mod workflow_events;
 
 use wasm_bindgen::prelude::*;
+
+// ---------------------------------------------------------------------------
+// TypeScript type alias declarations
+// ---------------------------------------------------------------------------
+//
+// `MediaSource` is a Rust type alias (`pub type MediaSource = ImageSource`) in
+// `blazen-llm`. Tsify only emits type definitions for `#[derive(Tsify)]`
+// structs/enums, so the alias never appears in the generated `.d.ts` even
+// though several emitted shapes (`ImageContent`, `AudioContent`,
+// `VideoContent`, `FileContent`) reference `MediaSource` as a field type.
+// Without this declaration, `import { MediaSource } from 'blazen_wasm_sdk'`
+// fails to type-check on the consumer side.
+#[wasm_bindgen(typescript_custom_section)]
+const TS_MEDIA_SOURCE_ALIAS: &str = r#"
+/**
+ * Source of a media payload (image, audio, video, or file). Re-exported as an
+ * alias of `ImageSource`; the same `Url`/`Base64` shape is used across all
+ * modalities.
+ */
+export type MediaSource = ImageSource;
+"#;
 
 /// Initialise the WASM module.
 ///

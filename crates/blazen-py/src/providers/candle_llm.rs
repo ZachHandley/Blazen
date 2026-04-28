@@ -16,7 +16,7 @@ use crate::providers::options::PyCandleLlmOptions;
 use crate::types::{PyChatMessage, PyCompletionResponse};
 use blazen_llm::ChatMessage;
 use blazen_llm::traits::{CompletionModel, LocalModel};
-use blazen_llm::{CandleLlmCompletionModel, CandleLlmProvider};
+use blazen_llm::{CandleInferenceResult, CandleLlmCompletionModel, CandleLlmProvider};
 
 // ---------------------------------------------------------------------------
 // PyCandleLlmProvider
@@ -189,5 +189,90 @@ impl PyCandleLlmProvider {
             "CandleLlmProvider(model_id='{}')",
             CompletionModel::model_id(self.completion.as_ref())
         )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PyCandleInferenceResult
+// ---------------------------------------------------------------------------
+
+/// Result from a non-streaming candle inference call.
+///
+/// Returned by the lower-level inherent ``CandleLlmProvider::infer`` API on
+/// the Rust side; exposed in Python so callers that hold a
+/// :class:`CandleInferenceResult` (e.g. from a custom binding or future
+/// inherent-infer surface) can introspect tokens and timing.
+#[gen_stub_pyclass]
+#[pyclass(name = "CandleInferenceResult", frozen, from_py_object)]
+#[derive(Clone)]
+pub struct PyCandleInferenceResult {
+    pub(crate) inner: Arc<CandleInferenceResult>,
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyCandleInferenceResult {
+    /// Construct a candle inference result.
+    #[new]
+    #[pyo3(signature = (
+        *,
+        content,
+        prompt_tokens,
+        completion_tokens,
+        total_time_secs,
+    ))]
+    fn new(
+        content: String,
+        prompt_tokens: usize,
+        completion_tokens: usize,
+        total_time_secs: f64,
+    ) -> Self {
+        Self {
+            inner: Arc::new(CandleInferenceResult {
+                content,
+                prompt_tokens,
+                completion_tokens,
+                total_time_secs,
+            }),
+        }
+    }
+
+    /// The generated text content.
+    #[getter]
+    fn content(&self) -> &str {
+        &self.inner.content
+    }
+
+    /// Number of prompt tokens consumed.
+    #[getter]
+    fn prompt_tokens(&self) -> usize {
+        self.inner.prompt_tokens
+    }
+
+    /// Number of completion tokens generated.
+    #[getter]
+    fn completion_tokens(&self) -> usize {
+        self.inner.completion_tokens
+    }
+
+    /// Wall-clock time for the inference in seconds.
+    #[getter]
+    fn total_time_secs(&self) -> f64 {
+        self.inner.total_time_secs
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "CandleInferenceResult(prompt_tokens={}, completion_tokens={}, total_time_secs={})",
+            self.inner.prompt_tokens, self.inner.completion_tokens, self.inner.total_time_secs
+        )
+    }
+}
+
+impl From<CandleInferenceResult> for PyCandleInferenceResult {
+    fn from(inner: CandleInferenceResult) -> Self {
+        Self {
+            inner: Arc::new(inner),
+        }
     }
 }

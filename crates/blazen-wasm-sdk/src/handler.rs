@@ -43,10 +43,25 @@ use std::pin::Pin;
 use std::rc::Rc;
 
 use blazen_core::WorkflowHandler;
-use blazen_events::{AnyEvent, DynamicEvent, StopEvent};
+use blazen_events::{AnyEvent, DynamicEvent, InputResponseEvent, StopEvent};
 use futures_util::StreamExt;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
+
+/// Newtype wrapping a [`js_sys::Function`] so it can cross `await` points
+/// inside futures that the runtime treats as `Send`.
+///
+/// Wasm32 is single-threaded, so the `Send + Sync` impls are vacuously
+/// safe — there is no other thread that could observe the wrapped JS
+/// function. The wrapper exists purely to satisfy `SendFuture`-style
+/// patterns used elsewhere in this crate (see `capability_providers.rs`).
+struct JsCallback(js_sys::Function);
+
+// SAFETY: wasm32 is single-threaded; no other thread exists to observe
+// the wrapped JS function, so Send/Sync are vacuously satisfied.
+unsafe impl Send for JsCallback {}
+// SAFETY: see above.
+unsafe impl Sync for JsCallback {}
 
 /// Convert any [`Serialize`] value into a [`JsValue`] using the SDK-wide
 /// convention that Rust maps marshal as plain JS objects (not `Map`
@@ -436,5 +451,182 @@ impl WasmWorkflowHandler {
         let id = snapshot.run_id.to_string();
         *self.cached_run_id.borrow_mut() = Some(id.clone());
         Ok(JsValue::from_str(&id))
+    }
+
+    /// Deliver a human-in-the-loop response to a workflow that auto-parked
+    /// on an `InputRequestEvent`.
+    ///
+    /// Mirrors [`JsWorkflowHandler::respond_to_input`] in the Node bindings:
+    /// the workflow's event loop unparks and injects the response as a
+    /// routable event. JS callers pass the matching `request_id` (from the
+    /// original `InputRequestEvent`) and any JSON-serialisable response
+    /// value.
+    ///
+    /// # Errors
+    ///
+    /// Rejects if the handler was already consumed, the response payload
+    /// can't be deserialised, or the event loop has already exited.
+    #[wasm_bindgen(js_name = "respondToInput")]
+    pub fn respond_to_input(
+        &self,
+        request_id: String,
+        response: JsValue,
+    ) -> Result<(), JsValue> {
+        let inner = self.inner.borrow();
+        let handler = inner
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("handler already consumed"))?;
+
+        // Convert the JS value into the JSON shape expected by
+        // `InputResponseEvent.response`. `JsValue::UNDEFINED` collapses to
+        // `null` so callers can omit a payload entirely if they want.
+        let response_json: serde_json::Value = if response.is_undefined() {
+            serde_json::Value::Null
+        } else {
+            serde_wasm_bindgen::from_value(response)
+                .map_err(|e| JsValue::from_str(&format!("invalid response payload: {e}")))?
+        };
+
+        let event = InputResponseEvent {
+            request_id,
+            response: response_json,
+        };
+
+        handler
+            .respond_to_input(event)
+            .map_err(|e| JsValue::from_str(&format!("respondToInput failed: {e}")))
+    }
+
+    /// Capture the workflow's current snapshot **without** halting the
+    /// event loop.
+    ///
+    /// Unlike [`pause`](Self::pause), this does not send a Pause control
+    /// message — it just asks the loop for a snapshot and lets execution
+    /// continue. Use this when you want a JSON-serialisable view of the
+    /// run's state for logging or telemetry.
+    ///
+    /// For a quiescent snapshot (no in-flight steps), pair `pause()` →
+    /// `snapshot()` → `resumeInPlace()`.
+    ///
+    /// # Errors
+    ///
+    /// Rejects if the handler was already consumed, the event loop has
+    /// exited, or marshalling fails.
+    #[wasm_bindgen(js_name = "snapshot")]
+    pub async fn snapshot(&self) -> Result<JsValue, JsValue> {
+        // Yield first so the spawn_local'd event loop can advance to a
+        // point where it can service the snapshot control message. See
+        // `yield_to_js` for the workerd-specific explanation.
+        yield_to_js().await;
+
+        // Take the handler out of its slot so we don't hold a `RefCell`
+        // borrow across the await; restored unconditionally below.
+        let handler = self
+            .inner
+            .borrow_mut()
+            .take()
+            .ok_or_else(|| JsValue::from_str("handler already consumed"))?;
+
+        let snapshot_result = handler.snapshot().await;
+
+        *self.inner.borrow_mut() = Some(handler);
+
+        let snapshot = snapshot_result
+            .map_err(|e| JsValue::from_str(&format!("snapshot failed: {e}")))?;
+
+        marshal_to_js(&snapshot)
+    }
+
+    /// Resume a paused event loop in place.
+    ///
+    /// Mirrors [`JsWorkflowHandler::resume_in_place`] in the Node bindings.
+    /// After a successful [`pause`](Self::pause), this unparks the loop so
+    /// it resumes dispatching events to steps. The same handler instance
+    /// continues to be valid for [`await_result`](Self::await_result),
+    /// [`next_event`](Self::next_event), etc.
+    ///
+    /// # Errors
+    ///
+    /// Rejects if the handler was already consumed or the event loop has
+    /// already exited.
+    #[wasm_bindgen(js_name = "resumeInPlace")]
+    pub fn resume_in_place(&self) -> Result<(), JsValue> {
+        let inner = self.inner.borrow();
+        let handler = inner
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("handler already consumed"))?;
+
+        handler
+            .resume_in_place()
+            .map_err(|e| JsValue::from_str(&format!("resumeInPlace failed: {e}")))
+    }
+
+    /// Subscribe to the workflow's broadcast event stream and forward each
+    /// event to a JS callback until the stream closes.
+    ///
+    /// Mirrors [`JsWorkflowHandler::stream_events`] in the Node bindings.
+    /// The returned Promise resolves when the stream closes (either the
+    /// workflow completed or was aborted). Unlike [`next_event`](Self::next_event),
+    /// this is a single Promise that drives the whole subscription, so JS
+    /// callers don't need to wrap repeated calls in their own loop.
+    ///
+    /// Events emitted before this call are not replayed — `stream_events()`
+    /// only delivers events published *after* subscription. Call this
+    /// before [`await_result`](Self::await_result) to avoid races.
+    ///
+    /// # Errors
+    ///
+    /// Rejects if `callback` is not a function, the handler was already
+    /// consumed, or marshalling an event payload fails.
+    #[wasm_bindgen(js_name = "streamEvents")]
+    pub async fn stream_events(&self, callback: js_sys::Function) -> Result<(), JsValue> {
+        // Yield so the loop can publish any already-queued events into the
+        // broadcast channel before we subscribe. See `yield_to_js` for the
+        // workerd-specific explanation.
+        yield_to_js().await;
+
+        let mut stream: EventStream = {
+            let inner = self.inner.borrow();
+            let handler = inner
+                .as_ref()
+                .ok_or_else(|| JsValue::from_str("handler already consumed"))?;
+            Box::pin(handler.stream_events())
+        };
+
+        let cb = JsCallback(callback);
+
+        while let Some(event) = stream.next().await {
+            // Drop the stream-end sentinel for parity with the Node
+            // bindings — it's an internal signal, not a user-facing event.
+            if event.event_type_id() == "blazen::StreamEnd" {
+                break;
+            }
+
+            let envelope = serde_json::json!({
+                "event_type": event.event_type_id(),
+                "data": event.to_json(),
+            });
+            let js_event = marshal_to_js(&envelope)?;
+
+            // Ignore callback errors so a faulty subscriber can't tear
+            // down the whole subscription; matching Node's NonBlocking
+            // semantics.
+            let _ = cb.0.call1(&JsValue::NULL, &js_event);
+        }
+
+        Ok(())
+    }
+
+    /// Tear down the event loop. Pure alias for [`cancel`](Self::cancel),
+    /// matching [`JsWorkflowHandler::abort`] in the Node bindings so JS
+    /// callers can use whichever name reads better in context.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stringified error if the underlying handler is already
+    /// gone.
+    #[wasm_bindgen(js_name = "abort")]
+    pub fn abort(&self) -> Result<(), JsValue> {
+        self.cancel()
     }
 }

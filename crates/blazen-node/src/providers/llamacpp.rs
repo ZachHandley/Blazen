@@ -18,7 +18,12 @@ use tokio_stream::StreamExt;
 
 use blazen_llm::traits::{CompletionModel, LocalModel};
 use blazen_llm::types::{ChatMessage, CompletionRequest, ToolDefinition};
-use blazen_llm::{LlamaCppOptions, LlamaCppProvider};
+use blazen_llm::{
+    LlamaCppChatMessageInput, LlamaCppChatRole, LlamaCppInferenceChunk,
+    LlamaCppInferenceChunkStream, LlamaCppInferenceResult, LlamaCppInferenceUsage, LlamaCppOptions,
+    LlamaCppProvider,
+};
+use tokio::sync::Mutex;
 
 use crate::error::{llm_error_to_napi, to_napi_error};
 use crate::providers::completion_model::StreamChunkCallbackTsfn;
@@ -258,5 +263,265 @@ impl JsLlamaCppProvider {
             .vram_bytes()
             .await
             .map(|b| i64::try_from(b).unwrap_or(i64::MAX))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// JsLlamaCppChatRole
+// ---------------------------------------------------------------------------
+
+/// Simplified chat role for the llama.cpp bridge layer.
+///
+/// Mirrors `blazen_llm::LlamaCppChatRole` (re-exported from
+/// `blazen-llm-llamacpp`). Distinct from the framework-wide `JsRole` because
+/// the llama.cpp bridge layer uses its own simplified four-variant enum.
+#[napi(string_enum, js_name = "LlamaCppChatRole")]
+pub enum JsLlamaCppChatRole {
+    System,
+    User,
+    Assistant,
+    Tool,
+}
+
+impl From<JsLlamaCppChatRole> for LlamaCppChatRole {
+    fn from(role: JsLlamaCppChatRole) -> Self {
+        match role {
+            JsLlamaCppChatRole::System => Self::System,
+            JsLlamaCppChatRole::User => Self::User,
+            JsLlamaCppChatRole::Assistant => Self::Assistant,
+            JsLlamaCppChatRole::Tool => Self::Tool,
+        }
+    }
+}
+
+impl From<LlamaCppChatRole> for JsLlamaCppChatRole {
+    fn from(role: LlamaCppChatRole) -> Self {
+        match role {
+            LlamaCppChatRole::System => Self::System,
+            LlamaCppChatRole::User => Self::User,
+            LlamaCppChatRole::Assistant => Self::Assistant,
+            LlamaCppChatRole::Tool => Self::Tool,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// JsLlamaCppChatMessageInput
+// ---------------------------------------------------------------------------
+
+/// A single chat message for input to the llama.cpp provider.
+///
+/// ```javascript
+/// const msg = new LlamaCppChatMessageInput(LlamaCppChatRole.User, "Hello");
+/// ```
+#[napi(js_name = "LlamaCppChatMessageInput")]
+pub struct JsLlamaCppChatMessageInput {
+    inner: LlamaCppChatMessageInput,
+}
+
+#[napi]
+impl JsLlamaCppChatMessageInput {
+    /// Build a chat message from a role and text body.
+    #[napi(constructor)]
+    #[must_use]
+    pub fn new(role: JsLlamaCppChatRole, text: String) -> Self {
+        Self {
+            inner: LlamaCppChatMessageInput::new(role.into(), text),
+        }
+    }
+
+    /// Who produced this message.
+    #[napi(getter)]
+    #[must_use]
+    pub fn role(&self) -> JsLlamaCppChatRole {
+        self.inner.role.into()
+    }
+
+    /// The textual content of the message.
+    #[napi(getter)]
+    #[must_use]
+    pub fn text(&self) -> &str {
+        &self.inner.text
+    }
+}
+
+// ---------------------------------------------------------------------------
+// JsLlamaCppInferenceUsage
+// ---------------------------------------------------------------------------
+
+/// Token usage statistics from a llama.cpp inference call.
+#[napi(js_name = "LlamaCppInferenceUsage")]
+pub struct JsLlamaCppInferenceUsage {
+    inner: LlamaCppInferenceUsage,
+}
+
+#[napi]
+impl JsLlamaCppInferenceUsage {
+    /// Tokens in the prompt.
+    #[napi(getter, js_name = "promptTokens")]
+    #[must_use]
+    pub fn prompt_tokens(&self) -> u32 {
+        self.inner.prompt_tokens
+    }
+
+    /// Tokens generated.
+    #[napi(getter, js_name = "completionTokens")]
+    #[must_use]
+    pub fn completion_tokens(&self) -> u32 {
+        self.inner.completion_tokens
+    }
+
+    /// Total tokens (prompt + completion).
+    #[napi(getter, js_name = "totalTokens")]
+    #[must_use]
+    pub fn total_tokens(&self) -> u32 {
+        self.inner.total_tokens
+    }
+
+    /// Total wall-clock inference time in seconds.
+    #[napi(getter, js_name = "totalTimeSec")]
+    #[must_use]
+    pub fn total_time_sec(&self) -> f64 {
+        f64::from(self.inner.total_time_sec)
+    }
+}
+
+impl From<LlamaCppInferenceUsage> for JsLlamaCppInferenceUsage {
+    fn from(inner: LlamaCppInferenceUsage) -> Self {
+        Self { inner }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// JsLlamaCppInferenceResult
+// ---------------------------------------------------------------------------
+
+/// Result of a single non-streaming llama.cpp inference call.
+#[napi(js_name = "LlamaCppInferenceResult")]
+pub struct JsLlamaCppInferenceResult {
+    inner: LlamaCppInferenceResult,
+}
+
+#[napi]
+impl JsLlamaCppInferenceResult {
+    /// The generated text content, if any.
+    #[napi(getter)]
+    #[must_use]
+    pub fn content(&self) -> Option<String> {
+        self.inner.content.clone()
+    }
+
+    /// Why the model stopped generating (e.g. `"stop"`, `"length"`).
+    #[napi(getter, js_name = "finishReason")]
+    #[must_use]
+    pub fn finish_reason(&self) -> &str {
+        &self.inner.finish_reason
+    }
+
+    /// The model identifier that produced this result.
+    #[napi(getter)]
+    #[must_use]
+    pub fn model(&self) -> &str {
+        &self.inner.model
+    }
+
+    /// Token usage statistics.
+    #[napi(getter)]
+    #[must_use]
+    pub fn usage(&self) -> JsLlamaCppInferenceUsage {
+        JsLlamaCppInferenceUsage {
+            inner: self.inner.usage.clone(),
+        }
+    }
+}
+
+impl From<LlamaCppInferenceResult> for JsLlamaCppInferenceResult {
+    fn from(inner: LlamaCppInferenceResult) -> Self {
+        Self { inner }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// JsLlamaCppInferenceChunk
+// ---------------------------------------------------------------------------
+
+/// A single chunk from a streaming llama.cpp inference call.
+#[napi(js_name = "LlamaCppInferenceChunk")]
+pub struct JsLlamaCppInferenceChunk {
+    inner: LlamaCppInferenceChunk,
+}
+
+#[napi]
+impl JsLlamaCppInferenceChunk {
+    /// Incremental text content, if any.
+    #[napi(getter)]
+    #[must_use]
+    pub fn delta(&self) -> Option<String> {
+        self.inner.delta.clone()
+    }
+
+    /// Present in the final chunk when generation stops (e.g. `"stop"`,
+    /// `"length"`).
+    #[napi(getter, js_name = "finishReason")]
+    #[must_use]
+    pub fn finish_reason(&self) -> Option<String> {
+        self.inner.finish_reason.clone()
+    }
+}
+
+impl From<LlamaCppInferenceChunk> for JsLlamaCppInferenceChunk {
+    fn from(inner: LlamaCppInferenceChunk) -> Self {
+        Self { inner }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// JsLlamaCppInferenceChunkStream
+// ---------------------------------------------------------------------------
+
+/// An async iterator over llama.cpp streaming inference chunks.
+///
+/// Wraps the underlying `Pin<Box<dyn Stream<Item = Result<...>> + Send>>`
+/// behind a `tokio::sync::Mutex` so it can be polled from JavaScript via
+/// `next()`. Each successful poll yields the next `LlamaCppInferenceChunk`
+/// (or `null` when the stream ends); a stream-level error is thrown.
+///
+/// ```javascript
+/// for (let chunk = await stream.next(); chunk !== null; chunk = await stream.next()) {
+///   process.stdout.write(chunk.delta ?? "");
+/// }
+/// ```
+#[napi(js_name = "LlamaCppInferenceChunkStream")]
+pub struct JsLlamaCppInferenceChunkStream {
+    inner: Arc<Mutex<LlamaCppInferenceChunkStream>>,
+}
+
+#[napi]
+impl JsLlamaCppInferenceChunkStream {
+    /// Pull the next chunk from the stream.
+    ///
+    /// Returns `null` once the stream is exhausted.
+    ///
+    /// # Errors
+    ///
+    /// Returns a JavaScript error if the underlying llama.cpp inference fails
+    /// partway through generation (e.g. tokenization failure or a context
+    /// decode error).
+    #[napi]
+    pub async fn next(&self) -> Result<Option<JsLlamaCppInferenceChunk>> {
+        let mut guard = self.inner.lock().await;
+        match guard.next().await {
+            Some(Ok(chunk)) => Ok(Some(chunk.into())),
+            Some(Err(err)) => Err(napi::Error::from_reason(err.to_string())),
+            None => Ok(None),
+        }
+    }
+}
+
+impl From<LlamaCppInferenceChunkStream> for JsLlamaCppInferenceChunkStream {
+    fn from(stream: LlamaCppInferenceChunkStream) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(stream)),
+        }
     }
 }

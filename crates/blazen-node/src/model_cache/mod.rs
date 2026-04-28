@@ -6,5 +6,5 @@
 pub mod cache;
 pub mod error;
 
-pub use cache::JsModelCache;
+pub use cache::{JsModelCache, JsProgressCallback};
 pub use error::cache_error_to_napi;

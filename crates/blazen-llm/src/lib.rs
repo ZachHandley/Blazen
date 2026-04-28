@@ -180,7 +180,11 @@ mod backends;
 pub use blazen_embed::{EmbedError, EmbedModel, EmbedOptions, EmbedResponse};
 
 #[cfg(feature = "mistralrs")]
-pub use blazen_llm_mistralrs::{MistralRsError, MistralRsOptions, MistralRsProvider};
+pub use blazen_llm_mistralrs::{
+    ChatMessageInput, ChatRole, InferenceChunk, InferenceChunkStream, InferenceImage,
+    InferenceImageSource, InferenceResult, InferenceToolCall, InferenceUsage, MistralRsError,
+    MistralRsOptions, MistralRsProvider,
+};
 
 #[cfg(feature = "candle-embed")]
 pub use blazen_embed_candle::{CandleEmbedError, CandleEmbedModel, CandleEmbedOptions};
@@ -196,10 +200,17 @@ pub use blazen_image_diffusion::{
 #[cfg(feature = "candle-llm")]
 pub use backends::candle_llm::CandleLlmCompletionModel;
 #[cfg(feature = "candle-llm")]
-pub use blazen_llm_candle::{CandleLlmError, CandleLlmOptions, CandleLlmProvider};
+pub use blazen_llm_candle::{
+    CandleInferenceResult, CandleLlmError, CandleLlmOptions, CandleLlmProvider,
+};
 
 #[cfg(feature = "llamacpp")]
-pub use blazen_llm_llamacpp::{LlamaCppError, LlamaCppOptions, LlamaCppProvider};
+pub use blazen_llm_llamacpp::{
+    ChatMessageInput as LlamaCppChatMessageInput, ChatRole as LlamaCppChatRole,
+    InferenceChunk as LlamaCppInferenceChunk, InferenceChunkStream as LlamaCppInferenceChunkStream,
+    InferenceResult as LlamaCppInferenceResult, InferenceUsage as LlamaCppInferenceUsage,
+    LlamaCppError, LlamaCppOptions, LlamaCppProvider,
+};
 
 #[cfg(feature = "piper")]
 pub use blazen_audio_piper::{PiperError, PiperOptions, PiperProvider};

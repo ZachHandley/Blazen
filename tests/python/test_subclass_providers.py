@@ -11,25 +11,25 @@ None of these tests require API keys or network access.
 import pytest
 
 from blazen import (
+    BackgroundRemovalProvider,
     ChatMessage,
     CompletionModel,
     CompletionOptions,
     EmbeddingModel,
+    ImageProvider,
     InMemoryBackend,
     Memory,
     MemoryBackend,
     ModelManager,
     ModelPricing,
-    PyBackgroundRemovalProvider,
-    PyImageProvider,
-    PyMusicProvider,
-    PyTTSProvider,
-    PyThreeDProvider,
-    PyVideoProvider,
-    PyVoiceProvider,
+    MusicProvider,
     SpeechRequest,
+    TTSProvider,
+    ThreeDProvider,
     Transcription,
     TranscriptionRequest,
+    VideoProvider,
+    VoiceProvider,
     lookup_pricing,
     register_pricing,
 )
@@ -218,7 +218,7 @@ def test_subclass_transcription_with_all_params():
 # ---------------------------------------------------------------------------
 
 
-class MockTTS(PyTTSProvider):
+class MockTTS(TTSProvider):
     """A mock TTS provider subclass for testing."""
 
     def __init__(self):
@@ -226,7 +226,7 @@ class MockTTS(PyTTSProvider):
 
 
 def test_subclass_tts_instantiation():
-    """Subclassing PyTTSProvider creates a valid instance."""
+    """Subclassing TTSProvider creates a valid instance."""
     tts = MockTTS()
     assert tts.provider_id == "mock-tts"
 
@@ -234,7 +234,7 @@ def test_subclass_tts_instantiation():
 def test_subclass_tts_is_instance():
     """Subclass instance passes isinstance check."""
     tts = MockTTS()
-    assert isinstance(tts, PyTTSProvider)
+    assert isinstance(tts, TTSProvider)
     assert isinstance(tts, MockTTS)
 
 
@@ -249,7 +249,7 @@ def test_subclass_tts_unoverridden_raises():
 def test_subclass_tts_with_all_params():
     """All optional constructor params work."""
 
-    class DetailedTTS(PyTTSProvider):
+    class DetailedTTS(TTSProvider):
         def __init__(self):
             super().__init__(
                 provider_id="detailed-tts",
@@ -269,7 +269,7 @@ def test_subclass_tts_with_all_params():
 # ---------------------------------------------------------------------------
 
 
-class MockImageProvider(PyImageProvider):
+class MockImageProvider(ImageProvider):
     """A mock image provider subclass for testing."""
 
     def __init__(self):
@@ -277,7 +277,7 @@ class MockImageProvider(PyImageProvider):
 
 
 def test_subclass_image_provider_instantiation():
-    """Subclassing PyImageProvider creates a valid instance."""
+    """Subclassing ImageProvider creates a valid instance."""
     provider = MockImageProvider()
     assert provider.provider_id == "mock-image"
 
@@ -285,7 +285,7 @@ def test_subclass_image_provider_instantiation():
 def test_subclass_image_provider_is_instance():
     """Subclass instance passes isinstance check."""
     provider = MockImageProvider()
-    assert isinstance(provider, PyImageProvider)
+    assert isinstance(provider, ImageProvider)
     assert isinstance(provider, MockImageProvider)
 
 
@@ -294,7 +294,7 @@ def test_subclass_image_provider_is_instance():
 # ---------------------------------------------------------------------------
 
 
-class MockVideoProvider(PyVideoProvider):
+class MockVideoProvider(VideoProvider):
     """A mock video provider subclass for testing."""
 
     def __init__(self):
@@ -302,7 +302,7 @@ class MockVideoProvider(PyVideoProvider):
 
 
 def test_subclass_video_provider_instantiation():
-    """Subclassing PyVideoProvider creates a valid instance."""
+    """Subclassing VideoProvider creates a valid instance."""
     provider = MockVideoProvider()
     assert provider.provider_id == "mock-video"
 
@@ -310,7 +310,7 @@ def test_subclass_video_provider_instantiation():
 def test_subclass_video_provider_is_instance():
     """Subclass instance passes isinstance check."""
     provider = MockVideoProvider()
-    assert isinstance(provider, PyVideoProvider)
+    assert isinstance(provider, VideoProvider)
     assert isinstance(provider, MockVideoProvider)
 
 
@@ -319,7 +319,7 @@ def test_subclass_video_provider_is_instance():
 # ---------------------------------------------------------------------------
 
 
-class MockMusicProvider(PyMusicProvider):
+class MockMusicProvider(MusicProvider):
     """A mock music provider subclass for testing."""
 
     def __init__(self):
@@ -327,7 +327,7 @@ class MockMusicProvider(PyMusicProvider):
 
 
 def test_subclass_music_provider_instantiation():
-    """Subclassing PyMusicProvider creates a valid instance."""
+    """Subclassing MusicProvider creates a valid instance."""
     provider = MockMusicProvider()
     assert provider.provider_id == "mock-music"
 
@@ -335,7 +335,7 @@ def test_subclass_music_provider_instantiation():
 def test_subclass_music_provider_is_instance():
     """Subclass instance passes isinstance check."""
     provider = MockMusicProvider()
-    assert isinstance(provider, PyMusicProvider)
+    assert isinstance(provider, MusicProvider)
     assert isinstance(provider, MockMusicProvider)
 
 
@@ -344,7 +344,7 @@ def test_subclass_music_provider_is_instance():
 # ---------------------------------------------------------------------------
 
 
-class MockVoiceProvider(PyVoiceProvider):
+class MockVoiceProvider(VoiceProvider):
     """A mock voice provider subclass for testing."""
 
     def __init__(self):
@@ -352,7 +352,7 @@ class MockVoiceProvider(PyVoiceProvider):
 
 
 def test_subclass_voice_provider_instantiation():
-    """Subclassing PyVoiceProvider creates a valid instance."""
+    """Subclassing VoiceProvider creates a valid instance."""
     provider = MockVoiceProvider()
     assert provider.provider_id == "mock-voice"
 
@@ -360,7 +360,7 @@ def test_subclass_voice_provider_instantiation():
 def test_subclass_voice_provider_is_instance():
     """Subclass instance passes isinstance check."""
     provider = MockVoiceProvider()
-    assert isinstance(provider, PyVoiceProvider)
+    assert isinstance(provider, VoiceProvider)
     assert isinstance(provider, MockVoiceProvider)
 
 
@@ -369,7 +369,7 @@ def test_subclass_voice_provider_is_instance():
 # ---------------------------------------------------------------------------
 
 
-class MockThreeDProvider(PyThreeDProvider):
+class MockThreeDProvider(ThreeDProvider):
     """A mock 3D provider subclass for testing."""
 
     def __init__(self):
@@ -377,7 +377,7 @@ class MockThreeDProvider(PyThreeDProvider):
 
 
 def test_subclass_3d_provider_instantiation():
-    """Subclassing PyThreeDProvider creates a valid instance."""
+    """Subclassing ThreeDProvider creates a valid instance."""
     provider = MockThreeDProvider()
     assert provider.provider_id == "mock-3d"
 
@@ -385,7 +385,7 @@ def test_subclass_3d_provider_instantiation():
 def test_subclass_3d_provider_is_instance():
     """Subclass instance passes isinstance check."""
     provider = MockThreeDProvider()
-    assert isinstance(provider, PyThreeDProvider)
+    assert isinstance(provider, ThreeDProvider)
     assert isinstance(provider, MockThreeDProvider)
 
 
@@ -394,7 +394,7 @@ def test_subclass_3d_provider_is_instance():
 # ---------------------------------------------------------------------------
 
 
-class MockBgRemovalProvider(PyBackgroundRemovalProvider):
+class MockBgRemovalProvider(BackgroundRemovalProvider):
     """A mock background removal provider subclass for testing."""
 
     def __init__(self):
@@ -402,7 +402,7 @@ class MockBgRemovalProvider(PyBackgroundRemovalProvider):
 
 
 def test_subclass_bg_removal_provider_instantiation():
-    """Subclassing PyBackgroundRemovalProvider creates a valid instance."""
+    """Subclassing BackgroundRemovalProvider creates a valid instance."""
     provider = MockBgRemovalProvider()
     assert provider.provider_id == "mock-bgrm"
 
@@ -410,7 +410,7 @@ def test_subclass_bg_removal_provider_instantiation():
 def test_subclass_bg_removal_provider_is_instance():
     """Subclass instance passes isinstance check."""
     provider = MockBgRemovalProvider()
-    assert isinstance(provider, PyBackgroundRemovalProvider)
+    assert isinstance(provider, BackgroundRemovalProvider)
     assert isinstance(provider, MockBgRemovalProvider)
 
 

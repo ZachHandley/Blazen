@@ -203,6 +203,43 @@ impl WasmMemory {
         })
     }
 
+    /// Create a memory store backed by a typed [`WasmInMemoryBackend`].
+    ///
+    /// Unlike [`fromJsBackend`], this consumes a Rust-native `InMemoryBackend`
+    /// wrapper (no JS round-trips per call), so reads and writes stay inside
+    /// the WASM linear memory.
+    ///
+    /// ```js
+    /// import { Memory, InMemoryBackend, EmbeddingModel } from '@blazen/sdk';
+    ///
+    /// const embedder = EmbeddingModel.openai();
+    /// const backend = new InMemoryBackend();
+    /// const memory = Memory.fromBackend(embedder, backend);
+    /// ```
+    #[wasm_bindgen(js_name = "fromBackend")]
+    #[must_use]
+    pub fn from_backend(embedder: &WasmEmbeddingModel, backend: &WasmInMemoryBackend) -> WasmMemory {
+        let arc: Arc<dyn blazen_memory::store::MemoryBackend> = backend.inner.clone();
+        let inner = Memory::new_arc(embedder.inner_arc(), arc);
+        Self {
+            inner: Arc::new(inner),
+        }
+    }
+
+    /// Create a memory store in local-only mode backed by a typed
+    /// [`WasmInMemoryBackend`] (no embedding model).
+    ///
+    /// See [`fromBackend`] for the typed-backend rationale.
+    #[wasm_bindgen(js_name = "localFromBackend")]
+    #[must_use]
+    pub fn local_from_backend(backend: &WasmInMemoryBackend) -> WasmMemory {
+        let arc: Arc<dyn blazen_memory::store::MemoryBackend> = backend.inner.clone();
+        let inner = Memory::local_arc(arc);
+        Self {
+            inner: Arc::new(inner),
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Mutation
     // -----------------------------------------------------------------------
@@ -1239,5 +1276,276 @@ impl blazen_memory::store::MemoryStore for JsMemoryStore {
         let result = SendFuture(self.call("len", &[])).await?;
         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         Ok(result.as_f64().unwrap_or(0.0) as usize)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WasmInMemoryBackend — standalone wrapper around `blazen_memory::InMemoryBackend`
+// ---------------------------------------------------------------------------
+
+/// In-process [`MemoryBackend`](blazen_memory::store::MemoryBackend) backed by
+/// a `HashMap` behind a `RwLock`.
+///
+/// Intended for tests and short-lived sessions: data lives only inside the
+/// current WASM module instance and is discarded on reload. Pair with
+/// [`Memory.fromBackend`](WasmMemory::from_backend) to plug it into a
+/// [`Memory`](WasmMemory) without going through the JS-backed bridge.
+///
+/// ```js
+/// import { Memory, InMemoryBackend, EmbeddingModel } from '@blazen/sdk';
+///
+/// const embedder = EmbeddingModel.openai();
+/// const backend = new InMemoryBackend();
+/// const memory = Memory.fromBackend(embedder, backend);
+/// await memory.add("doc1", "hello world", null);
+/// ```
+#[wasm_bindgen(js_name = "InMemoryBackend")]
+pub struct WasmInMemoryBackend {
+    inner: Arc<InMemoryBackend>,
+}
+
+// SAFETY: WASM is single-threaded.
+unsafe impl Send for WasmInMemoryBackend {}
+unsafe impl Sync for WasmInMemoryBackend {}
+
+impl Default for WasmInMemoryBackend {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[wasm_bindgen(js_class = "InMemoryBackend")]
+#[allow(
+    clippy::must_use_candidate,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::missing_errors_doc
+)]
+impl WasmInMemoryBackend {
+    /// Create a new, empty in-memory backend.
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(InMemoryBackend::new()),
+        }
+    }
+
+    /// Insert or update a stored entry.
+    ///
+    /// @param entry - A [`WasmStoredEntry`]-shaped object.
+    /// @returns `Promise<void>`.
+    pub fn put(&self, entry: WasmStoredEntry) -> Promise {
+        let inner = Arc::clone(&self.inner);
+        future_to_promise(async move {
+            let stored: StoredEntry = entry.into();
+            blazen_memory::store::MemoryBackend::put(&*inner, stored)
+                .await
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            Ok(JsValue::UNDEFINED)
+        })
+    }
+
+    /// Retrieve a stored entry by id.
+    ///
+    /// @param id - The entry identifier.
+    /// @returns `Promise<WasmStoredEntry | null>`.
+    pub fn get(&self, id: String) -> Promise {
+        let inner = Arc::clone(&self.inner);
+        future_to_promise(async move {
+            let entry = blazen_memory::store::MemoryBackend::get(&*inner, &id)
+                .await
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            match entry {
+                Some(e) => {
+                    let wrapper: WasmStoredEntry = e.into();
+                    serde_wasm_bindgen::to_value(&wrapper)
+                        .map_err(|err| JsValue::from_str(&err.to_string()))
+                }
+                None => Ok(JsValue::NULL),
+            }
+        })
+    }
+
+    /// Delete a stored entry by id.
+    ///
+    /// @param id - The entry identifier.
+    /// @returns `Promise<boolean>` — `true` if the entry existed and was removed.
+    pub fn delete(&self, id: String) -> Promise {
+        let inner = Arc::clone(&self.inner);
+        future_to_promise(async move {
+            let deleted = blazen_memory::store::MemoryBackend::delete(&*inner, &id)
+                .await
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            Ok(JsValue::from_bool(deleted))
+        })
+    }
+
+    /// Return all stored entries.
+    ///
+    /// @returns `Promise<WasmStoredEntry[]>`.
+    pub fn list(&self) -> Promise {
+        let inner = Arc::clone(&self.inner);
+        future_to_promise(async move {
+            let entries = blazen_memory::store::MemoryBackend::list(&*inner)
+                .await
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            let arr = js_sys::Array::new_with_length(entries.len() as u32);
+            for (i, e) in entries.into_iter().enumerate() {
+                let wrapper: WasmStoredEntry = e.into();
+                let val = serde_wasm_bindgen::to_value(&wrapper)
+                    .map_err(|err| JsValue::from_str(&err.to_string()))?;
+                arr.set(i as u32, val);
+            }
+            Ok(arr.into())
+        })
+    }
+
+    /// Return the number of stored entries.
+    ///
+    /// @returns `Promise<number>`.
+    #[wasm_bindgen(js_name = "len")]
+    pub fn len(&self) -> Promise {
+        let inner = Arc::clone(&self.inner);
+        future_to_promise(async move {
+            let n = blazen_memory::store::MemoryBackend::len(&*inner)
+                .await
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            Ok(JsValue::from_f64(n as f64))
+        })
+    }
+
+    /// Return `true` if the backend contains no entries.
+    ///
+    /// @returns `Promise<boolean>`.
+    #[wasm_bindgen(js_name = "isEmpty")]
+    pub fn is_empty(&self) -> Promise {
+        let inner = Arc::clone(&self.inner);
+        future_to_promise(async move {
+            let n = blazen_memory::store::MemoryBackend::len(&*inner)
+                .await
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            Ok(JsValue::from_bool(n == 0))
+        })
+    }
+
+    /// Return candidate entries that share at least one LSH band with the
+    /// query bands.
+    ///
+    /// @param bands - Query band strings, one per band slot.
+    /// @param limit - Soft cap on the number of returned entries.
+    /// @returns `Promise<WasmStoredEntry[]>`.
+    #[wasm_bindgen(js_name = "searchByBands")]
+    pub fn search_by_bands(&self, bands: Vec<String>, limit: u32) -> Promise {
+        let inner = Arc::clone(&self.inner);
+        future_to_promise(async move {
+            let entries = blazen_memory::store::MemoryBackend::search_by_bands(
+                &*inner,
+                &bands,
+                limit as usize,
+            )
+            .await
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            let arr = js_sys::Array::new_with_length(entries.len() as u32);
+            for (i, e) in entries.into_iter().enumerate() {
+                let wrapper: WasmStoredEntry = e.into();
+                let val = serde_wasm_bindgen::to_value(&wrapper)
+                    .map_err(|err| JsValue::from_str(&err.to_string()))?;
+                arr.set(i as u32, val);
+            }
+            Ok(arr.into())
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WasmMemoryResult — standalone wrapper around `blazen_memory::MemoryResult`
+// ---------------------------------------------------------------------------
+
+/// A single search result returned by [`Memory`](WasmMemory) queries.
+///
+/// Exposed primarily as a typed return value for downstream code that wants
+/// to construct `MemoryResult`s from JS (e.g. when implementing a custom
+/// [`MemoryStore`](WasmMemoryStore)).
+///
+/// Field semantics mirror [`blazen_memory::MemoryResult`]:
+/// - `id`       — the entry identifier
+/// - `text`     — the stored text content
+/// - `score`    — similarity score in `[0, 1]`, higher means more similar
+/// - `metadata` — arbitrary JSON-serializable metadata, or `null`
+#[wasm_bindgen(js_name = "MemoryResult")]
+pub struct WasmMemoryResult {
+    inner: blazen_memory::MemoryResult,
+}
+
+// SAFETY: WASM is single-threaded.
+unsafe impl Send for WasmMemoryResult {}
+unsafe impl Sync for WasmMemoryResult {}
+
+#[wasm_bindgen(js_class = "MemoryResult")]
+#[allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
+impl WasmMemoryResult {
+    /// Construct a new [`MemoryResult`](blazen_memory::MemoryResult).
+    ///
+    /// @param id       - The entry identifier.
+    /// @param text     - The stored text content.
+    /// @param score    - Similarity score in `[0, 1]`.
+    /// @param metadata - Arbitrary JSON-serializable metadata (`null` allowed).
+    #[wasm_bindgen(constructor)]
+    pub fn new(
+        id: String,
+        text: String,
+        score: f64,
+        metadata: JsValue,
+    ) -> Result<WasmMemoryResult, JsValue> {
+        let metadata: serde_json::Value = if metadata.is_undefined() || metadata.is_null() {
+            serde_json::Value::Null
+        } else {
+            serde_wasm_bindgen::from_value(metadata)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?
+        };
+        Ok(Self {
+            inner: blazen_memory::MemoryResult {
+                id,
+                text,
+                score,
+                metadata,
+            },
+        })
+    }
+
+    /// The entry identifier.
+    #[wasm_bindgen(getter)]
+    pub fn id(&self) -> String {
+        self.inner.id.clone()
+    }
+
+    /// The stored text content.
+    #[wasm_bindgen(getter)]
+    pub fn text(&self) -> String {
+        self.inner.text.clone()
+    }
+
+    /// Similarity score in `[0, 1]`.
+    #[wasm_bindgen(getter)]
+    pub fn score(&self) -> f64 {
+        self.inner.score
+    }
+
+    /// Arbitrary metadata, decoded from `serde_json::Value` to a JS value.
+    #[wasm_bindgen(getter)]
+    pub fn metadata(&self) -> JsValue {
+        serde_wasm_bindgen::to_value(&self.inner.metadata).unwrap_or(JsValue::NULL)
+    }
+}
+
+impl From<blazen_memory::MemoryResult> for WasmMemoryResult {
+    fn from(inner: blazen_memory::MemoryResult) -> Self {
+        Self { inner }
+    }
+}
+
+impl From<WasmMemoryResult> for blazen_memory::MemoryResult {
+    fn from(value: WasmMemoryResult) -> Self {
+        value.inner
     }
 }

@@ -11,22 +11,74 @@ use blazen_model_cache::{ModelCache, ProgressCallback};
 use super::error::cache_err;
 
 // ---------------------------------------------------------------------------
-// PyHostProgressCallback -- Rust trait adapter over a Python callable
+// PyProgressCallback -- subclassable ABC mirroring `ProgressCallback`
+// ---------------------------------------------------------------------------
+
+/// Subclassable ABC mirroring the Rust [`blazen_model_cache::ProgressCallback`]
+/// trait.
+///
+/// Subclass and override :meth:`on_progress` to receive download progress
+/// notifications from :meth:`ModelCache.download`. The default
+/// implementation is a no-op so subclasses can ignore total-byte updates
+/// they do not care about.
+///
+/// You may also pass a plain ``Callable[[int, int | None], None]`` to
+/// ``download(progress=...)`` for the same effect; this ABC simply gives
+/// type-checked callers a typed base to inherit from.
+///
+/// Example:
+///     >>> class Logger(ProgressCallback):
+///     ...     def on_progress(self, downloaded: int, total: int | None) -> None:
+///     ...         print(f"{downloaded}/{total}")
+///     >>> await cache.download("bert-base-uncased", "config.json", Logger())
+#[gen_stub_pyclass]
+#[pyclass(name = "ProgressCallback", subclass)]
+#[derive(Default)]
+pub struct PyProgressCallback;
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyProgressCallback {
+    #[new]
+    fn new() -> Self {
+        Self
+    }
+
+    /// Called repeatedly during a download with the current byte counts.
+    ///
+    /// Args:
+    ///     downloaded: Bytes received so far.
+    ///     total: Total expected bytes, or ``None`` if the size is unknown.
+    #[pyo3(signature = (downloaded, total=None))]
+    fn on_progress(&self, downloaded: u64, total: Option<u64>) {
+        // Default is a no-op; subclasses override.
+        let _ = (downloaded, total);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PyHostProgressCallback -- Rust trait adapter over a Python callable / ABC
 // ---------------------------------------------------------------------------
 
 /// Adapter that implements the Rust [`ProgressCallback`] trait by calling
-/// back into a Python callable.
+/// back into a Python object.
 ///
-/// The Python callable is invoked synchronously as
-/// ``callback(downloaded: int, total: int | None)`` from inside the
-/// hf-hub progress driver.
+/// If the Python object is a [`PyProgressCallback`] subclass instance, its
+/// bound ``on_progress(downloaded, total)`` method is invoked. Otherwise the
+/// object is treated as a plain callable invoked as
+/// ``callback(downloaded, total)``. Both paths run synchronously from inside
+/// the hf-hub progress driver.
 struct PyHostProgressCallback {
     py_obj: Py<PyAny>,
+    is_abc: bool,
 }
 
 impl PyHostProgressCallback {
-    fn new(py_obj: Py<PyAny>) -> Self {
-        Self { py_obj }
+    fn new(py: Python<'_>, py_obj: Py<PyAny>) -> Self {
+        // Cache the discrimination once so progress ticks don't re-check on
+        // every callback invocation.
+        let is_abc = py_obj.bind(py).is_instance_of::<PyProgressCallback>();
+        Self { py_obj, is_abc }
     }
 }
 
@@ -34,7 +86,11 @@ impl ProgressCallback for PyHostProgressCallback {
     fn on_progress(&self, downloaded_bytes: u64, total_bytes: Option<u64>) {
         Python::attach(|py| {
             let cb = self.py_obj.bind(py);
-            let _ = cb.call1((downloaded_bytes, total_bytes));
+            let _ = if self.is_abc {
+                cb.call_method1("on_progress", (downloaded_bytes, total_bytes))
+            } else {
+                cb.call1((downloaded_bytes, total_bytes))
+            };
         });
     }
 }
@@ -122,8 +178,10 @@ impl PyModelCache {
         progress: Option<Py<PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let cache = self.inner.clone();
-        let cb: Option<Arc<dyn ProgressCallback>> = progress
-            .map(|obj| -> Arc<dyn ProgressCallback> { Arc::new(PyHostProgressCallback::new(obj)) });
+        let cb: Option<Arc<dyn ProgressCallback>> =
+            progress.map(|obj| -> Arc<dyn ProgressCallback> {
+                Arc::new(PyHostProgressCallback::new(py, obj))
+            });
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let path = cache.download(&repo, &file, cb).await.map_err(cache_err)?;
             Ok(path.display().to_string())

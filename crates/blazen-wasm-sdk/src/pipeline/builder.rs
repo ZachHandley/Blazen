@@ -6,14 +6,58 @@
 //! builder and produces a [`WasmPipeline`] ready to `start()` or
 //! `resume()`.
 
-use std::sync::Mutex;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use wasm_bindgen::prelude::*;
 
+use blazen_pipeline::{PersistFn, PersistJsonFn, PipelineError, PipelineSnapshot};
+
 use crate::pipeline::error::pipeline_err;
 use crate::pipeline::pipeline::WasmPipeline;
 use crate::pipeline::stage::{WasmParallelStage, WasmStage};
+
+/// Newtype wrapping a [`js_sys::Function`] persist callback so the
+/// `PersistFn` / `PersistJsonFn` `Send + Sync` bound is satisfied.
+///
+/// SAFETY: `wasm32-unknown-unknown` is single-threaded; the JS function
+/// never crosses a thread boundary. The unsafe `Send`/`Sync` impls are
+/// vacuously safe.
+struct JsClosure(js_sys::Function);
+
+// SAFETY: wasm32 is single-threaded; nothing crosses threads.
+unsafe impl Send for JsClosure {}
+// SAFETY: wasm32 is single-threaded; nothing crosses threads.
+unsafe impl Sync for JsClosure {}
+
+/// Wrap a non-`Send` future so it can be returned where `Send` is required.
+///
+/// `wasm_bindgen_futures::JsFuture` is not `Send`, but `PersistFn` and
+/// `PersistJsonFn` both require `Pin<Box<dyn Future<Output = ...> + Send>>`.
+/// On `wasm32-unknown-unknown` the runtime is single-threaded, so the
+/// future never actually crosses threads; this wrapper makes the type
+/// system accept the bound. Mirrors the `SendFuture` pattern already used
+/// in `workflow.rs`.
+struct SendFuture<F>(F);
+
+// SAFETY: wasm32 is single-threaded; nothing crosses threads.
+unsafe impl<F> Send for SendFuture<F> {}
+
+impl<F: Future> Future for SendFuture<F> {
+    type Output = F::Output;
+
+    fn poll(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        // SAFETY: structural projection through the wrapper. We never
+        // move `F` out of `self`.
+        let inner = unsafe { self.map_unchecked_mut(|s| &mut s.0) };
+        inner.poll(cx)
+    }
+}
 
 /// Fluent builder for constructing a [`WasmPipeline`].
 ///
@@ -22,6 +66,7 @@ use crate::pipeline::stage::{WasmParallelStage, WasmStage};
 ///   .stage(new Stage("ingest", wfIngest))
 ///   .parallel(new ParallelStage("fan-out", [stageA, stageB]))
 ///   .timeoutPerStage(30)
+///   .onPersist(async (snapshot) => { await save(snapshot); })
 ///   .build();
 /// const handler = await pipeline.start({ data: "hello" });
 /// const result = await handler.result();
@@ -33,6 +78,12 @@ pub struct WasmPipelineBuilder {
     /// while the underlying `blazen_pipeline::PipelineBuilder` methods
     /// consume `self`.
     inner: Mutex<Option<blazen_pipeline::PipelineBuilder>>,
+    /// Persist callback (typed `PipelineSnapshot`). Drained into the
+    /// underlying builder by `build()`.
+    persist_fn: Mutex<Option<PersistFn>>,
+    /// Persist callback (JSON-serialized snapshot). Drained into the
+    /// underlying builder by `build()`.
+    persist_json_fn: Mutex<Option<PersistJsonFn>>,
 }
 
 #[wasm_bindgen(js_class = "PipelineBuilder")]
@@ -43,6 +94,8 @@ impl WasmPipelineBuilder {
     pub fn new(name: String) -> WasmPipelineBuilder {
         Self {
             inner: Mutex::new(Some(blazen_pipeline::PipelineBuilder::new(name))),
+            persist_fn: Mutex::new(None),
+            persist_json_fn: Mutex::new(None),
         }
     }
 
@@ -107,6 +160,84 @@ impl WasmPipelineBuilder {
         Ok(())
     }
 
+    /// Set a persist callback that receives a typed `PipelineSnapshot`
+    /// (serialized to a JS object via `serde-wasm-bindgen`) after each
+    /// stage completes. The callback may return a `Promise`; the engine
+    /// awaits it before continuing.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if the builder has already been
+    /// consumed.
+    #[wasm_bindgen(js_name = "onPersist")]
+    pub fn on_persist(&self, callback: js_sys::Function) -> Result<(), JsValue> {
+        if self.inner.lock().expect("poisoned").is_none() {
+            return Err(JsValue::from_str(
+                "PipelineBuilder already consumed (build() was called)",
+            ));
+        }
+        let wrapper = Arc::new(JsClosure(callback));
+        let persist: PersistFn = Arc::new(move |snapshot: PipelineSnapshot| {
+            let wrapper = Arc::clone(&wrapper);
+            Box::pin(SendFuture(async move {
+                let snapshot_js = serde_wasm_bindgen::to_value(&snapshot)
+                    .map_err(|e| PipelineError::PersistFailed(e.to_string()))?;
+                let promise_val = wrapper
+                    .0
+                    .call1(&JsValue::NULL, &snapshot_js)
+                    .map_err(|e| PipelineError::PersistFailed(format!("{e:?}")))?;
+                if promise_val.is_undefined() || promise_val.is_null() {
+                    return Ok(());
+                }
+                let promise = js_sys::Promise::from(promise_val);
+                wasm_bindgen_futures::JsFuture::from(promise)
+                    .await
+                    .map_err(|e| PipelineError::PersistFailed(format!("{e:?}")))?;
+                Ok(())
+            })) as Pin<Box<dyn Future<Output = Result<(), PipelineError>> + Send>>
+        });
+        *self.persist_fn.lock().expect("poisoned") = Some(persist);
+        Ok(())
+    }
+
+    /// Set a persist callback that receives the snapshot serialized as a
+    /// JSON string after each stage completes. The callback may return a
+    /// `Promise`; the engine awaits it before continuing.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if the builder has already been
+    /// consumed.
+    #[wasm_bindgen(js_name = "onPersistJson")]
+    pub fn on_persist_json(&self, callback: js_sys::Function) -> Result<(), JsValue> {
+        if self.inner.lock().expect("poisoned").is_none() {
+            return Err(JsValue::from_str(
+                "PipelineBuilder already consumed (build() was called)",
+            ));
+        }
+        let wrapper = Arc::new(JsClosure(callback));
+        let persist: PersistJsonFn = Arc::new(move |json: String| {
+            let wrapper = Arc::clone(&wrapper);
+            Box::pin(SendFuture(async move {
+                let json_js = JsValue::from_str(&json);
+                let promise_val = wrapper
+                    .0
+                    .call1(&JsValue::NULL, &json_js)
+                    .map_err(|e| PipelineError::PersistFailed(format!("{e:?}")))?;
+                if promise_val.is_undefined() || promise_val.is_null() {
+                    return Ok(());
+                }
+                let promise = js_sys::Promise::from(promise_val);
+                wasm_bindgen_futures::JsFuture::from(promise)
+                    .await
+                    .map_err(|e| PipelineError::PersistFailed(format!("{e:?}")))?;
+                Ok(())
+            })) as Pin<Box<dyn Future<Output = Result<(), PipelineError>> + Send>>
+        });
+        *self.persist_json_fn.lock().expect("poisoned") = Some(persist);
+        Ok(())
+    }
+
     /// Validate and build the pipeline. Throws if no stages were added or
     /// the stage names are not unique.
     ///
@@ -120,9 +251,15 @@ impl WasmPipelineBuilder {
     #[wasm_bindgen]
     pub fn build(&self) -> Result<WasmPipeline, JsValue> {
         let mut guard = self.inner.lock().expect("poisoned");
-        let builder = guard
+        let mut builder = guard
             .take()
             .ok_or_else(|| JsValue::from_str("PipelineBuilder already consumed"))?;
+        if let Some(persist) = self.persist_fn.lock().expect("poisoned").take() {
+            builder = builder.on_persist(persist);
+        }
+        if let Some(persist_json) = self.persist_json_fn.lock().expect("poisoned").take() {
+            builder = builder.on_persist_json(persist_json);
+        }
         let pipeline = builder.build().map_err(pipeline_err)?;
         Ok(WasmPipeline::from_inner(pipeline))
     }

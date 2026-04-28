@@ -578,6 +578,8 @@ if (!nativeBinding) {
 module.exports = nativeBinding
 module.exports.ActiveWorkflowSnapshot = nativeBinding.ActiveWorkflowSnapshot
 module.exports.JsActiveWorkflowSnapshot = nativeBinding.JsActiveWorkflowSnapshot
+module.exports.AgentResult = nativeBinding.AgentResult
+module.exports.JsAgentResult = nativeBinding.JsAgentResult
 module.exports.AnthropicProvider = nativeBinding.AnthropicProvider
 module.exports.JsAnthropicProvider = nativeBinding.JsAnthropicProvider
 module.exports.AzureOpenAiProvider = nativeBinding.AzureOpenAiProvider
@@ -586,6 +588,8 @@ module.exports.BackgroundRemovalProvider = nativeBinding.BackgroundRemovalProvid
 module.exports.JsBackgroundRemovalProvider = nativeBinding.JsBackgroundRemovalProvider
 module.exports.BatchConfig = nativeBinding.BatchConfig
 module.exports.JsBatchConfig = nativeBinding.JsBatchConfig
+module.exports.BatchResult = nativeBinding.BatchResult
+module.exports.JsBatchResult = nativeBinding.JsBatchResult
 module.exports.BedrockProvider = nativeBinding.BedrockProvider
 module.exports.JsBedrockProvider = nativeBinding.JsBedrockProvider
 module.exports.BlazenPeerClient = nativeBinding.BlazenPeerClient
@@ -600,10 +604,14 @@ module.exports.CacheMiddleware = nativeBinding.CacheMiddleware
 module.exports.JsCacheMiddleware = nativeBinding.JsCacheMiddleware
 module.exports.CandleEmbedProvider = nativeBinding.CandleEmbedProvider
 module.exports.JsCandleEmbedProvider = nativeBinding.JsCandleEmbedProvider
+module.exports.CandleInferenceResult = nativeBinding.CandleInferenceResult
+module.exports.JsCandleInferenceResult = nativeBinding.JsCandleInferenceResult
 module.exports.CandleLlmProvider = nativeBinding.CandleLlmProvider
 module.exports.JsCandleLlmProvider = nativeBinding.JsCandleLlmProvider
 module.exports.ChatMessage = nativeBinding.ChatMessage
 module.exports.JsChatMessage = nativeBinding.JsChatMessage
+module.exports.ChatMessageInput = nativeBinding.ChatMessageInput
+module.exports.JsChatMessageInput = nativeBinding.JsChatMessageInput
 module.exports.ChatWindow = nativeBinding.ChatWindow
 module.exports.JsChatWindow = nativeBinding.JsChatWindow
 module.exports.CheckpointStore = nativeBinding.CheckpointStore
@@ -654,12 +662,38 @@ module.exports.ImageModel = nativeBinding.ImageModel
 module.exports.JsImageModel = nativeBinding.JsImageModel
 module.exports.ImageProvider = nativeBinding.ImageProvider
 module.exports.JsImageProvider = nativeBinding.JsImageProvider
+module.exports.InferenceChunk = nativeBinding.InferenceChunk
+module.exports.JsInferenceChunk = nativeBinding.JsInferenceChunk
+module.exports.InferenceChunkStream = nativeBinding.InferenceChunkStream
+module.exports.JsInferenceChunkStream = nativeBinding.JsInferenceChunkStream
+module.exports.InferenceImage = nativeBinding.InferenceImage
+module.exports.JsInferenceImage = nativeBinding.JsInferenceImage
+module.exports.InferenceImageSource = nativeBinding.InferenceImageSource
+module.exports.JsInferenceImageSource = nativeBinding.JsInferenceImageSource
+module.exports.InferenceResult = nativeBinding.InferenceResult
+module.exports.JsInferenceResult = nativeBinding.JsInferenceResult
+module.exports.InferenceToolCall = nativeBinding.InferenceToolCall
+module.exports.JsInferenceToolCall = nativeBinding.JsInferenceToolCall
+module.exports.InferenceUsage = nativeBinding.InferenceUsage
+module.exports.JsInferenceUsage = nativeBinding.JsInferenceUsage
 module.exports.InMemoryBackend = nativeBinding.InMemoryBackend
 module.exports.JsInMemoryBackend = nativeBinding.JsInMemoryBackend
 module.exports.JobHandle = nativeBinding.JobHandle
 module.exports.JsJobHandleClass = nativeBinding.JsJobHandleClass
 module.exports.JsonlBackend = nativeBinding.JsonlBackend
 module.exports.JsJsonlBackend = nativeBinding.JsJsonlBackend
+module.exports.LangfuseConfig = nativeBinding.LangfuseConfig
+module.exports.JsLangfuseConfig = nativeBinding.JsLangfuseConfig
+module.exports.LlamaCppChatMessageInput = nativeBinding.LlamaCppChatMessageInput
+module.exports.JsLlamaCppChatMessageInput = nativeBinding.JsLlamaCppChatMessageInput
+module.exports.LlamaCppInferenceChunk = nativeBinding.LlamaCppInferenceChunk
+module.exports.JsLlamaCppInferenceChunk = nativeBinding.JsLlamaCppInferenceChunk
+module.exports.LlamaCppInferenceChunkStream = nativeBinding.LlamaCppInferenceChunkStream
+module.exports.JsLlamaCppInferenceChunkStream = nativeBinding.JsLlamaCppInferenceChunkStream
+module.exports.LlamaCppInferenceResult = nativeBinding.LlamaCppInferenceResult
+module.exports.JsLlamaCppInferenceResult = nativeBinding.JsLlamaCppInferenceResult
+module.exports.LlamaCppInferenceUsage = nativeBinding.LlamaCppInferenceUsage
+module.exports.JsLlamaCppInferenceUsage = nativeBinding.JsLlamaCppInferenceUsage
 module.exports.LlamaCppProvider = nativeBinding.LlamaCppProvider
 module.exports.JsLlamaCppProvider = nativeBinding.JsLlamaCppProvider
 module.exports.LocalModel = nativeBinding.LocalModel
@@ -714,6 +748,8 @@ module.exports.PipelineSnapshot = nativeBinding.PipelineSnapshot
 module.exports.JsPipelineSnapshot = nativeBinding.JsPipelineSnapshot
 module.exports.PiperProvider = nativeBinding.PiperProvider
 module.exports.JsPiperProvider = nativeBinding.JsPiperProvider
+module.exports.ProgressCallback = nativeBinding.ProgressCallback
+module.exports.JsProgressCallback = nativeBinding.JsProgressCallback
 module.exports.PromptFile = nativeBinding.PromptFile
 module.exports.JsPromptFile = nativeBinding.JsPromptFile
 module.exports.PromptRegistry = nativeBinding.PromptRegistry
@@ -802,6 +838,8 @@ module.exports.WorkflowSnapshot = nativeBinding.WorkflowSnapshot
 module.exports.JsWorkflowSnapshot = nativeBinding.JsWorkflowSnapshot
 module.exports.XaiProvider = nativeBinding.XaiProvider
 module.exports.JsXaiProvider = nativeBinding.JsXaiProvider
+module.exports.ChatRole = nativeBinding.ChatRole
+module.exports.JsChatRole = nativeBinding.JsChatRole
 module.exports.completeBatch = nativeBinding.completeBatch
 module.exports.completeBatchConfig = nativeBinding.completeBatchConfig
 module.exports.computeElidSimilarity = nativeBinding.computeElidSimilarity
@@ -815,6 +853,7 @@ module.exports.formatProviderHttpTail = nativeBinding.formatProviderHttpTail
 module.exports.getContextWindow = nativeBinding.getContextWindow
 module.exports.HistoryEventKindTag = nativeBinding.HistoryEventKindTag
 module.exports.JsHistoryEventKindTag = nativeBinding.JsHistoryEventKindTag
+module.exports.initLangfuse = nativeBinding.initLangfuse
 module.exports.internEventType = nativeBinding.internEventType
 module.exports.JoinStrategy = nativeBinding.JoinStrategy
 module.exports.JsJoinStrategy = nativeBinding.JsJoinStrategy
@@ -825,6 +864,8 @@ module.exports.JsFalLlmEndpointKind = nativeBinding.JsFalLlmEndpointKind
 module.exports.JsJobStatus = nativeBinding.JsJobStatus
 module.exports.JsRole = nativeBinding.JsRole
 module.exports.JsWhisperModel = nativeBinding.JsWhisperModel
+module.exports.LlamaCppChatRole = nativeBinding.LlamaCppChatRole
+module.exports.JsLlamaCppChatRole = nativeBinding.JsLlamaCppChatRole
 module.exports.loadClientTls = nativeBinding.loadClientTls
 module.exports.loadServerTls = nativeBinding.loadServerTls
 module.exports.lookupPricing = nativeBinding.lookupPricing
@@ -860,3 +901,86 @@ module.exports.JsTemplateRole = nativeBinding.JsTemplateRole
 module.exports.tryDeserializeEvent = nativeBinding.tryDeserializeEvent
 module.exports.typedToolSimple = nativeBinding.typedToolSimple
 module.exports.version = nativeBinding.version
+
+// --- post-build: typed-error wrapping ---
+;(() => {
+  const errorClasses = require('./error-classes.js')
+  const { enrichError } = errorClasses
+
+  // Wrap a single function so any thrown error -- sync or async -- is
+  // passed through enrichError before reaching the caller.
+  const wrap = (fn) => {
+    return function blazenWrapped(...args) {
+      try {
+        const result = fn.apply(this, args)
+        if (result && typeof result.then === 'function') {
+          return result.then(
+            (v) => v,
+            (e) => {
+              throw enrichError(e)
+            },
+          )
+        }
+        return result
+      } catch (e) {
+        throw enrichError(e)
+      }
+    }
+  }
+
+  // Patch a class's prototype methods in-place. Skips the constructor
+  // and any non-function or non-configurable property.
+  const patchPrototype = (Cls) => {
+    if (typeof Cls !== 'function') return
+    const proto = Cls.prototype
+    if (!proto || typeof proto !== 'object') return
+    for (const key of Object.getOwnPropertyNames(proto)) {
+      if (key === 'constructor') continue
+      const desc = Object.getOwnPropertyDescriptor(proto, key)
+      if (!desc || !desc.configurable) continue
+      if (typeof desc.value !== 'function') continue
+      try {
+        Object.defineProperty(proto, key, {
+          ...desc,
+          value: wrap(desc.value),
+        })
+      } catch {
+        // Some napi prototypes are frozen; skip gracefully.
+      }
+    }
+  }
+
+  // Wrap every top-level export. Distinguish functions (call wrap) from
+  // constructors (call patchPrototype). Heuristic: a constructor has a
+  // `prototype` object with own properties beyond `constructor`. When
+  // in doubt we patch the prototype AND wrap the function -- wrapping a
+  // constructor call in try/catch is safe (`new wrappedCtor()` still
+  // works because `fn.apply(this, args)` on a constructor called with
+  // `new` would normally fail, but napi-rs class constructors are
+  // exposed as plain factories that do not require `new`).
+  for (const key of Object.keys(module.exports)) {
+    const orig = module.exports[key]
+    if (typeof orig !== 'function') continue
+    // Skip the typed-error classes we are about to install.
+    if (Object.prototype.hasOwnProperty.call(errorClasses, key)) continue
+    if (orig.prototype && typeof orig.prototype === 'object') {
+      patchPrototype(orig)
+    }
+    // Only wrap "plain" functions (lowercase first letter convention) and
+    // any function whose prototype is empty (i.e. not a class). napi-rs
+    // emits classes with PascalCase names; we leave those callable as-is
+    // so `new ClassName(...)` keeps working but their methods are
+    // already patched above.
+    const isLikelyClass =
+      orig.prototype &&
+      Object.getOwnPropertyNames(orig.prototype).some((p) => p !== 'constructor')
+    if (!isLikelyClass) {
+      module.exports[key] = wrap(orig)
+    }
+  }
+
+  // Re-export the typed error classes + enrichError.
+  for (const [name, value] of Object.entries(errorClasses)) {
+    module.exports[name] = value
+  }
+})()

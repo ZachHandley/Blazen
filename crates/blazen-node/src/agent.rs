@@ -17,7 +17,7 @@ use blazen_llm::agent::{
 };
 use blazen_llm::error::BlazenError;
 use blazen_llm::traits::Tool;
-use blazen_llm::types::{ChatMessage, ToolDefinition};
+use blazen_llm::types::{ChatMessage, CompletionResponse, ToolDefinition};
 use napi::threadsafe_function::ThreadsafeFunctionCallMode;
 
 use crate::error::llm_error_to_napi;
@@ -92,17 +92,72 @@ pub struct JsAgentRunOptions {
 // ---------------------------------------------------------------------------
 
 /// The result of an agent run.
-#[napi(object)]
+//
+// The `response` field stores the source-of-truth Rust `CompletionResponse`
+// (which is `Clone`) and rebuilds the JS-shape on each getter call. This
+// mirrors `PyAgentResult` (which stores the inner Rust type and rebuilds the
+// Python wrapper per access) and avoids requiring `Clone` on
+// `JsCompletionResponse` (a `#[napi(object)]` shape whose transitively
+// generated mirror types are not `Clone`).
+#[napi(js_name = "AgentResult")]
 pub struct JsAgentResult {
+    response: CompletionResponse,
+    messages: Vec<serde_json::Value>,
+    iterations: u32,
+    total_cost: Option<f64>,
+}
+
+#[napi]
+#[allow(clippy::must_use_candidate)]
+impl JsAgentResult {
     /// The final completion response from the model.
-    pub response: JsCompletionResponse,
+    #[napi(getter)]
+    pub fn response(&self) -> JsCompletionResponse {
+        build_response(self.response.clone())
+    }
+
     /// Full message history including all tool calls and results.
-    pub messages: Vec<serde_json::Value>,
+    #[napi(getter)]
+    pub fn messages(&self) -> Vec<serde_json::Value> {
+        self.messages.clone()
+    }
+
     /// Number of tool-calling iterations that occurred.
-    pub iterations: u32,
+    #[napi(getter)]
+    pub fn iterations(&self) -> u32 {
+        self.iterations
+    }
+
     /// Aggregated cost across all iterations, if available.
-    #[napi(js_name = "totalCost")]
-    pub total_cost: Option<f64>,
+    #[napi(getter, js_name = "totalCost")]
+    pub fn total_cost(&self) -> Option<f64> {
+        self.total_cost
+    }
+
+    /// String representation matching the Python `AgentResult.__repr__`.
+    #[napi(js_name = "toString")]
+    pub fn display_string(&self) -> String {
+        format!(
+            "AgentResult(iterations={}, cost={:?})",
+            self.iterations, self.total_cost
+        )
+    }
+}
+
+impl JsAgentResult {
+    pub(crate) fn new(
+        response: CompletionResponse,
+        messages: Vec<serde_json::Value>,
+        iterations: u32,
+        total_cost: Option<f64>,
+    ) -> Self {
+        Self {
+            response,
+            messages,
+            iterations,
+            total_cost,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -300,12 +355,12 @@ pub async fn run_agent(
         })
         .collect::<napi::Result<Vec<_>>>()?;
 
-    Ok(JsAgentResult {
-        response: build_response(result.response),
-        messages: js_messages,
-        iterations: result.iterations,
-        total_cost: result.total_cost,
-    })
+    Ok(JsAgentResult::new(
+        result.response,
+        js_messages,
+        result.iterations,
+        result.total_cost,
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -428,10 +483,10 @@ pub async fn run_agent_with_callback(
         })
         .collect::<napi::Result<Vec<_>>>()?;
 
-    Ok(JsAgentResult {
-        response: build_response(result.response),
-        messages: js_messages,
-        iterations: result.iterations,
-        total_cost: result.total_cost,
-    })
+    Ok(JsAgentResult::new(
+        result.response,
+        js_messages,
+        result.iterations,
+        result.total_cost,
+    ))
 }

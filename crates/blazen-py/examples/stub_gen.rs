@@ -56,7 +56,35 @@ fn main() {
     let content = fs::read_to_string(&pyi_path).expect("failed to read blazen.pyi");
     let processed = rewrite_coroutine_to_async(&content);
     let processed = inject_exception_stubs(&processed);
+    let processed = inject_module_aliases(&processed);
     fs::write(&pyi_path, processed).expect("failed to write blazen.pyi");
+}
+
+/// Inject module-level type aliases that mirror Rust `pub type` aliases.
+///
+/// `pyo3-stub-gen` only emits classes registered via `#[gen_stub_pyclass]`
+/// — it does not see runtime aliases registered with `m.add("Name", ...)`.
+/// Each entry here corresponds to a `m.add(<alias>, py.get_type::<Py...>())`
+/// call in `src/lib.rs`. Aliases are written as `Name = Target` near the
+/// end of the file and added to `__all__` so re-exports work.
+#[cfg(not(feature = "extension-module"))]
+fn inject_module_aliases(content: &str) -> String {
+    // (alias_name, target_class_name)
+    const ALIASES: &[(&str, &str)] = &[("MediaSource", "ImageSource")];
+
+    let alias_names: Vec<&str> = ALIASES.iter().map(|(n, _)| *n).collect();
+    let with_all = inject_into_all(content, &alias_names);
+
+    let mut block = String::from(
+        "\n\n# --- Module-level type aliases -----------------------------------------\n",
+    );
+    block.push_str("# Mirror `pub type Foo = Bar;` declarations from the Rust crate so\n");
+    block.push_str("# `from blazen import Foo` resolves at type-check time.\n\n");
+    for (alias, target) in ALIASES {
+        block.push_str(&format!("{alias} = {target}\n"));
+    }
+
+    format!("{}{}", with_all.trim_end(), block)
 }
 
 /// Inject stub declarations for the 10 Blazen exception classes.

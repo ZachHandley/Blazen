@@ -7,21 +7,25 @@
 //!
 //! ## wasm32 support
 //!
-//! On `wasm32-*` targets the [`provider`] module (which owns the actual
-//! [`TractEmbedModel`] implementation) is compiled out: tract's ONNX runtime
-//! is fine on wasm in principle, but the `from_options` constructor relies on
-//! `tokio` runtime primitives and on `blazen-model-cache`'s `HuggingFace` Hub
-//! downloader, neither of which compiles to wasm32. The [`options`] module
-//! (registry + [`TractOptions`]) is still available so wasm consumers can use
-//! the same model catalog if they download weights through a different path
-//! (e.g. JavaScript `fetch`).
+//! On `wasm32-*` targets the native [`provider`] module is compiled out
+//! because its `from_options` constructor relies on `tokio` runtime primitives
+//! and on `blazen-model-cache`'s `HuggingFace` Hub downloader, neither of
+//! which compiles to wasm32. In its place, [`wasm_provider`] exposes
+//! [`WasmTractEmbedModel`] which downloads ONNX weights and the tokenizer via
+//! `web_sys::fetch` and runs inference through the same `tract-onnx` pipeline.
 
 pub mod options;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod provider;
 
+#[cfg(target_arch = "wasm32")]
+pub mod wasm_provider;
+
 pub use options::TractOptions;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use provider::{TractEmbedModel, TractError, TractResponse};
+
+#[cfg(target_arch = "wasm32")]
+pub use wasm_provider::{WasmTractEmbedModel, WasmTractError, WasmTractResponse};

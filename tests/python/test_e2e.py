@@ -35,6 +35,7 @@ from blazen import (
     RetryConfig,
     StartEvent,
     StopEvent,
+    TemplateRole,
     ToolDef,
     Workflow,
     count_message_tokens,
@@ -184,7 +185,7 @@ async def test_human_in_the_loop():
 
 def test_prompt_template_render():
     """PromptTemplate renders variables into a ChatMessage."""
-    t = PromptTemplate("Hello {{name}}, welcome to {{place}}!", role="user")
+    t = PromptTemplate("Hello {{name}}, welcome to {{place}}!", role=TemplateRole.User)
     msg = t.render(name="Alice", place="Wonderland")
     assert msg.content == "Hello Alice, welcome to Wonderland!"
     assert msg.role == "user"
@@ -200,13 +201,13 @@ def test_prompt_template_properties():
     """PromptTemplate exposes name, role, version, description."""
     t = PromptTemplate(
         "Hello {{name}}!",
-        role="system",
+        role=TemplateRole.System,
         name="greet",
         description="A greeting",
         version="2.0",
     )
     assert t.name == "greet"
-    assert t.role == "system"
+    assert t.role == TemplateRole.System
     assert t.version == "2.0"
     assert t.description == "A greeting"
     assert t.template == "Hello {{name}}!"

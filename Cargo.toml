@@ -89,7 +89,7 @@ pyo3 = { version = "0.28", features = ["multiple-pymethods"] }
 pyo3-async-runtimes = { version = "0.28", features = ["tokio-runtime"] }
 
 # Node.js bindings
-napi = { version = "3", features = ["async", "serde-json", "tokio_rt"] }
+napi = { version = "3", features = ["async", "napi6", "serde-json", "tokio_rt"] }
 napi-derive = "3"
 
 # Proc macro deps

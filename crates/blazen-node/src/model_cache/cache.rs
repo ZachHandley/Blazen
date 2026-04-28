@@ -34,6 +34,21 @@ type ProgressTsfn = ThreadsafeFunction<
     true,
 >;
 
+/// TSFN built from a bound `onProgress` method on a JS `ProgressCallback`
+/// subclass instance. Uses `BigInt` for byte counts so values larger than
+/// `Number.MAX_SAFE_INTEGER` (~9 PB) survive the Rust -> JS hop without loss.
+///
+/// The JS handler signature is
+/// `(downloaded: bigint, total: bigint | null) => void`.
+type ProgressMethodTsfn = ThreadsafeFunction<
+    FnArgs<(BigInt, Option<BigInt>)>,
+    (),
+    FnArgs<(BigInt, Option<BigInt>)>,
+    Status,
+    false,
+    true,
+>;
+
 /// Adapter that bridges the JS progress TSFN to the Rust [`ProgressCallback`]
 /// trait expected by [`ModelCache::download`].
 struct JsProgressAdapter {
@@ -50,6 +65,135 @@ impl ProgressCallback for JsProgressAdapter {
             ThreadsafeFunctionCallMode::NonBlocking,
         );
     }
+}
+
+/// Adapter that bridges a bound JS `onProgress` method (extracted from a
+/// [`JsProgressCallback`] subclass instance) to the Rust [`ProgressCallback`]
+/// trait. Byte counts are passed as `BigInt` to preserve full `u64` precision.
+struct JsProgressMethodAdapter {
+    tsfn: Arc<ProgressMethodTsfn>,
+}
+
+impl ProgressCallback for JsProgressMethodAdapter {
+    fn on_progress(&self, downloaded_bytes: u64, total_bytes: Option<u64>) {
+        let downloaded = BigInt::from(downloaded_bytes);
+        let total = total_bytes.map(BigInt::from);
+        let _ = self.tsfn.call(
+            FnArgs::from((downloaded, total)),
+            ThreadsafeFunctionCallMode::NonBlocking,
+        );
+    }
+}
+
+/// Subclassable base for download progress callbacks.
+///
+/// Extend this class and override `onProgress(downloaded, total)` to receive
+/// progress updates from [`JsModelCache::download`]. Byte counts are `bigint`
+/// values so large downloads (multi-gigabyte model files) keep full precision.
+///
+/// `total` is `null` when the server does not report `Content-Length` up
+/// front (e.g. streaming responses without a known size).
+///
+/// ```javascript
+/// import { ModelCache, ProgressCallback } from 'blazen';
+///
+/// class LoggingProgress extends ProgressCallback {
+///     onProgress(downloaded, total) {
+///         if (total !== null) {
+///             const pct = Number(downloaded * 100n / total);
+///             console.log(`${pct}%`);
+///         } else {
+///             console.log(`${downloaded} bytes`);
+///         }
+///     }
+/// }
+///
+/// const cache = ModelCache.create();
+/// await cache.download('bert-base-uncased', 'config.json', new LoggingProgress());
+/// ```
+#[napi(js_name = "ProgressCallback")]
+pub struct JsProgressCallback;
+
+#[napi]
+#[allow(
+    clippy::new_without_default,
+    clippy::must_use_candidate,
+    clippy::missing_errors_doc,
+    clippy::needless_pass_by_value,
+    clippy::unused_self
+)]
+impl JsProgressCallback {
+    /// Create a new `ProgressCallback` base instance.
+    ///
+    /// Subclasses should call `super()` and override `onProgress`.
+    #[napi(constructor)]
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Receive a progress update. Subclasses **must** override this method.
+    ///
+    /// Calling the base implementation always throws so that forgetting to
+    /// override is caught loudly rather than silently swallowing progress
+    /// events.
+    #[napi(js_name = "onProgress")]
+    pub fn on_progress(&self, _downloaded: BigInt, _total: Option<BigInt>) -> napi::Result<()> {
+        Err(napi::Error::new(
+            napi::Status::GenericFailure,
+            "ProgressCallback subclass must override onProgress(downloaded, total)",
+        ))
+    }
+}
+
+/// Build a [`ProgressCallback`] adapter from a JS `ProgressCallback` subclass
+/// instance.
+///
+/// Extracts the `onProgress` property from the instance, binds `this` to the
+/// instance via `Function.prototype.bind` (so `this.foo` works inside the
+/// override), and wraps the bound function in a TSFN that the Rust download
+/// code can call from any thread.
+///
+/// Errors if the instance has no `onProgress` property, the property is not a
+/// function, or building the TSFN fails.
+fn build_progress_adapter_from_instance(
+    instance: &Object<'_>,
+) -> Result<Arc<dyn ProgressCallback>> {
+    if !instance.has_named_property("onProgress").unwrap_or(false) {
+        return Err(napi::Error::from_reason(
+            "ProgressCallback instance is missing onProgress(downloaded, total)",
+        ));
+    }
+
+    // Extract as a typed Function so we can bind `this` and build a TSFN with
+    // matching argument types. `()` return reflects that the JS handler's
+    // return value is discarded.
+    let js_function: Function<'_, FnArgs<(BigInt, Option<BigInt>)>, ()> =
+        instance.get_named_property("onProgress").map_err(|e| {
+            napi::Error::from_reason(format!(
+                "ProgressCallback.onProgress is not a function: {e}"
+            ))
+        })?;
+
+    // Bind `this` to the subclass instance so user overrides can use `this.*`.
+    let bound = js_function.bind(instance).map_err(|e| {
+        napi::Error::from_reason(format!(
+            "failed to bind `this` on ProgressCallback.onProgress: {e}"
+        ))
+    })?;
+
+    let tsfn: ProgressMethodTsfn = bound
+        .build_threadsafe_function::<FnArgs<(BigInt, Option<BigInt>)>>()
+        .weak::<true>()
+        .build()
+        .map_err(|e| {
+            napi::Error::from_reason(format!(
+                "failed to build threadsafe function for ProgressCallback.onProgress: {e}"
+            ))
+        })?;
+
+    Ok(Arc::new(JsProgressMethodAdapter {
+        tsfn: Arc::new(tsfn),
+    }))
 }
 
 /// Local cache for ML models downloaded from `HuggingFace` Hub.
@@ -121,29 +265,48 @@ impl JsModelCache {
     ///
     /// Returns the local filesystem path to the cached file.
     ///
-    /// The optional `onProgress` callback receives `(downloaded, total)` where
+    /// The optional `onProgress` argument accepts either:
+    /// - A raw callback `(downloaded: number, total: number | null) => void`
+    ///   for a quick inline progress hook, or
+    /// - A [`JsProgressCallback`] subclass instance (recommended for stateful
+    ///   reporters), whose `onProgress(downloaded, total)` method receives
+    ///   byte counts as `bigint` values.
+    ///
     /// `total` is `null` when the server does not report the file size up
     /// front.
+    //
+    // Hand-rolled `AsyncBlock` rather than `async fn` because the `Object<'_>`
+    // arm of the `on_progress` parameter is `!Send` and would poison the
+    // generated future. We extract the JS instance to a `Send`-able adapter
+    // synchronously, then move only the adapter across the await.
     #[napi(js_name = "download")]
-    pub async fn download(
+    pub fn download(
         &self,
+        env: &Env,
         repo: String,
         file: String,
-        on_progress: Option<ProgressTsfn>,
-    ) -> Result<String> {
-        let progress: Option<Arc<dyn ProgressCallback>> = on_progress.map(|tsfn| {
-            let adapter = JsProgressAdapter {
-                tsfn: Arc::new(tsfn),
-            };
-            Arc::new(adapter) as Arc<dyn ProgressCallback>
-        });
+        on_progress: Option<Either<ProgressTsfn, Object<'_>>>,
+    ) -> Result<AsyncBlock<String>> {
+        let progress: Option<Arc<dyn ProgressCallback>> = match on_progress {
+            None => None,
+            Some(Either::A(tsfn)) => {
+                let adapter = JsProgressAdapter {
+                    tsfn: Arc::new(tsfn),
+                };
+                Some(Arc::new(adapter) as Arc<dyn ProgressCallback>)
+            }
+            Some(Either::B(instance)) => Some(build_progress_adapter_from_instance(&instance)?),
+        };
 
-        let path = self
-            .inner
-            .download(&repo, &file, progress)
-            .await
-            .map_err(cache_error_to_napi)?;
+        let inner = Arc::clone(&self.inner);
+        let fut = async move {
+            let path = inner
+                .download(&repo, &file, progress)
+                .await
+                .map_err(cache_error_to_napi)?;
+            Ok(path.to_string_lossy().into_owned())
+        };
 
-        Ok(path.to_string_lossy().into_owned())
+        AsyncBlockBuilder::new(fut).build(env)
     }
 }

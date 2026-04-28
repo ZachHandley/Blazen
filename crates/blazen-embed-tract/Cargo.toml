@@ -31,5 +31,20 @@ tract-onnx = { workspace = true }
 ndarray = { workspace = true }
 tokio = { version = "1", default-features = false, features = ["fs", "rt", "rt-multi-thread", "macros", "time"] }
 
+# wasm32-only: tract + tokenizers compile to wasm with the right feature flags.
+# `tokenizers` needs `unstable_wasm` (replaces `onig` with `fancy-regex` and
+# pulls in `getrandom/wasm_js`); `tract-onnx` needs `getrandom-js`. Model and
+# tokenizer bytes arrive via `web_sys::fetch` instead of `hf-hub`, so the
+# `blazen-model-cache` stack is bypassed entirely on this target.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokenizers = { version = "0.21", default-features = false, features = ["unstable_wasm"] }
+tract-onnx = { workspace = true, features = ["getrandom-js"] }
+ndarray = { workspace = true }
+wasm-bindgen = "=0.2.118"
+wasm-bindgen-futures = "=0.4.68"
+js-sys = "=0.3.95"
+web-sys = { version = "=0.3.95", features = ["Window", "Request", "RequestInit", "RequestMode", "Response"] }
+getrandom = { version = "0.2", features = ["js"] }
+
 [lints]
 workspace = true

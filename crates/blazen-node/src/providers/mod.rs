@@ -94,9 +94,17 @@ pub use embed::JsEmbedProvider;
 #[cfg(feature = "fastembed")]
 pub use fastembed::{JsFastEmbedModel, JsFastEmbedOptions, JsFastEmbedResponse};
 #[cfg(feature = "llamacpp")]
-pub use llamacpp::{JsLlamaCppOptions, JsLlamaCppProvider};
+pub use llamacpp::{
+    JsLlamaCppChatMessageInput, JsLlamaCppChatRole, JsLlamaCppInferenceChunk,
+    JsLlamaCppInferenceChunkStream, JsLlamaCppInferenceResult, JsLlamaCppInferenceUsage,
+    JsLlamaCppOptions, JsLlamaCppProvider,
+};
 #[cfg(feature = "mistralrs")]
-pub use mistralrs::JsMistralRsProvider;
+pub use mistralrs::{
+    JsChatMessageInput, JsChatRole, JsInferenceChunk, JsInferenceChunkStream, JsInferenceImage,
+    JsInferenceImageSource, JsInferenceResult, JsInferenceToolCall, JsInferenceUsage,
+    JsMistralRsProvider,
+};
 #[cfg(feature = "piper")]
 pub use piper::{JsPiperOptions, JsPiperProvider};
 #[cfg(feature = "tract")]

@@ -35,9 +35,12 @@ __all__ = [
     "CachedCompletionModel",
     "CandleEmbedModel",
     "CandleEmbedOptions",
+    "CandleInferenceResult",
     "CandleLlmOptions",
     "CandleLlmProvider",
     "ChatMessage",
+    "ChatMessageInput",
+    "ChatRole",
     "ChatWindow",
     "CheckpointStore",
     "Citation",
@@ -91,18 +94,32 @@ __all__ = [
     "ImageRequest",
     "ImageSource",
     "InMemoryBackend",
+    "InferenceChunk",
+    "InferenceChunkStream",
+    "InferenceImage",
+    "InferenceImageSource",
+    "InferenceResult",
+    "InferenceToolCall",
+    "InferenceUsage",
     "InputRequestEvent",
     "InputResponseEvent",
     "JobHandle",
     "JobStatus",
     "JoinStrategy",
     "JsonlBackend",
+    "LlamaCppChatMessageInput",
+    "LlamaCppChatRole",
+    "LlamaCppInferenceChunk",
+    "LlamaCppInferenceChunkStream",
+    "LlamaCppInferenceResult",
+    "LlamaCppInferenceUsage",
     "LlamaCppOptions",
     "LlamaCppProvider",
     "LlmPayload",
     "LocalModel",
     "MediaError",
     "MediaOutput",
+    "MediaSource",
     "MediaType",
     "Memory",
     "MemoryBackend",
@@ -145,6 +162,7 @@ __all__ = [
     "PiperOptions",
     "PiperProvider",
     "PricingEntry",
+    "ProgressCallback",
     "PromptFile",
     "PromptRegistry",
     "PromptTemplate",
@@ -1184,6 +1202,42 @@ class CandleEmbedOptions:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class CandleInferenceResult:
+    r"""
+    Result from a non-streaming candle inference call.
+    
+    Returned by the lower-level inherent ``CandleLlmProvider::infer`` API on
+    the Rust side; exposed in Python so callers that hold a
+    :class:`CandleInferenceResult` (e.g. from a custom binding or future
+    inherent-infer surface) can introspect tokens and timing.
+    """
+    @property
+    def content(self) -> builtins.str:
+        r"""
+        The generated text content.
+        """
+    @property
+    def prompt_tokens(self) -> builtins.int:
+        r"""
+        Number of prompt tokens consumed.
+        """
+    @property
+    def completion_tokens(self) -> builtins.int:
+        r"""
+        Number of completion tokens generated.
+        """
+    @property
+    def total_time_secs(self) -> builtins.float:
+        r"""
+        Wall-clock time for the inference in seconds.
+        """
+    def __new__(cls, *, content: builtins.str, prompt_tokens: builtins.int, completion_tokens: builtins.int, total_time_secs: builtins.float) -> CandleInferenceResult:
+        r"""
+        Construct a candle inference result.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class CandleLlmOptions:
     r"""
     Options for the local candle LLM backend.
@@ -1409,6 +1463,48 @@ class ChatMessage:
         
         ``data`` is always returned as a parsed Python value. ``llm_override``
         is an ``LlmPayload`` if one was set, else ``None``.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ChatMessageInput:
+    r"""
+    A single chat message for mistral.rs inference, optionally carrying image
+    attachments. Text-only messages leave ``images`` empty; vision messages
+    supply one or more ``InferenceImage`` entries.
+    """
+    @property
+    def role(self) -> ChatRole:
+        r"""
+        The role that produced this message.
+        """
+    @property
+    def text(self) -> builtins.str:
+        r"""
+        The textual content of the message.
+        """
+    @property
+    def images(self) -> builtins.list[InferenceImage]:
+        r"""
+        Image attachments on this message.
+        """
+    def __new__(cls, *, role: ChatRole, text: builtins.str, images: typing.Optional[typing.Sequence[InferenceImage]] = None) -> ChatMessageInput:
+        r"""
+        Construct a chat message input.
+        """
+    @staticmethod
+    def text_only(role: ChatRole, text: builtins.str) -> ChatMessageInput:
+        r"""
+        Build a text-only chat message.
+        """
+    @staticmethod
+    def with_images(role: ChatRole, text: builtins.str, images: typing.Sequence[InferenceImage]) -> ChatMessageInput:
+        r"""
+        Build a chat message with images attached.
+        """
+    def has_images(self) -> builtins.bool:
+        r"""
+        Whether this message has any image attachments.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -3896,6 +3992,210 @@ class InMemoryBackend:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class InferenceChunk:
+    r"""
+    A single chunk from streaming mistral.rs inference.
+    """
+    @property
+    def delta(self) -> typing.Optional[builtins.str]:
+        r"""
+        Incremental text content.
+        """
+    @property
+    def reasoning_delta(self) -> typing.Optional[builtins.str]:
+        r"""
+        Incremental reasoning content.
+        """
+    @property
+    def tool_calls(self) -> builtins.list[InferenceToolCall]:
+        r"""
+        Tool calls completed in this chunk.
+        """
+    @property
+    def finish_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Set on the final chunk when generation stops.
+        """
+    def __new__(cls, *, delta: typing.Optional[builtins.str] = None, reasoning_delta: typing.Optional[builtins.str] = None, tool_calls: typing.Optional[typing.Sequence[InferenceToolCall]] = None, finish_reason: typing.Optional[builtins.str] = None) -> InferenceChunk:
+        r"""
+        Construct an inference chunk.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class InferenceChunkStream:
+    r"""
+    Async iterator over streamed mistral.rs inference chunks.
+    
+    Implements the Python ``__aiter__`` / ``__anext__`` protocol so the stream
+    can be consumed with ``async for chunk in stream: ...``. Yields
+    ``InferenceChunk`` items and terminates with ``StopAsyncIteration`` once
+    the underlying engine stream is exhausted.
+    """
+    def __aiter__(self) -> InferenceChunkStream: ...
+    async def __anext__(self) -> InferenceChunk:
+
+@typing.final
+class InferenceImage:
+    r"""
+    An image payload attached to a ``ChatMessageInput`` for multimodal
+    mistral.rs inference.
+    """
+    @property
+    def source(self) -> InferenceImageSource:
+        r"""
+        The underlying image source.
+        """
+    def __new__(cls, *, source: InferenceImageSource) -> InferenceImage:
+        r"""
+        Construct an image from an explicit source.
+        """
+    @staticmethod
+    def from_bytes(bytes: typing.Sequence[builtins.int]) -> InferenceImage:
+        r"""
+        Build an image from raw encoded bytes (PNG, JPEG, WebP, ...).
+        """
+    @staticmethod
+    def from_path(path: builtins.str | os.PathLike | pathlib.Path) -> InferenceImage:
+        r"""
+        Build an image from a local file path.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class InferenceImageSource:
+    r"""
+    Source of an image payload for a multimodal mistral.rs chat message.
+    
+    Use the static factories ``bytes(...)`` or ``path(...)``. Inspect via
+    ``kind`` (``"bytes"`` or ``"path"``) plus the per-variant getters.
+    """
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Variant tag: ``"bytes"`` or ``"path"``.
+        """
+    @property
+    def data(self) -> typing.Optional[builtins.list[builtins.int]]:
+        r"""
+        Raw image bytes for the ``Bytes`` variant; ``None`` otherwise.
+        """
+    @property
+    def path_value(self) -> typing.Optional[pathlib.Path]:
+        r"""
+        Local file path for the ``Path`` variant; ``None`` otherwise.
+        """
+    @staticmethod
+    def bytes(data: typing.Sequence[builtins.int]) -> InferenceImageSource:
+        r"""
+        Build a bytes-backed image source from raw encoded bytes.
+        """
+    @staticmethod
+    def path(path: builtins.str | os.PathLike | pathlib.Path) -> InferenceImageSource:
+        r"""
+        Build a path-backed image source from a local file path.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class InferenceResult:
+    r"""
+    Result of a single non-streaming mistral.rs inference call.
+    """
+    @property
+    def content(self) -> typing.Optional[builtins.str]:
+        r"""
+        The generated text content, if any.
+        """
+    @property
+    def reasoning_content(self) -> typing.Optional[builtins.str]:
+        r"""
+        Reasoning / chain-of-thought content, if the model exposes it.
+        """
+    @property
+    def tool_calls(self) -> builtins.list[InferenceToolCall]:
+        r"""
+        Tool calls requested by the model.
+        """
+    @property
+    def finish_reason(self) -> builtins.str:
+        r"""
+        Why the model stopped generating.
+        """
+    @property
+    def model(self) -> builtins.str:
+        r"""
+        The model identifier that produced this result.
+        """
+    @property
+    def usage(self) -> InferenceUsage:
+        r"""
+        Token usage statistics.
+        """
+    def __new__(cls, *, finish_reason: builtins.str, model: builtins.str, usage: InferenceUsage, content: typing.Optional[builtins.str] = None, reasoning_content: typing.Optional[builtins.str] = None, tool_calls: typing.Optional[typing.Sequence[InferenceToolCall]] = None) -> InferenceResult:
+        r"""
+        Construct an inference result.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class InferenceToolCall:
+    r"""
+    A tool call returned by the mistral.rs engine.
+    """
+    @property
+    def id(self) -> builtins.str:
+        r"""
+        Provider-assigned call identifier.
+        """
+    @property
+    def name(self) -> builtins.str:
+        r"""
+        Tool function name.
+        """
+    @property
+    def arguments(self) -> builtins.str:
+        r"""
+        Tool arguments as a JSON string.
+        """
+    def __new__(cls, *, id: builtins.str, name: builtins.str, arguments: builtins.str) -> InferenceToolCall:
+        r"""
+        Construct a tool call.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class InferenceUsage:
+    r"""
+    Token usage statistics from a mistral.rs inference call.
+    """
+    @property
+    def prompt_tokens(self) -> builtins.int:
+        r"""
+        Tokens in the prompt.
+        """
+    @property
+    def completion_tokens(self) -> builtins.int:
+        r"""
+        Tokens generated.
+        """
+    @property
+    def total_tokens(self) -> builtins.int:
+        r"""
+        Total tokens (prompt + completion).
+        """
+    @property
+    def total_time_sec(self) -> builtins.float:
+        r"""
+        Total wall-clock inference time in seconds.
+        """
+    def __new__(cls, *, prompt_tokens: builtins.int = 0, completion_tokens: builtins.int = 0, total_tokens: builtins.int = 0, total_time_sec: builtins.float = 0.0) -> InferenceUsage:
+        r"""
+        Construct usage stats.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class InputRequestEvent:
     r"""
     Emitted by a step to request human input. Triggers auto-pause.
@@ -4053,6 +4353,131 @@ class JsonlBackend:
         
         Returns:
             A new JsonlBackend instance.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class LlamaCppChatMessageInput:
+    r"""
+    A single chat message for llama.cpp inference.
+    
+    llama.cpp messages are text-only; multimodal inputs are not supported by
+    this backend.
+    """
+    @property
+    def role(self) -> LlamaCppChatRole:
+        r"""
+        The role that produced this message.
+        """
+    @property
+    def text(self) -> builtins.str:
+        r"""
+        The textual content of the message.
+        """
+    def __new__(cls, *, role: LlamaCppChatRole, text: builtins.str) -> LlamaCppChatMessageInput:
+        r"""
+        Construct a chat message input.
+        """
+    @staticmethod
+    def create(role: LlamaCppChatRole, text: builtins.str) -> LlamaCppChatMessageInput:
+        r"""
+        Build a chat message via the typed factory on the underlying type.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class LlamaCppInferenceChunk:
+    r"""
+    A single chunk from streaming llama.cpp inference.
+    """
+    @property
+    def delta(self) -> typing.Optional[builtins.str]:
+        r"""
+        Incremental text content.
+        """
+    @property
+    def finish_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Set on the final chunk when generation stops.
+        """
+    def __new__(cls, *, delta: typing.Optional[builtins.str] = None, finish_reason: typing.Optional[builtins.str] = None) -> LlamaCppInferenceChunk:
+        r"""
+        Construct an inference chunk.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class LlamaCppInferenceChunkStream:
+    r"""
+    Async iterator over streamed llama.cpp inference chunks.
+    
+    Implements the Python ``__aiter__`` / ``__anext__`` protocol so the stream
+    can be consumed with ``async for chunk in stream: ...``. Yields
+    ``LlamaCppInferenceChunk`` items and terminates with ``StopAsyncIteration``
+    once the underlying engine stream is exhausted.
+    """
+    def __aiter__(self) -> LlamaCppInferenceChunkStream: ...
+    async def __anext__(self) -> LlamaCppInferenceChunk:
+
+@typing.final
+class LlamaCppInferenceResult:
+    r"""
+    Result of a single non-streaming llama.cpp inference call.
+    """
+    @property
+    def content(self) -> typing.Optional[builtins.str]:
+        r"""
+        The generated text content, if any.
+        """
+    @property
+    def finish_reason(self) -> builtins.str:
+        r"""
+        Why the model stopped generating.
+        """
+    @property
+    def model(self) -> builtins.str:
+        r"""
+        The model identifier that produced this result.
+        """
+    @property
+    def usage(self) -> LlamaCppInferenceUsage:
+        r"""
+        Token usage statistics.
+        """
+    def __new__(cls, *, finish_reason: builtins.str, model: builtins.str, usage: LlamaCppInferenceUsage, content: typing.Optional[builtins.str] = None) -> LlamaCppInferenceResult:
+        r"""
+        Construct an inference result.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class LlamaCppInferenceUsage:
+    r"""
+    Token usage statistics from a llama.cpp inference call.
+    """
+    @property
+    def prompt_tokens(self) -> builtins.int:
+        r"""
+        Tokens in the prompt.
+        """
+    @property
+    def completion_tokens(self) -> builtins.int:
+        r"""
+        Tokens generated.
+        """
+    @property
+    def total_tokens(self) -> builtins.int:
+        r"""
+        Total tokens (prompt + completion).
+        """
+    @property
+    def total_time_sec(self) -> builtins.float:
+        r"""
+        Total wall-clock inference time in seconds.
+        """
+    def __new__(cls, *, prompt_tokens: builtins.int = 0, completion_tokens: builtins.int = 0, total_tokens: builtins.int = 0, total_time_sec: builtins.float = 0.0) -> LlamaCppInferenceUsage:
+        r"""
+        Construct usage stats.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -5930,6 +6355,36 @@ class PricingEntry:
         Construct a pricing entry.
         """
     def __repr__(self) -> builtins.str: ...
+
+class ProgressCallback:
+    r"""
+    Subclassable ABC mirroring the Rust [`blazen_model_cache::ProgressCallback`]
+    trait.
+    
+    Subclass and override :meth:`on_progress` to receive download progress
+    notifications from :meth:`ModelCache.download`. The default
+    implementation is a no-op so subclasses can ignore total-byte updates
+    they do not care about.
+    
+    You may also pass a plain ``Callable[[int, int | None], None]`` to
+    ``download(progress=...)`` for the same effect; this ABC simply gives
+    type-checked callers a typed base to inherit from.
+    
+    Example:
+        >>> class Logger(ProgressCallback):
+        ...     def on_progress(self, downloaded: int, total: int | None) -> None:
+        ...         print(f"{downloaded}/{total}")
+        >>> await cache.download("bert-base-uncased", "config.json", Logger())
+    """
+    def __new__(cls) -> ProgressCallback: ...
+    def on_progress(self, downloaded: builtins.int, total: typing.Optional[builtins.int] = None) -> None:
+        r"""
+        Called repeatedly during a download with the current byte counts.
+        
+        Args:
+            downloaded: Bytes received so far.
+            total: Total expected bytes, or ``None`` if the size is unknown.
+        """
 
 @typing.final
 class PromptFile:
@@ -9254,6 +9709,16 @@ class CacheStrategy(enum.Enum):
     Auto = ...
 
 @typing.final
+class ChatRole(enum.Enum):
+    r"""
+    Chat message role for mistral.rs inference inputs.
+    """
+    System = ...
+    User = ...
+    Assistant = ...
+    Tool = ...
+
+@typing.final
 class Device(enum.Enum):
     r"""
     Hardware device selection for compute backends.
@@ -9306,6 +9771,16 @@ class JoinStrategy(enum.Enum):
     r"""
     Return as soon as the first branch completes; cancel the rest.
     """
+
+@typing.final
+class LlamaCppChatRole(enum.Enum):
+    r"""
+    Chat message role for llama.cpp inference inputs.
+    """
+    System = ...
+    User = ...
+    Assistant = ...
+    Tool = ...
 
 @typing.final
 class PauseReason(enum.Enum):
@@ -9945,3 +10420,9 @@ class ComputeError(BlazenError):
 class MediaError(BlazenError):
     """Media handling error (invalid input, size exceeded, etc)."""
     ...
+
+# --- Module-level type aliases -----------------------------------------
+# Mirror `pub type Foo = Bar;` declarations from the Rust crate so
+# `from blazen import Foo` resolves at type-check time.
+
+MediaSource = ImageSource

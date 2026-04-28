@@ -18,7 +18,9 @@ use tokio_stream::StreamExt;
 
 use blazen_llm::traits::{CompletionModel, LocalModel};
 use blazen_llm::types::{ChatMessage, CompletionRequest, ToolDefinition};
-use blazen_llm::{CandleLlmCompletionModel, CandleLlmOptions, CandleLlmProvider};
+use blazen_llm::{
+    CandleInferenceResult, CandleLlmCompletionModel, CandleLlmOptions, CandleLlmProvider,
+};
 
 use crate::error::{llm_error_to_napi, to_napi_error};
 use crate::providers::completion_model::StreamChunkCallbackTsfn;
@@ -264,5 +266,99 @@ impl JsCandleLlmProvider {
             .vram_bytes()
             .await
             .map(|b| i64::try_from(b).unwrap_or(i64::MAX))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// JsCandleInferenceResult NAPI class
+// ---------------------------------------------------------------------------
+
+/// Result from a non-streaming candle inference call.
+///
+/// Mirrors the underlying `blazen_llm::CandleInferenceResult` struct and
+/// exposes the generated text alongside token-count and timing metadata.
+///
+/// ```javascript
+/// const result = new CandleInferenceResult("hello", 12, 4, 0.42);
+/// console.log(result.content, result.promptTokens, result.completionTokens);
+/// ```
+#[napi(js_name = "CandleInferenceResult")]
+pub struct JsCandleInferenceResult {
+    /// The generated text content.
+    content: String,
+    /// Number of prompt tokens consumed.
+    prompt_tokens: u32,
+    /// Number of completion tokens generated.
+    completion_tokens: u32,
+    /// Wall-clock time for the inference in seconds.
+    total_time_secs: f64,
+}
+
+#[napi]
+impl JsCandleInferenceResult {
+    /// Construct a new `CandleInferenceResult`.
+    ///
+    /// `promptTokens` and `completionTokens` are token counts; pass `0`
+    /// when unknown. `totalTimeSecs` is the wall-clock duration of the
+    /// inference in seconds.
+    #[napi(constructor)]
+    #[must_use]
+    pub fn new(
+        content: String,
+        prompt_tokens: u32,
+        completion_tokens: u32,
+        total_time_secs: f64,
+    ) -> Self {
+        Self {
+            content,
+            prompt_tokens,
+            completion_tokens,
+            total_time_secs,
+        }
+    }
+
+    /// The generated text content.
+    #[napi(getter)]
+    #[must_use]
+    pub fn content(&self) -> String {
+        self.content.clone()
+    }
+
+    /// Number of prompt tokens consumed.
+    #[napi(getter, js_name = "promptTokens")]
+    #[must_use]
+    pub const fn prompt_tokens(&self) -> u32 {
+        self.prompt_tokens
+    }
+
+    /// Number of completion tokens generated.
+    #[napi(getter, js_name = "completionTokens")]
+    #[must_use]
+    pub const fn completion_tokens(&self) -> u32 {
+        self.completion_tokens
+    }
+
+    /// Wall-clock time for the inference in seconds.
+    #[napi(getter, js_name = "totalTimeSecs")]
+    #[must_use]
+    pub const fn total_time_secs(&self) -> f64 {
+        self.total_time_secs
+    }
+}
+
+impl JsCandleInferenceResult {
+    /// Convert from the underlying `blazen_llm::CandleInferenceResult`.
+    ///
+    /// `usize` token counts are saturated to `u32::MAX` on the (highly
+    /// unlikely) overflow path; JavaScript consumers see a `number` either
+    /// way and would not be able to represent values that large precisely.
+    #[must_use]
+    pub fn from_rust(inner: CandleInferenceResult) -> Self {
+        Self {
+            content: inner.content,
+            prompt_tokens: u32::try_from(inner.prompt_tokens).unwrap_or(u32::MAX),
+            completion_tokens: u32::try_from(inner.completion_tokens).unwrap_or(u32::MAX),
+            total_time_secs: inner.total_time_secs,
+        }
     }
 }

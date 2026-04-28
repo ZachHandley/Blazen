@@ -68,6 +68,7 @@ local-all = ["embed", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "di
 # Telemetry exporters
 otlp = ["blazen-telemetry/otlp"]
 prometheus = ["blazen-telemetry/prometheus"]
+langfuse = ["blazen-telemetry/langfuse"]
 # Distributed workflow types (RemoteWorkflowRequest/Response, PeerClient ABC)
 distributed = ["blazen-core/distributed", "blazen-peer/server", "blazen-peer/client"]
 

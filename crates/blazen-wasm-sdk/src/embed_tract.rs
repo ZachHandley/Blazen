@@ -1,8 +1,13 @@
-//! `wasm-bindgen` wrapper for [`blazen_embed_tract::TractEmbedModel`].
+//! `wasm-bindgen` wrapper for [`blazen_embed_tract::WasmTractEmbedModel`].
 //!
 //! `tract` is the only embedding backend that compiles to `wasm32`, so it is
 //! the natural fit for in-browser local embeddings without relying on a JS
 //! library like `@huggingface/transformers`.
+//!
+//! On wasm32 there is no `hf-hub` and no filesystem, so the constructor takes
+//! explicit URLs for the ONNX weights and tokenizer. Any HTTP server with CORS
+//! works — typically a CDN like `huggingface.co/<repo>/resolve/main/...` or a
+//! same-origin asset bundle.
 //!
 //! Two surfaces are exposed:
 //!
@@ -19,7 +24,11 @@
 //!
 //! const opts = new TractOptions();
 //! opts.modelName = 'BGESmallENV15';
-//! const model = await TractEmbedModel.create(opts);
+//! const model = await TractEmbedModel.create(
+//!     'https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main/onnx/model.onnx',
+//!     'https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main/tokenizer.json',
+//!     opts,
+//! );
 //! const vectors = await model.embed(['Hello world']);
 //! ```
 
@@ -29,9 +38,9 @@ use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 
-use blazen_embed_tract::{TractEmbedModel, TractOptions};
-use blazen_llm::types::EmbeddingResponse;
+use blazen_embed_tract::{TractOptions, WasmTractEmbedModel as UpstreamWasmTractEmbedModel};
 use blazen_llm::BlazenError;
+use blazen_llm::types::EmbeddingResponse;
 
 use crate::embedding::WasmEmbeddingModel;
 
@@ -66,9 +75,9 @@ impl<F: std::future::Future> std::future::Future for SendFuture<F> {
 /// Construction options for [`WasmTractEmbedModel`].
 ///
 /// Mirrors the relevant subset of [`blazen_embed_tract::TractOptions`] that
-/// makes sense to expose to JavaScript. The `cache_dir` field is intentionally
-/// omitted because there is no useful filesystem path for browser callers; the
-/// `show_download_progress` flag is omitted for the same reason.
+/// makes sense to expose to JavaScript. The `cache_dir` and
+/// `show_download_progress` fields are intentionally omitted because there is
+/// no useful filesystem path or progress UI for browser callers.
 #[wasm_bindgen(js_name = "TractOptions")]
 #[derive(Default)]
 pub struct WasmTractOptions {
@@ -133,10 +142,11 @@ impl WasmTractOptions {
 // ---------------------------------------------------------------------------
 
 /// Internal adapter that implements [`blazen_llm::traits::EmbeddingModel`] on
-/// top of a [`TractEmbedModel`]. This is what backs both [`WasmTractEmbedModel`]
-/// and the `EmbeddingModel.tract()` factory on [`WasmEmbeddingModel`].
+/// top of a [`UpstreamWasmTractEmbedModel`]. This is what backs both
+/// [`WasmTractEmbedModel`] and the `EmbeddingModel.tract()` factory on
+/// [`WasmEmbeddingModel`].
 pub(crate) struct TractEmbeddingAdapter {
-    model: Arc<TractEmbedModel>,
+    model: Arc<UpstreamWasmTractEmbedModel>,
 }
 
 // SAFETY: WASM is single-threaded.
@@ -144,7 +154,7 @@ unsafe impl Send for TractEmbeddingAdapter {}
 unsafe impl Sync for TractEmbeddingAdapter {}
 
 impl TractEmbeddingAdapter {
-    pub(crate) fn new(model: Arc<TractEmbedModel>) -> Self {
+    pub(crate) fn new(model: Arc<UpstreamWasmTractEmbedModel>) -> Self {
         Self { model }
     }
 
@@ -194,12 +204,16 @@ impl blazen_llm::traits::EmbeddingModel for TractEmbeddingAdapter {
 /// ```js
 /// const opts = new TractOptions();
 /// opts.modelName = 'BGESmallENV15';
-/// const model = await TractEmbedModel.create(opts);
+/// const model = await TractEmbedModel.create(
+///   'https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main/onnx/model.onnx',
+///   'https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main/tokenizer.json',
+///   opts,
+/// );
 /// const vectors = await model.embed(['Hello world']);
 /// ```
 #[wasm_bindgen(js_name = "TractEmbedModel")]
 pub struct WasmTractEmbedModel {
-    inner: Arc<TractEmbedModel>,
+    inner: Arc<UpstreamWasmTractEmbedModel>,
 }
 
 // SAFETY: WASM is single-threaded.
@@ -210,25 +224,37 @@ unsafe impl Sync for WasmTractEmbedModel {}
 impl WasmTractEmbedModel {
     /// Create a new tract-backed embedding model.
     ///
-    /// Loading downloads the ONNX weights and tokenizer for the requested
-    /// model on first call; subsequent calls reuse the local cache.
+    /// On wasm32 the ONNX weights and tokenizer are fetched over HTTP rather
+    /// than loaded from disk, so the caller must pass fully-qualified URLs.
+    /// Both URLs must respond with CORS headers permitting the calling origin.
+    ///
+    /// `modelUrl` should point to a raw ONNX protobuf
+    /// (e.g. `https://huggingface.co/<repo>/resolve/main/onnx/model.onnx`) and
+    /// `tokenizerUrl` to a HuggingFace-format `tokenizer.json`.
     ///
     /// Returns a `Promise<TractEmbedModel>`.
     ///
     /// # Errors
     ///
-    /// The returned promise rejects when the model name is unknown or when
-    /// downloading / parsing the ONNX graph fails.
+    /// The returned promise rejects when either URL fails to fetch, when the
+    /// model name (used for registry metadata lookup) is unknown, or when
+    /// parsing the ONNX graph or tokenizer fails.
     #[wasm_bindgen(js_name = "create")]
-    pub fn create(options: Option<WasmTractOptions>) -> js_sys::Promise {
+    pub fn create(
+        model_url: String,
+        tokenizer_url: String,
+        options: Option<WasmTractOptions>,
+    ) -> js_sys::Promise {
         let opts = options.unwrap_or_default().into_tract_options();
         future_to_promise(async move {
-            // `TractEmbedModel::from_options` is sync but performs blocking
-            // downloads internally; on wasm there is no `block_in_place` so
-            // the upstream impl must run inside a current-thread runtime that
-            // it sets up itself. We just call it directly.
-            let model = TractEmbedModel::from_options(opts)
-                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            // SAFETY: WASM is single-threaded, Send is vacuously satisfied.
+            let model = SendFuture(UpstreamWasmTractEmbedModel::create(
+                &model_url,
+                &tokenizer_url,
+                opts,
+            ))
+            .await
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
             let wrapper = WasmTractEmbedModel {
                 inner: Arc::new(model),
             };
@@ -261,8 +287,8 @@ impl WasmTractEmbedModel {
     pub fn embed(&self, texts: Vec<String>) -> js_sys::Promise {
         let model = Arc::clone(&self.inner);
         future_to_promise(async move {
-            let response = model
-                .embed(&texts)
+            // SAFETY: WASM is single-threaded, Send is vacuously satisfied.
+            let response = SendFuture(async { model.embed(&texts).await })
                 .await
                 .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
@@ -287,23 +313,38 @@ impl WasmEmbeddingModel {
     /// Local embedding via `tract-onnx` (pure-Rust ONNX inference).
     ///
     /// This is the only embedding backend that runs entirely inside the WASM
-    /// module — no JS libraries required. Weights and tokenizer are downloaded
-    /// on first use and cached locally.
+    /// module — no JS libraries required. `modelUrl` and `tokenizerUrl` must
+    /// point to a raw ONNX protobuf and a `tokenizer.json` respectively, served
+    /// with CORS headers permitting the calling origin.
     ///
     /// Returns a `Promise<EmbeddingModel>`.
     ///
     /// ```js
     /// const opts = new TractOptions();
     /// opts.modelName = 'BGESmallENV15';
-    /// const embedder = await EmbeddingModel.tract(opts);
+    /// const embedder = await EmbeddingModel.tract(
+    ///   'https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main/onnx/model.onnx',
+    ///   'https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main/tokenizer.json',
+    ///   opts,
+    /// );
     /// const vecs = await embedder.embed(['Hello world']);
     /// ```
     #[wasm_bindgen(js_name = "tract")]
-    pub fn tract(options: Option<WasmTractOptions>) -> js_sys::Promise {
+    pub fn tract(
+        model_url: String,
+        tokenizer_url: String,
+        options: Option<WasmTractOptions>,
+    ) -> js_sys::Promise {
         let opts = options.unwrap_or_default().into_tract_options();
         future_to_promise(async move {
-            let model = TractEmbedModel::from_options(opts)
-                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            // SAFETY: WASM is single-threaded, Send is vacuously satisfied.
+            let model = SendFuture(UpstreamWasmTractEmbedModel::create(
+                &model_url,
+                &tokenizer_url,
+                opts,
+            ))
+            .await
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
             let adapter = TractEmbeddingAdapter::new(Arc::new(model));
             let wrapper = WasmEmbeddingModel::from_inner(Arc::new(adapter));
             Ok(JsValue::from(wrapper))

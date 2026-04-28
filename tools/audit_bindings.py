@@ -166,16 +166,6 @@ WHITELIST: frozenset[str] = frozenset(
         "FetchHttpClient",
         "ReqwestHttpClient",
         "TracingCompletionModel",
-        "ChatMessageInput",
-        "ChatRole",
-        "InferenceChunk",
-        "InferenceChunkStream",
-        "InferenceImage",
-        "InferenceImageSource",
-        "InferenceResult",
-        "InferenceToolCall",
-        "InferenceUsage",
-        "CandleInferenceResult",
         "CandleLlmCompletionModel",
         "CandleEmbedModel",
         "FastEmbedResponse",
@@ -239,6 +229,21 @@ WHITELIST: frozenset[str] = frozenset(
         "LangfuseConfig",
         "LangfuseLayer",
         "init_langfuse",
+        # Internal telemetry error type -- never exposed standalone; errors
+        # propagate as plain strings via the `init_*` functions.
+        "TelemetryError",
+        # HTTP variant of OTLP init -- wasm-sdk uses this internally to back
+        # its `initOtlp`; native bindings (py + node) only expose `init_otlp`
+        # (the gRPC variant), so this name has no native binding consumer.
+        "init_otlp_http",
+        # Wasm-internal Tract types -- only compiled under `target_arch =
+        # "wasm32"` in `blazen-embed-tract::wasm_provider`. Native bindings
+        # (py + node) shouldn't expose them; the wasm-sdk re-binds the
+        # underlying class under the JS name `TractEmbedModel` (which IS
+        # already exposed via the regular `TractEmbedModel` whitelist entry).
+        "WasmTractEmbedModel",
+        "WasmTractError",
+        "WasmTractResponse",
         # Module-level constants attached via PyModule::add() / napi env
         # exports. The auditor's regex looks for `class X:` / `export
         # declare class X` and doesn't see module attribute literals.
@@ -301,11 +306,7 @@ WASM_SKIP: frozenset[str] = frozenset(
         "FastEmbedOptions",
         "FastEmbedResponse",
         "FastEmbedError",
-        # --- Tract embeddings (currently disabled per Phase 14) ---
-        "TractEmbedModel",
-        "TractOptions",
-        "TractResponse",
-        "TractError",
+        # --- Tract embeddings (now bound on wasm32 via fetch loader) ---
         # --- Candle embeddings ---
         "CandleEmbedModel",
         "CandleEmbedError",
@@ -326,6 +327,16 @@ WASM_SKIP: frozenset[str] = frozenset(
         "InferenceChunkStream",
         "InferenceResult",
         "InferenceUsage",
+        # Prefixed re-exports added in W2 so py + node can bind both
+        # mistralrs's un-prefixed and llamacpp's prefixed types side by side.
+        # llama.cpp is native-FFI-only, so the prefixed names also stay
+        # native-only on wasm32.
+        "LlamaCppChatMessageInput",
+        "LlamaCppChatRole",
+        "LlamaCppInferenceChunk",
+        "LlamaCppInferenceChunkStream",
+        "LlamaCppInferenceResult",
+        "LlamaCppInferenceUsage",
         # --- mistral.rs (native, GPU) ---
         "MistralRsProvider",
         "MistralRsOptions",
@@ -374,11 +385,12 @@ WASM_SKIP: frozenset[str] = frozenset(
         "ValkeyCheckpointStore",
         "PersistError",
         # --- Memory backends (host-dispatch ABC; wasm-sdk uses
-        # `Memory.fromJsBackend` instead of a separate `MemoryBackend` class) ---
+        # `Memory.fromJsBackend` for custom JS-backed stores) ---
+        # `MemoryBackend` itself is the host-dispatch ABC trait; wasm-sdk
+        # uses `InMemoryBackend` (W4-G) and `Memory.fromJsBackend` instead
+        # of binding the trait directly.
         "MemoryBackend",
-        "InMemoryBackend",
         "JsonlBackend",
-        "MemoryResult",
         "ValkeyBackend",
         # --- Manager (Phase 9 wasm-sdk binding pending) ---
         "ModelStatus",
@@ -387,8 +399,9 @@ WASM_SKIP: frozenset[str] = frozenset(
         "CacheError",
         "ProgressCallback",
         # --- Telemetry exporters (tonic / metrics-process / native) ---
-        "OtlpConfig",
-        "init_otlp",
+        # OtlpConfig + init_otlp ARE bound on wasm32 via tracing-opentelemetry
+        # over the OTLP HTTP exporter; only the langfuse exporter and the
+        # prometheus pull collector remain native-only.
         "LangfuseConfig",
         "LangfuseLayer",
         "init_langfuse",
@@ -535,16 +548,6 @@ WHITELIST_REASONS: dict[str, str] = {
     "FetchHttpClient": "wasm32-only HTTP client; native bindings use ReqwestHttpClient via PyHttpClient",
     "ReqwestHttpClient": "internal reqwest HTTP client; surfaced via PyHttpClient",
     "TracingCompletionModel": "wrapper class -- surfaced via the wrap_with_tracing free fn",
-    "ChatMessageInput": "mistralrs internal type -- bound via PyChatMessage",
-    "ChatRole": "mistralrs internal type -- bound via PyRole",
-    "InferenceChunk": "mistralrs internal type -- bound via PyStreamChunk",
-    "InferenceChunkStream": "mistralrs internal stream wrapper -- consumed via PyStreamChunk callback",
-    "InferenceImage": "mistralrs internal type -- bound via PyImageContent",
-    "InferenceImageSource": "mistralrs internal type -- bound via PyImageSource",
-    "InferenceResult": "mistralrs internal type -- bound via PyCompletionResponse",
-    "InferenceToolCall": "mistralrs internal type -- bound via PyToolCall",
-    "InferenceUsage": "mistralrs internal type -- bound via PyTokenUsage",
-    "CandleInferenceResult": "candle-llm internal type -- bound via PyCompletionResponse",
     "CandleLlmCompletionModel": "candle-llm trait-bridge wrapper -- exposed via PyCandleLlmProvider",
     "CandleEmbedModel": "candle-embed type bound as CandleEmbedProvider in node",
     "FastEmbedResponse": "internal -- exposed via PyEmbeddingResponse umbrella",
@@ -585,6 +588,20 @@ WHITELIST_REASONS: dict[str, str] = {
     "LangfuseConfig": "langfuse not in upstream blazen-telemetry",
     "LangfuseLayer": "langfuse not in upstream blazen-telemetry",
     "init_langfuse": "langfuse not in upstream blazen-telemetry",
+    "TelemetryError": "internal error type; not exposed by any binding",
+    "init_otlp_http": (
+        "internal-only HTTP variant; wasm-sdk's `initOtlp` calls it; native uses gRPC variant"
+    ),
+    "WasmTractEmbedModel": (
+        "wasm32-internal -- bound on wasm-sdk under JS name `TractEmbedModel` via "
+        "WasmTractEmbedModel class"
+    ),
+    "WasmTractError": (
+        "wasm32-internal -- errors surface via TractError on wasm-sdk"
+    ),
+    "WasmTractResponse": (
+        "wasm32-internal -- response shape exposed via TractResponse on wasm-sdk"
+    ),
     # Module-level constants and napi-aliased enums.
     "ENVELOPE_VERSION": "module-level constant, not a class",
     "MediaType": "bound as JsMediaType in napi (string enum)",

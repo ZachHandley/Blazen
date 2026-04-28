@@ -23,6 +23,23 @@ ALWAYS use `--workspace --all-features` for clippy. Never run clippy on a single
 cargo build --workspace --all-features
 ```
 
+## Regenerate typegens
+
+After any change to a binding (`blazen-py`, `blazen-node`, or `blazen-wasm-sdk`), regenerate ALL THREE typegens and commit drift:
+
+```bash
+# Python — regenerates crates/blazen-py/blazen.pyi
+cargo run --example stub_gen -p blazen-py
+
+# Node — regenerates crates/blazen-node/index.d.ts (and runs the post-build error-classes shim)
+pnpm --filter blazen run build
+
+# WASM-SDK — regenerates crates/blazen-wasm-sdk/pkg/blazen_wasm_sdk.d.ts
+wasm-pack build crates/blazen-wasm-sdk --target web --out-dir pkg --release
+```
+
+CI's `audit-bindings` job runs all three regens and fails on drift, so committing stale typegens will block merges.
+
 ## Test
 
 ```bash
