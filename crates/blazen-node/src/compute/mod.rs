@@ -12,4 +12,5 @@ pub use crate::generated::{
     JsUpscaleRequest, JsVideoRequest, JsVideoResult,
 };
 // JsJobStatus is hand-written (tagged enum with data variant, not auto-generated).
-pub use job::JsJobStatus;
+// JsJobHandleClass is the class wrapper around the auto-generated plain JsJobHandle.
+pub use job::{JobHandleOptions, JsJobHandleClass, JsJobStatus};

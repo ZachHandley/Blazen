@@ -631,6 +631,16 @@ impl PyFalProvider {
     }
 }
 
+impl PyFalProvider {
+    /// Return the inner provider as a generic `Arc<dyn ComputeProvider>`.
+    ///
+    /// Used by the top-level `Compute` class to wrap any provider that
+    /// implements [`ComputeProvider`].
+    pub(crate) fn compute_arc(&self) -> Arc<dyn ComputeProvider> {
+        self.inner.clone()
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

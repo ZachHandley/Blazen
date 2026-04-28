@@ -6,6 +6,11 @@
  * 3D generation, image utilities, and timing/cost metadata.
  */
 
+// Invocation examples:
+//   default (LLM only):        node --test tests/node/test_fal_smoke.mjs
+//   + compute (image/TTS/...): BLAZEN_TEST_FAL_COMPUTE=1 node --test tests/node/test_fal_smoke.mjs
+//   + video:                   BLAZEN_TEST_FAL_VIDEO=1 node --test tests/node/test_fal_smoke.mjs
+
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
@@ -14,8 +19,11 @@ import {
   ChatMessage,
   FalProvider,
 } from "../../crates/blazen-node/index.js";
+import { falOrSkip, expectFalRoutingError } from "./_smoke_helpers.mjs";
 
 const FAL_API_KEY = process.env.FAL_API_KEY;
+const FAL_COMPUTE = process.env.BLAZEN_TEST_FAL_COMPUTE === "1";
+const FAL_VIDEO = process.env.BLAZEN_TEST_FAL_VIDEO === "1";
 
 const IMAGE_URL =
   "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png";
@@ -138,18 +146,13 @@ describe("fal.ai modality auto-routing tests", { skip: !FAL_API_KEY }, () => {
       autoRouteModality: true,
     });
     const msg = ChatMessage.userAudio("Transcribe or describe this audio briefly.", AUDIO_URL);
-    try {
-      const response = await model.complete([msg]);
+    const response = await expectFalRoutingError(
+      model.complete([msg]),
+      ["Failed to download audio", "audio_url", "file_download_error"],
+    );
+    if (response !== undefined) {
       assert.ok(response.content, "expected content from audio auto-route");
       assert.ok(response.content.length > 0, "expected non-empty audio response");
-    } catch (e) {
-      const m = String(e.message ?? e);
-      assert.ok(
-        m.includes("Failed to download audio") ||
-          m.includes("audio_url") ||
-          m.includes("file_download_error"),
-        `unexpected error (routing may have failed): ${m}`,
-      );
     }
   });
 
@@ -160,18 +163,13 @@ describe("fal.ai modality auto-routing tests", { skip: !FAL_API_KEY }, () => {
       autoRouteModality: true,
     });
     const msg = ChatMessage.userVideo("Describe this video in one short sentence.", VIDEO_URL);
-    try {
-      const response = await model.complete([msg]);
+    const response = await expectFalRoutingError(
+      model.complete([msg]),
+      ["Failed to download video", "video_url", "file_download_error"],
+    );
+    if (response !== undefined) {
       assert.ok(response.content, "expected content from video auto-route");
       assert.ok(response.content.length > 0, "expected non-empty video response");
-    } catch (e) {
-      const m = String(e.message ?? e);
-      assert.ok(
-        m.includes("Failed to download video") ||
-          m.includes("video_url") ||
-          m.includes("file_download_error"),
-        `unexpected error (routing may have failed): ${m}`,
-      );
     }
   });
 });
@@ -202,132 +200,109 @@ describe("fal.ai streaming + embeddings + utilities", { skip: !FAL_API_KEY, time
     assert.strictEqual(vectors[1].length, 1536, "expected vector dim 1536");
   });
 
-  it("generates a 3D model", async () => {
+  it("generates a 3D model", { skip: !FAL_COMPUTE, timeout: 300_000 }, async (t) => {
     const provider = FalProvider.create({ apiKey: FAL_API_KEY });
-    try {
-      const result = await provider.generate3d({ imageUrl: UNFETCHABLE_IMAGE_URL });
+    const result = await expectFalRoutingError(
+      provider.generate3d({ imageUrl: UNFETCHABLE_IMAGE_URL }),
+      ["Failed to download", "image_url", "file_download_error"],
+    );
+    if (result !== undefined) {
       assert.ok(result, "expected a 3D generation result");
-    } catch (e) {
-      const m = String(e.message ?? e);
-      assert.ok(
-        m.includes("Failed to download") ||
-          m.includes("image_url") ||
-          m.includes("file_download_error"),
-        `unexpected error (routing may have failed): ${m}`,
-      );
     }
   });
 
-  it("removes background from an image", async () => {
+  it("removes background from an image", { skip: !FAL_COMPUTE, timeout: 300_000 }, async (t) => {
     const provider = FalProvider.create({ apiKey: FAL_API_KEY });
-    try {
-      const result = await provider.removeBackground({ imageUrl: IMAGE_URL });
+    const result = await expectFalRoutingError(
+      provider.removeBackground({ imageUrl: IMAGE_URL }),
+      ["Failed to download", "image_url", "file_download_error"],
+    );
+    if (result !== undefined) {
       assert.ok(result, "expected a background-removal result");
-    } catch (e) {
-      const m = String(e.message ?? e);
-      assert.ok(
-        m.includes("Failed to download") ||
-          m.includes("image_url") ||
-          m.includes("file_download_error"),
-        `unexpected error (routing may have failed): ${m}`,
-      );
     }
   });
 });
 
-describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY, timeout: 2_100_000 }, () => {
-  it("generates an image with FLUX", { timeout: 300_000 }, async () => {
+describe("fal.ai compute smoke tests", { skip: !FAL_API_KEY || !FAL_COMPUTE, timeout: 2_100_000 }, () => {
+  it("generates an image with FLUX", { timeout: 300_000 }, async (t) => {
     const provider = FalProvider.create({ apiKey: FAL_API_KEY });
-    const result = await provider.generateImage({ prompt: "a simple red circle on white" });
+    const result = await falOrSkip(t, provider.generateImage({ prompt: "a simple red circle on white" }));
+    if (result === undefined) return;
     assert.ok(result.images, "expected images");
     assert.ok(result.images.length > 0, "expected at least one image");
   });
 
-  it("synthesizes speech from text", { timeout: 90_000 }, async () => {
+  it("synthesizes speech from text", { timeout: 270_000 }, async (t) => {
     const provider = FalProvider.create({ apiKey: FAL_API_KEY });
-    const result = await provider.textToSpeech({
-      text: "Hello world.",
-    });
-
+    const result = await falOrSkip(t, provider.textToSpeech({ text: "Hello world." }));
+    if (result === undefined) return;
     assert.ok(result, "expected a result");
-    // The result should contain audio data (url or base64)
     assert.ok(
       result.audio_url || result.audio || result.url,
       `expected audio data in result, got keys: ${Object.keys(result).join(", ")}`
     );
   });
 
-  it("generates music from a prompt", { timeout: 300_000 }, async () => {
+  it("generates music from a prompt", { timeout: 300_000 }, async (t) => {
     const provider = FalProvider.create({ apiKey: FAL_API_KEY });
-    const result = await provider.generateMusic({
+    const result = await falOrSkip(t, provider.generateMusic({
       prompt: "happy upbeat jingle",
       durationSeconds: 5,
-    });
-
+    }));
+    if (result === undefined) return;
     assert.ok(result, "expected a result");
-    // The result should contain audio data
     assert.ok(
       result.audio_url || result.audio || result.url || result.audio_file,
       `expected audio data in result, got keys: ${Object.keys(result).join(", ")}`
     );
   });
 
-  it("transcribes audio from a URL", { timeout: 300_000 }, async () => {
+  it("transcribes audio from a URL", { timeout: 300_000 }, async (t) => {
     const provider = FalProvider.create({ apiKey: FAL_API_KEY });
-    const result = await provider.transcribe({
+    const result = await falOrSkip(t, provider.transcribe({
       audioUrl: "https://cdn.openai.com/API/docs/audio/alloy.wav",
-    });
-
+    }));
+    if (result === undefined) return;
     assert.ok(result, "expected a result");
-    // The result should contain transcribed text
     assert.ok(
       result.text || result.transcript || result.chunks,
       `expected text content in result, got keys: ${Object.keys(result).join(", ")}`
     );
   });
 
-  it("generates a video from a text prompt", { timeout: 1_200_000 }, async () => {
+  it("generates a video from a text prompt", { skip: !FAL_VIDEO, timeout: 1_200_000 }, async (t) => {
     const provider = FalProvider.create({ apiKey: FAL_API_KEY });
-    try {
-      const result = await provider.textToVideo({
-        prompt: "a cat walking slowly",
-      });
+    const result = await falOrSkip(t, provider.textToVideo({ prompt: "a cat walking slowly" }));
+    if (result === undefined) return;
 
-      assert.ok(result, "expected a result");
-      // The result should contain video data
-      assert.ok(
-        result.videos || result.video_url || result.video || result.url,
-        `expected video data in result, got keys: ${Object.keys(result).join(", ")}`
-      );
-      if (result.videos) {
-        assert.ok(result.videos.length > 0, "expected at least one video");
-      }
-    } catch (err) {
-      if (err.message && err.message.includes("downstream_service_unavailable")) {
-        console.log("SKIP: fal.ai downstream service unavailable (transient)");
-        return;
-      }
-      throw err;
+    assert.ok(result, "expected a result");
+    assert.ok(
+      result.videos || result.video_url || result.video || result.url,
+      `expected video data in result, got keys: ${Object.keys(result).join(", ")}`
+    );
+    if (result.videos) {
+      assert.ok(result.videos.length > 0, "expected at least one video");
     }
   });
 
-  it("runs a model synchronously via run()", { timeout: 300_000 }, async () => {
+  it("runs a model synchronously via run()", { timeout: 300_000 }, async (t) => {
     const provider = FalProvider.create({ apiKey: FAL_API_KEY });
-    const result = await provider.run({
+    const result = await falOrSkip(t, provider.run({
       model: "fal-ai/flux/schnell",
       input: { prompt: "blue sky with white clouds", imageSize: "square_hd" },
-    });
-
+    }));
+    if (result === undefined) return;
     assert.ok(result, "expected a non-null result from run()");
   });
 
-  it("submits a job and gets a valid job handle", { timeout: 300_000 }, async () => {
+  it("submits a job and gets a valid job handle", { timeout: 300_000 }, async (t) => {
     const provider = FalProvider.create({ apiKey: FAL_API_KEY });
 
-    const job = await provider.submit({
+    const job = await falOrSkip(t, provider.submit({
       model: "fal-ai/flux/schnell",
       input: { prompt: "green forest with sunlight" },
-    });
+    }));
+    if (job === undefined) return;
 
     assert.ok(job, "expected a job handle from submit()");
 

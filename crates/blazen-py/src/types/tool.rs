@@ -1,20 +1,20 @@
-//! Python wrapper for tool call types.
+//! Python wrappers for tool call / definition / output types.
 //!
 //! Exposes:
 //! - [`PyToolOutput`] — the two-channel return value from a tool
 //!   (`data` for callers, optional `llm_override` for what the LLM sees).
 //! - [`PyLlmPayload`] — the override payload, constructed via classmethod
 //!   factories (`text`, `json`, `provider_raw`).
-//!
-//! Re-exports the upstream [`ToolCall`] for callers that need the raw
-//! struct (e.g., introspecting an assistant message).
+//! - [`PyToolCall`] — a typed wrapper for a tool invocation requested by
+//!   the model (id / name / arguments).
+//! - [`PyToolDefinition`] — canonical typed wrapper for a tool definition
+//!   (name / description / JSON-schema parameters), distinct from
+//!   [`crate::agent::PyToolDef`] which also carries a Python handler callable.
 
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
-use blazen_llm::types::{LlmPayload, ProviderId, ToolOutput};
-
-pub use blazen_llm::types::ToolCall;
+use blazen_llm::types::{LlmPayload, ProviderId, ToolCall, ToolDefinition, ToolOutput};
 
 // ---------------------------------------------------------------------------
 // PyLlmPayload
@@ -250,5 +250,163 @@ impl PyToolOutput {
     /// Consume the wrapper and return the underlying Rust value.
     pub(crate) fn into_inner(self) -> ToolOutput<serde_json::Value> {
         self.inner
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PyToolCall
+// ---------------------------------------------------------------------------
+
+/// A tool invocation requested by the model.
+///
+/// Returned in ``CompletionResponse.tool_calls`` and ``StreamChunk.tool_calls``.
+///
+/// Example:
+///     >>> for tc in response.tool_calls:
+///     ...     print(tc.id, tc.name, tc.arguments)
+#[gen_stub_pyclass]
+#[pyclass(name = "ToolCall", frozen, from_py_object)]
+#[derive(Clone)]
+pub struct PyToolCall {
+    pub(crate) inner: ToolCall,
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyToolCall {
+    /// Construct a tool call explicitly.
+    #[new]
+    #[pyo3(signature = (*, id, name, arguments))]
+    fn new(id: String, name: String, arguments: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let py = arguments.py();
+        let args = crate::convert::py_to_json(py, arguments)?;
+        Ok(Self {
+            inner: ToolCall {
+                id,
+                name,
+                arguments: args,
+            },
+        })
+    }
+
+    /// Provider-assigned identifier for this specific invocation.
+    #[getter]
+    fn id(&self) -> &str {
+        &self.inner.id
+    }
+
+    /// The name of the tool to invoke.
+    #[getter]
+    fn name(&self) -> &str {
+        &self.inner.name
+    }
+
+    /// The arguments to pass to the tool, as a parsed Python value.
+    #[getter]
+    #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
+    fn arguments(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        crate::convert::json_to_py(py, &self.inner.arguments)
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ToolCall(id={:?}, name={:?})",
+            self.inner.id, self.inner.name
+        )
+    }
+}
+
+impl From<ToolCall> for PyToolCall {
+    fn from(inner: ToolCall) -> Self {
+        Self { inner }
+    }
+}
+
+impl From<&ToolCall> for PyToolCall {
+    fn from(inner: &ToolCall) -> Self {
+        Self {
+            inner: inner.clone(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PyToolDefinition
+// ---------------------------------------------------------------------------
+
+/// Canonical Python form of a tool definition (name, description, JSON-schema
+/// parameters). Distinct from ``ToolDef``, which adds a Python ``handler``
+/// callable for the agent loop. Use ``ToolDefinition`` when describing a tool
+/// without binding a handler --- e.g. building a request body manually.
+///
+/// Example:
+///     >>> tool = ToolDefinition(
+///     ...     name="search",
+///     ...     description="Search the web",
+///     ...     parameters={"type": "object", "properties": {"query": {"type": "string"}}},
+///     ... )
+#[gen_stub_pyclass]
+#[pyclass(name = "ToolDefinition", frozen, from_py_object)]
+#[derive(Clone)]
+pub struct PyToolDefinition {
+    pub(crate) inner: ToolDefinition,
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyToolDefinition {
+    /// Construct a tool definition.
+    #[new]
+    #[pyo3(signature = (*, name, description, parameters))]
+    fn new(name: String, description: String, parameters: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let py = parameters.py();
+        let params = crate::convert::py_to_json(py, parameters)?;
+        Ok(Self {
+            inner: ToolDefinition {
+                name,
+                description,
+                parameters: params,
+            },
+        })
+    }
+
+    /// The unique name of the tool.
+    #[getter]
+    fn name(&self) -> &str {
+        &self.inner.name
+    }
+
+    /// A human-readable description of what the tool does.
+    #[getter]
+    fn description(&self) -> &str {
+        &self.inner.description
+    }
+
+    /// JSON-schema describing the tool's input parameters, as a Python dict.
+    #[getter]
+    #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
+    fn parameters(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        crate::convert::json_to_py(py, &self.inner.parameters)
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ToolDefinition(name={:?}, description={:?})",
+            self.inner.name, self.inner.description
+        )
+    }
+}
+
+impl From<ToolDefinition> for PyToolDefinition {
+    fn from(inner: ToolDefinition) -> Self {
+        Self { inner }
+    }
+}
+
+impl From<&ToolDefinition> for PyToolDefinition {
+    fn from(inner: &ToolDefinition) -> Self {
+        Self {
+            inner: inner.clone(),
+        }
     }
 }

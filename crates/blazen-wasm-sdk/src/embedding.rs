@@ -85,6 +85,13 @@ impl WasmEmbeddingModel {
     pub(crate) fn inner_arc(&self) -> Arc<dyn EmbeddingModel> {
         Arc::clone(&self.inner)
     }
+
+    /// Construct a [`WasmEmbeddingModel`] from any `EmbeddingModel`
+    /// implementation. Used by sibling factory modules (e.g. `embed_tract`)
+    /// to build a JS-facing wrapper around their adapter type.
+    pub(crate) fn from_inner(inner: Arc<dyn EmbeddingModel>) -> Self {
+        Self { inner }
+    }
 }
 
 #[wasm_bindgen(typescript_custom_section)]
@@ -94,9 +101,13 @@ export type EmbedHandler = (texts: string[]) => Promise<Float32Array[]> | Float3
 "#;
 
 /// Create an `OpenAiCompatEmbeddingModel` backed by the fetch HTTP client.
-fn compat_embedding_with_fetch(model: OpenAiCompatEmbeddingModel) -> OpenAiCompatEmbeddingModel {
+fn compat_embedding_with_fetch(
+    config: OpenAiCompatConfig,
+    model: &str,
+    dimensions: usize,
+) -> OpenAiCompatEmbeddingModel {
     let client: Arc<dyn HttpClient> = FetchHttpClient::new().into_arc();
-    model.with_http_client(client)
+    OpenAiCompatEmbeddingModel::new_with_client(config, model, dimensions, client)
 }
 
 #[wasm_bindgen(js_class = "EmbeddingModel")]
@@ -110,7 +121,7 @@ impl WasmEmbeddingModel {
     pub fn openai() -> Result<WasmEmbeddingModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("openai", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let model = compat_embedding_with_fetch(OpenAiCompatEmbeddingModel::new(
+        let model = compat_embedding_with_fetch(
             OpenAiCompatConfig {
                 provider_name: "openai".into(),
                 base_url: "https://api.openai.com/v1".into(),
@@ -123,7 +134,7 @@ impl WasmEmbeddingModel {
             },
             "text-embedding-3-small",
             1536,
-        ));
+        );
         Ok(Self {
             inner: Arc::new(model),
         })
@@ -134,21 +145,20 @@ impl WasmEmbeddingModel {
     pub fn together() -> Result<WasmEmbeddingModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("together", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let model =
-            compat_embedding_with_fetch(OpenAiCompatEmbeddingModel::new(
-                OpenAiCompatConfig {
-                    provider_name: "together".into(),
-                    base_url: "https://api.together.xyz/v1".into(),
-                    api_key,
-                    default_model: String::new(),
-                    auth_method: AuthMethod::Bearer,
-                    extra_headers: Vec::new(),
-                    query_params: Vec::new(),
-                    supports_model_listing: false,
-                },
-                "togethercomputer/m2-bert-80M-8k-retrieval",
-                768,
-            ));
+        let model = compat_embedding_with_fetch(
+            OpenAiCompatConfig {
+                provider_name: "together".into(),
+                base_url: "https://api.together.xyz/v1".into(),
+                api_key,
+                default_model: String::new(),
+                auth_method: AuthMethod::Bearer,
+                extra_headers: Vec::new(),
+                query_params: Vec::new(),
+                supports_model_listing: false,
+            },
+            "togethercomputer/m2-bert-80M-8k-retrieval",
+            768,
+        );
         Ok(Self {
             inner: Arc::new(model),
         })
@@ -159,21 +169,20 @@ impl WasmEmbeddingModel {
     pub fn cohere() -> Result<WasmEmbeddingModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("cohere", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let model =
-            compat_embedding_with_fetch(OpenAiCompatEmbeddingModel::new(
-                OpenAiCompatConfig {
-                    provider_name: "cohere".into(),
-                    base_url: "https://api.cohere.ai/compatibility/v1".into(),
-                    api_key,
-                    default_model: String::new(),
-                    auth_method: AuthMethod::Bearer,
-                    extra_headers: Vec::new(),
-                    query_params: Vec::new(),
-                    supports_model_listing: false,
-                },
-                "embed-v4.0",
-                1024,
-            ));
+        let model = compat_embedding_with_fetch(
+            OpenAiCompatConfig {
+                provider_name: "cohere".into(),
+                base_url: "https://api.cohere.ai/compatibility/v1".into(),
+                api_key,
+                default_model: String::new(),
+                auth_method: AuthMethod::Bearer,
+                extra_headers: Vec::new(),
+                query_params: Vec::new(),
+                supports_model_listing: false,
+            },
+            "embed-v4.0",
+            1024,
+        );
         Ok(Self {
             inner: Arc::new(model),
         })
@@ -184,21 +193,20 @@ impl WasmEmbeddingModel {
     pub fn fireworks() -> Result<WasmEmbeddingModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("fireworks", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let model =
-            compat_embedding_with_fetch(OpenAiCompatEmbeddingModel::new(
-                OpenAiCompatConfig {
-                    provider_name: "fireworks".into(),
-                    base_url: "https://api.fireworks.ai/inference/v1".into(),
-                    api_key,
-                    default_model: String::new(),
-                    auth_method: AuthMethod::Bearer,
-                    extra_headers: Vec::new(),
-                    query_params: Vec::new(),
-                    supports_model_listing: false,
-                },
-                "nomic-ai/nomic-embed-text-v1.5",
-                768,
-            ));
+        let model = compat_embedding_with_fetch(
+            OpenAiCompatConfig {
+                provider_name: "fireworks".into(),
+                base_url: "https://api.fireworks.ai/inference/v1".into(),
+                api_key,
+                default_model: String::new(),
+                auth_method: AuthMethod::Bearer,
+                extra_headers: Vec::new(),
+                query_params: Vec::new(),
+                supports_model_listing: false,
+            },
+            "nomic-ai/nomic-embed-text-v1.5",
+            768,
+        );
         Ok(Self {
             inner: Arc::new(model),
         })

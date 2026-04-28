@@ -28,6 +28,55 @@ pub struct JsBatchOptions {
 }
 
 // ---------------------------------------------------------------------------
+// JsBatchConfig (typed class)
+// ---------------------------------------------------------------------------
+
+/// Typed configuration for a batch completion run.
+///
+/// Mirrors [`blazen_llm::batch::BatchConfig`] and exposes the static
+/// `unlimited()` factory.
+///
+/// ```typescript
+/// import { BatchConfig, completeBatchConfig } from 'blazen';
+///
+/// const cfg = new BatchConfig(4);             // up to 4 concurrent requests
+/// const cfg2 = BatchConfig.unlimited();        // no limit
+/// ```
+#[napi(js_name = "BatchConfig")]
+pub struct JsBatchConfig {
+    pub(crate) inner: BatchConfig,
+}
+
+#[napi]
+#[allow(clippy::must_use_candidate)]
+impl JsBatchConfig {
+    /// Create a batch config with the given concurrency limit.
+    ///
+    /// Pass `0` (or call `BatchConfig.unlimited()`) for unlimited concurrency.
+    #[napi(constructor)]
+    pub fn new(concurrency: u32) -> Self {
+        Self {
+            inner: BatchConfig::new(concurrency as usize),
+        }
+    }
+
+    /// Create a batch config with unlimited concurrency.
+    #[napi(factory)]
+    pub fn unlimited() -> Self {
+        Self {
+            inner: BatchConfig::unlimited(),
+        }
+    }
+
+    /// Maximum number of concurrent requests (`0` means unlimited).
+    #[napi(getter)]
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn concurrency(&self) -> u32 {
+        self.inner.concurrency as u32
+    }
+}
+
+// ---------------------------------------------------------------------------
 // JsBatchResult
 // ---------------------------------------------------------------------------
 
@@ -113,6 +162,67 @@ pub async fn complete_batch(
         )
     })?;
     let result = rust_complete_batch(inner.as_ref(), requests, config).await;
+
+    let mut responses = Vec::with_capacity(result.responses.len());
+    let mut errors = Vec::with_capacity(result.responses.len());
+
+    for res in result.responses {
+        match res {
+            Ok(response) => {
+                responses.push(Some(build_response(response)));
+                errors.push(None);
+            }
+            Err(e) => {
+                responses.push(None);
+                errors.push(Some(llm_error_to_napi(e).to_string()));
+            }
+        }
+    }
+
+    Ok(JsBatchResult {
+        responses,
+        errors,
+        total_usage: result.total_usage.map(Into::into),
+        total_cost: result.total_cost,
+    })
+}
+
+/// Run a batch using a typed [`JsBatchConfig`] instance instead of an options
+/// dict.
+///
+/// Equivalent to [`complete_batch`] but takes a `BatchConfig` class instance.
+/// Useful when constructing the config programmatically or sharing it across
+/// multiple calls.
+///
+/// ```typescript
+/// import { CompletionModel, ChatMessage, BatchConfig, completeBatchConfig } from 'blazen';
+///
+/// const cfg = new BatchConfig(4);
+/// const result = await completeBatchConfig(model, messageSets, cfg);
+/// ```
+#[napi(js_name = "completeBatchConfig")]
+#[allow(clippy::needless_pass_by_value, clippy::missing_errors_doc)]
+pub async fn complete_batch_config(
+    model: &JsCompletionModel,
+    message_sets: Vec<Vec<&JsChatMessage>>,
+    config: &JsBatchConfig,
+) -> napi::Result<JsBatchResult> {
+    let requests: Vec<CompletionRequest> = message_sets
+        .into_iter()
+        .map(|msgs| {
+            let chat_messages = msgs.iter().map(|m| m.inner.clone()).collect();
+            CompletionRequest::new(chat_messages)
+        })
+        .collect();
+
+    let cfg = BatchConfig::new(config.inner.concurrency);
+
+    let inner = model.inner.as_ref().ok_or_else(|| {
+        napi::Error::from_reason(
+            "completeBatchConfig() is not supported on subclassed CompletionModel instances",
+        )
+    })?;
+    let result = rust_complete_batch(inner.as_ref(), requests, cfg).await;
 
     let mut responses = Vec::with_capacity(result.responses.len());
     let mut errors = Vec::with_capacity(result.responses.len());

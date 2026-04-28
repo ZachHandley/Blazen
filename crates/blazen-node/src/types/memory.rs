@@ -11,12 +11,18 @@ use napi_derive::napi;
 use blazen_memory::Memory;
 use blazen_memory::backends::inmemory::InMemoryBackend;
 use blazen_memory::backends::jsonl::JsonlBackend;
+use blazen_memory::search::{
+    compute_elid_similarity as core_compute_elid_similarity,
+    compute_embedding_simhash_similarity as core_compute_embedding_simhash_similarity,
+    compute_text_simhash_similarity as core_compute_text_simhash_similarity,
+    simhash_from_hex as core_simhash_from_hex, simhash_to_hex as core_simhash_to_hex,
+};
 use blazen_memory::store::{MemoryBackend, MemoryStore};
 use blazen_memory::types::StoredEntry;
 use blazen_memory_valkey::ValkeyBackend;
 
 use super::embedding::JsEmbeddingModel;
-use crate::error::to_napi_error;
+use crate::error::{memory_error_to_napi, to_napi_error};
 
 // ---------------------------------------------------------------------------
 // Backend wrapper enum -- dispatches MemoryBackend through the three variants
@@ -163,6 +169,117 @@ impl JsMemoryBackend {
     ) -> Result<Vec<serde_json::Value>> {
         Err(napi::Error::from_reason(
             "subclass must override searchByBands()",
+        ))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// JsMemoryStore (subclassable base)
+// ---------------------------------------------------------------------------
+
+/// Base class for custom high-level memory stores.
+///
+/// Mirrors [`blazen_memory::store::MemoryStore`]. The concrete
+/// implementation that ships with Blazen is [`JsMemory`], which
+/// handles embedding, ELID encoding, and search on top of a
+/// [`JsMemoryBackend`]. Subclassing `MemoryStore` lets callers plug a
+/// JS-side store (e.g. one that delegates to a managed cloud service
+/// like `Pinecone` or `Weaviate`) into the same surface that
+/// `Memory.local` and `Memory(embedder, backend)` expose.
+///
+/// Subclasses **must** override every method. Entries and results are
+/// exchanged as plain JSON objects matching the
+/// [`blazen_memory::MemoryEntry`] / [`blazen_memory::MemoryResult`]
+/// shapes:
+///
+/// ```javascript
+/// class CloudMemoryStore extends MemoryStore {
+///     async add(entries) { /* ... */ }
+///     async search(query, limit, metadataFilter) { /* ... */ }
+///     async searchLocal(query, limit, metadataFilter) { /* ... */ }
+///     async get(id) { /* ... */ }
+///     async delete(id) { /* ... */ }
+///     async len() { /* ... */ }
+/// }
+/// ```
+#[napi(js_name = "MemoryStore")]
+pub struct JsMemoryStore {}
+
+#[napi]
+#[allow(
+    clippy::new_without_default,
+    clippy::must_use_candidate,
+    clippy::missing_errors_doc,
+    clippy::unused_async,
+    clippy::needless_pass_by_value
+)]
+impl JsMemoryStore {
+    /// Create a new memory store base instance.
+    #[napi(constructor)]
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    /// Add one or more entries to the store. Subclasses **must**
+    /// override this method.
+    #[napi]
+    pub async fn add(&self, _entries: Vec<serde_json::Value>) -> Result<Vec<String>> {
+        Err(napi::Error::from_reason("subclass must override add()"))
+    }
+
+    /// Search using a query string with the configured embedding
+    /// model. Subclasses **must** override this method.
+    #[napi]
+    pub async fn search(
+        &self,
+        _query: String,
+        _limit: u32,
+        _metadata_filter: Option<serde_json::Value>,
+    ) -> Result<Vec<serde_json::Value>> {
+        Err(napi::Error::from_reason("subclass must override search()"))
+    }
+
+    /// Search using only text-level `SimHash` (no embedding model
+    /// required). Subclasses **must** override this method.
+    #[napi(js_name = "searchLocal")]
+    pub async fn search_local(
+        &self,
+        _query: String,
+        _limit: u32,
+        _metadata_filter: Option<serde_json::Value>,
+    ) -> Result<Vec<serde_json::Value>> {
+        Err(napi::Error::from_reason(
+            "subclass must override searchLocal()",
+        ))
+    }
+
+    /// Retrieve a single entry by id. Subclasses **must** override
+    /// this method.
+    #[napi]
+    pub async fn get(&self, _id: String) -> Result<Option<serde_json::Value>> {
+        Err(napi::Error::from_reason("subclass must override get()"))
+    }
+
+    /// Delete an entry by id. Subclasses **must** override this
+    /// method.
+    #[napi]
+    pub async fn delete(&self, _id: String) -> Result<bool> {
+        Err(napi::Error::from_reason("subclass must override delete()"))
+    }
+
+    /// Return the number of entries. Subclasses **must** override
+    /// this method.
+    #[napi]
+    pub async fn len(&self) -> Result<u32> {
+        Err(napi::Error::from_reason("subclass must override len()"))
+    }
+
+    /// Whether the store contains no entries. Default implementation
+    /// returns `len() == 0`; subclasses may override for efficiency.
+    #[napi(js_name = "isEmpty")]
+    pub async fn is_empty(&self) -> Result<bool> {
+        Err(napi::Error::from_reason(
+            "subclass must override isEmpty() (or override len())",
         ))
     }
 }
@@ -533,4 +650,127 @@ pub struct JsAddEntry {
     pub text: String,
     /// Optional arbitrary metadata.
     pub metadata: Option<serde_json::Value>,
+}
+
+// ---------------------------------------------------------------------------
+// JsStoredEntry
+// ---------------------------------------------------------------------------
+
+/// A persisted memory entry as returned from the underlying backend.
+///
+/// Mirrors [`blazen_memory::types::StoredEntry`] for use from JavaScript.
+/// `simhash` is the 64-bit text-level `SimHash` clamped into `i64` (saturating
+/// at `i64::MAX` if the underlying `u64` exceeds the positive range — this is
+/// a one-way representation suitable for display, not lossless round-trip).
+#[napi(object)]
+pub struct JsStoredEntry {
+    /// Unique identifier for this entry.
+    pub id: String,
+    /// The original text content.
+    pub text: String,
+    /// Raw embedding vector (empty when running in local-only mode or when
+    /// the embedding has not been retained alongside the entry).
+    pub embedding: Vec<f64>,
+    /// Arbitrary user metadata.
+    pub metadata: serde_json::Value,
+    /// Text-level `SimHash` (64-bit), clamped from `u64` into a signed `i64`
+    /// for representation. Saturates at `i64::MAX`.
+    pub simhash: i64,
+    /// LSH bands derived from the embedding `SimHash`. Each band is a 32-bit
+    /// integer chunk (clamped into `i64` for JS interop).
+    #[napi(js_name = "simhashBands")]
+    pub simhash_bands: Vec<i64>,
+}
+
+// ---------------------------------------------------------------------------
+// Free functions
+// ---------------------------------------------------------------------------
+
+/// Default seed for embedding `SimHash`, matching `Memory`'s default
+/// (`"ELIDSIMH"` interpreted as a `u64`).
+const DEFAULT_SIMHASH_SEED: u64 = 0x454c_4944_5349_4d48;
+
+/// Compute similarity between two text strings using 64-bit `SimHash`.
+///
+/// Hashes each input with `elid::simhash` and compares using normalized
+/// Hamming distance over 64 bits. Returns a value in `[0.0, 1.0]`.
+#[napi(js_name = "computeTextSimhashSimilarity")]
+#[allow(clippy::needless_pass_by_value)]
+#[must_use]
+pub fn compute_text_simhash_similarity(a: String, b: String) -> f64 {
+    let ha = elid::simhash(&a);
+    let hb = elid::simhash(&b);
+    core_compute_text_simhash_similarity(ha, hb)
+}
+
+/// Compute similarity between two embedding vectors using 128-bit `SimHash`.
+///
+/// Hashes each input vector with `elid::embeddings::vector_simhash::simhash_128`
+/// (using the default `Memory` seed) and compares using normalized Hamming
+/// distance over 128 bits. Returns a value in `[0.0, 1.0]`.
+#[napi(js_name = "computeEmbeddingSimhashSimilarity")]
+#[must_use]
+pub fn compute_embedding_simhash_similarity(a: Vec<f64>, b: Vec<f64>) -> f64 {
+    #[allow(clippy::cast_possible_truncation)]
+    let af: Vec<f32> = a.into_iter().map(|x| x as f32).collect();
+    #[allow(clippy::cast_possible_truncation)]
+    let bf: Vec<f32> = b.into_iter().map(|x| x as f32).collect();
+    let ha = elid::embeddings::vector_simhash::simhash_128(&af, DEFAULT_SIMHASH_SEED);
+    let hb = elid::embeddings::vector_simhash::simhash_128(&bf, DEFAULT_SIMHASH_SEED);
+    core_compute_embedding_simhash_similarity(ha, hb)
+}
+
+/// Compute ELID-based similarity between two embedding vectors.
+///
+/// Encodes each vector with the default Mini128 ELID profile, then computes
+/// Hamming distance between the ELID payloads, normalized to `[0.0, 1.0]`.
+#[napi(js_name = "computeElidSimilarity")]
+#[allow(clippy::missing_errors_doc)]
+pub fn compute_elid_similarity(a: Vec<f64>, b: Vec<f64>) -> Result<f64> {
+    #[allow(clippy::cast_possible_truncation)]
+    let af: Vec<f32> = a.into_iter().map(|x| x as f32).collect();
+    #[allow(clippy::cast_possible_truncation)]
+    let bf: Vec<f32> = b.into_iter().map(|x| x as f32).collect();
+    let profile = elid::embeddings::Profile::default();
+    let elid_a = elid::embeddings::encode(&af, &profile)
+        .map_err(|e| memory_error_to_napi(blazen_memory::MemoryError::Elid(e)))?;
+    let elid_b = elid::embeddings::encode(&bf, &profile)
+        .map_err(|e| memory_error_to_napi(blazen_memory::MemoryError::Elid(e)))?;
+    core_compute_elid_similarity(elid_a.as_str(), elid_b.as_str()).map_err(memory_error_to_napi)
+}
+
+/// Parse a hex-encoded 128-bit `SimHash` and return its value as a decimal string.
+///
+/// The Node binding does not enable napi-rs's `napi6` feature, so JavaScript
+/// `BigInt` is not available. We return the parsed value as a base-10 string,
+/// which JS can convert with `BigInt(s)` if needed.
+///
+/// Returns an error if the input is not a valid 32-character hex string
+/// representing a 128-bit value.
+#[napi(js_name = "simhashFromHex")]
+#[allow(clippy::needless_pass_by_value, clippy::missing_errors_doc)]
+pub fn simhash_from_hex(hex: String) -> Result<String> {
+    let value = core_simhash_from_hex(&hex)
+        .ok_or_else(|| napi::Error::from_reason(format!("invalid 128-bit hex SimHash: {hex:?}")))?;
+    Ok(value.to_string())
+}
+
+/// Encode a 128-bit `SimHash` (passed as a decimal string) as a zero-padded
+/// 32-character hex string.
+///
+/// The value is accepted as a decimal string (e.g. produced by
+/// `BigInt(...).toString()` in JS) because the Node binding does not enable
+/// napi-rs's `napi6` feature and therefore cannot accept a `BigInt` directly.
+///
+/// Returns an error if the input is not a valid base-10 representation of a
+/// non-negative 128-bit integer.
+#[napi(js_name = "simhashToHex")]
+#[allow(clippy::needless_pass_by_value, clippy::missing_errors_doc)]
+pub fn simhash_to_hex(value: String) -> Result<String> {
+    let parsed: u128 = value.parse().map_err(|_| {
+        napi::Error::from_reason(format!(
+            "simhashToHex: expected a non-negative 128-bit decimal integer, got {value:?}"
+        ))
+    })?;
+    Ok(core_simhash_to_hex(parsed))
 }

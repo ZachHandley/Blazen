@@ -1,16 +1,23 @@
 //! Shared type definitions for the Node.js bindings.
 
+pub mod abc;
 pub mod artifact;
 pub mod chat_window;
 pub mod citation;
 pub mod completion;
+pub mod completion_request;
+#[cfg(feature = "embed")]
+pub mod embed_facade;
 pub mod embedding;
+pub mod events;
 pub mod finish_reason;
+pub mod http_client;
 pub mod media;
 pub mod memory;
 pub mod message;
 pub mod pricing;
 pub mod prompts;
+pub mod provider_info;
 pub mod reasoning;
 pub mod response_format;
 pub mod stream;
@@ -25,13 +32,24 @@ pub use crate::generated::{
     JsGeneratedAudio, JsGeneratedImage, JsGeneratedVideo, JsImageResult, JsJobHandle,
     JsMediaOutput, JsThreeDResult, JsTranscriptionResult, JsTranscriptionSegment, JsVideoResult,
 };
+pub use abc::{JsHostDispatch, JsLocalModel, JsModelRegistry, JsStructuredOutput, JsTool};
 pub use artifact::JsArtifact;
 pub use chat_window::JsChatWindow;
-pub use citation::JsCitation;
+pub use citation::{CitationOptions, JsCitation, JsCitationClass};
 pub(crate) use completion::build_response;
 pub use completion::{JsCompletionOptions, JsCompletionResponse};
+pub use completion_request::{
+    JsCompletionRequest, JsFileContent, JsMessageContent, JsStructuredResponse,
+};
+#[cfg(feature = "embed")]
+pub use embed_facade::JsEmbedResponse;
 pub use embedding::{JsEmbeddingModel, JsEmbeddingResponse};
+pub use events::{
+    JsAgentConfig, JsAgentEvent, JsStartEventClass, JsStopEventClass, JsStreamChunkEvent,
+    JsStreamCompleteEvent, StartEventOptions, StopEventOptions,
+};
 pub use finish_reason::JsFinishReason;
+pub use http_client::{JsHttpClient, JsHttpRequest, JsHttpResponse};
 pub use media::{Generated3DModel, GeneratedAudio, GeneratedImage, GeneratedVideo, MediaOutput};
 pub use memory::{
     JsAddEntry, JsInMemoryBackend, JsJsonlBackend, JsMemory, JsMemoryBackend, JsMemoryEntry,
@@ -41,12 +59,24 @@ pub use message::{
     ChatMessageOptions, JsChatMessage, JsContentPart, JsImageContent, JsImageSource, JsRole,
 };
 pub use pricing::{JsModelPricing, lookup_pricing, register_pricing};
-pub use prompts::{JsPromptRegistry, JsPromptTemplate};
-pub use reasoning::JsReasoningTrace;
+pub use prompts::{JsPromptFile, JsPromptRegistry, JsPromptTemplate, JsTemplateRole};
+pub use provider_info::{
+    JsModelCapabilities, JsModelInfo, JsPricingEntry, JsProviderCapabilities, JsProviderConfig,
+    JsProviderId,
+};
+pub use reasoning::{JsReasoningTrace, JsReasoningTraceClass, ReasoningTraceOptions};
 pub use response_format::JsResponseFormat;
 pub use stream::JsStreamChunk;
 pub(crate) use stream::build_stream_chunk;
-pub use tokens::{count_message_tokens, estimate_tokens};
-pub use tool::{ToolCall, ToolDefinition};
+#[cfg(feature = "tiktoken")]
+pub use tokens::JsTiktokenCounter;
+pub use tokens::{JsEstimateCounter, JsTokenCounter, count_message_tokens, estimate_tokens};
+pub use tool::{
+    JsToolCallClass, JsToolDefinitionClass, ToolCall, ToolCallOptions, ToolDefinition,
+    ToolDefinitionOptions,
+};
 pub use tool_output::{LlmPayload, ToolOutput};
-pub use usage::{RequestTiming, TokenUsage};
+pub use usage::{
+    JsRequestTimingClass, JsTokenUsageClass, RequestTiming, RequestTimingOptions, TokenUsage,
+    TokenUsageOptions,
+};

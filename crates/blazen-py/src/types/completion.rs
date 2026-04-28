@@ -5,7 +5,10 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_llm::CompletionResponse;
 
-use super::{PyArtifact, PyGeneratedAudio, PyGeneratedImage, PyGeneratedVideo, PyRequestTiming};
+use super::{
+    PyArtifact, PyCitation, PyGeneratedAudio, PyGeneratedImage, PyGeneratedVideo, PyReasoningTrace,
+    PyRequestTiming, PyTokenUsage, PyToolCall,
+};
 
 // ---------------------------------------------------------------------------
 // PyCompletionResponse
@@ -43,18 +46,13 @@ impl PyCompletionResponse {
     }
 
     #[getter]
-    #[gen_stub(override_return_type(type_repr = "list[dict[str, typing.Any]]", imports = ("typing",)))]
-    fn tool_calls(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        Ok(pythonize::pythonize(py, &self.inner.tool_calls)?.into())
+    fn tool_calls(&self) -> Vec<PyToolCall> {
+        self.inner.tool_calls.iter().map(PyToolCall::from).collect()
     }
 
     #[getter]
-    #[gen_stub(override_return_type(type_repr = "typing.Optional[dict[str, typing.Any]]", imports = ("typing",)))]
-    fn usage(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
-        match &self.inner.usage {
-            Some(u) => Ok(Some(pythonize::pythonize(py, u)?.into())),
-            None => Ok(None),
-        }
+    fn usage(&self) -> Option<PyTokenUsage> {
+        self.inner.usage.as_ref().map(PyTokenUsage::from)
     }
 
     #[getter]
@@ -106,20 +104,15 @@ impl PyCompletionResponse {
     /// Reasoning trace from models that expose one (Anthropic extended thinking,
     /// DeepSeek R1, OpenAI o-series, xAI Grok, Gemini thoughts).
     #[getter]
-    #[gen_stub(override_return_type(type_repr = "typing.Optional[dict[str, typing.Any]]", imports = ("typing",)))]
-    fn reasoning(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
-        match &self.inner.reasoning {
-            Some(r) => Ok(Some(pythonize::pythonize(py, r)?.into())),
-            None => Ok(None),
-        }
+    fn reasoning(&self) -> Option<PyReasoningTrace> {
+        self.inner.reasoning.as_ref().map(PyReasoningTrace::from)
     }
 
     /// Web/document citations backing the model's statement (Perplexity,
     /// Gemini grounding, Anthropic web search).
     #[getter]
-    #[gen_stub(override_return_type(type_repr = "list[dict[str, typing.Any]]", imports = ("typing",)))]
-    fn citations(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        Ok(pythonize::pythonize(py, &self.inner.citations)?.into())
+    fn citations(&self) -> Vec<PyCitation> {
+        self.inner.citations.iter().map(PyCitation::from).collect()
     }
 
     /// Typed inline artifacts extracted from the response (SVG, code blocks,

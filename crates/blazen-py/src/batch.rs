@@ -1,7 +1,8 @@
 //! Python wrappers for batch completion execution.
 //!
 //! Exposes [`complete_batch`](blazen_llm::batch::complete_batch) to Python
-//! with [`PyBatchResult`] for inspecting per-request outcomes.
+//! with [`PyBatchResult`] for inspecting per-request outcomes and
+//! [`PyBatchConfig`] for configuring concurrency.
 
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
@@ -13,7 +14,59 @@ use blazen_llm::types::ChatMessage;
 
 use crate::providers::PyCompletionModel;
 use crate::providers::completion_model::{PyCompletionOptions, build_request};
-use crate::types::{PyChatMessage, PyCompletionResponse};
+use crate::types::{PyChatMessage, PyCompletionResponse, PyTokenUsage};
+
+// ---------------------------------------------------------------------------
+// PyBatchConfig
+// ---------------------------------------------------------------------------
+
+/// Configuration for a batch completion run.
+///
+/// Args:
+///     concurrency: Maximum number of concurrent requests. ``0`` (the default)
+///         means unlimited.
+///
+/// Example:
+///     >>> config = BatchConfig(concurrency=4)
+///     >>> result = await complete_batch(model, requests, config=config)
+#[gen_stub_pyclass]
+#[pyclass(name = "BatchConfig", from_py_object)]
+#[derive(Clone)]
+pub struct PyBatchConfig {
+    pub(crate) concurrency: usize,
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyBatchConfig {
+    #[new]
+    #[pyo3(signature = (*, concurrency=0))]
+    fn new(concurrency: usize) -> Self {
+        Self { concurrency }
+    }
+
+    /// Build a config with unlimited concurrency.
+    #[staticmethod]
+    fn unlimited() -> Self {
+        Self { concurrency: 0 }
+    }
+
+    /// Maximum number of concurrent requests. ``0`` means unlimited.
+    #[getter]
+    fn concurrency(&self) -> usize {
+        self.concurrency
+    }
+
+    fn __repr__(&self) -> String {
+        format!("BatchConfig(concurrency={})", self.concurrency)
+    }
+}
+
+impl PyBatchConfig {
+    pub(crate) fn to_rust(&self) -> BatchConfig {
+        BatchConfig::new(self.concurrency)
+    }
+}
 
 // ---------------------------------------------------------------------------
 // PyBatchResult
@@ -66,14 +119,10 @@ impl PyBatchResult {
             .collect()
     }
 
-    /// Aggregated token usage across all successful responses, as a dict.
+    /// Aggregated token usage across all successful responses.
     #[getter]
-    #[gen_stub(override_return_type(type_repr = "typing.Optional[dict[str, typing.Any]]", imports = ("typing",)))]
-    fn total_usage(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
-        match &self.inner.total_usage {
-            Some(u) => Ok(Some(pythonize::pythonize(py, u)?.into())),
-            None => Ok(None),
-        }
+    fn total_usage(&self) -> Option<PyTokenUsage> {
+        self.inner.total_usage.as_ref().map(PyTokenUsage::from)
     }
 
     /// Aggregated cost across all successful responses.
@@ -144,11 +193,13 @@ impl PyBatchResult {
 #[gen_stub_pyfunction]
 #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, BatchResult]", imports = ("typing",)))]
 #[pyfunction]
-#[pyo3(signature = (model, requests, *, concurrency=0, options=None))]
+#[pyo3(signature = (model, requests, *, config=None, concurrency=0, options=None))]
+#[allow(clippy::map_unwrap_or)]
 pub fn complete_batch<'py>(
     py: Python<'py>,
     model: Bound<'py, PyCompletionModel>,
     requests: Vec<Vec<PyRef<'py, PyChatMessage>>>,
+    config: Option<PyRef<'py, PyBatchConfig>>,
     concurrency: usize,
     options: Option<PyRef<'py, PyCompletionOptions>>,
 ) -> PyResult<Bound<'py, PyAny>> {
@@ -161,11 +212,14 @@ pub fn complete_batch<'py>(
         })
         .collect::<PyResult<Vec<_>>>()?;
 
-    let config = BatchConfig::new(concurrency);
+    let rust_config = config
+        .as_deref()
+        .map(PyBatchConfig::to_rust)
+        .unwrap_or_else(|| BatchConfig::new(concurrency));
     let inner_model = crate::providers::completion_model::arc_from_bound(&model);
 
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
-        let result = rust_complete_batch(inner_model.as_ref(), rust_requests, config).await;
+        let result = rust_complete_batch(inner_model.as_ref(), rust_requests, rust_config).await;
         Ok(PyBatchResult { inner: result })
     })
 }

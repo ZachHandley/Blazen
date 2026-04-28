@@ -10,15 +10,22 @@
 //! - [`providers`] -- LLM completion model wrappers and provider factories.
 //! - [`error`] -- Error conversion utilities.
 //! - [`agent`] -- Agentic tool execution loop bindings.
+//! - [`peer`] -- Distributed peer gRPC server and client bindings.
 //! - [`workflow`] -- Workflow builder, runner, context, handler, and events.
 
 pub mod agent;
 pub mod batch;
 pub mod compute;
+pub mod core;
 pub mod error;
 pub mod generated;
 pub mod manager;
+pub mod model_cache;
+pub mod peer;
+pub mod persist;
+pub mod pipeline;
 pub mod providers;
+pub mod telemetry;
 pub mod types;
 pub mod workflow;
 

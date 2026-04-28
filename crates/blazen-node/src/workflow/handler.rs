@@ -14,6 +14,7 @@ use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 
 use super::event::any_event_to_js_value;
+use super::events_typed::JsInputResponseEvent;
 use super::workflow::JsWorkflowResult;
 use crate::error::workflow_error_to_napi;
 
@@ -165,6 +166,27 @@ impl JsWorkflowHandler {
         };
         handler
             .respond_to_input(input_response)
+            .map_err(workflow_error_to_napi)?;
+        Ok(())
+    }
+
+    /// Respond to an input request using a typed [`JsInputResponseEvent`].
+    ///
+    /// Equivalent to [`Self::respond_to_input`] but accepts the typed
+    /// event object so JS callers can pass a single value already shaped
+    /// like the [`crate::workflow::events_typed::JsInputResponseEvent`]
+    /// they may have built earlier.
+    #[napi(js_name = "respondToInputTyped")]
+    pub async fn respond_to_input_typed(&self, event: JsInputResponseEvent) -> Result<()> {
+        let guard = self.inner.lock().await;
+        let handler = guard.as_ref().ok_or_else(|| {
+            napi::Error::new(
+                napi::Status::GenericFailure,
+                "WorkflowHandler already consumed".to_string(),
+            )
+        })?;
+        handler
+            .respond_to_input(event.into_event())
             .map_err(workflow_error_to_napi)?;
         Ok(())
     }

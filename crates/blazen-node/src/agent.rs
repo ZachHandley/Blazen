@@ -11,13 +11,18 @@ use napi::bindgen_prelude::*;
 use napi::threadsafe_function::ThreadsafeFunction;
 use napi_derive::napi;
 
-use blazen_llm::agent::{AgentConfig, run_agent as rust_run_agent};
+use blazen_llm::agent::{
+    AgentConfig, run_agent as rust_run_agent,
+    run_agent_with_callback as rust_run_agent_with_callback,
+};
 use blazen_llm::error::BlazenError;
 use blazen_llm::traits::Tool;
 use blazen_llm::types::{ChatMessage, ToolDefinition};
+use napi::threadsafe_function::ThreadsafeFunctionCallMode;
 
 use crate::error::llm_error_to_napi;
 use crate::providers::JsCompletionModel;
+use crate::types::events::JsAgentEvent;
 use crate::types::{JsChatMessage, JsCompletionResponse, build_response};
 
 // ---------------------------------------------------------------------------
@@ -279,6 +284,134 @@ pub async fn run_agent(
         )
     })?;
     let result = rust_run_agent(inner.as_ref(), rust_messages, config)
+        .await
+        .map_err(llm_error_to_napi)?;
+
+    let js_messages: Vec<serde_json::Value> = result
+        .messages
+        .iter()
+        .map(|m| {
+            serde_json::to_value(m).map_err(|e| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    format!("Failed to serialize ChatMessage: {e}"),
+                )
+            })
+        })
+        .collect::<napi::Result<Vec<_>>>()?;
+
+    Ok(JsAgentResult {
+        response: build_response(result.response),
+        messages: js_messages,
+        iterations: result.iterations,
+        total_cost: result.total_cost,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// runAgentWithCallback
+// ---------------------------------------------------------------------------
+
+/// Event observer callback: receives a typed [`JsAgentEvent`] for each
+/// tool call, tool result, and iteration the agent loop emits.
+///
+/// `Weak = true` so it does not prevent Node.js from exiting once the
+/// agent run resolves. `CalleeHandled = false` to avoid the error-first
+/// callback convention.
+type AgentEventCallbackTsfn =
+    ThreadsafeFunction<JsAgentEvent, Unknown<'static>, JsAgentEvent, Status, false, true>;
+
+/// Run an agent loop with an event-observer callback.
+///
+/// Identical to [`run_agent`] but additionally invokes `onEvent` for each
+/// [`JsAgentEvent`] emitted during the loop. The callback is fire-and-forget
+/// — its return value is ignored, and any exception it raises does not
+/// abort the loop.
+///
+/// ```typescript
+/// import { CompletionModel, ChatMessage, runAgentWithCallback } from 'blazen';
+///
+/// const model = CompletionModel.openai({ apiKey: "sk-..." });
+///
+/// const result = await runAgentWithCallback(
+///   model,
+///   [ChatMessage.user("What is the weather in NYC?")],
+///   [{ name: "getWeather", description: "Get weather", parameters: { type: "object" } }],
+///   async (toolName, args) => ({ temp: 72, condition: "sunny" }),
+///   (event) => {
+///     console.log(event.kind, event.iteration, event.toolName);
+///   },
+///   { maxIterations: 5 },
+/// );
+/// ```
+#[napi(js_name = "runAgentWithCallback")]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::missing_errors_doc,
+    clippy::too_many_arguments
+)]
+pub async fn run_agent_with_callback(
+    model: &JsCompletionModel,
+    messages: Vec<&JsChatMessage>,
+    tools: Vec<JsToolDef>,
+    tool_handler: ToolHandlerTsfn,
+    on_event: AgentEventCallbackTsfn,
+    options: Option<JsAgentRunOptions>,
+) -> napi::Result<JsAgentResult> {
+    let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
+
+    let handler = Arc::new(tool_handler);
+
+    let rust_tools: Vec<Arc<dyn Tool>> = tools
+        .into_iter()
+        .map(|t| {
+            Arc::new(JsToolWrapper {
+                def: ToolDefinition {
+                    name: t.name,
+                    description: t.description,
+                    parameters: t.parameters,
+                },
+                handler: Arc::clone(&handler),
+            }) as Arc<dyn Tool>
+        })
+        .collect();
+
+    let opts = options.unwrap_or_default();
+
+    let mut config =
+        AgentConfig::new(rust_tools).with_max_iterations(opts.max_iterations.unwrap_or(10) as u32);
+
+    if let Some(sp) = opts.system_prompt {
+        config = config.with_system_prompt(sp);
+    }
+    if let Some(t) = opts.temperature {
+        config = config.with_temperature(t as f32);
+    }
+    if let Some(mt) = opts.max_tokens {
+        config = config.with_max_tokens(mt as u32);
+    }
+    if opts.add_finish_tool.unwrap_or(false) {
+        config = config.with_finish_tool();
+    }
+    if let Some(tc) = opts.tool_concurrency {
+        config = config.with_tool_concurrency(tc as usize);
+    }
+
+    let inner = model.inner.as_ref().ok_or_else(|| {
+        napi::Error::from_reason(
+            "runAgentWithCallback() is not supported on subclassed CompletionModel instances",
+        )
+    })?;
+
+    let on_event_arc = Arc::new(on_event);
+
+    let on_event_fn = move |ev: blazen_llm::AgentEvent| {
+        let typed = JsAgentEvent::from_rust(ev);
+        on_event_arc.call(typed, ThreadsafeFunctionCallMode::Blocking);
+    };
+
+    let result = rust_run_agent_with_callback(inner.as_ref(), rust_messages, config, on_event_fn)
         .await
         .map_err(llm_error_to_napi)?;
 

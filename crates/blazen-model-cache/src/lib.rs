@@ -3,13 +3,24 @@
 //! Provides [`ModelCache`] for downloading and caching ML models from
 //! [`HuggingFace` Hub](https://huggingface.co). Designed to be shared by all
 //! local-inference backends (fastembed, mistral.rs, whisper.cpp, etc.).
+//!
+//! ## wasm32 support
+//!
+//! On `wasm32-*` targets the underlying download stack (`hf-hub`, `dirs`,
+//! `tokio::fs`) is not available, so [`ModelCache`] is a stub that always
+//! returns [`CacheError::Unsupported`]. Browser/Worker callers should obtain
+//! model bytes through a different mechanism (e.g. `fetch()` on the JS side,
+//! pre-bundled assets, or a manually populated cache directory).
 
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::LazyLock;
 
 /// Per-destination-path mutexes that serialize concurrent [`ModelCache::download`]
 /// calls for the same file. Different files download in parallel; same-file
 /// callers wait so hf-hub's internal blob lock isn't raced.
+#[cfg(not(target_arch = "wasm32"))]
 static DOWNLOAD_LOCKS: LazyLock<dashmap::DashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>> =
     LazyLock::new(dashmap::DashMap::new);
 
@@ -27,6 +38,11 @@ pub enum CacheError {
     /// An underlying I/O error.
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+
+    /// The requested operation is not supported on this target (e.g. WASM,
+    /// where the underlying `HuggingFace` Hub download stack is unavailable).
+    #[error("model cache operation not supported on this target: {0}")]
+    Unsupported(String),
 }
 
 /// Callback trait for receiving download progress updates.
@@ -45,6 +61,7 @@ pub trait ProgressCallback: Send + Sync {
 ///
 /// Uses `Arc` so the adapter is `Clone + Send + Sync + 'static` as
 /// required by [`hf_hub::api::tokio::ApiRepo::download_with_progress`].
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone)]
 struct HfProgressAdapter {
     callback: Arc<dyn ProgressCallback>,
@@ -52,6 +69,7 @@ struct HfProgressAdapter {
     total: Option<u64>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl HfProgressAdapter {
     fn new(callback: Arc<dyn ProgressCallback>) -> Self {
         Self {
@@ -62,6 +80,7 @@ impl HfProgressAdapter {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl hf_hub::api::tokio::Progress for HfProgressAdapter {
     async fn init(&mut self, size: usize, _filename: &str) {
         self.total = Some(size as u64);
@@ -81,9 +100,11 @@ impl hf_hub::api::tokio::Progress for HfProgressAdapter {
 }
 
 /// A no-op progress implementation used when no callback is provided.
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone)]
 struct NoProgress;
 
+#[cfg(not(target_arch = "wasm32"))]
 impl hf_hub::api::tokio::Progress for NoProgress {
     async fn init(&mut self, _size: usize, _filename: &str) {}
     async fn update(&mut self, _size: usize) {}
@@ -112,6 +133,53 @@ pub struct ModelCache {
 }
 
 impl ModelCache {
+    /// Create a cache rooted at a specific directory.
+    ///
+    /// The directory does not need to exist yet; it will be created on the
+    /// first download.
+    ///
+    /// Available on every target — only [`Self::new`] and [`Self::download`]
+    /// require the native `HuggingFace` Hub download stack.
+    #[must_use]
+    pub fn with_dir(cache_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            cache_dir: cache_dir.into(),
+        }
+    }
+
+    /// The root cache directory path.
+    #[must_use]
+    pub fn cache_dir(&self) -> &Path {
+        &self.cache_dir
+    }
+
+    /// Check if a file is already present in the cache (without downloading).
+    ///
+    /// On wasm32 this always returns `false` — there is no filesystem to
+    /// inspect, so callers should not rely on cache hits in the browser.
+    #[must_use]
+    pub fn is_cached(&self, repo_id: &str, filename: &str) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.cached_path(repo_id, filename).is_file()
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = (repo_id, filename);
+            false
+        }
+    }
+
+    /// Compute the expected cache path for a repo/file pair.
+    fn cached_path(&self, repo_id: &str, filename: &str) -> PathBuf {
+        self.cache_dir.join(repo_id).join(filename)
+    }
+}
+
+// -- Native-only methods (filesystem + HuggingFace Hub) -----------------------
+
+#[cfg(not(target_arch = "wasm32"))]
+impl ModelCache {
     /// Create a cache in the default location.
     ///
     /// Uses `$BLAZEN_CACHE_DIR/models/` if the `BLAZEN_CACHE_DIR` environment
@@ -138,29 +206,6 @@ impl ModelCache {
         };
 
         Ok(Self { cache_dir })
-    }
-
-    /// Create a cache rooted at a specific directory.
-    ///
-    /// The directory does not need to exist yet; it will be created on the
-    /// first download.
-    #[must_use]
-    pub fn with_dir(cache_dir: impl Into<PathBuf>) -> Self {
-        Self {
-            cache_dir: cache_dir.into(),
-        }
-    }
-
-    /// The root cache directory path.
-    #[must_use]
-    pub fn cache_dir(&self) -> &Path {
-        &self.cache_dir
-    }
-
-    /// Check if a file is already present in the cache (without downloading).
-    #[must_use]
-    pub fn is_cached(&self, repo_id: &str, filename: &str) -> bool {
-        self.cached_path(repo_id, filename).is_file()
     }
 
     /// Download a file from `HuggingFace` Hub if it is not already cached.
@@ -266,14 +311,54 @@ impl ModelCache {
 
         Ok(dest)
     }
+}
 
-    /// Compute the expected cache path for a repo/file pair.
-    fn cached_path(&self, repo_id: &str, filename: &str) -> PathBuf {
-        self.cache_dir.join(repo_id).join(filename)
+// -- wasm32 stubs -------------------------------------------------------------
+
+#[cfg(target_arch = "wasm32")]
+impl ModelCache {
+    /// Stub that returns [`CacheError::Unsupported`] on wasm32.
+    ///
+    /// On wasm32 there is no `dirs::cache_dir()` and no `BLAZEN_CACHE_DIR`
+    /// environment lookup that would produce a usable path. Use
+    /// [`Self::with_dir`] with an explicit virtual path instead.
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`CacheError::Unsupported`].
+    pub fn new() -> Result<Self, CacheError> {
+        Err(CacheError::Unsupported(
+            "ModelCache::new() is not supported on wasm32; use ModelCache::with_dir() instead"
+                .to_string(),
+        ))
+    }
+
+    /// Stub that always returns [`CacheError::Unsupported`] on wasm32.
+    ///
+    /// The HuggingFace Hub client (`hf-hub`) and `tokio::fs` are not
+    /// compatible with the `wasm32-*` targets, so model files cannot be
+    /// downloaded from this side. Browser/Worker callers should fetch model
+    /// bytes via the JavaScript `fetch()` API and pass them in directly.
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`CacheError::Unsupported`].
+    pub async fn download(
+        &self,
+        repo_id: &str,
+        filename: &str,
+        progress: Option<Arc<dyn ProgressCallback>>,
+    ) -> Result<PathBuf, CacheError> {
+        let _ = (repo_id, filename, progress);
+        Err(CacheError::Unsupported(format!(
+            "ModelCache::download() is not supported on wasm32 \
+             (cache_dir={})",
+            self.cache_dir.display()
+        )))
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 #[allow(unsafe_code)] // env::set_var / env::remove_var require unsafe in edition 2024
 mod tests {
     use super::*;

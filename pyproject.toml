@@ -30,5 +30,7 @@ timeout = 120
 addopts = "--basetemp=.pytest_tmp"
 markers = [
     "timeout: set test timeout (requires pytest-timeout)",
+    "compute: fal compute tests (image/TTS/music/transcribe/3D/bg-removal/run/submit); opt in via BLAZEN_TEST_FAL_COMPUTE=1",
+    "video: fal text-to-video tests (slow, ~6+ min); opt in via BLAZEN_TEST_FAL_VIDEO=1",
 ]
 

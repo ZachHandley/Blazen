@@ -81,11 +81,12 @@ const FAL_SYNC_URL: &str = "https://fal.run";
 /// Default poll interval for queue-based execution.
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
-/// Maximum poll iterations for TTS jobs (~60s at 1s intervals).
-/// Deliberately lower than pytest/node test timeouts (90s) so the Rust
-/// poll loop fires its diagnostic timeout error before the test harness
-/// kills the process. TTS should complete in <30s for reasonable input.
-const MAX_TTS_POLL_ITERATIONS: u32 = 60;
+/// Maximum poll iterations for TTS jobs (~4 minutes at 1s intervals).
+/// Sized to fal's kokoro upstream wall-clock under queue pressure, not
+/// to any downstream test timeout. Typical TTS completes in <30s, but
+/// queue latency can push real jobs past a minute under load. Test
+/// harnesses must set their own timeout headroom above this budget.
+const MAX_TTS_POLL_ITERATIONS: u32 = 240;
 /// Maximum poll iterations for image generation (~5 min at 1s intervals).
 const MAX_IMAGE_POLL_ITERATIONS: u32 = 300;
 /// Maximum poll iterations for video generation (~20 min at 1s intervals).

@@ -55,7 +55,7 @@ thiserror = "2"
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
-tokio-stream = { version = "0.1", features = ["sync"] }
+tokio-stream = { version = "0.1", default-features = false, features = ["sync"] }
 futures-util = "0.3"
 async-trait = "0.1"
 

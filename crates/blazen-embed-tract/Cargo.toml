@@ -9,16 +9,27 @@ repository.workspace = true
 description = "Pure-Rust ONNX inference backend for Blazen embeddings (tract-onnx)"
 
 [dependencies]
-blazen-model-cache = { workspace = true }
-tokenizers = { workspace = true }
-tokio = { workspace = true }
+# wasm32-compatible deps. Only `serde`, `serde_json`, `tracing`, `thiserror`
+# survive the wasm32 cut — everything that drives ONNX inference, tokenization,
+# model download, or runtime scheduling lives behind the native target gate
+# below because those crates either depend on `mio`/`tokio::fs` (forbidden on
+# wasm32) or pull in C/C++ toolchains we do not want in a `wasm-bindgen` build.
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
+tokio = { version = "1", default-features = false, features = ["sync"] }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Native-only: tract-onnx + tokenizers + the model-cache download stack pull
+# in heavy C/C++ deps (or hf-hub via blazen-model-cache) and tokio's fs/rt
+# features that drag in mio. Gating them here keeps `cargo check
+# --target wasm32-unknown-unknown` working for downstream consumers.
+blazen-model-cache = { workspace = true }
+tokenizers = { workspace = true }
 tract-onnx = { workspace = true }
 ndarray = { workspace = true }
+tokio = { version = "1", default-features = false, features = ["fs", "rt", "rt-multi-thread", "macros", "time"] }
 
 [lints]
 workspace = true

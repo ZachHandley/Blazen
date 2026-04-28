@@ -101,6 +101,47 @@ pub struct PyWorkflow {
     session_pause_policy: PySessionPausePolicy,
 }
 
+impl PyWorkflow {
+    /// Construct a `PyWorkflow` directly from its parts. Used by the
+    /// Rust-side `WorkflowBuilder::build` path which has already
+    /// validated the inputs and just needs to assemble the struct
+    /// without going through the `#[new]` PyO3 constructor.
+    pub(crate) fn from_parts(
+        name: String,
+        steps: Vec<Py<PyStepWrapper>>,
+        timeout: Option<f64>,
+        session_pause_policy: PySessionPausePolicy,
+    ) -> Self {
+        Self {
+            name,
+            steps,
+            timeout,
+            session_pause_policy,
+        }
+    }
+
+    /// Build a `blazen_core::Workflow` from this `PyWorkflow` using the
+    /// provided Python task locals. Used by `Pipeline` to materialize
+    /// stage workflows at run time.
+    pub(crate) fn build_workflow_with_locals(
+        &self,
+        py: Python<'_>,
+        locals: pyo3_async_runtimes::TaskLocals,
+    ) -> PyResult<blazen_core::Workflow> {
+        let mut builder = blazen_core::WorkflowBuilder::new(&self.name);
+        for step in &self.steps {
+            let step_ref = step.borrow(py);
+            let registration = step_ref.to_registration_with_locals(locals.clone())?;
+            builder = builder.step(registration);
+        }
+        if let Some(t) = self.timeout {
+            builder = builder.timeout(Duration::from_secs_f64(t));
+        }
+        builder = builder.session_pause_policy(self.session_pause_policy.into());
+        builder.build().map_err(|e| BlazenPyError::from(e).into())
+    }
+}
+
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyWorkflow {
@@ -164,18 +205,7 @@ impl PyWorkflow {
 
         let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
 
-        // Build the workflow here with task locals
-        let mut builder = blazen_core::WorkflowBuilder::new(&self.name);
-        for step in &self.steps {
-            let step_ref = step.borrow(py);
-            let registration = step_ref.to_registration_with_locals(locals.clone())?;
-            builder = builder.step(registration);
-        }
-        if let Some(t) = self.timeout {
-            builder = builder.timeout(Duration::from_secs_f64(t));
-        }
-        builder = builder.session_pause_policy(self.session_pause_policy.into());
-        let workflow = builder.build().map_err(BlazenPyError::from)?;
+        let workflow = self.build_workflow_with_locals(py, locals.clone())?;
 
         // Phase 0.4: capture the parent session-ref registry BEFORE
         // entering the async block. This call must run on the Python
@@ -336,6 +366,19 @@ impl PyWorkflow {
             .map_err(BlazenPyError::from)?;
             to_py_result(Ok(PyWorkflowHandler::new(handler)))
         })
+    }
+
+    /// Create a fluent [`WorkflowBuilder`] for the given workflow name.
+    ///
+    /// Mirrors the Node.js / wasm-sdk surface. Use this when you want to
+    /// configure the workflow piecemeal rather than passing every option
+    /// to ``Workflow(...)`` directly.
+    ///
+    /// Example:
+    ///     >>> wf = Workflow.builder("my-wf").step(my_step).timeout(60.0).build()
+    #[staticmethod]
+    fn builder(name: &str) -> super::builder::PyWorkflowBuilder {
+        super::builder::PyWorkflowBuilder::with_name(name)
     }
 
     fn __repr__(&self) -> String {

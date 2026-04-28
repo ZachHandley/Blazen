@@ -62,6 +62,12 @@ pub struct WasmWorkflow {
     /// native [`StepRegistration`]s whose handlers call back into the JS
     /// function.
     pending_steps: Vec<PendingStep>,
+    /// Whether the caller customised timeout via [`WasmWorkflowBuilder`].
+    /// `true` means `run()`/`runHandler()` must NOT clobber the configured
+    /// timeout with a hardcoded `no_timeout()` call. `false` (the default
+    /// for the direct `new()` constructor) preserves the legacy behavior
+    /// where every invocation runs without a timeout.
+    timeout_user_configured: bool,
 }
 
 /// A JS step registration that has not yet been adapted into a native
@@ -89,7 +95,33 @@ impl WasmWorkflow {
             name: name.to_owned(),
             builder: Some(WorkflowBuilder::new(name)),
             pending_steps: Vec::new(),
+            timeout_user_configured: false,
         }
+    }
+
+    /// Construct a fluent [`WasmWorkflowBuilder`] for the given workflow
+    /// name.
+    ///
+    /// Equivalent to constructing a `Workflow` directly and calling
+    /// `addStep` repeatedly, but returns a chainable builder so JS callers
+    /// can configure timeout / auto-publish / step set up-front before
+    /// producing the `Workflow`. Mirrors
+    /// [`blazen_core::WorkflowBuilder`].
+    ///
+    /// ```js
+    /// const wf = Workflow.builder('my-flow')
+    ///   .addStep('process', ['StartEvent'], (event, ctx) => ({
+    ///     type: 'StopEvent',
+    ///     result: event.data,
+    ///   }))
+    ///   .noTimeout()
+    ///   .build();
+    /// const result = await wf.run({ data: 'hello' });
+    /// ```
+    #[wasm_bindgen(js_name = "builder")]
+    #[must_use]
+    pub fn builder(name: String) -> WasmWorkflowBuilder {
+        WasmWorkflowBuilder::new_internal(name)
     }
 
     /// The workflow name.
@@ -176,8 +208,14 @@ impl WasmWorkflow {
             builder = builder.step(registration);
         }
 
+        // Preserve the legacy "no timeout by default" behavior for the
+        // direct `new()` constructor, but respect the timeout configured
+        // on a `WasmWorkflowBuilder` when the user opted into one.
+        if !self.timeout_user_configured {
+            builder = builder.no_timeout();
+        }
+
         let workflow = builder
-            .no_timeout()
             .build()
             .map_err(|e| JsValue::from_str(&format!("workflow build failed: {e}")))?;
 
@@ -256,8 +294,15 @@ impl WasmWorkflow {
             builder = builder.step(registration);
         }
 
+        // Same legacy-preserving timeout policy as `run()`: the direct
+        // `new()` constructor disables the timeout to match the prior
+        // behavior, while a `WasmWorkflowBuilder`-configured timeout is
+        // honored when set.
+        if !self.timeout_user_configured {
+            builder = builder.no_timeout();
+        }
+
         let workflow = builder
-            .no_timeout()
             .build()
             .map_err(|e| JsValue::from_str(&format!("workflow build failed: {e}")))?;
 
@@ -333,6 +378,222 @@ impl WasmWorkflow {
             .map_err(|e| JsValue::from_str(&format!("workflow resume failed: {e}")))?;
 
         Ok(crate::handler::WasmWorkflowHandler::new(handler))
+    }
+}
+
+impl WasmWorkflow {
+    /// Materialize the buffered builder + pending JS steps into a real
+    /// [`blazen_core::Workflow`] without running it.
+    ///
+    /// Used by the pipeline binding to embed a `WasmWorkflow` inside a
+    /// [`blazen_pipeline::Stage`]. Like `run()` / `runHandler()`, this
+    /// consumes the workflow's internal builder; calling `run()` on the
+    /// same instance afterwards returns the standard "already run" error.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if:
+    /// - the workflow was already consumed (run/runHandler/build_workflow),
+    /// - the underlying [`WorkflowBuilder::build`] fails (e.g. duplicate step
+    ///   names).
+    pub(crate) fn build_workflow(&mut self) -> Result<Workflow, JsValue> {
+        let mut builder = self
+            .builder
+            .take()
+            .ok_or_else(|| JsValue::from_str("Workflow already consumed; reuse not supported"))?;
+
+        let workflow_name = self.name.clone();
+
+        let pending = std::mem::take(&mut self.pending_steps);
+        for pending_step in pending {
+            let registration = step_registration_from_js(pending_step, workflow_name.clone());
+            builder = builder.step(registration);
+        }
+
+        if !self.timeout_user_configured {
+            builder = builder.no_timeout();
+        }
+
+        builder
+            .build()
+            .map_err(|e| JsValue::from_str(&format!("workflow build failed: {e}")))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WasmWorkflowBuilder — fluent JS surface mirroring blazen_core::WorkflowBuilder
+// ---------------------------------------------------------------------------
+
+/// Fluent JS-facing builder mirroring [`blazen_core::WorkflowBuilder`].
+///
+/// Buffers pending steps and configuration knobs until [`build`](Self::build)
+/// is called, at which point the configuration is applied to a real
+/// [`WorkflowBuilder`] and a [`WasmWorkflow`] is produced.
+///
+/// All chainable methods consume `self` and return `Self` so JS callers can
+/// fluently chain configuration without intermediate variables.
+#[wasm_bindgen(js_name = "WorkflowBuilder")]
+pub struct WasmWorkflowBuilder {
+    /// Workflow name. Cached separately so [`name`](Self::name) stays cheap
+    /// and survives [`build`](Self::build).
+    name: String,
+    /// Buffered step registrations. Drained on [`build`](Self::build) into
+    /// the produced [`WasmWorkflow`]'s pending-step list, so the same
+    /// JS-callback adapter as the direct `Workflow::addStep` path is reused.
+    pending_steps: Vec<PendingStep>,
+    /// Optional execution timeout. `None` means use the
+    /// [`WorkflowBuilder`] default; `Some(None)` means disable the timeout
+    /// entirely (mirrors [`WorkflowBuilder::no_timeout`]); `Some(Some(d))`
+    /// means apply [`WorkflowBuilder::timeout`].
+    timeout: Option<Option<std::time::Duration>>,
+    /// Whether to enable automatic broadcast publishing (mirrors
+    /// [`WorkflowBuilder::auto_publish_events`]). `None` leaves the engine
+    /// default in place.
+    auto_publish_events: Option<bool>,
+}
+
+impl WasmWorkflowBuilder {
+    /// Internal constructor used by [`WasmWorkflow::builder`].
+    fn new_internal(name: String) -> Self {
+        Self {
+            name,
+            pending_steps: Vec::new(),
+            timeout: None,
+            auto_publish_events: None,
+        }
+    }
+}
+
+#[wasm_bindgen(js_class = "WorkflowBuilder")]
+impl WasmWorkflowBuilder {
+    /// Construct a fresh builder with the given workflow name.
+    #[wasm_bindgen(constructor)]
+    #[must_use]
+    pub fn new(name: String) -> WasmWorkflowBuilder {
+        Self::new_internal(name)
+    }
+
+    /// The workflow name.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    /// Register a step handler. Mirrors [`WasmWorkflow::add_step`].
+    ///
+    /// Returns the builder so the call can be chained:
+    ///
+    /// ```js
+    /// Workflow.builder('flow')
+    ///   .addStep('a', ['StartEvent'], handler1)
+    ///   .addStep('b', ['MidEvent'],   handler2)
+    ///   .build();
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if `event_types` is not an array of
+    /// strings.
+    #[wasm_bindgen(js_name = "addStep")]
+    pub fn add_step(
+        mut self,
+        name: &str,
+        event_types: JsValue,
+        handler: js_sys::Function,
+    ) -> Result<WasmWorkflowBuilder, JsValue> {
+        let types_array = js_sys::Array::from(&event_types);
+        let mut event_types_vec = Vec::with_capacity(types_array.length() as usize);
+        for i in 0..types_array.length() {
+            let t = types_array
+                .get(i)
+                .as_string()
+                .ok_or_else(|| JsValue::from_str("event_types must be an array of strings"))?;
+            event_types_vec.push(t);
+        }
+
+        self.pending_steps.push(PendingStep {
+            name: name.to_owned(),
+            event_types: event_types_vec,
+            handler,
+        });
+
+        Ok(self)
+    }
+
+    /// Set the maximum execution time for the workflow, in milliseconds.
+    ///
+    /// Mirrors [`WorkflowBuilder::timeout`].
+    #[wasm_bindgen(js_name = "timeoutMs")]
+    #[must_use]
+    pub fn timeout_ms(mut self, ms: u64) -> WasmWorkflowBuilder {
+        self.timeout = Some(Some(std::time::Duration::from_millis(ms)));
+        self
+    }
+
+    /// Disable the execution timeout (workflow runs until `StopEvent`).
+    ///
+    /// Mirrors [`WorkflowBuilder::no_timeout`].
+    #[wasm_bindgen(js_name = "noTimeout")]
+    #[must_use]
+    pub fn no_timeout(mut self) -> WasmWorkflowBuilder {
+        self.timeout = Some(None);
+        self
+    }
+
+    /// Enable or disable automatic publishing of lifecycle events to the
+    /// broadcast stream.
+    ///
+    /// Mirrors [`WorkflowBuilder::auto_publish_events`].
+    #[wasm_bindgen(js_name = "autoPublishEvents")]
+    #[must_use]
+    pub fn auto_publish_events(mut self, enabled: bool) -> WasmWorkflowBuilder {
+        self.auto_publish_events = Some(enabled);
+        self
+    }
+
+    /// Finalise the builder and return a [`WasmWorkflow`] ready to `run`.
+    ///
+    /// Applies the buffered configuration to a real
+    /// [`blazen_core::WorkflowBuilder`] and stuffs the pending steps into
+    /// the returned `WasmWorkflow` so the existing JS-callback adapter
+    /// inside `run` / `runHandler` is reused unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if the underlying engine builder rejects
+    /// the configuration (currently only validation that a [`WasmWorkflow`]
+    /// has at least one step, which is deferred until `run`).
+    #[wasm_bindgen(js_name = "build")]
+    pub fn build(self) -> Result<WasmWorkflow, JsValue> {
+        let Self {
+            name,
+            pending_steps,
+            timeout,
+            auto_publish_events,
+        } = self;
+
+        let timeout_user_configured = timeout.is_some();
+        let mut core_builder = WorkflowBuilder::new(&name);
+        match timeout {
+            Some(Some(d)) => {
+                core_builder = core_builder.timeout(d);
+            }
+            Some(None) => {
+                core_builder = core_builder.no_timeout();
+            }
+            None => {}
+        }
+        if let Some(enabled) = auto_publish_events {
+            core_builder = core_builder.auto_publish_events(enabled);
+        }
+
+        Ok(WasmWorkflow {
+            name,
+            builder: Some(core_builder),
+            pending_steps,
+            timeout_user_configured,
+        })
     }
 }
 
@@ -422,7 +683,8 @@ fn marshal_event_to_js(event: &dyn AnyEvent) -> Result<JsValue, WorkflowError> {
 ///
 /// 1. Marshals the type-erased event into a `JsValue` via [`marshal_event_to_js`].
 /// 2. Wraps the live [`Context`] in a [`WasmContext`] (exported to JS as
-///    `WorkflowContext`) and converts it to a `JsValue`.
+///    `Context`, with a deprecated `WorkflowContext` type alias for
+///    backward compatibility) and converts it to a `JsValue`.
 /// 3. Invokes the JS handler with `(event, context)`.
 /// 4. If the handler returned a `Promise`, awaits it via [`wasm_bindgen_futures::JsFuture`].
 /// 5. Marshals the resolved value back into a [`DynamicEvent`] (or treats

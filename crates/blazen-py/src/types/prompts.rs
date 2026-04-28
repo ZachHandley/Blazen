@@ -1,30 +1,37 @@
 //! Python wrappers for prompt template types.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyclass_enum, gen_stub_pymethods};
 
-use blazen_prompts::{PromptRegistry, PromptTemplate, TemplateRole};
+use blazen_prompts::{PromptFile, PromptRegistry, PromptTemplate, TemplateRole};
 
+use crate::error::BlazenException;
 use crate::types::message::PyChatMessage;
+
+// ---------------------------------------------------------------------------
+// PromptException
+// ---------------------------------------------------------------------------
+
+pyo3::create_exception!(blazen, PromptException, BlazenException);
+
+/// Register the prompt exception type on the module.
+pub fn register_exceptions(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("PromptError", m.py().get_type::<PromptException>())?;
+    Ok(())
+}
+
+/// Convert a [`blazen_prompts::PromptError`] into a [`PyErr`].
+pub fn prompt_err(err: blazen_prompts::PromptError) -> PyErr {
+    PromptException::new_err(err.to_string())
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/// Parse a role string into a [`TemplateRole`], defaulting to `User`.
-fn parse_role(role: Option<&str>) -> PyResult<TemplateRole> {
-    match role {
-        None | Some("user") => Ok(TemplateRole::User),
-        Some("system") => Ok(TemplateRole::System),
-        Some("assistant") => Ok(TemplateRole::Assistant),
-        Some(other) => Err(pyo3::exceptions::PyValueError::new_err(format!(
-            "unknown role: '{other}' (expected system, user, or assistant)"
-        ))),
-    }
-}
 
 /// Extract `**kwargs` from a Python dict into a `HashMap<String, String>`.
 fn kwargs_to_map(kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<HashMap<String, String>> {
@@ -48,18 +55,49 @@ fn kwargs_to_map(kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<HashMap<String,
     Ok(map)
 }
 
-/// Convert a [`blazen_prompts::PromptError`] into a Python exception.
-fn prompt_err(err: blazen_prompts::PromptError) -> PyErr {
-    use blazen_prompts::PromptError;
-    match &err {
-        PromptError::NotFound { .. } | PromptError::VersionNotFound { .. } => {
-            pyo3::exceptions::PyKeyError::new_err(err.to_string())
+// ---------------------------------------------------------------------------
+// PyTemplateRole
+// ---------------------------------------------------------------------------
+
+/// The role for a prompt template.
+///
+/// Maps to the chat ``Role`` produced when the template is rendered.
+#[gen_stub_pyclass_enum]
+#[pyclass(name = "TemplateRole", eq, eq_int, from_py_object)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum PyTemplateRole {
+    System,
+    User,
+    Assistant,
+}
+
+impl From<PyTemplateRole> for TemplateRole {
+    fn from(role: PyTemplateRole) -> Self {
+        match role {
+            PyTemplateRole::System => Self::System,
+            PyTemplateRole::User => Self::User,
+            PyTemplateRole::Assistant => Self::Assistant,
         }
-        PromptError::Io(_) => pyo3::exceptions::PyIOError::new_err(err.to_string()),
-        PromptError::MissingVariable { .. }
-        | PromptError::Validation(_)
-        | PromptError::Yaml(_)
-        | PromptError::Json(_) => pyo3::exceptions::PyValueError::new_err(err.to_string()),
+    }
+}
+
+impl From<TemplateRole> for PyTemplateRole {
+    fn from(role: TemplateRole) -> Self {
+        match role {
+            TemplateRole::System => Self::System,
+            TemplateRole::User => Self::User,
+            TemplateRole::Assistant => Self::Assistant,
+        }
+    }
+}
+
+impl From<&TemplateRole> for PyTemplateRole {
+    fn from(role: &TemplateRole) -> Self {
+        match role {
+            TemplateRole::System => Self::System,
+            TemplateRole::User => Self::User,
+            TemplateRole::Assistant => Self::Assistant,
+        }
     }
 }
 
@@ -74,7 +112,7 @@ fn prompt_err(err: blazen_prompts::PromptError) -> PyErr {
 ///
 /// Example::
 ///
-///     t = PromptTemplate("Hello {{name}}!", role="user")
+///     t = PromptTemplate("Hello {{name}}!", role=TemplateRole.User)
 ///     msg = t.render(name="Alice")
 ///     print(msg.content)  # "Hello Alice!"
 #[gen_stub_pyclass]
@@ -91,20 +129,22 @@ impl PyPromptTemplate {
     ///
     /// Args:
     ///     template: The template string with ``{{variable}}`` placeholders.
-    ///     role: The chat role ("system", "user", or "assistant"). Defaults to "user".
+    ///     role: The chat role (``TemplateRole.System``, ``TemplateRole.User``,
+    ///         or ``TemplateRole.Assistant``). Defaults to ``TemplateRole.User``.
     ///     name: A unique name for this template (defaults to "unnamed").
     ///     description: An optional description of this template.
     ///     version: The version string (defaults to "1.0").
     #[new]
     #[pyo3(signature = (template, *, role=None, name=None, description=None, version=None))]
+    #[allow(clippy::unnecessary_wraps)]
     fn new(
         template: &str,
-        role: Option<&str>,
+        role: Option<PyTemplateRole>,
         name: Option<&str>,
         description: Option<&str>,
         version: Option<&str>,
     ) -> PyResult<Self> {
-        let parsed_role = parse_role(role)?;
+        let parsed_role = role.unwrap_or(PyTemplateRole::User).into();
         let template_name = name.unwrap_or("unnamed");
 
         let mut inner = PromptTemplate::new(template_name, parsed_role, template);
@@ -128,7 +168,7 @@ impl PyPromptTemplate {
     ///     **variables: Template variables as keyword arguments.
     ///
     /// Raises:
-    ///     ValueError: If a required variable is missing.
+    ///     PromptError: If a required variable is missing.
     #[pyo3(signature = (**variables))]
     fn render(&self, variables: Option<&Bound<'_, PyDict>>) -> PyResult<PyChatMessage> {
         let vars = kwargs_to_map(variables)?;
@@ -142,14 +182,10 @@ impl PyPromptTemplate {
         &self.inner.template
     }
 
-    /// The chat role ("system", "user", or "assistant").
+    /// The chat role.
     #[getter]
-    fn role(&self) -> &str {
-        match &self.inner.role {
-            TemplateRole::System => "system",
-            TemplateRole::User => "user",
-            TemplateRole::Assistant => "assistant",
-        }
+    fn role(&self) -> PyTemplateRole {
+        PyTemplateRole::from(&self.inner.role)
     }
 
     /// The template name.
@@ -177,12 +213,77 @@ impl PyPromptTemplate {
     }
 
     fn __repr__(&self) -> String {
+        let role = match self.inner.role {
+            TemplateRole::System => "system",
+            TemplateRole::User => "user",
+            TemplateRole::Assistant => "assistant",
+        };
         format!(
             "PromptTemplate(name='{}', role='{}', version='{}')",
-            self.inner.name,
-            self.role(),
-            self.inner.version,
+            self.inner.name, role, self.inner.version,
         )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PyPromptFile
+// ---------------------------------------------------------------------------
+
+/// A serializable collection of prompt templates.
+///
+/// Mirrors the YAML/JSON file layout used by ``PromptRegistry.from_file``
+/// and ``PromptRegistry.to_file``.
+///
+/// Example::
+///
+///     pf = PromptFile([template_a, template_b])
+///     for t in pf.prompts:
+///         registry.register(t.name, t)
+#[gen_stub_pyclass]
+#[pyclass(name = "PromptFile", from_py_object)]
+#[derive(Clone)]
+pub struct PyPromptFile {
+    pub(crate) inner: PromptFile,
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyPromptFile {
+    /// Create a new ``PromptFile`` from a list of ``PromptTemplate`` objects.
+    ///
+    /// Args:
+    ///     prompts: The prompt templates to include in this file.
+    #[new]
+    #[pyo3(signature = (prompts=None))]
+    fn new(prompts: Option<Vec<PyPromptTemplate>>) -> Self {
+        let prompts = prompts
+            .map(|ts| ts.into_iter().map(|t| t.inner).collect())
+            .unwrap_or_default();
+        Self {
+            inner: PromptFile { prompts },
+        }
+    }
+
+    /// Re-extract cached variable lists on every contained template.
+    ///
+    /// Call after deserializing or after mutating template strings to
+    /// refresh the cached variable index used by ``render``.
+    fn init(&mut self) {
+        self.inner.init();
+    }
+
+    /// The prompt templates contained in this file.
+    #[getter]
+    fn prompts(&self) -> Vec<PyPromptTemplate> {
+        self.inner
+            .prompts
+            .iter()
+            .map(|t| PyPromptTemplate { inner: t.clone() })
+            .collect()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("PromptFile(prompts={})", self.inner.prompts.len())
     }
 }
 
@@ -257,8 +358,8 @@ impl PyPromptRegistry {
     ///     A ``ChatMessage`` with the rendered content.
     ///
     /// Raises:
-    ///     KeyError: If no template with that name exists.
-    ///     ValueError: If a required variable is missing.
+    ///     PromptError: If no template with that name exists, or if a
+    ///         required variable is missing.
     #[pyo3(signature = (name, **variables))]
     fn render(&self, name: &str, variables: Option<&Bound<'_, PyDict>>) -> PyResult<PyChatMessage> {
         let vars = kwargs_to_map(variables)?;
@@ -286,11 +387,11 @@ impl PyPromptRegistry {
     ///     A new ``PromptRegistry`` with the loaded templates.
     ///
     /// Raises:
-    ///     IOError: If the file cannot be read.
-    ///     ValueError: If the file format is unsupported or parsing fails.
+    ///     PromptError: If the file cannot be read, the format is
+    ///         unsupported, or parsing fails.
     #[staticmethod]
-    fn from_file(path: &str) -> PyResult<Self> {
-        let registry = PromptRegistry::from_file(path).map_err(prompt_err)?;
+    fn from_file(path: PathBuf) -> PyResult<Self> {
+        let registry = PromptRegistry::from_file(&path).map_err(prompt_err)?;
         Ok(Self { inner: registry })
     }
 
@@ -305,12 +406,27 @@ impl PyPromptRegistry {
     ///     A new ``PromptRegistry`` with the loaded templates.
     ///
     /// Raises:
-    ///     IOError: If the directory cannot be read.
-    ///     ValueError: If any file fails to parse.
+    ///     PromptError: If the directory cannot be read or any file fails
+    ///         to parse.
     #[staticmethod]
-    fn from_dir(path: &str) -> PyResult<Self> {
-        let registry = PromptRegistry::from_dir(path).map_err(prompt_err)?;
+    fn from_dir(path: PathBuf) -> PyResult<Self> {
+        let registry = PromptRegistry::from_dir(&path).map_err(prompt_err)?;
         Ok(Self { inner: registry })
+    }
+
+    /// Save all registered prompts to a YAML or JSON file.
+    ///
+    /// The format is detected by file extension (``.yaml``/``.yml`` for YAML,
+    /// ``.json`` for JSON).
+    ///
+    /// Args:
+    ///     path: Path to the output file.
+    ///
+    /// Raises:
+    ///     PromptError: If the file cannot be written, the format is
+    ///         unsupported, or serialization fails.
+    fn to_file(&self, path: PathBuf) -> PyResult<()> {
+        self.inner.to_file(&path).map_err(prompt_err)
     }
 
     fn __repr__(&self) -> String {

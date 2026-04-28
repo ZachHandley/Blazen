@@ -9,13 +9,20 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use js_sys::Promise;
+use serde::{Deserialize, Serialize};
+use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 
+use blazen_memory::search as mem_search;
 use blazen_memory::store::MemoryStore;
 use blazen_memory::{InMemoryBackend, Memory, MemoryEntry, StoredEntry};
 
 use crate::embedding::WasmEmbeddingModel;
+
+/// Default seed used by `blazen-memory` when computing 128-bit embedding `SimHash`.
+/// Matches `blazen_memory::memory::DEFAULT_SEED` ("ELIDSIMH").
+const DEFAULT_EMBEDDING_SEED: u64 = 0x454c_4944_5349_4d48;
 
 // ---------------------------------------------------------------------------
 // TypeScript type declarations
@@ -660,5 +667,577 @@ impl blazen_memory::store::MemoryBackend for JsMemoryBackend {
             entries.push(Self::js_to_entry(&arr.get(i))?);
         }
         Ok(entries)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WasmStoredEntry — tsify mirror of `blazen_memory::StoredEntry`
+// ---------------------------------------------------------------------------
+
+/// Plain-data mirror of [`blazen_memory::StoredEntry`] for JS interop.
+///
+/// Field names are camelCased to match the JS backend convention used by
+/// [`WasmMemory::from_js_backend`].
+#[derive(Debug, Clone, Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct WasmStoredEntry {
+    /// Unique identifier for this entry.
+    pub id: String,
+    /// The original text content.
+    pub text: String,
+    /// ELID-encoded embedding string (`null` in local-only mode).
+    pub elid: Option<String>,
+    /// 128-bit embedding `SimHash` as a 32-character hex string (`null` in local mode).
+    pub simhash_hex: Option<String>,
+    /// String-level `SimHash` of the raw text (always available).
+    /// Serialized as a JS number; values fit safely within 2^53 only for the low
+    /// 53 bits, so for round-trip fidelity prefer [`WasmStoredEntry::simhash_hex`].
+    pub text_simhash: u64,
+    /// LSH band strings derived from the embedding `SimHash`.
+    pub bands: Vec<String>,
+    /// Arbitrary user metadata.
+    pub metadata: serde_json::Value,
+}
+
+impl From<StoredEntry> for WasmStoredEntry {
+    fn from(value: StoredEntry) -> Self {
+        Self {
+            id: value.id,
+            text: value.text,
+            elid: value.elid,
+            simhash_hex: value.simhash_hex,
+            text_simhash: value.text_simhash,
+            bands: value.bands,
+            metadata: value.metadata,
+        }
+    }
+}
+
+impl From<WasmStoredEntry> for StoredEntry {
+    fn from(value: WasmStoredEntry) -> Self {
+        Self {
+            id: value.id,
+            text: value.text,
+            elid: value.elid,
+            simhash_hex: value.simhash_hex,
+            text_simhash: value.text_simhash,
+            bands: value.bands,
+            metadata: value.metadata,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Free similarity helpers
+// ---------------------------------------------------------------------------
+
+/// Compute text-level `SimHash` similarity between two strings.
+///
+/// Hashes both inputs with `elid::simhash` and returns
+/// `1.0 - hammingDistance / 64.0` in `[0, 1]`.
+///
+/// @param a - First string.
+/// @param b - Second string.
+/// @returns Similarity score where `1.0` means identical text hashes.
+#[wasm_bindgen(js_name = "computeTextSimhashSimilarity")]
+#[must_use]
+pub fn compute_text_simhash_similarity(a: String, b: String) -> f64 {
+    let ha = elid::simhash(&a);
+    let hb = elid::simhash(&b);
+    mem_search::compute_text_simhash_similarity(ha, hb)
+}
+
+/// Compute 128-bit `SimHash` similarity between two embedding vectors.
+///
+/// Computes `simhash_128` over each embedding using the default Blazen seed
+/// (`"ELIDSIMH"`) and returns `1.0 - hammingDistance / 128.0` in `[0, 1]`.
+///
+/// @param a - First embedding (any dimensionality, must match `b`).
+/// @param b - Second embedding.
+/// @returns Similarity score where `1.0` means identical hashes.
+#[wasm_bindgen(js_name = "computeEmbeddingSimhashSimilarity")]
+#[must_use]
+#[allow(clippy::cast_possible_truncation)]
+pub fn compute_embedding_simhash_similarity(a: Vec<f64>, b: Vec<f64>) -> f64 {
+    let a_f32: Vec<f32> = a.iter().map(|&v| v as f32).collect();
+    let b_f32: Vec<f32> = b.iter().map(|&v| v as f32).collect();
+    let ha = elid::embeddings::vector_simhash::simhash_128(&a_f32, DEFAULT_EMBEDDING_SEED);
+    let hb = elid::embeddings::vector_simhash::simhash_128(&b_f32, DEFAULT_EMBEDDING_SEED);
+    mem_search::compute_embedding_simhash_similarity(ha, hb)
+}
+
+/// Compute ELID similarity between two embedding vectors.
+///
+/// Encodes both embeddings with the default Mini128 ELID profile, then
+/// returns `1.0 - hammingDistance / 128.0` in `[0, 1]`.
+///
+/// @param a - First embedding (any dimensionality, must match `b`).
+/// @param b - Second embedding.
+/// @returns Similarity score where `1.0` means identical ELIDs.
+/// @throws If either embedding is invalid (e.g. empty or contains NaN).
+#[wasm_bindgen(js_name = "computeElidSimilarity")]
+#[allow(clippy::cast_possible_truncation, clippy::missing_errors_doc)]
+pub fn compute_elid_similarity(a: Vec<f64>, b: Vec<f64>) -> Result<f64, JsError> {
+    let a_f32: Vec<f32> = a.iter().map(|&v| v as f32).collect();
+    let b_f32: Vec<f32> = b.iter().map(|&v| v as f32).collect();
+    let profile = elid::embeddings::Profile::default();
+    let elid_a = elid::embeddings::encode(&a_f32, &profile)
+        .map_err(|e| JsError::new(&format!("ELID encode error (a): {e}")))?;
+    let elid_b = elid::embeddings::encode(&b_f32, &profile)
+        .map_err(|e| JsError::new(&format!("ELID encode error (b): {e}")))?;
+    mem_search::compute_elid_similarity(&elid_a.to_string(), &elid_b.to_string())
+        .map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Parse a hex-encoded text-level `SimHash` (u64) into a JS `bigint`.
+///
+/// Accepts up to 16 hex characters (case-insensitive, no `0x` prefix).
+///
+/// @param hex - Hex-encoded u64.
+/// @returns The parsed value as a `bigint`.
+/// @throws If the input is not a valid u64 hex string.
+#[wasm_bindgen(js_name = "simhashFromHex")]
+#[allow(clippy::missing_errors_doc)]
+pub fn simhash_from_hex(hex: String) -> Result<u64, JsError> {
+    u64::from_str_radix(hex.trim_start_matches("0x"), 16)
+        .map_err(|e| JsError::new(&format!("invalid simhash hex: {e}")))
+}
+
+/// Encode a u64 `SimHash` as a zero-padded 16-character hex string.
+///
+/// @param value - The `SimHash` value as a `bigint`.
+/// @returns Lowercase hex string of length 16.
+#[wasm_bindgen(js_name = "simhashToHex")]
+#[must_use]
+pub fn simhash_to_hex(value: u64) -> String {
+    format!("{value:016x}")
+}
+
+// ---------------------------------------------------------------------------
+// WasmMemoryStore — JS-backed `MemoryStore` ABC
+// ---------------------------------------------------------------------------
+
+#[wasm_bindgen(typescript_custom_section)]
+const TS_MEMORY_STORE: &str = r#"
+/**
+ * High-level memory store interface that JavaScript callers can implement to
+ * back `MemoryStore`. Each method may return a value or a Promise that
+ * resolves to that value.
+ *
+ * - `add(entries)` -- store one or more `{ id, text, metadata }` entries and
+ *   return their final ids.
+ * - `search(query, limit, metadataFilter)` -- embedding-based search.
+ * - `searchLocal(query, limit, metadataFilter)` -- text-`SimHash` search.
+ * - `get(id)` -- fetch a stored entry, or `null` if not found.
+ * - `delete(id)` -- delete an entry, returning `true` if it existed.
+ * - `len()` -- entry count.
+ */
+export interface MemoryStoreImpl {
+    add(entries: Array<{ id: string; text: string; metadata: any }>): Promise<string[]> | string[];
+    search(query: string, limit: number, metadataFilter: any): Promise<Array<{ id: string; text: string; score: number; metadata: any }>> | Array<{ id: string; text: string; score: number; metadata: any }>;
+    searchLocal(query: string, limit: number, metadataFilter: any): Promise<Array<{ id: string; text: string; score: number; metadata: any }>> | Array<{ id: string; text: string; score: number; metadata: any }>;
+    get(id: string): Promise<{ id: string; text: string; metadata: any } | null> | { id: string; text: string; metadata: any } | null;
+    delete(id: string): Promise<boolean> | boolean;
+    len(): Promise<number> | number;
+}
+"#;
+
+/// JS-backed [`MemoryStore`](blazen_memory::store::MemoryStore) ABC.
+///
+/// Wraps a JavaScript object whose methods implement the
+/// [`MemoryStore`](blazen_memory::store::MemoryStore) surface, so callers can
+/// plug entire memory stores (`mem0`, vector DBs, etc.) into Blazen without
+/// going through the `MemoryBackend` layer.
+///
+/// ```js
+/// import { MemoryStore } from '@blazen/sdk';
+///
+/// const store = new MemoryStore({
+///     async add(entries) { return entries.map(e => e.id || crypto.randomUUID()); },
+///     async search(query, limit, filter) { return []; },
+///     async searchLocal(query, limit, filter) { return []; },
+///     async get(id) { return null; },
+///     async delete(id) { return false; },
+///     async len() { return 0; },
+/// });
+/// ```
+#[wasm_bindgen(js_name = "MemoryStore")]
+pub struct WasmMemoryStore {
+    inner: Arc<JsMemoryStore>,
+}
+
+// SAFETY: WASM is single-threaded.
+unsafe impl Send for WasmMemoryStore {}
+unsafe impl Sync for WasmMemoryStore {}
+
+#[wasm_bindgen(js_class = "MemoryStore")]
+#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+impl WasmMemoryStore {
+    /// Wrap a JS object implementing the `MemoryStoreImpl` interface.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if `impl_obj` is missing one of the required
+    /// methods (`add`, `search`, `searchLocal`, `get`, `delete`, `len`).
+    #[wasm_bindgen(constructor)]
+    pub fn new(impl_obj: JsValue) -> Result<WasmMemoryStore, JsValue> {
+        let required = ["add", "search", "searchLocal", "get", "delete", "len"];
+        for method in &required {
+            let val = js_sys::Reflect::get(&impl_obj, &JsValue::from_str(method))
+                .map_err(|_| JsValue::from_str(&format!("MemoryStore impl missing '{method}'")))?;
+            if !val.is_function() {
+                return Err(JsValue::from_str(&format!(
+                    "MemoryStore.{method} must be a function"
+                )));
+            }
+        }
+        Ok(Self {
+            inner: Arc::new(JsMemoryStore::new(impl_obj)),
+        })
+    }
+
+    /// Add entries via the JS-backed store. Returns a `Promise<string[]>`.
+    pub fn add(&self, entries: JsValue) -> Promise {
+        let inner = Arc::clone(&self.inner);
+        future_to_promise(async move {
+            let raw_entries: Vec<RawAddEntry> = serde_wasm_bindgen::from_value(entries)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            let entries: Vec<MemoryEntry> = raw_entries
+                .into_iter()
+                .map(|e| MemoryEntry {
+                    id: e.id,
+                    text: e.text,
+                    metadata: e.metadata.unwrap_or(serde_json::Value::Null),
+                })
+                .collect();
+            let ids = blazen_memory::store::MemoryStore::add(&*inner, entries)
+                .await
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            let arr = js_sys::Array::new_with_length(ids.len() as u32);
+            for (i, id) in ids.iter().enumerate() {
+                arr.set(i as u32, JsValue::from_str(id));
+            }
+            Ok(arr.into())
+        })
+    }
+
+    /// Embedding-based search. Returns a `Promise<MemorySearchResult[]>`.
+    pub fn search(&self, query: String, limit: Option<u32>, metadata_filter: JsValue) -> Promise {
+        let inner = Arc::clone(&self.inner);
+        future_to_promise(async move {
+            let limit = limit.unwrap_or(10) as usize;
+            let filter: Option<serde_json::Value> =
+                if metadata_filter.is_undefined() || metadata_filter.is_null() {
+                    None
+                } else {
+                    Some(
+                        serde_wasm_bindgen::from_value(metadata_filter)
+                            .map_err(|e| JsValue::from_str(&e.to_string()))?,
+                    )
+                };
+            let results =
+                blazen_memory::store::MemoryStore::search(&*inner, &query, limit, filter.as_ref())
+                    .await
+                    .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            results_to_js_array(results)
+        })
+    }
+
+    /// `SimHash`-only search. Returns a `Promise<MemorySearchResult[]>`.
+    #[wasm_bindgen(js_name = "searchLocal")]
+    pub fn search_local(
+        &self,
+        query: String,
+        limit: Option<u32>,
+        metadata_filter: JsValue,
+    ) -> Promise {
+        let inner = Arc::clone(&self.inner);
+        future_to_promise(async move {
+            let limit = limit.unwrap_or(10) as usize;
+            let filter: Option<serde_json::Value> =
+                if metadata_filter.is_undefined() || metadata_filter.is_null() {
+                    None
+                } else {
+                    Some(
+                        serde_wasm_bindgen::from_value(metadata_filter)
+                            .map_err(|e| JsValue::from_str(&e.to_string()))?,
+                    )
+                };
+            let results = blazen_memory::store::MemoryStore::search_local(
+                &*inner,
+                &query,
+                limit,
+                filter.as_ref(),
+            )
+            .await
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            results_to_js_array(results)
+        })
+    }
+
+    /// Retrieve a single stored entry. Returns a `Promise<MemoryEntry | null>`.
+    pub fn get(&self, id: String) -> Promise {
+        let inner = Arc::clone(&self.inner);
+        future_to_promise(async move {
+            let entry = blazen_memory::store::MemoryStore::get(&*inner, &id)
+                .await
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            match entry {
+                Some(e) => {
+                    let obj = js_sys::Object::new();
+                    js_sys::Reflect::set(&obj, &"id".into(), &e.id.into())?;
+                    js_sys::Reflect::set(&obj, &"text".into(), &e.text.into())?;
+                    let meta = serde_wasm_bindgen::to_value(&e.metadata).unwrap_or(JsValue::NULL);
+                    js_sys::Reflect::set(&obj, &"metadata".into(), &meta)?;
+                    Ok(obj.into())
+                }
+                None => Ok(JsValue::NULL),
+            }
+        })
+    }
+
+    /// Delete an entry. Returns a `Promise<boolean>`.
+    pub fn delete(&self, id: String) -> Promise {
+        let inner = Arc::clone(&self.inner);
+        future_to_promise(async move {
+            let deleted = blazen_memory::store::MemoryStore::delete(&*inner, &id)
+                .await
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            Ok(JsValue::from_bool(deleted))
+        })
+    }
+
+    /// Return the number of entries. Returns a `Promise<number>`.
+    pub fn count(&self) -> Promise {
+        let inner = Arc::clone(&self.inner);
+        future_to_promise(async move {
+            let len = blazen_memory::store::MemoryStore::len(&*inner)
+                .await
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            Ok(JsValue::from_f64(len as f64))
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// JsMemoryStore — adapter from a JS object to `MemoryStore`
+// ---------------------------------------------------------------------------
+
+/// Adapter that implements [`MemoryStore`](blazen_memory::store::MemoryStore)
+/// by delegating each method to the corresponding JS function.
+struct JsMemoryStore {
+    impl_obj: JsValue,
+}
+
+// SAFETY: WASM is single-threaded.
+unsafe impl Send for JsMemoryStore {}
+unsafe impl Sync for JsMemoryStore {}
+
+impl JsMemoryStore {
+    fn new(impl_obj: JsValue) -> Self {
+        Self { impl_obj }
+    }
+
+    /// Call a method on the wrapped JS object and await any returned Promise.
+    async fn call(
+        &self,
+        method: &str,
+        args: &[JsValue],
+    ) -> std::result::Result<JsValue, blazen_memory::MemoryError> {
+        let func = js_sys::Reflect::get(&self.impl_obj, &JsValue::from_str(method)).map_err(
+            |e| blazen_memory::MemoryError::Backend(format!("MemoryStore.{method} not found: {e:?}")),
+        )?;
+        let func: &js_sys::Function = func.unchecked_ref();
+        let result = match args.len() {
+            0 => func.call0(&self.impl_obj),
+            1 => func.call1(&self.impl_obj, &args[0]),
+            2 => func.call2(&self.impl_obj, &args[0], &args[1]),
+            3 => func.call3(&self.impl_obj, &args[0], &args[1], &args[2]),
+            _ => {
+                let js_args = js_sys::Array::new();
+                for arg in args {
+                    js_args.push(arg);
+                }
+                func.apply(&self.impl_obj, &js_args)
+            }
+        }
+        .map_err(|e| {
+            blazen_memory::MemoryError::Backend(format!("MemoryStore.{method}() threw: {e:?}"))
+        })?;
+
+        if result.has_type::<js_sys::Promise>() {
+            let promise: js_sys::Promise = result.unchecked_into();
+            wasm_bindgen_futures::JsFuture::from(promise).await.map_err(|e| {
+                blazen_memory::MemoryError::Backend(format!(
+                    "MemoryStore.{method}() rejected: {e:?}"
+                ))
+            })
+        } else {
+            Ok(result)
+        }
+    }
+
+    fn js_to_result(
+        val: &JsValue,
+    ) -> std::result::Result<blazen_memory::MemoryResult, blazen_memory::MemoryError> {
+        let id = js_sys::Reflect::get(val, &"id".into())
+            .ok()
+            .and_then(|v| v.as_string())
+            .unwrap_or_default();
+        let text = js_sys::Reflect::get(val, &"text".into())
+            .ok()
+            .and_then(|v| v.as_string())
+            .unwrap_or_default();
+        let score = js_sys::Reflect::get(val, &"score".into())
+            .ok()
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let meta_val =
+            js_sys::Reflect::get(val, &"metadata".into()).unwrap_or(JsValue::NULL);
+        let metadata: serde_json::Value = if meta_val.is_null() || meta_val.is_undefined() {
+            serde_json::Value::Null
+        } else {
+            serde_wasm_bindgen::from_value(meta_val).unwrap_or(serde_json::Value::Null)
+        };
+        Ok(blazen_memory::MemoryResult {
+            id,
+            text,
+            score,
+            metadata,
+        })
+    }
+
+    fn js_to_stored(
+        val: &JsValue,
+    ) -> std::result::Result<StoredEntry, blazen_memory::MemoryError> {
+        let id = js_sys::Reflect::get(val, &"id".into())
+            .ok()
+            .and_then(|v| v.as_string())
+            .unwrap_or_default();
+        let text = js_sys::Reflect::get(val, &"text".into())
+            .ok()
+            .and_then(|v| v.as_string())
+            .unwrap_or_default();
+        let meta_val =
+            js_sys::Reflect::get(val, &"metadata".into()).unwrap_or(JsValue::NULL);
+        let metadata: serde_json::Value = if meta_val.is_null() || meta_val.is_undefined() {
+            serde_json::Value::Null
+        } else {
+            serde_wasm_bindgen::from_value(meta_val).unwrap_or(serde_json::Value::Null)
+        };
+        Ok(StoredEntry {
+            id,
+            text,
+            elid: None,
+            simhash_hex: None,
+            text_simhash: 0,
+            bands: Vec::new(),
+            metadata,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl blazen_memory::store::MemoryStore for JsMemoryStore {
+    async fn add(&self, entries: Vec<MemoryEntry>) -> blazen_memory::error::Result<Vec<String>> {
+        let arr = js_sys::Array::new();
+        for e in &entries {
+            let obj = js_sys::Object::new();
+            let _ = js_sys::Reflect::set(&obj, &"id".into(), &e.id.clone().into());
+            let _ = js_sys::Reflect::set(&obj, &"text".into(), &e.text.clone().into());
+            let meta = serde_wasm_bindgen::to_value(&e.metadata).unwrap_or(JsValue::NULL);
+            let _ = js_sys::Reflect::set(&obj, &"metadata".into(), &meta);
+            arr.push(&obj);
+        }
+        let result = SendFuture(self.call("add", &[arr.into()])).await?;
+        let arr: &js_sys::Array = result.dyn_ref::<js_sys::Array>().ok_or_else(|| {
+            blazen_memory::MemoryError::Backend("MemoryStore.add() must return an array".into())
+        })?;
+        let mut ids = Vec::with_capacity(arr.length() as usize);
+        for i in 0..arr.length() {
+            ids.push(arr.get(i).as_string().unwrap_or_default());
+        }
+        Ok(ids)
+    }
+
+    async fn search(
+        &self,
+        query: &str,
+        limit: usize,
+        metadata_filter: Option<&serde_json::Value>,
+    ) -> blazen_memory::error::Result<Vec<blazen_memory::MemoryResult>> {
+        let filter_js = metadata_filter
+            .and_then(|f| serde_wasm_bindgen::to_value(f).ok())
+            .unwrap_or(JsValue::NULL);
+        let result = SendFuture(self.call(
+            "search",
+            &[
+                JsValue::from_str(query),
+                JsValue::from_f64(limit as f64),
+                filter_js,
+            ],
+        ))
+        .await?;
+        let arr: &js_sys::Array = result.dyn_ref::<js_sys::Array>().ok_or_else(|| {
+            blazen_memory::MemoryError::Backend(
+                "MemoryStore.search() must return an array".into(),
+            )
+        })?;
+        let mut out = Vec::with_capacity(arr.length() as usize);
+        for i in 0..arr.length() {
+            out.push(Self::js_to_result(&arr.get(i))?);
+        }
+        Ok(out)
+    }
+
+    async fn search_local(
+        &self,
+        query: &str,
+        limit: usize,
+        metadata_filter: Option<&serde_json::Value>,
+    ) -> blazen_memory::error::Result<Vec<blazen_memory::MemoryResult>> {
+        let filter_js = metadata_filter
+            .and_then(|f| serde_wasm_bindgen::to_value(f).ok())
+            .unwrap_or(JsValue::NULL);
+        let result = SendFuture(self.call(
+            "searchLocal",
+            &[
+                JsValue::from_str(query),
+                JsValue::from_f64(limit as f64),
+                filter_js,
+            ],
+        ))
+        .await?;
+        let arr: &js_sys::Array = result.dyn_ref::<js_sys::Array>().ok_or_else(|| {
+            blazen_memory::MemoryError::Backend(
+                "MemoryStore.searchLocal() must return an array".into(),
+            )
+        })?;
+        let mut out = Vec::with_capacity(arr.length() as usize);
+        for i in 0..arr.length() {
+            out.push(Self::js_to_result(&arr.get(i))?);
+        }
+        Ok(out)
+    }
+
+    async fn get(&self, id: &str) -> blazen_memory::error::Result<Option<StoredEntry>> {
+        let result = SendFuture(self.call("get", &[JsValue::from_str(id)])).await?;
+        if result.is_null() || result.is_undefined() {
+            Ok(None)
+        } else {
+            Ok(Some(Self::js_to_stored(&result)?))
+        }
+    }
+
+    async fn delete(&self, id: &str) -> blazen_memory::error::Result<bool> {
+        let result = SendFuture(self.call("delete", &[JsValue::from_str(id)])).await?;
+        Ok(result.is_truthy())
+    }
+
+    async fn len(&self) -> blazen_memory::error::Result<usize> {
+        let result = SendFuture(self.call("len", &[])).await?;
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        Ok(result.as_f64().unwrap_or(0.0) as usize)
     }
 }

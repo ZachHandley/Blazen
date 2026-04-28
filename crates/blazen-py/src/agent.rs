@@ -12,13 +12,16 @@ use std::sync::Arc;
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
 
-use blazen_llm::agent::{AgentConfig, AgentResult as RustAgentResult, run_agent as rust_run_agent};
+use blazen_llm::agent::{
+    AgentConfig, AgentEvent as RustAgentEvent, AgentResult as RustAgentResult,
+    run_agent as rust_run_agent, run_agent_with_callback as rust_run_agent_with_callback,
+};
 use blazen_llm::error::BlazenError;
 use blazen_llm::traits::Tool;
 use blazen_llm::types::{ChatMessage, ToolDefinition};
 
 use crate::providers::PyCompletionModel;
-use crate::types::{PyChatMessage, PyCompletionResponse, PyToolOutput};
+use crate::types::{PyChatMessage, PyCompletionResponse, PyToolCall, PyToolOutput};
 
 /// Convert a Python tool-handler return value into a Rust [`ToolOutput`].
 ///
@@ -247,8 +250,309 @@ impl PyAgentResult {
 }
 
 // ---------------------------------------------------------------------------
-// run_agent function
+// PyAgentConfig
 // ---------------------------------------------------------------------------
+
+/// Typed configuration for the agentic tool execution loop.
+///
+/// Mirrors [`blazen_llm::AgentConfig`] minus the `tools` slot (tools are
+/// passed explicitly to the run function). Use this when calling
+/// [`run_agent`] with a fully-typed config rather than positional kwargs.
+///
+/// Example:
+///     >>> config = AgentConfig(max_iterations=20, system_prompt="be terse",
+///     ...                      temperature=0.0, tool_concurrency=4)
+#[gen_stub_pyclass]
+#[pyclass(name = "AgentConfig", from_py_object)]
+#[derive(Clone, Default)]
+pub struct PyAgentConfig {
+    pub(crate) max_iterations: u32,
+    pub(crate) add_finish_tool: bool,
+    pub(crate) system_prompt: Option<String>,
+    pub(crate) temperature: Option<f32>,
+    pub(crate) max_tokens: Option<u32>,
+    pub(crate) tool_concurrency: usize,
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyAgentConfig {
+    /// Construct an AgentConfig.
+    #[new]
+    #[pyo3(signature = (
+        *,
+        max_iterations=10,
+        add_finish_tool=false,
+        system_prompt=None,
+        temperature=None,
+        max_tokens=None,
+        tool_concurrency=0,
+    ))]
+    fn new(
+        max_iterations: u32,
+        add_finish_tool: bool,
+        system_prompt: Option<String>,
+        temperature: Option<f32>,
+        max_tokens: Option<u32>,
+        tool_concurrency: usize,
+    ) -> Self {
+        Self {
+            max_iterations,
+            add_finish_tool,
+            system_prompt,
+            temperature,
+            max_tokens,
+            tool_concurrency,
+        }
+    }
+
+    /// Maximum number of tool-call rounds before forcing a stop.
+    #[getter]
+    fn max_iterations(&self) -> u32 {
+        self.max_iterations
+    }
+
+    /// Whether the implicit "finish" tool is added.
+    #[getter]
+    fn add_finish_tool(&self) -> bool {
+        self.add_finish_tool
+    }
+
+    /// Optional system prompt prepended to messages.
+    #[getter]
+    fn system_prompt(&self) -> Option<&str> {
+        self.system_prompt.as_deref()
+    }
+
+    /// Sampling temperature.
+    #[getter]
+    fn temperature(&self) -> Option<f32> {
+        self.temperature
+    }
+
+    /// Maximum tokens per completion call.
+    #[getter]
+    fn max_tokens(&self) -> Option<u32> {
+        self.max_tokens
+    }
+
+    /// Maximum concurrent tool executions per round (0 = unlimited).
+    #[getter]
+    fn tool_concurrency(&self) -> usize {
+        self.tool_concurrency
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "AgentConfig(max_iterations={}, tool_concurrency={}, add_finish_tool={})",
+            self.max_iterations, self.tool_concurrency, self.add_finish_tool
+        )
+    }
+}
+
+impl PyAgentConfig {
+    /// Build the underlying Rust [`AgentConfig`] from a typed config and an
+    /// already-resolved tool list.
+    pub(crate) fn to_rust(&self, tools: Vec<Arc<dyn Tool>>) -> AgentConfig {
+        let mut config = AgentConfig::new(tools).with_max_iterations(self.max_iterations);
+        if let Some(prompt) = self.system_prompt.as_ref() {
+            config = config.with_system_prompt(prompt.clone());
+        }
+        if let Some(t) = self.temperature {
+            config = config.with_temperature(t);
+        }
+        if let Some(mt) = self.max_tokens {
+            config = config.with_max_tokens(mt);
+        }
+        if self.add_finish_tool {
+            config = config.with_finish_tool();
+        }
+        if self.tool_concurrency > 0 {
+            config = config.with_tool_concurrency(self.tool_concurrency);
+        }
+        config
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PyAgentEvent
+// ---------------------------------------------------------------------------
+
+/// Events emitted during agent execution.
+///
+/// Mirrors [`blazen_llm::AgentEvent`]. Yielded to the user-supplied callback
+/// passed to [`run_agent_with_callback`] -- one of three variants:
+/// - ``"tool_called"`` (carries iteration + tool_call),
+/// - ``"tool_result"`` (carries iteration + tool_name + result),
+/// - ``"iteration_complete"`` (carries iteration + had_tool_calls).
+///
+/// Inspect via the ``kind`` getter and the per-variant fields.
+#[gen_stub_pyclass]
+#[pyclass(name = "AgentEvent", frozen, from_py_object)]
+#[derive(Clone)]
+pub struct PyAgentEvent {
+    pub(crate) inner: RustAgentEvent,
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyAgentEvent {
+    /// Variant tag: ``"tool_called"``, ``"tool_result"``, or
+    /// ``"iteration_complete"``.
+    #[getter]
+    fn kind(&self) -> &'static str {
+        match &self.inner {
+            RustAgentEvent::ToolCalled { .. } => "tool_called",
+            RustAgentEvent::ToolResult { .. } => "tool_result",
+            RustAgentEvent::IterationComplete { .. } => "iteration_complete",
+        }
+    }
+
+    /// The 0-based iteration index at which this event fired.
+    #[getter]
+    fn iteration(&self) -> u32 {
+        match &self.inner {
+            RustAgentEvent::ToolCalled { iteration, .. }
+            | RustAgentEvent::ToolResult { iteration, .. }
+            | RustAgentEvent::IterationComplete { iteration, .. } => *iteration,
+        }
+    }
+
+    /// The tool call carried by ``ToolCalled`` events. ``None`` otherwise.
+    #[getter]
+    fn tool_call(&self) -> Option<PyToolCall> {
+        if let RustAgentEvent::ToolCalled { tool_call, .. } = &self.inner {
+            Some(PyToolCall::from(tool_call))
+        } else {
+            None
+        }
+    }
+
+    /// The tool name carried by ``ToolResult`` events. ``None`` otherwise.
+    #[getter]
+    fn tool_name(&self) -> Option<&str> {
+        if let RustAgentEvent::ToolResult { tool_name, .. } = &self.inner {
+            Some(tool_name)
+        } else {
+            None
+        }
+    }
+
+    /// The tool result value for ``ToolResult`` events. ``None`` otherwise.
+    #[getter]
+    #[gen_stub(override_return_type(type_repr = "typing.Optional[typing.Any]", imports = ("typing",)))]
+    fn result(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
+        if let RustAgentEvent::ToolResult { result, .. } = &self.inner {
+            Ok(Some(crate::convert::json_to_py(py, result)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Whether the model emitted any tool calls in this iteration. Set on
+    /// ``IterationComplete`` events; ``None`` otherwise.
+    #[getter]
+    fn had_tool_calls(&self) -> Option<bool> {
+        if let RustAgentEvent::IterationComplete { had_tool_calls, .. } = &self.inner {
+            Some(*had_tool_calls)
+        } else {
+            None
+        }
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "AgentEvent(kind={:?}, iteration={})",
+            self.kind(),
+            self.iteration()
+        )
+    }
+}
+
+impl From<RustAgentEvent> for PyAgentEvent {
+    fn from(inner: RustAgentEvent) -> Self {
+        Self { inner }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// run_agent_with_callback function
+// ---------------------------------------------------------------------------
+
+/// Run the agent loop while invoking a Python callback for every
+/// [`AgentEvent`].
+///
+/// The callback is dispatched synchronously from the agent's Tokio task; if
+/// it raises, the error is logged and the loop continues. For long-running
+/// observers, schedule work onto an executor inside the callback.
+///
+/// Args:
+///     model: The completion model to use.
+///     messages: Initial conversation messages.
+///     tools: List of ToolDef objects.
+///     config: Typed [`AgentConfig`].
+///     callback: Python callable receiving one [`AgentEvent`] per call.
+#[gen_stub_pyfunction]
+#[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, AgentResult]", imports = ("typing",)))]
+#[pyfunction]
+#[pyo3(signature = (model, messages, *, tools, config, callback))]
+pub fn run_agent_with_callback<'py>(
+    py: Python<'py>,
+    model: Bound<'py, PyCompletionModel>,
+    messages: Vec<PyRef<'py, PyChatMessage>>,
+    tools: Vec<PyRef<'py, PyToolDef>>,
+    config: PyRef<'py, PyAgentConfig>,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
+
+    let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
+    let inspect = py.import("inspect")?;
+
+    let rust_tools: Vec<Arc<dyn Tool>> = tools
+        .iter()
+        .map(|t| {
+            let is_async: bool = inspect
+                .call_method1("iscoroutinefunction", (&t.handler,))
+                .and_then(|r| r.extract())
+                .unwrap_or(false);
+            Arc::new(PyToolWrapper {
+                name: t.name.clone(),
+                description: t.description.clone(),
+                parameters: t.parameters.clone(),
+                callable: t.handler.clone_ref(py),
+                is_async,
+                locals: locals.clone(),
+            }) as Arc<dyn Tool>
+        })
+        .collect();
+
+    let rust_config = config.to_rust(rust_tools);
+    let inner_model = crate::providers::completion_model::arc_from_bound(&model);
+    let cb = Arc::new(callback);
+
+    pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
+        let cb_for_closure = Arc::clone(&cb);
+        let on_event = move |event: RustAgentEvent| {
+            let cb_ref = &cb_for_closure;
+            let _ = Python::attach(|py| -> PyResult<()> {
+                let py_event = Py::new(py, PyAgentEvent { inner: event })?;
+                cb_ref.call1(py, (py_event,))?;
+                Ok(())
+            });
+        };
+
+        let result = rust_run_agent_with_callback(
+            inner_model.as_ref(),
+            rust_messages,
+            rust_config,
+            on_event,
+        )
+        .await
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        Ok(PyAgentResult { inner: result })
+    })
+}
 
 /// Run an agentic tool execution loop.
 ///

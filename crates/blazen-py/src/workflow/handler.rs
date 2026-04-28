@@ -22,7 +22,7 @@ use tokio_stream::StreamExt;
 
 use blazen_core::session_ref::SessionRefRegistry;
 
-use super::event::any_event_to_py_event;
+use super::event::{PyInputResponseEvent, any_event_to_py_event};
 use super::session_ref::with_session_registry;
 use crate::error::BlazenPyError;
 
@@ -193,29 +193,42 @@ impl PyWorkflowHandler {
     /// Respond to an input request from a workflow step.
     ///
     /// Args:
-    ///     request_id: The ID from the `InputRequestEvent`.
+    ///     request_id: The ID from the `InputRequestEvent`, or an
+    ///         `InputResponseEvent` carrying both id and response.
     ///     response: A Python dict/value that will be converted to JSON and
-    ///               delivered to the waiting step.
+    ///         delivered to the waiting step. Required when `request_id`
+    ///         is a string; ignored when an `InputResponseEvent` is passed.
     ///
     /// Raises `RuntimeError` if the handler was already consumed.
     #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, None]", imports = ("typing",)))]
+    #[pyo3(signature = (request_id, response=None))]
     fn respond_to_input<'py>(
         &self,
         py: Python<'py>,
-        request_id: String,
-        response: &Bound<'py, PyAny>,
+        request_id: &Bound<'py, PyAny>,
+        response: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let response_json = crate::convert::py_to_json(py, response)?;
+        let input_response =
+            if let Ok(event) = request_id.extract::<PyRef<'_, PyInputResponseEvent>>() {
+                event.to_rust()
+            } else {
+                let id: String = request_id.extract()?;
+                let resp_obj = response.ok_or_else(|| {
+                    pyo3::exceptions::PyTypeError::new_err(
+                        "respond_to_input: 'response' is required when 'request_id' is a string",
+                    )
+                })?;
+                blazen_events::InputResponseEvent {
+                    request_id: id,
+                    response: crate::convert::py_to_json(py, resp_obj)?,
+                }
+            };
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let guard = inner.lock().await;
             let handler = guard
                 .as_ref()
                 .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
-            let input_response = blazen_events::InputResponseEvent {
-                request_id,
-                response: response_json,
-            };
             handler
                 .respond_to_input(input_response)
                 .map_err(BlazenPyError::from)?;

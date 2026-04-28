@@ -327,6 +327,35 @@ impl JsFalProvider {
         Ok(())
     }
 
+    /// Wait for a submitted job to complete and return its result.
+    ///
+    /// Equivalent to the Rust [`ComputeProvider::result`] method. Use this
+    /// after [`submit`](Self::submit) when you want to perform additional
+    /// work between submission and retrieval; otherwise prefer
+    /// [`run`](Self::run) which submits and waits in one call.
+    #[napi(js_name = "awaitCompletion")]
+    pub async fn await_completion(&self, handle: JsJobHandle) -> Result<JsComputeResult> {
+        let core_handle: blazen_llm::compute::JobHandle = handle.into();
+        let result = self
+            .inner
+            .result(core_handle)
+            .await
+            .map_err(blazen_error_to_napi)?;
+        Ok(result.into())
+    }
+
+    /// Alias for [`awaitCompletion`](Self::await_completion).
+    #[napi]
+    pub async fn result(&self, handle: JsJobHandle) -> Result<JsComputeResult> {
+        let core_handle: blazen_llm::compute::JobHandle = handle.into();
+        let result = self
+            .inner
+            .result(core_handle)
+            .await
+            .map_err(blazen_error_to_napi)?;
+        Ok(result.into())
+    }
+
     // -----------------------------------------------------------------
     // LLM completion
     // -----------------------------------------------------------------

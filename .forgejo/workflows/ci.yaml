@@ -318,10 +318,245 @@ jobs:
           owner: BlackLeafDigital
           auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
+  audit-bindings:
+    name: Audit Binding Parity
+    runs-on: ubuntu-latest
+    needs: [detect, lint]
+    if: needs.detect.outputs.web_only != 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ github.sha }}
+          step: ci-audit-bindings
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Setup Python + uv
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
+        with:
+          python-version: '3.12'
+
+      - name: Run binding-parity audit
+        if: steps.check.outputs.completed != 'true'
+        run: python3 tools/audit_bindings.py
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ github.sha }}
+          step: ci-audit-bindings
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+  test-wasm:
+    name: Test WASM
+    runs-on: ubuntu-latest
+    needs: [detect, lint]
+    if: needs.detect.outputs.web_only != 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ github.sha }}
+          step: ci-test-wasm
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy
+          sccache: true
+          sccache-s3-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-s3-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-s3-region: ${{ secrets.S3_REGION }}
+          sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/blazen-wasm
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: cargo check (wasm32, workspace crates)
+        if: steps.check.outputs.completed != 'true'
+        env:
+          RUSTFLAGS: "-D warnings"
+        run: |
+          cargo check --target wasm32-unknown-unknown -p blazen-core --no-default-features
+          cargo check --target wasm32-unknown-unknown -p blazen-memory --no-default-features
+          cargo check --target wasm32-unknown-unknown -p blazen-llm --no-default-features --features tsify
+
+      - name: Install wasm-pack
+        if: steps.check.outputs.completed != 'true'
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: wasm-pack build (blazen-wasm-sdk)
+        if: steps.check.outputs.completed != 'true'
+        working-directory: crates/blazen-wasm-sdk
+        run: wasm-pack build --target web --release
+
+      - name: wasm-pack test (blazen-wasm-sdk, --node)
+        if: steps.check.outputs.completed != 'true'
+        working-directory: crates/blazen-wasm-sdk
+        run: wasm-pack test --node --release
+
+      - name: clippy (blazen-wasm-sdk, wasm32)
+        if: steps.check.outputs.completed != 'true'
+        working-directory: crates/blazen-wasm-sdk
+        # blazen-wasm-sdk has its own [lints.clippy] (all=warn, pedantic=warn);
+        # mirror the original .github/workflows/wasm-ci.yml by NOT applying
+        # the workspace-level -D warnings here.
+        run: cargo clippy --target wasm32-unknown-unknown
+
+      - name: Setup Node
+        if: steps.check.outputs.completed != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        if: steps.check.outputs.completed != 'true'
+        run: corepack enable && corepack prepare pnpm@latest --activate
+
+      - name: Install cloudflare-worker example deps
+        if: steps.check.outputs.completed != 'true'
+        # The example is intentionally NOT part of the root pnpm-workspace.yaml,
+        # so install with --ignore-workspace to use the example's own lockfile.
+        working-directory: examples/cloudflare-worker
+        run: pnpm install --ignore-workspace --frozen-lockfile
+
+      - name: vitest (cloudflare-worker example)
+        if: steps.check.outputs.completed != 'true'
+        working-directory: examples/cloudflare-worker
+        run: pnpm test
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ github.sha }}
+          step: ci-test-wasm
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+  test-smoke-compute:
+    name: Test Compute Smoke (push to main / workflow_dispatch)
+    runs-on: ubuntu-latest
+    needs: [detect, lint]
+    # Mirrors auto-tag's gate: push-to-main and workflow_dispatch only. Keeps
+    # PR feedback fast (compute is ~7 min) while still exercising compute
+    # paths (image/TTS/music/transcribe/3D/bg-removal/run/submit) on the
+    # release critical path. auto-tag.needs depends on this job, so the gate
+    # must match — otherwise a skipped-need on workflow_dispatch would skip
+    # auto-tag itself.
+    if: needs.detect.outputs.web_only != 'true' && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ github.sha }}
+          step: ci-test-smoke-compute
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          sccache: true
+          sccache-s3-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-s3-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-s3-region: ${{ secrets.S3_REGION }}
+          sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/blazen-smoke-compute
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Setup Python + uv
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
+        with:
+          python-version: '3.12'
+
+      - name: Install Python deps and build wheel
+        if: steps.check.outputs.completed != 'true'
+        run: uv sync --group dev
+
+      - name: Setup Node
+        if: steps.check.outputs.completed != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        if: steps.check.outputs.completed != 'true'
+        run: corepack enable && corepack prepare pnpm@latest --activate
+
+      - name: Build Node bindings
+        if: steps.check.outputs.completed != 'true'
+        run: |
+          pnpm install
+          pnpm --filter blazen run build
+
+      - name: Run Python compute smoke tests
+        if: steps.check.outputs.completed != 'true'
+        # Per-test timeouts (e.g. 300s image, 270s TTS, 1200s video) live in
+        # tests/python/test_fal_smoke.py decorators; the --timeout=1200 here
+        # is just a fallback ceiling above the largest per-test budget.
+        run: uv run pytest -v --timeout=1200 tests/python/test_fal_smoke.py
+        env:
+          FAL_API_KEY: ${{ secrets.FAL_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          BLAZEN_TEST_FAL_COMPUTE: "1"
+
+      - name: Run Node compute smoke tests
+        if: steps.check.outputs.completed != 'true'
+        run: node --test tests/node/test_fal_smoke.mjs
+        env:
+          FAL_API_KEY: ${{ secrets.FAL_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          BLAZEN_TEST_FAL_COMPUTE: "1"
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ github.sha }}
+          step: ci-test-smoke-compute
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
   auto-tag:
     name: Auto Tag
     runs-on: ubuntu-latest
-    needs: [detect, test, test-python, test-node]
+    needs: [detect, test, test-python, test-node, test-wasm, test-smoke-compute]
     if: needs.detect.outputs.web_only != 'true' && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')
     steps:
       - name: Checkout

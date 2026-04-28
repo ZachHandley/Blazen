@@ -180,7 +180,7 @@ mod backends;
 pub use blazen_embed::{EmbedError, EmbedModel, EmbedOptions, EmbedResponse};
 
 #[cfg(feature = "mistralrs")]
-pub use blazen_llm_mistralrs::{MistralRsOptions, MistralRsProvider};
+pub use blazen_llm_mistralrs::{MistralRsError, MistralRsOptions, MistralRsProvider};
 
 #[cfg(feature = "candle-embed")]
 pub use blazen_embed_candle::{CandleEmbedError, CandleEmbedModel, CandleEmbedOptions};

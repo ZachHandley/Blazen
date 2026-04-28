@@ -7,10 +7,149 @@ use std::collections::HashMap;
 use napi::bindgen_prelude::Result;
 use napi_derive::napi;
 
-use blazen_prompts::{PromptRegistry, PromptTemplate, TemplateRole};
+use blazen_prompts::{PromptFile, PromptRegistry, PromptTemplate, TemplateRole};
 
 use super::message::JsChatMessage;
-use crate::error::to_napi_error;
+use crate::error::{prompt_error_to_napi, to_napi_error};
+
+// ---------------------------------------------------------------------------
+// JsTemplateRole
+// ---------------------------------------------------------------------------
+
+/// The role for a prompt template.
+///
+/// Mirrors [`blazen_prompts::TemplateRole`] and serializes as a lowercase
+/// string when used in YAML/JSON prompt files.
+#[napi(string_enum, js_name = "TemplateRole")]
+pub enum JsTemplateRole {
+    /// A system-level instruction.
+    System,
+    /// A message from the user.
+    User,
+    /// A message from the assistant.
+    Assistant,
+}
+
+impl From<JsTemplateRole> for TemplateRole {
+    fn from(role: JsTemplateRole) -> Self {
+        match role {
+            JsTemplateRole::System => Self::System,
+            JsTemplateRole::User => Self::User,
+            JsTemplateRole::Assistant => Self::Assistant,
+        }
+    }
+}
+
+impl From<TemplateRole> for JsTemplateRole {
+    fn from(role: TemplateRole) -> Self {
+        match role {
+            TemplateRole::System => Self::System,
+            TemplateRole::User => Self::User,
+            TemplateRole::Assistant => Self::Assistant,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// JsPromptFile
+// ---------------------------------------------------------------------------
+
+/// A serializable collection of prompt templates.
+///
+/// Mirrors [`blazen_prompts::PromptFile`] — the top-level structure used when
+/// reading or writing prompt template files in YAML or JSON format.
+#[napi(js_name = "PromptFile")]
+pub struct JsPromptFile {
+    pub(crate) inner: PromptFile,
+}
+
+#[napi]
+#[allow(
+    clippy::must_use_candidate,
+    clippy::missing_errors_doc,
+    clippy::needless_pass_by_value,
+    clippy::new_without_default
+)]
+impl JsPromptFile {
+    /// Create a new empty prompt file.
+    #[napi(constructor)]
+    pub fn new() -> Self {
+        Self {
+            inner: PromptFile {
+                prompts: Vec::new(),
+            },
+        }
+    }
+
+    /// Load a prompt file from a YAML or JSON file on disk.
+    ///
+    /// The file format is detected by extension (`.yaml`/`.yml` for YAML,
+    /// `.json` for JSON).
+    #[napi(factory, js_name = "fromFile")]
+    pub fn from_file(path: String) -> Result<Self> {
+        let contents = std::fs::read_to_string(&path).map_err(to_napi_error)?;
+        let ext = std::path::Path::new(&path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+
+        let mut inner: PromptFile = match ext.as_str() {
+            "yaml" | "yml" => serde_yml::from_str(&contents).map_err(to_napi_error)?,
+            "json" => serde_json::from_str(&contents).map_err(to_napi_error)?,
+            other => {
+                return Err(napi::Error::new(
+                    napi::Status::InvalidArg,
+                    format!("unsupported prompt file extension: '{other}'"),
+                ));
+            }
+        };
+        inner.init();
+        Ok(Self { inner })
+    }
+
+    /// Save this prompt file to a YAML or JSON file on disk.
+    ///
+    /// The file format is detected by extension (`.yaml`/`.yml` for YAML,
+    /// `.json` for JSON).
+    #[napi(js_name = "toFile")]
+    pub fn to_file(&self, path: String) -> Result<()> {
+        let ext = std::path::Path::new(&path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+
+        let contents = match ext.as_str() {
+            "yaml" | "yml" => serde_yml::to_string(&self.inner).map_err(to_napi_error)?,
+            "json" => serde_json::to_string_pretty(&self.inner).map_err(to_napi_error)?,
+            other => {
+                return Err(napi::Error::new(
+                    napi::Status::InvalidArg,
+                    format!("unsupported prompt file extension: '{other}'"),
+                ));
+            }
+        };
+        std::fs::write(&path, contents).map_err(to_napi_error)?;
+        Ok(())
+    }
+
+    /// The list of templates in this file.
+    #[napi(getter)]
+    pub fn prompts(&self) -> Vec<JsPromptTemplate> {
+        self.inner
+            .prompts
+            .iter()
+            .map(|t| JsPromptTemplate { inner: t.clone() })
+            .collect()
+    }
+
+    /// Append a template to this prompt file.
+    #[napi]
+    pub fn add(&mut self, template: &JsPromptTemplate) {
+        self.inner.prompts.push(template.inner.clone());
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Options object for PromptTemplate constructor
@@ -129,7 +268,10 @@ impl JsPromptTemplate {
     /// @returns A `ChatMessage` with the rendered content and template's role.
     #[napi]
     pub fn render(&self, variables: HashMap<String, String>) -> Result<JsChatMessage> {
-        let message = self.inner.render(&variables).map_err(to_napi_error)?;
+        let message = self
+            .inner
+            .render(&variables)
+            .map_err(prompt_error_to_napi)?;
         Ok(JsChatMessage { inner: message })
     }
 }
@@ -210,7 +352,7 @@ impl JsPromptRegistry {
         let message = self
             .inner
             .render(&name, &variables)
-            .map_err(to_napi_error)?;
+            .map_err(prompt_error_to_napi)?;
         Ok(JsChatMessage { inner: message })
     }
 
@@ -231,8 +373,19 @@ impl JsPromptRegistry {
     /// @returns A new `PromptRegistry` with the loaded templates.
     #[napi(factory, js_name = "fromFile")]
     pub fn from_file(path: String) -> Result<Self> {
-        let registry = PromptRegistry::from_file(&path).map_err(to_napi_error)?;
+        let registry = PromptRegistry::from_file(&path).map_err(prompt_error_to_napi)?;
         Ok(Self { inner: registry })
+    }
+
+    /// Save all registered prompts to a YAML or JSON file.
+    ///
+    /// The file format is detected by extension (`.yaml`/`.yml` for YAML,
+    /// `.json` for JSON).
+    ///
+    /// @param path - Path to write the prompt file to.
+    #[napi(js_name = "toFile")]
+    pub fn to_file(&self, path: String) -> Result<()> {
+        self.inner.to_file(&path).map_err(prompt_error_to_napi)
     }
 
     /// Load all prompt files from a directory.
@@ -243,7 +396,7 @@ impl JsPromptRegistry {
     /// @returns A new `PromptRegistry` with the loaded templates.
     #[napi(factory, js_name = "fromDir")]
     pub fn from_dir(path: String) -> Result<Self> {
-        let registry = PromptRegistry::from_dir(&path).map_err(to_napi_error)?;
+        let registry = PromptRegistry::from_dir(&path).map_err(prompt_error_to_napi)?;
         Ok(Self { inner: registry })
     }
 }

@@ -3,11 +3,12 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use pyo3::exceptions::PyTypeError;
+use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
 
+use blazen_memory::search;
 use blazen_memory::store::MemoryBackend;
 use blazen_memory::types::{MemoryEntry, MemoryResult, StoredEntry};
 use blazen_memory::{InMemoryBackend, JsonlBackend, Memory, MemoryError, MemoryStore};
@@ -16,8 +17,20 @@ use blazen_memory_valkey::ValkeyBackend;
 /// Local alias for the memory-crate result type.
 type MemResult<T> = std::result::Result<T, MemoryError>;
 
-use crate::error::BlazenPyError;
+use crate::error::{BlazenException, BlazenPyError};
 use crate::types::embedding::PyEmbeddingModel;
+
+// ---------------------------------------------------------------------------
+// MemoryException -- Python exception subclass of BlazenException
+// ---------------------------------------------------------------------------
+
+pyo3::create_exception!(blazen, MemoryException, BlazenException);
+
+/// Register the memory exception type on the module.
+pub fn register_exceptions(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("MemoryError", m.py().get_type::<MemoryException>())?;
+    Ok(())
+}
 
 // ---------------------------------------------------------------------------
 // Helper: extract a backend from a Python object
@@ -47,8 +60,115 @@ fn extract_backend(obj: &Bound<'_, PyAny>) -> PyResult<Arc<dyn MemoryBackend>> {
 // Helper: convert MemoryError -> PyErr
 // ---------------------------------------------------------------------------
 
-fn memory_err(e: blazen_memory::MemoryError) -> PyErr {
-    PyErr::from(BlazenPyError::Llm(e.to_string()))
+pub(crate) fn memory_err(e: blazen_memory::MemoryError) -> PyErr {
+    MemoryException::new_err(e.to_string())
+}
+
+// ---------------------------------------------------------------------------
+// PyMemoryStore (subclassable base mirroring the high-level trait)
+// ---------------------------------------------------------------------------
+
+/// Subclassable ABC mirroring the Rust [`blazen_memory::MemoryStore`] trait.
+///
+/// ``MemoryStore`` is the user-facing interface a fully-built memory system
+/// satisfies (handles embedding + ELID encoding + search + persistence).
+/// The shipped concrete implementation lives behind :class:`Memory`; this
+/// ABC exists so callers can document the surface that custom orchestrators
+/// must satisfy when composing memory subsystems together (e.g. a router
+/// that fans out across several stores, or a wrapper that adds caching).
+///
+/// Override every coroutine method -- the defaults raise
+/// ``NotImplementedError``.
+///
+/// Example:
+///     >>> class CachingStore(MemoryStore):
+///     ...     def __init__(self, inner: Memory, cache: dict): ...
+///     ...     async def add(self, entries): ...
+///     ...     async def search(self, query, limit, metadata_filter=None): ...
+///     ...     async def search_local(self, query, limit, metadata_filter=None): ...
+///     ...     async def get(self, id): ...
+///     ...     async def delete(self, id): ...
+///     ...     async def len(self): ...
+#[gen_stub_pyclass]
+#[pyclass(name = "MemoryStore", subclass)]
+pub struct PyMemoryStore;
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyMemoryStore {
+    #[new]
+    fn new() -> Self {
+        Self
+    }
+
+    /// Add one or more entries to the store. Should return a coroutine
+    /// resolving to ``list[str]`` of stored ids.
+    fn add(&self, entries: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        let _ = entries;
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "subclass must override add()",
+        ))
+    }
+
+    /// Semantic search using the configured embedding model.
+    ///
+    /// Should return a coroutine resolving to ``list[MemoryResult]``.
+    /// Implementations that do not have an embedding model should
+    /// raise an error.
+    #[pyo3(signature = (query, limit=5, metadata_filter=None))]
+    fn search(
+        &self,
+        query: String,
+        limit: usize,
+        metadata_filter: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let _ = (query, limit, metadata_filter);
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "subclass must override search()",
+        ))
+    }
+
+    /// Local SimHash-based search (no embedding model required).
+    ///
+    /// Should return a coroutine resolving to ``list[MemoryResult]``.
+    #[pyo3(signature = (query, limit=5, metadata_filter=None))]
+    fn search_local(
+        &self,
+        query: String,
+        limit: usize,
+        metadata_filter: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let _ = (query, limit, metadata_filter);
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "subclass must override search_local()",
+        ))
+    }
+
+    /// Retrieve a single entry by id. Should return a coroutine
+    /// resolving to an optional dict.
+    fn get(&self, id: String) -> PyResult<Py<PyAny>> {
+        let _ = id;
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "subclass must override get()",
+        ))
+    }
+
+    /// Delete an entry by id. Should return a coroutine resolving to
+    /// ``bool``.
+    fn delete(&self, id: String) -> PyResult<Py<PyAny>> {
+        let _ = id;
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "subclass must override delete()",
+        ))
+    }
+
+    /// Return the number of entries. Should return a coroutine
+    /// resolving to ``int``.
+    fn len(&self) -> PyResult<Py<PyAny>> {
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "subclass must override len()",
+        ))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -435,6 +555,248 @@ impl PyValkeyBackend {
     fn __repr__(&self) -> &'static str {
         "ValkeyBackend(...)"
     }
+}
+
+// ---------------------------------------------------------------------------
+// PyStoredEntry
+// ---------------------------------------------------------------------------
+
+/// An entry as persisted in a backend, including ELID and LSH band data.
+///
+/// `StoredEntry` is the on-disk / on-the-wire shape used by all
+/// `MemoryBackend` implementations. Custom backends written in Python
+/// receive and return these objects.
+///
+/// Example:
+///     >>> entry = StoredEntry(
+///     ...     id="doc1",
+///     ...     text="Paris is the capital of France",
+///     ...     text_simhash=0xDEADBEEF,
+///     ...     bands=["b0:0001", "b1:002a"],
+///     ...     metadata={"category": "geo"},
+///     ... )
+///     >>> entry.id
+///     'doc1'
+#[gen_stub_pyclass]
+#[pyclass(name = "StoredEntry", frozen, from_py_object)]
+#[derive(Clone)]
+pub struct PyStoredEntry {
+    pub(crate) inner: StoredEntry,
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyStoredEntry {
+    /// Construct a `StoredEntry`.
+    ///
+    /// Args:
+    ///     id: Unique identifier for this entry.
+    ///     text: The original text content.
+    ///     text_simhash: 64-bit `SimHash` of the raw text (used by local search).
+    ///     elid: Optional ELID-encoded embedding string.
+    ///     simhash_hex: Optional 128-bit embedding `SimHash` as a 32-char hex string.
+    ///     bands: LSH band strings derived from the embedding `SimHash`.
+    ///     metadata: Arbitrary user metadata.
+    #[new]
+    #[pyo3(signature = (
+        *,
+        id,
+        text,
+        text_simhash = 0,
+        elid = None,
+        simhash_hex = None,
+        bands = Vec::new(),
+        metadata = None,
+    ))]
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        py: Python<'_>,
+        id: String,
+        text: String,
+        text_simhash: u64,
+        elid: Option<String>,
+        simhash_hex: Option<String>,
+        bands: Vec<String>,
+        metadata: Option<Py<PyAny>>,
+    ) -> PyResult<Self> {
+        let metadata_value = match metadata {
+            Some(obj) => crate::convert::py_to_json(py, obj.bind(py))?,
+            None => serde_json::Value::Null,
+        };
+        Ok(Self {
+            inner: StoredEntry {
+                id,
+                text,
+                elid,
+                simhash_hex,
+                text_simhash,
+                bands,
+                metadata: metadata_value,
+            },
+        })
+    }
+
+    /// Unique identifier for this entry.
+    #[getter]
+    fn id(&self) -> &str {
+        &self.inner.id
+    }
+
+    /// The original text content.
+    #[getter]
+    fn text(&self) -> &str {
+        &self.inner.text
+    }
+
+    /// ELID-encoded embedding string (None when running in local-only mode).
+    #[getter]
+    fn elid(&self) -> Option<&str> {
+        self.inner.elid.as_deref()
+    }
+
+    /// 128-bit `SimHash` of the embedding, as a 32-char hex string.
+    #[getter]
+    fn simhash_hex(&self) -> Option<&str> {
+        self.inner.simhash_hex.as_deref()
+    }
+
+    /// String-level `SimHash` of the raw text (always available, for local search).
+    #[getter]
+    fn text_simhash(&self) -> u64 {
+        self.inner.text_simhash
+    }
+
+    /// LSH band strings derived from the embedding `SimHash`.
+    #[getter]
+    fn bands(&self) -> Vec<String> {
+        self.inner.bands.clone()
+    }
+
+    /// Arbitrary user metadata (returned as a Python dict / value).
+    #[getter]
+    #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
+    fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        crate::convert::json_to_py(py, &self.inner.metadata)
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "StoredEntry(id='{}', text='{}', text_simhash={}, bands={} entries)",
+            self.inner.id,
+            truncate_text(&self.inner.text, 40),
+            self.inner.text_simhash,
+            self.inner.bands.len(),
+        )
+    }
+}
+
+impl From<StoredEntry> for PyStoredEntry {
+    fn from(inner: StoredEntry) -> Self {
+        Self { inner }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Free functions: similarity helpers and SimHash hex conversion
+// ---------------------------------------------------------------------------
+
+/// Compute similarity between two 64-bit text `SimHashes`.
+///
+/// Uses Hamming distance normalized over 64 bits: returns a value in
+/// ``[0.0, 1.0]`` where ``1.0`` means the hashes are identical.
+///
+/// Args:
+///     a: First 64-bit `SimHash` value.
+///     b: Second 64-bit `SimHash` value.
+///
+/// Returns:
+///     Similarity score in ``[0.0, 1.0]``.
+#[gen_stub_pyfunction]
+#[pyfunction]
+#[must_use]
+pub fn compute_text_simhash_similarity(a: u64, b: u64) -> f64 {
+    search::compute_text_simhash_similarity(a, b)
+}
+
+/// Compute similarity between two 128-bit embedding `SimHashes`.
+///
+/// Each input is provided as a 32-char hex string (matching the
+/// ``simhash_hex`` field on `StoredEntry`). Uses Hamming distance
+/// normalized over 128 bits.
+///
+/// Args:
+///     a: First 128-bit `SimHash` as a hex string.
+///     b: Second 128-bit `SimHash` as a hex string.
+///
+/// Returns:
+///     Similarity score in ``[0.0, 1.0]``.
+///
+/// Raises:
+///     ValueError: If either argument is not a valid 128-bit hex string.
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn compute_embedding_simhash_similarity(a: &str, b: &str) -> PyResult<f64> {
+    let av = search::simhash_from_hex(a)
+        .ok_or_else(|| PyValueError::new_err(format!("invalid 128-bit hex SimHash: {a:?}")))?;
+    let bv = search::simhash_from_hex(b)
+        .ok_or_else(|| PyValueError::new_err(format!("invalid 128-bit hex SimHash: {b:?}")))?;
+    Ok(search::compute_embedding_simhash_similarity(av, bv))
+}
+
+/// Compute similarity between two ELID strings.
+///
+/// Decodes both ELIDs and computes the Hamming distance between their
+/// Mini128 payloads, normalized into ``[0.0, 1.0]``.
+///
+/// Args:
+///     a: First ELID string.
+///     b: Second ELID string.
+///
+/// Returns:
+///     Similarity score in ``[0.0, 1.0]``.
+///
+/// Raises:
+///     MemoryError: If either string is not a valid Mini128 ELID.
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn compute_elid_similarity(a: &str, b: &str) -> PyResult<f64> {
+    search::compute_elid_similarity(a, b).map_err(memory_err)
+}
+
+/// Parse a hex-encoded 128-bit `SimHash` back into an integer.
+///
+/// Python ints are arbitrary-precision so the full 128-bit value is
+/// returned without truncation.
+///
+/// Args:
+///     hex_str: A 32-char hex-encoded `SimHash`.
+///
+/// Returns:
+///     The decoded `SimHash` as a Python int.
+///
+/// Raises:
+///     ValueError: If `hex_str` is not a valid 128-bit hex string.
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn simhash_from_hex(hex_str: &str) -> PyResult<u128> {
+    search::simhash_from_hex(hex_str)
+        .ok_or_else(|| PyValueError::new_err(format!("invalid 128-bit hex SimHash: {hex_str:?}")))
+}
+
+/// Encode a 128-bit `SimHash` integer as a zero-padded 32-char hex string.
+///
+/// Args:
+///     value: A 128-bit `SimHash` as a Python int.
+///
+/// Returns:
+///     A zero-padded 32-character lowercase hex string.
+///
+/// Raises:
+///     OverflowError: If `value` does not fit in 128 bits.
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn simhash_to_hex(value: u128) -> String {
+    search::simhash_to_hex(value)
 }
 
 // ---------------------------------------------------------------------------

@@ -60,7 +60,7 @@ use wasm_bindgen::prelude::*;
 /// Panics if the future yields `Pending`. That signals a real `await` point
 /// inside the supposedly-sync method (e.g. a distributed peer RPC). The
 /// caller must use the async API instead.
-fn block_on_local<F: std::future::Future>(fut: F) -> F::Output {
+pub(crate) fn block_on_local<F: std::future::Future>(fut: F) -> F::Output {
     let mut fut = Box::pin(fut);
     let waker = noop_waker();
     let mut cx = TaskContext::from_waker(&waker);
@@ -96,22 +96,29 @@ fn noop_waker() -> std::task::Waker {
 
 #[wasm_bindgen(typescript_custom_section)]
 const TS_STATE_VALUE: &str = r#"
-/** A value that can be stored in the workflow context state map. */
-export type StateValue =
+/**
+ * A value that can be stored in the workflow context state map.
+ *
+ * This is the polymorphic JS-side shape — strings / numbers / objects / etc.
+ * are all valid. The typed equivalent (a `StateValue` *class* with explicit
+ * `Json` / `Bytes` / `Native` variants) is exported separately as
+ * `StateValue` from `core_types`.
+ */
+export type StateValueLike =
   | string
   | number
   | boolean
   | null
   | Uint8Array
-  | StateValue[]
-  | { [key: string]: StateValue };
+  | StateValueLike[]
+  | { [key: string]: StateValueLike };
 "#;
 
 #[wasm_bindgen(typescript_custom_section)]
 const TS_NAMESPACES: &str = r#"
 export interface StateNamespace {
-  get(key: string, defaultValue?: StateValue): StateValue | null;
-  set(key: string, value: StateValue): void;
+  get(key: string, defaultValue?: StateValueLike): StateValueLike | null;
+  set(key: string, value: StateValueLike): void;
   keys(): string[];
 }
 export interface SessionNamespace {
@@ -123,6 +130,16 @@ export interface MetadataNamespace {
   get(key: string, defaultValue?: unknown): unknown;
   set(key: string, value: unknown): void;
 }
+"#;
+
+/// Backward-compatible TypeScript alias for the old `WorkflowContext` JS
+/// class name. Existing imports of `WorkflowContext` continue to type-check
+/// against the new `Context` class. Slated for removal in a future release;
+/// new code should import `Context` directly.
+#[wasm_bindgen(typescript_custom_section)]
+const TS_WORKFLOWCONTEXT_ALIAS: &str = r#"
+/** @deprecated Use `Context` instead. Kept for backward compatibility. */
+export type WorkflowContext = Context;
 "#;
 
 // ---------------------------------------------------------------------------
@@ -195,11 +212,12 @@ fn json_to_js(value: &serde_json::Value) -> JsValue {
 /// Cheaply cloneable: the inner `Context` is itself an `Arc<RwLock<…>>` clone
 /// so duplicating this struct only bumps refcounts.
 ///
-/// **NOTE:** This type is exported to JS as `WorkflowContext` rather than the
-/// natural `WasmContext` due to a wasm-bindgen 0.2.118 cli-support bug that
-/// mangles class names containing the substring `Wasm`. Do not change the
-/// `js_name` / `js_class` annotations until that bug is fixed upstream.
-#[wasm_bindgen(js_name = "WorkflowContext")]
+/// **JS name:** This type is exported to JS as `Context`. For backward
+/// compatibility with the previous SDK surface, a `WorkflowContext` alias is
+/// declared in [`TS_WORKFLOWCONTEXT_ALIAS`] so existing TypeScript imports
+/// of `WorkflowContext` continue to type-check. The alias will be removed in
+/// a future release.
+#[wasm_bindgen(js_name = "Context")]
 pub struct WasmContext {
     /// Underlying real context. `Context` is itself `Arc`-backed so we can
     /// clone it freely without an outer wrapper.
@@ -253,7 +271,7 @@ impl WasmContext {
 // Public wasm_bindgen API
 // ---------------------------------------------------------------------------
 
-#[wasm_bindgen(js_class = "WorkflowContext")]
+#[wasm_bindgen(js_class = "Context")]
 impl WasmContext {
     /// Persistable workflow state. Backed by [`blazen_core::Context`]'s
     /// JSON-typed state map; entries survive snapshotting.
@@ -298,6 +316,36 @@ impl WasmContext {
     #[wasm_bindgen(getter)]
     pub fn metadata(&self) -> WasmMetadataNamespace {
         WasmMetadataNamespace { ctx: self.clone() }
+    }
+
+    /// Store raw binary data under `key`.
+    ///
+    /// Mirrors [`blazen_core::Context::set_bytes`] and the `set_bytes` method
+    /// on the Node SDK's `Context`. The data is stored as a
+    /// [`blazen_core::StateValue::Bytes`] entry and survives snapshotting.
+    #[wasm_bindgen(js_name = "setBytes")]
+    pub fn set_bytes(&self, key: String, data: js_sys::Uint8Array) {
+        let inner = self.inner.clone();
+        let bytes = data.to_vec();
+        block_on_local(async move {
+            inner.set_bytes(&key, bytes).await;
+        });
+    }
+
+    /// Retrieve raw binary data previously stored under `key`.
+    ///
+    /// Returns `null` if the key does not exist or the stored value is a
+    /// JSON / native variant rather than bytes. Mirrors
+    /// [`blazen_core::Context::get_bytes`].
+    #[wasm_bindgen(js_name = "getBytes")]
+    #[must_use]
+    pub fn get_bytes(&self, key: String) -> JsValue {
+        let inner = self.inner.clone();
+        let raw: Option<Vec<u8>> = block_on_local(async move { inner.get_bytes(&key).await });
+        match raw {
+            Some(bytes) => js_sys::Uint8Array::from(bytes.as_slice()).into(),
+            None => JsValue::NULL,
+        }
     }
 
     /// Send an event into the workflow's internal routing channel.

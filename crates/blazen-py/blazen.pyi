@@ -3,26 +3,51 @@
 
 import builtins
 import enum
+import os
+import pathlib
 import typing
 __all__ = [
+    "ActiveWorkflowSnapshot",
+    "AgentConfig",
+    "AgentEvent",
     "AgentResult",
+    "AnthropicProvider",
     "Artifact",
+    "AudioContent",
     "AuthError",
+    "AuthMethod",
+    "AzureOpenAiProvider",
     "AzureOptions",
     "BackgroundRemovalProvider",
     "BackgroundRemovalRequest",
+    "BatchConfig",
     "BatchResult",
     "BedrockOptions",
+    "BedrockProvider",
     "BlazenError",
+    "BlazenPeerClient",
+    "BlazenPeerServer",
     "BlazenState",
+    "BytesWrapper",
     "CacheConfig",
+    "CacheMiddleware",
     "CacheStrategy",
+    "CachedCompletionModel",
+    "CandleEmbedModel",
+    "CandleEmbedOptions",
+    "CandleLlmOptions",
+    "CandleLlmProvider",
     "ChatMessage",
     "ChatWindow",
+    "CheckpointStore",
+    "Citation",
+    "CohereProvider",
     "CompletionModel",
     "CompletionOptions",
+    "CompletionRequest",
     "CompletionResponse",
     "CompletionStream",
+    "Compute",
     "ComputeError",
     "ComputeRequest",
     "ComputeResult",
@@ -30,38 +55,104 @@ __all__ = [
     "ContentPolicyError",
     "Context",
     "CustomProvider",
+    "DeepSeekProvider",
+    "DerefRequest",
+    "DerefResponse",
     "Device",
+    "DiffusionOptions",
+    "DiffusionProvider",
+    "DiffusionScheduler",
+    "DynamicEvent",
     "EmbedOptions",
     "EmbeddingModel",
     "EmbeddingResponse",
+    "EstimateCounter",
     "Event",
+    "EventEnvelope",
     "FalEmbeddingModel",
     "FalLlmEndpointKind",
     "FalOptions",
     "FalProvider",
+    "FallbackModel",
+    "FastEmbedModel",
+    "FastEmbedOptions",
+    "FileContent",
     "FinishReason",
+    "FireworksProvider",
+    "GeminiProvider",
+    "GroqProvider",
+    "HistoryEvent",
+    "HistoryEventKind",
+    "HostDispatch",
+    "HttpClient",
+    "ImageContent",
+    "ImageModel",
     "ImageProvider",
     "ImageRequest",
+    "ImageSource",
     "InMemoryBackend",
+    "InputRequestEvent",
+    "InputResponseEvent",
     "JobHandle",
+    "JobStatus",
+    "JoinStrategy",
     "JsonlBackend",
+    "LlamaCppOptions",
+    "LlamaCppProvider",
     "LlmPayload",
+    "LocalModel",
     "MediaError",
     "MediaOutput",
     "MediaType",
     "Memory",
     "MemoryBackend",
+    "MemoryEntry",
     "MemoryResult",
+    "MemoryStore",
+    "MessageContent",
+    "Middleware",
+    "MiddlewareStack",
+    "MistralProvider",
     "MistralRsOptions",
+    "MistralRsProvider",
+    "ModelCache",
+    "ModelCapabilities",
+    "ModelInfo",
     "ModelManager",
     "ModelPricing",
+    "ModelRegistry",
     "ModelStatus",
     "MusicProvider",
     "MusicRequest",
+    "OpenAiCompatConfig",
+    "OpenAiCompatEmbeddingModel",
+    "OpenAiCompatProvider",
+    "OpenAiEmbeddingModel",
     "OpenAiProvider",
+    "OpenRouterProvider",
+    "ParallelStage",
+    "PauseReason",
+    "PeerRemoteRefDescriptor",
+    "PerplexityProvider",
+    "PersistedEvent",
+    "Pipeline",
+    "PipelineBuilder",
+    "PipelineEvent",
+    "PipelineHandler",
+    "PipelineResult",
+    "PipelineSnapshot",
+    "PipelineState",
+    "PiperOptions",
+    "PiperProvider",
+    "PricingEntry",
+    "PromptFile",
     "PromptRegistry",
     "PromptTemplate",
+    "ProviderCapabilities",
+    "ProviderConfig",
     "ProviderError",
+    "ProviderId",
+    "ProviderInfo",
     "ProviderOptions",
     "PyAudioResult",
     "PyGenerated3DModel",
@@ -75,42 +166,229 @@ __all__ = [
     "PyVideoResult",
     "Quantization",
     "RateLimitError",
+    "ReasoningTrace",
+    "RedbCheckpointStore",
+    "RefLifetime",
+    "RegistryKey",
+    "ReleaseRequest",
+    "ReleaseResponse",
+    "RemoteRefDescriptor",
     "RequestTiming",
     "ResponseFormat",
+    "RetryCompletionModel",
     "RetryConfig",
+    "RetryMiddleware",
     "Role",
     "SessionNamespace",
     "SessionPausePolicy",
+    "SessionRefRegistry",
     "SpeechRequest",
+    "Stage",
+    "StageKind",
+    "StageResult",
     "StartEvent",
     "StateNamespace",
+    "StateValue",
+    "StepDeserializerRegistry",
+    "StepOutput",
+    "StepRegistration",
     "StopEvent",
+    "StoredEntry",
+    "StreamChunk",
+    "StreamChunkEvent",
+    "StreamCompleteEvent",
+    "StructuredOutput",
+    "StructuredResponse",
+    "SubWorkflowRequest",
+    "SubWorkflowResponse",
     "TTSProvider",
+    "TemplateRole",
     "ThreeDProvider",
     "ThreeDRequest",
     "TimeoutError",
+    "TogetherProvider",
+    "TokenCounter",
+    "TokenUsage",
+    "Tool",
+    "ToolCall",
     "ToolDef",
+    "ToolDefinition",
     "ToolOutput",
     "Transcription",
     "TranscriptionRequest",
+    "TypedTool",
     "UnsupportedError",
     "UpscaleRequest",
     "ValidationError",
     "ValkeyBackend",
+    "ValkeyCheckpointStore",
+    "VideoContent",
     "VideoProvider",
     "VideoRequest",
     "VoiceCloneRequest",
     "VoiceHandle",
     "VoiceProvider",
+    "WhisperCppProvider",
     "WhisperModel",
     "WhisperOptions",
     "Workflow",
+    "WorkflowBuilder",
+    "WorkflowCheckpoint",
     "WorkflowHandler",
+    "WorkflowHistory",
+    "WorkflowResult",
+    "WorkflowSnapshot",
+    "XaiProvider",
     "complete_batch",
+    "compute_elid_similarity",
+    "compute_embedding_simhash_similarity",
+    "compute_text_simhash_similarity",
+    "count_message_tokens",
+    "env_var_for_provider",
+    "estimate_tokens",
+    "extract_inline_artifacts",
+    "format_provider_http_tail",
+    "get_context_window",
+    "intern_event_type",
+    "load_client_tls",
+    "load_server_tls",
     "lookup_pricing",
+    "lookup_step_builder",
+    "register_event_deserializer",
+    "register_from_model_info",
     "register_pricing",
+    "register_step_builder",
+    "registered_step_ids",
+    "resolve_api_key",
+    "resolve_peer_token",
     "run_agent",
+    "run_agent_with_callback",
+    "simhash_from_hex",
+    "simhash_to_hex",
+    "step",
+    "try_deserialize_event",
+    "typed_tool_simple",
+    "wrap_with_tracing",
 ]
+
+@typing.final
+class ActiveWorkflowSnapshot:
+    r"""
+    A snapshot of an in-progress workflow within a stage, captured when
+    a pipeline is paused mid-stage.
+    """
+    @property
+    def stage_name(self) -> builtins.str:
+        r"""
+        The name of the stage that owns this workflow.
+        """
+    @property
+    def branch_name(self) -> typing.Optional[builtins.str]:
+        r"""
+        For parallel stages, the name of the specific branch.
+        `None` for sequential stages.
+        """
+    def workflow_snapshot_json(self) -> builtins.str:
+        r"""
+        Workflow snapshot serialized as a JSON string.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class AgentConfig:
+    r"""
+    Typed configuration for the agentic tool execution loop.
+    
+    Mirrors [`blazen_llm::AgentConfig`] minus the `tools` slot (tools are
+    passed explicitly to the run function). Use this when calling
+    [`run_agent`] with a fully-typed config rather than positional kwargs.
+    
+    Example:
+        >>> config = AgentConfig(max_iterations=20, system_prompt="be terse",
+        ...                      temperature=0.0, tool_concurrency=4)
+    """
+    @property
+    def max_iterations(self) -> builtins.int:
+        r"""
+        Maximum number of tool-call rounds before forcing a stop.
+        """
+    @property
+    def add_finish_tool(self) -> builtins.bool:
+        r"""
+        Whether the implicit "finish" tool is added.
+        """
+    @property
+    def system_prompt(self) -> typing.Optional[builtins.str]:
+        r"""
+        Optional system prompt prepended to messages.
+        """
+    @property
+    def temperature(self) -> typing.Optional[builtins.float]:
+        r"""
+        Sampling temperature.
+        """
+    @property
+    def max_tokens(self) -> typing.Optional[builtins.int]:
+        r"""
+        Maximum tokens per completion call.
+        """
+    @property
+    def tool_concurrency(self) -> builtins.int:
+        r"""
+        Maximum concurrent tool executions per round (0 = unlimited).
+        """
+    def __new__(cls, *, max_iterations: builtins.int = 10, add_finish_tool: builtins.bool = False, system_prompt: typing.Optional[builtins.str] = None, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, tool_concurrency: builtins.int = 0) -> AgentConfig:
+        r"""
+        Construct an AgentConfig.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class AgentEvent:
+    r"""
+    Events emitted during agent execution.
+    
+    Mirrors [`blazen_llm::AgentEvent`]. Yielded to the user-supplied callback
+    passed to [`run_agent_with_callback`] -- one of three variants:
+    - ``"tool_called"`` (carries iteration + tool_call),
+    - ``"tool_result"`` (carries iteration + tool_name + result),
+    - ``"iteration_complete"`` (carries iteration + had_tool_calls).
+    
+    Inspect via the ``kind`` getter and the per-variant fields.
+    """
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Variant tag: ``"tool_called"``, ``"tool_result"``, or
+        ``"iteration_complete"``.
+        """
+    @property
+    def iteration(self) -> builtins.int:
+        r"""
+        The 0-based iteration index at which this event fired.
+        """
+    @property
+    def tool_call(self) -> typing.Optional[ToolCall]:
+        r"""
+        The tool call carried by ``ToolCalled`` events. ``None`` otherwise.
+        """
+    @property
+    def tool_name(self) -> typing.Optional[builtins.str]:
+        r"""
+        The tool name carried by ``ToolResult`` events. ``None`` otherwise.
+        """
+    @property
+    def result(self) -> typing.Optional[typing.Any]:
+        r"""
+        The tool result value for ``ToolResult`` events. ``None`` otherwise.
+        """
+    @property
+    def had_tool_calls(self) -> typing.Optional[builtins.bool]:
+        r"""
+        Whether the model emitted any tool calls in this iteration. Set on
+        ``IterationComplete`` events; ``None`` otherwise.
+        """
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class AgentResult:
@@ -142,6 +420,57 @@ class AgentResult:
     def total_cost(self) -> typing.Optional[builtins.float]:
         r"""
         Aggregated cost across all rounds, if available.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class AnthropicProvider:
+    r"""
+    An Anthropic Messages API provider.
+    
+    This is the standalone class form of `CompletionModel.anthropic(...)`.
+    Both surfaces wrap the same Rust provider; use whichever you prefer.
+    
+    Example:
+        >>> from blazen import AnthropicProvider, ProviderOptions, ChatMessage
+        >>> p = AnthropicProvider(options=ProviderOptions(api_key="sk-ant-..."))
+        >>> resp = await p.complete([ChatMessage.user("Hello!")])
+    """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        Get the model ID.
+        """
+    def __new__(cls, *, options: typing.Optional[ProviderOptions] = None) -> AnthropicProvider:
+        r"""
+        Create a new Anthropic provider.
+        
+        Args:
+            options: Optional [`ProviderOptions`] with api_key, base_url, model.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+        r"""
+        Perform a chat completion.
+        
+        Args:
+            messages: A list of ChatMessage objects.
+            options: Optional [`CompletionOptions`] for sampling parameters,
+                tools, and response format.
+        
+        Returns:
+            A CompletionResponse with content, model, tool_calls, usage, etc.
+        """
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream:
+        r"""
+        Stream a chat completion as an async iterator.
+        
+        Args:
+            messages: A list of ChatMessage objects.
+            options: Optional [`CompletionOptions`] for sampling parameters,
+                tools, and response format.
+        
+        Returns:
+            A [`CompletionStream`] that yields chunks via ``async for``.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -249,6 +578,62 @@ class Artifact:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class AudioContent:
+    r"""
+    Audio content for multimodal messages (Gemini, gpt-4o-audio-preview).
+    """
+    @property
+    def source(self) -> ImageSource: ...
+    @property
+    def media_type(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def duration_seconds(self) -> typing.Optional[builtins.float]: ...
+    def __new__(cls, *, source: ImageSource, media_type: typing.Optional[builtins.str] = None, duration_seconds: typing.Optional[builtins.float] = None) -> AudioContent:
+        r"""
+        Construct an audio content block.
+        """
+    @staticmethod
+    def from_url(url: builtins.str) -> AudioContent:
+        r"""
+        Build an audio block from a public URL.
+        """
+    @staticmethod
+    def from_base64(data: builtins.str, media_type: builtins.str) -> AudioContent:
+        r"""
+        Build an audio block from base64-encoded data with an explicit MIME.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class AzureOpenAiProvider:
+    r"""
+    An Azure OpenAI Service provider.
+    
+    Standalone class form of `CompletionModel.azure(...)`. Requires
+    `resource_name` and `deployment_name` on [`AzureOptions`].
+    
+    Example:
+        >>> from blazen import AzureOpenAiProvider, AzureOptions
+        >>> p = AzureOpenAiProvider(options=AzureOptions(
+        ...     resource_name="my-resource",
+        ...     deployment_name="gpt-4o",
+        ... ))
+    """
+    @property
+    def model_id(self) -> builtins.str: ...
+    def __new__(cls, *, options: AzureOptions) -> AzureOpenAiProvider:
+        r"""
+        Create a new Azure OpenAI provider.
+        
+        Args:
+            options: [`AzureOptions`] with required ``resource_name`` and
+                ``deployment_name`` plus optional ``api_version``.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class AzureOptions:
     r"""
     Options specific to Azure OpenAI.
@@ -332,6 +717,32 @@ class BackgroundRemovalRequest:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class BatchConfig:
+    r"""
+    Configuration for a batch completion run.
+    
+    Args:
+        concurrency: Maximum number of concurrent requests. ``0`` (the default)
+            means unlimited.
+    
+    Example:
+        >>> config = BatchConfig(concurrency=4)
+        >>> result = await complete_batch(model, requests, config=config)
+    """
+    @property
+    def concurrency(self) -> builtins.int:
+        r"""
+        Maximum number of concurrent requests. ``0`` means unlimited.
+        """
+    def __new__(cls, *, concurrency: builtins.int = 0) -> BatchConfig: ...
+    @staticmethod
+    def unlimited() -> BatchConfig:
+        r"""
+        Build a config with unlimited concurrency.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class BatchResult:
     r"""
     Result of a batch completion run.
@@ -360,9 +771,9 @@ class BatchResult:
         Per-request error messages. ``None`` for requests that succeeded.
         """
     @property
-    def total_usage(self) -> typing.Optional[dict[str, typing.Any]]:
+    def total_usage(self) -> typing.Optional[TokenUsage]:
         r"""
-        Aggregated token usage across all successful responses, as a dict.
+        Aggregated token usage across all successful responses.
         """
     @property
     def total_cost(self) -> typing.Optional[builtins.float]:
@@ -415,6 +826,130 @@ class BedrockOptions:
         """
     def __repr__(self) -> builtins.str: ...
 
+@typing.final
+class BedrockProvider:
+    r"""
+    An AWS Bedrock provider.
+    
+    Standalone class form of `CompletionModel.bedrock(...)`. Requires
+    ``region`` on [`BedrockOptions`].
+    """
+    @property
+    def model_id(self) -> builtins.str: ...
+    def __new__(cls, *, options: BedrockOptions) -> BedrockProvider:
+        r"""
+        Create a new Bedrock provider.
+        
+        Args:
+            options: [`BedrockOptions`] with required ``region``.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class BlazenPeerClient:
+    r"""
+    Client handle for talking to a remote `BlazenPeerServer`.
+    
+    Construct with `BlazenPeerClient.connect(endpoint, node_id)`. All RPC
+    methods are async and return Python coroutines.
+    """
+    @staticmethod
+    async def connect(endpoint: builtins.str, node_id: builtins.str) -> BlazenPeerClient:
+        r"""
+        Open a connection to the peer at `endpoint`.
+        
+        Args:
+            endpoint: A gRPC URI, e.g. ``"http://node-a.local:7443"``.
+            node_id: Identifier of *this* client used for trace logs.
+        
+        Returns:
+            A connected `BlazenPeerClient`.
+        
+        Raises:
+            PeerError: If the endpoint URI is invalid or the connection
+                cannot be established.
+        """
+    async def invoke_sub_workflow(self, request: SubWorkflowRequest) -> SubWorkflowResponse:
+        r"""
+        Invoke a sub-workflow on the connected peer.
+        
+        Args:
+            request: A `SubWorkflowRequest`.
+        
+        Returns:
+            A `SubWorkflowResponse`.
+        
+        Raises:
+            PeerError: If the request cannot be encoded, the RPC fails,
+                or the response cannot be decoded.
+        """
+    async def deref_session_ref(self, ref_uuid: builtins.str) -> bytes:
+        r"""
+        Dereference a remote session ref by its UUID. Returns the raw
+        serialized bytes of the underlying value.
+        
+        Args:
+            ref_uuid: A UUID string identifying the registry entry on the
+                origin node.
+        
+        Returns:
+            The raw bytes returned by the origin node's serializer.
+        
+        Raises:
+            PeerError: On postcard or transport errors, including remote
+                ``NOT_FOUND``.
+        """
+    async def release_session_ref(self, ref_uuid: builtins.str) -> bool:
+        r"""
+        Release (drop) a remote session ref. Returns ``True`` if the ref
+        was found and released, ``False`` if it was already gone.
+        
+        Args:
+            ref_uuid: A UUID string identifying the registry entry on the
+                origin node.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class BlazenPeerServer:
+    r"""
+    A node-local Blazen peer gRPC server.
+    
+    Owns a stable `node_id` and an in-process session-ref registry.
+    Call `serve(addr)` to bind and serve forever.
+    """
+    def __new__(cls, node_id: builtins.str) -> BlazenPeerServer:
+        r"""
+        Create a new peer server with a fresh, empty session-ref registry.
+        
+        Args:
+            node_id: Stable identifier embedded in `RemoteRefDescriptor`s
+                this server hands out.
+        """
+    def with_session_refs(self, registry: _SessionRegistryHandle) -> None:
+        r"""
+        Replace the per-server session-ref registry with one supplied by the
+        embedder. Lets a Blazen process share its registry between in-process
+        workflows and remote peers.
+        
+        Args:
+            registry: A `_SessionRegistryHandle` obtained from the workflow
+                layer (typically via the Python contextvar bridge).
+        """
+    async def serve(self, addr: builtins.str) -> None:
+        r"""
+        Bind the gRPC server to `addr` and serve forever.
+        
+        Args:
+            addr: A socket address string, e.g. ``"0.0.0.0:7443"``.
+        
+        Raises:
+            PeerError: If the server cannot bind or fails while serving.
+        """
+    def __repr__(self) -> builtins.str: ...
+
 class BlazenState:
     r"""
     Base class for typed workflow state objects.
@@ -441,6 +976,30 @@ class BlazenState:
     def __new__(cls, **_kwargs: typing.Any) -> BlazenState: ...
 
 @typing.final
+class BytesWrapper:
+    r"""
+    Wrapper around a `bytes` payload that mirrors
+    [`BytesWrapper`](blazen_core::value::BytesWrapper).
+    
+    On the Rust side the wrapper exists to opt into `serde_bytes` for
+    efficient binary-format encoding; on the Python side it is mostly
+    useful as a typed container so callers can disambiguate
+    "JSON-encoded bytes" from "raw bytes" at a class level.
+    """
+    @property
+    def data(self) -> builtins.list[builtins.int]:
+        r"""
+        Return the wrapped payload as `bytes`.
+        """
+    def __new__(cls, data: typing.Sequence[builtins.int]) -> BytesWrapper:
+        r"""
+        Construct from a `bytes` value.
+        """
+    def __len__(self) -> builtins.int: ...
+    def __bytes__(self) -> builtins.list[builtins.int]: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class CacheConfig:
     @property
     def strategy(self) -> CacheStrategy: ...
@@ -462,6 +1021,267 @@ class CacheConfig:
             strategy: Caching strategy (default: CacheStrategy.ContentHash).
             ttl_seconds: How long a cached response remains valid (default: 300).
             max_entries: Maximum number of cache entries (default: 1000).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class CacheMiddleware:
+    r"""
+    Middleware that wraps a model with `CachedCompletionModel`.
+    
+    This is the standalone Python-facing equivalent of
+    `blazen_llm::middleware::CacheMiddleware`.
+    """
+    def __new__(cls, config: typing.Optional[CacheConfig] = None) -> CacheMiddleware:
+        r"""
+        Build a cache middleware layer.
+        
+        Args:
+            config: Optional typed `CacheConfig`. Defaults to
+                `CacheConfig()` (content-hash strategy, 300s TTL,
+                1000 entries).
+        """
+    def wrap(self, model: CompletionModel) -> CompletionModel:
+        r"""
+        Apply this middleware directly to a `CompletionModel`, returning
+        a new `CompletionModel` with caching behaviour.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class CachedCompletionModel:
+    r"""
+    A `CompletionModel` decorator that caches non-streaming responses.
+    
+    Standalone equivalent of `CompletionModel.with_cache(config)`.
+    Streaming requests are never cached and always pass through.
+    
+    Example:
+        >>> base = CompletionModel.openai()
+        >>> model = CachedCompletionModel(base, CacheConfig(ttl_seconds=600))
+        >>> response = await model.complete([ChatMessage.user("Hi")])
+    """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        The model id reported by the underlying provider.
+        """
+    def __new__(cls, model: CompletionModel, config: typing.Optional[CacheConfig] = None) -> CachedCompletionModel:
+        r"""
+        Wrap a `CompletionModel` with response caching.
+        
+        Args:
+            model: The `CompletionModel` to wrap.
+            config: Optional typed `CacheConfig`. Defaults to
+                `CacheConfig()` (content-hash strategy, 300s TTL,
+                1000 entries).
+        """
+    def as_model(self) -> CompletionModel:
+        r"""
+        Convert this decorator into a `CompletionModel`.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+        r"""
+        Perform a chat completion, served from cache when possible.
+        """
+    def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Optional[typing.Any] = None, options: typing.Optional[CompletionOptions] = None) -> typing.Any:
+        r"""
+        Stream a chat completion (always passes through; never cached).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class CandleEmbedModel:
+    r"""
+    A local candle text embedding model.
+    
+    Runs embedding inference fully on-device using the candle (HuggingFace)
+    engine. No API key is required.
+    
+    Example:
+        >>> opts = CandleEmbedOptions(model_id="BAAI/bge-small-en-v1.5")
+        >>> model = CandleEmbedModel(options=opts)
+        >>> response = await model.embed(["Hello", "world"])
+    """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        Get the model identifier (HuggingFace repo id).
+        """
+    @property
+    def dimensions(self) -> builtins.int:
+        r"""
+        Get the dimensionality of the produced embedding vectors.
+        """
+    def __new__(cls, *, options: typing.Optional[CandleEmbedOptions] = None) -> CandleEmbedModel:
+        r"""
+        Create a new candle embedding model.
+        
+        Args:
+            options: Optional :class:`CandleEmbedOptions` for model id,
+                device, revision, and cache directory.
+        """
+    async def embed(self, texts: typing.Sequence[builtins.str]) -> EmbeddingResponse:
+        r"""
+        Embed one or more texts.
+        
+        Args:
+            texts: A list of strings to embed.
+        
+        Returns:
+            An :class:`EmbeddingResponse` with embeddings, model, and usage.
+        """
+    async def load(self) -> None:
+        r"""
+        Load the model weights into memory / VRAM. Idempotent.
+        """
+    async def unload(self) -> None:
+        r"""
+        Drop the loaded model and free its memory / VRAM.
+        """
+    async def is_loaded(self) -> builtins.bool:
+        r"""
+        Whether the model is currently loaded.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class CandleEmbedOptions:
+    r"""
+    Options for the local candle embedding backend.
+    
+    Example:
+        >>> opts = CandleEmbedOptions(model_id="BAAI/bge-small-en-v1.5")
+        >>> model = CandleEmbedModel(options=opts)
+    """
+    @property
+    def model_id(self) -> typing.Optional[builtins.str]: ...
+    @model_id.setter
+    def model_id(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def device(self) -> typing.Optional[builtins.str]: ...
+    @device.setter
+    def device(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def revision(self) -> typing.Optional[builtins.str]: ...
+    @revision.setter
+    def revision(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def cache_dir(self) -> typing.Optional[builtins.str]: ...
+    @cache_dir.setter
+    def cache_dir(self, value: typing.Optional[builtins.str]) -> None: ...
+    def __new__(cls, *, model_id: typing.Optional[builtins.str] = None, device: typing.Optional[builtins.str] = None, revision: typing.Optional[builtins.str] = None, cache_dir: typing.Optional[builtins.str] = None) -> CandleEmbedOptions:
+        r"""
+        Create a new CandleEmbedOptions.
+        
+        Args:
+            model_id: HuggingFace model ID
+                (default: ``"sentence-transformers/all-MiniLM-L6-v2"``).
+            device: Hardware device specifier (``"cpu"``, ``"cuda:0"``, ``"metal"``).
+            revision: Model revision / git ref on HuggingFace.
+            cache_dir: Path to cache downloaded models.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class CandleLlmOptions:
+    r"""
+    Options for the local candle LLM backend.
+    
+    Example:
+        >>> opts = CandleLlmOptions(model_id="meta-llama/Llama-3.2-1B")
+        >>> provider = CandleLlmProvider(options=opts)
+    """
+    @property
+    def model_id(self) -> typing.Optional[builtins.str]: ...
+    @model_id.setter
+    def model_id(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def device(self) -> typing.Optional[builtins.str]: ...
+    @device.setter
+    def device(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def quantization(self) -> typing.Optional[builtins.str]: ...
+    @quantization.setter
+    def quantization(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def revision(self) -> typing.Optional[builtins.str]: ...
+    @revision.setter
+    def revision(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def context_length(self) -> typing.Optional[builtins.int]: ...
+    @context_length.setter
+    def context_length(self, value: typing.Optional[builtins.int]) -> None: ...
+    @property
+    def cache_dir(self) -> typing.Optional[builtins.str]: ...
+    @cache_dir.setter
+    def cache_dir(self, value: typing.Optional[builtins.str]) -> None: ...
+    def __new__(cls, *, model_id: typing.Optional[builtins.str] = None, device: typing.Optional[builtins.str] = None, quantization: typing.Optional[builtins.str] = None, revision: typing.Optional[builtins.str] = None, context_length: typing.Optional[builtins.int] = None, cache_dir: typing.Optional[builtins.str] = None) -> CandleLlmOptions:
+        r"""
+        Create a new CandleLlmOptions.
+        
+        Args:
+            model_id: HuggingFace model ID or local path to weights.
+            device: Hardware device specifier (``"cpu"``, ``"cuda:0"``, ``"metal"``).
+            quantization: Quantization format string (e.g. ``"q4_k_m"``).
+            revision: Model revision / branch on HuggingFace.
+            context_length: Maximum context length in tokens.
+            cache_dir: Path to cache downloaded models.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class CandleLlmProvider:
+    r"""
+    A local candle LLM completion provider.
+    
+    Runs LLM inference fully on-device using the candle (HuggingFace) engine.
+    No API key is required.
+    
+    Example:
+        >>> opts = CandleLlmOptions(model_id="meta-llama/Llama-3.2-1B")
+        >>> provider = CandleLlmProvider(options=opts)
+        >>> response = await provider.complete([ChatMessage.user("Hello!")])
+    """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        Get the model identifier.
+        """
+    def __new__(cls, *, options: typing.Optional[CandleLlmOptions] = None) -> CandleLlmProvider:
+        r"""
+        Create a new candle LLM provider.
+        
+        Args:
+            options: Optional :class:`CandleLlmOptions` for model id, device,
+                quantization, revision, context length, and cache directory.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+        r"""
+        Perform a chat completion.
+        
+        Args:
+            messages: A list of :class:`ChatMessage` objects.
+            options: Optional :class:`CompletionOptions` for sampling params.
+        
+        Returns:
+            A :class:`CompletionResponse`.
+        """
+    async def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Any, options: typing.Optional[CompletionOptions] = None) -> None:
+        r"""
+        Stream a chat completion, calling a callback for each chunk.
+        """
+    async def load(self) -> None:
+        r"""
+        Load the model weights into memory / VRAM. Idempotent.
+        """
+    async def unload(self) -> None:
+        r"""
+        Drop the loaded model and free its memory / VRAM.
+        """
+    async def is_loaded(self) -> builtins.bool:
+        r"""
+        Whether the model is currently loaded.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -569,6 +1389,27 @@ class ChatMessage:
         r"""
         Create a user message from a list of ContentPart objects.
         """
+    @staticmethod
+    def tool_result_parts(*, call_id: builtins.str, name: builtins.str, parts: typing.Sequence[ContentPart]) -> ChatMessage:
+        r"""
+        Create a tool result message whose payload is a list of multimodal
+        content parts (text + image / audio / video / file). Useful for tools
+        that return images.
+        
+        Args:
+            call_id: The ``tool_call_id`` of the invocation this responds to.
+            name: The function name of the invocation this responds to.
+            parts: List of ``ContentPart`` objects forming the multimodal payload.
+        """
+    def tool_result_view(self) -> typing.Optional[tuple[typing.Any, typing.Optional[LlmPayload]]]:
+        r"""
+        Snapshot of the tool-result payload as a ``(data, llm_override)`` tuple,
+        regardless of whether it lives in ``tool_result`` or in ``content`` as
+        plain text. Returns ``None`` if this is not a ``role="tool"`` message.
+        
+        ``data`` is always returned as a parsed Python value. ``llm_override``
+        is an ``LlmPayload`` if one was set, else ``None``.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -633,6 +1474,114 @@ class ChatWindow:
     def __len__(self) -> builtins.int:
         r"""
         Return the number of messages in the window.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+class CheckpointStore:
+    r"""
+    Base class for custom workflow checkpoint stores.
+    
+    Subclass and override all four methods (``save``, ``load``, ``list``,
+    ``delete``) to implement a custom backend (e.g. Postgres, S3, DynamoDB).
+    Methods must be ``async``.
+    
+    Example:
+        >>> class PostgresCheckpointStore(CheckpointStore):
+        ...     async def save(self, checkpoint: WorkflowCheckpoint) -> None: ...
+        ...     async def load(self, run_id: str) -> WorkflowCheckpoint | None: ...
+        ...     async def list(self) -> list[WorkflowCheckpoint]: ...
+        ...     async def delete(self, run_id: str) -> None: ...
+    """
+    def __new__(cls) -> CheckpointStore: ...
+    def save(self, _checkpoint: typing.Any) -> typing.Any:
+        r"""
+        Persist a checkpoint, overwriting any existing entry with the same ``run_id``.
+        """
+    def load(self, _run_id: builtins.str) -> typing.Any:
+        r"""
+        Load a checkpoint by its ``run_id`` (UUID string). Return ``None`` if absent.
+        """
+    def list(self) -> typing.Any:
+        r"""
+        List all stored checkpoints, ordered by timestamp descending (most recent first).
+        """
+    def delete(self, _run_id: builtins.str) -> typing.Any:
+        r"""
+        Delete the checkpoint for the given ``run_id`` (UUID string).
+        """
+
+@typing.final
+class Citation:
+    r"""
+    A web/document citation backing a model statement (Perplexity, Gemini
+    grounding, Anthropic web search, etc.).
+    
+    Example:
+        >>> for c in response.citations:
+        ...     print(c.url, c.title, c.snippet)
+    """
+    @property
+    def url(self) -> builtins.str:
+        r"""
+        The cited URL.
+        """
+    @property
+    def title(self) -> typing.Optional[builtins.str]:
+        r"""
+        Optional title of the cited document.
+        """
+    @property
+    def snippet(self) -> typing.Optional[builtins.str]:
+        r"""
+        Optional excerpt from the cited document.
+        """
+    @property
+    def start(self) -> typing.Optional[builtins.int]:
+        r"""
+        Byte offset in the response text where this citation begins.
+        """
+    @property
+    def end(self) -> typing.Optional[builtins.int]:
+        r"""
+        Byte offset in the response text where this citation ends.
+        """
+    @property
+    def document_id(self) -> typing.Optional[builtins.str]:
+        r"""
+        Optional document identifier for retrieval-augmented citations.
+        """
+    @property
+    def metadata(self) -> dict[str, typing.Any]:
+        r"""
+        Provider-specific extra fields, preserved as a dict.
+        """
+    def __new__(cls, *, url: builtins.str, title: typing.Optional[builtins.str] = None, snippet: typing.Optional[builtins.str] = None, start: typing.Optional[builtins.int] = None, end: typing.Optional[builtins.int] = None, document_id: typing.Optional[builtins.str] = None, metadata: typing.Optional[typing.Any] = None) -> Citation:
+        r"""
+        Construct a citation explicitly. Most users get these from
+        `CompletionResponse.citations` rather than building them.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class CohereProvider:
+    r"""
+    A Cohere provider for chat completions and embeddings.
+    
+    Standalone class form of `CompletionModel.cohere(...)`.
+    """
+    @property
+    def model_id(self) -> builtins.str: ...
+    def __new__(cls, *, options: typing.Optional[ProviderOptions] = None) -> CohereProvider:
+        r"""
+        Create a new Cohere provider.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def embedding_model(self) -> EmbeddingModel:
+        r"""
+        Build a Cohere [`EmbeddingModel`] sharing this provider's API key.
+        
+        Defaults to ``embed-v4.0`` (1024 dims).
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -1026,6 +1975,69 @@ class CompletionOptions:
     def __new__(cls, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, top_p: typing.Optional[builtins.float] = None, model: typing.Optional[builtins.str] = None, tools: typing.Optional[typing.Sequence[ToolDef]] = None, response_format: typing.Optional[typing.Any] = None) -> CompletionOptions: ...
 
 @typing.final
+class CompletionRequest:
+    r"""
+    A provider-agnostic chat-completion request.
+    
+    Mirrors [`blazen_llm::CompletionRequest`]. Most code paths build the
+    request inline inside ``CompletionModel.complete(messages, options)``;
+    `CompletionRequest` is the typed alternative for callers that want to
+    inspect, serialize, or hand off the full request body explicitly.
+    
+    Example:
+        >>> req = CompletionRequest(
+        ...     messages=[ChatMessage.user("hi")],
+        ...     temperature=0.0,
+        ...     max_tokens=100,
+        ... )
+    """
+    @property
+    def messages(self) -> builtins.list[ChatMessage]:
+        r"""
+        The conversation messages.
+        """
+    @property
+    def tools(self) -> builtins.list[ToolDefinition]:
+        r"""
+        Tool definitions available to the model.
+        """
+    @property
+    def temperature(self) -> typing.Optional[builtins.float]:
+        r"""
+        Sampling temperature, if set.
+        """
+    @property
+    def max_tokens(self) -> typing.Optional[builtins.int]:
+        r"""
+        Maximum output tokens, if set.
+        """
+    @property
+    def top_p(self) -> typing.Optional[builtins.float]:
+        r"""
+        Nucleus sampling parameter, if set.
+        """
+    @property
+    def model(self) -> typing.Optional[builtins.str]:
+        r"""
+        Model override for this request, if set.
+        """
+    @property
+    def modalities(self) -> typing.Optional[builtins.list[builtins.str]]:
+        r"""
+        Output modalities (`["text"]`, `["image", "text"]`, ...), if set.
+        """
+    @property
+    def response_format(self) -> typing.Optional[typing.Any]:
+        r"""
+        JSON schema / response-format hint, returned as a Python dict.
+        """
+    def __new__(cls, *, messages: typing.Sequence[ChatMessage], tools: typing.Optional[typing.Sequence[ToolDefinition]] = None, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, top_p: typing.Optional[builtins.float] = None, response_format: typing.Optional[typing.Any] = None, model: typing.Optional[builtins.str] = None, modalities: typing.Optional[typing.Sequence[builtins.str]] = None) -> CompletionRequest:
+        r"""
+        Construct a completion request.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class CompletionResponse:
     r"""
     The result of a chat completion.
@@ -1042,9 +2054,9 @@ class CompletionResponse:
     @property
     def finish_reason(self) -> typing.Optional[builtins.str]: ...
     @property
-    def tool_calls(self) -> list[dict[str, typing.Any]]: ...
+    def tool_calls(self) -> builtins.list[ToolCall]: ...
     @property
-    def usage(self) -> typing.Optional[dict[str, typing.Any]]: ...
+    def usage(self) -> typing.Optional[TokenUsage]: ...
     @property
     def cost(self) -> typing.Optional[builtins.float]: ...
     @property
@@ -1058,13 +2070,13 @@ class CompletionResponse:
     @property
     def metadata_extra(self) -> dict[str, typing.Any]: ...
     @property
-    def reasoning(self) -> typing.Optional[dict[str, typing.Any]]:
+    def reasoning(self) -> typing.Optional[ReasoningTrace]:
         r"""
         Reasoning trace from models that expose one (Anthropic extended thinking,
         DeepSeek R1, OpenAI o-series, xAI Grok, Gemini thoughts).
         """
     @property
-    def citations(self) -> list[dict[str, typing.Any]]:
+    def citations(self) -> builtins.list[Citation]:
         r"""
         Web/document citations backing the model's statement (Perplexity,
         Gemini grounding, Anthropic web search).
@@ -1099,6 +2111,50 @@ class CompletionStream:
     def __aiter__(self) -> CompletionStream: ...
     async def __anext__(self) -> CompletionResponse:
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class Compute:
+    r"""
+    Job-control front-end over any compute provider.
+    
+    Wraps a [`ComputeProvider`] (for example a [`FalProvider`]) and exposes
+    the four-step async job lifecycle: ``submit`` -> ``status`` ->
+    ``await_completion`` (or ``cancel``).
+    
+    Example:
+        >>> from blazen import Compute, FalProvider, FalOptions, ComputeRequest
+        >>> fal = FalProvider(options=FalOptions(api_key="fal-..."))
+        >>> compute = Compute.from_fal(fal)
+        >>> handle = await compute.submit(ComputeRequest(model="fal-ai/flux/dev",
+        ...                                              input={"prompt": "a cat"}))
+        >>> while (await compute.status(handle)) in ("queued", "running"):
+        ...     await asyncio.sleep(1)
+        >>> result = await compute.await_completion(handle)
+    """
+    @staticmethod
+    def from_fal(provider: FalProvider) -> Compute:
+        r"""
+        Build a ``Compute`` from a ``FalProvider``.
+        """
+    async def submit(self, request: ComputeRequest) -> JobHandle:
+        r"""
+        Submit a compute job and return a [`JobHandle`].
+        """
+    async def status(self, job: JobHandle) -> builtins.str:
+        r"""
+        Poll the current status of a submitted job.
+        
+        Returns a status string: ``"queued"``, ``"running"``, ``"completed"``,
+        ``"failed"``, or ``"cancelled"``.
+        """
+    async def cancel(self, job: JobHandle) -> None:
+        r"""
+        Cancel a running or queued job.
+        """
+    async def await_completion(self, job: JobHandle) -> ComputeResult:
+        r"""
+        Wait for a job to complete and return the [`ComputeResult`].
+        """
 
 @typing.final
 class ComputeRequest:
@@ -1433,6 +2489,208 @@ class CustomProvider:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class DeepSeekProvider:
+    r"""
+    A DeepSeek provider.
+    
+    Standalone class form of `CompletionModel.deepseek(...)`.
+    """
+    @property
+    def model_id(self) -> builtins.str: ...
+    def __new__(cls, *, options: typing.Optional[ProviderOptions] = None) -> DeepSeekProvider:
+        r"""
+        Create a new DeepSeek provider.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class DerefRequest:
+    r"""
+    Request to dereference a remote session ref.
+    """
+    @property
+    def envelope_version(self) -> builtins.int:
+        r"""
+        Envelope version of this payload.
+        """
+    @property
+    def ref_uuid(self) -> builtins.str:
+        r"""
+        UUID of the registry entry on the origin node, as a string.
+        """
+    def __new__(cls, ref_uuid: builtins.str) -> DerefRequest:
+        r"""
+        Construct a new deref request from a session-ref UUID string.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class DerefResponse:
+    r"""
+    Response containing the dereferenced bytes for a session ref.
+    """
+    @property
+    def envelope_version(self) -> builtins.int:
+        r"""
+        Envelope version of this payload.
+        """
+    @property
+    def payload(self) -> builtins.list[builtins.int]:
+        r"""
+        Raw payload bytes returned by the origin node.
+        """
+    def __new__(cls, payload: typing.Sequence[builtins.int]) -> DerefResponse:
+        r"""
+        Construct a new deref response from raw bytes.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class DiffusionOptions:
+    r"""
+    Options for the local diffusion-rs image generation backend.
+    
+    Example:
+        >>> opts = DiffusionOptions(model_id="stabilityai/stable-diffusion-2-1", width=768, height=768)
+        >>> provider = DiffusionProvider(options=opts)
+    """
+    @property
+    def model_id(self) -> typing.Optional[builtins.str]: ...
+    @model_id.setter
+    def model_id(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def device(self) -> typing.Optional[builtins.str]: ...
+    @device.setter
+    def device(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def width(self) -> typing.Optional[builtins.int]: ...
+    @width.setter
+    def width(self, value: typing.Optional[builtins.int]) -> None: ...
+    @property
+    def height(self) -> typing.Optional[builtins.int]: ...
+    @height.setter
+    def height(self, value: typing.Optional[builtins.int]) -> None: ...
+    @property
+    def num_inference_steps(self) -> typing.Optional[builtins.int]: ...
+    @num_inference_steps.setter
+    def num_inference_steps(self, value: typing.Optional[builtins.int]) -> None: ...
+    @property
+    def guidance_scale(self) -> typing.Optional[builtins.float]: ...
+    @guidance_scale.setter
+    def guidance_scale(self, value: typing.Optional[builtins.float]) -> None: ...
+    @property
+    def scheduler(self) -> DiffusionScheduler: ...
+    @scheduler.setter
+    def scheduler(self, value: DiffusionScheduler) -> None: ...
+    @property
+    def cache_dir(self) -> typing.Optional[builtins.str]: ...
+    @cache_dir.setter
+    def cache_dir(self, value: typing.Optional[builtins.str]) -> None: ...
+    def __new__(cls, *, model_id: typing.Optional[builtins.str] = None, device: typing.Optional[builtins.str] = None, width: typing.Optional[builtins.int] = None, height: typing.Optional[builtins.int] = None, num_inference_steps: typing.Optional[builtins.int] = None, guidance_scale: typing.Optional[builtins.float] = None, scheduler: typing.Optional[DiffusionScheduler] = None, cache_dir: typing.Optional[builtins.str] = None) -> DiffusionOptions:
+        r"""
+        Create a new DiffusionOptions.
+        
+        Args:
+            model_id: HuggingFace model repository ID.
+            device: Hardware device specifier (``"cpu"``, ``"cuda:0"``, ``"metal"``).
+            width: Output image width in pixels (default 512).
+            height: Output image height in pixels (default 512).
+            num_inference_steps: Number of denoising steps (default 20).
+            guidance_scale: Classifier-free guidance scale (default 7.5).
+            scheduler: Noise scheduler enum value (default ``DiffusionScheduler.EulerA``).
+            cache_dir: Path to cache downloaded models.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class DiffusionProvider:
+    r"""
+    A local diffusion-rs image generation provider.
+    
+    Runs Stable Diffusion inference fully on-device via the diffusion-rs
+    engine. No API key is required.
+    
+    The underlying Rust integration is in progress; calls to
+    :meth:`generate_image` currently raise :class:`DiffusionError` until
+    the pipeline wiring lands.
+    
+    Example:
+        >>> opts = DiffusionOptions(model_id="stabilityai/stable-diffusion-2-1")
+        >>> provider = DiffusionProvider(options=opts)
+    """
+    @property
+    def width(self) -> builtins.int:
+        r"""
+        Resolved output image width (default 512).
+        """
+    @property
+    def height(self) -> builtins.int:
+        r"""
+        Resolved output image height (default 512).
+        """
+    @property
+    def num_inference_steps(self) -> builtins.int:
+        r"""
+        Resolved number of inference steps (default 20).
+        """
+    @property
+    def guidance_scale(self) -> builtins.float:
+        r"""
+        Resolved guidance scale (default 7.5).
+        """
+    @property
+    def scheduler(self) -> DiffusionScheduler:
+        r"""
+        Configured noise scheduler.
+        """
+    def __new__(cls, *, options: typing.Optional[DiffusionOptions] = None) -> DiffusionProvider:
+        r"""
+        Create a new diffusion-rs provider.
+        
+        Args:
+            options: Optional :class:`DiffusionOptions` for model id, device,
+                dimensions, inference steps, guidance scale, scheduler, and
+                cache directory.
+        """
+    async def generate_image(self, _request: ImageRequest) -> ImageResult:
+        r"""
+        Generate images from a text prompt.
+        
+        Args:
+            request: An :class:`ImageRequest` with prompt and parameters.
+        
+        Returns:
+            An :class:`ImageResult`.
+        
+        Raises:
+            DiffusionError: While the upstream engine integration is in
+                progress, this call always raises.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class DynamicEvent:
+    r"""
+    A type-erased event carrying its type name and JSON payload.
+    
+    Mirrors [`blazen_events::DynamicEvent`]. Used to transport events
+    defined in foreign language bindings through the Rust workflow engine.
+    
+    Python usage:
+    ```python
+    ev = DynamicEvent("MyEvent", key="value", count=3)
+    print(ev.event_type)   # "MyEvent"
+    print(ev.to_dict())    # {"key": "value", "count": 3}
+    ```
+    """
+    @property
+    def event_type(self) -> builtins.str: ...
+    def to_dict(self) -> dict[str, typing.Any]: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class EmbedOptions:
     r"""
     Options for the local embedding backend.
@@ -1619,6 +2877,27 @@ class EmbeddingResponse:
         """
     def __repr__(self) -> builtins.str: ...
 
+@typing.final
+class EstimateCounter(TokenCounter):
+    r"""
+    Lightweight heuristic token counter (chars-per-token ratio).
+    
+    Default ratio is 3.5 chars/token, a reasonable approximation for English
+    BPE tokenisation. Requires no external data files and works everywhere.
+    """
+    def __new__(cls, context_size: builtins.int = 128000, chars_per_token: typing.Optional[builtins.float] = None) -> tuple[EstimateCounter, TokenCounter]:
+        r"""
+        Build a counter with the default 3.5 chars/token ratio.
+        
+        Args:
+            context_size: The model's context window in tokens.
+            chars_per_token: Optional override for the chars-per-token ratio.
+        """
+    def count_tokens(self, text: builtins.str) -> builtins.int: ...
+    def count_message_tokens(self, messages: typing.Sequence[ChatMessage]) -> builtins.int: ...
+    def context_size(self) -> builtins.int: ...
+    def remaining_tokens(self, messages: typing.Sequence[ChatMessage]) -> builtins.int: ...
+
 class Event:
     r"""
     A dict-like event object exposed to Python.
@@ -1682,6 +2961,30 @@ class Event:
         # ev.event_type == "GreetEvent"
         ```
         """
+
+@typing.final
+class EventEnvelope:
+    r"""
+    Wraps an event with metadata for the internal queue.
+    
+    Mirrors [`blazen_events::EventEnvelope`]. Carries the typed event plus
+    the optional source step name that produced it.
+    
+    Python usage:
+    ```python
+    envelope = EventEnvelope(my_event, source_step="step_a")
+    print(envelope.event_type)   # the inner event's type
+    print(envelope.source_step)  # "step_a"
+    ```
+    """
+    @property
+    def event_type(self) -> builtins.str: ...
+    @property
+    def source_step(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def event(self) -> Event: ...
+    def __new__(cls, event: Event, source_step: typing.Optional[builtins.str] = None) -> EventEnvelope: ...
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class FalEmbeddingModel:
@@ -1998,6 +3301,156 @@ class FalProvider:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class FallbackModel:
+    r"""
+    A `CompletionModel` that tries a primary provider and falls back to a
+    secondary on retryable failures.
+    
+    Standalone equivalent of
+    `CompletionModel.with_fallback([primary, fallback])` for the common
+    two-provider case. For chains of three or more providers use
+    `CompletionModel.with_fallback(...)`.
+    
+    Example:
+        >>> primary = CompletionModel.openai()
+        >>> backup = CompletionModel.anthropic()
+        >>> model = FallbackModel(primary, backup)
+        >>> response = await model.complete([ChatMessage.user("Hi")])
+    """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        The model id reported by the primary provider.
+        """
+    def __new__(cls, primary: CompletionModel, fallback: CompletionModel) -> FallbackModel:
+        r"""
+        Build a fallback chain from a primary and a fallback provider.
+        
+        Args:
+            primary: The first provider to try.
+            fallback: The provider to invoke when `primary` fails with
+                a retryable error.
+        """
+    def as_model(self) -> CompletionModel:
+        r"""
+        Convert this decorator into a `CompletionModel`.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+        r"""
+        Perform a chat completion against the primary provider, falling
+        back to the secondary on retryable failures.
+        """
+    def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Optional[typing.Any] = None, options: typing.Optional[CompletionOptions] = None) -> typing.Any:
+        r"""
+        Stream a chat completion against the primary provider, falling
+        back to the secondary on retryable failures during the initial
+        connection.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class FastEmbedModel:
+    r"""
+    A local fastembed (ONNX Runtime) embedding model.
+    
+    Loads the same fastembed model catalog that backs
+    :class:`EmbeddingModel.local`, but exposes the typed standalone class
+    for callers that want explicit feature gating or per-instance options.
+    
+    Example:
+        >>> opts = FastEmbedOptions(model_name="BGESmallENV15")
+        >>> model = FastEmbedModel(options=opts)
+        >>> response = await model.embed(["hello", "world"])
+    """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        Get the model identifier (HuggingFace repo id).
+        """
+    @property
+    def dimensions(self) -> builtins.int:
+        r"""
+        Get the dimensionality of the produced embedding vectors.
+        """
+    def __new__(cls, *, options: typing.Optional[FastEmbedOptions] = None) -> FastEmbedModel:
+        r"""
+        Create a new fastembed model.
+        
+        Args:
+            options: Optional :class:`FastEmbedOptions` for model name,
+                cache directory, batch size, and download progress.
+        """
+    async def embed(self, texts: typing.Sequence[builtins.str]) -> EmbeddingResponse:
+        r"""
+        Embed one or more texts.
+        
+        Args:
+            texts: A list of strings to embed.
+        
+        Returns:
+            An :class:`EmbeddingResponse` with embeddings, model, and usage.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class FastEmbedOptions:
+    r"""
+    Options for the local fastembed (ONNX Runtime) embedding backend.
+    
+    Mirrors :class:`EmbedOptions`; the underlying crate is
+    ``blazen-embed-fastembed``. Only available on non-musl targets where
+    the Microsoft-prebuilt ONNX Runtime binaries can link.
+    
+    Example:
+        >>> opts = FastEmbedOptions(model_name="BGESmallENV15")
+        >>> model = FastEmbedModel(options=opts)
+    """
+    @property
+    def model_name(self) -> typing.Optional[builtins.str]: ...
+    @model_name.setter
+    def model_name(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def cache_dir(self) -> typing.Optional[builtins.str]: ...
+    @cache_dir.setter
+    def cache_dir(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def max_batch_size(self) -> typing.Optional[builtins.int]: ...
+    @max_batch_size.setter
+    def max_batch_size(self, value: typing.Optional[builtins.int]) -> None: ...
+    @property
+    def show_download_progress(self) -> typing.Optional[builtins.bool]: ...
+    @show_download_progress.setter
+    def show_download_progress(self, value: typing.Optional[builtins.bool]) -> None: ...
+    def __new__(cls, *, model_name: typing.Optional[builtins.str] = None, cache_dir: typing.Optional[builtins.str] = None, max_batch_size: typing.Optional[builtins.int] = None, show_download_progress: typing.Optional[builtins.bool] = None) -> FastEmbedOptions:
+        r"""
+        Create a new FastEmbedOptions.
+        
+        Args:
+            model_name: Fastembed model variant name (e.g. ``"BGESmallENV15"``).
+            cache_dir: Model cache directory path.
+            max_batch_size: Maximum batch size for embedding.
+            show_download_progress: Show download progress when fetching models.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class FileContent:
+    r"""
+    File / document content (PDFs and other documents) for multimodal messages.
+    """
+    @property
+    def source(self) -> ImageSource: ...
+    @property
+    def media_type(self) -> builtins.str: ...
+    @property
+    def filename(self) -> typing.Optional[builtins.str]: ...
+    def __new__(cls, *, source: ImageSource, media_type: builtins.str, filename: typing.Optional[builtins.str] = None) -> FileContent:
+        r"""
+        Construct a file content block.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class FinishReason:
     r"""
     Normalized finish reason across providers.
@@ -2038,6 +3491,292 @@ class FinishReason:
         """
     def __repr__(self) -> builtins.str: ...
     def __eq__(self, other: FinishReason) -> builtins.bool: ...
+
+@typing.final
+class FireworksProvider:
+    r"""
+    A Fireworks AI provider for chat completions and embeddings.
+    
+    Standalone class form of `CompletionModel.fireworks(...)`.
+    """
+    @property
+    def model_id(self) -> builtins.str: ...
+    def __new__(cls, *, options: typing.Optional[ProviderOptions] = None) -> FireworksProvider:
+        r"""
+        Create a new Fireworks AI provider.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def embedding_model(self) -> EmbeddingModel:
+        r"""
+        Build a Fireworks AI [`EmbeddingModel`] sharing this provider's API key.
+        
+        Defaults to ``nomic-ai/nomic-embed-text-v1.5`` (768 dims).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class GeminiProvider:
+    r"""
+    A Google Gemini provider.
+    
+    This is the standalone class form of `CompletionModel.gemini(...)`.
+    
+    Example:
+        >>> from blazen import GeminiProvider, ProviderOptions, ChatMessage
+        >>> p = GeminiProvider(options=ProviderOptions(api_key="..."))
+        >>> resp = await p.complete([ChatMessage.user("Hello!")])
+    """
+    @property
+    def model_id(self) -> builtins.str: ...
+    def __new__(cls, *, options: typing.Optional[ProviderOptions] = None) -> GeminiProvider:
+        r"""
+        Create a new Gemini provider.
+        
+        Args:
+            options: Optional [`ProviderOptions`] with api_key, base_url, model.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class GroqProvider:
+    r"""
+    A Groq provider — ultra-fast LPU inference for popular open models.
+    
+    Standalone class form of `CompletionModel.groq(...)`.
+    """
+    @property
+    def model_id(self) -> builtins.str: ...
+    def __new__(cls, *, options: typing.Optional[ProviderOptions] = None) -> GroqProvider:
+        r"""
+        Create a new Groq provider.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class HistoryEvent:
+    r"""
+    A single timestamped event in a workflow's history.
+    """
+    @property
+    def timestamp(self) -> builtins.str:
+        r"""
+        ISO-8601 UTC timestamp of when this event occurred.
+        """
+    @property
+    def sequence(self) -> builtins.int:
+        r"""
+        Monotonically increasing sequence number within the run.
+        """
+    @property
+    def kind(self) -> HistoryEventKind:
+        r"""
+        The event payload.
+        """
+    def to_dict(self) -> typing.Any:
+        r"""
+        Convert this event to a Python dict via the serde representation.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class HistoryEventKind:
+    r"""
+    A workflow history event payload.
+    
+    Construct via the static factory methods (`HistoryEventKind.workflow_started`,
+    `HistoryEventKind.step_completed`, etc.). Use `to_dict()` to inspect the
+    payload as a Python dict.
+    """
+    @property
+    def type_name(self) -> builtins.str:
+        r"""
+        Return the variant tag (e.g. `"WorkflowStarted"`, `"StepCompleted"`).
+        """
+    @staticmethod
+    def workflow_started(input: typing.Any) -> HistoryEventKind:
+        r"""
+        Workflow started executing with the given JSON-serializable input.
+        """
+    @staticmethod
+    def event_received(event_type: builtins.str, source_step: typing.Optional[builtins.str] = None) -> HistoryEventKind:
+        r"""
+        An event was received by the workflow engine.
+        """
+    @staticmethod
+    def step_dispatched(step_name: builtins.str, event_type: builtins.str) -> HistoryEventKind:
+        r"""
+        A step was dispatched for execution.
+        """
+    @staticmethod
+    def step_completed(step_name: builtins.str, duration_ms: builtins.int, output_type: builtins.str) -> HistoryEventKind:
+        r"""
+        A step completed successfully.
+        """
+    @staticmethod
+    def step_failed(step_name: builtins.str, error: builtins.str, duration_ms: builtins.int) -> HistoryEventKind:
+        r"""
+        A step failed with an error.
+        """
+    @staticmethod
+    def llm_call_started(provider: builtins.str, model: builtins.str) -> HistoryEventKind:
+        r"""
+        An LLM call was initiated.
+        """
+    @staticmethod
+    def llm_call_completed(provider: builtins.str, model: builtins.str, prompt_tokens: builtins.int, completion_tokens: builtins.int, total_tokens: builtins.int, duration_ms: builtins.int) -> HistoryEventKind:
+        r"""
+        An LLM call completed successfully.
+        """
+    @staticmethod
+    def llm_call_failed(provider: builtins.str, model: builtins.str, error: builtins.str, duration_ms: builtins.int) -> HistoryEventKind:
+        r"""
+        An LLM call failed.
+        """
+    @staticmethod
+    def workflow_paused(reason: PauseReason, pending_count: builtins.int) -> HistoryEventKind:
+        r"""
+        The workflow was paused.
+        """
+    @staticmethod
+    def workflow_resumed() -> HistoryEventKind:
+        r"""
+        The workflow resumed from a paused state.
+        """
+    @staticmethod
+    def input_requested(request_id: builtins.str, prompt: builtins.str) -> HistoryEventKind:
+        r"""
+        The workflow is requesting human input.
+        """
+    @staticmethod
+    def input_received(request_id: builtins.str) -> HistoryEventKind:
+        r"""
+        Human input was received.
+        """
+    @staticmethod
+    def workflow_completed(duration_ms: builtins.int) -> HistoryEventKind:
+        r"""
+        The workflow completed successfully.
+        """
+    @staticmethod
+    def workflow_failed(error: builtins.str, duration_ms: builtins.int) -> HistoryEventKind:
+        r"""
+        The workflow failed.
+        """
+    @staticmethod
+    def workflow_timed_out(elapsed_ms: builtins.int) -> HistoryEventKind:
+        r"""
+        The workflow timed out.
+        """
+    def to_dict(self) -> typing.Any:
+        r"""
+        Convert this event payload to a Python dict via the serde representation.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+class HostDispatch:
+    r"""
+    Subclassable ABC mirroring [`blazen_llm::HostDispatch`].
+    
+    `HostDispatch` is the host-side bridge that a `CustomProvider` calls into
+    for each capability method. Native Python providers usually plug into the
+    concrete `PyHostDispatch` adapter inside `crate::providers::custom`, but
+    this ABC documents the surface that adapter delegates to so user code can
+    declare "implements HostDispatch" without coupling to the adapter type.
+    """
+    def __new__(cls) -> HostDispatch: ...
+    def call(self, _capability: builtins.str, _payload: typing.Any) -> typing.Any:
+        r"""
+        Dispatch a host call by capability name with a JSON payload. Should
+        return a coroutine resolving to a JSON-serializable value.
+        """
+
+class HttpClient:
+    r"""
+    Abstract base class for an HTTP transport.
+    
+    Subclass and override ``send`` and ``send_streaming`` to provide a custom
+    HTTP backend. ``send`` returns a fully-buffered response as a dict
+    ``{"status": int, "headers": list[tuple[str, str]], "body": bytes}``;
+    ``send_streaming`` returns an async iterator of ``bytes`` chunks.
+    
+    Example:
+        >>> class HttpxClient(HttpClient):
+        ...     async def send(self, request):
+        ...         resp = await self._client.request(
+        ...             request["method"], request["url"],
+        ...             headers=request["headers"], content=request.get("body"),
+        ...         )
+        ...         return {
+        ...             "status": resp.status_code,
+        ...             "headers": list(resp.headers.items()),
+        ...             "body": resp.content,
+        ...         }
+    """
+    def __new__(cls) -> HttpClient: ...
+    async def send(self, request: typing.Any) -> dict[str, typing.Any]:
+        r"""
+        Send a request and return a fully-buffered response.
+        
+        Subclasses must override. Default implementation raises
+        ``NotImplementedError``.
+        """
+    async def send_streaming(self, request: typing.Any) -> typing.AsyncIterator[bytes]:
+        r"""
+        Send a request and return a streaming response.
+        
+        Subclasses must override. Default implementation raises
+        ``NotImplementedError``.
+        """
+
+@typing.final
+class ImageContent:
+    r"""
+    Image content for multimodal messages.
+    """
+    @property
+    def source(self) -> ImageSource:
+        r"""
+        The underlying media source.
+        """
+    @property
+    def media_type(self) -> typing.Optional[builtins.str]:
+        r"""
+        MIME type, e.g. ``"image/png"``.
+        """
+    def __new__(cls, *, source: ImageSource, media_type: typing.Optional[builtins.str] = None) -> ImageContent:
+        r"""
+        Construct an image content block from a typed source.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+class ImageModel:
+    r"""
+    Subclassable ABC mirroring the Rust
+    [`blazen_llm::compute::traits::ImageModel`] trait.
+    
+    ``ImageModel`` is the supertrait alias used by the compute layer for
+    any provider that supports both image generation and upscaling. Bind
+    this when authoring a custom image provider in pure Python that
+    wants to declare "implements ImageModel" without coupling to a
+    specific :class:`ImageProvider` subclass. Override both methods --
+    the defaults raise ``NotImplementedError``.
+    """
+    def __new__(cls) -> ImageModel: ...
+    def generate_image(self, _request: typing.Any) -> typing.Any:
+        r"""
+        Generate one or more images from a text prompt. Should return a
+        coroutine resolving to an :class:`ImageResult`.
+        """
+    def upscale_image(self, _request: typing.Any) -> typing.Any:
+        r"""
+        Upscale an existing image. Should return a coroutine resolving
+        to an :class:`ImageResult`.
+        """
 
 class ImageProvider:
     r"""
@@ -2092,6 +3831,53 @@ class ImageRequest:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class ImageSource:
+    r"""
+    How a piece of media is provided. Variants are constructed via the
+    classmethod factories ``url(...)``, ``base64(...)``, and ``file(...)``.
+    
+    Inspect via the ``kind`` getter (``"url"``, ``"base64"``, or ``"file"``)
+    and the per-variant getters (``url``, ``data``, ``path``).
+    """
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Variant tag: ``"url"``, ``"base64"``, or ``"file"``.
+        """
+    @property
+    def url_value(self) -> typing.Optional[builtins.str]:
+        r"""
+        URL string for ``Url`` variants. ``None`` otherwise.
+        """
+    @property
+    def data(self) -> typing.Optional[builtins.str]:
+        r"""
+        Base64-encoded payload for ``Base64`` variants. ``None`` otherwise.
+        """
+    @property
+    def path(self) -> typing.Optional[pathlib.Path]:
+        r"""
+        Local file path for ``File`` variants. ``None`` otherwise.
+        """
+    @staticmethod
+    def url(url: builtins.str) -> ImageSource:
+        r"""
+        Build a URL source.
+        """
+    @staticmethod
+    def base64(data: builtins.str) -> ImageSource:
+        r"""
+        Build a base64 source.
+        """
+    @staticmethod
+    def file(path: builtins.str | os.PathLike | pathlib.Path) -> ImageSource:
+        r"""
+        Build a local-file source. Only honoured by local backends; cloud
+        providers reject this variant.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class InMemoryBackend:
     r"""
     An in-memory storage backend for Memory.
@@ -2107,6 +3893,48 @@ class InMemoryBackend:
         r"""
         Create a new, empty in-memory backend.
         """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class InputRequestEvent:
+    r"""
+    Emitted by a step to request human input. Triggers auto-pause.
+    
+    Python usage:
+    ```python
+    ev = InputRequestEvent("req-1", prompt="What is your name?")
+    ```
+    """
+    @property
+    def request_id(self) -> builtins.str: ...
+    @request_id.setter
+    def request_id(self, value: builtins.str) -> None: ...
+    @property
+    def prompt(self) -> builtins.str: ...
+    @prompt.setter
+    def prompt(self, value: builtins.str) -> None: ...
+    @property
+    def metadata(self) -> typing.Any: ...
+    def __new__(cls, request_id: builtins.str, prompt: typing.Optional[builtins.str] = None, metadata: typing.Optional[dict] = None) -> InputRequestEvent: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class InputResponseEvent:
+    r"""
+    The human's response, injected on resume.
+    
+    Python usage:
+    ```python
+    ev = InputResponseEvent("req-1", {"answer": "Alice"})
+    ```
+    """
+    @property
+    def request_id(self) -> builtins.str: ...
+    @request_id.setter
+    def request_id(self, value: builtins.str) -> None: ...
+    @property
+    def response(self) -> typing.Any: ...
+    def __new__(cls, request_id: builtins.str, response: typing.Any) -> InputResponseEvent: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -2142,6 +3970,66 @@ class JobHandle:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class JobStatus:
+    r"""
+    Status of a compute job.
+    
+    Mirrors [`blazen_llm::compute::JobStatus`]. Carries both a discriminator
+    (``kind``) and the optional ``error`` message preserved from the core
+    ``JobStatus::Failed`` variant. Construct via the classmethod factories
+    (``queued()``, ``running()``, ``completed()``, ``failed(error)``,
+    ``cancelled()``) or via the legacy string constants.
+    
+    Example:
+        >>> JobStatus.queued()
+        >>> JobStatus.failed("rate limited")
+        >>> JobStatus.QUEUED    # legacy string constant -- "queued"
+    """
+    QUEUED: builtins.str = 'queued'
+    RUNNING: builtins.str = 'running'
+    COMPLETED: builtins.str = 'completed'
+    FAILED: builtins.str = 'failed'
+    CANCELLED: builtins.str = 'cancelled'
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Discriminator: ``"queued"``, ``"running"``, ``"completed"``,
+        ``"failed"``, or ``"cancelled"``.
+        """
+    @property
+    def error(self) -> typing.Optional[builtins.str]:
+        r"""
+        The error message for ``Failed`` variants. ``None`` otherwise.
+        """
+    @staticmethod
+    def queued() -> JobStatus:
+        r"""
+        Build the ``Queued`` variant.
+        """
+    @staticmethod
+    def running() -> JobStatus:
+        r"""
+        Build the ``Running`` variant.
+        """
+    @staticmethod
+    def completed() -> JobStatus:
+        r"""
+        Build the ``Completed`` variant.
+        """
+    @staticmethod
+    def failed(error: builtins.str) -> JobStatus:
+        r"""
+        Build the ``Failed`` variant with an error message.
+        """
+    @staticmethod
+    def cancelled() -> JobStatus:
+        r"""
+        Build the ``Cancelled`` variant.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __eq__(self, other: JobStatus) -> builtins.bool: ...
+
+@typing.final
 class JsonlBackend:
     r"""
     A JSONL file-backed storage backend for Memory.
@@ -2165,6 +4053,118 @@ class JsonlBackend:
         
         Returns:
             A new JsonlBackend instance.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class LlamaCppOptions:
+    r"""
+    Options for the local llama.cpp LLM backend.
+    
+    Example:
+        >>> opts = LlamaCppOptions(model_path="/models/llama-3.2-1b-q4_k_m.gguf")
+        >>> provider = LlamaCppProvider(options=opts)
+    """
+    @property
+    def model_path(self) -> typing.Optional[builtins.str]: ...
+    @model_path.setter
+    def model_path(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def device(self) -> typing.Optional[builtins.str]: ...
+    @device.setter
+    def device(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def quantization(self) -> typing.Optional[builtins.str]: ...
+    @quantization.setter
+    def quantization(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def context_length(self) -> typing.Optional[builtins.int]: ...
+    @context_length.setter
+    def context_length(self, value: typing.Optional[builtins.int]) -> None: ...
+    @property
+    def n_gpu_layers(self) -> typing.Optional[builtins.int]: ...
+    @n_gpu_layers.setter
+    def n_gpu_layers(self, value: typing.Optional[builtins.int]) -> None: ...
+    @property
+    def cache_dir(self) -> typing.Optional[builtins.str]: ...
+    @cache_dir.setter
+    def cache_dir(self, value: typing.Optional[builtins.str]) -> None: ...
+    def __new__(cls, *, model_path: typing.Optional[builtins.str] = None, device: typing.Optional[builtins.str] = None, quantization: typing.Optional[builtins.str] = None, context_length: typing.Optional[builtins.int] = None, n_gpu_layers: typing.Optional[builtins.int] = None, cache_dir: typing.Optional[builtins.str] = None) -> LlamaCppOptions:
+        r"""
+        Create a new LlamaCppOptions.
+        
+        Args:
+            model_path: Path to a GGUF model file or HuggingFace model ID.
+            device: Hardware device specifier (``"cpu"``, ``"cuda:0"``, ``"metal"``).
+            quantization: Quantization format string (e.g. ``"q4_k_m"``).
+            context_length: Maximum context length in tokens.
+            n_gpu_layers: Number of layers to offload to GPU.
+            cache_dir: Path to cache downloaded models.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class LlamaCppProvider:
+    r"""
+    A local llama.cpp completion provider.
+    
+    Runs LLM inference fully on-device using the llama.cpp engine. No API
+    key is required. The first inference call lazily loads the model;
+    callers can pre-warm by awaiting :meth:`load`.
+    
+    Example:
+        >>> opts = LlamaCppOptions(model_path="/models/llama-3.2-1b-q4_k_m.gguf")
+        >>> provider = LlamaCppProvider(options=opts)
+        >>> response = await provider.complete([ChatMessage.user("Hello!")])
+    """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        Get the model identifier (typically the GGUF path or HF model id).
+        """
+    def __new__(cls, *, options: typing.Optional[LlamaCppOptions] = None) -> LlamaCppProvider:
+        r"""
+        Create a new llama.cpp provider.
+        
+        Args:
+            options: Optional :class:`LlamaCppOptions` for model path,
+                device, quantization, context length, GPU layer count, and
+                cache directory.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+        r"""
+        Perform a chat completion.
+        
+        Args:
+            messages: A list of :class:`ChatMessage` objects.
+            options: Optional :class:`CompletionOptions` for sampling params.
+        
+        Returns:
+            A :class:`CompletionResponse` with content, model, usage,
+            finish_reason, and timing.
+        """
+    async def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Any, options: typing.Optional[CompletionOptions] = None) -> None:
+        r"""
+        Stream a chat completion, calling a callback for each chunk.
+        
+        Args:
+            messages: A list of :class:`ChatMessage` objects.
+            on_chunk: Callback function receiving each chunk as a dict.
+            options: Optional :class:`CompletionOptions` for sampling params.
+        """
+    async def load(self) -> None:
+        r"""
+        Load the model weights into memory / VRAM.
+        
+        Idempotent; calling on an already-loaded provider is a no-op.
+        """
+    async def unload(self) -> None:
+        r"""
+        Drop the loaded model and free its memory / VRAM.
+        """
+    async def is_loaded(self) -> builtins.bool:
+        r"""
+        Whether the model is currently loaded.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -2227,6 +4227,32 @@ class LlmPayload:
         `"anthropic"`, `"gemini"`, `"responses"`, `"fal"`.
         """
     def __repr__(self) -> builtins.str: ...
+
+class LocalModel:
+    r"""
+    Subclassable ABC mirroring [`blazen_llm::traits::LocalModel`].
+    
+    Implement when authoring a Python-side wrapper for an in-process model
+    backend that supports explicit ``load`` / ``unload``. Override every
+    method -- the defaults raise ``NotImplementedError``.
+    """
+    def __new__(cls) -> LocalModel: ...
+    def load(self) -> typing.Any:
+        r"""
+        Load the model into memory / VRAM. Idempotent.
+        """
+    def unload(self) -> typing.Any:
+        r"""
+        Drop the loaded model. Idempotent.
+        """
+    def is_loaded(self) -> typing.Any:
+        r"""
+        Whether the model is currently loaded.
+        """
+    def vram_bytes(self) -> typing.Any:
+        r"""
+        Approximate VRAM footprint in bytes, if available.
+        """
 
 @typing.final
 class MediaOutput:
@@ -2467,6 +4493,42 @@ class MemoryBackend:
         """
 
 @typing.final
+class MemoryEntry:
+    r"""
+    A lightweight input record for adding entries to a [`Memory`] store.
+    
+    Args:
+        text: The text content to store.
+        id: Optional identifier. If omitted, one is generated when added.
+        metadata: Optional arbitrary user metadata (any JSON-serializable
+            Python value).
+    
+    Example:
+        >>> entry = MemoryEntry(text="hello", id="my-id", metadata={"k": "v"})
+        >>> await memory.add_many([entry])
+    """
+    @property
+    def text(self) -> builtins.str:
+        r"""
+        The text content stored under this entry.
+        """
+    @property
+    def id(self) -> builtins.str:
+        r"""
+        The entry id. Empty string when one will be generated server-side.
+        """
+    @property
+    def metadata(self) -> typing.Any:
+        r"""
+        User metadata associated with this entry.
+        """
+    def __new__(cls, *, text: builtins.str, id: typing.Optional[builtins.str] = None, metadata: typing.Optional[typing.Any] = None) -> MemoryEntry:
+        r"""
+        Construct a memory entry.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class MemoryResult:
     r"""
     A single search result from a Memory search.
@@ -2500,6 +4562,254 @@ class MemoryResult:
         r"""
         Arbitrary user metadata (returned as a Python dict/value).
         """
+    def __repr__(self) -> builtins.str: ...
+
+class MemoryStore:
+    r"""
+    Subclassable ABC mirroring the Rust [`blazen_memory::MemoryStore`] trait.
+    
+    ``MemoryStore`` is the user-facing interface a fully-built memory system
+    satisfies (handles embedding + ELID encoding + search + persistence).
+    The shipped concrete implementation lives behind :class:`Memory`; this
+    ABC exists so callers can document the surface that custom orchestrators
+    must satisfy when composing memory subsystems together (e.g. a router
+    that fans out across several stores, or a wrapper that adds caching).
+    
+    Override every coroutine method -- the defaults raise
+    ``NotImplementedError``.
+    
+    Example:
+        >>> class CachingStore(MemoryStore):
+        ...     def __init__(self, inner: Memory, cache: dict): ...
+        ...     async def add(self, entries): ...
+        ...     async def search(self, query, limit, metadata_filter=None): ...
+        ...     async def search_local(self, query, limit, metadata_filter=None): ...
+        ...     async def get(self, id): ...
+        ...     async def delete(self, id): ...
+        ...     async def len(self): ...
+    """
+    def __new__(cls) -> MemoryStore: ...
+    def add(self, entries: typing.Any) -> typing.Any:
+        r"""
+        Add one or more entries to the store. Should return a coroutine
+        resolving to ``list[str]`` of stored ids.
+        """
+    def search(self, query: builtins.str, limit: builtins.int = 5, metadata_filter: typing.Optional[typing.Any] = None) -> typing.Any:
+        r"""
+        Semantic search using the configured embedding model.
+        
+        Should return a coroutine resolving to ``list[MemoryResult]``.
+        Implementations that do not have an embedding model should
+        raise an error.
+        """
+    def search_local(self, query: builtins.str, limit: builtins.int = 5, metadata_filter: typing.Optional[typing.Any] = None) -> typing.Any:
+        r"""
+        Local SimHash-based search (no embedding model required).
+        
+        Should return a coroutine resolving to ``list[MemoryResult]``.
+        """
+    def get(self, id: builtins.str) -> typing.Any:
+        r"""
+        Retrieve a single entry by id. Should return a coroutine
+        resolving to an optional dict.
+        """
+    def delete(self, id: builtins.str) -> typing.Any:
+        r"""
+        Delete an entry by id. Should return a coroutine resolving to
+        ``bool``.
+        """
+    def len(self) -> typing.Any:
+        r"""
+        Return the number of entries. Should return a coroutine
+        resolving to ``int``.
+        """
+
+@typing.final
+class MessageContent:
+    r"""
+    The content payload of a [`ChatMessage`]. One of:
+    - ``"text"`` — plain string content.
+    - ``"image"`` — a single image (legacy shorthand).
+    - ``"parts"`` — a multi-part list of typed [`ContentPart`] values.
+    
+    Construct via the factory classmethods. Inspect via ``kind`` plus the
+    per-variant getters (``text``, ``image``, ``parts``).
+    """
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Variant tag: ``"text"``, ``"image"``, or ``"parts"``.
+        """
+    @property
+    def text_value(self) -> typing.Optional[builtins.str]:
+        r"""
+        Text body for ``Text`` variants. ``None`` otherwise.
+        """
+    @property
+    def image_value(self) -> typing.Optional[ImageContent]:
+        r"""
+        Image body for ``Image`` variants. ``None`` otherwise.
+        """
+    @property
+    def parts_value(self) -> builtins.list[ContentPart]:
+        r"""
+        Parts body for ``Parts`` variants. Returns an empty list otherwise.
+        """
+    @staticmethod
+    def text(text: builtins.str) -> MessageContent:
+        r"""
+        Build a plain-text content payload.
+        """
+    @staticmethod
+    def image(image: ImageContent) -> MessageContent:
+        r"""
+        Build a single-image content payload.
+        """
+    @staticmethod
+    def parts(parts: typing.Sequence[ContentPart]) -> MessageContent:
+        r"""
+        Build a multi-part content payload from a list of [`ContentPart`] values.
+        """
+    def text_content(self) -> typing.Optional[builtins.str]:
+        r"""
+        Concatenate any text segments, returning ``None`` if no text exists.
+        """
+    def as_parts(self) -> builtins.list[ContentPart]:
+        r"""
+        Convert any variant into a list of typed [`ContentPart`]s.
+        """
+    def has_images(self) -> builtins.bool:
+        r"""
+        Whether this message contains any image parts.
+        """
+    def has_audio(self) -> builtins.bool:
+        r"""
+        Whether this message contains any audio parts.
+        """
+    def has_video(self) -> builtins.bool:
+        r"""
+        Whether this message contains any video parts.
+        """
+    def has_files(self) -> builtins.bool:
+        r"""
+        Whether this message contains any file parts.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+class Middleware:
+    r"""
+    Abstract base class for Python-implemented LLM middleware.
+    
+    Subclass and override `apply(model, messages, options)` (async) to
+    add custom behaviour around a `CompletionModel`. The `model`
+    argument is the inner `CompletionModel` produced by the rest of the
+    middleware chain; call `await model.complete(messages, options)` to
+    forward the request, optionally inspecting or modifying the result
+    before returning it.
+    
+    Example:
+        >>> class LoggingMiddleware(Middleware):
+        ...     async def apply(self, model, messages, options):
+        ...         print(f"calling {model.model_id}")
+        ...         response = await model.complete(messages, options)
+        ...         print(f"got {len(response.content or '')} chars")
+        ...         return response
+        >>>
+        >>> stack = MiddlewareStack().layer(LoggingMiddleware())
+        >>> wrapped = stack.apply(CompletionModel.openai())
+    """
+    def __new__(cls) -> Middleware: ...
+    def apply(self, model: typing.Any, messages: typing.Any, options: typing.Optional[typing.Any] = None) -> typing.Any:
+        r"""
+        Wrap a `complete()` invocation with custom behaviour.
+        
+        Subclasses must override this method. The default implementation
+        raises `NotImplementedError`.
+        
+        Args:
+            model: The inner `CompletionModel` to forward to.
+            messages: The list of `ChatMessage` objects from the request.
+            options: Optional `CompletionOptions` (sampling parameters,
+                tools, response format).
+        
+        Returns:
+            A `CompletionResponse`.
+        """
+
+@typing.final
+class MiddlewareStack:
+    r"""
+    A composable stack of `Middleware` layers.
+    
+    Layers are added with `layer()` (or the convenience helpers
+    `with_retry()` / `with_cache()`); the first layer added becomes the
+    outermost wrapper at `apply_to()` time. Calling `apply_to(model)`
+    returns a new `CompletionModel` that runs every layer around the
+    supplied model.
+    
+    Example:
+        >>> stack = (MiddlewareStack()
+        ...     .with_retry(RetryConfig(max_retries=5))
+        ...     .with_cache(CacheConfig(ttl_seconds=600)))
+        >>> wrapped = stack.apply(CompletionModel.openai())
+    """
+    def __new__(cls) -> MiddlewareStack:
+        r"""
+        Create an empty middleware stack.
+        """
+    def layer(self, slf: MiddlewareStack, middleware: typing.Any) -> MiddlewareStack:
+        r"""
+        Add a middleware layer.
+        
+        Accepts any of:
+          * a `RetryMiddleware` instance,
+          * a `CacheMiddleware` instance,
+          * a Python `Middleware` subclass instance.
+        
+        The first layer added becomes the **outermost** wrapper; it
+        executes first on the request path and last on the response
+        path.
+        
+        Returns ``self`` so calls can be chained.
+        """
+    def with_retry(self, config: typing.Optional[RetryConfig] = None) -> MiddlewareStack:
+        r"""
+        Convenience: add a `RetryMiddleware` layer.
+        """
+    def with_cache(self, config: typing.Optional[CacheConfig] = None) -> MiddlewareStack:
+        r"""
+        Convenience: add a `CacheMiddleware` layer.
+        """
+    def apply(self, model: CompletionModel) -> CompletionModel:
+        r"""
+        Apply every registered layer to `model` and return the fully
+        wrapped `CompletionModel`.
+        
+        The first layer added becomes the outermost wrapper. Layers are
+        applied in reverse insertion order so that the first layer added
+        runs first on the request path.
+        """
+    def __len__(self) -> builtins.int:
+        r"""
+        The number of layers currently registered.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class MistralProvider:
+    r"""
+    A Mistral AI provider.
+    
+    Standalone class form of `CompletionModel.mistral(...)`.
+    """
+    @property
+    def model_id(self) -> builtins.str: ...
+    def __new__(cls, *, options: typing.Optional[ProviderOptions] = None) -> MistralProvider:
+        r"""
+        Create a new Mistral provider.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -2554,6 +4864,182 @@ class MistralRsOptions:
             max_batch_size: Maximum batch size for concurrent requests.
             chat_template: Jinja2 chat template override.
             cache_dir: Path to cache downloaded models.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class MistralRsProvider:
+    r"""
+    A local mistral.rs LLM completion provider.
+    
+    Runs LLM inference fully on-device using the mistral.rs engine. Supports
+    vision-capable models when configured via the underlying Rust struct.
+    No API key is required.
+    
+    Example:
+        >>> opts = MistralRsOptions("mistralai/Mistral-7B-Instruct-v0.3")
+        >>> provider = MistralRsProvider(options=opts)
+        >>> response = await provider.complete([ChatMessage.user("Hello!")])
+    """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        Get the model identifier.
+        """
+    def __new__(cls, *, options: MistralRsOptions) -> MistralRsProvider:
+        r"""
+        Create a new mistral.rs provider.
+        
+        Args:
+            options: Required :class:`MistralRsOptions` with the model id.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+        r"""
+        Perform a chat completion.
+        """
+    async def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Any, options: typing.Optional[CompletionOptions] = None) -> None:
+        r"""
+        Stream a chat completion, calling a callback for each chunk.
+        """
+    async def load(self) -> None:
+        r"""
+        Load the model weights into memory / VRAM. Idempotent.
+        """
+    async def unload(self) -> None:
+        r"""
+        Drop the loaded model and free its memory / VRAM.
+        """
+    async def is_loaded(self) -> builtins.bool:
+        r"""
+        Whether the model is currently loaded.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ModelCache:
+    r"""
+    Local cache for ML models downloaded from `HuggingFace` Hub.
+    
+    Models are stored under ``{cache_dir}/{repo_id}/{filename}``. Files are
+    downloaded only once; subsequent calls return the cached path immediately.
+    
+    Example:
+        >>> cache = ModelCache()
+        >>> path = await cache.download("bert-base-uncased", "config.json")
+        >>> print(path)
+    """
+    def __new__(cls) -> ModelCache:
+        r"""
+        Create a cache in the default location.
+        
+        Uses ``$BLAZEN_CACHE_DIR/models/`` if the ``BLAZEN_CACHE_DIR``
+        environment variable is set, otherwise falls back to the platform
+        cache directory (e.g. ``~/.cache/blazen/models/`` on Linux).
+        """
+    @staticmethod
+    def with_dir(path: builtins.str | os.PathLike | pathlib.Path) -> ModelCache:
+        r"""
+        Create a cache rooted at a specific directory.
+        
+        The directory does not need to exist yet; it will be created on the
+        first download.
+        
+        Args:
+            path: Filesystem path to use as the cache root.
+        """
+    def cache_dir(self) -> builtins.str:
+        r"""
+        The root cache directory path as a string.
+        """
+    def is_cached(self, repo: builtins.str, file: builtins.str) -> builtins.bool:
+        r"""
+        Check if a file is already present in the cache (without downloading).
+        
+        Args:
+            repo: HuggingFace repo id (e.g. "bert-base-uncased").
+            file: Filename within the repo (e.g. "config.json").
+        """
+    async def download(self, repo: builtins.str, file: builtins.str, progress: typing.Optional[typing.Any] = None) -> builtins.str:
+        r"""
+        Download a file from HuggingFace Hub if it is not already cached.
+        
+        Returns the local filesystem path to the cached file as a string.
+        
+        Args:
+            repo: HuggingFace repo id (e.g. "bert-base-uncased").
+            file: Filename within the repo (e.g. "config.json").
+            progress: Optional callable invoked as
+                ``progress(downloaded_bytes: int, total_bytes: int | None)``
+                during the download.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ModelCapabilities:
+    r"""
+    What a single model can do.
+    
+    Mirrors [`blazen_llm::traits::ModelCapabilities`]. Returned as part of
+    [`ModelInfo`] entries.
+    """
+    @property
+    def chat(self) -> builtins.bool: ...
+    @property
+    def streaming(self) -> builtins.bool: ...
+    @property
+    def tool_use(self) -> builtins.bool: ...
+    @property
+    def structured_output(self) -> builtins.bool: ...
+    @property
+    def vision(self) -> builtins.bool: ...
+    @property
+    def image_generation(self) -> builtins.bool: ...
+    @property
+    def embeddings(self) -> builtins.bool: ...
+    @property
+    def video_generation(self) -> builtins.bool: ...
+    @property
+    def text_to_speech(self) -> builtins.bool: ...
+    @property
+    def speech_to_text(self) -> builtins.bool: ...
+    @property
+    def audio_generation(self) -> builtins.bool: ...
+    @property
+    def three_d_generation(self) -> builtins.bool: ...
+    def __new__(cls, *, chat: builtins.bool = False, streaming: builtins.bool = False, tool_use: builtins.bool = False, structured_output: builtins.bool = False, vision: builtins.bool = False, image_generation: builtins.bool = False, embeddings: builtins.bool = False, video_generation: builtins.bool = False, text_to_speech: builtins.bool = False, speech_to_text: builtins.bool = False, audio_generation: builtins.bool = False, three_d_generation: builtins.bool = False) -> ModelCapabilities: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ModelInfo:
+    r"""
+    Information about a model offered by a provider.
+    
+    Mirrors [`blazen_llm::traits::ModelInfo`]. Used by
+    [`register_from_model_info`] to register pricing without going
+    through the lower-level ``register_pricing`` entry point.
+    """
+    @property
+    def id(self) -> builtins.str: ...
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def provider(self) -> builtins.str: ...
+    @property
+    def context_length(self) -> typing.Optional[builtins.int]: ...
+    @property
+    def pricing(self) -> typing.Optional[ModelPricing]: ...
+    def __new__(cls, *, id: builtins.str, provider: builtins.str, name: typing.Optional[builtins.str] = None, context_length: typing.Optional[builtins.int] = None, pricing: typing.Optional[ModelPricing] = None, capabilities: typing.Optional[dict] = None) -> ModelInfo:
+        r"""
+        Create a new ModelInfo.
+        
+        Args:
+            id: Model identifier used in API requests.
+            provider: Provider name.
+            name: Human-readable display name (defaults to ``id``).
+            context_length: Maximum context window in tokens.
+            pricing: Optional [`ModelPricing`] entry.
+            capabilities: Optional capability flags as a dict
+                (``{"chat": True, "streaming": True, ...}``).
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -2655,6 +5141,26 @@ class ModelPricing:
     def __new__(cls, *, input_per_million: typing.Optional[builtins.float] = None, output_per_million: typing.Optional[builtins.float] = None, per_image: typing.Optional[builtins.float] = None, per_second: typing.Optional[builtins.float] = None) -> ModelPricing: ...
     def __repr__(self) -> builtins.str: ...
 
+class ModelRegistry:
+    r"""
+    Subclassable ABC mirroring [`blazen_llm::traits::ModelRegistry`].
+    
+    Implement to expose a custom model-listing capability from a Python
+    provider. Override both methods -- the defaults raise
+    ``NotImplementedError``.
+    """
+    def __new__(cls) -> ModelRegistry: ...
+    def list_models(self) -> typing.Any:
+        r"""
+        List all models. Should return a coroutine resolving to
+        ``list[ModelInfo]``.
+        """
+    def get_model(self, _model_id: builtins.str) -> typing.Any:
+        r"""
+        Look up a model by id. Should return a coroutine resolving to an
+        optional ``ModelInfo``.
+        """
+
 @typing.final
 class ModelStatus:
     r"""
@@ -2715,6 +5221,140 @@ class MusicRequest:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class OpenAiCompatConfig:
+    r"""
+    Configuration for a generic OpenAI-compatible provider.
+    
+    Example:
+        >>> cfg = OpenAiCompatConfig(
+        ...     provider_name="my-gateway",
+        ...     base_url="https://gateway.example.com/v1",
+        ...     api_key="secret",
+        ...     default_model="gpt-4o",
+        ... )
+        >>> p = OpenAiCompatProvider(config=cfg)
+    """
+    @property
+    def provider_name(self) -> builtins.str: ...
+    @property
+    def base_url(self) -> builtins.str: ...
+    @property
+    def default_model(self) -> builtins.str: ...
+    def __new__(cls, *, provider_name: builtins.str, base_url: builtins.str, api_key: builtins.str, default_model: builtins.str, auth_method: typing.Optional[AuthMethod] = None, api_key_header: typing.Optional[builtins.str] = None, extra_headers: typing.Optional[typing.Sequence[tuple[builtins.str, builtins.str]]] = None, query_params: typing.Optional[typing.Sequence[tuple[builtins.str, builtins.str]]] = None, supports_model_listing: builtins.bool = False) -> OpenAiCompatConfig:
+        r"""
+        Create a new OpenAiCompatConfig.
+        
+        Args:
+            provider_name: Human-readable name (used in logs and model info).
+            base_url: API base URL (e.g. ``"https://api.openai.com/v1"``).
+            api_key: API key string.
+            default_model: Default model id when requests don't override it.
+            auth_method: One of [`AuthMethod`] (default ``Bearer``).
+            api_key_header: Header name when ``auth_method`` is ``ApiKeyHeader``.
+            extra_headers: Extra static headers to send on every request.
+            query_params: Extra static query parameters to attach.
+            supports_model_listing: Whether the provider supports ``GET /models``.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class OpenAiCompatEmbeddingModel:
+    r"""
+    A generic OpenAI-compatible embedding model.
+    
+    Constructed via [`OpenAiCompatProvider.embedding_model`] in normal use.
+    Exposed as a free-standing class for parity with other providers.
+    
+    Example:
+        >>> cfg = OpenAiCompatConfig(...)
+        >>> em = OpenAiCompatEmbeddingModel(
+        ...     config=cfg,
+        ...     model="text-embedding-3-small",
+        ...     dimensions=1536,
+        ... )
+        >>> resp = await em.embed(["hello"])
+    """
+    @property
+    def model_id(self) -> builtins.str: ...
+    @property
+    def dimensions(self) -> builtins.int: ...
+    def __new__(cls, *, config: OpenAiCompatConfig, model: builtins.str, dimensions: builtins.int) -> OpenAiCompatEmbeddingModel: ...
+    async def embed(self, texts: typing.Sequence[builtins.str]) -> EmbeddingResponse:
+        r"""
+        Embed one or more texts.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class OpenAiCompatProvider:
+    r"""
+    A generic OpenAI-compatible chat completion provider.
+    
+    Use this for any OpenAI-compatible service without a dedicated
+    provider class. For known services (Groq, OpenRouter, Together, ...)
+    prefer the dedicated wrapper which preconfigures the URL/auth.
+    
+    Example:
+        >>> cfg = OpenAiCompatConfig(
+        ...     provider_name="vllm-host",
+        ...     base_url="http://localhost:8000/v1",
+        ...     api_key="",
+        ...     default_model="meta-llama/Llama-3.1-8B-Instruct",
+        ... )
+        >>> p = OpenAiCompatProvider(config=cfg)
+        >>> resp = await p.complete([ChatMessage.user("Hi!")])
+    """
+    @property
+    def model_id(self) -> builtins.str: ...
+    def __new__(cls, *, config: OpenAiCompatConfig) -> OpenAiCompatProvider:
+        r"""
+        Create a new OpenAI-compatible provider.
+        
+        Args:
+            config: A fully-specified [`OpenAiCompatConfig`].
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def embedding_model(self, *, model: builtins.str, dimensions: builtins.int) -> EmbeddingModel:
+        r"""
+        Build an embedding model sharing this provider's configuration.
+        
+        Args:
+            model: Embedding model id (e.g. ``"text-embedding-3-small"``).
+            dimensions: Output dimensionality of the embedding vectors.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class OpenAiEmbeddingModel:
+    r"""
+    An OpenAI embedding model.
+    
+    Example:
+        >>> from blazen import OpenAiEmbeddingModel, ProviderOptions
+        >>> em = OpenAiEmbeddingModel(options=ProviderOptions(api_key="sk-..."))
+        >>> resp = await em.embed(["hello", "world"])
+    """
+    @property
+    def model_id(self) -> builtins.str: ...
+    @property
+    def dimensions(self) -> builtins.int: ...
+    def __new__(cls, *, options: typing.Optional[ProviderOptions] = None, model: typing.Optional[builtins.str] = None, dimensions: typing.Optional[builtins.int] = None) -> OpenAiEmbeddingModel:
+        r"""
+        Create a new OpenAI embedding model.
+        
+        Args:
+            options: Optional [`ProviderOptions`] with api_key, base_url, model.
+            model: Model id override (default: ``"text-embedding-3-small"``).
+            dimensions: Output dimensionality (default: 1536).
+        """
+    async def embed(self, texts: typing.Sequence[builtins.str]) -> EmbeddingResponse:
+        r"""
+        Embed one or more texts.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class OpenAiProvider:
     r"""
     An OpenAI provider for text-to-speech and other compute capabilities.
@@ -2754,6 +5394,577 @@ class OpenAiProvider:
         Returns:
             An [`AudioResult`] with audio clips, timing, cost, and metadata.
         """
+
+@typing.final
+class OpenRouterProvider:
+    r"""
+    An OpenRouter provider — gives unified access to 400+ models.
+    
+    Standalone class form of `CompletionModel.openrouter(...)`.
+    """
+    @property
+    def model_id(self) -> builtins.str: ...
+    def __new__(cls, *, options: typing.Optional[ProviderOptions] = None) -> OpenRouterProvider:
+        r"""
+        Create a new OpenRouter provider.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ParallelStage:
+    r"""
+    A parallel stage running multiple branches concurrently.
+    
+    Each branch is a [`Stage`]. All branches start simultaneously and the
+    `join_strategy` determines how results are collected.
+    
+    Example:
+        >>> parallel = ParallelStage(
+        ...     name="fanout",
+        ...     branches=[stage_a, stage_b, stage_c],
+        ...     join_strategy=JoinStrategy.WaitAll,
+        ... )
+    """
+    @property
+    def name(self) -> builtins.str:
+        r"""
+        The stage's name.
+        """
+    @property
+    def join_strategy(self) -> JoinStrategy:
+        r"""
+        The configured join strategy.
+        """
+    def __new__(cls, name: builtins.str, branches: typing.Sequence[Stage], join_strategy: typing.Optional[JoinStrategy] = None) -> ParallelStage:
+        r"""
+        Create a new parallel stage.
+        
+        Args:
+            name: Human-readable name for the parallel group.
+            branches: A list of `Stage` objects to run concurrently.
+            join_strategy: How to join branch results. Defaults to
+                `JoinStrategy.WaitAll`.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PeerRemoteRefDescriptor:
+    r"""
+    Metadata describing a remote session ref handed out by a peer.
+    
+    Named `PeerRemoteRefDescriptor` to avoid colliding with the
+    `RemoteRefDescriptor` exposed by `blazen_core` for in-process refs.
+    """
+    @property
+    def origin_node_id(self) -> builtins.str:
+        r"""
+        Stable identifier of the node that owns the underlying value.
+        """
+    @property
+    def type_tag(self) -> builtins.str:
+        r"""
+        Type tag mirroring `SessionRefSerializable::blazen_type_tag`.
+        """
+    @property
+    def created_at_epoch_ms(self) -> builtins.int:
+        r"""
+        Wall-clock creation time on the origin node, in ms since the Unix epoch.
+        """
+    def __new__(cls, origin_node_id: builtins.str, type_tag: builtins.str, created_at_epoch_ms: builtins.int) -> PeerRemoteRefDescriptor:
+        r"""
+        Construct a new descriptor.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PerplexityProvider:
+    r"""
+    A Perplexity provider — web-grounded chat with citations.
+    
+    Standalone class form of `CompletionModel.perplexity(...)`.
+    """
+    @property
+    def model_id(self) -> builtins.str: ...
+    def __new__(cls, *, options: typing.Optional[ProviderOptions] = None) -> PerplexityProvider:
+        r"""
+        Create a new Perplexity provider.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PersistedEvent:
+    r"""
+    A serialized representation of a queued event captured in a checkpoint.
+    
+    Renamed in Python from the Rust ``SerializedEvent`` to avoid a naming
+    collision with the ``SerializedEvent`` type produced by ``blazen-core``
+    for workflow event streams.
+    
+    Example:
+        >>> ev = PersistedEvent(event_type="blazen::StartEvent", data={"input": "hi"})
+        >>> ev.event_type
+        'blazen::StartEvent'
+    """
+    @property
+    def event_type(self) -> builtins.str:
+        r"""
+        The event type identifier (e.g. ``"blazen::StartEvent"``).
+        """
+    @property
+    def data(self) -> typing.Any:
+        r"""
+        The event data as a Python value (decoded from JSON).
+        """
+    def __new__(cls, event_type: builtins.str, data: typing.Optional[typing.Any] = None) -> PersistedEvent:
+        r"""
+        Construct a new persisted event.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class Pipeline:
+    r"""
+    A validated, ready-to-run pipeline.
+    
+    Returned by [`PipelineBuilder.build`](super::builder::PyPipelineBuilder).
+    Execute via [`start`](Self::start). Resume from a saved snapshot via
+    [`resume`](Self::resume).
+    """
+    async def start(self, **kwargs: typing.Any) -> PipelineHandler:
+        r"""
+        Execute the pipeline.
+        
+        Args:
+            **kwargs: Initial input as keyword arguments. Wrapped into a
+                dict and passed as the pipeline input.
+        
+        Returns:
+            A `PipelineHandler` for awaiting the result, streaming events,
+            or pausing.
+        """
+    async def resume(self, snapshot: PipelineSnapshot) -> PipelineHandler:
+        r"""
+        Resume a pipeline from a previously captured snapshot.
+        
+        Args:
+            snapshot: A `PipelineSnapshot` produced by `PipelineHandler.pause()`.
+        
+        Returns:
+            A new `PipelineHandler` for the resumed pipeline.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PipelineBuilder:
+    r"""
+    Fluent builder for constructing a [`Pipeline`].
+    
+    Example:
+        >>> ingest = Stage(name="ingest", workflow=ingest_wf)
+        >>> enrich = Stage(name="enrich", workflow=enrich_wf)
+        >>> pipeline = (
+        ...     PipelineBuilder("etl")
+        ...     .stage(ingest)
+        ...     .stage(enrich)
+        ...     .timeout_per_stage(60.0)
+        ...     .build()
+        ... )
+    """
+    def __new__(cls, name: builtins.str) -> PipelineBuilder:
+        r"""
+        Create a new builder with the given pipeline name.
+        """
+    def stage(self, stage: Stage) -> PipelineBuilder:
+        r"""
+        Append a sequential `Stage` to the pipeline.
+        """
+    def parallel(self, parallel: ParallelStage) -> PipelineBuilder:
+        r"""
+        Append a `ParallelStage` (multiple branches) to the pipeline.
+        """
+    def on_persist(self, callback: typing.Any) -> PipelineBuilder:
+        r"""
+        Set a persist callback that receives a typed `PipelineSnapshot`
+        after each stage completes. The callback may be sync or async.
+        """
+    def on_persist_json(self, callback: typing.Any) -> PipelineBuilder:
+        r"""
+        Set a persist callback that receives the snapshot as a JSON string
+        after each stage completes. The callback may be sync or async.
+        """
+    def timeout_per_stage(self, seconds: builtins.float) -> PipelineBuilder:
+        r"""
+        Set a per-stage timeout in seconds. Each stage's workflow will be
+        given this duration before being considered timed out.
+        """
+    def build(self) -> Pipeline:
+        r"""
+        Validate and build the pipeline.
+        
+        Raises `PipelineError` if the pipeline has no stages or if any
+        stage names are duplicated.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PipelineEvent:
+    r"""
+    An event emitted by a pipeline stage, tagged with stage/branch
+    provenance.
+    """
+    @property
+    def stage_name(self) -> builtins.str:
+        r"""
+        The name of the stage that produced this event.
+        """
+    @property
+    def branch_name(self) -> typing.Optional[builtins.str]:
+        r"""
+        For parallel stages, the name of the specific branch.
+        `None` for sequential stages.
+        """
+    @property
+    def workflow_run_id(self) -> builtins.str:
+        r"""
+        The workflow run ID that produced this event.
+        """
+    @property
+    def event(self) -> Event:
+        r"""
+        The underlying workflow event.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PipelineHandler:
+    r"""
+    Handle to a running pipeline.
+    
+    Use `result()` to await the final `PipelineResult`, `stream_events()`
+    to iterate over intermediate events, `pause()` to capture a snapshot,
+    `resume_in_place()` to continue a paused pipeline, `snapshot()` to
+    capture state without stopping, or `abort()` to terminate.
+    """
+    async def result(self) -> PipelineResult:
+        r"""
+        Await the final pipeline result.
+        
+        Consumes the handler. Returns a `PipelineResult` containing the
+        final output and all stage results, or raises `PipelineError`.
+        """
+    def stream_events(self) -> _PipelineEventStream:
+        r"""
+        Create an async iterator over intermediate events from pipeline stages.
+        """
+    async def pause(self) -> PipelineSnapshot:
+        r"""
+        Pause the running pipeline and return a snapshot.
+        
+        Consumes the handler since the pipeline is no longer running after
+        a pause. The returned `PipelineSnapshot` can be passed to
+        `Pipeline.resume(...)`.
+        """
+    async def resume_in_place(self) -> None:
+        r"""
+        Resume a paused pipeline in place.
+        """
+    async def snapshot(self) -> PipelineSnapshot:
+        r"""
+        Capture a snapshot without stopping the pipeline.
+        
+        Note: this is a stub in the underlying engine and currently raises
+        `PipelineError`.
+        """
+    async def abort(self) -> None:
+        r"""
+        Abort the running pipeline.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PipelineResult:
+    r"""
+    The final output of a successfully completed pipeline run.
+    """
+    @property
+    def pipeline_name(self) -> builtins.str:
+        r"""
+        The name of the pipeline.
+        """
+    @property
+    def run_id(self) -> builtins.str:
+        r"""
+        Unique identifier for this pipeline run.
+        """
+    @property
+    def final_output(self) -> typing.Any:
+        r"""
+        The output of the last stage (the pipeline's final result).
+        """
+    @property
+    def stage_results(self) -> builtins.list[StageResult]:
+        r"""
+        Results from every stage, in execution order.
+        """
+    @property
+    def shared_state(self) -> dict[str, typing.Any]:
+        r"""
+        The shared key/value state at completion time, as a Python dict.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PipelineSnapshot:
+    r"""
+    Complete snapshot of a pipeline's state at the moment it was paused.
+    
+    Pass this to [`Pipeline.resume`](crate::pipeline::pipeline::PyPipeline::resume)
+    to continue the pipeline from where it left off.
+    """
+    @property
+    def pipeline_name(self) -> builtins.str:
+        r"""
+        The name of the pipeline.
+        """
+    @property
+    def run_id(self) -> builtins.str:
+        r"""
+        Unique identifier for this pipeline run.
+        """
+    @property
+    def timestamp(self) -> builtins.str:
+        r"""
+        When the snapshot was captured (ISO 8601 string).
+        """
+    @property
+    def current_stage_index(self) -> builtins.int:
+        r"""
+        Index of the stage that was executing (or about to execute) when
+        the pipeline was paused.
+        """
+    @property
+    def completed_stages(self) -> builtins.list[StageResult]:
+        r"""
+        Results from stages that completed before the pause.
+        """
+    @property
+    def active_snapshots(self) -> builtins.list[ActiveWorkflowSnapshot]:
+        r"""
+        Snapshots of workflows that were actively executing when the pause
+        signal arrived.
+        """
+    @property
+    def input(self) -> typing.Any:
+        r"""
+        The original pipeline input.
+        """
+    @property
+    def shared_state(self) -> dict[str, typing.Any]:
+        r"""
+        The shared key/value state at pause time, as a Python dict.
+        """
+    def to_json(self) -> builtins.str:
+        r"""
+        Serialize the snapshot to a JSON string.
+        """
+    def to_json_pretty(self) -> builtins.str:
+        r"""
+        Serialize the snapshot to a pretty-printed JSON string.
+        """
+    @staticmethod
+    def from_json(json: builtins.str) -> PipelineSnapshot:
+        r"""
+        Deserialize a snapshot from a JSON string.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PipelineState:
+    r"""
+    Read-only view of pipeline state.
+    
+    Passed to user-supplied `input_mapper(state)` and `condition(state)`
+    callbacks. The view exposes the original pipeline input, the shared
+    key/value store, and per-stage results.
+    
+    Note: the view is only valid during the callback call. Storing it
+    outside of the callback (e.g. on `self`) is not supported.
+    """
+    @property
+    def input(self) -> typing.Any:
+        r"""
+        The original pipeline input.
+        """
+    def get(self, key: builtins.str) -> typing.Any:
+        r"""
+        Get a value from the shared key/value store. Returns `None` if not set.
+        """
+    def stage_result(self, name: builtins.str) -> typing.Any:
+        r"""
+        Get the output of a specific completed stage by name.
+        Returns `None` if the stage has not yet completed.
+        """
+    def last_result(self) -> typing.Any:
+        r"""
+        The output of the most recently completed stage, or the original
+        pipeline input if no stages have completed yet.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PiperOptions:
+    r"""
+    Options for the local Piper TTS backend.
+    
+    Example:
+        >>> opts = PiperOptions(model_id="en_US-amy-medium")
+        >>> provider = PiperProvider(options=opts)
+    """
+    @property
+    def model_id(self) -> typing.Optional[builtins.str]: ...
+    @model_id.setter
+    def model_id(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def speaker_id(self) -> typing.Optional[builtins.int]: ...
+    @speaker_id.setter
+    def speaker_id(self, value: typing.Optional[builtins.int]) -> None: ...
+    @property
+    def sample_rate(self) -> typing.Optional[builtins.int]: ...
+    @sample_rate.setter
+    def sample_rate(self, value: typing.Optional[builtins.int]) -> None: ...
+    @property
+    def cache_dir(self) -> typing.Optional[builtins.str]: ...
+    @cache_dir.setter
+    def cache_dir(self, value: typing.Optional[builtins.str]) -> None: ...
+    def __new__(cls, *, model_id: typing.Optional[builtins.str] = None, speaker_id: typing.Optional[builtins.int] = None, sample_rate: typing.Optional[builtins.int] = None, cache_dir: typing.Optional[builtins.str] = None) -> PiperOptions:
+        r"""
+        Create a new PiperOptions.
+        
+        Args:
+            model_id: Piper voice model identifier (e.g. ``"en_US-amy-medium"``).
+            speaker_id: Speaker ID for multi-speaker models.
+            sample_rate: Output audio sample rate in Hz.
+            cache_dir: Path to cache downloaded voice models.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PiperProvider:
+    r"""
+    A local Piper text-to-speech provider.
+    
+    Runs synthesis fully on-device via Piper voice models on ONNX Runtime.
+    No API key is required.
+    
+    The underlying Rust integration is in progress; calls to
+    :meth:`text_to_speech` currently raise :class:`PiperError` with an
+    ``"engine not available"`` message until the engine wiring lands.
+    
+    Example:
+        >>> opts = PiperOptions(model_id="en_US-amy-medium")
+        >>> provider = PiperProvider(options=opts)
+    """
+    @property
+    def model_id(self) -> typing.Optional[builtins.str]:
+        r"""
+        Get the configured voice model id, if any.
+        """
+    @property
+    def engine_available(self) -> builtins.bool:
+        r"""
+        Whether the underlying ONNX Runtime engine is compiled into this
+        build. When ``False``, all synthesis calls raise :class:`PiperError`.
+        """
+    def __new__(cls, *, options: typing.Optional[PiperOptions] = None) -> PiperProvider:
+        r"""
+        Create a new Piper provider.
+        
+        Args:
+            options: Optional :class:`PiperOptions` for voice model id,
+                speaker id, sample rate, and cache directory.
+        """
+    async def text_to_speech(self, _request: SpeechRequest) -> AudioResult:
+        r"""
+        Synthesize speech from text.
+        
+        Args:
+            request: A :class:`SpeechRequest` with text, voice, and other
+                parameters.
+        
+        Returns:
+            An :class:`AudioResult` with the synthesized audio.
+        
+        Raises:
+            PiperError: While the upstream engine integration is in
+                progress, this call always raises with an
+                ``"engine not available"`` message.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PricingEntry:
+    r"""
+    A pricing entry for the global pricing registry.
+    
+    Mirrors [`blazen_llm::PricingEntry`]. Distinct from [`ModelPricing`] which
+    is the richer per-model record (input/output/per_image/per_second);
+    `PricingEntry` is the registry's canonical input/output-only shape used by
+    `register_pricing(...)` and `lookup_pricing(...)`.
+    """
+    @property
+    def input_per_million(self) -> builtins.float:
+        r"""
+        USD per million input (prompt) tokens.
+        """
+    @property
+    def output_per_million(self) -> builtins.float:
+        r"""
+        USD per million output (completion) tokens.
+        """
+    def __new__(cls, *, input_per_million: builtins.float, output_per_million: builtins.float) -> PricingEntry:
+        r"""
+        Construct a pricing entry.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class PromptFile:
+    r"""
+    A serializable collection of prompt templates.
+    
+    Mirrors the YAML/JSON file layout used by ``PromptRegistry.from_file``
+    and ``PromptRegistry.to_file``.
+    
+    Example::
+    
+        pf = PromptFile([template_a, template_b])
+        for t in pf.prompts:
+            registry.register(t.name, t)
+    """
+    @property
+    def prompts(self) -> builtins.list[PromptTemplate]:
+        r"""
+        The prompt templates contained in this file.
+        """
+    def __new__(cls, prompts: typing.Optional[typing.Sequence[PromptTemplate]] = None) -> PromptFile:
+        r"""
+        Create a new ``PromptFile`` from a list of ``PromptTemplate`` objects.
+        
+        Args:
+            prompts: The prompt templates to include in this file.
+        """
+    def init(self) -> None:
+        r"""
+        Re-extract cached variable lists on every contained template.
+        
+        Call after deserializing or after mutating template strings to
+        refresh the cached variable index used by ``render``.
+        """
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class PromptRegistry:
@@ -2808,8 +6019,8 @@ class PromptRegistry:
             A ``ChatMessage`` with the rendered content.
         
         Raises:
-            KeyError: If no template with that name exists.
-            ValueError: If a required variable is missing.
+            PromptError: If no template with that name exists, or if a
+                required variable is missing.
         """
     def list(self) -> builtins.list[builtins.str]:
         r"""
@@ -2819,7 +6030,7 @@ class PromptRegistry:
             A list of template name strings.
         """
     @staticmethod
-    def from_file(path: builtins.str) -> PromptRegistry:
+    def from_file(path: builtins.str | os.PathLike | pathlib.Path) -> PromptRegistry:
         r"""
         Load a registry from a YAML or JSON file.
         
@@ -2833,11 +6044,11 @@ class PromptRegistry:
             A new ``PromptRegistry`` with the loaded templates.
         
         Raises:
-            IOError: If the file cannot be read.
-            ValueError: If the file format is unsupported or parsing fails.
+            PromptError: If the file cannot be read, the format is
+                unsupported, or parsing fails.
         """
     @staticmethod
-    def from_dir(path: builtins.str) -> PromptRegistry:
+    def from_dir(path: builtins.str | os.PathLike | pathlib.Path) -> PromptRegistry:
         r"""
         Load all prompt files from a directory.
         
@@ -2850,8 +6061,22 @@ class PromptRegistry:
             A new ``PromptRegistry`` with the loaded templates.
         
         Raises:
-            IOError: If the directory cannot be read.
-            ValueError: If any file fails to parse.
+            PromptError: If the directory cannot be read or any file fails
+                to parse.
+        """
+    def to_file(self, path: builtins.str | os.PathLike | pathlib.Path) -> None:
+        r"""
+        Save all registered prompts to a YAML or JSON file.
+        
+        The format is detected by file extension (``.yaml``/``.yml`` for YAML,
+        ``.json`` for JSON).
+        
+        Args:
+            path: Path to the output file.
+        
+        Raises:
+            PromptError: If the file cannot be written, the format is
+                unsupported, or serialization fails.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -2865,7 +6090,7 @@ class PromptTemplate:
     
     Example::
     
-        t = PromptTemplate("Hello {{name}}!", role="user")
+        t = PromptTemplate("Hello {{name}}!", role=TemplateRole.User)
         msg = t.render(name="Alice")
         print(msg.content)  # "Hello Alice!"
     """
@@ -2875,9 +6100,9 @@ class PromptTemplate:
         The raw template string.
         """
     @property
-    def role(self) -> builtins.str:
+    def role(self) -> TemplateRole:
         r"""
-        The chat role ("system", "user", or "assistant").
+        The chat role.
         """
     @property
     def name(self) -> builtins.str:
@@ -2899,13 +6124,14 @@ class PromptTemplate:
         r"""
         The sorted list of variable names in this template.
         """
-    def __new__(cls, template: builtins.str, *, role: typing.Optional[builtins.str] = None, name: typing.Optional[builtins.str] = None, description: typing.Optional[builtins.str] = None, version: typing.Optional[builtins.str] = None) -> PromptTemplate:
+    def __new__(cls, template: builtins.str, *, role: typing.Optional[TemplateRole] = None, name: typing.Optional[builtins.str] = None, description: typing.Optional[builtins.str] = None, version: typing.Optional[builtins.str] = None) -> PromptTemplate:
         r"""
         Create a new prompt template.
         
         Args:
             template: The template string with ``{{variable}}`` placeholders.
-            role: The chat role ("system", "user", or "assistant"). Defaults to "user".
+            role: The chat role (``TemplateRole.System``, ``TemplateRole.User``,
+                or ``TemplateRole.Assistant``). Defaults to ``TemplateRole.User``.
             name: A unique name for this template (defaults to "unnamed").
             description: An optional description of this template.
             version: The version string (defaults to "1.0").
@@ -2921,9 +6147,89 @@ class PromptTemplate:
             **variables: Template variables as keyword arguments.
         
         Raises:
-            ValueError: If a required variable is missing.
+            PromptError: If a required variable is missing.
         """
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ProviderCapabilities:
+    r"""
+    Capabilities advertised by a provider as a whole.
+    
+    Mirrors [`blazen_llm::traits::ProviderCapabilities`].
+    """
+    @property
+    def streaming(self) -> builtins.bool: ...
+    @property
+    def tool_calling(self) -> builtins.bool: ...
+    @property
+    def structured_output(self) -> builtins.bool: ...
+    @property
+    def vision(self) -> builtins.bool: ...
+    @property
+    def model_listing(self) -> builtins.bool: ...
+    @property
+    def embeddings(self) -> builtins.bool: ...
+    def __new__(cls, *, streaming: builtins.bool = False, tool_calling: builtins.bool = False, structured_output: builtins.bool = False, vision: builtins.bool = False, model_listing: builtins.bool = False, embeddings: builtins.bool = False) -> ProviderCapabilities: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ProviderConfig:
+    r"""
+    Configuration metadata for a provider instance.
+    
+    Mirrors [`blazen_llm::traits::ProviderConfig`]. Used by custom providers
+    to advertise their identity, endpoint, pricing, and resource information.
+    """
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def model_id(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def provider_id(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def base_url(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def context_length(self) -> typing.Optional[builtins.int]: ...
+    @property
+    def max_output_tokens(self) -> typing.Optional[builtins.int]: ...
+    @property
+    def vram_estimate_bytes(self) -> typing.Optional[builtins.int]: ...
+    @property
+    def pricing(self) -> typing.Optional[ModelPricing]: ...
+    @property
+    def capabilities(self) -> typing.Optional[ModelCapabilities]: ...
+    def __new__(cls, *, name: typing.Optional[builtins.str] = None, model_id: typing.Optional[builtins.str] = None, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, context_length: typing.Optional[builtins.int] = None, max_output_tokens: typing.Optional[builtins.int] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None, pricing: typing.Optional[ModelPricing] = None, capabilities: typing.Optional[ModelCapabilities] = None) -> ProviderConfig: ...
+    def __repr__(self) -> builtins.str: ...
+
+class ProviderInfo:
+    r"""
+    Subclassable ABC that mirrors [`blazen_llm::traits::ProviderInfo`].
+    
+    Implement to expose a custom provider's identity, endpoint, and
+    capabilities to Blazen's discovery surface. Override every method --
+    the default implementations raise ``NotImplementedError``.
+    
+    Example:
+        >>> class MyProviderInfo(ProviderInfo):
+        ...     def provider_name(self) -> str: return "my-provider"
+        ...     def base_url(self) -> str: return "https://api.example.com"
+        ...     def capabilities(self) -> ProviderCapabilities:
+        ...         return ProviderCapabilities(streaming=True, tool_calling=True)
+    """
+    def __new__(cls) -> ProviderInfo: ...
+    def provider_name(self) -> builtins.str:
+        r"""
+        The provider's canonical name (e.g. `"openai"`, `"anthropic"`).
+        """
+    def base_url(self) -> builtins.str:
+        r"""
+        The provider's base API URL.
+        """
+    def capabilities(self) -> ProviderCapabilities:
+        r"""
+        The provider's capability flags as a [`ProviderCapabilities`] object.
+        """
 
 @typing.final
 class ProviderOptions:
@@ -3239,6 +6545,180 @@ class PyVideoResult:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class ReasoningTrace:
+    r"""
+    Chain-of-thought / extended-thinking trace from models that expose one
+    (Anthropic extended thinking, DeepSeek R1, OpenAI o-series, xAI Grok,
+    Gemini thoughts).
+    
+    Example:
+        >>> trace = response.reasoning
+        >>> if trace is not None:
+        ...     print(trace.text, trace.effort, trace.redacted)
+    """
+    @property
+    def text(self) -> builtins.str:
+        r"""
+        Plain-text rendering of the reasoning content.
+        """
+    @property
+    def signature(self) -> typing.Optional[builtins.str]:
+        r"""
+        Provider-specific signature/redaction handle (Anthropic), if any.
+        """
+    @property
+    def redacted(self) -> builtins.bool:
+        r"""
+        Whether the trace was redacted by the provider.
+        """
+    @property
+    def effort(self) -> typing.Optional[builtins.str]:
+        r"""
+        Reasoning effort level if the provider exposes one
+        (`"low"` / `"medium"` / `"high"` / `"max"` / ...).
+        """
+    def __new__(cls, *, text: builtins.str, signature: typing.Optional[builtins.str] = None, redacted: builtins.bool = False, effort: typing.Optional[builtins.str] = None) -> ReasoningTrace:
+        r"""
+        Construct a reasoning trace explicitly.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class RedbCheckpointStore:
+    r"""
+    A redb-backed checkpoint store.
+    
+    Stores workflow checkpoints in an embedded ACID key-value file at the
+    given path. The file is created if it does not exist.
+    
+    Example:
+        >>> store = RedbCheckpointStore("workflow.db")
+        >>> await store.save(checkpoint)
+        >>> loaded = await store.load(checkpoint.run_id)
+    """
+    def __new__(cls, path: builtins.str) -> RedbCheckpointStore:
+        r"""
+        Create or open a redb-backed store at ``path``.
+        """
+    async def save(self, checkpoint: WorkflowCheckpoint) -> None:
+        r"""
+        Persist a checkpoint, overwriting any existing entry with the same ``run_id``.
+        """
+    async def load(self, run_id: builtins.str) -> typing.Optional[WorkflowCheckpoint]:
+        r"""
+        Load a checkpoint by its ``run_id`` (UUID string).
+        """
+    async def list(self) -> list[WorkflowCheckpoint]:
+        r"""
+        List all stored checkpoints, ordered by timestamp descending.
+        """
+    async def delete(self, run_id: builtins.str) -> None:
+        r"""
+        Delete the checkpoint for the given ``run_id`` (UUID string).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class RegistryKey:
+    r"""
+    Strongly-typed UUID key identifying an entry in a
+    [`PySessionRefRegistry`].
+    
+    Construct one from a UUID string with `RegistryKey(uuid_str)` or mint
+    a fresh random one with `RegistryKey.new()`.
+    """
+    def __eq__(self, other: builtins.object) -> builtins.bool: ...
+    def __new__(cls, uuid_str: builtins.str) -> RegistryKey:
+        r"""
+        Construct a [`PyRegistryKey`] by parsing a UUID string.
+        """
+    @staticmethod
+    def new_random() -> RegistryKey:
+        r"""
+        Mint a fresh random key.
+        """
+    def __str__(self) -> builtins.str:
+        r"""
+        Return the wrapped UUID as a string.
+        """
+    def __hash__(self) -> builtins.int: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ReleaseRequest:
+    r"""
+    Request to release (drop) a remote session ref.
+    """
+    @property
+    def envelope_version(self) -> builtins.int:
+        r"""
+        Envelope version of this payload.
+        """
+    @property
+    def ref_uuid(self) -> builtins.str:
+        r"""
+        UUID of the registry entry to drop on the origin node, as a string.
+        """
+    def __new__(cls, ref_uuid: builtins.str) -> ReleaseRequest:
+        r"""
+        Construct a new release request from a session-ref UUID string.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ReleaseResponse:
+    r"""
+    Acknowledgement for a [`PyReleaseRequest`].
+    """
+    @property
+    def envelope_version(self) -> builtins.int:
+        r"""
+        Envelope version of this payload.
+        """
+    @property
+    def released(self) -> builtins.bool:
+        r"""
+        `True` if the registry entry was found and dropped, `False` otherwise.
+        """
+    def __new__(cls, released: builtins.bool) -> ReleaseResponse:
+        r"""
+        Construct a new release response.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class RemoteRefDescriptor:
+    r"""
+    In-process `RemoteRefDescriptor` (the core-crate variant stored in the
+    `SessionRefRegistry::remote_refs` sidecar).
+    
+    This is *distinct* from the wire-protocol descriptor exposed by the
+    peer module as `PeerRemoteRefDescriptor` -- that one carries an
+    envelope version and is what the gRPC layer encodes. The class is
+    named `RemoteRefDescriptor` on the Python side because it matches
+    the type name in `blazen_core::session_ref`.
+    """
+    @property
+    def origin_node_id(self) -> builtins.str: ...
+    @property
+    def type_tag(self) -> builtins.str: ...
+    @property
+    def created_at_epoch_ms(self) -> builtins.int: ...
+    def __new__(cls, origin_node_id: builtins.str, type_tag: builtins.str, created_at_epoch_ms: builtins.int) -> RemoteRefDescriptor:
+        r"""
+        Construct a new descriptor.
+        
+        Args:
+            origin_node_id: Stable identifier of the peer node that owns
+                the underlying value.
+            type_tag: Type tag mirroring
+                `SessionRefSerializable.blazen_type_tag`.
+            created_at_epoch_ms: Wall-clock creation time on the origin
+                node, in milliseconds since the Unix epoch.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class RequestTiming:
     r"""
     Breakdown of request timing (queue, execution, total) in milliseconds.
@@ -3318,6 +6798,52 @@ class ResponseFormat:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class RetryCompletionModel:
+    r"""
+    A `CompletionModel` decorator that retries transient failures with
+    exponential backoff.
+    
+    This is the standalone equivalent of
+    `CompletionModel.with_retry(config)` and exposes the same
+    `complete()` / `stream()` surface.
+    
+    Example:
+        >>> base = CompletionModel.openai()
+        >>> model = RetryCompletionModel(base, RetryConfig(max_retries=5))
+        >>> response = await model.complete([ChatMessage.user("Hi")])
+    """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        The model id reported by the underlying provider.
+        """
+    def __new__(cls, model: CompletionModel, config: typing.Optional[RetryConfig] = None) -> RetryCompletionModel:
+        r"""
+        Wrap a `CompletionModel` with automatic retry on transient failures.
+        
+        Args:
+            model: The `CompletionModel` to wrap.
+            config: Optional typed `RetryConfig`. Defaults to
+                `RetryConfig()` (3 retries, 1s initial, 30s max).
+        """
+    def as_model(self) -> CompletionModel:
+        r"""
+        Convert this decorator into a `CompletionModel` so it can be passed
+        to APIs that expect a `CompletionModel` (`run_agent`,
+        `complete_batch`, further decorators, etc.).
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+        r"""
+        Perform a chat completion, retrying transient failures.
+        """
+    def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Optional[typing.Any] = None, options: typing.Optional[CompletionOptions] = None) -> typing.Any:
+        r"""
+        Stream a chat completion, retrying the initial connection on
+        transient failures.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class RetryConfig:
     @property
     def max_retries(self) -> builtins.int: ...
@@ -3349,6 +6875,29 @@ class RetryConfig:
             max_delay_ms: Maximum backoff delay (default: 30000).
             honor_retry_after: Honor server retry_after (default: True).
             jitter: Add random jitter (default: True).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class RetryMiddleware:
+    r"""
+    Middleware that wraps a model with `RetryCompletionModel`.
+    
+    This is the standalone Python-facing equivalent of
+    `blazen_llm::middleware::RetryMiddleware`.
+    """
+    def __new__(cls, config: typing.Optional[RetryConfig] = None) -> RetryMiddleware:
+        r"""
+        Build a retry middleware layer.
+        
+        Args:
+            config: Optional typed `RetryConfig`. Defaults to
+                `RetryConfig()` (3 retries, 1s initial, 30s max).
+        """
+    def wrap(self, model: CompletionModel) -> CompletionModel:
+        r"""
+        Apply this middleware directly to a `CompletionModel`, returning
+        a new `CompletionModel` with retry behaviour.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -3401,6 +6950,77 @@ class SessionNamespace:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class SessionRefRegistry:
+    r"""
+    Python-visible handle to a [`SessionRefRegistry`].
+    
+    The methods that mutate or query the registry are synchronous on the
+    Python side -- they bridge through [`block_on_context`] to drive the
+    underlying async `RwLock` to completion. This matches the existing
+    internal `_SessionRegistryHandle` shim and keeps the API ergonomic for
+    step bodies that already run inside a Tokio worker (where
+    `block_in_place` is the right primitive).
+    """
+    def __new__(cls) -> SessionRefRegistry:
+        r"""
+        Construct an empty registry.
+        """
+    def len(self) -> builtins.int:
+        r"""
+        Number of currently live entries (main map).
+        """
+    def is_empty(self) -> builtins.bool:
+        r"""
+        Whether the registry has any live entries.
+        """
+    def keys(self) -> builtins.list[RegistryKey]:
+        r"""
+        Snapshot every live key in the registry.
+        """
+    def lifetime_of(self, key: RegistryKey) -> typing.Optional[RefLifetime]:
+        r"""
+        Look up the [`RefLifetime`] policy for a key.
+        """
+    def get_remote(self, key: RegistryKey) -> typing.Optional[RemoteRefDescriptor]:
+        r"""
+        Look up an in-process remote-ref descriptor by key, if the key is
+        stored in the remote-ref sidecar instead of the main map.
+        """
+    def is_remote(self, key: RegistryKey) -> builtins.bool:
+        r"""
+        Whether `key` resolves to a remote-ref entry rather than a local
+        live value.
+        """
+    def remote_entries(self) -> builtins.list[tuple[RegistryKey, RemoteRefDescriptor]]:
+        r"""
+        Snapshot every `(key, descriptor)` pair currently in the
+        remote-ref sidecar.
+        """
+    def remove(self, key: RegistryKey) -> builtins.bool:
+        r"""
+        Remove a single entry. Returns `True` if the key was present.
+        
+        Also clears any matching serializable, lifetime, and remote-ref
+        sidecar entries.
+        """
+    def drain(self) -> builtins.int:
+        r"""
+        Drain all entries (main map and every sidecar). Returns the
+        number of entries removed from the main map.
+        """
+    def clear_on_context_drop(self, owns_registry: builtins.bool) -> builtins.int:
+        r"""
+        Purge all refs whose [`RefLifetime`] policy says they should be
+        dropped when the owning `Context` is dropped. Returns the number
+        removed.
+        
+        Args:
+            owns_registry: Mirror of `Context::owns_registry` -- `True`
+                means the calling `Context` owns this registry.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class SpeechRequest:
     r"""
     Typed wrapper for a text-to-speech request.
@@ -3418,6 +7038,68 @@ class SpeechRequest:
     @property
     def model(self) -> typing.Optional[builtins.str]: ...
     def __new__(cls, *, text: builtins.str, voice: typing.Optional[builtins.str] = None, voice_url: typing.Optional[builtins.str] = None, language: typing.Optional[builtins.str] = None, speed: typing.Optional[builtins.float] = None, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> SpeechRequest: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class Stage:
+    r"""
+    A single sequential stage in a pipeline.
+    
+    Wraps a `Workflow` with optional input mapping and conditional execution.
+    
+    Example:
+        >>> ingest = Workflow("ingest", [extract_step])
+        >>> stage = Stage(name="ingest", workflow=ingest)
+    """
+    @property
+    def name(self) -> builtins.str:
+        r"""
+        The stage's name.
+        """
+    def __new__(cls, name: builtins.str, workflow: Workflow, input_mapper: typing.Optional[typing.Any] = None, condition: typing.Optional[typing.Any] = None) -> Stage:
+        r"""
+        Create a new sequential stage.
+        
+        Args:
+            name: Human-readable name for the stage (used in results
+                and event provenance).
+            workflow: The `Workflow` to execute for this stage.
+            input_mapper: Optional callable `(state: PipelineState) -> Any`
+                that transforms pipeline state into the workflow input.
+                When `None`, the previous stage's output (or pipeline input
+                for the first stage) is passed through directly.
+            condition: Optional callable `(state: PipelineState) -> bool`
+                that decides whether the stage runs. When `None` the stage
+                always runs. When the callable returns `False` the stage is
+                skipped.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class StageResult:
+    r"""
+    The outcome of a single completed stage.
+    """
+    @property
+    def name(self) -> builtins.str:
+        r"""
+        The name of the stage.
+        """
+    @property
+    def output(self) -> typing.Any:
+        r"""
+        The output produced by the stage's workflow.
+        """
+    @property
+    def skipped(self) -> builtins.bool:
+        r"""
+        Whether the stage was skipped due to its condition returning `False`.
+        """
+    @property
+    def duration_ms(self) -> builtins.int:
+        r"""
+        How long the stage took to execute, in milliseconds.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -3464,6 +7146,196 @@ class StateNamespace:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class StateValue:
+    r"""
+    Tagged union mirroring [`StateValue`].
+    
+    The Python class exposes a `kind` discriminator (`"json"`, `"bytes"`,
+    `"native"`) plus accessor methods for each variant. Construct
+    instances through the static factories `StateValue.json(value)`,
+    `StateValue.bytes(data)`, and `StateValue.native(data)`.
+    """
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Discriminator: `"json"`, `"bytes"`, or `"native"`.
+        """
+    @staticmethod
+    def json(value: typing.Any) -> StateValue:
+        r"""
+        Build a JSON-typed `StateValue` from any JSON-compatible Python
+        value.
+        """
+    @staticmethod
+    def bytes(data: typing.Sequence[builtins.int]) -> StateValue:
+        r"""
+        Build a `Bytes`-typed `StateValue` from a `bytes` payload.
+        """
+    @staticmethod
+    def native(data: typing.Sequence[builtins.int]) -> StateValue:
+        r"""
+        Build a `Native`-typed `StateValue` from a binding-serialized
+        `bytes` payload (Python pickle, etc.).
+        """
+    def is_json(self) -> builtins.bool: ...
+    def is_bytes(self) -> builtins.bool: ...
+    def is_native(self) -> builtins.bool: ...
+    def as_json(self) -> typing.Any:
+        r"""
+        Return the inner JSON value as a Python object, or raise
+        `ValueError` if this is not a JSON variant.
+        """
+    def as_bytes(self) -> builtins.list[builtins.int]:
+        r"""
+        Return the inner byte payload, or raise `ValueError` if this is
+        not a `Bytes` variant.
+        """
+    def as_native(self) -> builtins.list[builtins.int]:
+        r"""
+        Return the inner native-serialized payload, or raise `ValueError`
+        if this is not a `Native` variant.
+        """
+    def to_dict(self) -> dict[str, typing.Any]:
+        r"""
+        Encode the value as a `dict` matching the serde wire format used
+        by the core crate (`{"Json": ...}`, `{"Bytes": [...]}`,
+        `{"Native": [...]}`).
+        """
+    @staticmethod
+    def from_dict(value: dict) -> StateValue:
+        r"""
+        Build a `StateValue` from a serde-shaped `dict`. Inverse of
+        `to_dict`.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class StepDeserializerRegistry:
+    r"""
+    Python-visible handle to the *process-global*
+    [`blazen_core::step_registry::StepDeserializerRegistry`].
+    
+    The core crate exposes the registry as a singleton accessible only
+    through the `register_step_builder` / `lookup_step_builder` /
+    `registered_step_ids` free functions, so this class is a thin
+    introspection facade -- every method delegates to those functions.
+    Construction is allowed for ergonomic reasons but every instance is
+    equivalent and shares the same global state.
+    """
+    def __new__(cls) -> StepDeserializerRegistry:
+        r"""
+        Construct a handle. All instances reference the same
+        process-global registry.
+        """
+    def len(self) -> builtins.int:
+        r"""
+        Number of registered step builders in the process-global
+        registry.
+        """
+    def is_empty(self) -> builtins.bool:
+        r"""
+        Whether the registry has any registered builders.
+        """
+    def step_ids(self) -> builtins.list[builtins.str]:
+        r"""
+        Return every registered step ID. Order is unspecified.
+        """
+    def contains(self, step_id: builtins.str) -> builtins.bool:
+        r"""
+        Return `True` if a builder is registered under `step_id`.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class StepOutput:
+    r"""
+    One of three terminal results from a step body.
+    
+    Mirrors the Rust [`blazen_core::step::StepOutput`] enum:
+    
+    * ``Single`` -- one outbound event, routed normally.
+    * ``Multiple`` -- a fan-out of events. Every entry is dispatched.
+    * ``None`` -- side-effect only, the workflow loop produces no
+      downstream events from this step.
+    
+    Construct via the static helpers (``StepOutput.single(event)``,
+    ``StepOutput.multiple([...])``, ``StepOutput.none()``); the inner
+    ``kind`` and ``events`` getters let callers introspect after the
+    fact.
+    """
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Discriminator: ``"single"``, ``"multiple"``, or ``"none"``.
+        """
+    @staticmethod
+    def single(event: Event) -> StepOutput:
+        r"""
+        Construct a single-event output.
+        """
+    @staticmethod
+    def multiple(events: typing.Sequence[Event]) -> StepOutput:
+        r"""
+        Construct a fan-out output from a list of events.
+        """
+    @staticmethod
+    def none() -> StepOutput:
+        r"""
+        Construct a no-output result (side-effect only).
+        """
+    def is_none(self) -> builtins.bool:
+        r"""
+        Whether this output has no events (the ``None`` variant).
+        """
+    def events(self) -> list:
+        r"""
+        Return all events carried by this output.
+        
+        Empty for ``"none"``; length 1 for ``"single"``; length N for
+        ``"multiple"``.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class StepRegistration:
+    r"""
+    Read-only metadata for a step registered on a [`Workflow`].
+    
+    Wraps [`blazen_core::step::StepRegistration`]. Returned by the
+    workflow introspection helpers so callers can list the steps that
+    will run, their accepted/emitted event types, and the configured
+    max-concurrency.
+    
+    The handler closure itself is not exposed -- it is a Rust closure
+    type that cannot cross the FFI boundary -- but every other field is
+    available as a getter.
+    """
+    @property
+    def name(self) -> builtins.str:
+        r"""
+        Human-readable name for this step.
+        """
+    @property
+    def accepts(self) -> builtins.list[builtins.str]:
+        r"""
+        Event type identifiers this step accepts (matches
+        ``Event.event_type``).
+        """
+    @property
+    def emits(self) -> builtins.list[builtins.str]:
+        r"""
+        Event type identifiers this step may emit (informational only;
+        the runtime does not enforce this).
+        """
+    @property
+    def max_concurrency(self) -> builtins.int:
+        r"""
+        Maximum number of concurrent invocations of this step. ``0``
+        means unlimited.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class StopEvent(Event):
     r"""
     A stop event that terminates a workflow with a result.
@@ -3474,6 +7346,329 @@ class StopEvent(Event):
     ```
     """
     ...
+
+@typing.final
+class StoredEntry:
+    r"""
+    An entry as persisted in a backend, including ELID and LSH band data.
+    
+    `StoredEntry` is the on-disk / on-the-wire shape used by all
+    `MemoryBackend` implementations. Custom backends written in Python
+    receive and return these objects.
+    
+    Example:
+        >>> entry = StoredEntry(
+        ...     id="doc1",
+        ...     text="Paris is the capital of France",
+        ...     text_simhash=0xDEADBEEF,
+        ...     bands=["b0:0001", "b1:002a"],
+        ...     metadata={"category": "geo"},
+        ... )
+        >>> entry.id
+        'doc1'
+    """
+    @property
+    def id(self) -> builtins.str:
+        r"""
+        Unique identifier for this entry.
+        """
+    @property
+    def text(self) -> builtins.str:
+        r"""
+        The original text content.
+        """
+    @property
+    def elid(self) -> typing.Optional[builtins.str]:
+        r"""
+        ELID-encoded embedding string (None when running in local-only mode).
+        """
+    @property
+    def simhash_hex(self) -> typing.Optional[builtins.str]:
+        r"""
+        128-bit `SimHash` of the embedding, as a 32-char hex string.
+        """
+    @property
+    def text_simhash(self) -> builtins.int:
+        r"""
+        String-level `SimHash` of the raw text (always available, for local search).
+        """
+    @property
+    def bands(self) -> builtins.list[builtins.str]:
+        r"""
+        LSH band strings derived from the embedding `SimHash`.
+        """
+    @property
+    def metadata(self) -> dict[str, typing.Any]:
+        r"""
+        Arbitrary user metadata (returned as a Python dict / value).
+        """
+    def __new__(cls, *, id: builtins.str, text: builtins.str, text_simhash: builtins.int = 0, elid: typing.Optional[builtins.str] = None, simhash_hex: typing.Optional[builtins.str] = None, bands: typing.Sequence[builtins.str] = [], metadata: typing.Optional[typing.Any] = None) -> StoredEntry:
+        r"""
+        Construct a `StoredEntry`.
+        
+        Args:
+            id: Unique identifier for this entry.
+            text: The original text content.
+            text_simhash: 64-bit `SimHash` of the raw text (used by local search).
+            elid: Optional ELID-encoded embedding string.
+            simhash_hex: Optional 128-bit embedding `SimHash` as a 32-char hex string.
+            bands: LSH band strings derived from the embedding `SimHash`.
+            metadata: Arbitrary user metadata.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class StreamChunk:
+    r"""
+    A single chunk from a streaming completion response.
+    
+    Yielded by ``CompletionModel.stream(...)`` either via async iteration or
+    the ``on_chunk`` callback. Carries an incremental text ``delta`` plus any
+    tool calls, reasoning deltas, citations, or artifacts that landed in this
+    chunk. The ``finish_reason`` is set on the terminal chunk.
+    """
+    @property
+    def delta(self) -> typing.Optional[builtins.str]:
+        r"""
+        Incremental text content from this chunk, if any.
+        """
+    @property
+    def tool_calls(self) -> builtins.list[ToolCall]:
+        r"""
+        Tool invocations completed in this chunk.
+        """
+    @property
+    def finish_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Finish reason on the terminal chunk.
+        """
+    @property
+    def reasoning_delta(self) -> typing.Optional[builtins.str]:
+        r"""
+        Reasoning text delta (Anthropic thinking, R1 reasoning_content, o-series).
+        """
+    @property
+    def citations(self) -> builtins.list[Citation]:
+        r"""
+        Citations completed in this chunk.
+        """
+    @property
+    def artifacts(self) -> builtins.list[Artifact]:
+        r"""
+        Artifacts completed in this chunk.
+        """
+    def __new__(cls, *, delta: typing.Optional[builtins.str] = None, tool_calls: typing.Optional[typing.Sequence[ToolCall]] = None, finish_reason: typing.Optional[builtins.str] = None, reasoning_delta: typing.Optional[builtins.str] = None) -> StreamChunk:
+        r"""
+        Construct a stream chunk explicitly.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class StreamChunkEvent:
+    r"""
+    Workflow event emitted for each incremental chunk during a streaming
+    completion.
+    
+    Mirrors [`blazen_llm::events::StreamChunkEvent`]. Steps that bridge LLM
+    streaming into the workflow event bus publish one of these per chunk so
+    downstream consumers can observe progress in real time.
+    """
+    @property
+    def delta(self) -> builtins.str:
+        r"""
+        The incremental text content from this chunk.
+        """
+    @property
+    def finish_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Finish reason set on the final chunk, if applicable.
+        """
+    @property
+    def model(self) -> builtins.str:
+        r"""
+        The model that produced this chunk.
+        """
+    def __new__(cls, *, delta: builtins.str, model: builtins.str, finish_reason: typing.Optional[builtins.str] = None) -> StreamChunkEvent:
+        r"""
+        Construct a stream-chunk event.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class StreamCompleteEvent:
+    r"""
+    Workflow event emitted once a streaming completion has fully finished.
+    
+    Mirrors [`blazen_llm::events::StreamCompleteEvent`]. Carries the
+    concatenated full text, optional usage stats, and the model id.
+    """
+    @property
+    def full_text(self) -> builtins.str:
+        r"""
+        The full concatenated text of the streamed response.
+        """
+    @property
+    def usage(self) -> typing.Optional[TokenUsage]:
+        r"""
+        Token usage statistics, if reported by the provider.
+        """
+    @property
+    def model(self) -> builtins.str:
+        r"""
+        The model that produced the response.
+        """
+    def __new__(cls, *, full_text: builtins.str, model: builtins.str, usage: typing.Optional[TokenUsage] = None) -> StreamCompleteEvent:
+        r"""
+        Construct a stream-complete event.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+class StructuredOutput:
+    r"""
+    Subclassable ABC mirroring [`blazen_llm::traits::StructuredOutput`].
+    
+    The Rust trait has a blanket implementation for every `CompletionModel`,
+    so most callers just call ``model.complete(messages, options)`` with a
+    [`ResponseFormat.json_schema(...)`](crate::types::PyResponseFormat) hint.
+    This ABC lets a Python provider explicitly opt in to a typed
+    ``extract(messages)`` entry point.
+    """
+    def __new__(cls) -> StructuredOutput: ...
+    def extract(self, _messages: typing.Any) -> typing.Any:
+        r"""
+        Extract a structured value, returning a [`StructuredResponse`].
+        """
+
+@typing.final
+class StructuredResponse:
+    r"""
+    Result of [`StructuredOutput.extract(...)`].
+    
+    Mirrors [`blazen_llm::StructuredResponse`] with the type parameter
+    erased to a Python value (each provider deserializes into its preferred
+    shape -- typically a dict or a Pydantic model -- and stuffs it into
+    ``data``).
+    """
+    @property
+    def data(self) -> typing.Any:
+        r"""
+        The extracted structured value.
+        """
+    @property
+    def model(self) -> builtins.str:
+        r"""
+        The model that produced the response.
+        """
+    @property
+    def usage(self) -> typing.Optional[TokenUsage]:
+        r"""
+        Token usage for the request.
+        """
+    @property
+    def cost(self) -> typing.Optional[builtins.float]:
+        r"""
+        Estimated cost in USD.
+        """
+    @property
+    def timing(self) -> typing.Optional[RequestTiming]:
+        r"""
+        Request timing.
+        """
+    @property
+    def metadata(self) -> dict[str, typing.Any]:
+        r"""
+        Provider-specific metadata.
+        """
+    @property
+    def reasoning(self) -> typing.Optional[ReasoningTrace]:
+        r"""
+        Reasoning trace, if exposed by the provider.
+        """
+    @property
+    def citations(self) -> builtins.list[Citation]:
+        r"""
+        Web/document citations backing the response.
+        """
+    @property
+    def artifacts(self) -> builtins.list[Artifact]:
+        r"""
+        Inline artifacts extracted from the response.
+        """
+    def __new__(cls, *, data: typing.Any, model: builtins.str, usage: typing.Optional[TokenUsage] = None, cost: typing.Optional[builtins.float] = None, timing: typing.Optional[RequestTiming] = None, metadata: typing.Optional[typing.Any] = None) -> StructuredResponse:
+        r"""
+        Construct a structured response.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class SubWorkflowRequest:
+    r"""
+    Request to invoke a sub-workflow on a remote peer.
+    """
+    @property
+    def envelope_version(self) -> builtins.int:
+        r"""
+        Envelope version of this payload.
+        """
+    @property
+    def workflow_name(self) -> builtins.str:
+        r"""
+        Symbolic name of the workflow to invoke.
+        """
+    @property
+    def step_ids(self) -> builtins.list[builtins.str]:
+        r"""
+        Step IDs to execute as part of this sub-workflow.
+        """
+    @property
+    def timeout_secs(self) -> typing.Optional[builtins.int]:
+        r"""
+        Optional wall-clock timeout in seconds.
+        """
+    def __new__(cls, workflow_name: builtins.str, step_ids: typing.Optional[typing.Sequence[builtins.str]] = None, input: typing.Optional[dict] = None, timeout_secs: typing.Optional[builtins.int] = None) -> SubWorkflowRequest:
+        r"""
+        Build a new sub-workflow request.
+        
+        Args:
+            workflow_name: Symbolic name of the workflow to invoke.
+            step_ids: Ordered list of step IDs (empty = workflow default).
+            input: Initial input value (passed as kwargs dict, encoded as JSON).
+            timeout_secs: Optional wall-clock timeout in seconds.
+        """
+    def input_value(self) -> typing.Any:
+        r"""
+        Decode the JSON-encoded `input_json` payload back into a Python value.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class SubWorkflowResponse:
+    r"""
+    Result of a remote sub-workflow invocation.
+    """
+    @property
+    def envelope_version(self) -> builtins.int:
+        r"""
+        Envelope version of this payload.
+        """
+    @property
+    def error(self) -> typing.Optional[builtins.str]:
+        r"""
+        Error message if the sub-workflow failed; otherwise `None`.
+        """
+    def result_value(self) -> typing.Any:
+        r"""
+        Decode the JSON-encoded `result_json` payload, if any.
+        """
+    def state_values(self) -> dict[str, typing.Any]:
+        r"""
+        Decode the entire `state_json` map back into a Python dict.
+        """
+    def remote_refs(self) -> dict[str, PeerRemoteRefDescriptor]:
+        r"""
+        Map from session-ref UUID (as string) to peer remote-ref descriptor.
+        """
+    def __repr__(self) -> builtins.str: ...
 
 class TTSProvider:
     r"""
@@ -3546,6 +7741,167 @@ class ThreeDRequest:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class TogetherProvider:
+    r"""
+    A Together AI provider for chat completions and embeddings.
+    
+    Standalone class form of `CompletionModel.together(...)`.
+    """
+    @property
+    def model_id(self) -> builtins.str: ...
+    def __new__(cls, *, options: typing.Optional[ProviderOptions] = None) -> TogetherProvider:
+        r"""
+        Create a new Together AI provider.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def embedding_model(self) -> EmbeddingModel:
+        r"""
+        Build a Together AI [`EmbeddingModel`] sharing this provider's API key.
+        
+        Defaults to ``togethercomputer/m2-bert-80M-8k-retrieval`` (768 dims).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+class TokenCounter:
+    r"""
+    Abstract base class for token counters.
+    
+    Subclass and override ``count_tokens``, ``count_message_tokens``, and
+    ``context_size`` to plug in a custom counting strategy. The default
+    implementations raise ``NotImplementedError``.
+    
+    Example:
+        >>> class MyCounter(TokenCounter):
+        ...     def count_tokens(self, text: str) -> int:
+        ...         return len(text) // 4
+        ...     def count_message_tokens(self, messages):
+        ...         return sum(self.count_tokens(m.content or "") for m in messages)
+        ...     def context_size(self) -> int:
+        ...         return 128_000
+    """
+    def __new__(cls) -> TokenCounter: ...
+    def count_tokens(self, _text: builtins.str) -> builtins.int:
+        r"""
+        Count tokens in a raw text string.
+        """
+    def count_message_tokens(self, _messages: typing.Sequence[ChatMessage]) -> builtins.int:
+        r"""
+        Count tokens for a list of chat messages, including per-message overhead.
+        """
+    def context_size(self) -> builtins.int:
+        r"""
+        Maximum context window size (tokens) for the model this counter targets.
+        """
+    def remaining_tokens(self, messages: typing.Sequence[ChatMessage]) -> builtins.int:
+        r"""
+        Number of tokens remaining after the given prompt.
+        """
+
+@typing.final
+class TokenUsage:
+    r"""
+    Token usage statistics for a completion request.
+    
+    Example:
+        >>> usage = response.usage
+        >>> if usage is not None:
+        ...     print(usage.prompt_tokens, usage.completion_tokens, usage.total_tokens)
+    """
+    @property
+    def prompt_tokens(self) -> builtins.int:
+        r"""
+        Number of tokens in the prompt / input.
+        """
+    @property
+    def completion_tokens(self) -> builtins.int:
+        r"""
+        Number of tokens in the completion / output.
+        """
+    @property
+    def total_tokens(self) -> builtins.int:
+        r"""
+        Total tokens consumed (prompt + completion).
+        """
+    @property
+    def reasoning_tokens(self) -> builtins.int:
+        r"""
+        Tokens spent on hidden reasoning (o-series, R1, Anthropic thinking).
+        """
+    @property
+    def cached_input_tokens(self) -> builtins.int:
+        r"""
+        Tokens served from a prompt cache, if the provider reports them.
+        """
+    @property
+    def audio_input_tokens(self) -> builtins.int:
+        r"""
+        Tokens consumed by audio input.
+        """
+    @property
+    def audio_output_tokens(self) -> builtins.int:
+        r"""
+        Tokens consumed by audio output.
+        """
+    def __new__(cls, *, prompt_tokens: builtins.int = 0, completion_tokens: builtins.int = 0, total_tokens: builtins.int = 0, reasoning_tokens: builtins.int = 0, cached_input_tokens: builtins.int = 0, audio_input_tokens: builtins.int = 0, audio_output_tokens: builtins.int = 0) -> TokenUsage:
+        r"""
+        Construct a token-usage record explicitly.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+class Tool:
+    r"""
+    Subclassable ABC mirroring the Rust [`blazen_llm::traits::Tool`] trait.
+    
+    Implement to declare the shape of a tool ahead of registration; tools that
+    actually drive the agent loop should use [`ToolDef`](crate::agent::PyToolDef)
+    which carries a callable handler. Override every method -- the defaults
+    raise ``NotImplementedError``.
+    """
+    def __new__(cls) -> Tool: ...
+    def definition(self) -> typing.Any:
+        r"""
+        Return the tool's [`ToolDefinition`] (name, description, JSON schema).
+        """
+    def execute(self, _arguments: typing.Any) -> typing.Any:
+        r"""
+        Execute the tool with a JSON-serializable arguments object. Should
+        return a [`ToolOutput`] (or a value coercible into one).
+        """
+
+@typing.final
+class ToolCall:
+    r"""
+    A tool invocation requested by the model.
+    
+    Returned in ``CompletionResponse.tool_calls`` and ``StreamChunk.tool_calls``.
+    
+    Example:
+        >>> for tc in response.tool_calls:
+        ...     print(tc.id, tc.name, tc.arguments)
+    """
+    @property
+    def id(self) -> builtins.str:
+        r"""
+        Provider-assigned identifier for this specific invocation.
+        """
+    @property
+    def name(self) -> builtins.str:
+        r"""
+        The name of the tool to invoke.
+        """
+    @property
+    def arguments(self) -> dict[str, typing.Any]:
+        r"""
+        The arguments to pass to the tool, as a parsed Python value.
+        """
+    def __new__(cls, *, id: builtins.str, name: builtins.str, arguments: typing.Any) -> ToolCall:
+        r"""
+        Construct a tool call explicitly.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class ToolDef:
     r"""
     A tool definition for the agent.
@@ -3579,6 +7935,42 @@ class ToolDef:
         The Python callable that implements the tool.
         """
     def __new__(cls, *, name: builtins.str, description: builtins.str, parameters: typing.Any, handler: typing.Any) -> ToolDef: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ToolDefinition:
+    r"""
+    Canonical Python form of a tool definition (name, description, JSON-schema
+    parameters). Distinct from ``ToolDef``, which adds a Python ``handler``
+    callable for the agent loop. Use ``ToolDefinition`` when describing a tool
+    without binding a handler --- e.g. building a request body manually.
+    
+    Example:
+        >>> tool = ToolDefinition(
+        ...     name="search",
+        ...     description="Search the web",
+        ...     parameters={"type": "object", "properties": {"query": {"type": "string"}}},
+        ... )
+    """
+    @property
+    def name(self) -> builtins.str:
+        r"""
+        The unique name of the tool.
+        """
+    @property
+    def description(self) -> builtins.str:
+        r"""
+        A human-readable description of what the tool does.
+        """
+    @property
+    def parameters(self) -> dict[str, typing.Any]:
+        r"""
+        JSON-schema describing the tool's input parameters, as a Python dict.
+        """
+    def __new__(cls, *, name: builtins.str, description: builtins.str, parameters: typing.Any) -> ToolDefinition:
+        r"""
+        Construct a tool definition.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -3758,6 +8150,56 @@ class TranscriptionRequest:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class TypedTool:
+    r"""
+    A typed Python tool whose parameter schema comes from a Pydantic model.
+    
+    Holds an internal [`ToolDef`] you can hand to the agent loop via
+    :meth:`as_tool_def`. The class also exposes the same ``name`` /
+    ``description`` / ``parameters`` getters so it interoperates with
+    any code that introspects a tool surface.
+    
+    Example:
+        >>> from pydantic import BaseModel
+        >>> class AddArgs(BaseModel):
+        ...     a: int
+        ...     b: int
+        >>> async def add(args: AddArgs) -> dict:
+        ...     return {"sum": args.a + args.b}
+        >>> tool = TypedTool(
+        ...     name="add",
+        ...     description="Add two numbers",
+        ...     args_model=AddArgs,
+        ...     handler=add,
+        ... )
+        >>> result = await run_agent(model, msgs, tools=[tool.as_tool_def()])
+    """
+    @property
+    def name(self) -> builtins.str: ...
+    @property
+    def description(self) -> builtins.str: ...
+    @property
+    def parameters(self) -> dict[str, typing.Any]: ...
+    @property
+    def handler(self) -> typing.Any: ...
+    def __new__(cls, *, name: builtins.str, description: builtins.str, args_model: type, handler: typing.Any) -> TypedTool:
+        r"""
+        Build a TypedTool.
+        
+        Args:
+            name: Tool name advertised to the model.
+            description: Human-readable description.
+            args_model: A class exposing ``model_json_schema()`` (any
+                Pydantic v2 model qualifies).
+            handler: Callable invoked with a parsed model instance.
+        """
+    def as_tool_def(self) -> ToolDef:
+        r"""
+        Return a [`ToolDef`] suitable for [`run_agent`] / agent loops.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class UpscaleRequest:
     r"""
     Typed wrapper for an image upscale request.
@@ -3789,6 +8231,77 @@ class ValkeyBackend:
         Args:
             url: A Redis/Valkey connection URL, e.g. "redis://localhost:6379".
             prefix: Optional key prefix for namespacing (default: "blazen:memory:").
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ValkeyCheckpointStore:
+    r"""
+    A Valkey/Redis-backed checkpoint store.
+    
+    Constructed via :meth:`connect` (async) because the underlying connection
+    manager requires an active runtime. Optionally accepts a TTL in seconds
+    after which keys auto-expire.
+    
+    Example:
+        >>> store = await ValkeyCheckpointStore.connect("redis://localhost:6379")
+        >>> # Or with a 24-hour TTL on saved checkpoints:
+        >>> store = await ValkeyCheckpointStore.connect("redis://localhost:6379", ttl_seconds=86400)
+    """
+    @staticmethod
+    async def connect(url: builtins.str, ttl_seconds: typing.Optional[builtins.int] = None) -> ValkeyCheckpointStore:
+        r"""
+        Connect to a Valkey/Redis server at ``url``.
+        
+        Args:
+            url: A Redis/Valkey connection URL such as ``redis://host:port/db``
+                (or ``rediss://`` for TLS).
+            ttl_seconds: Optional TTL applied to every saved checkpoint.
+        
+        This is an async classmethod because the initial connection is established eagerly.
+        """
+    async def save(self, checkpoint: WorkflowCheckpoint) -> None:
+        r"""
+        Persist a checkpoint, overwriting any existing entry with the same ``run_id``.
+        """
+    async def load(self, run_id: builtins.str) -> typing.Optional[WorkflowCheckpoint]:
+        r"""
+        Load a checkpoint by its ``run_id`` (UUID string).
+        """
+    async def list(self) -> list[WorkflowCheckpoint]:
+        r"""
+        List all stored checkpoints, ordered by timestamp descending.
+        """
+    async def delete(self, run_id: builtins.str) -> None:
+        r"""
+        Delete the checkpoint for the given ``run_id`` (UUID string).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class VideoContent:
+    r"""
+    Video content for multimodal messages (Gemini).
+    """
+    @property
+    def source(self) -> ImageSource: ...
+    @property
+    def media_type(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def duration_seconds(self) -> typing.Optional[builtins.float]: ...
+    def __new__(cls, *, source: ImageSource, media_type: typing.Optional[builtins.str] = None, duration_seconds: typing.Optional[builtins.float] = None) -> VideoContent:
+        r"""
+        Construct a video content block.
+        """
+    @staticmethod
+    def from_url(url: builtins.str) -> VideoContent:
+        r"""
+        Build a video block from a public URL.
+        """
+    @staticmethod
+    def from_base64(data: builtins.str, media_type: builtins.str) -> VideoContent:
+        r"""
+        Build a video block from base64-encoded data with an explicit MIME.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -3951,6 +8464,68 @@ class VoiceProvider:
         r"""
         Delete a previously-cloned voice.
         """
+
+@typing.final
+class WhisperCppProvider:
+    r"""
+    A local whisper.cpp transcription provider.
+    
+    Runs speech-to-text fully on-device using the whisper.cpp engine. The
+    provider expects 16-bit PCM mono WAV at 16 kHz; URL audio sources are
+    not supported. Use :meth:`TranscriptionRequest.from_file` with a local
+    path.
+    
+    Example:
+        >>> opts = WhisperOptions(model=WhisperModel.Base)
+        >>> provider = WhisperCppProvider(options=opts)
+        >>> req = TranscriptionRequest.from_file("audio.wav")
+        >>> result = await provider.transcribe(req)
+        >>> print(result.text)
+    """
+    @property
+    def provider_id(self) -> builtins.str:
+        r"""
+        Get the provider identifier (``"whispercpp"``).
+        """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        Alias for :attr:`provider_id` to mirror :class:`CompletionModel`.
+        """
+    def __new__(cls, *, options: typing.Optional[WhisperOptions] = None) -> WhisperCppProvider:
+        r"""
+        Create a new whisper.cpp provider.
+        
+        Args:
+            options: Optional :class:`WhisperOptions` for model size,
+                device, language, and cache directory.
+        """
+    async def transcribe(self, request: TranscriptionRequest) -> TranscriptionResult:
+        r"""
+        Transcribe an audio clip to text.
+        
+        Args:
+            request: A :class:`TranscriptionRequest`. Use
+                :meth:`TranscriptionRequest.from_file` for local files
+                (URL sources are not supported by whisper.cpp).
+        
+        Returns:
+            A :class:`TranscriptionResult` with text, segments, language,
+            timing, cost, and metadata.
+        """
+    async def load(self) -> None:
+        r"""
+        Load the model weights into memory. Idempotent.
+        """
+    async def unload(self) -> None:
+        r"""
+        Drop the loaded model and free its memory.
+        """
+    async def is_loaded(self) -> builtins.bool:
+        r"""
+        Whether the model is currently loaded.
+        """
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class WhisperOptions:
@@ -4119,6 +8694,147 @@ class Workflow:
             >>>
             >>> handler = await Workflow.resume_with_session_refs(snap, [s])
         """
+    @staticmethod
+    def builder(name: builtins.str) -> WorkflowBuilder:
+        r"""
+        Create a fluent [`WorkflowBuilder`] for the given workflow name.
+        
+        Mirrors the Node.js / wasm-sdk surface. Use this when you want to
+        configure the workflow piecemeal rather than passing every option
+        to ``Workflow(...)`` directly.
+        
+        Example:
+            >>> wf = Workflow.builder("my-wf").step(my_step).timeout(60.0).build()
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class WorkflowBuilder:
+    r"""
+    Fluent builder for a [`Workflow`].
+    
+    Each configuration method returns ``self`` so calls can be chained.
+    Call ``build()`` to produce a ready-to-run [`Workflow`].
+    
+    Example:
+        >>> wf = (Workflow.builder("my-wf")
+        ...      .step(my_step)
+        ...      .timeout(60.0)
+        ...      .auto_publish_events(True)
+        ...      .build())
+    """
+    @property
+    def name(self) -> builtins.str:
+        r"""
+        The workflow name.
+        """
+    def __new__(cls, name: builtins.str) -> WorkflowBuilder:
+        r"""
+        Create a new builder with the given workflow name.
+        """
+    def step(self, registration: _StepWrapper) -> WorkflowBuilder:
+        r"""
+        Register a step (an `@step`-decorated function).
+        """
+    def timeout(self, seconds: builtins.float) -> WorkflowBuilder:
+        r"""
+        Set the maximum execution time for the workflow in seconds.
+        """
+    def no_timeout(self) -> WorkflowBuilder:
+        r"""
+        Disable the execution timeout (workflow runs until `StopEvent`).
+        """
+    def auto_publish_events(self, enabled: builtins.bool) -> WorkflowBuilder:
+        r"""
+        Enable automatic publishing of lifecycle events to the broadcast
+        stream. Defaults to ``False``.
+        """
+    def session_pause_policy(self, policy: SessionPausePolicy) -> WorkflowBuilder:
+        r"""
+        Set the session-pause policy for live session references.
+        """
+    def with_history(self) -> WorkflowBuilder:
+        r"""
+        Enable collection of an append-only history of workflow events.
+        """
+    def checkpoint_store(self, store: typing.Any) -> WorkflowBuilder:
+        r"""
+        Configure the checkpoint store backing durable persistence.
+        """
+    def checkpoint_after_step(self, enabled: builtins.bool) -> WorkflowBuilder:
+        r"""
+        Enable or disable automatic checkpointing after each step.
+        """
+    def build(self) -> Workflow:
+        r"""
+        Build the [`Workflow`].
+        
+        Validation: the workflow must have at least one registered step.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class WorkflowCheckpoint:
+    r"""
+    A snapshot of a workflow's state at a point in time.
+    
+    Use a [`CheckpointStore`] backend to ``save``/``load``/``list``/``delete``
+    these snapshots for crash recovery and pause/resume.
+    
+    Example:
+        >>> import uuid
+        >>> from datetime import datetime, timezone
+        >>> cp = WorkflowCheckpoint(
+        ...     workflow_name="demo",
+        ...     run_id=str(uuid.uuid4()),
+        ...     timestamp=datetime.now(timezone.utc).isoformat(),
+        ...     state={"counter": 1},
+        ...     pending_events=[],
+        ...     metadata={},
+        ... )
+    """
+    @property
+    def workflow_name(self) -> builtins.str:
+        r"""
+        The name of the workflow that produced this checkpoint.
+        """
+    @property
+    def run_id(self) -> builtins.str:
+        r"""
+        The unique run id, formatted as a UUID string.
+        """
+    @property
+    def timestamp(self) -> builtins.str:
+        r"""
+        The checkpoint timestamp as an RFC-3339 string.
+        """
+    @property
+    def state(self) -> dict[str, typing.Any]:
+        r"""
+        The state map (key -> JSON-decoded Python value).
+        """
+    @property
+    def pending_events(self) -> builtins.list[PersistedEvent]:
+        r"""
+        The list of pending events captured at checkpoint time.
+        """
+    @property
+    def metadata(self) -> dict[str, typing.Any]:
+        r"""
+        The metadata map (key -> JSON-decoded Python value).
+        """
+    def __new__(cls, workflow_name: builtins.str, run_id: builtins.str = '', timestamp: builtins.str = '', state: typing.Optional[typing.Any] = None, pending_events: typing.Optional[typing.Sequence[typing.Any]] = None, metadata: typing.Optional[typing.Any] = None) -> WorkflowCheckpoint:
+        r"""
+        Construct a new workflow checkpoint.
+        
+        Args:
+            workflow_name: The name of the workflow.
+            run_id: The unique run id (UUID string). If empty, a new UUID is generated.
+            timestamp: An ISO-8601 / RFC-3339 timestamp string. If empty, ``now`` (UTC) is used.
+            state: Optional dict mapping state keys to JSON-serialisable values.
+            pending_events: Optional list of ``PersistedEvent`` instances representing the queue.
+            metadata: Optional dict of arbitrary metadata.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -4195,14 +8911,16 @@ class WorkflowHandler:
         Returns:
             A JSON string representing the workflow snapshot.
         """
-    async def respond_to_input(self, request_id: builtins.str, response: typing.Any) -> None:
+    async def respond_to_input(self, request_id: typing.Any, response: typing.Optional[typing.Any] = None) -> None:
         r"""
         Respond to an input request from a workflow step.
         
         Args:
-            request_id: The ID from the `InputRequestEvent`.
+            request_id: The ID from the `InputRequestEvent`, or an
+                `InputResponseEvent` carrying both id and response.
             response: A Python dict/value that will be converted to JSON and
-                      delivered to the waiting step.
+                delivered to the waiting step. Required when `request_id`
+                is a string; ignored when an `InputResponseEvent` is passed.
         
         Raises `RuntimeError` if the handler was already consumed.
         """
@@ -4218,6 +8936,214 @@ class WorkflowHandler:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class WorkflowHistory:
+    r"""
+    Append-only history of events for a single workflow run.
+    
+    Example:
+        >>> from blazen import WorkflowHistory, HistoryEventKind
+        >>> h = WorkflowHistory("00000000-0000-0000-0000-000000000000", "demo")
+        >>> h.push(HistoryEventKind.workflow_started({"q": "hi"}))
+        >>> h.push(HistoryEventKind.workflow_completed(duration_ms=42))
+        >>> assert len(h) == 2
+    """
+    @property
+    def run_id(self) -> builtins.str:
+        r"""
+        The run UUID as a string.
+        """
+    @property
+    def workflow_name(self) -> builtins.str:
+        r"""
+        The workflow name.
+        """
+    @property
+    def events(self) -> builtins.list[HistoryEvent]:
+        r"""
+        All events recorded so far.
+        """
+    def __new__(cls, run_id: builtins.str, name: builtins.str) -> WorkflowHistory:
+        r"""
+        Create a new empty history for a workflow run.
+        
+        Args:
+            run_id: A UUID string (any RFC 4122 format) identifying the run.
+            name: The name of the workflow being executed.
+        """
+    def push(self, kind: HistoryEventKind) -> None:
+        r"""
+        Append an event to the history.
+        """
+    def __len__(self) -> builtins.int:
+        r"""
+        Number of events recorded.
+        """
+    def len(self) -> builtins.int:
+        r"""
+        Number of events recorded.
+        """
+    def is_empty(self) -> builtins.bool:
+        r"""
+        True if no events have been recorded.
+        """
+    def to_json(self) -> builtins.str:
+        r"""
+        Serialize the full history to a JSON string.
+        """
+    def to_dict(self) -> typing.Any:
+        r"""
+        Convert the full history to a Python dict via the serde representation.
+        """
+    @staticmethod
+    def from_json(json: builtins.str) -> WorkflowHistory:
+        r"""
+        Reconstruct a `WorkflowHistory` from a JSON string.
+        """
+    @staticmethod
+    def from_dict(data: dict) -> WorkflowHistory:
+        r"""
+        Reconstruct a `WorkflowHistory` from a Python dict (matching
+        the `to_dict()` shape).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class WorkflowResult:
+    r"""
+    Final result of a completed workflow run.
+    
+    Mirrors [`blazen_core::WorkflowResult`]: a terminal
+    :class:`Event` plus the :class:`SessionRefRegistry` that owns the
+    in-process objects any session-ref markers on that event refer to.
+    
+    Construct one via the static factory or by reading the components
+    off an existing :class:`WorkflowHandler` result.
+    """
+    @property
+    def event(self) -> Event:
+        r"""
+        The terminal event produced by the workflow.
+        """
+    @property
+    def session_refs(self) -> SessionRefRegistry:
+        r"""
+        The session-ref registry owning the in-process objects that any
+        session-ref markers on the event refer to.
+        """
+    def __new__(cls, event: Event, session_refs: typing.Optional[SessionRefRegistry] = None) -> WorkflowResult:
+        r"""
+        Build a [`WorkflowResult`] from its parts.
+        
+        Args:
+            event: The terminal :class:`Event` produced by the workflow
+                (typically a ``StopEvent``).
+            session_refs: Optional :class:`SessionRefRegistry` that owns
+                the in-process objects referenced by any session-ref
+                markers on the event's payload. Pass ``None`` when the
+                event does not carry session refs.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class WorkflowSnapshot:
+    r"""
+    Typed handle for a [`WorkflowSnapshot`].
+    
+    Construct from a captured snapshot via the `Workflow.snapshot()`
+    helper (which still returns the JSON form for backwards
+    compatibility) by feeding the JSON into
+    `WorkflowSnapshot.from_json(json)`. The class also exposes the binary
+    `MessagePack` codec via `to_msgpack` / `from_msgpack`.
+    """
+    @property
+    def version(self) -> builtins.int:
+        r"""
+        Snapshot format version. See
+        [`blazen_core::snapshot::SNAPSHOT_VERSION`].
+        """
+    @property
+    def workflow_name(self) -> builtins.str:
+        r"""
+        Symbolic name of the workflow that produced this snapshot.
+        """
+    @property
+    def run_id(self) -> builtins.str:
+        r"""
+        Run identifier (UUID, as a string).
+        """
+    @property
+    def timestamp(self) -> builtins.str:
+        r"""
+        Wall-clock capture time as an ISO-8601 string.
+        """
+    def context_state(self) -> dict[str, StateValue]:
+        r"""
+        Decoded view of the captured `context_state` map. Each value is
+        returned as a typed [`PyStateValue`] so callers can distinguish
+        JSON, raw-bytes, and native-pickle entries.
+        """
+    def collected_events(self) -> dict[str, list[typing.Any]]:
+        r"""
+        Fan-in collected events keyed by event-type identifier.
+        """
+    def pending_events(self) -> list[dict[str, typing.Any]]:
+        r"""
+        Pending events that were still in the routing channel at
+        snapshot time. Each item is a `dict` with `event_type`, `data`,
+        and optional `source_step` keys.
+        """
+    def metadata(self) -> dict[str, typing.Any]:
+        r"""
+        Free-form metadata captured alongside the snapshot. Includes
+        `run_id`, `workflow_name`, and any user-defined keys set via
+        `Context.set_metadata`.
+        """
+    def to_json(self) -> builtins.str:
+        r"""
+        Serialize the snapshot to a JSON string.
+        """
+    def to_json_pretty(self) -> builtins.str:
+        r"""
+        Pretty-printed JSON form. Useful for debugging snapshots by
+        hand.
+        """
+    @staticmethod
+    def from_json(json: builtins.str) -> WorkflowSnapshot:
+        r"""
+        Deserialize a snapshot from a JSON string.
+        """
+    def to_msgpack(self) -> builtins.list[builtins.int]:
+        r"""
+        Serialize the snapshot to `MessagePack` bytes.
+        
+        `MessagePack` is more compact than JSON and avoids the per-byte
+        overhead JSON imposes on `StateValue.Bytes` payloads.
+        """
+    @staticmethod
+    def from_msgpack(data: typing.Sequence[builtins.int]) -> WorkflowSnapshot:
+        r"""
+        Deserialize a snapshot from `MessagePack` bytes.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class XaiProvider:
+    r"""
+    An xAI (Grok) provider.
+    
+    Standalone class form of `CompletionModel.xai(...)`.
+    """
+    @property
+    def model_id(self) -> builtins.str: ...
+    def __new__(cls, *, options: typing.Optional[ProviderOptions] = None) -> XaiProvider:
+        r"""
+        Create a new xAI provider.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class _EventStream:
     r"""
     Async iterator over streamed workflow events.
@@ -4230,6 +9156,14 @@ class _EventStream:
     """
     def __aiter__(self) -> _EventStream: ...
     async def __anext__(self) -> Event:
+
+@typing.final
+class _PipelineEventStream:
+    r"""
+    Async iterator over streamed pipeline events.
+    """
+    def __aiter__(self) -> _PipelineEventStream: ...
+    async def __anext__(self) -> PipelineEvent:
 
 @typing.final
 class _SessionRegistryHandle:
@@ -4297,6 +9231,22 @@ class _StepWrapper:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class AuthMethod(enum.Enum):
+    r"""
+    How to send the API key for an OpenAI-compatible provider.
+    
+    - ``Bearer`` → ``Authorization: Bearer <key>``
+    - ``ApiKeyHeader`` → custom header (set ``api_key_header`` on
+      [`OpenAiCompatConfig`])
+    - ``AzureApiKey`` → ``api-key: <key>``
+    - ``KeyPrefix`` → ``Authorization: Key <key>``
+    """
+    Bearer = ...
+    ApiKeyHeader = ...
+    AzureApiKey = ...
+    KeyPrefix = ...
+
+@typing.final
 class CacheStrategy(enum.Enum):
     None = ...
     ContentHash = ...
@@ -4320,6 +9270,19 @@ class Device(enum.Enum):
     Rocm = ...
 
 @typing.final
+class DiffusionScheduler(enum.Enum):
+    r"""
+    Noise schedulers available for the diffusion process.
+    
+    Different schedulers trade off between generation speed and output quality.
+    :attr:`EulerA` is a good default for most use cases.
+    """
+    Euler = ...
+    EulerA = ...
+    Dpm = ...
+    Ddim = ...
+
+@typing.final
 class FalLlmEndpointKind(enum.Enum):
     r"""
     Simplified fal.ai endpoint family.
@@ -4329,6 +9292,56 @@ class FalLlmEndpointKind(enum.Enum):
     OpenAiEmbeddings = ...
     OpenRouter = ...
     AnyLlm = ...
+
+@typing.final
+class JoinStrategy(enum.Enum):
+    r"""
+    How to join the results of parallel branches.
+    """
+    WaitAll = ...
+    r"""
+    Wait for all branches to complete and collect all results.
+    """
+    FirstCompletes = ...
+    r"""
+    Return as soon as the first branch completes; cancel the rest.
+    """
+
+@typing.final
+class PauseReason(enum.Enum):
+    r"""
+    Reason a workflow was paused.
+    """
+    Manual = ...
+    InputRequired = ...
+
+@typing.final
+class ProviderId(enum.Enum):
+    r"""
+    Identifies the underlying provider for `LlmPayload.provider_raw(...)`
+    targeting and other provider-specific routing decisions.
+    
+    Mirrors [`blazen_llm::types::ProviderId`].
+    """
+    OpenAi = ...
+    OpenAiCompat = ...
+    Azure = ...
+    Anthropic = ...
+    Gemini = ...
+    Responses = ...
+    Fal = ...
+
+    @property
+    def name_str(self) -> builtins.str:
+        r"""
+        The canonical wire name (lowercase).
+        """
+    @staticmethod
+    def from_str(value: builtins.str) -> ProviderId:
+        r"""
+        Parse a provider id from its canonical wire name.
+        """
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class Quantization(enum.Enum):
@@ -4354,6 +9367,26 @@ class Quantization(enum.Enum):
     Q2K = ...
     Gptq4Bit = ...
     Awq4Bit = ...
+
+@typing.final
+class RefLifetime(enum.Enum):
+    r"""
+    Lifetime policy for a single session-ref entry.
+    
+    Mirrors [`RefLifetime`]:
+    
+    - `UntilContextDrop` -- purged when the owning `Context` is dropped
+      (default, preserves pre-Phase-11.2 behaviour).
+    - `UntilExplicitDrop` -- never purged automatically; caller must
+      invoke `SessionRefRegistry.remove(key)`.
+    - `UntilSnapshot` -- purged the next time the snapshot walker runs.
+    - `UntilParentFinish` -- purged only when the registry-owning
+      `Context` (typically the parent in a parent/child workflow) drops.
+    """
+    UntilContextDrop = ...
+    UntilExplicitDrop = ...
+    UntilSnapshot = ...
+    UntilParentFinish = ...
 
 @typing.final
 class SessionPausePolicy(enum.Enum):
@@ -4388,6 +9421,25 @@ class SessionPausePolicy(enum.Enum):
     HardError = ...
 
 @typing.final
+class StageKind(enum.Enum):
+    r"""
+    A stage in a pipeline -- either sequential or parallel.
+    """
+    Sequential = ...
+    Parallel = ...
+
+@typing.final
+class TemplateRole(enum.Enum):
+    r"""
+    The role for a prompt template.
+    
+    Maps to the chat ``Role`` produced when the template is rendered.
+    """
+    System = ...
+    User = ...
+    Assistant = ...
+
+@typing.final
 class WhisperModel(enum.Enum):
     r"""
     Whisper model size variant for the local whisper.cpp backend.
@@ -4412,7 +9464,7 @@ class WhisperModel(enum.Enum):
     Medium = ...
     LargeV3 = ...
 
-async def complete_batch(model: CompletionModel, requests: typing.Sequence[typing.Sequence[ChatMessage]], *, concurrency: builtins.int = 0, options: typing.Optional[CompletionOptions] = None) -> BatchResult:
+async def complete_batch(model: CompletionModel, requests: typing.Sequence[typing.Sequence[ChatMessage]], *, config: typing.Optional[BatchConfig] = None, concurrency: builtins.int = 0, options: typing.Optional[CompletionOptions] = None) -> BatchResult:
     r"""
     Execute multiple completion requests in parallel with bounded concurrency.
     
@@ -4444,6 +9496,179 @@ async def complete_batch(model: CompletionModel, requests: typing.Sequence[typin
         ...         print(resp.content)
     """
 
+def compute_elid_similarity(a: builtins.str, b: builtins.str) -> builtins.float:
+    r"""
+    Compute similarity between two ELID strings.
+    
+    Decodes both ELIDs and computes the Hamming distance between their
+    Mini128 payloads, normalized into ``[0.0, 1.0]``.
+    
+    Args:
+        a: First ELID string.
+        b: Second ELID string.
+    
+    Returns:
+        Similarity score in ``[0.0, 1.0]``.
+    
+    Raises:
+        MemoryError: If either string is not a valid Mini128 ELID.
+    """
+
+def compute_embedding_simhash_similarity(a: builtins.str, b: builtins.str) -> builtins.float:
+    r"""
+    Compute similarity between two 128-bit embedding `SimHashes`.
+    
+    Each input is provided as a 32-char hex string (matching the
+    ``simhash_hex`` field on `StoredEntry`). Uses Hamming distance
+    normalized over 128 bits.
+    
+    Args:
+        a: First 128-bit `SimHash` as a hex string.
+        b: Second 128-bit `SimHash` as a hex string.
+    
+    Returns:
+        Similarity score in ``[0.0, 1.0]``.
+    
+    Raises:
+        ValueError: If either argument is not a valid 128-bit hex string.
+    """
+
+def compute_text_simhash_similarity(a: builtins.int, b: builtins.int) -> builtins.float:
+    r"""
+    Compute similarity between two 64-bit text `SimHashes`.
+    
+    Uses Hamming distance normalized over 64 bits: returns a value in
+    ``[0.0, 1.0]`` where ``1.0`` means the hashes are identical.
+    
+    Args:
+        a: First 64-bit `SimHash` value.
+        b: Second 64-bit `SimHash` value.
+    
+    Returns:
+        Similarity score in ``[0.0, 1.0]``.
+    """
+
+def count_message_tokens(messages: typing.Sequence[ChatMessage], context_size: builtins.int = 128000) -> builtins.int:
+    r"""
+    Estimate the number of tokens for a list of chat messages.
+    
+    Includes per-message overhead tokens (role markers, separators, etc.)
+    in addition to the content tokens.
+    
+    Args:
+        messages: A list of ChatMessage objects.
+        context_size: The context window size (default: 128000).
+    
+    Returns:
+        The estimated token count for the full message list.
+    
+    Example:
+        >>> tokens = count_message_tokens([
+        ...     ChatMessage.system("You are helpful."),
+        ...     ChatMessage.user("Hello!"),
+        ... ])
+        >>> print(tokens)
+    """
+
+def env_var_for_provider(provider: builtins.str) -> typing.Optional[builtins.str]:
+    r"""
+    Return the well-known environment variable name for ``provider``.
+    
+    Returns ``None`` for unknown providers.
+    
+    Example:
+        >>> env_var_for_provider("openai")
+        'OPENAI_API_KEY'
+    """
+
+def estimate_tokens(text: builtins.str, context_size: builtins.int = 128000) -> builtins.int:
+    r"""
+    Estimate the number of tokens in a text string.
+    
+    Uses a lightweight heuristic (approximately 3.5 characters per token)
+    that works everywhere without external data files.
+    
+    Args:
+        text: The text to estimate tokens for.
+        context_size: The context window size (default: 128000).
+    
+    Returns:
+        The estimated token count.
+    
+    Example:
+        >>> tokens = estimate_tokens("Hello, world!")
+        >>> print(tokens)  # 4
+    """
+
+def extract_inline_artifacts(content: builtins.str) -> builtins.list[Artifact]:
+    r"""
+    Scan a string of LLM-generated text for inline artifacts.
+    
+    Detects fenced code blocks (` ```python ... ``` `), SVG runs, mermaid
+    diagrams, and similar inline formats. Returns artifacts in source
+    order.
+    
+    Args:
+        content: The assistant content string to scan.
+    
+    Returns:
+        A list of [`Artifact`] objects.
+    """
+
+def format_provider_http_tail(raw_body: builtins.str, *, detail: typing.Optional[builtins.str] = None, request_id: typing.Optional[builtins.str] = None) -> builtins.str:
+    r"""
+    Format the tail string used in a `BlazenError::ProviderHttp` Display.
+    
+    Returns either the structured ``detail`` or a 200-char prefix of
+    ``raw_body``, optionally suffixed with a ``(request-id=...)`` clause.
+    """
+
+def get_context_window(model: builtins.str) -> builtins.int:
+    r"""
+    Best-effort context window size for a model id.
+    
+    Falls back to 128 000 when the model string does not match any known
+    pattern.
+    """
+
+def intern_event_type(name: builtins.str) -> builtins.str:
+    r"""
+    Intern a dynamic event-type name so it can be referenced as a stable
+    identifier. Returns the interned string (always equal to `name`).
+    """
+
+def load_client_tls(cert_pem_path: builtins.str | os.PathLike | pathlib.Path, key_pem_path: builtins.str | os.PathLike | pathlib.Path, ca_pem_path: builtins.str | os.PathLike | pathlib.Path) -> None:
+    r"""
+    Load a client-side TLS configuration from PEM files.
+    
+    Args:
+        cert_pem_path: Path to the client certificate chain (PEM).
+        key_pem_path: Path to the client private key (PEM).
+        ca_pem_path: Path to the CA certificate used to verify the server (PEM).
+    
+    Raises:
+        PeerError: If any of the PEM files cannot be read.
+    """
+
+def load_server_tls(cert_pem_path: builtins.str | os.PathLike | pathlib.Path, key_pem_path: builtins.str | os.PathLike | pathlib.Path, ca_pem_path: builtins.str | os.PathLike | pathlib.Path) -> None:
+    r"""
+    Load a server-side TLS configuration from PEM files.
+    
+    All three files are read eagerly; the returned value is an opaque
+    success indicator (the underlying `tonic::transport::ServerTlsConfig`
+    is not exposed to Python). Use this from a wrapper that wires the
+    result into a server builder, or as a smoke check that the PEM files
+    exist and are readable.
+    
+    Args:
+        cert_pem_path: Path to the server certificate chain (PEM).
+        key_pem_path: Path to the server private key (PEM).
+        ca_pem_path: Path to the CA certificate used to verify clients (PEM).
+    
+    Raises:
+        PeerError: If any of the PEM files cannot be read.
+    """
+
 def lookup_pricing(model_id: builtins.str) -> typing.Optional[ModelPricing]:
     r"""
     Look up pricing for a model ID.
@@ -4462,6 +9687,42 @@ def lookup_pricing(model_id: builtins.str) -> typing.Optional[ModelPricing]:
         ...     print(pricing.input_per_million)
     """
 
+def lookup_step_builder(step_id: builtins.str) -> builtins.bool:
+    r"""
+    Return `True` if `step_id` is registered in the process-global
+    registry.
+    
+    The core API returns a fresh `StepRegistration` (an `Arc<Fn ...>`),
+    which is not exposed to Python. This binding therefore reports
+    presence only -- callers that need to *use* the registration must do
+    so on the Rust side.
+    """
+
+def register_event_deserializer(name: builtins.str, deserializer: typing.Any) -> None:
+    r"""
+    Register a Python callable as the deserializer for the given event type.
+    
+    The callable receives a Python dict (the JSON payload) and must return
+    a [`PyEvent`]. The resulting event is wrapped as a [`DynamicEvent`] for
+    transport through the workflow engine.
+    
+    Python usage:
+    ```python
+    def make_my_event(data: dict) -> Event:
+        return Event("MyEvent", **data)
+    
+    register_event_deserializer("MyEvent", make_my_event)
+    ```
+    """
+
+def register_from_model_info(info: ModelInfo) -> None:
+    r"""
+    Register pricing in the global pricing registry from a [`ModelInfo`].
+    
+    No-op when ``info.pricing`` is ``None`` or contains neither input
+    nor output cost.
+    """
+
 def register_pricing(model_id: builtins.str, pricing: ModelPricing) -> None:
     r"""
     Register pricing for a model ID.
@@ -4473,6 +9734,45 @@ def register_pricing(model_id: builtins.str, pricing: ModelPricing) -> None:
     
     Example:
         >>> register_pricing("my-model", ModelPricing(input_per_million=1.0, output_per_million=2.0))
+    """
+
+def register_step_builder(_step_id: builtins.str, _builder: typing.Any) -> None:
+    r"""
+    Register a step builder in the process-global step registry.
+    
+    **Note:** This binding currently rejects Python callables -- the core
+    registry stores bare `fn` pointers, which cannot be synthesised from a
+    Python function without a per-step trampoline. The `#[step]`
+    proc-macro registers Rust-side builders directly; from Python you can
+    inspect the registry via `lookup_step_builder` and
+    `registered_step_ids`, but registration itself must happen on the
+    Rust side (or via a future trampoline plumbed through this binding).
+    """
+
+def registered_step_ids() -> builtins.list[builtins.str]:
+    r"""
+    Return every step ID currently registered in the process-global
+    registry.
+    """
+
+def resolve_api_key(provider: builtins.str, *, explicit: typing.Optional[builtins.str] = None) -> builtins.str:
+    r"""
+    Resolve an API key for ``provider``.
+    
+    Resolution order:
+    1. ``explicit`` if non-empty.
+    2. The provider's env var (see ``PROVIDER_ENV_VARS``).
+    3. Raises a Blazen auth error if neither is available.
+    
+    Returns the resolved key, or raises an exception on failure.
+    """
+
+def resolve_peer_token() -> typing.Optional[builtins.str]:
+    r"""
+    Read the peer authentication token from the environment.
+    
+    Returns the value of ``BLAZEN_PEER_TOKEN`` when it is set to a
+    non-empty string, ``None`` otherwise.
     """
 
 async def run_agent(model: CompletionModel, messages: typing.Sequence[ChatMessage], *, tools: typing.Sequence[ToolDef], max_iterations: builtins.int = 10, system_prompt: typing.Optional[builtins.str] = None, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, add_finish_tool: builtins.bool = False, tool_concurrency: builtins.int = 0) -> AgentResult:
@@ -4496,6 +9796,91 @@ async def run_agent(model: CompletionModel, messages: typing.Sequence[ChatMessag
     
     Returns:
         AgentResult with the final response and full conversation history.
+    """
+
+async def run_agent_with_callback(model: CompletionModel, messages: typing.Sequence[ChatMessage], *, tools: typing.Sequence[ToolDef], config: AgentConfig, callback: typing.Any) -> AgentResult:
+    r"""
+    Run the agent loop while invoking a Python callback for every
+    [`AgentEvent`].
+    
+    The callback is dispatched synchronously from the agent's Tokio task; if
+    it raises, the error is logged and the loop continues. For long-running
+    observers, schedule work onto an executor inside the callback.
+    
+    Args:
+        model: The completion model to use.
+        messages: Initial conversation messages.
+        tools: List of ToolDef objects.
+        config: Typed [`AgentConfig`].
+        callback: Python callable receiving one [`AgentEvent`] per call.
+    """
+
+def simhash_from_hex(hex_str: builtins.str) -> builtins.int:
+    r"""
+    Parse a hex-encoded 128-bit `SimHash` back into an integer.
+    
+    Python ints are arbitrary-precision so the full 128-bit value is
+    returned without truncation.
+    
+    Args:
+        hex_str: A 32-char hex-encoded `SimHash`.
+    
+    Returns:
+        The decoded `SimHash` as a Python int.
+    
+    Raises:
+        ValueError: If `hex_str` is not a valid 128-bit hex string.
+    """
+
+def simhash_to_hex(value: builtins.int) -> builtins.str:
+    r"""
+    Encode a 128-bit `SimHash` integer as a zero-padded 32-char hex string.
+    
+    Args:
+        value: A 128-bit `SimHash` as a Python int.
+    
+    Returns:
+        A zero-padded 32-character lowercase hex string.
+    
+    Raises:
+        OverflowError: If `value` does not fit in 128 bits.
+    """
+
+def step(func: typing.Optional[typing.Any] = None, *, accepts: typing.Optional[typing.Sequence[builtins.str]] = None, emits: typing.Optional[typing.Sequence[builtins.str]] = None, max_concurrency: builtins.int = 0) -> typing.Any: ...
+
+def try_deserialize_event(name: builtins.str, json_str: builtins.str) -> typing.Optional[Event]:
+    r"""
+    Attempt to deserialize a JSON string into a [`PyEvent`] using the registry.
+    
+    Returns `None` if no deserializer is registered for `name` or if the JSON
+    cannot be parsed.
+    """
+
+def typed_tool_simple(*, name: builtins.str, description: builtins.str, args_model: type, handler: typing.Any) -> ToolDef:
+    r"""
+    Convenience constructor mirroring [`blazen_llm::typed_tool_simple`].
+    
+    Returns a [`ToolDef`] directly so it can be passed straight to
+    [`run_agent`].
+    """
+
+def wrap_with_tracing(model: CompletionModel, provider_name: builtins.str) -> CompletionModel:
+    r"""
+    Wrap a `CompletionModel` with a tracing decorator.
+    
+    Each call to `complete()` or `stream()` is instrumented with an
+    `info_span!` carrying provider name, model id, token usage, duration,
+    and finish reason.
+    
+    Args:
+        model: The CompletionModel to wrap.
+        provider_name: Static label included in every emitted span.
+            Note: the underlying Rust type requires a `'static` lifetime,
+            so the provided string is leaked for the lifetime of the
+            process. Use a small, stable set of labels.
+    
+    Returns:
+        A new CompletionModel that emits tracing spans on every call.
     """
 
 # --- Exception hierarchy ---------------------------------------------------

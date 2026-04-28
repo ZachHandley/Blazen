@@ -3,14 +3,44 @@
 //! Exposes `completeBatch()` as an async function that runs multiple
 //! completion requests in parallel with bounded concurrency.
 
+use serde::{Deserialize, Serialize};
+use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 
-use blazen_llm::batch::{BatchConfig, complete_batch};
+use blazen_llm::batch::{BatchConfig as InnerBatchConfig, complete_batch};
 use blazen_llm::types::CompletionRequest;
 
 use crate::chat_message::js_messages_to_vec;
 use crate::completion_model::WasmCompletionModel;
+
+// ---------------------------------------------------------------------------
+// BatchConfig (tsify-derived plain struct)
+// ---------------------------------------------------------------------------
+
+/// Configuration for a batch completion run.
+///
+/// Mirrors [`blazen_llm::batch::BatchConfig`] as a TypeScript-friendly plain
+/// object. Use `concurrency: 0` for unlimited concurrency.
+#[derive(Debug, Clone, Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct BatchConfig {
+    /// Maximum number of concurrent requests. `0` means unlimited.
+    pub concurrency: usize,
+}
+
+impl BatchConfig {
+    /// Convert this typed config into the underlying `blazen-llm` config.
+    fn into_inner(self) -> InnerBatchConfig {
+        InnerBatchConfig::new(self.concurrency)
+    }
+}
+
+impl Default for BatchConfig {
+    fn default() -> Self {
+        Self { concurrency: 0 }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -70,7 +100,8 @@ pub fn complete_batch_js(
             requests.push(CompletionRequest::new(msgs));
         }
 
-        // Parse optional configuration.
+        // Parse optional configuration. Accepts either a tsify-typed
+        // `BatchConfig` or a loose `{ concurrency }` object.
         let mut concurrency: usize = 0;
         if options.is_object() {
             if let Ok(c) = js_sys::Reflect::get(&options, &JsValue::from_str("concurrency")) {
@@ -83,7 +114,7 @@ pub fn complete_batch_js(
             }
         }
 
-        let config = BatchConfig::new(concurrency);
+        let config = BatchConfig { concurrency }.into_inner();
         let result = complete_batch(model_arc.as_ref(), requests, config).await;
 
         // Build the result JS object.

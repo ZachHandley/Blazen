@@ -9,17 +9,28 @@ repository.workspace = true
 description = "Shared model download and cache layer for Blazen local-inference backends"
 
 [dependencies]
-hf-hub = { workspace = true, features = ["tokio"] }
-tokio = { workspace = true, features = ["fs", "sync"] }
+# wasm32-compatible deps. Tokio is restricted to sync primitives only on
+# wasm32 (no fs / rt / time, all of which drag in mio's `net` feature and
+# break the wasm32 build). Everything filesystem- or HuggingFace-Hub-related
+# lives behind the native target-conditional section below.
+tokio = { version = "1", default-features = false, features = ["sync"] }
 sha2 = { workspace = true }
-dirs = { workspace = true }
 thiserror = { workspace = true }
 dashmap = { workspace = true }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Native-only: hf-hub uses reqwest/ureq + filesystem cache; dirs reads OS
+# paths; tokio::fs needs mio. None of these compile to wasm32.
+hf-hub = { workspace = true, features = ["tokio"] }
+tokio = { version = "1", default-features = false, features = ["fs", "rt", "rt-multi-thread", "macros", "time"] }
+dirs = { workspace = true }
+
 [dev-dependencies]
-tokio = { workspace = true, features = ["full", "test-util"] }
 tempfile = { workspace = true }
 futures-util = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
 
 [lints]
 workspace = true

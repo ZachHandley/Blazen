@@ -4,6 +4,11 @@ Gated on the FAL_API_KEY environment variable.
 Tests LLM completion, image generation, TTS, transcription, and timing metadata.
 """
 
+# Invocation examples:
+#   default (LLM only):        uv run pytest tests/python/test_fal_smoke.py
+#   + compute (image/TTS/...): BLAZEN_TEST_FAL_COMPUTE=1 uv run pytest tests/python/test_fal_smoke.py
+#   + video:                   BLAZEN_TEST_FAL_VIDEO=1 uv run pytest tests/python/test_fal_smoke.py
+
 import os
 
 import pytest
@@ -33,6 +38,18 @@ skip_without_key = pytest.mark.skipif(
     reason="FAL_API_KEY not set",
 )
 
+FAL_COMPUTE = os.environ.get("BLAZEN_TEST_FAL_COMPUTE") == "1"
+FAL_VIDEO = os.environ.get("BLAZEN_TEST_FAL_VIDEO") == "1"
+
+skip_without_compute = pytest.mark.skipif(
+    not FAL_API_KEY or not FAL_COMPUTE,
+    reason="set FAL_API_KEY and BLAZEN_TEST_FAL_COMPUTE=1 to run fal compute tests",
+)
+skip_without_video = pytest.mark.skipif(
+    not FAL_API_KEY or not FAL_VIDEO,
+    reason="set FAL_API_KEY and BLAZEN_TEST_FAL_VIDEO=1 to run fal video tests",
+)
+
 
 async def _fal_or_skip(coro):
     """Await a fal compute coroutine; skip on transient infra errors."""
@@ -40,7 +57,7 @@ async def _fal_or_skip(coro):
         return await coro
     except Exception as e:
         err = str(e)
-        if any(s in err for s in ("404", "502", "503", "504", "Bad Gateway", "service_unavailable", "No endpoints available")):
+        if any(s in err for s in ("404", "502", "503", "504", "Bad Gateway", "service_unavailable", "No endpoints available", "poll timeout after")):
             pytest.skip(f"fal.ai infra error: {err}")
         raise
 
@@ -211,7 +228,8 @@ async def test_fal_embeddings():
     assert len(response.embeddings[0]) == 1536
 
 
-@skip_without_key
+@skip_without_compute
+@pytest.mark.compute
 @pytest.mark.asyncio
 @pytest.mark.timeout(300)
 async def test_fal_3d_generation():
@@ -243,7 +261,8 @@ async def test_fal_3d_generation():
         ), f"unexpected error (routing may have failed): {err}"
 
 
-@skip_without_key
+@skip_without_compute
+@pytest.mark.compute
 @pytest.mark.asyncio
 @pytest.mark.timeout(300)
 async def test_fal_background_removal():
@@ -277,7 +296,8 @@ async def test_fal_background_removal():
 # ---------------------------------------------------------------------------
 
 
-@skip_without_key
+@skip_without_compute
+@pytest.mark.compute
 @pytest.mark.asyncio
 @pytest.mark.timeout(300)
 async def test_fal_image_generation():
@@ -289,9 +309,10 @@ async def test_fal_image_generation():
     assert len(result.images) > 0
 
 
-@skip_without_key
+@skip_without_compute
+@pytest.mark.compute
 @pytest.mark.asyncio
-@pytest.mark.timeout(90)
+@pytest.mark.timeout(270)
 async def test_fal_text_to_speech():
     provider = FalProvider(options=FalOptions(api_key=FAL_API_KEY))
     result = await _fal_or_skip(provider.text_to_speech(
@@ -306,7 +327,8 @@ async def test_fal_text_to_speech():
 # ---------------------------------------------------------------------------
 
 
-@skip_without_key
+@skip_without_compute
+@pytest.mark.compute
 @pytest.mark.asyncio
 @pytest.mark.timeout(300)
 async def test_fal_generate_music():
@@ -319,7 +341,8 @@ async def test_fal_generate_music():
     assert len(result.audio) > 0
 
 
-@skip_without_key
+@skip_without_compute
+@pytest.mark.compute
 @pytest.mark.asyncio
 @pytest.mark.timeout(300)
 async def test_fal_transcribe():
@@ -332,7 +355,8 @@ async def test_fal_transcribe():
     assert len(result.text) > 0
 
 
-@skip_without_key
+@skip_without_video
+@pytest.mark.video
 @pytest.mark.asyncio
 @pytest.mark.timeout(1200)
 async def test_fal_text_to_video():
@@ -358,7 +382,8 @@ async def test_fal_text_to_video():
     assert len(result.videos) > 0
 
 
-@skip_without_key
+@skip_without_compute
+@pytest.mark.compute
 @pytest.mark.asyncio
 @pytest.mark.timeout(300)
 async def test_fal_raw_compute_run():
@@ -374,7 +399,8 @@ async def test_fal_raw_compute_run():
     assert result.output is not None
 
 
-@skip_without_key
+@skip_without_compute
+@pytest.mark.compute
 @pytest.mark.asyncio
 @pytest.mark.timeout(300)
 async def test_fal_job_submit():

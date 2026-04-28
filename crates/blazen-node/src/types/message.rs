@@ -225,6 +225,40 @@ impl JsChatMessage {
         })
     }
 
+    /// Create a tool result message whose payload is a list of multimodal
+    /// content parts (text, image, audio, video).
+    ///
+    /// Useful for tools that return images or other media. The parts live in
+    /// the message's content; the structured `toolResult` field is left
+    /// unset.
+    #[napi(factory, js_name = "toolResultParts")]
+    pub fn tool_result_parts(
+        call_id: String,
+        name: String,
+        parts: Vec<JsContentPart>,
+    ) -> Result<Self> {
+        let content_parts = convert_js_parts(parts)?;
+        Ok(Self {
+            inner: ChatMessage::tool_result_parts(call_id, name, content_parts),
+        })
+    }
+
+    /// Return a snapshot of the tool-result payload as `{ data, llmOverride }`.
+    ///
+    /// Works for both structured tool results (where the payload lives in the
+    /// `toolResult` sibling field) and plain string results (where the payload
+    /// lives in `content`). Returns `null` for messages that are not tool
+    /// results.
+    #[napi(getter, js_name = "toolResultView")]
+    pub fn tool_result_view(&self) -> Option<crate::types::tool_output::ToolOutput> {
+        self.inner.tool_result_view().map(|(data, llm_override)| {
+            crate::types::tool_output::ToolOutput {
+                data,
+                llm_override: llm_override.map(crate::types::tool_output::LlmPayload::from_rust),
+            }
+        })
+    }
+
     /// The role of the message author.
     #[napi(getter)]
     pub fn role(&self) -> String {

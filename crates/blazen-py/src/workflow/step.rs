@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use pyo3::prelude::*;
 use pyo3::types::{PyCFunction, PyDict, PyTuple};
-use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
 
 use blazen_events::AnyEvent;
 
@@ -362,6 +362,7 @@ fn infer_accepts_from_hints(py: Python<'_>, func: &Py<PyAny>) -> Vec<String> {
     }
 }
 
+#[gen_stub_pyfunction]
 #[pyfunction]
 #[pyo3(signature = (func=None, *, accepts=None, emits=None, max_concurrency=0))]
 pub fn step(

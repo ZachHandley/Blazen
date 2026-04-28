@@ -89,12 +89,21 @@ impl WasmCompletionModel {
     pub(crate) fn inner_arc(&self) -> Arc<dyn CompletionModel> {
         Arc::clone(&self.inner)
     }
+
+    /// Construct a [`WasmCompletionModel`] from an existing
+    /// `Arc<dyn CompletionModel>`. Used by the standalone decorator and
+    /// middleware classes (`FallbackModel`, `RetryCompletionModel`,
+    /// `CachedCompletionModel`, `MiddlewareStack`) to expose their wrapped
+    /// model back to JavaScript as a regular `CompletionModel`.
+    pub(crate) fn from_arc(inner: Arc<dyn CompletionModel>) -> Self {
+        Self { inner }
+    }
 }
 
 /// Create an `OpenAiCompatProvider` backed by the fetch HTTP client.
-fn compat_with_fetch(provider: OpenAiCompatProvider) -> OpenAiCompatProvider {
+fn compat_with_fetch(config: OpenAiCompatConfig) -> OpenAiCompatProvider {
     let client: Arc<dyn HttpClient> = FetchHttpClient::new().into_arc();
-    provider.with_http_client(client)
+    OpenAiCompatProvider::new_with_client(config, client)
 }
 
 #[wasm_bindgen(js_class = "CompletionModel")]
@@ -108,7 +117,7 @@ impl WasmCompletionModel {
     pub fn openai() -> Result<WasmCompletionModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("openai", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+        let provider = compat_with_fetch(OpenAiCompatConfig {
             provider_name: "openai".into(),
             base_url: "https://api.openai.com/v1".into(),
             api_key,
@@ -117,7 +126,7 @@ impl WasmCompletionModel {
             extra_headers: Vec::new(),
             query_params: Vec::new(),
             supports_model_listing: true,
-        }));
+        });
         Ok(Self {
             inner: Arc::new(provider),
         })
@@ -128,7 +137,7 @@ impl WasmCompletionModel {
     pub fn openrouter() -> Result<WasmCompletionModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("openrouter", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+        let provider = compat_with_fetch(OpenAiCompatConfig {
             provider_name: "openrouter".into(),
             base_url: "https://openrouter.ai/api/v1".into(),
             api_key,
@@ -137,7 +146,7 @@ impl WasmCompletionModel {
             extra_headers: Vec::new(),
             query_params: Vec::new(),
             supports_model_listing: true,
-        }));
+        });
         Ok(Self {
             inner: Arc::new(provider),
         })
@@ -148,7 +157,7 @@ impl WasmCompletionModel {
     pub fn groq() -> Result<WasmCompletionModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("groq", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+        let provider = compat_with_fetch(OpenAiCompatConfig {
             provider_name: "groq".into(),
             base_url: "https://api.groq.com/openai/v1".into(),
             api_key,
@@ -157,7 +166,7 @@ impl WasmCompletionModel {
             extra_headers: Vec::new(),
             query_params: Vec::new(),
             supports_model_listing: true,
-        }));
+        });
         Ok(Self {
             inner: Arc::new(provider),
         })
@@ -168,7 +177,7 @@ impl WasmCompletionModel {
     pub fn together() -> Result<WasmCompletionModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("together", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+        let provider = compat_with_fetch(OpenAiCompatConfig {
             provider_name: "together".into(),
             base_url: "https://api.together.xyz/v1".into(),
             api_key,
@@ -177,7 +186,7 @@ impl WasmCompletionModel {
             extra_headers: Vec::new(),
             query_params: Vec::new(),
             supports_model_listing: true,
-        }));
+        });
         Ok(Self {
             inner: Arc::new(provider),
         })
@@ -188,7 +197,7 @@ impl WasmCompletionModel {
     pub fn mistral() -> Result<WasmCompletionModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("mistral", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+        let provider = compat_with_fetch(OpenAiCompatConfig {
             provider_name: "mistral".into(),
             base_url: "https://api.mistral.ai/v1".into(),
             api_key,
@@ -197,7 +206,7 @@ impl WasmCompletionModel {
             extra_headers: Vec::new(),
             query_params: Vec::new(),
             supports_model_listing: true,
-        }));
+        });
         Ok(Self {
             inner: Arc::new(provider),
         })
@@ -208,7 +217,7 @@ impl WasmCompletionModel {
     pub fn deepseek() -> Result<WasmCompletionModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("deepseek", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+        let provider = compat_with_fetch(OpenAiCompatConfig {
             provider_name: "deepseek".into(),
             base_url: "https://api.deepseek.com".into(),
             api_key,
@@ -217,7 +226,7 @@ impl WasmCompletionModel {
             extra_headers: Vec::new(),
             query_params: Vec::new(),
             supports_model_listing: false,
-        }));
+        });
         Ok(Self {
             inner: Arc::new(provider),
         })
@@ -228,7 +237,7 @@ impl WasmCompletionModel {
     pub fn fireworks() -> Result<WasmCompletionModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("fireworks", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+        let provider = compat_with_fetch(OpenAiCompatConfig {
             provider_name: "fireworks".into(),
             base_url: "https://api.fireworks.ai/inference/v1".into(),
             api_key,
@@ -237,7 +246,7 @@ impl WasmCompletionModel {
             extra_headers: Vec::new(),
             query_params: Vec::new(),
             supports_model_listing: true,
-        }));
+        });
         Ok(Self {
             inner: Arc::new(provider),
         })
@@ -248,7 +257,7 @@ impl WasmCompletionModel {
     pub fn perplexity() -> Result<WasmCompletionModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("perplexity", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+        let provider = compat_with_fetch(OpenAiCompatConfig {
             provider_name: "perplexity".into(),
             base_url: "https://api.perplexity.ai".into(),
             api_key,
@@ -257,7 +266,7 @@ impl WasmCompletionModel {
             extra_headers: Vec::new(),
             query_params: Vec::new(),
             supports_model_listing: false,
-        }));
+        });
         Ok(Self {
             inner: Arc::new(provider),
         })
@@ -268,7 +277,7 @@ impl WasmCompletionModel {
     pub fn xai() -> Result<WasmCompletionModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("xai", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+        let provider = compat_with_fetch(OpenAiCompatConfig {
             provider_name: "xai".into(),
             base_url: "https://api.x.ai/v1".into(),
             api_key,
@@ -277,7 +286,7 @@ impl WasmCompletionModel {
             extra_headers: Vec::new(),
             query_params: Vec::new(),
             supports_model_listing: true,
-        }));
+        });
         Ok(Self {
             inner: Arc::new(provider),
         })
@@ -288,7 +297,7 @@ impl WasmCompletionModel {
     pub fn cohere() -> Result<WasmCompletionModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("cohere", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+        let provider = compat_with_fetch(OpenAiCompatConfig {
             provider_name: "cohere".into(),
             base_url: "https://api.cohere.ai/compatibility/v1".into(),
             api_key,
@@ -297,7 +306,7 @@ impl WasmCompletionModel {
             extra_headers: Vec::new(),
             query_params: Vec::new(),
             supports_model_listing: false,
-        }));
+        });
         Ok(Self {
             inner: Arc::new(provider),
         })
@@ -308,7 +317,7 @@ impl WasmCompletionModel {
     pub fn bedrock(region: &str) -> Result<WasmCompletionModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("bedrock", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let provider = compat_with_fetch(OpenAiCompatProvider::new(OpenAiCompatConfig {
+        let provider = compat_with_fetch(OpenAiCompatConfig {
             provider_name: "bedrock".into(),
             base_url: format!("https://bedrock-mantle.{region}.api.aws/v1"),
             api_key,
@@ -317,7 +326,7 @@ impl WasmCompletionModel {
             extra_headers: Vec::new(),
             query_params: Vec::new(),
             supports_model_listing: true,
-        }));
+        });
         Ok(Self {
             inner: Arc::new(provider),
         })

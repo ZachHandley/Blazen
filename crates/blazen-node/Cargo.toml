@@ -18,22 +18,37 @@ blazen-llm = { workspace = true, features = ["reqwest"] }
 blazen-manager.workspace = true
 blazen-memory.workspace = true
 blazen-memory-valkey.workspace = true
+blazen-model-cache.workspace = true
+blazen-peer = { workspace = true, features = ["server", "client"] }
+blazen-persist = { workspace = true, features = ["redb", "valkey"] }
+blazen-embed-fastembed = { workspace = true, optional = true }
+blazen-embed-tract = { workspace = true, optional = true }
+blazen-pipeline.workspace = true
 blazen-prompts.workspace = true
+blazen-telemetry = { workspace = true, features = ["history", "spans"] }
 chrono.workspace = true
+elid = { version = "0.4.3", default-features = false, features = ["embeddings"] }
 napi.workspace = true
 napi-derive.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_yml.workspace = true
 async-trait.workspace = true
+futures-util.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
+uuid.workspace = true
 
 [features]
 default = []
+# Exact BPE token counting via tiktoken-rs (forwarded to blazen-llm).
+tiktoken = ["blazen-llm/tiktoken"]
 # Local inference backends (feature-gated, populated per-phase)
 embed = ["blazen-llm/embed"]
+fastembed = ["blazen-llm/embed", "dep:blazen-embed-fastembed"]
+tract = ["dep:blazen-embed-tract"]
 candle-embed = ["blazen-llm/candle-embed"]
 mistralrs = ["blazen-llm/mistralrs"]
 llamacpp = ["blazen-llm/llamacpp"]
@@ -41,7 +56,12 @@ candle-llm = ["blazen-llm/candle-llm"]
 diffusion = ["blazen-llm/diffusion"]
 whispercpp = ["blazen-llm/whispercpp"]
 piper = ["blazen-llm/piper"]
-local-all = ["embed", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "piper"]
+local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "piper"]
+# Distributed peer-to-peer execution (cross-node sub-workflow invocation).
+distributed = ["blazen-core/distributed", "blazen-peer/server", "blazen-peer/client"]
+# Telemetry exporters
+otlp = ["blazen-telemetry/otlp"]
+prometheus = ["blazen-telemetry/prometheus"]
 
 [build-dependencies]
 napi-build = "2"

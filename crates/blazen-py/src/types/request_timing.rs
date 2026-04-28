@@ -9,7 +9,8 @@ use blazen_llm::types::RequestTiming;
 
 /// Breakdown of request timing (queue, execution, total) in milliseconds.
 #[gen_stub_pyclass]
-#[pyclass(name = "RequestTiming", frozen)]
+#[pyclass(name = "RequestTiming", frozen, from_py_object)]
+#[derive(Clone)]
 pub struct PyRequestTiming {
     pub(crate) inner: RequestTiming,
 }

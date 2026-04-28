@@ -7,7 +7,16 @@ use blazen_llm::types::provider_options::{
     AzureOptions, BedrockOptions, FalLlmEndpointKind, FalOptions, ProviderOptions,
 };
 
-#[cfg(any(feature = "embed", feature = "mistralrs", feature = "whispercpp"))]
+#[cfg(any(
+    feature = "embed",
+    feature = "mistralrs",
+    feature = "whispercpp",
+    feature = "llamacpp",
+    feature = "candle-llm",
+    feature = "candle-embed",
+    feature = "piper",
+    feature = "diffusion",
+))]
 use std::path::PathBuf;
 
 // ---------------------------------------------------------------------------
@@ -870,5 +879,808 @@ impl PyWhisperOptions {
             "WhisperOptions(model={}, device={:?}, language={:?})",
             self.inner.model, self.inner.device, self.inner.language
         )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// LlamaCppOptions
+// ---------------------------------------------------------------------------
+
+/// Options for the local llama.cpp LLM backend.
+///
+/// Example:
+///     >>> opts = LlamaCppOptions(model_path="/models/llama-3.2-1b-q4_k_m.gguf")
+///     >>> provider = LlamaCppProvider(options=opts)
+#[cfg(feature = "llamacpp")]
+#[gen_stub_pyclass]
+#[pyclass(name = "LlamaCppOptions", from_py_object)]
+#[derive(Clone, Default)]
+pub struct PyLlamaCppOptions {
+    pub(crate) inner: blazen_llm::LlamaCppOptions,
+}
+
+#[cfg(feature = "llamacpp")]
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyLlamaCppOptions {
+    /// Create a new LlamaCppOptions.
+    ///
+    /// Args:
+    ///     model_path: Path to a GGUF model file or HuggingFace model ID.
+    ///     device: Hardware device specifier (``"cpu"``, ``"cuda:0"``, ``"metal"``).
+    ///     quantization: Quantization format string (e.g. ``"q4_k_m"``).
+    ///     context_length: Maximum context length in tokens.
+    ///     n_gpu_layers: Number of layers to offload to GPU.
+    ///     cache_dir: Path to cache downloaded models.
+    #[new]
+    #[pyo3(signature = (*, model_path=None, device=None, quantization=None, context_length=None, n_gpu_layers=None, cache_dir=None))]
+    fn new(
+        model_path: Option<String>,
+        device: Option<String>,
+        quantization: Option<String>,
+        context_length: Option<usize>,
+        n_gpu_layers: Option<u32>,
+        cache_dir: Option<String>,
+    ) -> Self {
+        Self {
+            inner: blazen_llm::LlamaCppOptions {
+                model_path,
+                device,
+                quantization,
+                context_length,
+                n_gpu_layers,
+                cache_dir: cache_dir.map(PathBuf::from),
+            },
+        }
+    }
+
+    #[getter]
+    fn model_path(&self) -> Option<String> {
+        self.inner.model_path.clone()
+    }
+    #[setter]
+    fn set_model_path(&mut self, value: Option<String>) {
+        self.inner.model_path = value;
+    }
+
+    #[getter]
+    fn device(&self) -> Option<String> {
+        self.inner.device.clone()
+    }
+    #[setter]
+    fn set_device(&mut self, value: Option<String>) {
+        self.inner.device = value;
+    }
+
+    #[getter]
+    fn quantization(&self) -> Option<String> {
+        self.inner.quantization.clone()
+    }
+    #[setter]
+    fn set_quantization(&mut self, value: Option<String>) {
+        self.inner.quantization = value;
+    }
+
+    #[getter]
+    fn context_length(&self) -> Option<usize> {
+        self.inner.context_length
+    }
+    #[setter]
+    fn set_context_length(&mut self, value: Option<usize>) {
+        self.inner.context_length = value;
+    }
+
+    #[getter]
+    fn n_gpu_layers(&self) -> Option<u32> {
+        self.inner.n_gpu_layers
+    }
+    #[setter]
+    fn set_n_gpu_layers(&mut self, value: Option<u32>) {
+        self.inner.n_gpu_layers = value;
+    }
+
+    #[getter]
+    fn cache_dir(&self) -> Option<String> {
+        self.inner
+            .cache_dir
+            .as_ref()
+            .map(|p: &PathBuf| p.display().to_string())
+    }
+    #[setter]
+    fn set_cache_dir(&mut self, value: Option<String>) {
+        self.inner.cache_dir = value.map(PathBuf::from);
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "LlamaCppOptions(model_path={:?}, device={:?})",
+            self.inner.model_path, self.inner.device
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CandleLlmOptions
+// ---------------------------------------------------------------------------
+
+/// Options for the local candle LLM backend.
+///
+/// Example:
+///     >>> opts = CandleLlmOptions(model_id="meta-llama/Llama-3.2-1B")
+///     >>> provider = CandleLlmProvider(options=opts)
+#[cfg(feature = "candle-llm")]
+#[gen_stub_pyclass]
+#[pyclass(name = "CandleLlmOptions", from_py_object)]
+#[derive(Clone, Default)]
+pub struct PyCandleLlmOptions {
+    pub(crate) inner: blazen_llm::CandleLlmOptions,
+}
+
+#[cfg(feature = "candle-llm")]
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyCandleLlmOptions {
+    /// Create a new CandleLlmOptions.
+    ///
+    /// Args:
+    ///     model_id: HuggingFace model ID or local path to weights.
+    ///     device: Hardware device specifier (``"cpu"``, ``"cuda:0"``, ``"metal"``).
+    ///     quantization: Quantization format string (e.g. ``"q4_k_m"``).
+    ///     revision: Model revision / branch on HuggingFace.
+    ///     context_length: Maximum context length in tokens.
+    ///     cache_dir: Path to cache downloaded models.
+    #[new]
+    #[pyo3(signature = (*, model_id=None, device=None, quantization=None, revision=None, context_length=None, cache_dir=None))]
+    fn new(
+        model_id: Option<String>,
+        device: Option<String>,
+        quantization: Option<String>,
+        revision: Option<String>,
+        context_length: Option<usize>,
+        cache_dir: Option<String>,
+    ) -> Self {
+        Self {
+            inner: blazen_llm::CandleLlmOptions {
+                model_id,
+                device,
+                quantization,
+                revision,
+                context_length,
+                cache_dir: cache_dir.map(PathBuf::from),
+            },
+        }
+    }
+
+    #[getter]
+    fn model_id(&self) -> Option<String> {
+        self.inner.model_id.clone()
+    }
+    #[setter]
+    fn set_model_id(&mut self, value: Option<String>) {
+        self.inner.model_id = value;
+    }
+
+    #[getter]
+    fn device(&self) -> Option<String> {
+        self.inner.device.clone()
+    }
+    #[setter]
+    fn set_device(&mut self, value: Option<String>) {
+        self.inner.device = value;
+    }
+
+    #[getter]
+    fn quantization(&self) -> Option<String> {
+        self.inner.quantization.clone()
+    }
+    #[setter]
+    fn set_quantization(&mut self, value: Option<String>) {
+        self.inner.quantization = value;
+    }
+
+    #[getter]
+    fn revision(&self) -> Option<String> {
+        self.inner.revision.clone()
+    }
+    #[setter]
+    fn set_revision(&mut self, value: Option<String>) {
+        self.inner.revision = value;
+    }
+
+    #[getter]
+    fn context_length(&self) -> Option<usize> {
+        self.inner.context_length
+    }
+    #[setter]
+    fn set_context_length(&mut self, value: Option<usize>) {
+        self.inner.context_length = value;
+    }
+
+    #[getter]
+    fn cache_dir(&self) -> Option<String> {
+        self.inner
+            .cache_dir
+            .as_ref()
+            .map(|p: &PathBuf| p.display().to_string())
+    }
+    #[setter]
+    fn set_cache_dir(&mut self, value: Option<String>) {
+        self.inner.cache_dir = value.map(PathBuf::from);
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "CandleLlmOptions(model_id={:?}, device={:?})",
+            self.inner.model_id, self.inner.device
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CandleEmbedOptions
+// ---------------------------------------------------------------------------
+
+/// Options for the local candle embedding backend.
+///
+/// Example:
+///     >>> opts = CandleEmbedOptions(model_id="BAAI/bge-small-en-v1.5")
+///     >>> model = CandleEmbedModel(options=opts)
+#[cfg(feature = "candle-embed")]
+#[gen_stub_pyclass]
+#[pyclass(name = "CandleEmbedOptions", from_py_object)]
+#[derive(Clone, Default)]
+pub struct PyCandleEmbedOptions {
+    pub(crate) inner: blazen_llm::CandleEmbedOptions,
+}
+
+#[cfg(feature = "candle-embed")]
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyCandleEmbedOptions {
+    /// Create a new CandleEmbedOptions.
+    ///
+    /// Args:
+    ///     model_id: HuggingFace model ID
+    ///         (default: ``"sentence-transformers/all-MiniLM-L6-v2"``).
+    ///     device: Hardware device specifier (``"cpu"``, ``"cuda:0"``, ``"metal"``).
+    ///     revision: Model revision / git ref on HuggingFace.
+    ///     cache_dir: Path to cache downloaded models.
+    #[new]
+    #[pyo3(signature = (*, model_id=None, device=None, revision=None, cache_dir=None))]
+    fn new(
+        model_id: Option<String>,
+        device: Option<String>,
+        revision: Option<String>,
+        cache_dir: Option<String>,
+    ) -> Self {
+        Self {
+            inner: blazen_llm::CandleEmbedOptions {
+                model_id,
+                device,
+                revision,
+                cache_dir: cache_dir.map(PathBuf::from),
+            },
+        }
+    }
+
+    #[getter]
+    fn model_id(&self) -> Option<String> {
+        self.inner.model_id.clone()
+    }
+    #[setter]
+    fn set_model_id(&mut self, value: Option<String>) {
+        self.inner.model_id = value;
+    }
+
+    #[getter]
+    fn device(&self) -> Option<String> {
+        self.inner.device.clone()
+    }
+    #[setter]
+    fn set_device(&mut self, value: Option<String>) {
+        self.inner.device = value;
+    }
+
+    #[getter]
+    fn revision(&self) -> Option<String> {
+        self.inner.revision.clone()
+    }
+    #[setter]
+    fn set_revision(&mut self, value: Option<String>) {
+        self.inner.revision = value;
+    }
+
+    #[getter]
+    fn cache_dir(&self) -> Option<String> {
+        self.inner
+            .cache_dir
+            .as_ref()
+            .map(|p: &PathBuf| p.display().to_string())
+    }
+    #[setter]
+    fn set_cache_dir(&mut self, value: Option<String>) {
+        self.inner.cache_dir = value.map(PathBuf::from);
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "CandleEmbedOptions(model_id={:?}, device={:?})",
+            self.inner.model_id, self.inner.device
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PiperOptions
+// ---------------------------------------------------------------------------
+
+/// Options for the local Piper TTS backend.
+///
+/// Example:
+///     >>> opts = PiperOptions(model_id="en_US-amy-medium")
+///     >>> provider = PiperProvider(options=opts)
+#[cfg(feature = "piper")]
+#[gen_stub_pyclass]
+#[pyclass(name = "PiperOptions", from_py_object)]
+#[derive(Clone, Default)]
+pub struct PyPiperOptions {
+    pub(crate) inner: blazen_llm::PiperOptions,
+}
+
+#[cfg(feature = "piper")]
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyPiperOptions {
+    /// Create a new PiperOptions.
+    ///
+    /// Args:
+    ///     model_id: Piper voice model identifier (e.g. ``"en_US-amy-medium"``).
+    ///     speaker_id: Speaker ID for multi-speaker models.
+    ///     sample_rate: Output audio sample rate in Hz.
+    ///     cache_dir: Path to cache downloaded voice models.
+    #[new]
+    #[pyo3(signature = (*, model_id=None, speaker_id=None, sample_rate=None, cache_dir=None))]
+    fn new(
+        model_id: Option<String>,
+        speaker_id: Option<u32>,
+        sample_rate: Option<u32>,
+        cache_dir: Option<String>,
+    ) -> Self {
+        Self {
+            inner: blazen_llm::PiperOptions {
+                model_id,
+                speaker_id,
+                sample_rate,
+                cache_dir: cache_dir.map(PathBuf::from),
+            },
+        }
+    }
+
+    #[getter]
+    fn model_id(&self) -> Option<String> {
+        self.inner.model_id.clone()
+    }
+    #[setter]
+    fn set_model_id(&mut self, value: Option<String>) {
+        self.inner.model_id = value;
+    }
+
+    #[getter]
+    fn speaker_id(&self) -> Option<u32> {
+        self.inner.speaker_id
+    }
+    #[setter]
+    fn set_speaker_id(&mut self, value: Option<u32>) {
+        self.inner.speaker_id = value;
+    }
+
+    #[getter]
+    fn sample_rate(&self) -> Option<u32> {
+        self.inner.sample_rate
+    }
+    #[setter]
+    fn set_sample_rate(&mut self, value: Option<u32>) {
+        self.inner.sample_rate = value;
+    }
+
+    #[getter]
+    fn cache_dir(&self) -> Option<String> {
+        self.inner
+            .cache_dir
+            .as_ref()
+            .map(|p: &PathBuf| p.display().to_string())
+    }
+    #[setter]
+    fn set_cache_dir(&mut self, value: Option<String>) {
+        self.inner.cache_dir = value.map(PathBuf::from);
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "PiperOptions(model_id={:?}, speaker_id={:?})",
+            self.inner.model_id, self.inner.speaker_id
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// DiffusionScheduler
+// ---------------------------------------------------------------------------
+
+/// Noise schedulers available for the diffusion process.
+///
+/// Different schedulers trade off between generation speed and output quality.
+/// :attr:`EulerA` is a good default for most use cases.
+#[cfg(feature = "diffusion")]
+#[gen_stub_pyclass_enum]
+#[pyclass(name = "DiffusionScheduler", eq, eq_int, from_py_object)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum PyDiffusionScheduler {
+    Euler,
+    EulerA,
+    Dpm,
+    Ddim,
+}
+
+#[cfg(feature = "diffusion")]
+#[allow(clippy::derivable_impls)]
+impl Default for PyDiffusionScheduler {
+    fn default() -> Self {
+        Self::EulerA
+    }
+}
+
+#[cfg(feature = "diffusion")]
+impl From<PyDiffusionScheduler> for blazen_llm::DiffusionScheduler {
+    fn from(s: PyDiffusionScheduler) -> Self {
+        match s {
+            PyDiffusionScheduler::Euler => Self::Euler,
+            PyDiffusionScheduler::EulerA => Self::EulerA,
+            PyDiffusionScheduler::Dpm => Self::Dpm,
+            PyDiffusionScheduler::Ddim => Self::Ddim,
+        }
+    }
+}
+
+#[cfg(feature = "diffusion")]
+impl From<blazen_llm::DiffusionScheduler> for PyDiffusionScheduler {
+    fn from(s: blazen_llm::DiffusionScheduler) -> Self {
+        match s {
+            blazen_llm::DiffusionScheduler::Euler => Self::Euler,
+            blazen_llm::DiffusionScheduler::EulerA => Self::EulerA,
+            blazen_llm::DiffusionScheduler::Dpm => Self::Dpm,
+            blazen_llm::DiffusionScheduler::Ddim => Self::Ddim,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// DiffusionOptions
+// ---------------------------------------------------------------------------
+
+/// Options for the local diffusion-rs image generation backend.
+///
+/// Example:
+///     >>> opts = DiffusionOptions(model_id="stabilityai/stable-diffusion-2-1", width=768, height=768)
+///     >>> provider = DiffusionProvider(options=opts)
+#[cfg(feature = "diffusion")]
+#[gen_stub_pyclass]
+#[pyclass(name = "DiffusionOptions", from_py_object)]
+#[derive(Clone, Default)]
+pub struct PyDiffusionOptions {
+    pub(crate) inner: blazen_llm::DiffusionOptions,
+}
+
+#[cfg(feature = "diffusion")]
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyDiffusionOptions {
+    /// Create a new DiffusionOptions.
+    ///
+    /// Args:
+    ///     model_id: HuggingFace model repository ID.
+    ///     device: Hardware device specifier (``"cpu"``, ``"cuda:0"``, ``"metal"``).
+    ///     width: Output image width in pixels (default 512).
+    ///     height: Output image height in pixels (default 512).
+    ///     num_inference_steps: Number of denoising steps (default 20).
+    ///     guidance_scale: Classifier-free guidance scale (default 7.5).
+    ///     scheduler: Noise scheduler enum value (default ``DiffusionScheduler.EulerA``).
+    ///     cache_dir: Path to cache downloaded models.
+    #[new]
+    #[pyo3(signature = (*, model_id=None, device=None, width=None, height=None, num_inference_steps=None, guidance_scale=None, scheduler=None, cache_dir=None))]
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        model_id: Option<String>,
+        device: Option<String>,
+        width: Option<u32>,
+        height: Option<u32>,
+        num_inference_steps: Option<u32>,
+        guidance_scale: Option<f32>,
+        scheduler: Option<PyDiffusionScheduler>,
+        cache_dir: Option<String>,
+    ) -> Self {
+        Self {
+            inner: blazen_llm::DiffusionOptions {
+                model_id,
+                device,
+                width,
+                height,
+                num_inference_steps,
+                guidance_scale,
+                scheduler: scheduler.map(Into::into).unwrap_or_default(),
+                cache_dir: cache_dir.map(PathBuf::from),
+            },
+        }
+    }
+
+    #[getter]
+    fn model_id(&self) -> Option<String> {
+        self.inner.model_id.clone()
+    }
+    #[setter]
+    fn set_model_id(&mut self, value: Option<String>) {
+        self.inner.model_id = value;
+    }
+
+    #[getter]
+    fn device(&self) -> Option<String> {
+        self.inner.device.clone()
+    }
+    #[setter]
+    fn set_device(&mut self, value: Option<String>) {
+        self.inner.device = value;
+    }
+
+    #[getter]
+    fn width(&self) -> Option<u32> {
+        self.inner.width
+    }
+    #[setter]
+    fn set_width(&mut self, value: Option<u32>) {
+        self.inner.width = value;
+    }
+
+    #[getter]
+    fn height(&self) -> Option<u32> {
+        self.inner.height
+    }
+    #[setter]
+    fn set_height(&mut self, value: Option<u32>) {
+        self.inner.height = value;
+    }
+
+    #[getter]
+    fn num_inference_steps(&self) -> Option<u32> {
+        self.inner.num_inference_steps
+    }
+    #[setter]
+    fn set_num_inference_steps(&mut self, value: Option<u32>) {
+        self.inner.num_inference_steps = value;
+    }
+
+    #[getter]
+    fn guidance_scale(&self) -> Option<f32> {
+        self.inner.guidance_scale
+    }
+    #[setter]
+    fn set_guidance_scale(&mut self, value: Option<f32>) {
+        self.inner.guidance_scale = value;
+    }
+
+    #[getter]
+    fn scheduler(&self) -> PyDiffusionScheduler {
+        self.inner.scheduler.into()
+    }
+    #[setter]
+    fn set_scheduler(&mut self, value: PyDiffusionScheduler) {
+        self.inner.scheduler = value.into();
+    }
+
+    #[getter]
+    fn cache_dir(&self) -> Option<String> {
+        self.inner
+            .cache_dir
+            .as_ref()
+            .map(|p: &PathBuf| p.display().to_string())
+    }
+    #[setter]
+    fn set_cache_dir(&mut self, value: Option<String>) {
+        self.inner.cache_dir = value.map(PathBuf::from);
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "DiffusionOptions(model_id={:?}, width={:?}, height={:?})",
+            self.inner.model_id, self.inner.width, self.inner.height
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// FastEmbedOptions  (alias of EmbedOptions facade on non-musl)
+// ---------------------------------------------------------------------------
+
+/// Options for the local fastembed (ONNX Runtime) embedding backend.
+///
+/// Mirrors :class:`EmbedOptions`; the underlying crate is
+/// ``blazen-embed-fastembed``. Only available on non-musl targets where
+/// the Microsoft-prebuilt ONNX Runtime binaries can link.
+///
+/// Example:
+///     >>> opts = FastEmbedOptions(model_name="BGESmallENV15")
+///     >>> model = FastEmbedModel(options=opts)
+#[cfg(all(feature = "embed", not(target_env = "musl")))]
+#[gen_stub_pyclass]
+#[pyclass(name = "FastEmbedOptions", from_py_object)]
+#[derive(Clone, Default)]
+pub struct PyFastEmbedOptions {
+    pub(crate) inner: blazen_llm::EmbedOptions,
+}
+
+#[cfg(all(feature = "embed", not(target_env = "musl")))]
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyFastEmbedOptions {
+    /// Create a new FastEmbedOptions.
+    ///
+    /// Args:
+    ///     model_name: Fastembed model variant name (e.g. ``"BGESmallENV15"``).
+    ///     cache_dir: Model cache directory path.
+    ///     max_batch_size: Maximum batch size for embedding.
+    ///     show_download_progress: Show download progress when fetching models.
+    #[new]
+    #[pyo3(signature = (*, model_name=None, cache_dir=None, max_batch_size=None, show_download_progress=None))]
+    fn new(
+        model_name: Option<String>,
+        cache_dir: Option<String>,
+        max_batch_size: Option<usize>,
+        show_download_progress: Option<bool>,
+    ) -> Self {
+        Self {
+            inner: blazen_llm::EmbedOptions {
+                model_name,
+                cache_dir: cache_dir.map(PathBuf::from),
+                max_batch_size,
+                show_download_progress,
+            },
+        }
+    }
+
+    #[getter]
+    fn model_name(&self) -> Option<String> {
+        self.inner.model_name.clone()
+    }
+    #[setter]
+    fn set_model_name(&mut self, value: Option<String>) {
+        self.inner.model_name = value;
+    }
+
+    #[getter]
+    fn cache_dir(&self) -> Option<String> {
+        self.inner
+            .cache_dir
+            .as_ref()
+            .map(|p: &PathBuf| p.display().to_string())
+    }
+    #[setter]
+    fn set_cache_dir(&mut self, value: Option<String>) {
+        self.inner.cache_dir = value.map(PathBuf::from);
+    }
+
+    #[getter]
+    fn max_batch_size(&self) -> Option<usize> {
+        self.inner.max_batch_size
+    }
+    #[setter]
+    fn set_max_batch_size(&mut self, value: Option<usize>) {
+        self.inner.max_batch_size = value;
+    }
+
+    #[getter]
+    fn show_download_progress(&self) -> Option<bool> {
+        self.inner.show_download_progress
+    }
+    #[setter]
+    fn set_show_download_progress(&mut self, value: Option<bool>) {
+        self.inner.show_download_progress = value;
+    }
+
+    fn __repr__(&self) -> String {
+        format!("FastEmbedOptions(model_name={:?})", self.inner.model_name)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// TractOptions
+// ---------------------------------------------------------------------------
+
+/// Options for the local tract (pure-Rust ONNX) embedding backend.
+///
+/// Mirrors :class:`FastEmbedOptions`; the underlying crate is
+/// ``blazen-embed-tract``. Available on every target the ``tract``
+/// feature is enabled for -- including musl and other environments
+/// where fastembed's prebuilt ONNX Runtime binaries are unavailable.
+///
+/// Example:
+///     >>> opts = TractOptions(model_name="BGESmallENV15")
+///     >>> model = TractEmbedModel(options=opts)
+#[cfg(feature = "tract")]
+#[gen_stub_pyclass]
+#[pyclass(name = "TractOptions", from_py_object)]
+#[derive(Clone, Default)]
+pub struct PyTractOptions {
+    pub(crate) inner: blazen_embed_tract::TractOptions,
+}
+
+#[cfg(feature = "tract")]
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyTractOptions {
+    /// Create a new TractOptions.
+    ///
+    /// Args:
+    ///     model_name: Embedding model variant name (e.g. ``"BGESmallENV15"``).
+    ///     cache_dir: Model cache directory path.
+    ///     max_batch_size: Maximum batch size for embedding.
+    ///     show_download_progress: Show download progress when fetching models.
+    #[new]
+    #[pyo3(signature = (*, model_name=None, cache_dir=None, max_batch_size=None, show_download_progress=None))]
+    fn new(
+        model_name: Option<String>,
+        cache_dir: Option<String>,
+        max_batch_size: Option<usize>,
+        show_download_progress: Option<bool>,
+    ) -> Self {
+        Self {
+            inner: blazen_embed_tract::TractOptions {
+                model_name,
+                cache_dir: cache_dir.map(PathBuf::from),
+                max_batch_size,
+                show_download_progress,
+            },
+        }
+    }
+
+    #[getter]
+    fn model_name(&self) -> Option<String> {
+        self.inner.model_name.clone()
+    }
+    #[setter]
+    fn set_model_name(&mut self, value: Option<String>) {
+        self.inner.model_name = value;
+    }
+
+    #[getter]
+    fn cache_dir(&self) -> Option<String> {
+        self.inner
+            .cache_dir
+            .as_ref()
+            .map(|p: &PathBuf| p.display().to_string())
+    }
+    #[setter]
+    fn set_cache_dir(&mut self, value: Option<String>) {
+        self.inner.cache_dir = value.map(PathBuf::from);
+    }
+
+    #[getter]
+    fn max_batch_size(&self) -> Option<usize> {
+        self.inner.max_batch_size
+    }
+    #[setter]
+    fn set_max_batch_size(&mut self, value: Option<usize>) {
+        self.inner.max_batch_size = value;
+    }
+
+    #[getter]
+    fn show_download_progress(&self) -> Option<bool> {
+        self.inner.show_download_progress
+    }
+    #[setter]
+    fn set_show_download_progress(&mut self, value: Option<bool>) {
+        self.inner.show_download_progress = value;
+    }
+
+    fn __repr__(&self) -> String {
+        format!("TractOptions(model_name={:?})", self.inner.model_name)
     }
 }

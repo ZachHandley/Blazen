@@ -798,9 +798,9 @@ impl PyCompletionModel {
 ///
 /// Boxed to keep the enum variant sizes balanced (avoids
 /// `clippy::large_enum_variant`).
-struct PendingStream {
-    model: Arc<dyn CompletionModel>,
-    request: Option<CompletionRequest>,
+pub(crate) struct PendingStream {
+    pub(crate) model: Arc<dyn CompletionModel>,
+    pub(crate) request: Option<CompletionRequest>,
 }
 
 /// Internal state for [`PyLazyCompletionStream`].
@@ -808,7 +808,7 @@ struct PendingStream {
 /// The stream is lazily initialized on the first `__anext__` call so that the
 /// Python caller can use the natural `async for chunk in model.stream(...)`
 /// form without having to `await` the method first.
-enum LazyStreamState {
+pub(crate) enum LazyStreamState {
     /// The underlying stream has not yet been requested.
     NotStarted(Box<PendingStream>),
     /// The stream is active and yielding chunks.
@@ -828,7 +828,7 @@ enum LazyStreamState {
 #[gen_stub_pyclass]
 #[pyclass(name = "CompletionStream")]
 pub struct PyLazyCompletionStream {
-    state: Arc<Mutex<LazyStreamState>>,
+    pub(crate) state: Arc<Mutex<LazyStreamState>>,
 }
 
 #[gen_stub_pymethods]
@@ -1078,6 +1078,16 @@ impl CompletionModel for PySubclassCompletionModel {
     fn provider_config(&self) -> Option<&blazen_llm::ProviderConfig> {
         None
     }
+}
+
+/// Public re-export of [`build_py_options_from_request`] for sibling
+/// modules that need to reify a Rust `CompletionRequest` back into
+/// Python [`PyCompletionOptions`] (e.g. the middleware adapter).
+pub(crate) fn build_py_options_from_request_helper(
+    py: Python<'_>,
+    request: &blazen_llm::CompletionRequest,
+) -> PyResult<Option<Py<PyCompletionOptions>>> {
+    build_py_options_from_request(py, request)
 }
 
 /// Build a [`PyCompletionOptions`] instance from a [`CompletionRequest`].

@@ -21,12 +21,18 @@ doctest = false
 [dependencies]
 async-trait.workspace = true
 blazen-core.workspace = true
+blazen-embed-tract = { workspace = true, optional = true }
 blazen-events.workspace = true
 blazen-llm = { workspace = true, features = ["reqwest", "pyo3-serde"] }
 blazen-manager.workspace = true
 blazen-memory.workspace = true
 blazen-memory-valkey.workspace = true
+blazen-model-cache.workspace = true
+blazen-peer = { workspace = true, features = ["server", "client"] }
+blazen-persist = { workspace = true, features = ["redb", "valkey"] }
+blazen-pipeline.workspace = true
 blazen-prompts.workspace = true
+blazen-telemetry = { workspace = true, features = ["history", "spans"] }
 chrono.workspace = true
 pyo3.workspace = true
 pyo3-async-runtimes.workspace = true
@@ -37,6 +43,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
+uuid.workspace = true
 base64.workspace = true
 pythonize = "0.28"
 pyo3-stub-gen = "0.22"
@@ -54,7 +61,15 @@ candle-llm = ["blazen-llm/candle-llm"]
 diffusion = ["blazen-llm/diffusion"]
 whispercpp = ["blazen-llm/whispercpp"]
 piper = ["blazen-llm/piper"]
+tiktoken = ["blazen-llm/tiktoken"]
+# Pure-Rust ONNX embedding backend (musl/WASM-friendly alternative to fastembed).
+tract = ["dep:blazen-embed-tract"]
 local-all = ["embed", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "piper"]
+# Telemetry exporters
+otlp = ["blazen-telemetry/otlp"]
+prometheus = ["blazen-telemetry/prometheus"]
+# Distributed workflow types (RemoteWorkflowRequest/Response, PeerClient ABC)
+distributed = ["blazen-core/distributed", "blazen-peer/server", "blazen-peer/client"]
 
 [lints]
 workspace = true

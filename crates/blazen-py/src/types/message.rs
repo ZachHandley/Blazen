@@ -296,6 +296,43 @@ impl PyChatMessage {
         }
     }
 
+    /// Create a tool result message whose payload is a list of multimodal
+    /// content parts (text + image / audio / video / file). Useful for tools
+    /// that return images.
+    ///
+    /// Args:
+    ///     call_id: The ``tool_call_id`` of the invocation this responds to.
+    ///     name: The function name of the invocation this responds to.
+    ///     parts: List of ``ContentPart`` objects forming the multimodal payload.
+    #[staticmethod]
+    #[pyo3(signature = (*, call_id, name, parts))]
+    fn tool_result_parts(call_id: &str, name: &str, parts: Vec<PyRef<'_, PyContentPart>>) -> Self {
+        let rust_parts: Vec<ContentPart> = parts.iter().map(|p| p.inner.clone()).collect();
+        Self {
+            inner: ChatMessage::tool_result_parts(call_id, name, rust_parts),
+        }
+    }
+
+    /// Snapshot of the tool-result payload as a ``(data, llm_override)`` tuple,
+    /// regardless of whether it lives in ``tool_result`` or in ``content`` as
+    /// plain text. Returns ``None`` if this is not a ``role="tool"`` message.
+    ///
+    /// ``data`` is always returned as a parsed Python value. ``llm_override``
+    /// is an ``LlmPayload`` if one was set, else ``None``.
+    #[gen_stub(override_return_type(type_repr = "typing.Optional[tuple[typing.Any, typing.Optional[LlmPayload]]]", imports = ("typing",)))]
+    fn tool_result_view(
+        &self,
+        py: Python<'_>,
+    ) -> PyResult<Option<(Py<PyAny>, Option<crate::types::tool::PyLlmPayload>)>> {
+        let Some((data, override_ref)) = self.inner.tool_result_view() else {
+            return Ok(None);
+        };
+        let py_data = crate::convert::json_to_py(py, &data)?;
+        let py_override =
+            override_ref.map(|p| crate::types::tool::PyLlmPayload { inner: p.clone() });
+        Ok(Some((py_data, py_override)))
+    }
+
     /// Get the role as a string.
     #[getter]
     fn role(&self) -> &str {

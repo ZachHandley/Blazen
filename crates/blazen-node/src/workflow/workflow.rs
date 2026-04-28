@@ -4,7 +4,7 @@
 //! workflows with step handlers as async functions.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use blazen_core::SessionRefDeserializerFn;
@@ -23,6 +23,7 @@ use super::event::{any_event_to_js_value, js_value_to_any_event};
 use super::handler::JsWorkflowHandler;
 use super::session_ref_serializable::{DESERIALIZER_FN, intern_type_tag};
 use crate::error::workflow_error_to_napi;
+use crate::persist::JsCheckpointStore;
 
 // ---------------------------------------------------------------------------
 // SessionPausePolicy enum
@@ -175,6 +176,7 @@ pub struct JsWorkflow {
     steps: Vec<JsStepRegistration>,
     timeout_secs: Option<f64>,
     session_pause_policy: JsSessionPausePolicy,
+    auto_publish_events: bool,
 }
 
 #[napi]
@@ -188,7 +190,22 @@ impl JsWorkflow {
             steps: Vec::new(),
             timeout_secs: Some(300.0), // 5 min default
             session_pause_policy: JsSessionPausePolicy::PickleOrError,
+            auto_publish_events: false,
         }
+    }
+
+    /// Start a fluent builder for a workflow with the given name.
+    ///
+    /// ```javascript
+    /// const wf = Workflow.builder("my-wf")
+    ///     .addStep("first", ["blazen::StartEvent"], async (ev, ctx) => /* ... */)
+    ///     .timeout(60)
+    ///     .autoPublishEvents(true)
+    ///     .build();
+    /// ```
+    #[napi]
+    pub fn builder(name: String) -> JsWorkflowBuilder {
+        JsWorkflowBuilder::new_internal(name)
     }
 
     /// Configure how live session refs are treated when the workflow
@@ -200,6 +217,17 @@ impl JsWorkflow {
     #[napi(js_name = "setSessionPausePolicy")]
     pub fn set_session_pause_policy(&mut self, policy: JsSessionPausePolicy) {
         self.session_pause_policy = policy;
+    }
+
+    /// Enable or disable automatic publishing of lifecycle events to the
+    /// broadcast stream.
+    ///
+    /// When enabled, the event loop publishes `DynamicEvent`s with type
+    /// `"blazen::lifecycle"` at key decision points (event routed, step
+    /// started, step completed, step failed). Defaults to `false`.
+    #[napi(js_name = "setAutoPublishEvents")]
+    pub fn set_auto_publish_events(&mut self, enabled: bool) {
+        self.auto_publish_events = enabled;
     }
 
     /// Add a step to the workflow.
@@ -422,7 +450,7 @@ impl JsWorkflow {
 
 impl JsWorkflow {
     /// Build the internal `Workflow` from the registered steps.
-    fn build_workflow(&self) -> Result<blazen_core::Workflow> {
+    pub(crate) fn build_workflow(&self) -> Result<blazen_core::Workflow> {
         let mut builder = blazen_core::WorkflowBuilder::new(self.name.clone());
 
         if let Some(secs) = self.timeout_secs {
@@ -437,8 +465,276 @@ impl JsWorkflow {
         }
 
         builder = builder.session_pause_policy(self.session_pause_policy.into());
+        builder = builder.auto_publish_events(self.auto_publish_events);
 
         builder.build().map_err(workflow_error_to_napi)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// JsWorkflowBuilder
+// ---------------------------------------------------------------------------
+
+/// Internal mutable state for [`JsWorkflowBuilder`]. Wrapped in a
+/// [`Mutex`] so the builder can expose chainable `&self` methods (each
+/// call mutates the inner state behind the lock).
+#[allow(clippy::struct_excessive_bools)]
+struct WorkflowBuilderState {
+    name: String,
+    steps: Vec<JsStepRegistration>,
+    timeout_secs: Option<f64>,
+    session_pause_policy: JsSessionPausePolicy,
+    auto_publish_events: bool,
+    /// Mirrors the `with_history` flag on
+    /// [`blazen_core::WorkflowBuilder`]. Stored here for forward
+    /// compatibility — the underlying call site is gated on the
+    /// `telemetry` feature on `blazen-core`, which is not enabled in
+    /// this binding's compilation, so the flag is currently a no-op.
+    /// Setting it does NOT raise an error so JS code can opt into the
+    /// API ahead of the feature being turned on without breaking.
+    collect_history: bool,
+    /// Mirrors `checkpoint_after_step`. Same forward-compatibility
+    /// caveat as `collect_history`.
+    checkpoint_after_step: bool,
+    /// `true` once `checkpointStore(...)` has been called. Same caveat
+    /// as `collect_history` — currently does not flow into the core
+    /// builder because the `persist` feature is off here.
+    checkpoint_store_set: bool,
+}
+
+/// Fluent builder for constructing a [`JsWorkflow`].
+///
+/// Obtained via [`JsWorkflow::builder`]. All configuration methods
+/// take `&self` and return `&Self` so they can be chained from
+/// JavaScript. `build()` consumes the builder; calling any other
+/// method after `build()` raises a `napi::Error`.
+///
+/// ```javascript
+/// const wf = Workflow.builder("my-wf")
+///     .addStep("first", ["blazen::StartEvent"], async (ev, ctx) => {
+///         return { type: "blazen::StopEvent", result: ev };
+///     })
+///     .timeout(60)
+///     .autoPublishEvents(true)
+///     .sessionPausePolicy(SessionPausePolicy.PickleOrSerialize)
+///     .build();
+/// ```
+#[napi(js_name = "WorkflowBuilder")]
+pub struct JsWorkflowBuilder {
+    inner: Mutex<Option<WorkflowBuilderState>>,
+}
+
+#[napi]
+#[allow(
+    clippy::must_use_candidate,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::needless_pass_by_value
+)]
+impl JsWorkflowBuilder {
+    /// Construct a fresh builder. Equivalent to
+    /// [`JsWorkflow::builder`] but exposed as a constructor so JS code
+    /// can also write `new WorkflowBuilder("name")`.
+    #[napi(constructor)]
+    pub fn new(name: String) -> Self {
+        Self::new_internal(name)
+    }
+
+    /// Set the workflow name. Replaces any name passed to the
+    /// constructor.
+    #[napi]
+    pub fn name(&self, name: String) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let state = guard
+            .as_mut()
+            .ok_or_else(JsWorkflowBuilder::consumed_error)?;
+        state.name = name;
+        Ok(self)
+    }
+
+    /// Append a step. The step's `handler` is an `async (event, ctx)`
+    /// JavaScript function; the workflow engine routes events whose
+    /// `type` matches one of `eventTypes` to it.
+    #[napi(js_name = "addStep")]
+    pub fn add_step(
+        &self,
+        name: String,
+        event_types: Vec<String>,
+        handler: StepHandlerTsfn,
+    ) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let state = guard
+            .as_mut()
+            .ok_or_else(JsWorkflowBuilder::consumed_error)?;
+        state.steps.push(JsStepRegistration {
+            name,
+            event_types,
+            handler: Arc::new(handler),
+        });
+        Ok(self)
+    }
+
+    /// Set the workflow timeout in seconds. A non-positive value
+    /// disables the timeout (equivalent to [`Self::no_timeout`]).
+    #[napi]
+    pub fn timeout(&self, seconds: f64) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let state = guard
+            .as_mut()
+            .ok_or_else(JsWorkflowBuilder::consumed_error)?;
+        if seconds <= 0.0 {
+            state.timeout_secs = None;
+        } else {
+            state.timeout_secs = Some(seconds);
+        }
+        Ok(self)
+    }
+
+    /// Disable the workflow timeout — the workflow runs until a
+    /// `StopEvent` is emitted.
+    #[napi(js_name = "noTimeout")]
+    pub fn no_timeout(&self) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let state = guard
+            .as_mut()
+            .ok_or_else(JsWorkflowBuilder::consumed_error)?;
+        state.timeout_secs = None;
+        Ok(self)
+    }
+
+    /// Enable or disable automatic publishing of lifecycle events to
+    /// the broadcast stream. See [`JsWorkflow::set_auto_publish_events`].
+    #[napi(js_name = "autoPublishEvents")]
+    pub fn auto_publish_events(&self, enabled: bool) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let state = guard
+            .as_mut()
+            .ok_or_else(JsWorkflowBuilder::consumed_error)?;
+        state.auto_publish_events = enabled;
+        Ok(self)
+    }
+
+    /// Configure the [`JsSessionPausePolicy`] applied to live session
+    /// refs at pause/snapshot time. Defaults to
+    /// `SessionPausePolicy.PickleOrError`.
+    #[napi(js_name = "sessionPausePolicy")]
+    pub fn session_pause_policy(&self, policy: JsSessionPausePolicy) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let state = guard
+            .as_mut()
+            .ok_or_else(JsWorkflowBuilder::consumed_error)?;
+        state.session_pause_policy = policy;
+        Ok(self)
+    }
+
+    /// Enable history collection.
+    ///
+    /// Mirrors [`blazen_core::WorkflowBuilder::with_history`]. The
+    /// underlying call is gated on the `telemetry` feature of
+    /// `blazen-core`, which is **not** currently enabled in the Node
+    /// binding's compilation. The flag is recorded on the builder for
+    /// forward compatibility but does not yet flow into the core
+    /// engine — calls to `withHistory()` complete successfully but do
+    /// not change runtime behavior. The setting will start taking
+    /// effect once the `blazen-core/telemetry` feature is enabled in
+    /// `crates/blazen-node/Cargo.toml`.
+    #[napi(js_name = "withHistory")]
+    pub fn with_history(&self) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let state = guard
+            .as_mut()
+            .ok_or_else(JsWorkflowBuilder::consumed_error)?;
+        state.collect_history = true;
+        Ok(self)
+    }
+
+    /// Attach a checkpoint store to the workflow.
+    ///
+    /// Mirrors [`blazen_core::WorkflowBuilder::checkpoint_store`]. The
+    /// underlying call is gated on the `persist` feature of
+    /// `blazen-core`, which is **not** currently enabled in the Node
+    /// binding's compilation. The flag is recorded on the builder for
+    /// forward compatibility but does not yet flow into the core
+    /// engine — pass a [`JsCheckpointStore`] (typically a concrete
+    /// subclass like `RedbCheckpointStore` or `ValkeyCheckpointStore`)
+    /// so the JS API is stable; the binding will start forwarding the
+    /// store once the `blazen-core/persist` feature is enabled in
+    /// `crates/blazen-node/Cargo.toml`.
+    #[napi(js_name = "checkpointStore")]
+    pub fn checkpoint_store(&self, _store: &JsCheckpointStore) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let state = guard
+            .as_mut()
+            .ok_or_else(JsWorkflowBuilder::consumed_error)?;
+        state.checkpoint_store_set = true;
+        Ok(self)
+    }
+
+    /// Enable or disable automatic checkpointing after each step
+    /// completes. Same forward-compatibility caveat as
+    /// [`Self::with_history`] — the flag is recorded but does not yet
+    /// flow into the core engine.
+    #[napi(js_name = "checkpointAfterStep")]
+    pub fn checkpoint_after_step(&self, enabled: bool) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let state = guard
+            .as_mut()
+            .ok_or_else(JsWorkflowBuilder::consumed_error)?;
+        state.checkpoint_after_step = enabled;
+        Ok(self)
+    }
+
+    /// Validate and produce the [`JsWorkflow`]. Consumes the builder —
+    /// any subsequent method call (including a second `build()`) will
+    /// raise a `napi::Error`.
+    ///
+    /// The forward-compat fields (`collect_history`,
+    /// `checkpoint_after_step`, `checkpoint_store_set`) are read and
+    /// dropped here — they will start flowing into the core engine
+    /// once the matching `blazen-core/{telemetry,persist}` features
+    /// are enabled in the Node binding's `Cargo.toml`.
+    #[napi]
+    pub fn build(&self) -> Result<JsWorkflow> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let state = guard.take().ok_or_else(JsWorkflowBuilder::consumed_error)?;
+
+        let _ = state.collect_history;
+        let _ = state.checkpoint_after_step;
+        let _ = state.checkpoint_store_set;
+
+        Ok(JsWorkflow {
+            name: state.name,
+            steps: state.steps,
+            timeout_secs: state.timeout_secs,
+            session_pause_policy: state.session_pause_policy,
+            auto_publish_events: state.auto_publish_events,
+        })
+    }
+}
+
+impl JsWorkflowBuilder {
+    /// Shared constructor used by both [`Self::new`] and
+    /// [`JsWorkflow::builder`].
+    pub(crate) fn new_internal(name: String) -> Self {
+        Self {
+            inner: Mutex::new(Some(WorkflowBuilderState {
+                name,
+                steps: Vec::new(),
+                timeout_secs: Some(300.0),
+                session_pause_policy: JsSessionPausePolicy::PickleOrError,
+                auto_publish_events: false,
+                collect_history: false,
+                checkpoint_after_step: false,
+                checkpoint_store_set: false,
+            })),
+        }
+    }
+
+    fn consumed_error() -> napi::Error {
+        napi::Error::new(
+            Status::GenericFailure,
+            "WorkflowBuilder already consumed (build() was called)",
+        )
     }
 }
 

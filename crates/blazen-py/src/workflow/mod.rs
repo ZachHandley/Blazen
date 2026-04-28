@@ -1,5 +1,6 @@
 //! Workflow engine: events, steps, context, handler, and workflow types.
 
+pub mod builder;
 pub mod context;
 pub mod event;
 pub mod handler;

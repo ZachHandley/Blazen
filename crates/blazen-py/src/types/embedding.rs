@@ -39,6 +39,20 @@ pub struct PyEmbeddingModel {
     pub(crate) dimensions_override: Option<usize>,
 }
 
+impl PyEmbeddingModel {
+    /// Build a `PyEmbeddingModel` from a fully-constructed Rust model.
+    ///
+    /// Used by sibling provider wrappers (e.g. [`PyTogetherProvider`])
+    /// that expose an `embedding_model()` factory.
+    pub(crate) fn from_arc(inner: Arc<dyn EmbeddingModel>) -> Self {
+        Self {
+            inner: Some(inner),
+            config: None,
+            dimensions_override: None,
+        }
+    }
+}
+
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyEmbeddingModel {

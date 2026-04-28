@@ -22,6 +22,29 @@ pyo3::create_exception!(blazen, UnsupportedError, BlazenException);
 pyo3::create_exception!(blazen, ComputeError, BlazenException);
 pyo3::create_exception!(blazen, MediaError, BlazenException);
 
+// Per-backend provider error subclasses. All subclass `ProviderError` so
+// callers that don't care which backend failed can keep a single
+// `except ProviderError:` arm. Callers that DO care can branch on the
+// concrete backend exception.
+#[cfg(feature = "llamacpp")]
+pyo3::create_exception!(blazen, LlamaCppError, ProviderError);
+#[cfg(feature = "candle-llm")]
+pyo3::create_exception!(blazen, CandleLlmError, ProviderError);
+#[cfg(feature = "candle-embed")]
+pyo3::create_exception!(blazen, CandleEmbedError, ProviderError);
+#[cfg(feature = "mistralrs")]
+pyo3::create_exception!(blazen, MistralRsError, ProviderError);
+#[cfg(feature = "whispercpp")]
+pyo3::create_exception!(blazen, WhisperError, ProviderError);
+#[cfg(feature = "piper")]
+pyo3::create_exception!(blazen, PiperError, ProviderError);
+#[cfg(feature = "diffusion")]
+pyo3::create_exception!(blazen, DiffusionError, ProviderError);
+#[cfg(all(feature = "embed", not(target_env = "musl")))]
+pyo3::create_exception!(blazen, FastEmbedError, ProviderError);
+#[cfg(feature = "tract")]
+pyo3::create_exception!(blazen, TractError, ProviderError);
+
 /// Register all custom exception types on the Python module.
 pub fn register_exceptions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("BlazenError", m.py().get_type::<BlazenException>())?;
@@ -37,6 +60,26 @@ pub fn register_exceptions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("UnsupportedError", m.py().get_type::<UnsupportedError>())?;
     m.add("ComputeError", m.py().get_type::<ComputeError>())?;
     m.add("MediaError", m.py().get_type::<MediaError>())?;
+
+    #[cfg(feature = "llamacpp")]
+    m.add("LlamaCppError", m.py().get_type::<LlamaCppError>())?;
+    #[cfg(feature = "candle-llm")]
+    m.add("CandleLlmError", m.py().get_type::<CandleLlmError>())?;
+    #[cfg(feature = "candle-embed")]
+    m.add("CandleEmbedError", m.py().get_type::<CandleEmbedError>())?;
+    #[cfg(feature = "mistralrs")]
+    m.add("MistralRsError", m.py().get_type::<MistralRsError>())?;
+    #[cfg(feature = "whispercpp")]
+    m.add("WhisperError", m.py().get_type::<WhisperError>())?;
+    #[cfg(feature = "piper")]
+    m.add("PiperError", m.py().get_type::<PiperError>())?;
+    #[cfg(feature = "diffusion")]
+    m.add("DiffusionError", m.py().get_type::<DiffusionError>())?;
+    #[cfg(all(feature = "embed", not(target_env = "musl")))]
+    m.add("FastEmbedError", m.py().get_type::<FastEmbedError>())?;
+    #[cfg(feature = "tract")]
+    m.add("TractError", m.py().get_type::<TractError>())?;
+
     Ok(())
 }
 
