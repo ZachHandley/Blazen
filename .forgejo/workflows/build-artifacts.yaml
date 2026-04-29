@@ -416,11 +416,41 @@ jobs:
             export RUSTFLAGS="-C target-feature=-crt-static"
             TARGET_FLAG=""
           fi
+          # maturin 1.13.x's bundled auditwheel policy caps manylinux_2_28 at
+          # GLIBCXX_3.4.24, but the real manylinux_2_28 spec (and PyPA's
+          # auditwheel) allow 3.4.25 — which is what GCC 8's libstdc++ emits
+          # for ordinary C++17 code from llama-cpp-sys-2 / whisper-rs-sys /
+          # candle-*-sys / piper-sys / mistralrs. Skip maturin's stale audit
+          # for GNU manylinux slots and run PyPA auditwheel afterward.
+          AUDITWHEEL_FLAG=""
+          if [[ "${{ matrix.container-kind }}" == "manylinux" && "${{ matrix.target }}" == *"-linux-gnu" ]]; then
+            AUDITWHEEL_FLAG="--auditwheel skip"
+          fi
           uvx maturin build --release \
             -m crates/blazen-py/Cargo.toml \
             $TARGET_FLAG \
             $MANYLINUX_FLAG \
+            $AUDITWHEEL_FLAG \
             $INTERPRETERS
+
+          # Run real PyPA auditwheel on GNU manylinux wheels: bundles any
+          # external shared libs and stamps the correct manylinux_2_28 tag.
+          if [[ -n "$AUDITWHEEL_FLAG" ]]; then
+            WHEELS_DIR="${CARGO_TARGET_DIR:-target}/wheels"
+            ARCH="$(uname -m)"
+            mkdir -p "$WHEELS_DIR/repaired"
+            for whl in "$WHEELS_DIR"/*.whl; do
+              uvx auditwheel repair \
+                --plat "manylinux_2_28_${ARCH}" \
+                -w "$WHEELS_DIR/repaired" \
+                "$whl"
+            done
+            rm -f "$WHEELS_DIR"/*.whl
+            mv "$WHEELS_DIR/repaired"/*.whl "$WHEELS_DIR/"
+            rmdir "$WHEELS_DIR/repaired"
+            echo "Repaired wheels:"
+            ls -1 "$WHEELS_DIR"
+          fi
 
       - name: Build wheels (Windows)
         if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
