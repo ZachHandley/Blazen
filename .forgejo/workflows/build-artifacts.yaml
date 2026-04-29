@@ -130,7 +130,7 @@ jobs:
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'musl'
         run: |
           apt-get update -qq
-          apt-get install -y -qq cmake ccache pkg-config curl libssl-dev patchelf libclang-dev
+          apt-get install -y -qq cmake ccache pkg-config curl libssl-dev patchelf libclang-dev protobuf-compiler
 
       - name: Install system deps (alpine)
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'alpine'
@@ -141,7 +141,8 @@ jobs:
             cmake make ccache \
             pkgconf openssl-dev \
             clang-dev llvm-dev \
-            perl patchelf libffi-dev
+            perl patchelf libffi-dev \
+            protobuf-dev
 
       - name: Ensure musl toolchain on PATH and pin cargo linker
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'musl'
@@ -667,7 +668,7 @@ jobs:
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'musl'
         run: |
           apt-get update -qq
-          apt-get install -y -qq cmake ccache pkg-config curl libssl-dev libclang-dev
+          apt-get install -y -qq cmake ccache pkg-config curl libssl-dev libclang-dev protobuf-compiler
 
       - name: Install system deps (alpine)
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'alpine'
@@ -678,7 +679,8 @@ jobs:
             cmake make ccache \
             pkgconf openssl-dev \
             clang-dev llvm-dev \
-            perl patchelf libffi-dev
+            perl patchelf libffi-dev \
+            protobuf-dev
 
       - name: Ensure musl toolchain on PATH and pin cargo linker
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'musl'

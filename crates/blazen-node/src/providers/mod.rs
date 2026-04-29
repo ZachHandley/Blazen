@@ -35,7 +35,7 @@ pub mod candle_llm;
 pub mod diffusion;
 #[cfg(feature = "embed")]
 pub mod embed;
-#[cfg(feature = "fastembed")]
+#[cfg(all(feature = "fastembed", not(target_env = "musl")))]
 pub mod fastembed;
 #[cfg(feature = "llamacpp")]
 pub mod llamacpp;
@@ -91,7 +91,7 @@ pub use candle_llm::{JsCandleLlmOptions, JsCandleLlmProvider};
 pub use diffusion::{JsDiffusionOptions, JsDiffusionProvider, JsDiffusionScheduler};
 #[cfg(feature = "embed")]
 pub use embed::JsEmbedProvider;
-#[cfg(feature = "fastembed")]
+#[cfg(all(feature = "fastembed", not(target_env = "musl")))]
 pub use fastembed::{JsFastEmbedModel, JsFastEmbedOptions, JsFastEmbedResponse};
 #[cfg(feature = "llamacpp")]
 pub use llamacpp::{

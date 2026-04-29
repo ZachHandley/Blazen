@@ -21,7 +21,6 @@ blazen-memory-valkey.workspace = true
 blazen-model-cache.workspace = true
 blazen-peer = { workspace = true, features = ["server", "client"] }
 blazen-persist = { workspace = true, features = ["redb", "valkey"] }
-blazen-embed-fastembed = { workspace = true, optional = true }
 blazen-embed-tract = { workspace = true, optional = true }
 blazen-pipeline.workspace = true
 blazen-prompts.workspace = true
@@ -75,3 +74,6 @@ workspace = true
 
 [target.'cfg(unix)'.dependencies]
 openssl-sys = { version = "0.9", features = ["vendored"] }
+
+[target.'cfg(not(target_env = "musl"))'.dependencies]
+blazen-embed-fastembed = { workspace = true, optional = true }
