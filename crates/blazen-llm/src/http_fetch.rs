@@ -28,11 +28,13 @@ use crate::http::{ByteStream, HttpClient, HttpMethod, HttpRequest, HttpResponse}
 struct SendFuture<F>(F);
 
 // SAFETY: WASM is single-threaded.
+#[allow(unsafe_code)]
 unsafe impl<F> Send for SendFuture<F> {}
 
 impl<F: std::future::Future> std::future::Future for SendFuture<F> {
     type Output = F::Output;
 
+    #[allow(unsafe_code)]
     fn poll(
         self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -56,7 +58,9 @@ impl<F: std::future::Future> std::future::Future for SendFuture<F> {
 pub struct FetchHttpClient;
 
 // SAFETY: WASM is single-threaded; there is no thread to race with.
+#[allow(unsafe_code)]
 unsafe impl Send for FetchHttpClient {}
+#[allow(unsafe_code)]
 unsafe impl Sync for FetchHttpClient {}
 
 impl FetchHttpClient {
@@ -187,7 +191,9 @@ struct ReadableStreamWrapper {
     reader: web_sys::ReadableStreamDefaultReader,
 }
 
+#[allow(unsafe_code)]
 unsafe impl Send for ReadableStreamWrapper {}
+#[allow(unsafe_code)]
 unsafe impl Sync for ReadableStreamWrapper {}
 
 impl Stream for ReadableStreamWrapper {

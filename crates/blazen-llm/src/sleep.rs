@@ -32,11 +32,13 @@ async fn cfg_sleep(duration: Duration) {
     struct SendJsFuture(wasm_bindgen_futures::JsFuture);
 
     // SAFETY: wasm32 is single-threaded — there is no other thread to send to.
+    #[allow(unsafe_code)]
     unsafe impl Send for SendJsFuture {}
 
     impl Future for SendJsFuture {
         type Output = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
 
+        #[allow(unsafe_code)]
         fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
             // SAFETY: we never move the inner JsFuture out of the Pin.
             unsafe { self.map_unchecked_mut(|s| &mut s.0) }.poll(cx)
