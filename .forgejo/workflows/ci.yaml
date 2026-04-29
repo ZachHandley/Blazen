@@ -370,7 +370,7 @@ jobs:
 
       - name: Install wasm-pack
         if: steps.check.outputs.completed != 'true'
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+        run: cargo install wasm-pack --locked
 
       - name: Regenerate Python pyi stub + drift check
         if: steps.check.outputs.completed != 'true'
@@ -461,7 +461,7 @@ jobs:
 
       - name: Install wasm-pack
         if: steps.check.outputs.completed != 'true'
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+        run: cargo install wasm-pack --locked
 
       - name: wasm-pack build (blazen-wasm-sdk)
         if: steps.check.outputs.completed != 'true'
