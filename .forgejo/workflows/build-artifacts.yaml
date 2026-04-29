@@ -126,6 +126,13 @@ jobs:
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'manylinux'
         run: yum install -y cmake openssl-devel ccache pkg-config curl perl-core perl-Time-Piece clang-devel
 
+      - name: Install protoc (manylinux)
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'manylinux'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-system-deps@main
+        with:
+          packages: protobuf-compiler
+          cross-platform: 'true'
+
       - name: Install system deps (musl)
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'musl'
         run: |
@@ -663,6 +670,13 @@ jobs:
       - name: Install system deps (manylinux)
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'manylinux'
         run: yum install -y cmake openssl-devel ccache pkg-config curl perl-core perl-Time-Piece clang-devel
+
+      - name: Install protoc (manylinux)
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'manylinux'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-system-deps@main
+        with:
+          packages: protobuf-compiler
+          cross-platform: 'true'
 
       - name: Install system deps (musl)
         if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'musl'
