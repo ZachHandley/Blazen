@@ -416,12 +416,18 @@ jobs:
             export RUSTFLAGS="-C target-feature=-crt-static"
             TARGET_FLAG=""
           fi
-          # maturin 1.13.x's bundled auditwheel policy caps manylinux_2_28 at
-          # GLIBCXX_3.4.24, but the real manylinux_2_28 spec (and PyPA's
-          # auditwheel) allow 3.4.25 — which is what GCC 8's libstdc++ emits
-          # for ordinary C++17 code from llama-cpp-sys-2 / whisper-rs-sys /
-          # candle-*-sys / piper-sys / mistralrs. Skip maturin's stale audit
-          # for GNU manylinux slots and run PyPA auditwheel afterward.
+          # GCC 8.5 (AlmaLinux 8 / manylinux_2_28 system compiler) emits
+          # GLIBCXX_3.4.25 references for ordinary C++17 stdlib code from
+          # llama-cpp-sys-2 / whisper-rs-sys / piper-sys etc., which exceeds
+          # both maturin's bundled and PyPA's manylinux_2_28 policy cap of
+          # GLIBCXX_3.4.24. Static-link libstdc++/libgcc so the C++ runtime
+          # is inlined into the final .so and no GLIBCXX dynamic dep escapes.
+          if [[ "${{ matrix.container-kind }}" == "manylinux" && "${{ matrix.target }}" == *"-linux-gnu" ]]; then
+            export RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=-static-libstdc++ -C link-arg=-static-libgcc"
+          fi
+          # maturin 1.13.x's bundled auditwheel policy is also one micro-version
+          # behind PyPA's; skip it and run real PyPA auditwheel afterward to
+          # bundle any external libs and stamp the manylinux_2_28 platform tag.
           AUDITWHEEL_FLAG=""
           if [[ "${{ matrix.container-kind }}" == "manylinux" && "${{ matrix.target }}" == *"-linux-gnu" ]]; then
             AUDITWHEEL_FLAG="--auditwheel skip"
@@ -433,11 +439,15 @@ jobs:
             $AUDITWHEEL_FLAG \
             $INTERPRETERS
 
-          # Run real PyPA auditwheel on GNU manylinux wheels: bundles any
-          # external shared libs and stamps the correct manylinux_2_28 tag.
+          # Run real PyPA auditwheel on GNU manylinux wheels.
           if [[ -n "$AUDITWHEEL_FLAG" ]]; then
             WHEELS_DIR="${CARGO_TARGET_DIR:-target}/wheels"
             ARCH="$(uname -m)"
+            echo "=== Pre-repair symbol diagnostic (auditwheel show) ==="
+            for whl in "$WHEELS_DIR"/*.whl; do
+              echo "--- $whl ---"
+              uvx auditwheel show "$whl" || true
+            done
             mkdir -p "$WHEELS_DIR/repaired"
             for whl in "$WHEELS_DIR"/*.whl; do
               uvx auditwheel repair \
