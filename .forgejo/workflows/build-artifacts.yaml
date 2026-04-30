@@ -37,12 +37,12 @@ jobs:
             runs-on: ubuntu-latest
             container: forge.blackleafdigital.com/blackleafdigital/blazen-ci-base:x86_64-unknown-linux-gnu
             container-kind: manylinux
-            manylinux: "2_28"
+            manylinux: "2_34"
           - target: aarch64-unknown-linux-gnu
             runs-on: arm64
-            container: quay.io/pypa/manylinux_2_28_aarch64
+            container: forge.blackleafdigital.com/blackleafdigital/blazen-ci-base:aarch64-unknown-linux-gnu
             container-kind: manylinux
-            manylinux: "2_28"
+            manylinux: "2_34"
           - target: x86_64-unknown-linux-musl
             runs-on: ubuntu-latest
             container: forge.blackleafdigital.com/blackleafdigital/blazen-ci-base:x86_64-unknown-linux-musl
@@ -394,6 +394,24 @@ jobs:
           unset CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER
           unset RUSTC_WRAPPER
 
+          # GNU manylinux: enable gcc-toolset-14 so cmake/cargo see gcc 14.
+          # System gcc 8.5 emits an unresolvable __cxx11::filesystem_error
+          # typeinfo from C++17 stdlib code; gcc-toolset-14 emits the modern
+          # ABI-tag form. The wheel's symbol footprint (max GLIBC 2.32 via
+          # ort-sys's prebuilt onnxruntime, max GLIBCXX 3.4.25) lands within
+          # manylinux_2_34's allowance.
+          if [[ "${{ matrix.container-kind }}" == "manylinux" && "${{ matrix.target }}" == *"-linux-gnu" ]]; then
+            if [ -f /opt/rh/gcc-toolset-14/enable ]; then
+              set +u
+              source /opt/rh/gcc-toolset-14/enable
+              set -u
+              echo "Activated gcc-toolset-14: $(gcc --version | head -1)"
+            else
+              echo "ERROR: /opt/rh/gcc-toolset-14/enable missing in $(uname -m) ci-base image" >&2
+              exit 1
+            fi
+          fi
+
           INTERPRETERS=""
           for V in 3.10 3.11 3.12 3.13 3.14; do
             INTERP=$(uv python find "$V" 2>/dev/null) && INTERPRETERS="$INTERPRETERS -i $INTERP" || echo "Python $V unavailable, skipping"
@@ -416,50 +434,19 @@ jobs:
             export RUSTFLAGS="-C target-feature=-crt-static"
             TARGET_FLAG=""
           fi
-          # GCC 8.5 (AlmaLinux 8 / manylinux_2_28 system compiler) emits
-          # GLIBCXX_3.4.25 references for ordinary C++17 stdlib code from
-          # llama-cpp-sys-2 / whisper-rs-sys / piper-sys etc., which exceeds
-          # both maturin's bundled and PyPA's manylinux_2_28 policy cap of
-          # GLIBCXX_3.4.24. Static-link libstdc++/libgcc so the C++ runtime
-          # is inlined into the final .so and no GLIBCXX dynamic dep escapes.
-          if [[ "${{ matrix.container-kind }}" == "manylinux" && "${{ matrix.target }}" == *"-linux-gnu" ]]; then
-            export RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=-static-libstdc++ -C link-arg=-static-libgcc"
-          fi
-          # maturin 1.13.x's bundled auditwheel policy is also one micro-version
-          # behind PyPA's; skip it and run real PyPA auditwheel afterward to
-          # bundle any external libs and stamp the manylinux_2_28 platform tag.
-          AUDITWHEEL_FLAG=""
-          if [[ "${{ matrix.container-kind }}" == "manylinux" && "${{ matrix.target }}" == *"-linux-gnu" ]]; then
-            AUDITWHEEL_FLAG="--auditwheel skip"
-          fi
           uvx maturin build --release \
             -m crates/blazen-py/Cargo.toml \
             $TARGET_FLAG \
             $MANYLINUX_FLAG \
-            $AUDITWHEEL_FLAG \
             $INTERPRETERS
 
-          # Run real PyPA auditwheel on GNU manylinux wheels.
-          if [[ -n "$AUDITWHEEL_FLAG" ]]; then
+          # Diagnostic: show the symbol envelope auditwheel observed.
+          if [[ "${{ matrix.container-kind }}" == "manylinux" && "${{ matrix.target }}" == *"-linux-gnu" ]]; then
             WHEELS_DIR="${CARGO_TARGET_DIR:-target}/wheels"
-            ARCH="$(uname -m)"
-            echo "=== Pre-repair symbol diagnostic (auditwheel show) ==="
             for whl in "$WHEELS_DIR"/*.whl; do
               echo "--- $whl ---"
               uvx auditwheel show "$whl" || true
             done
-            mkdir -p "$WHEELS_DIR/repaired"
-            for whl in "$WHEELS_DIR"/*.whl; do
-              uvx auditwheel repair \
-                --plat "manylinux_2_28_${ARCH}" \
-                -w "$WHEELS_DIR/repaired" \
-                "$whl"
-            done
-            rm -f "$WHEELS_DIR"/*.whl
-            mv "$WHEELS_DIR/repaired"/*.whl "$WHEELS_DIR/"
-            rmdir "$WHEELS_DIR/repaired"
-            echo "Repaired wheels:"
-            ls -1 "$WHEELS_DIR"
           fi
 
       - name: Build wheels (Windows)
