@@ -241,6 +241,8 @@ npx tsx examples/custom_memory_backend.ts
 
 Track VRAM across multiple local models. Register each model with an estimated footprint; when loading a new one would exceed the budget, the least-recently-used model is automatically unloaded.
 
+> **Note:** `budgetBytes`, `vramEstimateBytes`, `usedBytes`, `availableBytes`, and `vramEstimate` are JS `bigint`s (since the Rust side uses `u64` and `>4 GiB` budgets used to silently truncate). `budgetGb` is still a regular `number`.
+
 ```typescript
 import { CompletionModel, ModelManager } from "blazen";
 
@@ -257,9 +259,10 @@ const mistral24b = CompletionModel.mistralrs({
   modelId: "mistralai/Mistral-Small-24B",
 });
 
-await manager.register("llama-8b", llama8b, 8 * 1024 ** 3);
-await manager.register("qwen-14b", qwen14b, 14 * 1024 ** 3);
-await manager.register("mistral-24b", mistral24b, 20 * 1024 ** 3);
+// vramEstimateBytes is a bigint -- use bigint literal arithmetic.
+await manager.register("llama-8b", llama8b, 8n * 1024n ** 3n);
+await manager.register("qwen-14b", qwen14b, 14n * 1024n ** 3n);
+await manager.register("mistral-24b", mistral24b, 20n * 1024n ** 3n);
 
 // Fits alongside qwen-14b (8 + 14 = 22 GB).
 await manager.load("llama-8b");
@@ -269,8 +272,14 @@ await manager.load("qwen-14b");
 await manager.load("mistral-24b");
 
 for (const s of await manager.status()) {
+  // s.vramEstimate is a bigint; toLocaleString() works directly on bigints.
   console.log(`${s.id}: loaded=${s.loaded}, vram=${s.vramEstimate.toLocaleString()} bytes`);
 }
+
+// usedBytes() and availableBytes() resolve to bigint -- divide by a bigint to get GB.
+const used = await manager.usedBytes();
+const available = await manager.availableBytes();
+console.log(`used=${used / (1024n ** 3n)} GB, available=${available / (1024n ** 3n)} GB`);
 ```
 
 ```sh

@@ -1202,28 +1202,84 @@ new MemoryResult(id: string, text: string, score: number, metadata: any);
 
 VRAM budget-aware model manager with LRU eviction. Not typically used in WASM (where GPU model loading is uncommon), but available for tracking model state.
 
-> **Backed by the real `blazen_manager::ModelManager`.** Earlier WASM builds shipped a `HashMap` reimpl with the same surface; the binding now wraps the real Rust manager, so eviction order, budget accounting, and concurrent-access semantics match the native and Node bindings exactly. The JS API surface (`register`, `unregister`, `load`, `unload`, `isLoaded`, `usedBytes`, `availableBytes`, `budgetBytes`, `status`) is unchanged.
+> **Backed by the real `blazen_manager::ModelManager`.** Method names match the native and Node bindings; the WASM constructor takes a single `number` of gigabytes as a positional argument (no options object). Unlike the Node binding, WASM byte-quantity getters return plain `number` (`f64`) — JS doubles carry 53 bits of mantissa, more than enough for any realistic VRAM budget — so there is no BigInt migration on this surface.
 
 ### Constructor
 
 ```typescript
-const manager = new ModelManager({ budgetGb: 24 });
-// or
-const manager = new ModelManager({ budgetBytes: 24 * 1_073_741_824 });
+const manager = new ModelManager(8);   // 8 GB budget
 ```
+
+| Argument | Type | Description |
+|---|---|---|
+| `budgetGb` | `number` | VRAM budget in gigabytes. Converted to bytes internally (`budgetGb * 1_073_741_824`). |
 
 ### Methods
 
 | Method | Signature | Description |
 |---|---|---|
-| `register` | `await manager.register(id, model, vramEstimate)` | Register a model with its estimated VRAM footprint. |
+| `register` | `await manager.register(id, model, vramEstimate, lifecycle)` | Register a model with its estimated VRAM footprint (`vramEstimate: number` bytes) and a JS lifecycle object exposing async `load()` / `unload()` methods. |
 | `load` | `await manager.load(id)` | Load a model, evicting LRU models if needed. |
 | `unload` | `await manager.unload(id)` | Unload a model and free its VRAM. |
 | `isLoaded` | `await manager.isLoaded(id): boolean` | Check if a model is currently loaded. |
 | `ensureLoaded` | `await manager.ensureLoaded(id)` | Alias for `load()`. |
-| `usedBytes` | `await manager.usedBytes(): number` | Total VRAM currently used by loaded models. |
-| `availableBytes` | `await manager.availableBytes(): number` | Available VRAM within the budget. |
-| `status` | `await manager.status(): ModelStatus[]` | Status of all registered models. |
+| `usedBytes` | `await manager.usedBytes(): number` | Total VRAM currently used by loaded models, in bytes. |
+| `availableBytes` | `await manager.availableBytes(): number` | Available VRAM within the budget, in bytes. |
+| `status` | `await manager.status(): { id: string; loaded: boolean; vramEstimate: number }[]` | Status of all registered models. |
+
+### Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `.budgetBytes` | `number` | Read-only getter returning the configured budget in bytes (`budgetGb * 1_073_741_824`). |
+
+---
+
+## ModelRegistry
+
+JS-callback ABC for advertising a model catalog. Wraps a JS object implementing `listModels()` and `getModel(modelId)` so browser code can plug a custom registry into Blazen's model-info lookup surface. Mirrors the trait at `blazen_llm::traits::ModelRegistry` and reaches parity with `PyModelRegistry` (Python) / `JsModelRegistry` (Node).
+
+### Constructor
+
+```typescript
+import init, { ModelRegistry } from "@blazen/sdk";
+import type { ModelInfo } from "@blazen/sdk";
+
+await init();
+
+const registry = new ModelRegistry({
+  async listModels(): Promise<ModelInfo[]> {
+    const res = await fetch("/api/models");
+    return res.json();
+  },
+  async getModel(modelId: string): Promise<ModelInfo | null> {
+    const res = await fetch(`/api/models/${modelId}`);
+    return res.ok ? res.json() : null;
+  },
+});
+
+const models = await registry.listModels();
+```
+
+The constructor argument must implement the `ModelRegistryImpl` interface (auto-emitted into `crates/blazen-wasm-sdk/pkg/blazen_wasm_sdk.d.ts`):
+
+```typescript
+export interface ModelRegistryImpl {
+  listModels(): Promise<ModelInfo[]> | ModelInfo[];
+  getModel(modelId: string): Promise<ModelInfo | null> | ModelInfo | null;
+}
+```
+
+Both methods may return either a `Promise` or a synchronous value; the binding awaits whichever is produced.
+
+### Methods
+
+| Method | Signature | Description |
+|---|---|---|
+| `listModels` | `await registry.listModels(): Promise<ModelInfo[]>` | Returns whatever the JS `listModels()` callback resolved to. |
+| `getModel` | `await registry.getModel(modelId: string): Promise<ModelInfo \| null>` | Returns whatever the JS `getModel()` callback resolved to, or `null` if the model is unknown. |
+
+The registry returns plain `ModelInfo` objects — the same tsify-generated shape produced elsewhere on the WASM surface and documented in `crates/blazen-wasm-sdk/pkg/blazen_wasm_sdk.d.ts`.
 
 ---
 

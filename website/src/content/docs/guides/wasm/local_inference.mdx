@@ -354,12 +354,12 @@ The JS-facing API matches the native one:
 
 | Method | Purpose |
 |---|---|
-| `register(id, sizeBytes, loader)` | Declare a model and how to load it on demand |
+| `register(id, model, vramEstimateBytes, lifecycle)` | Declare a model with `{ load, unload }` lifecycle hooks |
 | `unregister(id)` | Drop a registration (and any loaded weights) |
 | `load(id)` | Load (or reuse) and mark as MRU |
 | `unload(id)` | Free without unregistering |
 | `isLoaded(id)` | Check whether weights are currently resident |
-| `usedBytes()` / `availableBytes()` / `budgetBytes()` | Budget telemetry |
+| `usedBytes` / `availableBytes` / `budgetBytes` | Budget telemetry (getters, no parens) |
 | `status()` | Snapshot of every registration |
 
 ```typescript
@@ -367,17 +367,19 @@ import init, { ModelManager, TractEmbedModel } from '@blazen/sdk';
 
 await init();
 
-const manager = new ModelManager(512 * 1024 * 1024); // 512 MB budget
+const manager = new ModelManager(0.5); // 0.5 GB (512 MB) budget -- constructor takes gigabytes
 
-manager.register('mini-lm', 90 * 1024 * 1024, async () => {
-  return await TractEmbedModel.create(miniLmOnnx, miniLmTokenizer);
+manager.register('mini-lm', null, 90 * 1024 * 1024, {
+  load: async () => TractEmbedModel.create(miniLmOnnx, miniLmTokenizer),
+  unload: async () => {},
 });
-manager.register('bge-small', 130 * 1024 * 1024, async () => {
-  return await TractEmbedModel.create(bgeOnnx, bgeTokenizer);
+manager.register('bge-small', null, 130 * 1024 * 1024, {
+  load: async () => TractEmbedModel.create(bgeOnnx, bgeTokenizer),
+  unload: async () => {},
 });
 
 const embedder = await manager.load('mini-lm');  // loads + marks MRU
-console.log(manager.usedBytes(), '/', manager.budgetBytes());
+console.log(manager.usedBytes, '/', manager.budgetBytes); // getters, no parens
 ```
 
 When a `load()` call would push `usedBytes()` past `budgetBytes()`, the manager evicts the LRU entry first. Use it whenever your app might keep more than one Tract model alive at a time.

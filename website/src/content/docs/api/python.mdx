@@ -1416,6 +1416,46 @@ manager = ModelManager(budget_bytes=24 * 1_073_741_824)
 
 ---
 
+## ModelRegistry
+
+An ABC for advertising a model catalog. Subclass to plug a custom catalog (a static manifest, a remote control-plane lookup, a cache of `/v1/models` results) into Blazen's model-info surface. Mirrors the Rust trait `blazen_llm::traits::ModelRegistry` and the equivalent ABCs in the Node and WASM SDKs.
+
+Both methods are abstract -- the default implementations raise `NotImplementedError`, so a subclass must override both.
+
+```python
+class ModelRegistry:
+    async def list_models(self) -> list[ModelInfo]: ...
+    async def get_model(self, model_id: str) -> ModelInfo | None: ...
+```
+
+### Subclass example
+
+```python
+from blazen import ModelRegistry, ModelInfo
+
+class StaticRegistry(ModelRegistry):
+    def __init__(self, models: list[ModelInfo]):
+        super().__init__()
+        self._models = {m.id: m for m in models}
+
+    async def list_models(self) -> list[ModelInfo]:
+        return list(self._models.values())
+
+    async def get_model(self, model_id: str) -> ModelInfo | None:
+        return self._models.get(model_id)
+```
+
+### Methods
+
+| Method | Signature | Description |
+|---|---|---|
+| `list_models` | `async def list_models(self) -> list[ModelInfo]` | List every model the registry advertises. |
+| `get_model` | `async def get_model(self, model_id: str) -> ModelInfo \| None` | Look up a single model. Return `None` if unknown. |
+
+See `ModelInfo` for the dataclass shape returned by these methods.
+
+---
+
 ## ModelPricing and Pricing Functions
 
 ### ModelPricing

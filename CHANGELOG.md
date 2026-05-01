@@ -33,16 +33,20 @@
 - Node binding: typed JS error class hierarchy (~87 classes via JS shim post-processor, rooted at `BlazenError`), `AgentResult` / `BatchResult` upgraded from plain dicts to typed classes with getters and `toString()`, `PipelineBuilder.onPersist` / `.onPersistJson`, `ProgressCallback` subclassable class, `enrichError(err)` helper.
 - Python binding: `ProgressCallback` ABC.
 - `blazen-telemetry` gained `otlp-http` Cargo feature for HTTP transport (alongside the existing `otlp` gRPC variant).
+- WASM-SDK: `ModelRegistry` JS-callback ABC (`new ModelRegistry({ listModels, getModel })`) — parity with Python `PyModelRegistry` / Node `JsModelRegistry`. Auto-emitted `ModelRegistryImpl` interface in the regenerated `blazen_wasm_sdk.d.ts`.
 
 ### Changed
 
 - CI's `audit-bindings` job now regenerates all three typegens (`blazen.pyi`, `index.d.ts`, `pkg/blazen_wasm_sdk.d.ts`) and fails on drift before running the parity audit.
 - `cargo run --example stub_gen -p blazen-py` now requires `--features langfuse,otlp,prometheus,tract,distributed` to surface all feature-gated bindings (CI, `.githooks/pre-commit`, and `CLAUDE.md` updated).
 - `auto-tag` release job now blocked on `audit-bindings`.
+- **Breaking** — Node `ModelManager` byte-budget API now uses `bigint` instead of `number`: `ModelManagerConfig.budgetBytes`, `JsModelStatus.vramEstimate`, `register(..., vramEstimateBytes)`, `usedBytes()`, `availableBytes()`. Fixes silent truncation of >4 GiB budgets that affected typical 7B+ local LLMs. The `budgetGb: number` constructor path is unaffected.
 
 ### Fixed
 
 - `blazen-node`: `JsAgentResult.toString()` and `JsBatchResult.toString()` no longer trip clippy's `inherent_to_string` lint (renamed Rust method, kept JS-facing `toString` via napi `js_name`).
+- `blazen-py`: 9 doctest failures fixed by converting `Example::` indented Python blocks and `>>>` REPL examples in `prompts.rs`, `tool.rs`, `transcription.rs`, `providers/completion_model.rs`, and `workflow/step.rs` docstrings to explicit ` ```text ` fenced blocks (rustdoc was trying to compile Python as Rust). Same docstrings now appear in the regenerated `blazen.pyi` with cleaner formatting.
+- Workspace `cargo clippy --workspace --all-features --tests -- -D warnings` is now clean (was failing on 22 pre-existing test-only lints across `blazen-llm-candle`, `blazen-memory-valkey`, `blazen-memory`, `blazen-embed-fastembed`, `blazen-embed-tract`, `blazen-llm-llamacpp`, `blazen-llm`, `blazen-pipeline`).
 
 ### CI
 

@@ -1680,26 +1680,26 @@ VRAM budget-aware model manager with LRU eviction. Tracks registered local model
 import { ModelManager } from "blazen";
 
 const manager = new ModelManager({ budgetGb: 24 });
-// or
-const manager = new ModelManager({ budgetBytes: 24 * 1_073_741_824 });
+// or — bigint is required so budgets above 4 GiB don't silently truncate
+const manager = new ModelManager({ budgetBytes: 24n * 1_073_741_824n });
 ```
 
 | Field | Type | Description |
 |---|---|---|
 | `budgetGb` | `number?` | VRAM budget in gigabytes. Provide exactly one of `budgetGb` or `budgetBytes`. |
-| `budgetBytes` | `number?` | VRAM budget in bytes. |
+| `budgetBytes` | `bigint?` | VRAM budget in bytes. Use `bigint` literals (e.g. `24n * 1_073_741_824n`) so budgets above 4 GiB don't truncate. |
 
 ### Methods
 
 | Method | Signature | Description |
 |---|---|---|
-| `register` | `await manager.register(id, model, vramEstimate)` | Register a model with its estimated VRAM footprint. Starts unloaded. |
+| `register` | `await manager.register(id, model, vramEstimate?: bigint)` | Register a model with its estimated VRAM footprint (in bytes, as a `bigint`). Starts unloaded. |
 | `load` | `await manager.load(id)` | Load a model, evicting LRU models if needed. |
 | `unload` | `await manager.unload(id)` | Unload a model and free its VRAM. |
 | `isLoaded` | `await manager.isLoaded(id): boolean` | Check if a model is currently loaded. |
 | `ensureLoaded` | `await manager.ensureLoaded(id)` | Alias for `load()`. |
-| `usedBytes` | `await manager.usedBytes(): number` | Total VRAM currently used by loaded models. |
-| `availableBytes` | `await manager.availableBytes(): number` | Available VRAM within the budget. |
+| `usedBytes` | `await manager.usedBytes(): bigint` | Total VRAM currently used by loaded models, in bytes. |
+| `availableBytes` | `await manager.availableBytes(): bigint` | Available VRAM within the budget, in bytes. |
 | `status` | `await manager.status(): ModelStatus[]` | Status of all registered models. |
 
 ### ModelStatus
@@ -1708,9 +1708,54 @@ const manager = new ModelManager({ budgetBytes: 24 * 1_073_741_824 });
 interface ModelStatus {
   id: string;                // Model identifier
   loaded: boolean;           // Whether the model is currently loaded
-  vramEstimate: number;      // Estimated VRAM footprint in bytes
+  vramEstimate: bigint;      // Estimated VRAM footprint in bytes
 }
 ```
+
+> **Why `bigint`?** The byte-budget surface (`budgetBytes`, `register`'s `vramEstimate`, `usedBytes()`, `availableBytes()`, `ModelStatus.vramEstimate`) used to be `number` (`u32` on the Rust side), which capped budgets at ~4 GiB and silently truncated larger inputs — a real footgun for 7B+ local models that need 8 GiB+ of VRAM. Pass values as `BigInt` literals (`8n * 1_073_741_824n`) or via `BigInt(8 * 1024 ** 3)`. The `budgetGb: number` constructor path is unchanged for users who prefer plain numbers and gigabyte granularity.
+
+---
+
+## ModelRegistry
+
+An ABC for model catalogs. Subclass it to advertise the models your code knows about — used by capability-discovery code, dynamic model menus, and parity with the Rust `blazen_llm::traits::ModelRegistry` trait.
+
+```typescript
+export declare class ModelRegistry {
+  listModels(): Promise<ModelInfo[]>;
+  getModel(modelId: string): Promise<ModelInfo | null>;
+}
+```
+
+| Method | Signature | Description |
+|---|---|---|
+| `listModels` | `async listModels(): Promise<ModelInfo[]>` | Return every model the registry advertises. |
+| `getModel` | `async getModel(modelId: string): Promise<ModelInfo \| null>` | Look up a single model by id, or return `null` if unknown. |
+
+The base implementations of both methods throw — overriding them is mandatory. `super()` must be called from the subclass constructor.
+
+```typescript
+import { ModelRegistry } from "blazen";
+import type { ModelInfo } from "blazen";
+
+class MyRegistry extends ModelRegistry {
+  async listModels(): Promise<ModelInfo[]> {
+    return [
+      { id: "gpt-4o", provider: "openai" /* ...other ModelInfo fields */ },
+      { id: "claude-sonnet-4", provider: "anthropic" /* ... */ },
+    ];
+  }
+
+  async getModel(modelId: string): Promise<ModelInfo | null> {
+    const all = await this.listModels();
+    return all.find((m) => m.id === modelId) ?? null;
+  }
+}
+```
+
+See the `ModelInfo` reference for the full set of fields each entry must populate (id, provider, capabilities, context window, pricing, etc.).
+
+Mirrors `PyModelRegistry` (Python) and `WasmModelRegistry` exposed as `ModelRegistry` (WASM SDK) — subclassing `ModelRegistry` in any binding produces the same Rust-side `blazen_llm::traits::ModelRegistry` implementation.
 
 ---
 

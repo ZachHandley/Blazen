@@ -363,6 +363,45 @@ console.log(`used=${manager.usedBytes}, available=${manager.availableBytes}`);
 
 ---
 
+## ModelRegistry (WASM)
+
+Wraps a JS object exposing `listModels()` and `getModel(modelId)` so browser code can plug a custom model catalog (a fetched manifest, an in-browser registry, a control-plane endpoint) into Blazen's model-info lookup surface. Same shape as the Python `ModelRegistry` ABC and the Node `ModelRegistry` class, so workflow code reads identically across runtimes.
+
+```typescript
+import init, { ModelRegistry } from "@blazen/sdk";
+import type { ModelInfo } from "@blazen/sdk";
+
+await init();
+
+// Back the registry with whatever source you like -- a fetched manifest,
+// an offline IndexedDB cache, or a control-plane endpoint.
+const registry = new ModelRegistry({
+  async listModels(): Promise<ModelInfo[]> {
+    const res = await fetch("/api/models");
+    if (!res.ok) throw new Error(`registry fetch failed: ${res.status}`);
+    return res.json();
+  },
+  async getModel(modelId: string): Promise<ModelInfo | null> {
+    const res = await fetch(`/api/models/${modelId}`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`registry fetch failed: ${res.status}`);
+    return res.json();
+  },
+});
+
+const all = await registry.listModels();
+console.log(`available models: ${all.length}`);
+
+const gpt = await registry.getModel("gpt-4o");
+if (gpt) {
+  console.log(gpt.id, gpt.provider, gpt.capabilities);
+}
+```
+
+Both methods may return synchronous values too -- the SDK awaits whatever the callback returned, so a purely in-memory registry can skip the `async` keyword entirely.
+
+---
+
 ## Pricing Registration and Cost Tracking (WASM)
 
 `registerPricing` attaches USD-per-million-token rates to any model ID. Completions produced with that model ID then carry a computed `cost` field.
