@@ -32,6 +32,13 @@ pub enum PipelineError {
     #[error("pipeline was aborted")]
     Aborted,
 
+    /// The pipeline as a whole exceeded its total timeout.
+    #[error("pipeline timed out after {elapsed_ms}ms")]
+    Timeout {
+        /// The total timeout in milliseconds that was exceeded.
+        elapsed_ms: u64,
+    },
+
     /// An internal channel was closed unexpectedly.
     #[error("channel closed")]
     ChannelClosed,

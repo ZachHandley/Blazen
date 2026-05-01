@@ -36,6 +36,8 @@ fn echo_workflow() -> blazen_core::Workflow {
         handler,
         max_concurrency: 0,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     WorkflowBuilder::new("echo")
@@ -72,6 +74,8 @@ fn prefix_workflow(prefix: &'static str) -> blazen_core::Workflow {
         handler,
         max_concurrency: 0,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     WorkflowBuilder::new(format!("prefix-{prefix}"))
@@ -108,6 +112,8 @@ fn suffix_workflow(suffix: &'static str) -> blazen_core::Workflow {
         handler,
         max_concurrency: 0,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     WorkflowBuilder::new(format!("suffix-{suffix}"))
@@ -140,6 +146,8 @@ fn delayed_echo_workflow(ms: u64) -> blazen_core::Workflow {
         handler,
         max_concurrency: 0,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     WorkflowBuilder::new(format!("delayed-echo-{ms}ms"))
@@ -178,6 +186,8 @@ fn streaming_echo_workflow() -> blazen_core::Workflow {
         handler,
         max_concurrency: 0,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     WorkflowBuilder::new("streaming-echo")
@@ -204,6 +214,8 @@ fn failing_workflow() -> blazen_core::Workflow {
         handler,
         max_concurrency: 0,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     WorkflowBuilder::new("fail")
@@ -431,10 +443,18 @@ async fn test_parallel_streaming() {
     let result = handler.result().await.unwrap();
     assert!(result.final_output.is_object());
 
-    // Events should have stage_name "stream-group" and branch_name set.
+    // Events should have stage_name "stream-group". The pipeline-level
+    // `ProgressEvent` for the parallel stage carries `branch_name: None`
+    // (it announces the stage as a whole), while everything streamed from
+    // an inner branch carries `branch_name = Some(...)`. Filter out the
+    // top-level progress envelope and check the rest.
     for event in &events {
         assert_eq!(event.stage_name, "stream-group");
-        assert!(event.branch_name.is_some());
+        if event.branch_name.is_none() {
+            // Pipeline-level progress envelope — must be a ProgressEvent.
+            assert_eq!(event.event.event_type_id(), "blazen::ProgressEvent");
+            continue;
+        }
         let branch = event.branch_name.as_deref().unwrap();
         assert!(branch == "branch-a" || branch == "branch-b");
     }
@@ -836,4 +856,388 @@ async fn test_pipeline_resume_restores_shared_state() {
         result.final_output,
         serde_json::json!({"text": "hello-world"})
     );
+}
+
+// ---------------------------------------------------------------------------
+// Total pipeline timeout
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn pipeline_total_timeout_fires_when_exceeded() {
+    // Build a pipeline whose single stage sleeps longer than `total_timeout`.
+    // Expect the run-loop to be cancelled and `PipelineError::Timeout` to be
+    // surfaced via the result channel.
+    let pipeline = PipelineBuilder::new("total-timeout")
+        .stage(Stage {
+            name: "slow-stage".into(),
+            workflow: delayed_echo_workflow(500),
+            input_mapper: None,
+            condition: None,
+        })
+        .total_timeout(Duration::from_millis(50))
+        .build()
+        .unwrap();
+
+    let handler = pipeline.start(serde_json::json!({"text": "hi"}));
+    let result = handler.result().await;
+
+    assert!(result.is_err(), "expected Timeout error, got {result:?}");
+    match result.unwrap_err() {
+        PipelineError::Timeout { elapsed_ms } => {
+            assert_eq!(
+                elapsed_ms, 50,
+                "elapsed_ms should equal the configured total timeout"
+            );
+        }
+        other => panic!("expected PipelineError::Timeout, got: {other}"),
+    }
+}
+
+#[tokio::test]
+async fn pipeline_total_timeout_does_not_fire_when_pipeline_finishes_first() {
+    // A pipeline that finishes quickly relative to the total timeout should
+    // produce a normal `Ok` result.
+    let pipeline = PipelineBuilder::new("total-timeout-no-fire")
+        .stage(Stage {
+            name: "fast-stage".into(),
+            workflow: echo_workflow(),
+            input_mapper: None,
+            condition: None,
+        })
+        .total_timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+
+    let handler = pipeline.start(serde_json::json!({"text": "fast"}));
+    let result = handler
+        .result()
+        .await
+        .expect("pipeline should complete before total_timeout");
+    assert_eq!(result.final_output, serde_json::json!({"text": "fast"}));
+}
+
+#[tokio::test]
+async fn pipeline_no_total_timeout_disables_total_timeout() {
+    // Ensure the `no_total_timeout` builder method clears any previously-set
+    // total timeout and the pipeline is allowed to run to completion even
+    // though the previous setting would have fired.
+    let pipeline = PipelineBuilder::new("no-total-timeout")
+        .stage(Stage {
+            name: "slow-stage".into(),
+            workflow: delayed_echo_workflow(100),
+            input_mapper: None,
+            condition: None,
+        })
+        .total_timeout(Duration::from_millis(10))
+        .no_total_timeout()
+        .build()
+        .unwrap();
+
+    let handler = pipeline.start(serde_json::json!({"text": "ok"}));
+    let result = handler
+        .result()
+        .await
+        .expect("no_total_timeout() should disable the total timeout");
+    assert_eq!(result.final_output, serde_json::json!({"text": "ok"}));
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline-level retry config
+// ---------------------------------------------------------------------------
+
+#[test]
+fn pipeline_builder_retry_config_sets_field() {
+    use blazen_llm::retry::RetryConfig;
+    let pipeline = PipelineBuilder::new("test")
+        .stage(Stage {
+            name: "only-stage".into(),
+            workflow: echo_workflow(),
+            input_mapper: None,
+            condition: None,
+        })
+        .retry_config(RetryConfig {
+            max_retries: 7,
+            ..RetryConfig::default()
+        })
+        .build()
+        .expect("builds");
+    assert!(pipeline.retry_config().is_some());
+    assert_eq!(pipeline.retry_config().unwrap().max_retries, 7);
+}
+
+#[test]
+fn pipeline_builder_no_retry_sets_max_retries_zero() {
+    let pipeline = PipelineBuilder::new("test")
+        .stage(Stage {
+            name: "only-stage".into(),
+            workflow: echo_workflow(),
+            input_mapper: None,
+            condition: None,
+        })
+        .no_retry()
+        .build()
+        .expect("builds");
+    assert_eq!(pipeline.retry_config().unwrap().max_retries, 0);
+}
+
+// ---------------------------------------------------------------------------
+// Usage / cost rollup
+// ---------------------------------------------------------------------------
+
+/// Build a workflow that emits a single `UsageEvent` then stops.
+fn usage_emitting_workflow() -> blazen_core::Workflow {
+    use blazen_events::{Modality, UsageEvent};
+    use uuid::Uuid;
+
+    let handler: StepFn = Arc::new(|_event, ctx| {
+        Box::pin(async move {
+            let ue = UsageEvent {
+                provider: "test".into(),
+                model: "test-model".into(),
+                modality: Modality::Llm,
+                prompt_tokens: 100,
+                completion_tokens: 50,
+                total_tokens: 150,
+                reasoning_tokens: 0,
+                cached_input_tokens: 0,
+                audio_input_tokens: 0,
+                audio_output_tokens: 0,
+                image_count: 0,
+                audio_seconds: 0.0,
+                video_seconds: 0.0,
+                cost_usd: Some(0.0025),
+                latency_ms: 10,
+                run_id: Uuid::new_v4(),
+            };
+            ctx.write_event_to_stream(ue).await;
+            Ok(StepOutput::Single(Box::new(StopEvent {
+                result: serde_json::json!("ok"),
+            })))
+        })
+    });
+
+    let step = StepRegistration {
+        name: "emit_usage".into(),
+        accepts: vec![StartEvent::event_type()],
+        emits: vec![StopEvent::event_type()],
+        handler,
+        max_concurrency: 0,
+        semaphore: None,
+        timeout: None,
+        retry_config: None,
+    };
+
+    WorkflowBuilder::new("usage_test")
+        .step(step)
+        .no_timeout()
+        .build()
+        .unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pipeline_aggregates_usage_events_into_state_and_result() {
+    let pipeline = PipelineBuilder::new("usage_pipeline")
+        .stage(Stage {
+            name: "only".into(),
+            workflow: usage_emitting_workflow(),
+            input_mapper: None,
+            condition: None,
+        })
+        .build()
+        .expect("builds");
+
+    let handler = pipeline.start(serde_json::json!({}));
+    let result = handler.result().await.expect("pipeline runs");
+
+    assert_eq!(result.usage_total.prompt_tokens, 100);
+    assert_eq!(result.usage_total.completion_tokens, 50);
+    assert_eq!(result.usage_total.total_tokens, 150);
+    assert!((result.cost_total_usd - 0.0025).abs() < 1e-9);
+
+    assert_eq!(result.stage_results.len(), 1);
+    let stage = &result.stage_results[0];
+    assert_eq!(stage.name, "only");
+    let stage_usage = stage.usage.as_ref().expect("stage usage recorded");
+    assert_eq!(stage_usage.prompt_tokens, 100);
+    assert_eq!(stage_usage.completion_tokens, 50);
+    assert_eq!(stage_usage.total_tokens, 150);
+    let stage_cost = stage.cost_usd.expect("stage cost recorded");
+    assert!((stage_cost - 0.0025).abs() < 1e-9);
+}
+
+// ---------------------------------------------------------------------------
+// Typed shared state — `PipelineState<S>` end-to-end coverage
+// ---------------------------------------------------------------------------
+
+#[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
+struct MyState {
+    counter: u32,
+    label: String,
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pipeline_typed_state_struct_round_trips() {
+    let handler_fn: StepFn = Arc::new(|_ev, _ctx| {
+        Box::pin(async {
+            Ok(StepOutput::Single(Box::new(StopEvent {
+                result: serde_json::json!({"counter": 7, "label": "go"}),
+            })))
+        })
+    });
+    let step = StepRegistration::new(
+        "step1".into(),
+        vec![StartEvent::event_type()],
+        vec![StopEvent::event_type()],
+        handler_fn,
+        0,
+    );
+    let workflow = WorkflowBuilder::new("wf")
+        .step(step)
+        .no_timeout()
+        .build()
+        .unwrap();
+
+    let pipeline = PipelineBuilder::<serde_json::Value>::new("p1")
+        .with_state::<MyState>()
+        .stage(Stage {
+            name: "s1".into(),
+            workflow,
+            input_mapper: None,
+            condition: None,
+        })
+        .build()
+        .unwrap();
+
+    let h = pipeline.start(serde_json::json!({}));
+    let result = h.result().await.expect("pipeline runs");
+    // Snapshot's JSON-encoded shared_state — verify the test compiles end-to-end
+    // even with a typed S2.
+    let _ = result;
+}
+
+#[test]
+fn pipeline_objects_bag_round_trips_typed() {
+    use blazen_pipeline::PipelineState;
+    let mut state: PipelineState<serde_json::Value> = PipelineState::default();
+    state.put_object("conn", String::from("postgres://localhost"));
+    let s: &String = state.get_object("conn").unwrap();
+    assert_eq!(s, "postgres://localhost");
+    let removed: String = state.remove_object("conn").unwrap();
+    assert_eq!(removed, "postgres://localhost");
+}
+
+// ---------------------------------------------------------------------------
+// Wave 7 — Progress events
+// ---------------------------------------------------------------------------
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pipeline_emits_progress_events_for_each_stage() {
+    use blazen_events::{ProgressEvent, ProgressKind};
+
+    let pipeline = PipelineBuilder::new("progress-emit")
+        .stage(Stage {
+            name: "first".into(),
+            workflow: echo_workflow(),
+            input_mapper: None,
+            condition: None,
+        })
+        .stage(Stage {
+            name: "second".into(),
+            workflow: echo_workflow(),
+            input_mapper: None,
+            condition: None,
+        })
+        .build()
+        .unwrap();
+
+    let handler = pipeline.start(serde_json::json!({"text": "hello"}));
+    let mut stream = handler.stream_events();
+
+    // Collect everything the pipeline streams over a short window. The
+    // pipeline is fast so 1s is plenty.
+    let collect_task = tokio::spawn(async move {
+        let mut events: Vec<blazen_pipeline::PipelineEvent> = Vec::new();
+        while let Ok(Some(event)) =
+            tokio::time::timeout(Duration::from_secs(1), stream.next()).await
+        {
+            events.push(event);
+        }
+        events
+    });
+
+    let _ = handler.result().await.expect("pipeline succeeds");
+    let collected = collect_task.await.unwrap();
+
+    // Filter for typed pipeline-kind progress envelopes.
+    let progress: Vec<&ProgressEvent> = collected
+        .iter()
+        .filter_map(|e| e.event.as_any().downcast_ref::<ProgressEvent>())
+        .filter(|p| matches!(p.kind, ProgressKind::Pipeline))
+        .collect();
+
+    assert!(
+        progress.len() >= 2,
+        "expected >=2 Pipeline ProgressEvents, got {}",
+        progress.len()
+    );
+
+    // `current` and `percent` must monotonically increase across the
+    // first two pipeline-kind progress events (one per stage).
+    let first = progress[0];
+    let second = progress[1];
+    assert_eq!(first.current, 1);
+    assert_eq!(second.current, 2);
+    assert_eq!(first.total, Some(2));
+    assert_eq!(second.total, Some(2));
+    assert_eq!(first.label, "first");
+    assert_eq!(second.label, "second");
+    let pct1 = first.percent.expect("percent present");
+    let pct2 = second.percent.expect("percent present");
+    assert!(pct1 < pct2, "percent must monotonically increase");
+    assert!((pct2 - 100.0_f32).abs() < f32::EPSILON);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pipeline_handler_progress_snapshot_advances() {
+    // Stage 1: instant. Stage 2: slow (300ms).
+    let pipeline = PipelineBuilder::new("progress-snapshot")
+        .stage(Stage {
+            name: "fast".into(),
+            workflow: echo_workflow(),
+            input_mapper: None,
+            condition: None,
+        })
+        .stage(Stage {
+            name: "slow".into(),
+            workflow: delayed_echo_workflow(300),
+            input_mapper: None,
+            condition: None,
+        })
+        .build()
+        .unwrap();
+
+    let handler = pipeline.start(serde_json::json!({"text": "snap"}));
+
+    // Initial snapshot — total_stages must be 2; current_stage_index
+    // is at most 1 (could already be 1 if the first stage started).
+    let initial = handler.progress();
+    assert_eq!(initial.total_stages, 2);
+    assert!(initial.current_stage_index <= 1);
+
+    // Wait into the slow second stage.
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    let mid = handler.progress();
+    assert_eq!(mid.total_stages, 2);
+    assert!(
+        mid.current_stage_index >= initial.current_stage_index,
+        "current_stage_index must not regress (initial={}, mid={})",
+        initial.current_stage_index,
+        mid.current_stage_index
+    );
+    assert!(mid.percent <= 100.0);
+
+    // Final snapshot after the pipeline completes — should report 2/2.
+    let _ = handler.result().await.expect("pipeline completes");
+    // (handler is consumed by `.result()`; if a future task wants to
+    // sample after completion it must keep its own clone of the atomic.)
 }

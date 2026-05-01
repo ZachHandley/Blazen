@@ -12,6 +12,7 @@
 
 use std::fmt;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use blazen_core::SessionRefRegistry;
 use blazen_events::AnyEvent;
@@ -21,6 +22,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use uuid::Uuid;
 
 use crate::error::PipelineError;
+use crate::pipeline::ProgressSnapshot;
 use crate::snapshot::{PipelineResult, PipelineSnapshot};
 
 /// Commands sent from the handler to the execution loop via the control channel.
@@ -93,6 +95,12 @@ pub struct PipelineHandler {
     /// pipeline at construction so the handler outlives the `execute_pipeline`
     /// task and consumers can resolve session-ref markers in stage outputs.
     session_refs: Arc<SessionRefRegistry>,
+    /// Shared 1-based index of the stage currently executing. Written by
+    /// the executor task before each stage runs and read by
+    /// [`PipelineHandler::progress`].
+    current_stage: Arc<AtomicUsize>,
+    /// Total number of stages on the pipeline. Captured at construction.
+    total_stages: u32,
 }
 
 impl PipelineHandler {
@@ -103,6 +111,8 @@ impl PipelineHandler {
         control_tx: mpsc::UnboundedSender<PipelineControl>,
         snapshot_rx: oneshot::Receiver<PipelineSnapshot>,
         session_refs: Arc<SessionRefRegistry>,
+        current_stage: Arc<AtomicUsize>,
+        total_stages: u32,
     ) -> Self {
         Self {
             result_rx: Some(result_rx),
@@ -110,6 +120,39 @@ impl PipelineHandler {
             control_tx,
             snapshot_rx: Some(snapshot_rx),
             session_refs,
+            current_stage,
+            total_stages,
+        }
+    }
+
+    /// Snapshot the pipeline's current progress without affecting execution.
+    ///
+    /// Reads the 1-based stage index that the executor publishes before
+    /// each stage runs, plus the total stage count captured when the
+    /// handler was constructed. The result is best-effort and may be
+    /// stale by a few microseconds — there is no synchronisation between
+    /// the executor task and `progress()` callers.
+    #[must_use]
+    pub fn progress(&self) -> ProgressSnapshot {
+        let cur = self.current_stage.load(Ordering::Relaxed);
+        let total = self.total_stages;
+        let current_stage_index = u32::try_from(cur).unwrap_or(u32::MAX);
+        let percent = if total == 0 {
+            0.0_f32
+        } else {
+            #[allow(
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss
+            )]
+            let p = (f64::from(current_stage_index) / f64::from(total) * 100.0) as f32;
+            p.clamp(0.0, 100.0)
+        };
+        ProgressSnapshot {
+            current_stage_index,
+            total_stages: total,
+            percent,
+            current_stage_name: None,
         }
     }
 

@@ -15,8 +15,9 @@
 use std::sync::Arc;
 
 use crate::runtime::JoinHandle;
-use blazen_events::{AnyEvent, InputResponseEvent};
-use tokio::sync::{broadcast, mpsc, oneshot};
+use blazen_events::{AnyEvent, InputResponseEvent, UsageEvent};
+use blazen_llm::types::TokenUsage;
+use tokio::sync::{Mutex, broadcast, mpsc, oneshot};
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -24,15 +25,37 @@ use crate::error::WorkflowError;
 use crate::session_ref::SessionRefRegistry;
 use crate::snapshot::WorkflowSnapshot;
 
+/// Running aggregate of token usage and cost for a workflow run.
+///
+/// Updated incrementally by an accumulator task that subscribes to the
+/// workflow's broadcast stream and folds each emitted
+/// [`UsageEvent`](blazen_events::UsageEvent) into the running totals.
+/// Exposed via [`WorkflowHandler::usage_total`] / [`WorkflowHandler::cost_total_usd`]
+/// during the run and surfaced on [`WorkflowResult`] once the run completes.
+#[derive(Debug, Default, Clone)]
+pub(crate) struct UsageTotals {
+    pub usage: TokenUsage,
+    pub cost_usd: f64,
+}
+
 /// The result of a completed workflow run.
 ///
-/// Owns both the terminal event AND the session-ref registry that backs
-/// any `__blazen_session_ref__` markers carried by the event payload, so
-/// markers remain resolvable for as long as the caller holds the result.
+/// Owns the terminal event AND the session-ref registry that backs any
+/// `__blazen_session_ref__` markers carried by the event payload, so markers
+/// remain resolvable for as long as the caller holds the result. Also
+/// surfaces aggregated token usage and cost summed from every
+/// [`UsageEvent`](blazen_events::UsageEvent) emitted on the workflow's
+/// broadcast stream during the run.
 #[derive(Debug)]
 pub struct WorkflowResult {
     pub event: Box<dyn AnyEvent>,
     pub session_refs: Arc<SessionRefRegistry>,
+    /// Total token usage aggregated across all LLM/embed/image/audio calls
+    /// during this workflow run, summed from emitted
+    /// [`UsageEvent`](blazen_events::UsageEvent)s.
+    pub usage_total: TokenUsage,
+    /// Total cost in USD across the workflow run.
+    pub cost_total_usd: f64,
 }
 
 /// Commands sent from the handler to the event loop via the control channel.
@@ -71,6 +94,14 @@ pub struct WorkflowHandler {
     event_loop_handle: Option<JoinHandle<()>>,
     /// Live session-ref registry for this run.
     session_refs: Arc<SessionRefRegistry>,
+    /// Running aggregate of token usage and cost. Updated by the
+    /// accumulator task spawned in [`WorkflowHandler::new`].
+    usage_totals: Arc<Mutex<UsageTotals>>,
+    /// Handle to the accumulator task that drains the broadcast stream
+    /// and folds [`UsageEvent`]s into `usage_totals`. Awaited inside
+    /// [`WorkflowHandler::result`] so the totals reach a steady state
+    /// before they are surfaced on [`WorkflowResult`].
+    usage_accumulator_handle: Option<JoinHandle<()>>,
     /// Receives history events from the event loop (requires `telemetry` feature).
     #[cfg(feature = "telemetry")]
     history_rx: Option<mpsc::UnboundedReceiver<blazen_telemetry::HistoryEvent>>,
@@ -78,6 +109,13 @@ pub struct WorkflowHandler {
 
 impl WorkflowHandler {
     /// Create a new handler (crate-internal).
+    ///
+    /// Spawns an internal accumulator task that subscribes to `stream_tx`,
+    /// downcasts every published event, and folds any
+    /// [`UsageEvent`](blazen_events::UsageEvent) into a shared
+    /// [`UsageTotals`]. The task exits naturally when every sender clone
+    /// of `stream_tx` is dropped (i.e. when the workflow has completed
+    /// and its `Context` has been released).
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         result_rx: oneshot::Receiver<Result<Box<dyn AnyEvent>, WorkflowError>>,
@@ -89,15 +127,79 @@ impl WorkflowHandler {
             mpsc::UnboundedReceiver<blazen_telemetry::HistoryEvent>,
         >,
     ) -> Self {
+        let usage_totals = Arc::new(Mutex::new(UsageTotals::default()));
+
+        // Subscribe BEFORE spawning so we never miss a UsageEvent racing
+        // with the very first step.
+        let mut accumulator_rx = stream_tx.subscribe();
+        let totals_for_task = Arc::clone(&usage_totals);
+        let accumulator_handle = crate::runtime::spawn(async move {
+            loop {
+                match accumulator_rx.recv().await {
+                    Ok(boxed) => {
+                        if let Some(usage) = boxed.as_any().downcast_ref::<UsageEvent>() {
+                            let mut totals = totals_for_task.lock().await;
+                            totals.usage.add(&TokenUsage {
+                                prompt_tokens: usage.prompt_tokens,
+                                completion_tokens: usage.completion_tokens,
+                                total_tokens: usage.total_tokens,
+                                reasoning_tokens: usage.reasoning_tokens,
+                                cached_input_tokens: usage.cached_input_tokens,
+                                audio_input_tokens: usage.audio_input_tokens,
+                                audio_output_tokens: usage.audio_output_tokens,
+                            });
+                            if let Some(cost) = usage.cost_usd {
+                                totals.cost_usd += cost;
+                            }
+                        }
+                    }
+                    // Lagged: best-effort accumulator, just keep going.
+                    // We deliberately swallow lag rather than fail the
+                    // workflow because the broadcast buffer is sized for
+                    // user-facing streams, not for guaranteed delivery.
+                    Err(broadcast::error::RecvError::Lagged(_)) => {}
+                    // Closed: every sender clone has been dropped, the
+                    // workflow is fully torn down.
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        });
+
         Self {
             result_rx: Some(result_rx),
             stream_tx,
             control_tx,
             event_loop_handle: Some(event_loop_handle),
             session_refs,
+            usage_totals,
+            usage_accumulator_handle: Some(accumulator_handle),
             #[cfg(feature = "telemetry")]
             history_rx,
         }
+    }
+
+    /// Snapshot the current aggregated [`TokenUsage`] for this run.
+    ///
+    /// Safe to call at any point during or after the run; reads through a
+    /// `tokio::sync::Mutex` so callers see a consistent view of the
+    /// accumulator's state at the moment of the call. After
+    /// [`result`](Self::result) has returned, the value matches the
+    /// `usage_total` field on the returned [`WorkflowResult`].
+    pub async fn usage_total(&self) -> TokenUsage {
+        let totals = self.usage_totals.lock().await;
+        totals.usage.clone()
+    }
+
+    /// Snapshot the current aggregated cost in USD for this run.
+    ///
+    /// Sums [`UsageEvent::cost_usd`](blazen_events::UsageEvent::cost_usd)
+    /// across every emitted usage event; events with `cost_usd == None`
+    /// contribute zero. After [`result`](Self::result) has returned, the
+    /// value matches the `cost_total_usd` field on the returned
+    /// [`WorkflowResult`].
+    pub async fn cost_total_usd(&self) -> f64 {
+        let totals = self.usage_totals.lock().await;
+        totals.cost_usd
     }
 
     /// Get a clone of the session-ref registry handle.
@@ -138,10 +240,27 @@ impl WorkflowHandler {
             let _ = handle.await;
         }
 
+        // Drop our owned sender clone so the accumulator task observes a
+        // closed broadcast channel once every other sender (held by the
+        // event loop's Context clones) has also been released. This must
+        // happen BEFORE we await the accumulator handle, otherwise the
+        // task would hang waiting for further events that can never arrive.
+        let (drained_stream_tx, _) = broadcast::channel::<Box<dyn AnyEvent>>(1);
+        let owned_sender = std::mem::replace(&mut self.stream_tx, drained_stream_tx);
+        drop(owned_sender);
+
+        // Now wait for the accumulator to fold any in-flight UsageEvents.
+        if let Some(handle) = self.usage_accumulator_handle.take() {
+            let _ = handle.await;
+        }
+
+        let totals = self.usage_totals.lock().await.clone();
         let session_refs = Arc::clone(&self.session_refs);
         Ok(WorkflowResult {
             event,
             session_refs,
+            usage_total: totals.usage,
+            cost_total_usd: totals.cost_usd,
         })
     }
 

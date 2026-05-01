@@ -10,7 +10,7 @@ use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 
-use blazen_llm::agent::AgentConfig;
+use blazen_llm::agent::{AgentConfig, FINISH_WORKFLOW_TOOL_NAME};
 use blazen_llm::traits::Tool;
 use blazen_llm::types::ToolDefinition;
 
@@ -48,6 +48,10 @@ impl<F: std::future::Future> std::future::Future for SendFuture<F> {
 struct JsTool {
     definition: ToolDefinition,
     handler: js_sys::Function,
+    /// When `true`, the agent loop exits immediately after this tool runs
+    /// and the tool's *arguments* become the final result. Mirrors
+    /// [`blazen_llm::traits::Tool::is_exit`].
+    is_exit: bool,
 }
 
 // SAFETY: WASM is single-threaded.
@@ -147,6 +151,10 @@ impl Tool for JsTool {
         self.definition.clone()
     }
 
+    fn is_exit(&self) -> bool {
+        self.is_exit
+    }
+
     async fn execute(
         &self,
         arguments: serde_json::Value,
@@ -178,6 +186,10 @@ impl Tool for JsTool {
 /// - `maxTokens` (number) -- max tokens per completion call
 /// - `addFinishTool` (boolean) -- add built-in finish tool the model can
 ///   call to exit early
+/// - `noFinishTool` (boolean) -- suppress the canonical `finish_workflow`
+///   tool (mirrors [`AgentConfig::no_finish_tool`])
+/// - `finishToolName` (string) -- override the canonical name used for the
+///   auto-injected `finish_workflow` tool
 ///
 /// Returns a `Promise` that resolves to a JS object with:
 /// - `content` (string | undefined) -- the final text response
@@ -228,15 +240,26 @@ pub fn run_agent(
                 })?;
 
             let params_js = js_sys::Reflect::get(&tool_obj, &JsValue::from_str("parameters"))
-                .map_err(|e| JsValue::from_str(&format!("Tool '{name}' missing 'parameters': {e:?}")))?;
-            let parameters: serde_json::Value = serde_wasm_bindgen::from_value(params_js)
-                .map_err(|e| JsValue::from_str(&format!("Tool '{name}' invalid 'parameters': {e}")))?;
+                .map_err(|e| {
+                    JsValue::from_str(&format!("Tool '{name}' missing 'parameters': {e:?}"))
+                })?;
+            let parameters: serde_json::Value =
+                serde_wasm_bindgen::from_value(params_js).map_err(|e| {
+                    JsValue::from_str(&format!("Tool '{name}' invalid 'parameters': {e}"))
+                })?;
 
             let handler_js = js_sys::Reflect::get(&tool_obj, &JsValue::from_str("handler"))
-                .map_err(|e| JsValue::from_str(&format!("Tool '{name}' missing 'handler': {e:?}")))?;
-            let handler: js_sys::Function = handler_js
-                .dyn_into()
-                .map_err(|_| JsValue::from_str(&format!("Tool '{name}' handler is not a function")))?;
+                .map_err(|e| {
+                    JsValue::from_str(&format!("Tool '{name}' missing 'handler': {e:?}"))
+                })?;
+            let handler: js_sys::Function = handler_js.dyn_into().map_err(|_| {
+                JsValue::from_str(&format!("Tool '{name}' handler is not a function"))
+            })?;
+
+            let is_exit = js_sys::Reflect::get(&tool_obj, &JsValue::from_str("isExit"))
+                .ok()
+                .map(|v| v.is_truthy())
+                .unwrap_or(false);
 
             tool_impls.push(Arc::new(JsTool {
                 definition: ToolDefinition {
@@ -245,6 +268,7 @@ pub fn run_agent(
                     parameters,
                 },
                 handler,
+                is_exit,
             }));
         }
 
@@ -252,8 +276,7 @@ pub fn run_agent(
 
         // Parse optional configuration from the options object.
         if options.is_object() {
-            if let Ok(tc) = js_sys::Reflect::get(&options, &JsValue::from_str("toolConcurrency"))
-            {
+            if let Ok(tc) = js_sys::Reflect::get(&options, &JsValue::from_str("toolConcurrency")) {
                 if let Some(n) = tc.as_f64() {
                     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                     {
@@ -293,6 +316,16 @@ pub fn run_agent(
             if let Ok(af) = js_sys::Reflect::get(&options, &JsValue::from_str("addFinishTool")) {
                 if af.is_truthy() {
                     config = config.with_finish_tool();
+                }
+            }
+            if let Ok(nf) = js_sys::Reflect::get(&options, &JsValue::from_str("noFinishTool")) {
+                if nf.is_truthy() {
+                    config = config.no_finish_tool();
+                }
+            }
+            if let Ok(name) = js_sys::Reflect::get(&options, &JsValue::from_str("finishToolName")) {
+                if let Some(s) = name.as_string() {
+                    config = config.finish_tool_name(s);
                 }
             }
         }
@@ -352,4 +385,61 @@ pub fn run_agent(
 
         Ok(obj.into())
     })
+}
+
+// ---------------------------------------------------------------------------
+// finishWorkflowTool / FINISH_WORKFLOW_TOOL_NAME
+// ---------------------------------------------------------------------------
+
+/// The canonical name (`"finish_workflow"`) of the auto-injected exit tool.
+/// Mirrors [`blazen_llm::FINISH_WORKFLOW_TOOL_NAME`].
+#[wasm_bindgen(js_name = "FINISH_WORKFLOW_TOOL_NAME")]
+#[must_use]
+pub fn finish_workflow_tool_name() -> String {
+    FINISH_WORKFLOW_TOOL_NAME.to_owned()
+}
+
+/// Construct a JS-side tool object equivalent to
+/// [`blazen_llm::finish_workflow_tool`]: a no-op exit tool the LLM can call
+/// to gracefully terminate the agent loop. Pass it into
+/// [`run_agent`]'s `tools` array when you want explicit control over the
+/// finish-tool surface.
+///
+/// The returned object has the standard agent-tool shape:
+/// `{ name, description, parameters, handler, isExit }`.
+#[wasm_bindgen(js_name = "finishWorkflowTool")]
+pub fn finish_workflow_tool() -> Result<JsValue, JsValue> {
+    let obj = js_sys::Object::new();
+    js_sys::Reflect::set(
+        &obj,
+        &JsValue::from_str("name"),
+        &JsValue::from_str(FINISH_WORKFLOW_TOOL_NAME),
+    )?;
+    js_sys::Reflect::set(
+        &obj,
+        &JsValue::from_str("description"),
+        &JsValue::from_str(
+            "Call this tool to gracefully terminate the agent loop. The tool's arguments are returned as the final result.",
+        ),
+    )?;
+    let params = js_sys::Object::new();
+    js_sys::Reflect::set(
+        &params,
+        &JsValue::from_str("type"),
+        &JsValue::from_str("object"),
+    )?;
+    js_sys::Reflect::set(
+        &params,
+        &JsValue::from_str("properties"),
+        &js_sys::Object::new(),
+    )?;
+    js_sys::Reflect::set(&obj, &JsValue::from_str("parameters"), &params)?;
+    let handler = js_sys::Function::new_no_args("return arguments[0];");
+    js_sys::Reflect::set(&obj, &JsValue::from_str("handler"), &handler)?;
+    js_sys::Reflect::set(
+        &obj,
+        &JsValue::from_str("isExit"),
+        &JsValue::from_bool(true),
+    )?;
+    Ok(obj.into())
 }

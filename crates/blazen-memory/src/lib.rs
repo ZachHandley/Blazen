@@ -53,6 +53,7 @@
 pub mod backends;
 pub mod error;
 pub mod memory;
+pub mod retry;
 pub mod search;
 pub mod store;
 pub mod types;
@@ -63,5 +64,6 @@ pub use backends::InMemoryBackend;
 pub use backends::JsonlBackend;
 pub use error::MemoryError;
 pub use memory::Memory;
+pub use retry::RetryMemoryBackend;
 pub use store::{MemoryBackend, MemoryStore};
 pub use types::{MemoryEntry, MemoryResult, StoredEntry};

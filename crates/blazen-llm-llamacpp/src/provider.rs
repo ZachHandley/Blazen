@@ -1023,7 +1023,7 @@ mod tests {
         assert_ne!(ChatRole::Assistant, ChatRole::Tool);
     }
 
-    /// Verify the ChatML fallback prompt formatter produces the expected format.
+    /// Verify the `ChatML` fallback prompt formatter produces the expected format.
     #[cfg(feature = "engine")]
     #[test]
     fn format_prompt_chatml_produces_expected_output() {

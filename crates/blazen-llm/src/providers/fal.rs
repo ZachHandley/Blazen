@@ -66,6 +66,7 @@ use crate::http::{HttpClient, HttpRequest};
 use crate::media::{
     Generated3DModel, GeneratedAudio, GeneratedImage, GeneratedVideo, MediaOutput, MediaType,
 };
+use crate::retry::RetryConfig;
 use crate::types::{
     CompletionRequest, CompletionResponse, EmbeddingResponse, RequestTiming, StreamChunk,
     TokenUsage,
@@ -439,6 +440,7 @@ pub enum FalExecutionMode {
 /// ```
 pub struct FalProvider {
     client: Arc<dyn HttpClient>,
+    retry_config: Option<Arc<RetryConfig>>,
     api_key: String,
     /// LLM endpoint family. Default: [`FalLlmEndpoint::OpenAiChat`].
     llm_endpoint: FalLlmEndpoint,
@@ -467,6 +469,7 @@ impl Clone for FalProvider {
     fn clone(&self) -> Self {
         Self {
             client: Arc::clone(&self.client),
+            retry_config: self.retry_config.clone(),
             api_key: self.api_key.clone(),
             llm_endpoint: self.llm_endpoint.clone(),
             llm_model: self.llm_model.clone(),
@@ -675,6 +678,7 @@ impl FalProvider {
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             client: crate::default_http_client(),
+            retry_config: None,
             api_key: api_key.into(),
             llm_endpoint: FalLlmEndpoint::default(),
             llm_model: "anthropic/claude-sonnet-4.5".to_owned(),
@@ -690,6 +694,7 @@ impl FalProvider {
     pub fn new_with_client(api_key: impl Into<String>, client: Arc<dyn HttpClient>) -> Self {
         Self {
             client,
+            retry_config: None,
             api_key: api_key.into(),
             llm_endpoint: FalLlmEndpoint::default(),
             llm_model: "anthropic/claude-sonnet-4.5".to_owned(),
@@ -756,6 +761,7 @@ impl FalProvider {
     pub fn embedding_model(&self) -> FalEmbeddingModel {
         FalEmbeddingModel {
             client: Arc::clone(&self.client),
+            retry_config: self.retry_config.clone(),
             api_key: self.api_key.clone(),
             model: "openai/text-embedding-3-small".to_owned(),
             dimensions: 1536,
@@ -887,6 +893,24 @@ impl FalProvider {
     #[must_use]
     pub fn with_http_client(mut self, client: Arc<dyn HttpClient>) -> Self {
         self.client = client;
+        self
+    }
+
+    /// Return a clone of the underlying HTTP client.
+    ///
+    /// Escape hatch for power users who need to issue raw HTTP requests
+    /// (custom headers, endpoints not yet covered by Blazen's typed
+    /// surface, debugging) while reusing the same connection pool, TLS
+    /// config, and timeouts as this provider.
+    #[must_use]
+    pub fn http_client(&self) -> Arc<dyn HttpClient> {
+        Arc::clone(&self.client)
+    }
+
+    /// Set the provider-level default retry configuration.
+    #[must_use]
+    pub fn with_retry_config(mut self, config: RetryConfig) -> Self {
+        self.retry_config = Some(Arc::new(config));
         self
     }
 
@@ -2230,6 +2254,14 @@ impl crate::traits::CompletionModel for FalProvider {
         &self.llm_model
     }
 
+    fn retry_config(&self) -> Option<&Arc<RetryConfig>> {
+        self.retry_config.as_ref()
+    }
+
+    fn http_client(&self) -> Option<Arc<dyn HttpClient>> {
+        Some(Self::http_client(self))
+    }
+
     async fn complete(
         &self,
         request: CompletionRequest,
@@ -2529,7 +2561,7 @@ impl ImageGeneration for FalProvider {
                 BlazenError::Serialization(format!("failed to parse image output: {e}"))
             })?;
 
-        let images = image_output
+        let images: Vec<GeneratedImage> = image_output
             .images
             .into_iter()
             .map(|img| {
@@ -2550,9 +2582,11 @@ impl ImageGeneration for FalProvider {
             .collect();
 
         Ok(ImageResult {
+            image_count: u32::try_from(images.len()).unwrap_or(u32::MAX),
             images,
             timing: result.timing,
             cost: result.cost,
+            usage: None,
             metadata: serde_json::Value::Null,
         })
     }
@@ -2614,6 +2648,8 @@ impl ImageGeneration for FalProvider {
             images: vec![image],
             timing: result.timing,
             cost: result.cost,
+            usage: None,
+            image_count: 1,
             metadata: serde_json::Value::Null,
         })
     }
@@ -2893,11 +2929,18 @@ impl VideoGeneration for FalProvider {
             .run_with_max_iterations(compute_req, MAX_VIDEO_POLL_ITERATIONS)
             .await?;
         let video = parse_fal_video(&result.output)?;
+        let videos = vec![video];
+        let video_seconds = videos
+            .iter()
+            .map(|v| f64::from(v.duration_seconds.unwrap_or(0.0)))
+            .sum::<f64>();
 
         Ok(VideoResult {
-            videos: vec![video],
+            videos,
             timing: result.timing,
             cost: result.cost,
+            usage: None,
+            video_seconds,
             metadata: result.metadata,
         })
     }
@@ -2941,11 +2984,18 @@ impl VideoGeneration for FalProvider {
             .run_with_max_iterations(compute_req, MAX_VIDEO_POLL_ITERATIONS)
             .await?;
         let video = parse_fal_video(&result.output)?;
+        let videos = vec![video];
+        let video_seconds = videos
+            .iter()
+            .map(|v| f64::from(v.duration_seconds.unwrap_or(0.0)))
+            .sum::<f64>();
 
         Ok(VideoResult {
-            videos: vec![video],
+            videos,
             timing: result.timing,
             cost: result.cost,
+            usage: None,
+            video_seconds,
             metadata: result.metadata,
         })
     }
@@ -2991,11 +3041,18 @@ impl AudioGeneration for FalProvider {
             .run_with_max_iterations(compute_req, MAX_TTS_POLL_ITERATIONS)
             .await?;
         let audio = parse_fal_audio(&result.output)?;
+        let audio = vec![audio];
+        let audio_seconds = audio
+            .iter()
+            .map(|a| f64::from(a.duration_seconds.unwrap_or(0.0)))
+            .sum::<f64>();
 
         Ok(AudioResult {
-            audio: vec![audio],
+            audio,
             timing: result.timing,
             cost: result.cost,
+            usage: None,
+            audio_seconds,
             metadata: result.metadata,
         })
     }
@@ -3025,11 +3082,18 @@ impl AudioGeneration for FalProvider {
             .run_with_max_iterations(compute_req, MAX_MUSIC_POLL_ITERATIONS)
             .await?;
         let audio = parse_fal_audio(&result.output)?;
+        let audio = vec![audio];
+        let audio_seconds = audio
+            .iter()
+            .map(|a| f64::from(a.duration_seconds.unwrap_or(0.0)))
+            .sum::<f64>();
 
         Ok(AudioResult {
-            audio: vec![audio],
+            audio,
             timing: result.timing,
             cost: result.cost,
+            usage: None,
+            audio_seconds,
             metadata: result.metadata,
         })
     }
@@ -3059,11 +3123,18 @@ impl AudioGeneration for FalProvider {
             .run_with_max_iterations(compute_req, MAX_MUSIC_POLL_ITERATIONS)
             .await?;
         let audio = parse_fal_audio(&result.output)?;
+        let audio = vec![audio];
+        let audio_seconds = audio
+            .iter()
+            .map(|a| f64::from(a.duration_seconds.unwrap_or(0.0)))
+            .sum::<f64>();
 
         Ok(AudioResult {
-            audio: vec![audio],
+            audio,
             timing: result.timing,
             cost: result.cost,
+            usage: None,
+            audio_seconds,
             metadata: result.metadata,
         })
     }
@@ -3102,6 +3173,7 @@ impl ThreeDGeneration for FalProvider {
             models: vec![parse_fal_3d_model(&result.output)?],
             timing: result.timing,
             cost: result.cost,
+            usage: None,
             metadata: result.metadata,
         })
     }
@@ -3161,7 +3233,7 @@ impl Transcription for FalProvider {
             .and_then(serde_json::Value::as_str)
             .map(String::from);
 
-        let segments = result
+        let segments: Vec<TranscriptionSegment> = result
             .output
             .get("chunks")
             .and_then(|v| v.as_array())
@@ -3188,12 +3260,19 @@ impl Transcription for FalProvider {
             })
             .unwrap_or_default();
 
+        let audio_seconds = segments
+            .iter()
+            .map(|s| (s.end - s.start).max(0.0))
+            .sum::<f64>();
+
         Ok(TranscriptionResult {
             text,
             segments,
             language,
             timing: result.timing,
             cost: result.cost,
+            usage: None,
+            audio_seconds,
             metadata: result.output,
         })
     }
@@ -3237,6 +3316,8 @@ impl BackgroundRemoval for FalProvider {
             }],
             timing: result.timing,
             cost: result.cost,
+            usage: None,
+            image_count: 1,
             metadata: result.metadata,
         })
     }
@@ -3253,6 +3334,7 @@ impl BackgroundRemoval for FalProvider {
 /// HTTP client and API key.
 pub struct FalEmbeddingModel {
     client: Arc<dyn HttpClient>,
+    retry_config: Option<Arc<RetryConfig>>,
     api_key: String,
     model: String,
     dimensions: usize,
@@ -3272,6 +3354,7 @@ impl Clone for FalEmbeddingModel {
     fn clone(&self) -> Self {
         Self {
             client: Arc::clone(&self.client),
+            retry_config: self.retry_config.clone(),
             api_key: self.api_key.clone(),
             model: self.model.clone(),
             dimensions: self.dimensions,
@@ -3291,6 +3374,7 @@ impl FalEmbeddingModel {
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             client: crate::default_http_client(),
+            retry_config: None,
             api_key: api_key.into(),
             model: "openai/text-embedding-3-small".to_owned(),
             dimensions: 1536,
@@ -3318,6 +3402,23 @@ impl FalEmbeddingModel {
         self.client = client;
         self
     }
+
+    /// Return a clone of the underlying HTTP client.
+    ///
+    /// Escape hatch for power users who need to issue raw HTTP requests
+    /// while reusing the same connection pool, TLS config, and timeouts
+    /// as this embedding model.
+    #[must_use]
+    pub fn http_client(&self) -> Arc<dyn HttpClient> {
+        Arc::clone(&self.client)
+    }
+
+    /// Set the provider-level default retry configuration.
+    #[must_use]
+    pub fn with_retry_config(mut self, config: RetryConfig) -> Self {
+        self.retry_config = Some(Arc::new(config));
+        self
+    }
 }
 
 #[async_trait]
@@ -3328,6 +3429,14 @@ impl crate::traits::EmbeddingModel for FalEmbeddingModel {
 
     fn dimensions(&self) -> usize {
         self.dimensions
+    }
+
+    fn retry_config(&self) -> Option<&Arc<RetryConfig>> {
+        self.retry_config.as_ref()
+    }
+
+    fn http_client(&self) -> Option<Arc<dyn HttpClient>> {
+        Some(Self::http_client(self))
     }
 
     async fn embed(&self, texts: &[String]) -> Result<EmbeddingResponse, BlazenError> {
@@ -3491,7 +3600,7 @@ mod tests {
         // Defense-in-depth: assert the constructed URL never contains a model name.
         let provider = FalProvider::new("fal-test").with_llm_model("anthropic/claude-sonnet-4.5");
         let path = provider.llm_endpoint.path();
-        let url = format!("https://fal.run/{}", path);
+        let url = format!("https://fal.run/{path}");
         assert!(url.contains("openrouter/router/openai/v1/chat/completions"));
         assert!(!url.contains("claude-sonnet-4.5"));
         assert!(!url.contains("anthropic/claude"));

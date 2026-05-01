@@ -56,6 +56,7 @@ struct PyToolWrapper {
     parameters: serde_json::Value,
     callable: Py<PyAny>,
     is_async: bool,
+    is_exit: bool,
     locals: pyo3_async_runtimes::TaskLocals,
 }
 
@@ -67,6 +68,10 @@ impl Tool for PyToolWrapper {
             description: self.description.clone(),
             parameters: self.parameters.clone(),
         }
+    }
+
+    fn is_exit(&self) -> bool {
+        self.is_exit
     }
 
     async fn execute(
@@ -139,19 +144,24 @@ pub struct PyToolDef {
     pub(crate) description: String,
     pub(crate) parameters: serde_json::Value,
     pub(crate) handler: Py<PyAny>,
+    /// When `true`, the agent loop returns immediately after this tool is
+    /// invoked and packages the tool's return value as the final response.
+    /// Mirrors `Tool::is_exit()`.
+    pub(crate) is_exit: bool,
 }
 
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyToolDef {
     #[new]
-    #[pyo3(signature = (*, name, description, parameters, handler))]
+    #[pyo3(signature = (*, name, description, parameters, handler, is_exit=false))]
     fn new(
         py: Python<'_>,
         name: &str,
         description: &str,
         parameters: &Bound<'_, PyAny>,
         handler: Py<PyAny>,
+        is_exit: bool,
     ) -> PyResult<Self> {
         let params = crate::convert::py_to_json(py, parameters)?;
         Ok(Self {
@@ -159,6 +169,7 @@ impl PyToolDef {
             description: description.to_owned(),
             parameters: params,
             handler,
+            is_exit,
         })
     }
 
@@ -186,8 +197,15 @@ impl PyToolDef {
         self.handler.clone_ref(py)
     }
 
+    /// Whether the agent loop should treat this tool as a workflow-exit
+    /// signal. Mirrors `Tool::is_exit()`.
+    #[getter]
+    fn is_exit(&self) -> bool {
+        self.is_exit
+    }
+
     fn __repr__(&self) -> String {
-        format!("ToolDef(name='{}')", self.name)
+        format!("ToolDef(name='{}', is_exit={})", self.name, self.is_exit,)
     }
 }
 
@@ -265,9 +283,12 @@ impl PyAgentResult {
 #[gen_stub_pyclass]
 #[pyclass(name = "AgentConfig", from_py_object)]
 #[derive(Clone, Default)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct PyAgentConfig {
     pub(crate) max_iterations: u32,
     pub(crate) add_finish_tool: bool,
+    pub(crate) no_finish_tool: bool,
+    pub(crate) finish_tool_name: Option<String>,
     pub(crate) system_prompt: Option<String>,
     pub(crate) temperature: Option<f32>,
     pub(crate) max_tokens: Option<u32>,
@@ -283,14 +304,19 @@ impl PyAgentConfig {
         *,
         max_iterations=10,
         add_finish_tool=false,
+        no_finish_tool=false,
+        finish_tool_name=None,
         system_prompt=None,
         temperature=None,
         max_tokens=None,
         tool_concurrency=0,
     ))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         max_iterations: u32,
         add_finish_tool: bool,
+        no_finish_tool: bool,
+        finish_tool_name: Option<String>,
         system_prompt: Option<String>,
         temperature: Option<f32>,
         max_tokens: Option<u32>,
@@ -299,6 +325,8 @@ impl PyAgentConfig {
         Self {
             max_iterations,
             add_finish_tool,
+            no_finish_tool,
+            finish_tool_name,
             system_prompt,
             temperature,
             max_tokens,
@@ -316,6 +344,19 @@ impl PyAgentConfig {
     #[getter]
     fn add_finish_tool(&self) -> bool {
         self.add_finish_tool
+    }
+
+    /// Whether to suppress the always-on `finish_workflow` synthetic tool.
+    #[getter]
+    fn no_finish_tool(&self) -> bool {
+        self.no_finish_tool
+    }
+
+    /// Custom name for the synthetic `finish_workflow` tool. When `None`,
+    /// the canonical [`FINISH_WORKFLOW_TOOL_NAME`] is used.
+    #[getter]
+    fn finish_tool_name(&self) -> Option<&str> {
+        self.finish_tool_name.as_deref()
     }
 
     /// Optional system prompt prepended to messages.
@@ -366,6 +407,12 @@ impl PyAgentConfig {
         }
         if self.add_finish_tool {
             config = config.with_finish_tool();
+        }
+        if self.no_finish_tool {
+            config = config.no_finish_tool();
+        }
+        if let Some(name) = self.finish_tool_name.as_ref() {
+            config = config.finish_tool_name(name.clone());
         }
         if self.tool_concurrency > 0 {
             config = config.with_tool_concurrency(self.tool_concurrency);
@@ -476,6 +523,71 @@ impl From<RustAgentEvent> for PyAgentEvent {
 }
 
 // ---------------------------------------------------------------------------
+// finish_workflow_tool factory
+// ---------------------------------------------------------------------------
+
+/// Build the synthetic ``finish_workflow`` tool that the agent loop adds by
+/// default (unless [`AgentConfig.no_finish_tool`] is set).
+///
+/// Useful when you want to publish the same tool from a custom agent loop
+/// or surface its name / description / schema to a UI before the run starts.
+/// The resulting [`ToolDef`] sets ``is_exit=True`` so the parent agent
+/// terminates when the model invokes it.
+///
+/// # Panics
+///
+/// Panics if the embedded Python source for the no-op identity handler
+/// fails to compile via `Py.run` — this would only happen if the
+/// interpreter is in a deeply broken state.
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn finish_workflow_tool(py: Python<'_>) -> PyResult<Py<PyToolDef>> {
+    // Mirror the Rust definition: a single optional `result` arg + free-form
+    // metadata. We synthesise a no-op handler that just echoes its args back
+    // so the Python-side tool definition has the same shape as the Rust one.
+    let parameters = serde_json::json!({
+        "type": "object",
+        "properties": {
+            "result": {
+                "type": "string",
+                "description": "Final answer for the human. Free-form text."
+            }
+        },
+        "required": ["result"],
+        "additionalProperties": true
+    });
+
+    // Identity handler: echo args back as-is. The agent loop short-circuits
+    // before this gets called when the tool is registered as `is_exit=true`,
+    // but having a non-failing handler keeps the tool usable in custom loops.
+    let globals = pyo3::types::PyDict::new(py);
+    py.run(
+        std::ffi::CString::new("def _finish(args): return args")
+            .unwrap()
+            .as_c_str(),
+        Some(&globals),
+        Some(&globals),
+    )?;
+    let handler = globals
+        .get_item("_finish")?
+        .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("synth handler missing"))?
+        .unbind();
+
+    Py::new(
+        py,
+        PyToolDef {
+            name: blazen_llm::FINISH_WORKFLOW_TOOL_NAME.to_owned(),
+            description:
+                "Signal that the workflow is finished and return a final answer to the user."
+                    .to_owned(),
+            parameters,
+            handler,
+            is_exit: true,
+        },
+    )
+}
+
+// ---------------------------------------------------------------------------
 // run_agent_with_callback function
 // ---------------------------------------------------------------------------
 
@@ -522,6 +634,7 @@ pub fn run_agent_with_callback<'py>(
                 parameters: t.parameters.clone(),
                 callable: t.handler.clone_ref(py),
                 is_async,
+                is_exit: t.is_exit,
                 locals: locals.clone(),
             }) as Arc<dyn Tool>
         })
@@ -609,6 +722,7 @@ pub fn run_agent<'py>(
                 parameters: t.parameters.clone(),
                 callable: t.handler.clone_ref(py),
                 is_async,
+                is_exit: t.is_exit,
                 locals: locals.clone(),
             }) as Arc<dyn Tool>
         })

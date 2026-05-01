@@ -39,6 +39,8 @@ async fn test_e2e_single_step_echo() {
         }),
         max_concurrency: 1,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     let workflow = WorkflowBuilder::new("e2e-echo").step(echo).build().unwrap();
@@ -84,6 +86,8 @@ async fn test_e2e_multi_step_dynamic_pipeline() {
         }),
         max_concurrency: 1,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     let step_b = StepRegistration {
@@ -108,6 +112,8 @@ async fn test_e2e_multi_step_dynamic_pipeline() {
         }),
         max_concurrency: 1,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     let step_c = StepRegistration {
@@ -129,6 +135,8 @@ async fn test_e2e_multi_step_dynamic_pipeline() {
         }),
         max_concurrency: 1,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     let workflow = WorkflowBuilder::new("e2e-dynamic-pipeline")
@@ -183,6 +191,8 @@ async fn test_e2e_branching_dynamic_events() {
         }),
         max_concurrency: 1,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     let handle_high = StepRegistration {
@@ -198,6 +208,8 @@ async fn test_e2e_branching_dynamic_events() {
         }),
         max_concurrency: 1,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     let handle_low = StepRegistration {
@@ -213,6 +225,8 @@ async fn test_e2e_branching_dynamic_events() {
         }),
         max_concurrency: 1,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     // Test high priority branch.
@@ -276,6 +290,8 @@ async fn test_e2e_context_sharing() {
         }),
         max_concurrency: 1,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     let reader = StepRegistration {
@@ -297,6 +313,8 @@ async fn test_e2e_context_sharing() {
         }),
         max_concurrency: 1,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     let wf = WorkflowBuilder::new("e2e-context")
@@ -351,6 +369,8 @@ async fn test_e2e_streaming_events() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -420,6 +440,8 @@ async fn test_e2e_pause_and_resume() {
         }),
         max_concurrency: 1,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     // Step two reads via to_json() -- with the deserializer registry, events
@@ -447,6 +469,8 @@ async fn test_e2e_pause_and_resume() {
         }),
         max_concurrency: 1,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     let wf = WorkflowBuilder::new("e2e-pause-resume")
@@ -523,6 +547,8 @@ async fn test_e2e_fan_out() {
         }),
         max_concurrency: 1,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     let handle_a = StepRegistration {
@@ -538,6 +564,8 @@ async fn test_e2e_fan_out() {
         }),
         max_concurrency: 1,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     let handle_b = StepRegistration {
@@ -553,6 +581,8 @@ async fn test_e2e_fan_out() {
         }),
         max_concurrency: 1,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     let wf = WorkflowBuilder::new("e2e-fan-out")
@@ -594,6 +624,8 @@ async fn test_e2e_timeout() {
         }),
         max_concurrency: 1,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     let wf = WorkflowBuilder::new("e2e-timeout")

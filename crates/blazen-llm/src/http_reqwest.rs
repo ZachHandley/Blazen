@@ -7,27 +7,48 @@ use futures_util::StreamExt;
 use std::sync::Arc;
 
 use crate::error::BlazenError;
-use crate::http::{ByteStream, HttpClient, HttpMethod, HttpRequest, HttpResponse};
+use crate::http::{
+    ByteStream, HttpClient, HttpClientConfig, HttpMethod, HttpRequest, HttpResponse,
+};
 
 /// An [`HttpClient`] backed by [`reqwest::Client`].
 #[derive(Debug, Clone)]
 pub struct ReqwestHttpClient {
     client: reqwest::Client,
+    config: HttpClientConfig,
 }
 
 impl ReqwestHttpClient {
-    /// Create a new client with a default [`reqwest::Client`].
+    /// Create with default timeouts (60s request, 10s connect).
     #[must_use]
     pub fn new() -> Self {
+        Self::with_config(HttpClientConfig::default())
+    }
+
+    /// Create with the given timeout / user-agent configuration.
+    #[must_use]
+    pub fn with_config(config: HttpClientConfig) -> Self {
+        let client = build_client(&config);
+        Self { client, config }
+    }
+
+    /// Wrap an existing `reqwest::Client`. The `HttpClientConfig` returned
+    /// by [`HttpClient::config`] will be `HttpClientConfig::default()` —
+    /// callers using this constructor are responsible for matching their
+    /// own client config with the values they want surfaced upstream.
+    #[must_use]
+    pub fn from_client(client: reqwest::Client) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client,
+            config: HttpClientConfig::default(),
         }
     }
 
-    /// Create a new client wrapping an existing [`reqwest::Client`].
+    /// Wrap an existing `reqwest::Client` together with the
+    /// [`HttpClientConfig`] that was used (or should be advertised) for it.
     #[must_use]
-    pub fn from_client(client: reqwest::Client) -> Self {
-        Self { client }
+    pub fn from_client_and_config(client: reqwest::Client, config: HttpClientConfig) -> Self {
+        Self { client, config }
     }
 
     /// Build a [`reqwest::RequestBuilder`] from our abstract [`HttpRequest`].
@@ -68,8 +89,26 @@ impl Default for ReqwestHttpClient {
     }
 }
 
+fn build_client(config: &HttpClientConfig) -> reqwest::Client {
+    let mut builder = reqwest::Client::builder();
+    if let Some(d) = config.request_timeout {
+        builder = builder.timeout(d);
+    }
+    if let Some(d) = config.connect_timeout {
+        builder = builder.connect_timeout(d);
+    }
+    if let Some(ref ua) = config.user_agent {
+        builder = builder.user_agent(ua);
+    }
+    builder.build().unwrap_or_else(|_| reqwest::Client::new())
+}
+
 #[async_trait::async_trait]
 impl HttpClient for ReqwestHttpClient {
+    fn config(&self) -> &HttpClientConfig {
+        &self.config
+    }
+
     async fn send(&self, request: HttpRequest) -> Result<HttpResponse, BlazenError> {
         let builder = self.build_request(&request);
         let response = builder
@@ -119,5 +158,44 @@ impl HttpClient for ReqwestHttpClient {
         });
 
         Ok((status, headers, Box::pin(byte_stream)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn config_round_trips_through_with_config() {
+        let cfg = HttpClientConfig {
+            request_timeout: Some(Duration::from_secs(7)),
+            connect_timeout: Some(Duration::from_secs(3)),
+            user_agent: Some("test-agent/1.0".to_owned()),
+        };
+        let client = ReqwestHttpClient::with_config(cfg.clone());
+        assert_eq!(client.config().request_timeout, cfg.request_timeout);
+        assert_eq!(client.config().connect_timeout, cfg.connect_timeout);
+        assert_eq!(client.config().user_agent, cfg.user_agent);
+    }
+
+    #[test]
+    fn unlimited_disables_timeouts() {
+        let client = ReqwestHttpClient::with_config(HttpClientConfig::unlimited());
+        assert!(client.config().request_timeout.is_none());
+        assert!(client.config().connect_timeout.is_none());
+    }
+
+    #[test]
+    fn default_construction_applies_default_timeouts() {
+        let client = ReqwestHttpClient::new();
+        assert_eq!(
+            client.config().request_timeout,
+            Some(Duration::from_secs(60))
+        );
+        assert_eq!(
+            client.config().connect_timeout,
+            Some(Duration::from_secs(10))
+        );
     }
 }

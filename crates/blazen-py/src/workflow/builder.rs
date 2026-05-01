@@ -7,10 +7,16 @@
 //! builder is the typed alternative that exposes every knob (auto-publish,
 //! history collection, checkpointing).
 
+use std::sync::Arc;
+use std::time::Duration;
+
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
+use blazen_llm::retry::RetryConfig;
+
 use super::workflow::{PySessionPausePolicy, PyWorkflow};
+use crate::providers::config::PyRetryConfig;
 
 /// Fluent builder for a [`Workflow`].
 ///
@@ -37,6 +43,15 @@ pub struct PyWorkflowBuilder {
     pub(crate) checkpoint_after_step: bool,
     pub(crate) collect_history: bool,
     pub(crate) checkpoint_store: Option<Py<PyAny>>,
+    /// Workflow-level retry-config default. `None` after `clear_retry_config`.
+    pub(crate) retry_config: Option<Arc<RetryConfig>>,
+    /// Whether `retry_config` was explicitly set (so `None` means "clear",
+    /// not "inherit").
+    pub(crate) retry_config_set: bool,
+    /// Per-step default timeout (applies only to subsequent `.step(...)`s
+    /// that don't override their own timeout).
+    pub(crate) step_timeout_default: Option<Duration>,
+    pub(crate) step_timeout_default_set: bool,
 }
 
 impl PyWorkflowBuilder {
@@ -50,10 +65,14 @@ impl PyWorkflowBuilder {
             timeout: Some(300.0),
             timeout_set: false,
             session_pause_policy: PySessionPausePolicy::PickleOrError,
-            auto_publish_events: false,
+            auto_publish_events: true,
             checkpoint_after_step: false,
             collect_history: false,
             checkpoint_store: None,
+            retry_config: None,
+            retry_config_set: false,
+            step_timeout_default: None,
+            step_timeout_default_set: false,
         }
     }
 }
@@ -64,17 +83,7 @@ impl PyWorkflowBuilder {
     /// Create a new builder with the given workflow name.
     #[new]
     fn new(name: &str) -> Self {
-        Self {
-            name: name.to_owned(),
-            steps: Vec::new(),
-            timeout: Some(300.0),
-            timeout_set: false,
-            session_pause_policy: PySessionPausePolicy::PickleOrError,
-            auto_publish_events: false,
-            checkpoint_after_step: false,
-            collect_history: false,
-            checkpoint_store: None,
-        }
+        Self::with_name(name)
     }
 
     /// Register a step (an `@step`-decorated function).
@@ -128,6 +137,46 @@ impl PyWorkflowBuilder {
         slf.into()
     }
 
+    /// Set the workflow-level default `RetryConfig`. Pipeline / step / per-call
+    /// overrides take precedence at the LLM call site.
+    fn retry_config(mut slf: PyRefMut<'_, Self>, config: PyRef<'_, PyRetryConfig>) -> Py<Self> {
+        slf.retry_config = Some(Arc::new(config.inner.clone()));
+        slf.retry_config_set = true;
+        slf.into()
+    }
+
+    /// Disable retries at the workflow level (`max_retries = 0`).
+    fn no_retry(mut slf: PyRefMut<'_, Self>) -> Py<Self> {
+        slf.retry_config = Some(Arc::new(RetryConfig {
+            max_retries: 0,
+            ..RetryConfig::default()
+        }));
+        slf.retry_config_set = true;
+        slf.into()
+    }
+
+    /// Clear any workflow-level retry config (defer to next-outer scope).
+    fn clear_retry_config(mut slf: PyRefMut<'_, Self>) -> Py<Self> {
+        slf.retry_config = None;
+        slf.retry_config_set = true;
+        slf.into()
+    }
+
+    /// Apply a default per-step wall-clock timeout (in seconds) to every
+    /// step appended after this call.
+    fn step_timeout(mut slf: PyRefMut<'_, Self>, seconds: f64) -> Py<Self> {
+        slf.step_timeout_default = Some(Duration::from_secs_f64(seconds));
+        slf.step_timeout_default_set = true;
+        slf.into()
+    }
+
+    /// Clear any default per-step timeout (subsequent steps run without one).
+    fn no_step_timeout(mut slf: PyRefMut<'_, Self>) -> Py<Self> {
+        slf.step_timeout_default = None;
+        slf.step_timeout_default_set = true;
+        slf.into()
+    }
+
     /// Build the [`Workflow`].
     ///
     /// Validation: the workflow must have at least one registered step.
@@ -143,12 +192,20 @@ impl PyWorkflowBuilder {
         let steps: Vec<Py<super::step::PyStepWrapper>> =
             self.steps.iter().map(|s| s.clone_ref(py)).collect();
 
-        Ok(PyWorkflow::from_parts(
+        let mut wf = PyWorkflow::from_parts(
             self.name.clone(),
             steps,
             self.timeout,
             self.session_pause_policy,
-        ))
+        );
+        wf.set_auto_publish_events(self.auto_publish_events);
+        if self.retry_config_set {
+            wf.set_retry_config(self.retry_config.clone());
+        }
+        if self.step_timeout_default_set {
+            wf.set_step_timeout_default(self.step_timeout_default);
+        }
+        Ok(wf)
     }
 
     /// The workflow name.

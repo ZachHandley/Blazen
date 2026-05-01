@@ -97,11 +97,15 @@ pub mod tokens;
 pub mod traits;
 pub mod typed_tool;
 pub mod types;
+pub mod usage_recording;
 
 pub use providers::custom::{CustomProvider, HostDispatch};
 
 // Re-export primary types at crate root for ergonomic imports.
-pub use agent::{AgentConfig, AgentEvent, AgentResult, run_agent, run_agent_with_callback};
+pub use agent::{
+    AgentConfig, AgentEvent, AgentResult, FINISH_WORKFLOW_TOOL_NAME, finish_workflow_tool,
+    run_agent, run_agent_with_callback,
+};
 pub use artifacts::extract_inline_artifacts;
 pub use batch::{BatchConfig, BatchResult, complete_batch};
 pub use cache::{CacheConfig, CacheStrategy, CachedCompletionModel};
@@ -168,6 +172,9 @@ pub use types::{
     LlmPayload, MediaSource, MessageContent, ProviderId, ReasoningTrace, RequestTiming,
     ResponseFormat, Role, StreamChunk, StructuredResponse, TokenUsage, ToolCall, ToolDefinition,
     ToolOutput, VideoContent,
+};
+pub use usage_recording::{
+    NoopUsageEmitter, UsageEmitter, UsageRecordingCompletionModel, UsageRecordingEmbeddingModel,
 };
 
 // ---------------------------------------------------------------------------

@@ -227,8 +227,12 @@ impl WasmWorkflowHistory {
     /// Returns an error if any event fails to convert into a JS value.
     #[wasm_bindgen(js_name = "events")]
     pub fn events(&self) -> Result<JsValue, JsValue> {
-        let mirrored: Vec<HistoryEvent> =
-            self.inner.events.iter().map(history_event_from_inner).collect();
+        let mirrored: Vec<HistoryEvent> = self
+            .inner
+            .events
+            .iter()
+            .map(history_event_from_inner)
+            .collect();
         serde_wasm_bindgen::to_value(&mirrored).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
@@ -259,8 +263,8 @@ impl WasmWorkflowHistory {
     /// Returns an error if `value` does not match the expected shape.
     #[wasm_bindgen(js_name = "fromJSON")]
     pub fn from_json(value: JsValue) -> Result<WasmWorkflowHistory, JsValue> {
-        let inner: InnerWorkflowHistory = serde_wasm_bindgen::from_value(value)
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let inner: InnerWorkflowHistory =
+            serde_wasm_bindgen::from_value(value).map_err(|e| JsValue::from_str(&e.to_string()))?;
         Ok(Self { inner })
     }
 
@@ -271,8 +275,8 @@ impl WasmWorkflowHistory {
     /// Returns an error if `json` is not a valid serialized history.
     #[wasm_bindgen(js_name = "fromJsonString")]
     pub fn from_json_string(json: &str) -> Result<WasmWorkflowHistory, JsValue> {
-        let inner: InnerWorkflowHistory = serde_json::from_str(json)
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let inner: InnerWorkflowHistory =
+            serde_json::from_str(json).map_err(|e| JsValue::from_str(&e.to_string()))?;
         Ok(Self { inner })
     }
 }
@@ -372,13 +376,9 @@ fn history_event_kind_from_inner(kind: InnerHistoryEventKind) -> HistoryEventKin
         InnerHistoryEventKind::WorkflowCompleted { duration_ms } => {
             HistoryEventKind::WorkflowCompleted { duration_ms }
         }
-        InnerHistoryEventKind::WorkflowFailed {
-            error,
-            duration_ms,
-        } => HistoryEventKind::WorkflowFailed {
-            error,
-            duration_ms,
-        },
+        InnerHistoryEventKind::WorkflowFailed { error, duration_ms } => {
+            HistoryEventKind::WorkflowFailed { error, duration_ms }
+        }
         InnerHistoryEventKind::WorkflowTimedOut { elapsed_ms } => {
             HistoryEventKind::WorkflowTimedOut { elapsed_ms }
         }
@@ -468,13 +468,9 @@ fn history_event_kind_to_inner(kind: HistoryEventKind) -> InnerHistoryEventKind 
         HistoryEventKind::WorkflowCompleted { duration_ms } => {
             InnerHistoryEventKind::WorkflowCompleted { duration_ms }
         }
-        HistoryEventKind::WorkflowFailed {
-            error,
-            duration_ms,
-        } => InnerHistoryEventKind::WorkflowFailed {
-            error,
-            duration_ms,
-        },
+        HistoryEventKind::WorkflowFailed { error, duration_ms } => {
+            InnerHistoryEventKind::WorkflowFailed { error, duration_ms }
+        }
         HistoryEventKind::WorkflowTimedOut { elapsed_ms } => {
             InnerHistoryEventKind::WorkflowTimedOut { elapsed_ms }
         }

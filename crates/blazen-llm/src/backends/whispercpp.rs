@@ -93,6 +93,21 @@ fn to_blazen_segment(seg: EngineTranscriptionSegment) -> TranscriptionSegment {
 
 /// Convert the provider-level result into the blazen-llm public result type.
 fn to_blazen_result(engine: EngineTranscriptionResult, total_ms: u64) -> TranscriptionResult {
+    let audio_seconds: f64 = if engine.segments.is_empty() {
+        0.0
+    } else {
+        let max_end = engine.segments.iter().map(|s| s.end_ms).max().unwrap_or(0);
+        let min_start = engine
+            .segments
+            .iter()
+            .map(|s| s.start_ms)
+            .min()
+            .unwrap_or(0);
+        let span_ms = (max_end - min_start).max(0);
+        #[allow(clippy::cast_precision_loss)]
+        let secs = span_ms as f64 / 1000.0;
+        secs
+    };
     TranscriptionResult {
         text: engine.text,
         segments: engine.segments.into_iter().map(to_blazen_segment).collect(),
@@ -103,6 +118,8 @@ fn to_blazen_result(engine: EngineTranscriptionResult, total_ms: u64) -> Transcr
             total_ms: Some(total_ms),
         },
         cost: None,
+        usage: None,
+        audio_seconds,
         metadata: serde_json::Value::Null,
     }
 }

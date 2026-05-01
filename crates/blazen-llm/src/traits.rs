@@ -78,6 +78,34 @@ pub trait CompletionModel: Send + Sync {
     fn provider_config(&self) -> Option<&ProviderConfig> {
         None
     }
+
+    /// Provider-level default retry configuration, if any.
+    ///
+    /// When the host runtime (Pipeline / Workflow / Step) sets up a
+    /// [`RetryStack`](crate::retry::RetryStack), this provider default is
+    /// the lowest-priority entry. Returning `None` (the default) means the
+    /// provider has no opinion and the runtime falls back to
+    /// [`RetryConfig::default`](crate::retry::RetryConfig::default).
+    fn retry_config(&self) -> Option<&std::sync::Arc<crate::retry::RetryConfig>> {
+        None
+    }
+
+    /// Escape hatch returning the underlying HTTP client this provider
+    /// uses for wire-level I/O, if any.
+    ///
+    /// Power users can use this to issue raw requests for debugging,
+    /// custom headers, or endpoints not yet covered by Blazen's typed
+    /// surface area. Returns `None` for providers that have no
+    /// HTTP client (e.g. local-inference providers, or
+    /// [`CustomProvider`](crate::providers::custom::CustomProvider) where
+    /// dispatch happens entirely in the host language).
+    ///
+    /// HTTP-based built-in providers override this to return
+    /// `Some(self.http_client())` — the inherent method is the more
+    /// ergonomic accessor when the concrete type is known.
+    fn http_client(&self) -> Option<std::sync::Arc<dyn crate::http::HttpClient>> {
+        None
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -157,6 +185,32 @@ pub trait EmbeddingModel: Send + Sync {
     fn provider_config(&self) -> Option<&ProviderConfig> {
         None
     }
+
+    /// Provider-level default retry configuration, if any.
+    ///
+    /// When the host runtime (Pipeline / Workflow / Step) sets up a
+    /// [`RetryStack`](crate::retry::RetryStack), this provider default is
+    /// the lowest-priority entry. Returning `None` (the default) means the
+    /// provider has no opinion and the runtime falls back to
+    /// [`RetryConfig::default`](crate::retry::RetryConfig::default).
+    fn retry_config(&self) -> Option<&std::sync::Arc<crate::retry::RetryConfig>> {
+        None
+    }
+
+    /// Escape hatch returning the underlying HTTP client this provider
+    /// uses for wire-level I/O, if any.
+    ///
+    /// Power users can use this to issue raw requests for debugging,
+    /// custom headers, or endpoints not yet covered by Blazen's typed
+    /// surface area. Returns `None` for providers that have no HTTP
+    /// client (e.g. local-inference providers).
+    ///
+    /// HTTP-based built-in providers override this to return
+    /// `Some(self.http_client())` — the inherent method is the more
+    /// ergonomic accessor when the concrete type is known.
+    fn http_client(&self) -> Option<std::sync::Arc<dyn crate::http::HttpClient>> {
+        None
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -182,6 +236,13 @@ pub trait Tool: Send + Sync {
         &self,
         arguments: serde_json::Value,
     ) -> Result<crate::types::ToolOutput<serde_json::Value>, BlazenError>;
+
+    /// Whether this tool is an *exit tool*. When the LLM invokes a tool whose
+    /// `is_exit()` returns `true`, the agent loop returns immediately and the
+    /// tool's arguments become the final result. Defaults to `false`.
+    fn is_exit(&self) -> bool {
+        false
+    }
 }
 
 // ---------------------------------------------------------------------------

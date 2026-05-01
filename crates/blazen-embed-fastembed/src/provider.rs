@@ -204,12 +204,9 @@ mod tests {
         // This test does NOT require model download because we short-circuit
         // on empty input. But we still need a model instance, so we skip if
         // the model is not cached locally.
-        let model = match FastEmbedModel::from_options(FastEmbedOptions::default()) {
-            Ok(m) => m,
-            Err(_) => {
-                eprintln!("skipping embed_empty_input_returns_empty: model not available");
-                return;
-            }
+        let Ok(model) = FastEmbedModel::from_options(FastEmbedOptions::default()) else {
+            eprintln!("skipping embed_empty_input_returns_empty: model not available");
+            return;
         };
         let response = model.embed(&[]).await.expect("empty embed should succeed");
         assert!(response.embeddings.is_empty());

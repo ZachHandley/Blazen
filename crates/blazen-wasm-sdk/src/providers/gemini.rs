@@ -71,19 +71,12 @@ impl WasmGeminiProvider {
     /// Perform a non-streaming chat completion.
     #[wasm_bindgen]
     pub fn complete(&self, messages: JsValue) -> js_sys::Promise {
-        complete_promise(
-            as_dyn_completion(Arc::clone(&self.inner)),
-            messages,
-        )
+        complete_promise(as_dyn_completion(Arc::clone(&self.inner)), messages)
     }
 
     /// Perform a non-streaming completion with additional options.
     #[wasm_bindgen(js_name = "completeWithOptions")]
-    pub fn complete_with_options(
-        &self,
-        messages: JsValue,
-        options: JsValue,
-    ) -> js_sys::Promise {
+    pub fn complete_with_options(&self, messages: JsValue, options: JsValue) -> js_sys::Promise {
         let model = as_dyn_completion(Arc::clone(&self.inner));
         future_to_promise(async move {
             let msgs = crate::chat_message::js_messages_to_vec(&messages)?;
@@ -93,8 +86,7 @@ impl WasmGeminiProvider {
                 .complete(request)
                 .await
                 .map_err(|e| JsValue::from_str(&e.to_string()))?;
-            serde_wasm_bindgen::to_value(&response)
-                .map_err(|e| JsValue::from_str(&e.to_string()))
+            serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
         })
     }
 

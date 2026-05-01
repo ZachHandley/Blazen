@@ -92,7 +92,7 @@ impl JsWorkflowHandler {
         };
 
         let result = handler.result().await.map_err(workflow_error_to_napi)?;
-        Ok(make_result(&*result.event))
+        Ok(make_result(&result))
     }
 
     /// Signal the running workflow to pause.
@@ -191,6 +191,31 @@ impl JsWorkflowHandler {
         Ok(())
     }
 
+    /// Aggregated token usage across the workflow run so far.
+    ///
+    /// Mirrors [`blazen_core::WorkflowHandler::usage_total`]. Returns
+    /// `null` after the handler has been consumed by [`Self::result`].
+    #[napi(js_name = "usageTotal")]
+    pub async fn usage_total(&self) -> Result<Option<crate::types::JsTokenUsageClass>> {
+        let guard = self.inner.lock().await;
+        let Some(handler) = guard.as_ref() else {
+            return Ok(None);
+        };
+        Ok(Some(handler.usage_total().await.into()))
+    }
+
+    /// Aggregated cost in USD across the workflow run so far. Mirrors
+    /// [`blazen_core::WorkflowHandler::cost_total_usd`]. Returns `null`
+    /// after the handler has been consumed by [`Self::result`].
+    #[napi(js_name = "costTotalUsd")]
+    pub async fn cost_total_usd(&self) -> Result<Option<f64>> {
+        let guard = self.inner.lock().await;
+        let Some(handler) = guard.as_ref() else {
+            return Ok(None);
+        };
+        Ok(Some(handler.cost_total_usd().await))
+    }
+
     /// Abort the running workflow.
     #[napi]
     pub async fn abort(&self) -> Result<()> {
@@ -252,11 +277,12 @@ impl JsWorkflowHandler {
     }
 }
 
-/// Convert a result event to a [`JsWorkflowResult`].
+/// Convert a [`blazen_core::WorkflowResult`] to a [`JsWorkflowResult`].
 ///
-/// This is a copy of the helper in `workflow.rs` -- kept here to avoid
-/// circular dependencies. Both produce the same output format.
-fn make_result(event: &dyn blazen_events::AnyEvent) -> JsWorkflowResult {
+/// Carries the usage / cost rollups from Wave 3 alongside the terminal
+/// event payload. Kept local to avoid a circular dep with `workflow.rs`.
+fn make_result(result: &blazen_core::WorkflowResult) -> JsWorkflowResult {
+    let event = &*result.event;
     let event_type = event.event_type_id().to_owned();
     let json = event.to_json();
 
@@ -268,5 +294,10 @@ fn make_result(event: &dyn blazen_events::AnyEvent) -> JsWorkflowResult {
         json
     };
 
-    JsWorkflowResult { event_type, data }
+    JsWorkflowResult {
+        event_type,
+        data,
+        usage_total: result.usage_total.clone().into(),
+        cost_total_usd: result.cost_total_usd,
+    }
 }

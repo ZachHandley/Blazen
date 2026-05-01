@@ -23,12 +23,19 @@ pub struct PyPricingEntry {
 impl PyPricingEntry {
     /// Construct a pricing entry.
     #[new]
-    #[pyo3(signature = (*, input_per_million, output_per_million))]
-    fn new(input_per_million: f64, output_per_million: f64) -> Self {
+    #[pyo3(signature = (*, input_per_million, output_per_million, per_image=None, per_second=None))]
+    fn new(
+        input_per_million: f64,
+        output_per_million: f64,
+        per_image: Option<f64>,
+        per_second: Option<f64>,
+    ) -> Self {
         Self {
             inner: PricingEntry {
                 input_per_million,
                 output_per_million,
+                per_image,
+                per_second,
             },
         }
     }
@@ -45,10 +52,25 @@ impl PyPricingEntry {
         self.inner.output_per_million
     }
 
+    /// USD per image (for image-generation / vision-input pricing).
+    #[getter]
+    fn per_image(&self) -> Option<f64> {
+        self.inner.per_image
+    }
+
+    /// USD per second of compute (for time-billed providers).
+    #[getter]
+    fn per_second(&self) -> Option<f64> {
+        self.inner.per_second
+    }
+
     fn __repr__(&self) -> String {
         format!(
-            "PricingEntry(input_per_million={}, output_per_million={})",
-            self.inner.input_per_million, self.inner.output_per_million
+            "PricingEntry(input_per_million={}, output_per_million={}, per_image={:?}, per_second={:?})",
+            self.inner.input_per_million,
+            self.inner.output_per_million,
+            self.inner.per_image,
+            self.inner.per_second,
         )
     }
 }

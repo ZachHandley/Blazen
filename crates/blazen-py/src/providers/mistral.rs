@@ -10,8 +10,9 @@ use crate::error::blazen_error_to_pyerr;
 use crate::providers::completion_model::{
     LazyStreamState, PendingStream, PyCompletionOptions, PyLazyCompletionStream, build_request,
 };
+use crate::providers::config::PyRetryConfig;
 use crate::providers::options::PyProviderOptions;
-use crate::types::{PyChatMessage, PyCompletionResponse};
+use crate::types::{PyChatMessage, PyCompletionResponse, PyHttpClientHandle};
 use blazen_llm::ChatMessage;
 use blazen_llm::providers::mistral::MistralProvider;
 use blazen_llm::traits::CompletionModel;
@@ -82,6 +83,21 @@ impl PyMistralProvider {
             )))),
         };
         Bound::new(py, stream)
+    }
+
+    /// Set the provider-level default retry config.
+    pub fn with_retry_config(&self, config: PyRetryConfig) -> Self {
+        let inner = (*self.inner).clone().with_retry_config(config.inner);
+        Self {
+            inner: Arc::new(inner),
+        }
+    }
+
+    /// Return an opaque handle to the underlying HTTP client.
+    pub fn http_client(&self) -> PyHttpClientHandle {
+        PyHttpClientHandle {
+            inner: self.inner.http_client(),
+        }
     }
 
     fn __repr__(&self) -> String {

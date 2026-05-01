@@ -249,6 +249,8 @@ where
         }),
         max_concurrency: 1,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     }
 }
 
@@ -336,6 +338,8 @@ async fn test_branching_workflow() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -517,6 +521,8 @@ async fn test_fan_out() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -622,6 +628,8 @@ async fn test_streaming() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -712,6 +720,8 @@ async fn test_context_state_sharing() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -738,6 +748,8 @@ async fn test_context_state_sharing() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -847,6 +859,8 @@ async fn test_derive_event_in_workflow() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -1104,6 +1118,8 @@ async fn test_pause_captures_snapshot() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -1202,6 +1218,8 @@ async fn test_pause_and_resume() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -1237,6 +1255,8 @@ async fn test_pause_and_resume() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -1336,6 +1356,8 @@ async fn test_pause_resume_via_json() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -1431,6 +1453,8 @@ async fn test_cross_step_object_sharing() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -1459,6 +1483,8 @@ async fn test_cross_step_object_sharing() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -1520,6 +1546,8 @@ async fn test_pause_resume_in_place() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -1573,6 +1601,8 @@ async fn test_snapshot_while_running() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -1637,6 +1667,8 @@ async fn test_abort_drops_cleanly() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -1688,6 +1720,8 @@ async fn test_workflow_result_carries_registry() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -1750,6 +1784,8 @@ async fn test_sub_workflow_session_ref_handoff_via_shared_registry() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -1797,6 +1833,8 @@ async fn test_sub_workflow_session_ref_handoff_via_shared_registry() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -1865,6 +1903,8 @@ async fn test_session_pause_policy_hard_error() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -1914,6 +1954,7 @@ async fn test_session_pause_policy_hard_error() {
 // refs the child inserted" and this test will need to be updated.
 
 #[tokio::test]
+#[allow(clippy::too_many_lines)]
 async fn test_sub_workflow_hard_error_policy_sees_parent_refs() {
     use blazen_core::SessionPausePolicy;
     use blazen_core::session_ref::RegistryKey;
@@ -1935,6 +1976,8 @@ async fn test_sub_workflow_hard_error_policy_sees_parent_refs() {
         }),
         max_concurrency: 1,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
     let child_workflow = Arc::new(
         WorkflowBuilder::new("child-hard-error")
@@ -1983,6 +2026,8 @@ async fn test_sub_workflow_hard_error_policy_sees_parent_refs() {
         },
         max_concurrency: 1,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     };
 
     let parent_handler = WorkflowBuilder::new("parent-shared-registry")
@@ -2093,6 +2138,8 @@ async fn test_until_snapshot_lifetime_purged_by_snapshot_walker() {
             handler,
             max_concurrency: 1,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     };
 
@@ -2218,6 +2265,8 @@ fn registry_echo_step() -> StepRegistration {
         handler,
         max_concurrency: 0,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     }
 }
 
@@ -2234,6 +2283,8 @@ fn registry_noop_step() -> StepRegistration {
         handler,
         max_concurrency: 0,
         semaphore: None,
+        timeout: None,
+        retry_config: None,
     }
 }
 

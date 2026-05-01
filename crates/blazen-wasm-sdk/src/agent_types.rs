@@ -47,6 +47,15 @@ pub struct WasmAgentConfig {
     /// early. Default: `false`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub add_finish_tool: Option<bool>,
+    /// When `true`, the canonical `finish_workflow` tool is **not** injected.
+    /// Mirrors [`AgentConfig::no_finish_tool`]. Default: `false`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub no_finish_tool: Option<bool>,
+    /// Override the canonical name used for the auto-injected
+    /// `finish_workflow` tool. When `None` the default
+    /// [`blazen_llm::FINISH_WORKFLOW_TOOL_NAME`] is used.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub finish_tool_name: Option<String>,
     /// Optional system prompt prepended to messages.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub system_prompt: Option<String>,
@@ -71,6 +80,12 @@ impl WasmAgentConfig {
         }
         if let Some(true) = self.add_finish_tool {
             config = config.with_finish_tool();
+        }
+        if let Some(true) = self.no_finish_tool {
+            config = config.no_finish_tool();
+        }
+        if let Some(name) = self.finish_tool_name {
+            config = config.finish_tool_name(name);
         }
         if let Some(s) = self.system_prompt {
             config = config.with_system_prompt(s);
@@ -188,6 +203,10 @@ impl<F: std::future::Future> std::future::Future for SendFuture<F> {
 struct JsTool {
     definition: ToolDefinition,
     handler: js_sys::Function,
+    /// When `true`, the agent loop exits immediately after this tool runs
+    /// and the tool's arguments become the final result. Mirrors
+    /// [`blazen_llm::traits::Tool::is_exit`].
+    is_exit: bool,
 }
 
 unsafe impl Send for JsTool {}
@@ -263,6 +282,10 @@ impl Tool for JsTool {
         self.definition.clone()
     }
 
+    fn is_exit(&self) -> bool {
+        self.is_exit
+    }
+
     async fn execute(
         &self,
         arguments: serde_json::Value,
@@ -288,8 +311,8 @@ fn parse_tools(tools: &JsValue) -> Result<Vec<Arc<dyn Tool>>, JsValue> {
             .and_then(|v| v.as_string())
             .ok_or_else(|| JsValue::from_str(&format!("Tool '{name}' missing 'description'")))?;
 
-        let params_js = js_sys::Reflect::get(&tool_obj, &JsValue::from_str("parameters"))
-            .map_err(|e| {
+        let params_js =
+            js_sys::Reflect::get(&tool_obj, &JsValue::from_str("parameters")).map_err(|e| {
                 JsValue::from_str(&format!("Tool '{name}' missing 'parameters': {e:?}"))
             })?;
         let parameters: serde_json::Value = serde_wasm_bindgen::from_value(params_js)
@@ -297,9 +320,14 @@ fn parse_tools(tools: &JsValue) -> Result<Vec<Arc<dyn Tool>>, JsValue> {
 
         let handler_js = js_sys::Reflect::get(&tool_obj, &JsValue::from_str("handler"))
             .map_err(|e| JsValue::from_str(&format!("Tool '{name}' missing 'handler': {e:?}")))?;
-        let handler: js_sys::Function = handler_js.dyn_into().map_err(|_| {
-            JsValue::from_str(&format!("Tool '{name}' handler is not a function"))
-        })?;
+        let handler: js_sys::Function = handler_js
+            .dyn_into()
+            .map_err(|_| JsValue::from_str(&format!("Tool '{name}' handler is not a function")))?;
+
+        let is_exit = js_sys::Reflect::get(&tool_obj, &JsValue::from_str("isExit"))
+            .ok()
+            .map(|v| v.is_truthy())
+            .unwrap_or(false);
 
         tool_impls.push(Arc::new(JsTool {
             definition: ToolDefinition {
@@ -308,6 +336,7 @@ fn parse_tools(tools: &JsValue) -> Result<Vec<Arc<dyn Tool>>, JsValue> {
                 parameters,
             },
             handler,
+            is_exit,
         }));
     }
 
@@ -345,8 +374,7 @@ pub fn run_agent_with_callback(
             config = parsed.apply_to(config);
         }
 
-        let serializer =
-            serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true);
+        let serializer = serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true);
 
         // SAFETY: WASM is single-threaded, so the `!Send` `js_sys::Function`
         // is never observed across threads. We wrap it in a transparent

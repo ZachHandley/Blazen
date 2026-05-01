@@ -27,6 +27,10 @@ pub struct WasmTypedTool {
     description: String,
     parameters: JsValue,
     handler: js_sys::Function,
+    /// When `true`, calling this tool causes the agent loop to terminate
+    /// immediately and the tool's *arguments* become the final result.
+    /// Mirrors [`blazen_llm::TypedTool::is_exit`].
+    is_exit: bool,
 }
 
 // SAFETY: WASM is single-threaded.
@@ -56,7 +60,27 @@ impl WasmTypedTool {
             description,
             parameters,
             handler,
+            is_exit: false,
         }
+    }
+
+    /// Mark this tool as an *exit tool*. Mirrors
+    /// [`blazen_llm::TypedTool::exit_tool`]. When the LLM calls an exit
+    /// tool, the agent loop returns immediately and the tool's arguments
+    /// become the final result.
+    ///
+    /// Returns `self` to support chaining: `new TypedTool(...).exitTool(true)`.
+    #[wasm_bindgen(js_name = "exitTool")]
+    pub fn exit_tool(mut self, exit: bool) -> WasmTypedTool {
+        self.is_exit = exit;
+        self
+    }
+
+    /// Whether this tool is marked as an exit tool.
+    #[wasm_bindgen(getter, js_name = "isExit")]
+    #[must_use]
+    pub fn is_exit(&self) -> bool {
+        self.is_exit
     }
 
     /// The tool name.
@@ -85,11 +109,19 @@ impl WasmTypedTool {
 
     /// Materialize this typed tool as the plain JS object shape expected by
     /// [`crate::agent::run_agent`]:
-    /// `{ name, description, parameters, handler }`.
+    /// `{ name, description, parameters, handler, isExit }`.
+    ///
+    /// `isExit` is included when the tool was constructed (or chained) with
+    /// [`Self::exit_tool`] so the agent-loop dispatcher in
+    /// [`crate::agent::run_agent`] can honour exit-tool semantics.
     #[wasm_bindgen(js_name = "asTool")]
     pub fn as_tool(&self) -> Result<JsValue, JsValue> {
         let obj = js_sys::Object::new();
-        js_sys::Reflect::set(&obj, &JsValue::from_str("name"), &JsValue::from_str(&self.name))?;
+        js_sys::Reflect::set(
+            &obj,
+            &JsValue::from_str("name"),
+            &JsValue::from_str(&self.name),
+        )?;
         js_sys::Reflect::set(
             &obj,
             &JsValue::from_str("description"),
@@ -97,6 +129,11 @@ impl WasmTypedTool {
         )?;
         js_sys::Reflect::set(&obj, &JsValue::from_str("parameters"), &self.parameters)?;
         js_sys::Reflect::set(&obj, &JsValue::from_str("handler"), &self.handler)?;
+        js_sys::Reflect::set(
+            &obj,
+            &JsValue::from_str("isExit"),
+            &JsValue::from_bool(self.is_exit),
+        )?;
         Ok(obj.into())
     }
 }

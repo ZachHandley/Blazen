@@ -10,8 +10,10 @@ pub mod completion_request;
 pub mod embed_facade;
 pub mod embedding;
 pub mod events;
+pub mod events_wave;
 pub mod finish_reason;
 pub mod http_client;
+pub mod http_client_config;
 pub mod media;
 pub mod memory;
 pub mod message;
@@ -20,6 +22,7 @@ pub mod prompts;
 pub mod provider_info;
 pub mod reasoning;
 pub mod response_format;
+pub mod retry_stack;
 pub mod stream;
 pub mod tokens;
 pub mod tool;
@@ -48,8 +51,15 @@ pub use events::{
     JsAgentConfig, JsAgentEvent, JsStartEventClass, JsStopEventClass, JsStreamChunkEvent,
     JsStreamCompleteEvent, StartEventOptions, StopEventOptions,
 };
+pub use events_wave::{
+    JsModality, JsProgressEvent, JsProgressKind, JsUsageEvent, add_usage_to_token_usage,
+    new_usage_event,
+};
 pub use finish_reason::JsFinishReason;
 pub use http_client::{JsHttpClient, JsHttpRequest, JsHttpResponse};
+pub use http_client_config::{
+    JsHttpClientConfig, default_http_client_config, unlimited_http_client_config,
+};
 pub use media::{Generated3DModel, GeneratedAudio, GeneratedImage, GeneratedVideo, MediaOutput};
 pub use memory::{
     JsAddEntry, JsInMemoryBackend, JsJsonlBackend, JsMemory, JsMemoryBackend, JsMemoryEntry,
@@ -58,7 +68,10 @@ pub use memory::{
 pub use message::{
     ChatMessageOptions, JsChatMessage, JsContentPart, JsImageContent, JsImageSource, JsRole,
 };
-pub use pricing::{JsModelPricing, lookup_pricing, register_pricing};
+pub use pricing::{
+    JsModelPricing, compute_audio_cost, compute_image_cost, compute_video_cost, lookup_pricing,
+    register_pricing,
+};
 pub use prompts::{JsPromptFile, JsPromptRegistry, JsPromptTemplate, JsTemplateRole};
 pub use provider_info::{
     JsModelCapabilities, JsModelInfo, JsPricingEntry, JsProviderCapabilities, JsProviderConfig,
@@ -66,6 +79,7 @@ pub use provider_info::{
 };
 pub use reasoning::{JsReasoningTrace, JsReasoningTraceClass, ReasoningTraceOptions};
 pub use response_format::JsResponseFormat;
+pub use retry_stack::{JsRetryStack, new_retry_stack, resolve_retry_stack};
 pub use stream::JsStreamChunk;
 pub(crate) use stream::build_stream_chunk;
 #[cfg(feature = "tiktoken")]

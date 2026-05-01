@@ -7,6 +7,7 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 
+use crate::events::PyProgressSnapshot;
 use crate::pipeline::error::pipeline_err;
 use crate::pipeline::event::PyPipelineEvent;
 use crate::pipeline::snapshot::{PyPipelineResult, PyPipelineSnapshot};
@@ -129,6 +130,21 @@ impl PyPipelineHandler {
             handler.abort().map_err(pipeline_err)?;
             Ok(())
         })
+    }
+
+    /// Snapshot the pipeline's current progress without affecting execution.
+    ///
+    /// Reads are best-effort and may briefly be one stage stale relative to
+    /// the executor task. Returns `None` once the handler has been consumed
+    /// by `result()` or `pause()`.
+    fn progress(&self, py: Python<'_>) -> Option<PyProgressSnapshot> {
+        let guard = py.detach(|| {
+            let rt = pyo3_async_runtimes::tokio::get_runtime();
+            rt.block_on(self.inner.lock())
+        });
+        guard
+            .as_ref()
+            .map(|h| PyProgressSnapshot::from(h.progress()))
     }
 
     fn __repr__(&self) -> String {

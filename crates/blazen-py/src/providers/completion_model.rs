@@ -823,8 +823,12 @@ pub(crate) enum LazyStreamState {
 /// with `async for`. The underlying HTTP stream is lazily initialized on the
 /// first `__anext__` call, allowing the natural one-liner form:
 ///
-///     async for chunk in model.stream([ChatMessage.user("Hi!")]):
-///         ...
+/// # Example
+///
+/// ```text
+/// async for chunk in model.stream([ChatMessage.user("Hi!")]):
+///     ...
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "CompletionStream")]
 pub struct PyLazyCompletionStream {
@@ -1129,6 +1133,7 @@ fn build_py_options_from_request(
                         description: t.description.clone(),
                         parameters: t.parameters.clone(),
                         handler: py.None(),
+                        is_exit: false,
                     },
                 )
             })

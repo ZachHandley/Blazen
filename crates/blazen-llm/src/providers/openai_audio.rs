@@ -139,6 +139,10 @@ pub(crate) async fn text_to_speech_request(
             total_ms: Some(elapsed_ms),
         },
         cost: None,
+        usage: None,
+        // OpenAI's TTS endpoint does not report audio duration; leave 0.0 until
+        // a downstream decoder fills it in.
+        audio_seconds: 0.0,
         metadata: Value::Object(Map::new()),
     })
 }

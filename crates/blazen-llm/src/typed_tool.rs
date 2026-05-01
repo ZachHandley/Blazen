@@ -36,6 +36,10 @@ where
     name: String,
     description: String,
     handler: Arc<F>,
+    /// When `true`, calling this tool causes the agent loop to terminate
+    /// immediately, returning the tool's *arguments* as the final result.
+    /// Default: `false`.
+    pub is_exit: bool,
     _phantom: PhantomData<fn(Args) -> Output>,
 }
 
@@ -50,8 +54,18 @@ where
             name: name.into(),
             description: description.into(),
             handler: Arc::new(handler),
+            is_exit: false,
             _phantom: PhantomData,
         }
+    }
+
+    /// Mark this tool as an *exit tool*. When the LLM calls it, the agent
+    /// loop returns immediately and the tool's arguments become the final
+    /// result.
+    #[must_use]
+    pub fn exit_tool(mut self, exit: bool) -> Self {
+        self.is_exit = exit;
+        self
     }
 }
 
@@ -85,6 +99,10 @@ where
             data,
             llm_override: typed_output.llm_override,
         })
+    }
+
+    fn is_exit(&self) -> bool {
+        self.is_exit
     }
 }
 

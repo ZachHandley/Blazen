@@ -72,10 +72,7 @@ where
 
 /// Resolve the API key for `provider` (explicit > env var) and surface
 /// errors as `JsValue` strings.
-pub(crate) fn resolve_key(
-    provider: &str,
-    explicit: Option<String>,
-) -> Result<String, JsValue> {
+pub(crate) fn resolve_key(provider: &str, explicit: Option<String>) -> Result<String, JsValue> {
     blazen_llm::keys::resolve_api_key(provider, explicit)
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
@@ -92,8 +89,8 @@ pub(crate) fn apply_request_options(
     if !options.is_object() {
         return Ok(request);
     }
-    let opts: serde_json::Value = serde_wasm_bindgen::from_value(options)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let opts: serde_json::Value =
+        serde_wasm_bindgen::from_value(options).map_err(|e| JsValue::from_str(&e.to_string()))?;
     if let Some(temp) = opts.get("temperature").and_then(|v| v.as_f64()) {
         #[allow(clippy::cast_possible_truncation)]
         {
@@ -248,8 +245,8 @@ pub fn get_context_window(model: &str) -> u32 {
 /// pricing data.
 #[wasm_bindgen(js_name = "registerFromModelInfo")]
 pub fn register_from_model_info(info: JsValue) -> Result<(), JsValue> {
-    let model_info: blazen_llm::ModelInfo = serde_wasm_bindgen::from_value(info)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let model_info: blazen_llm::ModelInfo =
+        serde_wasm_bindgen::from_value(info).map_err(|e| JsValue::from_str(&e.to_string()))?;
     blazen_llm::pricing::register_from_model_info(&model_info);
     Ok(())
 }

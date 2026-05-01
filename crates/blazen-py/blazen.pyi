@@ -28,6 +28,8 @@ __all__ = [
     "BlazenPeerClient",
     "BlazenPeerServer",
     "BlazenState",
+    "BlockingCompletionModel",
+    "BlockingEmbeddingModel",
     "BytesWrapper",
     "CacheConfig",
     "CacheMiddleware",
@@ -92,6 +94,8 @@ __all__ = [
     "HistoryEventKind",
     "HostDispatch",
     "HttpClient",
+    "HttpClientConfig",
+    "HttpClientHandle",
     "ImageContent",
     "ImageModel",
     "ImageProvider",
@@ -139,6 +143,7 @@ __all__ = [
     "MistralRsError",
     "MistralRsOptions",
     "MistralRsProvider",
+    "Modality",
     "ModelCache",
     "ModelCapabilities",
     "ModelInfo",
@@ -173,6 +178,9 @@ __all__ = [
     "PiperProvider",
     "PricingEntry",
     "ProgressCallback",
+    "ProgressEvent",
+    "ProgressKind",
+    "ProgressSnapshot",
     "PromptFile",
     "PromptRegistry",
     "PromptTemplate",
@@ -207,7 +215,10 @@ __all__ = [
     "ResponseFormat",
     "RetryCompletionModel",
     "RetryConfig",
+    "RetryEmbeddingModel",
+    "RetryHttpClient",
     "RetryMiddleware",
+    "RetryStack",
     "Role",
     "SessionNamespace",
     "SessionPausePolicy",
@@ -253,6 +264,7 @@ __all__ = [
     "TypedTool",
     "UnsupportedError",
     "UpscaleRequest",
+    "UsageEvent",
     "ValidationError",
     "ValkeyBackend",
     "ValkeyCheckpointStore",
@@ -275,13 +287,17 @@ __all__ = [
     "WorkflowSnapshot",
     "XaiProvider",
     "complete_batch",
+    "compute_audio_cost",
     "compute_elid_similarity",
     "compute_embedding_simhash_similarity",
+    "compute_image_cost",
     "compute_text_simhash_similarity",
+    "compute_video_cost",
     "count_message_tokens",
     "env_var_for_provider",
     "estimate_tokens",
     "extract_inline_artifacts",
+    "finish_workflow_tool",
     "format_provider_http_tail",
     "get_context_window",
     "init_langfuse",
@@ -356,6 +372,17 @@ class AgentConfig:
         Whether the implicit "finish" tool is added.
         """
     @property
+    def no_finish_tool(self) -> builtins.bool:
+        r"""
+        Whether to suppress the always-on `finish_workflow` synthetic tool.
+        """
+    @property
+    def finish_tool_name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Custom name for the synthetic `finish_workflow` tool. When `None`,
+        the canonical [`FINISH_WORKFLOW_TOOL_NAME`] is used.
+        """
+    @property
     def system_prompt(self) -> typing.Optional[builtins.str]:
         r"""
         Optional system prompt prepended to messages.
@@ -375,7 +402,7 @@ class AgentConfig:
         r"""
         Maximum concurrent tool executions per round (0 = unlimited).
         """
-    def __new__(cls, *, max_iterations: builtins.int = 10, add_finish_tool: builtins.bool = False, system_prompt: typing.Optional[builtins.str] = None, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, tool_concurrency: builtins.int = 0) -> AgentConfig:
+    def __new__(cls, *, max_iterations: builtins.int = 10, add_finish_tool: builtins.bool = False, no_finish_tool: builtins.bool = False, finish_tool_name: typing.Optional[builtins.str] = None, system_prompt: typing.Optional[builtins.str] = None, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, tool_concurrency: builtins.int = 0) -> AgentConfig:
         r"""
         Construct an AgentConfig.
         """
@@ -509,6 +536,24 @@ class AnthropicProvider:
         
         Returns:
             A [`CompletionStream`] that yields chunks via ``async for``.
+        """
+    def with_retry_config(self, config: RetryConfig) -> AnthropicProvider:
+        r"""
+        Set the provider-level default retry config.
+        
+        Returns a new provider sharing the same HTTP client and other
+        settings, with the given retry config applied. Pipeline / workflow /
+        step / call scopes can override this; if all are unset, this is the
+        fallback.
+        """
+    def http_client(self) -> HttpClientHandle:
+        r"""
+        Return an opaque handle to the underlying HTTP client.
+        
+        Escape hatch for power users who need to issue raw HTTP requests
+        (custom headers, endpoints not yet covered by Blazen's typed
+        surface, debugging) while reusing the same connection pool, TLS
+        config, and timeouts as this provider.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -669,6 +714,14 @@ class AzureOpenAiProvider:
         """
     async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def with_retry_config(self, config: RetryConfig) -> AzureOpenAiProvider:
+        r"""
+        Set the provider-level default retry config.
+        """
+    def http_client(self) -> HttpClientHandle:
+        r"""
+        Return an opaque handle to the underlying HTTP client.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -883,6 +936,14 @@ class BedrockProvider:
         """
     async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def with_retry_config(self, config: RetryConfig) -> BedrockProvider:
+        r"""
+        Set the provider-level default retry config.
+        """
+    def http_client(self) -> HttpClientHandle:
+        r"""
+        Return an opaque handle to the underlying HTTP client.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -1012,6 +1073,57 @@ class BlazenState:
     ```
     """
     def __new__(cls, **_kwargs: typing.Any) -> BlazenState: ...
+
+@typing.final
+class BlockingCompletionModel:
+    r"""
+    Blocking sibling of [`CompletionModel`].
+    
+    Wrap any `CompletionModel` with `BlockingCompletionModel(model)` to drive
+    `complete()` synchronously from non-async Python contexts (CLIs, REPLs,
+    scripts, sync libraries). Streaming is not exposed here — use the async
+    API or pass an `on_chunk` callback to the regular model when you need
+    partial chunks.
+    """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        The model id reported by the wrapped provider.
+        """
+    def __new__(cls, model: CompletionModel) -> BlockingCompletionModel:
+        r"""
+        Wrap a `CompletionModel` for synchronous dispatch.
+        """
+    def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+        r"""
+        Synchronously perform a chat completion. Blocks the calling thread.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class BlockingEmbeddingModel:
+    r"""
+    Blocking sibling of [`EmbeddingModel`].
+    """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        The model id reported by the wrapped embedding provider.
+        """
+    @property
+    def dimensions(self) -> builtins.int:
+        r"""
+        Output dimensionality.
+        """
+    def __new__(cls, model: EmbeddingModel) -> BlockingEmbeddingModel:
+        r"""
+        Wrap an `EmbeddingModel` for synchronous dispatch.
+        """
+    def embed(self, texts: typing.Sequence[builtins.str]) -> EmbeddingResponse:
+        r"""
+        Synchronously embed a list of texts.
+        """
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class BytesWrapper:
@@ -1699,6 +1811,14 @@ class CohereProvider:
         
         Defaults to ``embed-v4.0`` (1024 dims).
         """
+    def with_retry_config(self, config: RetryConfig) -> CohereProvider:
+        r"""
+        Set the provider-level default retry config.
+        """
+    def http_client(self) -> HttpClientHandle:
+        r"""
+        Return an opaque handle to the underlying HTTP client.
+        """
     def __repr__(self) -> builtins.str: ...
 
 class CompletionModel:
@@ -2221,8 +2341,12 @@ class CompletionStream:
     with `async for`. The underlying HTTP stream is lazily initialized on the
     first `__anext__` call, allowing the natural one-liner form:
     
-        async for chunk in model.stream([ChatMessage.user("Hi!")]):
-            ...
+    # Example
+    
+    ```text
+    async for chunk in model.stream([ChatMessage.user("Hi!")]):
+        ...
+    ```
     """
     def __aiter__(self) -> CompletionStream: ...
     async def __anext__(self) -> CompletionResponse:
@@ -2602,6 +2726,23 @@ class CustomProvider:
         Remove the background from an image by calling the host's
         ``remove_background`` async method.
         """
+    def with_retry_config(self, config: RetryConfig) -> CustomProvider:
+        r"""
+        Set the provider-level default retry config.
+        
+        Returns a new provider sharing the same host object, with the given
+        retry config applied. Pipeline / workflow / step / call scopes can
+        override this; if all are unset, this is the fallback.
+        """
+    def http_client(self) -> typing.Optional[HttpClientHandle]:
+        r"""
+        Return an opaque handle to the underlying HTTP client, if any.
+        
+        [`CustomProvider`] dispatches entirely through the host language,
+        so it owns no wire-level HTTP client. This method always returns
+        ``None``; the shape mirrors the trait-level `http_client` accessor
+        for uniform probing across providers.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -2619,6 +2760,14 @@ class DeepSeekProvider:
         """
     async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def with_retry_config(self, config: RetryConfig) -> DeepSeekProvider:
+        r"""
+        Set the provider-level default retry config.
+        """
+    def http_client(self) -> HttpClientHandle:
+        r"""
+        Return an opaque handle to the underlying HTTP client.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -3137,6 +3286,14 @@ class FalEmbeddingModel:
         Returns:
             An EmbeddingResponse with embeddings, model, usage, and cost.
         """
+    def with_retry_config(self, config: RetryConfig) -> FalEmbeddingModel:
+        r"""
+        Set the provider-level default retry config.
+        """
+    def http_client(self) -> HttpClientHandle:
+        r"""
+        Return an opaque handle to the underlying HTTP client.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -3414,6 +3571,14 @@ class FalProvider:
             options: Optional [`CompletionOptions`] for sampling parameters,
                 tools, and response format.
         """
+    def with_retry_config(self, config: RetryConfig) -> FalProvider:
+        r"""
+        Set the provider-level default retry config.
+        """
+    def http_client(self) -> HttpClientHandle:
+        r"""
+        Return an opaque handle to the underlying HTTP client.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -3629,6 +3794,14 @@ class FireworksProvider:
         
         Defaults to ``nomic-ai/nomic-embed-text-v1.5`` (768 dims).
         """
+    def with_retry_config(self, config: RetryConfig) -> FireworksProvider:
+        r"""
+        Set the provider-level default retry config.
+        """
+    def http_client(self) -> HttpClientHandle:
+        r"""
+        Return an opaque handle to the underlying HTTP client.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -3654,6 +3827,14 @@ class GeminiProvider:
         """
     async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def with_retry_config(self, config: RetryConfig) -> GeminiProvider:
+        r"""
+        Set the provider-level default retry config.
+        """
+    def http_client(self) -> HttpClientHandle:
+        r"""
+        Return an opaque handle to the underlying HTTP client.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -3671,6 +3852,14 @@ class GroqProvider:
         """
     async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def with_retry_config(self, config: RetryConfig) -> GroqProvider:
+        r"""
+        Set the provider-level default retry config.
+        """
+    def http_client(self) -> HttpClientHandle:
+        r"""
+        Return an opaque handle to the underlying HTTP client.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -3848,6 +4037,67 @@ class HttpClient:
         Subclasses must override. Default implementation raises
         ``NotImplementedError``.
         """
+
+@typing.final
+class HttpClientConfig:
+    r"""
+    Configuration knobs applied when constructing an HTTP client.
+    
+    Mirrors [`blazen_llm::http::HttpClientConfig`]: caps the wall-clock
+    duration of a single HTTP request and the TCP/TLS connection-establishment
+    phase. `None` means *no timeout* — the underlying client will wait
+    indefinitely. ``user_agent`` is sent on every request when set.
+    
+    Construct via the keyword constructor or the [`HttpClientConfig.unlimited`]
+    factory (no request / connect timeout).
+    
+    Example:
+        >>> cfg = HttpClientConfig(request_timeout=30.0, connect_timeout=5.0)
+        >>> unlimited = HttpClientConfig.unlimited()
+    """
+    @property
+    def request_timeout(self) -> typing.Optional[builtins.float]:
+        r"""
+        Maximum wall-clock duration of a single request (seconds).
+        `None` = unlimited.
+        """
+    @property
+    def connect_timeout(self) -> typing.Optional[builtins.float]:
+        r"""
+        Maximum duration of the connection-establishment phase (seconds).
+        `None` = unlimited.
+        """
+    @property
+    def user_agent(self) -> typing.Optional[builtins.str]:
+        r"""
+        User-Agent header, when set. `None` falls back to the underlying
+        client's default User-Agent.
+        """
+    def __new__(cls, *, request_timeout: typing.Optional[builtins.float] = 60.0, connect_timeout: typing.Optional[builtins.float] = 10.0, user_agent: typing.Optional[builtins.str] = None) -> HttpClientConfig:
+        r"""
+        Build a config from optional wall-clock timeouts (in seconds) and an
+        optional user-agent string.
+        """
+    @staticmethod
+    def unlimited() -> HttpClientConfig:
+        r"""
+        Construct a config with neither request nor connect timeout. Useful
+        for long-polling style endpoints that hold the connection open
+        indefinitely.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class HttpClientHandle:
+    r"""
+    Opaque handle around an `Arc<dyn HttpClient>` returned by
+    `*Provider.http_client()`. Use it to pass the underlying client to
+    other providers or to inspect its config.
+    
+    This class cannot be constructed directly from Python — instances are
+    produced by the `http_client()` accessor on each provider class.
+    """
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class ImageContent:
@@ -5304,6 +5554,14 @@ class MistralProvider:
         """
     async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def with_retry_config(self, config: RetryConfig) -> MistralProvider:
+        r"""
+        Set the provider-level default retry config.
+        """
+    def http_client(self) -> HttpClientHandle:
+        r"""
+        Return an opaque handle to the underlying HTTP client.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -5408,6 +5666,83 @@ class MistralRsProvider:
         Whether the model is currently loaded.
         """
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class Modality:
+    r"""
+    The kind of provider call that produced a [`UsageEvent`].
+    
+    Mirrors [`blazen_events::Modality`]. Use the static constructors for the
+    fixed variants and ``Modality.custom("name")`` for the user-defined slot.
+    Inspect via the `kind` getter (returns the variant name) and the
+    `custom_label` getter (the inner string when `kind == "Custom"`).
+    """
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Variant tag — one of `Llm`, `Embedding`, `ImageGen`, `AudioTts`,
+        `AudioStt`, `Video`, `ThreeD`, `BackgroundRemoval`, `Custom`.
+        """
+    @property
+    def custom_label(self) -> typing.Optional[builtins.str]:
+        r"""
+        The custom label when `kind == "Custom"`; `None` otherwise.
+        """
+    def __new__(cls) -> Modality:
+        r"""
+        Default construct as `Modality.Llm`.
+        """
+    @staticmethod
+    def llm() -> Modality:
+        r"""
+        LLM completion / chat / structured-output call.
+        """
+    @staticmethod
+    def embedding() -> Modality:
+        r"""
+        Embedding call.
+        """
+    @staticmethod
+    def image_gen() -> Modality:
+        r"""
+        Image-generation call.
+        """
+    @staticmethod
+    def audio_tts() -> Modality:
+        r"""
+        Text-to-speech call.
+        """
+    @staticmethod
+    def audio_stt() -> Modality:
+        r"""
+        Speech-to-text call.
+        """
+    @staticmethod
+    def video() -> Modality:
+        r"""
+        Video-generation call.
+        """
+    @staticmethod
+    def three_d() -> Modality:
+        r"""
+        3D-asset generation call.
+        """
+    @staticmethod
+    def background_removal() -> Modality:
+        r"""
+        Background-removal call.
+        """
+    @staticmethod
+    def custom(label: builtins.str) -> Modality:
+        r"""
+        User-defined modality with a free-form label.
+        """
+    def is_custom(self) -> builtins.bool:
+        r"""
+        Whether this is a user-defined `Custom(name)` variant.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __eq__(self, other: Modality) -> builtins.bool: ...
 
 @typing.final
 class ModelCache:
@@ -5777,6 +6112,14 @@ class OpenAiCompatEmbeddingModel:
         r"""
         Embed one or more texts.
         """
+    def with_retry_config(self, config: RetryConfig) -> OpenAiCompatEmbeddingModel:
+        r"""
+        Set the provider-level default retry config.
+        """
+    def http_client(self) -> HttpClientHandle:
+        r"""
+        Return an opaque handle to the underlying HTTP client.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -5817,6 +6160,14 @@ class OpenAiCompatProvider:
             model: Embedding model id (e.g. ``"text-embedding-3-small"``).
             dimensions: Output dimensionality of the embedding vectors.
         """
+    def with_retry_config(self, config: RetryConfig) -> OpenAiCompatProvider:
+        r"""
+        Set the provider-level default retry config.
+        """
+    def http_client(self) -> HttpClientHandle:
+        r"""
+        Return an opaque handle to the underlying HTTP client.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -5845,6 +6196,14 @@ class OpenAiEmbeddingModel:
     async def embed(self, texts: typing.Sequence[builtins.str]) -> EmbeddingResponse:
         r"""
         Embed one or more texts.
+        """
+    def with_retry_config(self, config: RetryConfig) -> OpenAiEmbeddingModel:
+        r"""
+        Set the provider-level default retry config.
+        """
+    def http_client(self) -> HttpClientHandle:
+        r"""
+        Return an opaque handle to the underlying HTTP client.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -5888,6 +6247,14 @@ class OpenAiProvider:
         Returns:
             An [`AudioResult`] with audio clips, timing, cost, and metadata.
         """
+    def with_retry_config(self, config: RetryConfig) -> OpenAiProvider:
+        r"""
+        Set the provider-level default retry config.
+        """
+    def http_client(self) -> HttpClientHandle:
+        r"""
+        Return an opaque handle to the underlying HTTP client.
+        """
 
 @typing.final
 class OpenRouterProvider:
@@ -5904,6 +6271,14 @@ class OpenRouterProvider:
         """
     async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def with_retry_config(self, config: RetryConfig) -> OpenRouterProvider:
+        r"""
+        Set the provider-level default retry config.
+        """
+    def http_client(self) -> HttpClientHandle:
+        r"""
+        Return an opaque handle to the underlying HTTP client.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -6037,6 +6412,14 @@ class PerplexityProvider:
         """
     async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def with_retry_config(self, config: RetryConfig) -> PerplexityProvider:
+        r"""
+        Set the provider-level default retry config.
+        """
+    def http_client(self) -> HttpClientHandle:
+        r"""
+        Return an opaque handle to the underlying HTTP client.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -6145,6 +6528,29 @@ class PipelineBuilder:
         Set a per-stage timeout in seconds. Each stage's workflow will be
         given this duration before being considered timed out.
         """
+    def total_timeout(self, seconds: builtins.float) -> PipelineBuilder:
+        r"""
+        Set the maximum wall-clock duration for the entire pipeline run, in
+        seconds. Cumulative across all stages.
+        """
+    def no_total_timeout(self) -> PipelineBuilder:
+        r"""
+        Disable the pipeline-level total-timeout (run until every stage
+        completes or fails).
+        """
+    def retry_config(self, config: RetryConfig) -> PipelineBuilder:
+        r"""
+        Set the pipeline-level default `RetryConfig` for every LLM call.
+        Workflow / step / per-call overrides take precedence over this value.
+        """
+    def no_retry(self) -> PipelineBuilder:
+        r"""
+        Disable retries at the pipeline level (`max_retries = 0`).
+        """
+    def clear_retry_config(self) -> PipelineBuilder:
+        r"""
+        Clear any pipeline-level retry config (defer to next-outer scope).
+        """
     def build(self) -> Pipeline:
         r"""
         Validate and build the pipeline.
@@ -6227,6 +6633,14 @@ class PipelineHandler:
         r"""
         Abort the running pipeline.
         """
+    def progress(self) -> typing.Optional[ProgressSnapshot]:
+        r"""
+        Snapshot the pipeline's current progress without affecting execution.
+        
+        Reads are best-effort and may briefly be one stage stale relative to
+        the executor task. Returns `None` once the handler has been consumed
+        by `result()` or `pause()`.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -6258,6 +6672,18 @@ class PipelineResult:
     def shared_state(self) -> dict[str, typing.Any]:
         r"""
         The shared key/value state at completion time, as a Python dict.
+        """
+    @property
+    def usage_total(self) -> TokenUsage:
+        r"""
+        Total token usage aggregated across every stage's emitted
+        `UsageEvent`s.
+        """
+    @property
+    def cost_total_usd(self) -> builtins.float:
+        r"""
+        Total cost in USD aggregated across every stage's emitted
+        `UsageEvent::cost_usd` values.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -6342,6 +6768,22 @@ class PipelineState:
     def input(self) -> typing.Any:
         r"""
         The original pipeline input.
+        """
+    @property
+    def usage_total(self) -> TokenUsage:
+        r"""
+        Token-usage rollup for the pipeline run so far.
+        
+        Sums every `UsageEvent` emitted on the workflow event streams
+        across every stage that has completed at the moment of the read.
+        """
+    @property
+    def cost_total_usd(self) -> builtins.float:
+        r"""
+        USD cost rollup for the pipeline run so far.
+        
+        Sums `UsageEvent::cost_usd` across every stage that has completed
+        at the moment of the read.
         """
     def get(self, key: builtins.str) -> typing.Any:
         r"""
@@ -6469,7 +6911,17 @@ class PricingEntry:
         r"""
         USD per million output (completion) tokens.
         """
-    def __new__(cls, *, input_per_million: builtins.float, output_per_million: builtins.float) -> PricingEntry:
+    @property
+    def per_image(self) -> typing.Optional[builtins.float]:
+        r"""
+        USD per image (for image-generation / vision-input pricing).
+        """
+    @property
+    def per_second(self) -> typing.Optional[builtins.float]:
+        r"""
+        USD per second of compute (for time-billed providers).
+        """
+    def __new__(cls, *, input_per_million: builtins.float, output_per_million: builtins.float, per_image: typing.Optional[builtins.float] = None, per_second: typing.Optional[builtins.float] = None) -> PricingEntry:
         r"""
         Construct a pricing entry.
         """
@@ -6506,6 +6958,61 @@ class ProgressCallback:
         """
 
 @typing.final
+class ProgressEvent:
+    r"""
+    Emitted by Pipeline and Workflow runners to surface progress to callers.
+    """
+    @property
+    def kind(self) -> ProgressKind: ...
+    @property
+    def current(self) -> builtins.int: ...
+    @property
+    def total(self) -> typing.Optional[builtins.int]: ...
+    @property
+    def percent(self) -> typing.Optional[builtins.float]: ...
+    @property
+    def label(self) -> builtins.str: ...
+    @property
+    def run_id(self) -> builtins.str: ...
+    def __new__(cls, *, kind: ProgressKind, current: builtins.int, total: typing.Optional[builtins.int] = None, percent: typing.Optional[builtins.float] = None, label: builtins.str, run_id: typing.Optional[builtins.str] = None) -> ProgressEvent:
+        r"""
+        Build a progress event.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ProgressSnapshot:
+    r"""
+    A best-effort, latch-style snapshot of pipeline progress.
+    
+    Returned by [`PipelineHandler.progress`] without taking any locks; values
+    may briefly be one stage stale.
+    """
+    @property
+    def current_stage_index(self) -> builtins.int:
+        r"""
+        1-based index of the stage currently executing (or just completed).
+        `0` before the first stage starts.
+        """
+    @property
+    def total_stages(self) -> builtins.int:
+        r"""
+        Total number of stages declared on the pipeline.
+        """
+    @property
+    def percent(self) -> builtins.float:
+        r"""
+        Progress as a percentage in `0.0..=100.0`.
+        """
+    @property
+    def current_stage_name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Name of the current stage when available; `None` from the simple
+        atomic-index implementation today.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class PromptFile:
     r"""
     A serializable collection of prompt templates.
@@ -6513,11 +7020,13 @@ class PromptFile:
     Mirrors the YAML/JSON file layout used by ``PromptRegistry.from_file``
     and ``PromptRegistry.to_file``.
     
-    Example::
+    # Example
     
-        pf = PromptFile([template_a, template_b])
-        for t in pf.prompts:
-            registry.register(t.name, t)
+    ```text
+    pf = PromptFile([template_a, template_b])
+    for t in pf.prompts:
+        registry.register(t.name, t)
+    ```
     """
     @property
     def prompts(self) -> builtins.list[PromptTemplate]:
@@ -6548,12 +7057,14 @@ class PromptRegistry:
     Organises templates by name and version, with convenient lookup,
     rendering, and file I/O.
     
-    Example::
+    # Example
     
-        registry = PromptRegistry()
-        registry.register("greet", PromptTemplate("Hello {{name}}!"))
-        msg = registry.render("greet", name="Alice")
-        print(msg.content)
+    ```text
+    registry = PromptRegistry()
+    registry.register("greet", PromptTemplate("Hello {{name}}!"))
+    msg = registry.render("greet", name="Alice")
+    print(msg.content)
+    ```
     """
     def __new__(cls) -> PromptRegistry:
         r"""
@@ -6662,11 +7173,13 @@ class PromptTemplate:
     Templates are rendered by replacing ``{{var}}`` placeholders with the
     provided keyword arguments.
     
-    Example::
+    # Example
     
-        t = PromptTemplate("Hello {{name}}!", role=TemplateRole.User)
-        msg = t.render(name="Alice")
-        print(msg.content)  # "Hello Alice!"
+    ```text
+    t = PromptTemplate("Hello {{name}}!", role=TemplateRole.User)
+    msg = t.render(name="Alice")
+    print(msg.content)  # "Hello Alice!"
+    ```
     """
     @property
     def template(self) -> builtins.str:
@@ -7514,6 +8027,66 @@ class RetryConfig:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class RetryEmbeddingModel:
+    r"""
+    An [`EmbeddingModel`] decorator that retries transient failures with
+    exponential backoff.
+    
+    Mirrors [`blazen_llm::retry::RetryEmbeddingModel`]. Wrap any embedding
+    model — built-in or `EmbeddingModel`-subclass from Python — with this
+    type to get rate-limit / timeout / 5xx retries with no extra plumbing.
+    
+    Example:
+        >>> base = EmbeddingModel.openai(options=ProviderOptions(api_key="sk-..."))
+        >>> model = RetryEmbeddingModel(base, RetryConfig(max_retries=5))
+        >>> resp = await model.embed(["hello", "world"])
+    """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        The model id reported by the underlying provider.
+        """
+    @property
+    def dimensions(self) -> builtins.int:
+        r"""
+        Output dimensionality.
+        """
+    def __new__(cls, model: EmbeddingModel, config: typing.Optional[RetryConfig] = None) -> RetryEmbeddingModel:
+        r"""
+        Wrap an `EmbeddingModel` with automatic retry on transient failures.
+        """
+    async def embed(self, texts: typing.Sequence[builtins.str]) -> EmbeddingResponse:
+        r"""
+        Embed a list of texts with retries on transient failures.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class RetryHttpClient:
+    r"""
+    Marker handle for a [`RetryHttpClient`].
+    
+    The Rust [`RetryHttpClient`] decorator wraps an `Arc<dyn HttpClient>` to
+    add retry/backoff to raw HTTP. The dynamic HTTP-client trait does not
+    cross the Python FFI boundary as a callable transport (Python users plug
+    in HTTP via the [`HttpClient`](crate::types::PyHttpClient) abc class
+    instead), so this Python wrapper is intentionally a thin introspection
+    handle: it captures the [`RetryConfig`] you'd hand the Rust constructor
+    and is accepted by the standalone provider classes that take an
+    `Arc<dyn HttpClient>` internally.
+    """
+    @property
+    def config(self) -> RetryConfig:
+        r"""
+        The captured retry configuration.
+        """
+    def __new__(cls, config: typing.Optional[RetryConfig] = None) -> RetryHttpClient:
+        r"""
+        Capture a retry-config to layer onto an HTTP transport.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class RetryMiddleware:
     r"""
     Middleware that wraps a model with `RetryCompletionModel`.
@@ -7533,6 +8106,62 @@ class RetryMiddleware:
         r"""
         Apply this middleware directly to a `CompletionModel`, returning
         a new `CompletionModel` with retry behaviour.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class RetryStack:
+    r"""
+    A snapshot of every scope's retry configuration.
+    
+    Mirrors [`blazen_llm::retry::RetryStack`]. Build one to capture the
+    per-scope retry chain (provider / pipeline / workflow / step) and then
+    call [`resolve`](Self::resolve) with an optional per-call override to
+    produce the effective `RetryConfig` for a single LLM call.
+    
+    Most users will not construct this directly — `Pipeline` / `Workflow`
+    / `Step` build it implicitly via the typed builder helpers — but the
+    type is exposed so custom orchestrators can drive the resolver
+    themselves.
+    """
+    @property
+    def provider(self) -> typing.Optional[RetryConfig]:
+        r"""
+        Provider-level default (lowest priority).
+        """
+    @provider.setter
+    def provider(self, value: typing.Optional[RetryConfig]) -> None: ...
+    @property
+    def pipeline(self) -> typing.Optional[RetryConfig]:
+        r"""
+        Pipeline-level default.
+        """
+    @pipeline.setter
+    def pipeline(self, value: typing.Optional[RetryConfig]) -> None: ...
+    @property
+    def workflow(self) -> typing.Optional[RetryConfig]:
+        r"""
+        Workflow-level override.
+        """
+    @workflow.setter
+    def workflow(self, value: typing.Optional[RetryConfig]) -> None: ...
+    @property
+    def step(self) -> typing.Optional[RetryConfig]:
+        r"""
+        Step-level override (highest priority before per-call).
+        """
+    @step.setter
+    def step(self, value: typing.Optional[RetryConfig]) -> None: ...
+    def __new__(cls, *, provider: typing.Optional[RetryConfig] = None, pipeline: typing.Optional[RetryConfig] = None, workflow: typing.Optional[RetryConfig] = None, step: typing.Optional[RetryConfig] = None) -> RetryStack:
+        r"""
+        Build an empty stack. Set fields via the per-scope getters/setters
+        below or pass them as kwargs.
+        """
+    def resolve(self, call: typing.Optional[RetryConfig] = None) -> RetryConfig:
+        r"""
+        Resolve the stack against an optional per-call override and return
+        the effective `RetryConfig`. Precedence: call > step > workflow >
+        pipeline > provider; falls back to `RetryConfig()` defaults.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -7734,6 +8363,19 @@ class StageResult:
     def duration_ms(self) -> builtins.int:
         r"""
         How long the stage took to execute, in milliseconds.
+        """
+    @property
+    def usage(self) -> typing.Optional[TokenUsage]:
+        r"""
+        Token usage attributed to this stage (summed from `UsageEvent`s
+        emitted while the stage was running). `None` when no usage events
+        were observed for this stage.
+        """
+    @property
+    def cost_usd(self) -> typing.Optional[builtins.float]:
+        r"""
+        USD cost attributed to this stage, summed from `UsageEvent::cost_usd`
+        values. `None` when no usage events reported a cost.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -8396,6 +9038,14 @@ class TogetherProvider:
         
         Defaults to ``togethercomputer/m2-bert-80M-8k-retrieval`` (768 dims).
         """
+    def with_retry_config(self, config: RetryConfig) -> TogetherProvider:
+        r"""
+        Set the provider-level default retry config.
+        """
+    def http_client(self) -> HttpClientHandle:
+        r"""
+        Return an opaque handle to the underlying HTTP client.
+        """
     def __repr__(self) -> builtins.str: ...
 
 class TokenCounter:
@@ -8481,6 +9131,24 @@ class TokenUsage:
     def __new__(cls, *, prompt_tokens: builtins.int = 0, completion_tokens: builtins.int = 0, total_tokens: builtins.int = 0, reasoning_tokens: builtins.int = 0, cached_input_tokens: builtins.int = 0, audio_input_tokens: builtins.int = 0, audio_output_tokens: builtins.int = 0) -> TokenUsage:
         r"""
         Construct a token-usage record explicitly.
+        """
+    @staticmethod
+    def zero() -> TokenUsage:
+        r"""
+        Construct a zero-initialised `TokenUsage` (every counter is `0`).
+        
+        Equivalent to `TokenUsage()` but kept as an explicit factory for
+        readability at call sites that build running tallies.
+        """
+    def add(self, other: TokenUsage) -> TokenUsage:
+        r"""
+        Saturating field-wise addition: returns a new `TokenUsage` whose
+        counters are `self + other`.
+        
+        `TokenUsage` is exposed as a frozen value so this method intentionally
+        returns a new instance rather than mutating in place. For high-volume
+        rollups, prefer doing the arithmetic in Rust via the workflow / pipeline
+        machinery.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -8569,7 +9237,13 @@ class ToolDef:
         r"""
         The Python callable that implements the tool.
         """
-    def __new__(cls, *, name: builtins.str, description: builtins.str, parameters: typing.Any, handler: typing.Any) -> ToolDef: ...
+    @property
+    def is_exit(self) -> builtins.bool:
+        r"""
+        Whether the agent loop should treat this tool as a workflow-exit
+        signal. Mirrors `Tool::is_exit()`.
+        """
+    def __new__(cls, *, name: builtins.str, description: builtins.str, parameters: typing.Any, handler: typing.Any, is_exit: builtins.bool = False) -> ToolDef: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -8619,12 +9293,14 @@ class ToolOutput:
     is left unset and each provider applies its default conversion.
     
     Construct an explicit override when the structured payload should differ
-    from what the LLM sees::
+    from what the LLM sees:
     
-        return ToolOutput(
-            data={"items": [...], "total": 1234},
-            llm_override=LlmPayload.text("Found 1234 items."),
-        )
+    ```text
+    return ToolOutput(
+        data={"items": [...], "total": 1234},
+        llm_override=LlmPayload.text("Found 1234 items."),
+    )
+    ```
     """
     @property
     def data(self) -> typing.Any:
@@ -8766,20 +9442,23 @@ class Transcription:
     Use the static constructor methods to create a transcriber for a specific
     provider, then call :meth:`transcribe` to convert audio to text.
     
-    Example:
-        >>> # Local, offline transcription via whisper.cpp
-        >>> opts = WhisperOptions(model=WhisperModel.Base)
-        >>> transcriber = Transcription.whispercpp(options=opts)
-        >>> result = await transcriber.transcribe(
-        ...     TranscriptionRequest.from_file("audio.wav")
-        ... )
-        >>> print(result.text)
+    # Example
     
-        >>> # Remote transcription via fal.ai (requires API key)
-        >>> transcriber = Transcription.fal()
-        >>> result = await transcriber.transcribe(
-        ...     TranscriptionRequest(audio_url="https://example.com/audio.mp3")
-        ... )
+    ```text
+    >>> # Local, offline transcription via whisper.cpp
+    >>> opts = WhisperOptions(model=WhisperModel.Base)
+    >>> transcriber = Transcription.whispercpp(options=opts)
+    >>> result = await transcriber.transcribe(
+    ...     TranscriptionRequest.from_file("audio.wav")
+    ... )
+    >>> print(result.text)
+    
+    >>> # Remote transcription via fal.ai (requires API key)
+    >>> transcriber = Transcription.fal()
+    >>> result = await transcriber.transcribe(
+    ...     TranscriptionRequest(audio_url="https://example.com/audio.mp3")
+    ... )
+    ```
     """
     @property
     def provider_id(self) -> builtins.str:
@@ -8920,6 +9599,11 @@ class TypedTool:
         >>> result = await run_agent(model, msgs, tools=[tool.as_tool_def()])
     """
     @property
+    def is_exit(self) -> builtins.bool:
+        r"""
+        Whether this tool is an exit tool.
+        """
+    @property
     def name(self) -> builtins.str: ...
     @property
     def description(self) -> builtins.str: ...
@@ -8927,7 +9611,7 @@ class TypedTool:
     def parameters(self) -> dict[str, typing.Any]: ...
     @property
     def handler(self) -> typing.Any: ...
-    def __new__(cls, *, name: builtins.str, description: builtins.str, args_model: type, handler: typing.Any) -> TypedTool:
+    def __new__(cls, *, name: builtins.str, description: builtins.str, args_model: type, handler: typing.Any, is_exit: builtins.bool = False) -> TypedTool:
         r"""
         Build a TypedTool.
         
@@ -8937,6 +9621,13 @@ class TypedTool:
             args_model: A class exposing ``model_json_schema()`` (any
                 Pydantic v2 model qualifies).
             handler: Callable invoked with a parsed model instance.
+        """
+    def exit_tool(self, exit: builtins.bool) -> TypedTool:
+        r"""
+        Mark this tool as an exit tool. Returns a NEW [`TypedTool`] with
+        the flag flipped — mirrors the canonical `TypedTool::exit_tool`
+        builder. The agent loop returns immediately after the model invokes
+        an exit tool.
         """
     def as_tool_def(self) -> ToolDef:
         r"""
@@ -8956,6 +9647,78 @@ class UpscaleRequest:
     @property
     def model(self) -> typing.Optional[builtins.str]: ...
     def __new__(cls, *, image_url: builtins.str, scale: builtins.float, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> UpscaleRequest: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class UsageEvent:
+    r"""
+    Emitted by every provider call to surface tokens, modality-specific
+    quantities, and cost from the provider's actual API response. Mirrors
+    [`blazen_events::UsageEvent`].
+    
+    `Pipeline` and `WorkflowHandler` aggregate these into the rollups
+    surfaced via `usage_total` / `cost_total_usd`. Custom providers can
+    build and emit their own via `Context.emit_usage(event)` so they
+    participate in the same accounting.
+    """
+    @property
+    def provider(self) -> builtins.str: ...
+    @property
+    def model(self) -> builtins.str: ...
+    @property
+    def modality(self) -> Modality: ...
+    @property
+    def prompt_tokens(self) -> builtins.int: ...
+    @property
+    def completion_tokens(self) -> builtins.int: ...
+    @property
+    def total_tokens(self) -> builtins.int: ...
+    @property
+    def reasoning_tokens(self) -> builtins.int: ...
+    @property
+    def cached_input_tokens(self) -> builtins.int: ...
+    @property
+    def audio_input_tokens(self) -> builtins.int: ...
+    @property
+    def audio_output_tokens(self) -> builtins.int: ...
+    @property
+    def image_count(self) -> builtins.int: ...
+    @property
+    def audio_seconds(self) -> builtins.float: ...
+    @property
+    def video_seconds(self) -> builtins.float: ...
+    @property
+    def cost_usd(self) -> typing.Optional[builtins.float]: ...
+    @property
+    def latency_ms(self) -> builtins.int: ...
+    @property
+    def run_id(self) -> builtins.str:
+        r"""
+        The run identifier as an RFC-4122 UUID string.
+        """
+    def __new__(cls, *, provider: builtins.str, model: builtins.str, modality: typing.Optional[Modality] = None, prompt_tokens: builtins.int = 0, completion_tokens: builtins.int = 0, total_tokens: builtins.int = 0, reasoning_tokens: builtins.int = 0, cached_input_tokens: builtins.int = 0, audio_input_tokens: builtins.int = 0, audio_output_tokens: builtins.int = 0, image_count: builtins.int = 0, audio_seconds: builtins.float = 0.0, video_seconds: builtins.float = 0.0, cost_usd: typing.Optional[builtins.float] = None, latency_ms: builtins.int = 0, run_id: typing.Optional[builtins.str] = None) -> UsageEvent:
+        r"""
+        Build a `UsageEvent`.
+        
+        Args:
+            provider: The provider that served the call (e.g. `"openai"`).
+            model: The model identifier (e.g. `"gpt-4o-mini"`).
+            modality: The kind of call. Defaults to `Modality.Llm`.
+            prompt_tokens: Prompt / input tokens billed.
+            completion_tokens: Completion / output tokens billed.
+            total_tokens: Total tokens billed.
+            reasoning_tokens: Hidden reasoning tokens (o-series, R1, ...).
+            cached_input_tokens: Tokens served from a prompt cache.
+            audio_input_tokens: Audio input tokens (multimodal).
+            audio_output_tokens: Audio output tokens (multimodal).
+            image_count: Images generated or processed.
+            audio_seconds: Audio duration (TTS / STT).
+            video_seconds: Video duration (video generation).
+            cost_usd: USD cost for this call (provider-reported or computed).
+            latency_ms: Wall-clock latency.
+            run_id: Pipeline / workflow run identifier (UUID string). When
+                `None`, a fresh `uuid4` is generated so events are unique.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -9338,7 +10101,7 @@ class Workflow:
         >>> handler = await wf.run({"message": "hello"})
         >>> result = await handler.result()
     """
-    def __new__(cls, name: builtins.str, steps: typing.Sequence[_StepWrapper], timeout: typing.Optional[builtins.float] = None, session_pause_policy: typing.Optional[SessionPausePolicy] = None) -> Workflow:
+    def __new__(cls, name: builtins.str, steps: typing.Sequence[_StepWrapper], timeout: typing.Optional[builtins.float] = None, session_pause_policy: typing.Optional[SessionPausePolicy] = None, auto_publish_events: typing.Optional[builtins.bool] = None, retry_config: typing.Optional[RetryConfig] = None) -> Workflow:
         r"""
         Create a new workflow.
         
@@ -9510,6 +10273,28 @@ class WorkflowBuilder:
         r"""
         Enable or disable automatic checkpointing after each step.
         """
+    def retry_config(self, config: RetryConfig) -> WorkflowBuilder:
+        r"""
+        Set the workflow-level default `RetryConfig`. Pipeline / step / per-call
+        overrides take precedence at the LLM call site.
+        """
+    def no_retry(self) -> WorkflowBuilder:
+        r"""
+        Disable retries at the workflow level (`max_retries = 0`).
+        """
+    def clear_retry_config(self) -> WorkflowBuilder:
+        r"""
+        Clear any workflow-level retry config (defer to next-outer scope).
+        """
+    def step_timeout(self, seconds: builtins.float) -> WorkflowBuilder:
+        r"""
+        Apply a default per-step wall-clock timeout (in seconds) to every
+        step appended after this call.
+        """
+    def no_step_timeout(self) -> WorkflowBuilder:
+        r"""
+        Clear any default per-step timeout (subsequent steps run without one).
+        """
     def build(self) -> Workflow:
         r"""
         Build the [`Workflow`].
@@ -9595,16 +10380,17 @@ class WorkflowHandler:
         >>> result = await handler.result()
         >>> print(result.to_dict())
     """
-    async def result(self) -> Event:
+    async def result(self) -> WorkflowResult:
         r"""
         Await the final workflow result.
         
-        Consumes the handler. Returns the terminal event (typically a
-        `StopEvent`). Raises `RuntimeError` if the handler was already
-        consumed.
+        Consumes the handler. Returns a :class:`WorkflowResult` bundling
+        the terminal event (typically a ``StopEvent``), the session-ref
+        registry, and aggregated ``usage_total`` / ``cost_total_usd``.
+        Raises ``RuntimeError`` if the handler was already consumed.
         
         Returns:
-            The final Event produced by the workflow.
+            The :class:`WorkflowResult` produced by the workflow.
         """
     def stream_events(self) -> _EventStream:
         r"""
@@ -9677,6 +10463,22 @@ class WorkflowHandler:
         possible. Does **not** consume the handler.
         
         Raises `RuntimeError` if the handler was already consumed.
+        """
+    async def usage_total(self) -> TokenUsage:
+        r"""
+        Snapshot the running aggregate `TokenUsage` for this workflow run.
+        
+        Safe to call at any point during or after the run; the value matches
+        `WorkflowResult.usage_total` once `result()` has been awaited.
+        Raises `RuntimeError` if the handler was already consumed.
+        """
+    async def cost_total_usd(self) -> builtins.float:
+        r"""
+        Snapshot the running aggregate cost in USD for this workflow run.
+        
+        Sums `UsageEvent::cost_usd` across every emitted usage event. Events
+        with `cost_usd == None` contribute zero. Raises `RuntimeError` if the
+        handler was already consumed.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -9775,7 +10577,17 @@ class WorkflowResult:
         The session-ref registry owning the in-process objects that any
         session-ref markers on the event refer to.
         """
-    def __new__(cls, event: Event, session_refs: typing.Optional[SessionRefRegistry] = None) -> WorkflowResult:
+    @property
+    def usage_total(self) -> TokenUsage:
+        r"""
+        Aggregated token usage across the workflow run.
+        """
+    @property
+    def cost_total_usd(self) -> builtins.float:
+        r"""
+        Aggregated USD cost across the workflow run.
+        """
+    def __new__(cls, event: Event, session_refs: typing.Optional[SessionRefRegistry] = None, usage_total: typing.Optional[TokenUsage] = None, cost_total_usd: builtins.float = 0.0) -> WorkflowResult:
         r"""
         Build a [`WorkflowResult`] from its parts.
         
@@ -9886,6 +10698,14 @@ class XaiProvider:
         """
     async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    def with_retry_config(self, config: RetryConfig) -> XaiProvider:
+        r"""
+        Set the provider-level default retry config.
+        """
+    def http_client(self) -> HttpClientHandle:
+        r"""
+        Return an opaque handle to the underlying HTTP client.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -10081,6 +10901,16 @@ class PauseReason(enum.Enum):
     InputRequired = ...
 
 @typing.final
+class ProgressKind(enum.Enum):
+    r"""
+    The kind of progress this event describes.
+    """
+    Pipeline = ...
+    Workflow = ...
+    SubWorkflow = ...
+    Stage = ...
+
+@typing.final
 class ProviderId(enum.Enum):
     r"""
     Identifies the underlying provider for `LlmPayload.provider_raw(...)`
@@ -10261,6 +11091,15 @@ async def complete_batch(model: CompletionModel, requests: typing.Sequence[typin
         ...         print(resp.content)
     """
 
+def compute_audio_cost(model_id: builtins.str, seconds: builtins.float) -> typing.Optional[builtins.float]:
+    r"""
+    Compute USD cost of an audio request (TTS or STT).
+    
+    Looks up the registered ``per_second`` price for ``model_id`` and returns
+    ``per_second * seconds``. Returns ``None`` if the model is unknown or has
+    no per-second price.
+    """
+
 def compute_elid_similarity(a: builtins.str, b: builtins.str) -> builtins.float:
     r"""
     Compute similarity between two ELID strings.
@@ -10298,6 +11137,15 @@ def compute_embedding_simhash_similarity(a: builtins.str, b: builtins.str) -> bu
         ValueError: If either argument is not a valid 128-bit hex string.
     """
 
+def compute_image_cost(model_id: builtins.str, image_count: builtins.int) -> typing.Optional[builtins.float]:
+    r"""
+    Compute USD cost of an image-generation request.
+    
+    Looks up the registered ``per_image`` price for ``model_id`` and returns
+    ``per_image * image_count``. Returns ``None`` if the model is unknown or
+    has no per-image price.
+    """
+
 def compute_text_simhash_similarity(a: builtins.int, b: builtins.int) -> builtins.float:
     r"""
     Compute similarity between two 64-bit text `SimHashes`.
@@ -10311,6 +11159,15 @@ def compute_text_simhash_similarity(a: builtins.int, b: builtins.int) -> builtin
     
     Returns:
         Similarity score in ``[0.0, 1.0]``.
+    """
+
+def compute_video_cost(model_id: builtins.str, seconds: builtins.float) -> typing.Optional[builtins.float]:
+    r"""
+    Compute USD cost of a video-generation request.
+    
+    Looks up the registered ``per_second`` price for ``model_id`` and returns
+    ``per_second * seconds``. Returns ``None`` if the model is unknown or has
+    no per-second price.
     """
 
 def count_message_tokens(messages: typing.Sequence[ChatMessage], context_size: builtins.int = 128000) -> builtins.int:
@@ -10378,6 +11235,23 @@ def extract_inline_artifacts(content: builtins.str) -> builtins.list[Artifact]:
     
     Returns:
         A list of [`Artifact`] objects.
+    """
+
+def finish_workflow_tool() -> ToolDef:
+    r"""
+    Build the synthetic ``finish_workflow`` tool that the agent loop adds by
+    default (unless [`AgentConfig.no_finish_tool`] is set).
+    
+    Useful when you want to publish the same tool from a custom agent loop
+    or surface its name / description / schema to a UI before the run starts.
+    The resulting [`ToolDef`] sets ``is_exit=True`` so the parent agent
+    terminates when the model invokes it.
+    
+    # Panics
+    
+    Panics if the embedded Python source for the no-op identity handler
+    fails to compile via `Py.run` — this would only happen if the
+    interpreter is in a deeply broken state.
     """
 
 def format_provider_http_tail(raw_body: builtins.str, *, detail: typing.Optional[builtins.str] = None, request_id: typing.Optional[builtins.str] = None) -> builtins.str:
@@ -10660,7 +11534,7 @@ def try_deserialize_event(name: builtins.str, json_str: builtins.str) -> typing.
     cannot be parsed.
     """
 
-def typed_tool_simple(*, name: builtins.str, description: builtins.str, args_model: type, handler: typing.Any) -> ToolDef:
+def typed_tool_simple(*, name: builtins.str, description: builtins.str, args_model: type, handler: typing.Any, is_exit: builtins.bool = False) -> ToolDef:
     r"""
     Convenience constructor mirroring [`blazen_llm::typed_tool_simple`].
     

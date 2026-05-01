@@ -17,6 +17,7 @@ distributed = []
 blazen-persist = { workspace = true, optional = true }
 blazen-telemetry = { workspace = true, optional = true, features = ["history"] }
 blazen-events.workspace = true
+blazen-llm.workspace = true
 blazen-macros.workspace = true
 tokio = { version = "1", default-features = false, features = ["sync", "macros"] }
 tokio-stream = { version = "0.1", default-features = false, features = ["sync"] }

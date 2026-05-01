@@ -18,7 +18,9 @@ use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_core::session_ref::SessionRefRegistry;
+use blazen_llm::types::TokenUsage;
 
+use crate::types::PyTokenUsage;
 use crate::workflow::event::PyEvent;
 
 use super::session_ref::PySessionRefRegistry;
@@ -40,6 +42,8 @@ use super::session_ref::PySessionRefRegistry;
 pub struct PyWorkflowResult {
     event: Py<PyEvent>,
     session_refs: Arc<SessionRefRegistry>,
+    usage_total: TokenUsage,
+    cost_total_usd: f64,
 }
 
 #[gen_stub_pymethods]
@@ -55,13 +59,20 @@ impl PyWorkflowResult {
     ///         markers on the event's payload. Pass ``None`` when the
     ///         event does not carry session refs.
     #[new]
-    #[pyo3(signature = (event, session_refs=None))]
-    fn new(event: Py<PyEvent>, session_refs: Option<&PySessionRefRegistry>) -> Self {
+    #[pyo3(signature = (event, session_refs=None, usage_total=None, cost_total_usd=0.0))]
+    fn new(
+        event: Py<PyEvent>,
+        session_refs: Option<&PySessionRefRegistry>,
+        usage_total: Option<PyTokenUsage>,
+        cost_total_usd: f64,
+    ) -> Self {
         let registry =
             session_refs.map_or_else(|| Arc::new(SessionRefRegistry::new()), |r| r.inner.clone());
         Self {
             event,
             session_refs: registry,
+            usage_total: usage_total.map(|u| u.inner).unwrap_or_default(),
+            cost_total_usd,
         }
     }
 
@@ -80,8 +91,23 @@ impl PyWorkflowResult {
         }
     }
 
+    /// Aggregated token usage across the workflow run.
+    #[getter]
+    fn usage_total(&self) -> PyTokenUsage {
+        PyTokenUsage::from(&self.usage_total)
+    }
+
+    /// Aggregated USD cost across the workflow run.
+    #[getter]
+    fn cost_total_usd(&self) -> f64 {
+        self.cost_total_usd
+    }
+
     fn __repr__(&self) -> String {
-        "WorkflowResult(event=..., session_refs=...)".to_string()
+        format!(
+            "WorkflowResult(event=..., usage_total={:?}, cost_total_usd={})",
+            self.usage_total, self.cost_total_usd,
+        )
     }
 }
 
@@ -97,6 +123,26 @@ impl PyWorkflowResult {
         Self {
             event,
             session_refs,
+            usage_total: TokenUsage::default(),
+            cost_total_usd: 0.0,
+        }
+    }
+
+    /// Build a [`PyWorkflowResult`] including aggregated usage / cost.
+    ///
+    /// Used by adapters that have already extracted `usage_total` and
+    /// `cost_total_usd` from a Rust [`blazen_core::WorkflowResult`].
+    pub fn new_with_usage(
+        event: Py<PyEvent>,
+        session_refs: Arc<SessionRefRegistry>,
+        usage_total: TokenUsage,
+        cost_total_usd: f64,
+    ) -> Self {
+        Self {
+            event,
+            session_refs,
+            usage_total,
+            cost_total_usd,
         }
     }
 }

@@ -39,6 +39,7 @@ pub struct PyTypedTool {
     description: String,
     parameters: serde_json::Value,
     handler: Py<PyAny>,
+    is_exit: bool,
 }
 
 #[gen_stub_pymethods]
@@ -53,13 +54,14 @@ impl PyTypedTool {
     ///         Pydantic v2 model qualifies).
     ///     handler: Callable invoked with a parsed model instance.
     #[new]
-    #[pyo3(signature = (*, name, description, args_model, handler))]
+    #[pyo3(signature = (*, name, description, args_model, handler, is_exit=false))]
     fn new(
         py: Python<'_>,
         name: &str,
         description: &str,
         args_model: Bound<'_, PyType>,
         handler: Py<PyAny>,
+        is_exit: bool,
     ) -> PyResult<Self> {
         let schema_obj = args_model.call_method0("model_json_schema")?;
         let parameters = crate::convert::py_to_json(py, &schema_obj)?;
@@ -69,7 +71,31 @@ impl PyTypedTool {
             description: description.to_owned(),
             parameters,
             handler: wrapped,
+            is_exit,
         })
+    }
+
+    /// Mark this tool as an exit tool. Returns a NEW [`TypedTool`] with
+    /// the flag flipped — mirrors the canonical `TypedTool::exit_tool`
+    /// builder. The agent loop returns immediately after the model invokes
+    /// an exit tool.
+    fn exit_tool(&self, py: Python<'_>, exit: bool) -> PyResult<Py<Self>> {
+        Py::new(
+            py,
+            Self {
+                name: self.name.clone(),
+                description: self.description.clone(),
+                parameters: self.parameters.clone(),
+                handler: self.handler.clone_ref(py),
+                is_exit: exit,
+            },
+        )
+    }
+
+    /// Whether this tool is an exit tool.
+    #[getter]
+    fn is_exit(&self) -> bool {
+        self.is_exit
     }
 
     #[getter]
@@ -102,6 +128,7 @@ impl PyTypedTool {
                 description: self.description.clone(),
                 parameters: self.parameters.clone(),
                 handler: self.handler.clone_ref(py),
+                is_exit: self.is_exit,
             },
         )
     }
@@ -121,13 +148,14 @@ impl PyTypedTool {
 /// [`run_agent`].
 #[gen_stub_pyfunction]
 #[pyfunction]
-#[pyo3(signature = (*, name, description, args_model, handler))]
+#[pyo3(signature = (*, name, description, args_model, handler, is_exit=false))]
 pub fn typed_tool_simple(
     py: Python<'_>,
     name: &str,
     description: &str,
     args_model: Bound<'_, PyType>,
     handler: Py<PyAny>,
+    is_exit: bool,
 ) -> PyResult<Py<PyToolDef>> {
     let schema_obj = args_model.call_method0("model_json_schema")?;
     let parameters = crate::convert::py_to_json(py, &schema_obj)?;
@@ -139,6 +167,7 @@ pub fn typed_tool_simple(
             description: description.to_owned(),
             parameters,
             handler: wrapped,
+            is_exit,
         },
     )
 }

@@ -27,6 +27,7 @@ use super::openai_format::parse_retry_after;
 use super::{provider_http_error, provider_http_error_parts};
 use crate::error::BlazenError;
 use crate::http::{ByteStream, HttpClient, HttpRequest, HttpResponse};
+use crate::retry::RetryConfig;
 use crate::traits::{ModelCapabilities, ModelInfo, ModelRegistry};
 use crate::types::{
     CompletionRequest, CompletionResponse, ContentPart, ImageContent, ImageSource, MessageContent,
@@ -208,6 +209,9 @@ fn build_json_schema_system_instruction(response_format: &serde_json::Value) -> 
 /// ```
 pub struct AnthropicProvider {
     client: Arc<dyn HttpClient>,
+    /// Provider-level default retry config. Pipeline / workflow / step / call
+    /// scopes can override this; if all are `None`, this is the fallback.
+    retry_config: Option<Arc<RetryConfig>>,
     api_key: String,
     base_url: String,
     default_model: String,
@@ -226,6 +230,7 @@ impl Clone for AnthropicProvider {
     fn clone(&self) -> Self {
         Self {
             client: Arc::clone(&self.client),
+            retry_config: self.retry_config.clone(),
             api_key: self.api_key.clone(),
             base_url: self.base_url.clone(),
             default_model: self.default_model.clone(),
@@ -244,6 +249,7 @@ impl AnthropicProvider {
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             client: crate::default_http_client(),
+            retry_config: None,
             api_key: api_key.into(),
             base_url: "https://api.anthropic.com/v1".to_owned(),
             default_model: "claude-sonnet-4-5-20250929".to_owned(),
@@ -255,6 +261,7 @@ impl AnthropicProvider {
     pub fn new_with_client(api_key: impl Into<String>, client: Arc<dyn HttpClient>) -> Self {
         Self {
             client,
+            retry_config: None,
             api_key: api_key.into(),
             base_url: "https://api.anthropic.com/v1".to_owned(),
             default_model: "claude-sonnet-4-5-20250929".to_owned(),
@@ -279,6 +286,24 @@ impl AnthropicProvider {
     #[must_use]
     pub fn with_http_client(mut self, client: Arc<dyn HttpClient>) -> Self {
         self.client = client;
+        self
+    }
+
+    /// Return a clone of the underlying HTTP client.
+    ///
+    /// Escape hatch for power users who need to issue raw HTTP requests
+    /// (custom headers, endpoints not yet covered by Blazen's typed
+    /// surface, debugging) while reusing the same connection pool, TLS
+    /// config, and timeouts as this provider.
+    #[must_use]
+    pub fn http_client(&self) -> Arc<dyn HttpClient> {
+        Arc::clone(&self.client)
+    }
+
+    /// Set the provider-level default retry configuration.
+    #[must_use]
+    pub fn with_retry_config(mut self, config: RetryConfig) -> Self {
+        self.retry_config = Some(Arc::new(config));
         self
     }
 
@@ -677,6 +702,14 @@ fn parse_content_blocks(blocks: Vec<ContentBlock>) -> ParsedContent {
 impl crate::traits::CompletionModel for AnthropicProvider {
     fn model_id(&self) -> &str {
         &self.default_model
+    }
+
+    fn retry_config(&self) -> Option<&Arc<RetryConfig>> {
+        self.retry_config.as_ref()
+    }
+
+    fn http_client(&self) -> Option<Arc<dyn HttpClient>> {
+        Some(Self::http_client(self))
     }
 
     async fn complete(

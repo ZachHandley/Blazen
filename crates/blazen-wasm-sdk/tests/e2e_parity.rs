@@ -47,9 +47,7 @@ wasm_bindgen_test_configure!(run_in_node_experimental);
 // wiring we hand back a synchronous plain object with the
 // `blazen::StopEvent` discriminator that the dispatch layer recognises.
 fn make_stop_step_handler(payload_json: &'static str) -> js_sys::Function {
-    let body = format!(
-        "return {{ type: 'blazen::StopEvent', result: {payload_json} }};"
-    );
+    let body = format!("return {{ type: 'blazen::StopEvent', result: {payload_json} }};");
     // Two-arg signature matches the `(event, ctx)` calling convention the
     // workflow engine uses for step handlers.
     js_sys::Function::new_with_args("event, ctx", &body)

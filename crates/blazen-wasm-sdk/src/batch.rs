@@ -93,9 +93,7 @@ pub fn complete_batch_js(
         for i in 0..len {
             let inner_messages = outer_array.get(i);
             let msgs = js_messages_to_vec(&inner_messages).map_err(|e| {
-                JsValue::from_str(&format!(
-                    "Failed to parse message set at index {i}: {e:?}"
-                ))
+                JsValue::from_str(&format!("Failed to parse message set at index {i}: {e:?}"))
             })?;
             requests.push(CompletionRequest::new(msgs));
         }

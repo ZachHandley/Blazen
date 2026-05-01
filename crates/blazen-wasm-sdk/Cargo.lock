@@ -201,6 +201,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "blazen-events",
+ "blazen-llm",
  "blazen-macros",
  "chrono",
  "dashmap",
@@ -248,7 +249,9 @@ dependencies = [
  "dashmap",
  "serde",
  "serde_json",
+ "tsify-next",
  "uuid",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -331,6 +334,7 @@ version = "0.0.0-dev"
 dependencies = [
  "blazen-core",
  "blazen-events",
+ "blazen-llm",
  "chrono",
  "futures-util",
  "indexmap 2.13.0",

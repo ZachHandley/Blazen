@@ -44,6 +44,7 @@ wasm-bindgen = { version = "=0.2.118", optional = true }
 pythonize = { version = "0.28", optional = true }
 pyo3 = { version = "0.28", optional = true }
 base64 = { workspace = true }
+uuid.workspace = true
 blazen-embed = { workspace = true, optional = true }
 blazen-llm-mistralrs = { workspace = true, optional = true }
 blazen-audio-whispercpp = { workspace = true, optional = true }

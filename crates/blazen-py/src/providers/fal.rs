@@ -20,9 +20,10 @@ use crate::compute::result_types::{
 };
 use crate::error::{BlazenPyError, blazen_error_to_pyerr};
 use crate::providers::completion_model::PyCompletionOptions;
+use crate::providers::config::PyRetryConfig;
 use crate::providers::options::PyFalOptions;
 use crate::types::embedding::PyEmbeddingResponse;
-use crate::types::{PyChatMessage, PyCompletionResponse};
+use crate::types::{PyChatMessage, PyCompletionResponse, PyHttpClientHandle};
 use blazen_llm::ChatMessage;
 use blazen_llm::compute::{
     AudioGeneration, BackgroundRemoval, ComputeProvider, ImageGeneration, ThreeDGeneration,
@@ -623,6 +624,21 @@ impl PyFalProvider {
         CompletionModel::model_id(self.inner.as_ref())
     }
 
+    /// Set the provider-level default retry config.
+    pub fn with_retry_config(&self, config: PyRetryConfig) -> Self {
+        let inner = (*self.inner).clone().with_retry_config(config.inner);
+        Self {
+            inner: Arc::new(inner),
+        }
+    }
+
+    /// Return an opaque handle to the underlying HTTP client.
+    pub fn http_client(&self) -> PyHttpClientHandle {
+        PyHttpClientHandle {
+            inner: self.inner.http_client(),
+        }
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "FalProvider(model_id='{}')",
@@ -746,6 +762,21 @@ impl PyFalEmbeddingModel {
                 .map_err(BlazenPyError::from)?;
             Ok(PyEmbeddingResponse { inner: response })
         })
+    }
+
+    /// Set the provider-level default retry config.
+    pub fn with_retry_config(&self, config: PyRetryConfig) -> Self {
+        let inner = (*self.inner).clone().with_retry_config(config.inner);
+        Self {
+            inner: Arc::new(inner),
+        }
+    }
+
+    /// Return an opaque handle to the underlying HTTP client.
+    pub fn http_client(&self) -> PyHttpClientHandle {
+        PyHttpClientHandle {
+            inner: self.inner.http_client(),
+        }
     }
 
     fn __repr__(&self) -> String {

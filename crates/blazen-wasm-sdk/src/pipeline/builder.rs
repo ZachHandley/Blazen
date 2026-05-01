@@ -160,6 +160,92 @@ impl WasmPipelineBuilder {
         Ok(())
     }
 
+    /// Set a total wall-clock timeout in seconds for the whole pipeline run.
+    /// Exceeding it surfaces as a pipeline failure.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if the builder has already been consumed.
+    #[wasm_bindgen(js_name = "totalTimeout")]
+    pub fn total_timeout(&self, seconds: f64) -> Result<(), JsValue> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let builder = guard.take().ok_or_else(|| {
+            JsValue::from_str("PipelineBuilder already consumed (build() was called)")
+        })?;
+        *guard = Some(builder.total_timeout(Duration::from_secs_f64(seconds)));
+        Ok(())
+    }
+
+    /// Disable any total wall-clock pipeline timeout that was previously
+    /// configured (the pipeline runs without a wall-clock cap).
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if the builder has already been consumed.
+    #[wasm_bindgen(js_name = "noTotalTimeout")]
+    pub fn no_total_timeout(&self) -> Result<(), JsValue> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let builder = guard.take().ok_or_else(|| {
+            JsValue::from_str("PipelineBuilder already consumed (build() was called)")
+        })?;
+        *guard = Some(builder.no_total_timeout());
+        Ok(())
+    }
+
+    /// Set a pipeline-level [`RetryConfig`](blazen_llm::retry::RetryConfig)
+    /// default for every LLM/embed/HTTP call inside the pipeline. Workflow,
+    /// step, and per-call overrides take precedence.
+    ///
+    /// `options` is a plain JS object with optional fields `maxRetries`,
+    /// `initialDelayMs`, `maxDelayMs`, `honorRetryAfter`, `jitter`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if the builder has already been consumed.
+    #[wasm_bindgen(js_name = "retryConfig")]
+    pub fn retry_config(&self, options: JsValue) -> Result<(), JsValue> {
+        let cfg = crate::decorators::build_retry_config(&options);
+        let mut guard = self.inner.lock().expect("poisoned");
+        let builder = guard.take().ok_or_else(|| {
+            JsValue::from_str("PipelineBuilder already consumed (build() was called)")
+        })?;
+        *guard = Some(builder.retry_config(cfg));
+        Ok(())
+    }
+
+    /// Disable any pipeline-level retry default that was previously
+    /// configured. Equivalent to `retry_config(RetryConfig { max_retries: 0,
+    /// .. })` but more explicit.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if the builder has already been consumed.
+    #[wasm_bindgen(js_name = "noRetry")]
+    pub fn no_retry(&self) -> Result<(), JsValue> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let builder = guard.take().ok_or_else(|| {
+            JsValue::from_str("PipelineBuilder already consumed (build() was called)")
+        })?;
+        *guard = Some(builder.no_retry());
+        Ok(())
+    }
+
+    /// Clear any pipeline-level retry config so resolution falls back to
+    /// (workflow / step / provider) precedence.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if the builder has already been consumed.
+    #[wasm_bindgen(js_name = "clearRetryConfig")]
+    pub fn clear_retry_config(&self) -> Result<(), JsValue> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let builder = guard.take().ok_or_else(|| {
+            JsValue::from_str("PipelineBuilder already consumed (build() was called)")
+        })?;
+        *guard = Some(builder.clear_retry_config());
+        Ok(())
+    }
+
     /// Set a persist callback that receives a typed `PipelineSnapshot`
     /// (serialized to a JS object via `serde-wasm-bindgen`) after each
     /// stage completes. The callback may return a `Promise`; the engine

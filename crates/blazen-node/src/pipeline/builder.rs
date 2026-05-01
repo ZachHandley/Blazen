@@ -11,6 +11,7 @@ use napi_derive::napi;
 use blazen_pipeline::{PipelineError, PipelineSnapshot};
 
 use crate::error::pipeline_error_to_napi;
+use crate::generated::JsRetryConfig;
 use crate::pipeline::pipeline::JsPipeline;
 use crate::pipeline::snapshot::JsPipelineSnapshot;
 use crate::pipeline::stage::{JsParallelStage, JsStage};
@@ -98,6 +99,83 @@ impl JsPipelineBuilder {
             )
         })?;
         *guard = Some(builder.timeout_per_stage(Duration::from_secs_f64(seconds)));
+        Ok(self)
+    }
+
+    /// Set a total wall-clock timeout for the entire pipeline run, in
+    /// seconds. When the pipeline does not finish within this duration the
+    /// run is cancelled with a `PipelineError::Timeout`. Default is no
+    /// total timeout. Mirrors [`blazen_pipeline::PipelineBuilder::total_timeout`].
+    #[napi(js_name = "totalTimeout")]
+    pub fn total_timeout(&self, seconds: f64) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let builder = guard.take().ok_or_else(|| {
+            napi::Error::new(
+                napi::Status::GenericFailure,
+                "PipelineBuilder already consumed (build() was called)",
+            )
+        })?;
+        *guard = Some(builder.total_timeout(Duration::from_secs_f64(seconds)));
+        Ok(self)
+    }
+
+    /// Disable the total-pipeline timeout (default).
+    #[napi(js_name = "noTotalTimeout")]
+    pub fn no_total_timeout(&self) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let builder = guard.take().ok_or_else(|| {
+            napi::Error::new(
+                napi::Status::GenericFailure,
+                "PipelineBuilder already consumed (build() was called)",
+            )
+        })?;
+        *guard = Some(builder.no_total_timeout());
+        Ok(self)
+    }
+
+    /// Set a default retry configuration applied to every LLM call inside
+    /// the pipeline. Workflow / step / per-call overrides take precedence.
+    /// Mirrors [`blazen_pipeline::PipelineBuilder::retry_config`].
+    #[napi(js_name = "retryConfig")]
+    pub fn retry_config(&self, config: JsRetryConfig) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let builder = guard.take().ok_or_else(|| {
+            napi::Error::new(
+                napi::Status::GenericFailure,
+                "PipelineBuilder already consumed (build() was called)",
+            )
+        })?;
+        *guard = Some(builder.retry_config(config.into()));
+        Ok(self)
+    }
+
+    /// Disable pipeline-level retries (`maxRetries = 0`). Workflow / step /
+    /// per-call overrides still take precedence.
+    #[napi(js_name = "noRetry")]
+    pub fn no_retry(&self) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let builder = guard.take().ok_or_else(|| {
+            napi::Error::new(
+                napi::Status::GenericFailure,
+                "PipelineBuilder already consumed (build() was called)",
+            )
+        })?;
+        *guard = Some(builder.no_retry());
+        Ok(self)
+    }
+
+    /// Clear any pipeline-level retry config; LLM calls fall through to
+    /// workflow / step / provider defaults.
+    #[napi(js_name = "clearRetryConfig")]
+    pub fn clear_retry_config(&self) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let builder = guard.take().ok_or_else(|| {
+            napi::Error::new(
+                napi::Status::GenericFailure,
+                "PipelineBuilder already consumed (build() was called)",
+            )
+        })?;
+        *guard = Some(builder.clear_retry_config());
         Ok(self)
     }
 

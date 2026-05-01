@@ -81,8 +81,9 @@ impl From<RustProviderId> for JsProviderId {
 ///
 /// Mirrors [`blazen_llm::PricingEntry`]. The existing
 /// [`crate::types::pricing::JsModelPricing`] is a richer "input" type that
-/// also carries `perImage` / `perSecond`; this shape only covers the
-/// per-million token rates the registry actually stores.
+/// also carries `perImage` / `perSecond`; this shape covers the
+/// per-million token rates the registry actually stores, plus optional
+/// per-image and per-second rates for multimodal/audio/video models.
 #[napi(object, js_name = "PricingEntry")]
 pub struct JsPricingEntry {
     /// USD per million input (prompt) tokens.
@@ -91,6 +92,12 @@ pub struct JsPricingEntry {
     /// USD per million output (completion) tokens.
     #[napi(js_name = "outputPerMillion")]
     pub output_per_million: f64,
+    /// USD per image (for multimodal models). `null` if not applicable.
+    #[napi(js_name = "perImage")]
+    pub per_image: Option<f64>,
+    /// USD per second (for audio/video models). `null` if not applicable.
+    #[napi(js_name = "perSecond")]
+    pub per_second: Option<f64>,
 }
 
 impl From<RustPricingEntry> for JsPricingEntry {
@@ -98,6 +105,8 @@ impl From<RustPricingEntry> for JsPricingEntry {
         Self {
             input_per_million: p.input_per_million,
             output_per_million: p.output_per_million,
+            per_image: p.per_image,
+            per_second: p.per_second,
         }
     }
 }
@@ -107,6 +116,8 @@ impl From<JsPricingEntry> for RustPricingEntry {
         Self {
             input_per_million: p.input_per_million,
             output_per_million: p.output_per_million,
+            per_image: p.per_image,
+            per_second: p.per_second,
         }
     }
 }

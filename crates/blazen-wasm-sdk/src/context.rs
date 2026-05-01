@@ -42,9 +42,7 @@ use std::pin::Pin;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::task::{Context as TaskContext, Poll};
 
-use blazen_core::session_ref::{
-    RegistryKey, SessionRefError, SessionRefSerializable,
-};
+use blazen_core::session_ref::{RegistryKey, SessionRefError, SessionRefSerializable};
 use blazen_core::{BytesWrapper, Context, StateValue};
 use wasm_bindgen::prelude::*;
 
@@ -183,8 +181,9 @@ fn js_to_state_value(value: JsValue) -> Result<StateValue, JsValue> {
         return Ok(StateValue::Bytes(BytesWrapper(arr.to_vec())));
     }
 
-    let json: serde_json::Value = serde_wasm_bindgen::from_value(value)
-        .map_err(|e| JsValue::from_str(&format!("WasmContext: value not JSON-serialisable: {e}")))?;
+    let json: serde_json::Value = serde_wasm_bindgen::from_value(value).map_err(|e| {
+        JsValue::from_str(&format!("WasmContext: value not JSON-serialisable: {e}"))
+    })?;
     Ok(StateValue::Json(json))
 }
 
@@ -428,8 +427,7 @@ impl WasmContext {
         let payload = bytes.to_vec();
         block_on_local(async move {
             let registry = inner.session_refs_arc().await;
-            let serializable =
-                Arc::new(WasmSessionRefSerializable::new(&type_name, payload));
+            let serializable = Arc::new(WasmSessionRefSerializable::new(&type_name, payload));
             registry
                 .insert_serializable(serializable)
                 .await
@@ -556,8 +554,7 @@ impl WasmStateNamespace {
     #[wasm_bindgen]
     pub fn get(&self, key: String, default: JsValue) -> JsValue {
         let inner = self.ctx.inner.clone();
-        let stored: Option<StateValue> =
-            block_on_local(async move { inner.get_value(&key).await });
+        let stored: Option<StateValue> = block_on_local(async move { inner.get_value(&key).await });
         match stored {
             Some(sv) => state_value_to_js(&sv),
             None => {

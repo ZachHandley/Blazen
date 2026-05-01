@@ -110,11 +110,13 @@ impl From<&TemplateRole> for PyTemplateRole {
 /// Templates are rendered by replacing ``{{var}}`` placeholders with the
 /// provided keyword arguments.
 ///
-/// Example::
+/// # Example
 ///
-///     t = PromptTemplate("Hello {{name}}!", role=TemplateRole.User)
-///     msg = t.render(name="Alice")
-///     print(msg.content)  # "Hello Alice!"
+/// ```text
+/// t = PromptTemplate("Hello {{name}}!", role=TemplateRole.User)
+/// msg = t.render(name="Alice")
+/// print(msg.content)  # "Hello Alice!"
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "PromptTemplate", from_py_object)]
 #[derive(Clone)]
@@ -234,11 +236,13 @@ impl PyPromptTemplate {
 /// Mirrors the YAML/JSON file layout used by ``PromptRegistry.from_file``
 /// and ``PromptRegistry.to_file``.
 ///
-/// Example::
+/// # Example
 ///
-///     pf = PromptFile([template_a, template_b])
-///     for t in pf.prompts:
-///         registry.register(t.name, t)
+/// ```text
+/// pf = PromptFile([template_a, template_b])
+/// for t in pf.prompts:
+///     registry.register(t.name, t)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "PromptFile", from_py_object)]
 #[derive(Clone)]
@@ -296,12 +300,14 @@ impl PyPromptFile {
 /// Organises templates by name and version, with convenient lookup,
 /// rendering, and file I/O.
 ///
-/// Example::
+/// # Example
 ///
-///     registry = PromptRegistry()
-///     registry.register("greet", PromptTemplate("Hello {{name}}!"))
-///     msg = registry.render("greet", name="Alice")
-///     print(msg.content)
+/// ```text
+/// registry = PromptRegistry()
+/// registry.register("greet", PromptTemplate("Hello {{name}}!"))
+/// msg = registry.render("greet", name="Alice")
+/// print(msg.content)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "PromptRegistry", from_py_object)]
 #[derive(Clone)]

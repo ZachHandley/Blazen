@@ -15,8 +15,11 @@ use crate::error::BlazenError;
 use crate::traits::{CompletionModel, Tool};
 use crate::types::{
     ChatMessage, CompletionRequest, CompletionResponse, RequestTiming, TokenUsage, ToolCall,
-    ToolDefinition,
+    ToolDefinition, ToolOutput,
 };
+
+/// Default name of the built-in `finish_workflow` exit tool.
+pub const FINISH_WORKFLOW_TOOL_NAME: &str = "finish_workflow";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -30,9 +33,22 @@ pub struct AgentConfig {
     pub max_iterations: u32,
     /// Tools available to the agent.
     pub tools: Vec<Arc<dyn Tool>>,
-    /// Whether to add an implicit "finish" tool the model can call to exit early.
-    /// Default: false.
+    /// Whether to add the legacy implicit "finish" tool (single `answer`
+    /// string argument) the model can call to exit early. Default: `false`.
+    ///
+    /// This is the original Wave-0 finish tool. Most callers should prefer
+    /// the always-on `finish_workflow` tool (see [`Self::no_finish_tool`])
+    /// which carries a typed `result: serde_json::Value` plus optional
+    /// `summary: String`.
     pub add_finish_tool: bool,
+    /// When `true`, suppress automatic registration of the built-in
+    /// `finish_workflow` exit tool. Default: `false` (the tool is always
+    /// added unless opted out).
+    pub no_finish_tool: bool,
+    /// Override the name of the built-in `finish_workflow` tool. Useful
+    /// when the host wants to namespace it. Default: `None`, meaning the
+    /// canonical name [`FINISH_WORKFLOW_TOOL_NAME`] is used.
+    pub finish_tool_name: Option<String>,
     /// Optional system prompt prepended to messages.
     pub system_prompt: Option<String>,
     /// Sampling temperature.
@@ -51,6 +67,8 @@ impl AgentConfig {
             max_iterations: 10,
             tools,
             add_finish_tool: false,
+            no_finish_tool: false,
+            finish_tool_name: None,
             system_prompt: None,
             temperature: None,
             max_tokens: None,
@@ -73,6 +91,22 @@ impl AgentConfig {
     #[must_use]
     pub fn with_finish_tool(mut self) -> Self {
         self.add_finish_tool = true;
+        self
+    }
+
+    /// Suppress automatic registration of the built-in `finish_workflow`
+    /// exit tool. By default the tool is auto-added to every agent run.
+    #[must_use]
+    pub fn no_finish_tool(mut self) -> Self {
+        self.no_finish_tool = true;
+        self
+    }
+
+    /// Rename the built-in `finish_workflow` exit tool. The schema and
+    /// behavior are unchanged; only the name surfaced to the model differs.
+    #[must_use]
+    pub fn finish_tool_name(mut self, name: impl Into<String>) -> Self {
+        self.finish_tool_name = Some(name.into());
         self
     }
 
@@ -133,6 +167,73 @@ impl Tool for FinishTool {
         // before execution happens.
         Ok(arguments.into())
     }
+}
+
+/// Built-in `finish_workflow` exit tool. Carries a typed
+/// `result: serde_json::Value` plus an optional human-readable `summary`.
+///
+/// When the LLM calls this tool, the agent loop returns immediately and the
+/// tool's arguments become the final result. Auto-registered on every
+/// [`run_agent`] call unless [`AgentConfig::no_finish_tool`] is used.
+struct FinishWorkflowTool {
+    name: String,
+}
+
+impl FinishWorkflowTool {
+    fn new(name: impl Into<String>) -> Self {
+        Self { name: name.into() }
+    }
+}
+
+#[async_trait::async_trait]
+impl Tool for FinishWorkflowTool {
+    fn definition(&self) -> ToolDefinition {
+        ToolDefinition {
+            name: self.name.clone(),
+            description: "Call this tool to terminate the agent loop and return a final \
+                          structured result. The `result` argument can be any JSON value \
+                          (object, array, string, number, etc.); `summary` is an optional \
+                          human-readable description of what was accomplished."
+                .to_owned(),
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "result": {
+                        "description": "The final structured result of the workflow."
+                    },
+                    "summary": {
+                        "type": "string",
+                        "description": "Optional human-readable summary of the result."
+                    }
+                },
+                "required": ["result"]
+            }),
+        }
+    }
+
+    async fn execute(
+        &self,
+        arguments: serde_json::Value,
+    ) -> Result<ToolOutput<serde_json::Value>, BlazenError> {
+        // The early-return is performed by the agent loop after dispatch
+        // observes `is_exit() == true`; the body simply echoes the args
+        // so the tool-result message stays well-formed.
+        Ok(ToolOutput::new(arguments))
+    }
+
+    fn is_exit(&self) -> bool {
+        true
+    }
+}
+
+/// Construct the built-in `finish_workflow` exit tool with its canonical name.
+///
+/// Most callers do not need to invoke this directly: [`run_agent`] auto-registers
+/// it on every run unless [`AgentConfig::no_finish_tool`] is set. The accessor
+/// is exposed primarily for tests, custom agent loops, and binding shims.
+#[must_use]
+pub fn finish_workflow_tool() -> Arc<dyn Tool> {
+    Arc::new(FinishWorkflowTool::new(FINISH_WORKFLOW_TOOL_NAME)) as Arc<dyn Tool>
 }
 
 // ---------------------------------------------------------------------------
@@ -244,6 +345,21 @@ pub async fn run_agent_with_callback(
         all_tools.push(finish);
     }
 
+    // Auto-register the built-in `finish_workflow` exit tool unless opted out.
+    if !config.no_finish_tool {
+        let name = config
+            .finish_tool_name
+            .clone()
+            .unwrap_or_else(|| FINISH_WORKFLOW_TOOL_NAME.to_owned());
+        // Don't double-register if the caller already supplied a tool with the
+        // same name (e.g. their own custom exit tool).
+        if !all_tools.iter().any(|t| t.definition().name == name) {
+            let finish = Arc::new(FinishWorkflowTool::new(name)) as Arc<dyn Tool>;
+            tool_defs.push(finish.definition());
+            all_tools.push(finish);
+        }
+    }
+
     for iteration in 0..config.max_iterations {
         let request = build_request(&messages, &tool_defs, &config);
 
@@ -291,6 +407,35 @@ pub async fn run_agent_with_callback(
             response.content.clone(),
             response.tool_calls.clone(),
         ));
+
+        // Detect an exit-tool call BEFORE dispatch so we can short-circuit
+        // immediately with the tool's arguments as the final result. This
+        // covers both the built-in `finish_workflow` tool and any user tool
+        // that returns `is_exit() == true`.
+        if let Some(exit_call) = find_exit_call(&response.tool_calls, &all_tools) {
+            on_event(AgentEvent::ToolCalled {
+                iteration,
+                tool_call: exit_call.clone(),
+            });
+            on_event(AgentEvent::ToolResult {
+                iteration,
+                tool_name: exit_call.name.clone(),
+                result: exit_call.arguments.clone(),
+            });
+            on_event(AgentEvent::IterationComplete {
+                iteration,
+                had_tool_calls: true,
+            });
+            return Ok(build_exit_result(
+                exit_call,
+                &response,
+                &messages,
+                iteration,
+                total_usage,
+                total_cost,
+                &start,
+            ));
+        }
 
         // Execute each tool call and add results.
         execute_tool_calls(
@@ -486,15 +631,73 @@ fn find_tool(tools: &[Arc<dyn Tool>], name: &str) -> Option<Arc<dyn Tool>> {
     tools.iter().find(|t| t.definition().name == name).cloned()
 }
 
+/// Scan `tool_calls` and return the first call that targets an exit-marked
+/// tool (`Tool::is_exit() == true`). Returns `None` when no exit tool was
+/// invoked or the tool name is unknown.
+fn find_exit_call<'a>(
+    tool_calls: &'a [ToolCall],
+    all_tools: &[Arc<dyn Tool>],
+) -> Option<&'a ToolCall> {
+    tool_calls
+        .iter()
+        .find(|tc| find_tool(all_tools, &tc.name).is_some_and(|t| t.is_exit()))
+}
+
+/// Build the [`AgentResult`] returned when an exit tool terminates the loop.
+///
+/// The exit tool's `arguments` become the response `metadata` (so callers can
+/// recover the structured `result` / `summary` fields verbatim) and, when a
+/// `summary` string is present in the args, the `content` of the synthesized
+/// final response.
+fn build_exit_result(
+    exit_call: &ToolCall,
+    response: &CompletionResponse,
+    messages: &[ChatMessage],
+    iteration: u32,
+    total_usage: Option<TokenUsage>,
+    total_cost: Option<f64>,
+    start: &Instant,
+) -> AgentResult {
+    let summary = exit_call
+        .arguments
+        .get("summary")
+        .and_then(|v| v.as_str())
+        .map(str::to_owned);
+
+    let final_response = CompletionResponse {
+        content: summary,
+        tool_calls: vec![],
+        reasoning: None,
+        citations: vec![],
+        artifacts: vec![],
+        usage: response.usage.clone(),
+        model: response.model.clone(),
+        finish_reason: Some("exit_tool".to_owned()),
+        cost: response.cost,
+        timing: response.timing.clone(),
+        images: response.images.clone(),
+        audio: response.audio.clone(),
+        videos: response.videos.clone(),
+        metadata: exit_call.arguments.clone(),
+    };
+
+    AgentResult {
+        response: final_response,
+        messages: messages.to_vec(),
+        iterations: iteration,
+        total_usage,
+        total_cost,
+        timing: Some(elapsed_timing(start)),
+    }
+}
+
 fn accumulate_usage(total: &mut Option<TokenUsage>, new: Option<&TokenUsage>) {
-    if let Some(new_usage) = new {
-        if let Some(existing) = total {
-            existing.prompt_tokens += new_usage.prompt_tokens;
-            existing.completion_tokens += new_usage.completion_tokens;
-            existing.total_tokens += new_usage.total_tokens;
-        } else {
-            *total = Some(new_usage.clone());
-        }
+    let Some(new_usage) = new else {
+        return;
+    };
+    match total {
+        Some(existing) => existing.add(new_usage),
+        None => *total = Some(new_usage.clone()),
     }
 }
 

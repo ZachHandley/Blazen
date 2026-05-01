@@ -7,6 +7,7 @@ use blazen_pipeline::{ActiveWorkflowSnapshot, PipelineResult, PipelineSnapshot, 
 
 use crate::convert::json_to_py;
 use crate::pipeline::error::pipeline_err;
+use crate::types::PyTokenUsage;
 
 /// The outcome of a single completed stage.
 #[gen_stub_pyclass]
@@ -41,6 +42,21 @@ impl PyStageResult {
     #[getter]
     fn duration_ms(&self) -> u64 {
         self.inner.duration_ms
+    }
+
+    /// Token usage attributed to this stage (summed from `UsageEvent`s
+    /// emitted while the stage was running). `None` when no usage events
+    /// were observed for this stage.
+    #[getter]
+    fn usage(&self) -> Option<PyTokenUsage> {
+        self.inner.usage.clone().map(PyTokenUsage::from)
+    }
+
+    /// USD cost attributed to this stage, summed from `UsageEvent::cost_usd`
+    /// values. `None` when no usage events reported a cost.
+    #[getter]
+    fn cost_usd(&self) -> Option<f64> {
+        self.inner.cost_usd
     }
 
     fn __repr__(&self) -> String {
@@ -248,6 +264,20 @@ impl PyPipelineResult {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
         json_to_py(py, &serde_json::Value::Object(map))
+    }
+
+    /// Total token usage aggregated across every stage's emitted
+    /// `UsageEvent`s.
+    #[getter]
+    fn usage_total(&self) -> PyTokenUsage {
+        PyTokenUsage::from(&self.inner.usage_total)
+    }
+
+    /// Total cost in USD aggregated across every stage's emitted
+    /// `UsageEvent::cost_usd` values.
+    #[getter]
+    fn cost_total_usd(&self) -> f64 {
+        self.inner.cost_total_usd
     }
 
     fn __repr__(&self) -> String {

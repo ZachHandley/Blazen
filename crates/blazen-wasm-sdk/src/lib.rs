@@ -44,6 +44,7 @@ pub mod memory;
 pub mod memory_types;
 pub mod middleware;
 pub mod model_abcs;
+pub mod model_registry;
 pub mod pipeline;
 pub mod pricing;
 pub mod providers;

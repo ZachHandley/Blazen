@@ -218,7 +218,10 @@ impl WasmMemory {
     /// ```
     #[wasm_bindgen(js_name = "fromBackend")]
     #[must_use]
-    pub fn from_backend(embedder: &WasmEmbeddingModel, backend: &WasmInMemoryBackend) -> WasmMemory {
+    pub fn from_backend(
+        embedder: &WasmEmbeddingModel,
+        backend: &WasmInMemoryBackend,
+    ) -> WasmMemory {
         let arc: Arc<dyn blazen_memory::store::MemoryBackend> = backend.inner.clone();
         let inner = Memory::new_arc(embedder.inner_arc(), arc);
         Self {
@@ -523,10 +526,10 @@ impl JsMemoryBackend {
         method: &str,
         args: &[JsValue],
     ) -> std::result::Result<JsValue, blazen_memory::MemoryError> {
-        let func = js_sys::Reflect::get(&self.backend, &JsValue::from_str(method))
-            .map_err(|e| blazen_memory::MemoryError::Backend(format!(
-                "backend.{method} not found: {e:?}"
-            )))?;
+        let func =
+            js_sys::Reflect::get(&self.backend, &JsValue::from_str(method)).map_err(|e| {
+                blazen_memory::MemoryError::Backend(format!("backend.{method} not found: {e:?}"))
+            })?;
 
         let func: &js_sys::Function = func.unchecked_ref();
         let result = match args.len() {
@@ -541,18 +544,20 @@ impl JsMemoryBackend {
                 func.apply(&self.backend, &js_args)
             }
         }
-        .map_err(|e| blazen_memory::MemoryError::Backend(format!(
-            "backend.{method}() threw: {e:?}"
-        )))?;
+        .map_err(|e| {
+            blazen_memory::MemoryError::Backend(format!("backend.{method}() threw: {e:?}"))
+        })?;
 
         // Await if the result is a Promise.
         if result.has_type::<js_sys::Promise>() {
             let promise: js_sys::Promise = result.unchecked_into();
             wasm_bindgen_futures::JsFuture::from(promise)
                 .await
-                .map_err(|e| blazen_memory::MemoryError::Backend(format!(
-                    "backend.{method}() rejected: {e:?}"
-                )))
+                .map_err(|e| {
+                    blazen_memory::MemoryError::Backend(format!(
+                        "backend.{method}() rejected: {e:?}"
+                    ))
+                })
         } else {
             Ok(result)
         }
@@ -566,12 +571,18 @@ impl JsMemoryBackend {
         let _ = js_sys::Reflect::set(
             &obj,
             &"elid".into(),
-            &entry.elid.as_deref().map_or(JsValue::NULL, |s| JsValue::from_str(s)),
+            &entry
+                .elid
+                .as_deref()
+                .map_or(JsValue::NULL, |s| JsValue::from_str(s)),
         );
         let _ = js_sys::Reflect::set(
             &obj,
             &"simhashHex".into(),
-            &entry.simhash_hex.as_deref().map_or(JsValue::NULL, |s| JsValue::from_str(s)),
+            &entry
+                .simhash_hex
+                .as_deref()
+                .map_or(JsValue::NULL, |s| JsValue::from_str(s)),
         );
         let _ = js_sys::Reflect::set(
             &obj,
@@ -609,16 +620,14 @@ impl JsMemoryBackend {
             .ok()
             .and_then(|v| v.as_f64())
             .map_or(0, |v| v as u64);
-        let bands_val = js_sys::Reflect::get(val, &"bands".into())
-            .unwrap_or(JsValue::UNDEFINED);
+        let bands_val = js_sys::Reflect::get(val, &"bands".into()).unwrap_or(JsValue::UNDEFINED);
         let bands: Vec<String> = if bands_val.is_instance_of::<js_sys::Array>() {
             let arr: &js_sys::Array = bands_val.unchecked_ref();
             arr.iter().filter_map(|v| v.as_string()).collect()
         } else {
             Vec::new()
         };
-        let metadata_val = js_sys::Reflect::get(val, &"metadata".into())
-            .unwrap_or(JsValue::NULL);
+        let metadata_val = js_sys::Reflect::get(val, &"metadata".into()).unwrap_or(JsValue::NULL);
         let metadata: serde_json::Value = if metadata_val.is_null() || metadata_val.is_undefined() {
             serde_json::Value::Null
         } else {
@@ -1082,9 +1091,12 @@ impl JsMemoryStore {
         method: &str,
         args: &[JsValue],
     ) -> std::result::Result<JsValue, blazen_memory::MemoryError> {
-        let func = js_sys::Reflect::get(&self.impl_obj, &JsValue::from_str(method)).map_err(
-            |e| blazen_memory::MemoryError::Backend(format!("MemoryStore.{method} not found: {e:?}")),
-        )?;
+        let func =
+            js_sys::Reflect::get(&self.impl_obj, &JsValue::from_str(method)).map_err(|e| {
+                blazen_memory::MemoryError::Backend(format!(
+                    "MemoryStore.{method} not found: {e:?}"
+                ))
+            })?;
         let func: &js_sys::Function = func.unchecked_ref();
         let result = match args.len() {
             0 => func.call0(&self.impl_obj),
@@ -1105,11 +1117,13 @@ impl JsMemoryStore {
 
         if result.has_type::<js_sys::Promise>() {
             let promise: js_sys::Promise = result.unchecked_into();
-            wasm_bindgen_futures::JsFuture::from(promise).await.map_err(|e| {
-                blazen_memory::MemoryError::Backend(format!(
-                    "MemoryStore.{method}() rejected: {e:?}"
-                ))
-            })
+            wasm_bindgen_futures::JsFuture::from(promise)
+                .await
+                .map_err(|e| {
+                    blazen_memory::MemoryError::Backend(format!(
+                        "MemoryStore.{method}() rejected: {e:?}"
+                    ))
+                })
         } else {
             Ok(result)
         }
@@ -1130,8 +1144,7 @@ impl JsMemoryStore {
             .ok()
             .and_then(|v| v.as_f64())
             .unwrap_or(0.0);
-        let meta_val =
-            js_sys::Reflect::get(val, &"metadata".into()).unwrap_or(JsValue::NULL);
+        let meta_val = js_sys::Reflect::get(val, &"metadata".into()).unwrap_or(JsValue::NULL);
         let metadata: serde_json::Value = if meta_val.is_null() || meta_val.is_undefined() {
             serde_json::Value::Null
         } else {
@@ -1145,9 +1158,7 @@ impl JsMemoryStore {
         })
     }
 
-    fn js_to_stored(
-        val: &JsValue,
-    ) -> std::result::Result<StoredEntry, blazen_memory::MemoryError> {
+    fn js_to_stored(val: &JsValue) -> std::result::Result<StoredEntry, blazen_memory::MemoryError> {
         let id = js_sys::Reflect::get(val, &"id".into())
             .ok()
             .and_then(|v| v.as_string())
@@ -1156,8 +1167,7 @@ impl JsMemoryStore {
             .ok()
             .and_then(|v| v.as_string())
             .unwrap_or_default();
-        let meta_val =
-            js_sys::Reflect::get(val, &"metadata".into()).unwrap_or(JsValue::NULL);
+        let meta_val = js_sys::Reflect::get(val, &"metadata".into()).unwrap_or(JsValue::NULL);
         let metadata: serde_json::Value = if meta_val.is_null() || meta_val.is_undefined() {
             serde_json::Value::Null
         } else {
@@ -1217,9 +1227,7 @@ impl blazen_memory::store::MemoryStore for JsMemoryStore {
         ))
         .await?;
         let arr: &js_sys::Array = result.dyn_ref::<js_sys::Array>().ok_or_else(|| {
-            blazen_memory::MemoryError::Backend(
-                "MemoryStore.search() must return an array".into(),
-            )
+            blazen_memory::MemoryError::Backend("MemoryStore.search() must return an array".into())
         })?;
         let mut out = Vec::with_capacity(arr.length() as usize);
         for i in 0..arr.length() {

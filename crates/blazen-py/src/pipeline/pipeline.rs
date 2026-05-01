@@ -12,6 +12,8 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
+use blazen_llm::retry::RetryConfig;
+
 use crate::convert::{dict_to_json, py_to_json};
 use crate::pipeline::error::pipeline_err;
 use crate::pipeline::handler::PyPipelineHandler;
@@ -25,12 +27,17 @@ use crate::pipeline::stage::PendingStage;
 /// [`resume`](Self::resume).
 #[gen_stub_pyclass]
 #[pyclass(name = "Pipeline")]
+#[allow(clippy::struct_excessive_bools)]
 pub struct PyPipeline {
     pub(crate) name: String,
     pub(crate) pending_stages: Vec<PendingStage>,
     pub(crate) on_persist: Option<Py<PyAny>>,
     pub(crate) on_persist_json: Option<Py<PyAny>>,
     pub(crate) timeout_per_stage: Option<Duration>,
+    pub(crate) total_timeout: Option<Duration>,
+    pub(crate) total_timeout_set: bool,
+    pub(crate) retry_config: Option<Arc<RetryConfig>>,
+    pub(crate) retry_config_set: bool,
 }
 
 #[gen_stub_pymethods]
@@ -71,6 +78,18 @@ impl PyPipeline {
         if let Some(t) = self.timeout_per_stage {
             builder = builder.timeout_per_stage(t);
         }
+        if self.total_timeout_set {
+            match self.total_timeout {
+                Some(t) => builder = builder.total_timeout(t),
+                None => builder = builder.no_total_timeout(),
+            }
+        }
+        if self.retry_config_set {
+            match self.retry_config.as_ref() {
+                Some(cfg) => builder = builder.retry_config((**cfg).clone()),
+                None => builder = builder.clear_retry_config(),
+            }
+        }
         if let Some(cb) = self.on_persist.take() {
             builder = builder.on_persist(build_persist_fn(cb));
         }
@@ -110,6 +129,18 @@ impl PyPipeline {
         }
         if let Some(t) = self.timeout_per_stage {
             builder = builder.timeout_per_stage(t);
+        }
+        if self.total_timeout_set {
+            match self.total_timeout {
+                Some(t) => builder = builder.total_timeout(t),
+                None => builder = builder.no_total_timeout(),
+            }
+        }
+        if self.retry_config_set {
+            match self.retry_config.as_ref() {
+                Some(cfg) => builder = builder.retry_config((**cfg).clone()),
+                None => builder = builder.clear_retry_config(),
+            }
         }
         if let Some(cb) = self.on_persist.take() {
             builder = builder.on_persist(build_persist_fn(cb));

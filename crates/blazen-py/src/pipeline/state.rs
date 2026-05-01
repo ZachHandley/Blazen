@@ -13,6 +13,8 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use blazen_pipeline::PipelineState;
 
 use crate::convert::json_to_py;
+use crate::events::PyUsageEvent;
+use crate::types::PyTokenUsage;
 
 /// Read-only view of pipeline state.
 ///
@@ -97,7 +99,31 @@ impl PyPipelineState {
         json_to_py(py, self.state().last_result())
     }
 
+    /// Token-usage rollup for the pipeline run so far.
+    ///
+    /// Sums every `UsageEvent` emitted on the workflow event streams
+    /// across every stage that has completed at the moment of the read.
+    #[getter]
+    fn usage_total(&self) -> PyTokenUsage {
+        PyTokenUsage::from(self.state().usage_total())
+    }
+
+    /// USD cost rollup for the pipeline run so far.
+    ///
+    /// Sums `UsageEvent::cost_usd` across every stage that has completed
+    /// at the moment of the read.
+    #[getter]
+    fn cost_total_usd(&self) -> f64 {
+        self.state().cost_total_usd()
+    }
+
     fn __repr__(&self) -> String {
         "PipelineState(...)".to_owned()
     }
 }
+
+// Suppress unused-import warning — PyUsageEvent is referenced through
+// the rollup machinery internally and from sibling modules.
+const _: fn() = || {
+    let _ = std::marker::PhantomData::<PyUsageEvent>;
+};

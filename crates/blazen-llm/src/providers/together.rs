@@ -11,6 +11,7 @@ use futures_util::Stream;
 use super::openai_compat::{AuthMethod, OpenAiCompatConfig, OpenAiCompatProvider};
 use crate::error::BlazenError;
 use crate::http::HttpClient;
+use crate::retry::RetryConfig;
 use crate::traits::{
     CompletionModel, ModelInfo, ModelRegistry, ProviderCapabilities, ProviderInfo,
 };
@@ -35,13 +36,16 @@ use crate::types::{CompletionRequest, CompletionResponse, StreamChunk};
 /// ```
 pub struct TogetherProvider {
     inner: OpenAiCompatProvider,
+    /// Provider-level default retry config. Pipeline / workflow / step / call
+    /// scopes can override this; if all are `None`, this is the fallback.
+    retry_config: Option<Arc<RetryConfig>>,
 }
 
 impl std::fmt::Debug for TogetherProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TogetherProvider")
             .field("inner", &self.inner)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -49,6 +53,7 @@ impl Clone for TogetherProvider {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
+            retry_config: self.retry_config.clone(),
         }
     }
 }
@@ -74,6 +79,7 @@ impl TogetherProvider {
                 query_params: Vec::new(),
                 supports_model_listing: true,
             }),
+            retry_config: None,
         }
     }
 
@@ -94,6 +100,7 @@ impl TogetherProvider {
                 },
                 client,
             ),
+            retry_config: None,
         }
     }
 
@@ -110,6 +117,24 @@ impl TogetherProvider {
         self.inner = self.inner.with_http_client(client);
         self
     }
+
+    /// Return a clone of the underlying HTTP client.
+    ///
+    /// Escape hatch delegating to the wrapped
+    /// [`OpenAiCompatProvider`]. Useful for issuing raw HTTP requests
+    /// (custom headers, debugging, endpoints not yet covered by Blazen)
+    /// while reusing the provider's connection pool and TLS config.
+    #[must_use]
+    pub fn http_client(&self) -> Arc<dyn HttpClient> {
+        self.inner.http_client()
+    }
+
+    /// Set the provider-level default retry configuration.
+    #[must_use]
+    pub fn with_retry_config(mut self, config: RetryConfig) -> Self {
+        self.retry_config = Some(Arc::new(config));
+        self
+    }
 }
 
 super::impl_simple_from_options!(TogetherProvider, "together", no_base_url);
@@ -122,6 +147,14 @@ super::impl_simple_from_options!(TogetherProvider, "together", no_base_url);
 impl CompletionModel for TogetherProvider {
     fn model_id(&self) -> &str {
         self.inner.model_id()
+    }
+
+    fn retry_config(&self) -> Option<&Arc<RetryConfig>> {
+        self.retry_config.as_ref()
+    }
+
+    fn http_client(&self) -> Option<Arc<dyn HttpClient>> {
+        Some(Self::http_client(self))
     }
 
     async fn complete(

@@ -58,9 +58,7 @@ fn build_input_mapper(callback: js_sys::Function) -> InputMapperFn {
             Err(_) => JsValue::NULL,
         };
         match wrapper.0.call1(&JsValue::NULL, &state_js) {
-            Ok(result) => {
-                serde_wasm_bindgen::from_value(result).unwrap_or(serde_json::Value::Null)
-            }
+            Ok(result) => serde_wasm_bindgen::from_value(result).unwrap_or(serde_json::Value::Null),
             Err(_) => serde_json::Value::Null,
         }
     })

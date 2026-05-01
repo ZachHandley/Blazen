@@ -29,6 +29,14 @@ pub struct StageResult {
     pub skipped: bool,
     /// How long the stage took to execute, in milliseconds.
     pub duration_ms: u64,
+    /// Token usage attributed to this stage, summed from `UsageEvent`s emitted
+    /// while this stage was executing. `None` when no usage events were seen.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<blazen_llm::types::TokenUsage>,
+    /// Cost in USD attributed to this stage. `None` when no usage events
+    /// reported a cost.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost_usd: Option<f64>,
 }
 
 /// A snapshot of an in-progress workflow within a stage.
@@ -113,6 +121,12 @@ pub struct PipelineResult {
     pub stage_results: Vec<StageResult>,
     /// The shared key/value state at completion time.
     pub shared_state: HashMap<String, serde_json::Value>,
+    /// Total token usage aggregated across every stage.
+    #[serde(default)]
+    pub usage_total: blazen_llm::types::TokenUsage,
+    /// Total cost in USD aggregated across every stage.
+    #[serde(default)]
+    pub cost_total_usd: f64,
     /// Shared session-ref registry for this pipeline run. Skipped during
     /// serialization; deserialized snapshots get a fresh empty registry
     /// since live refs can't survive cross-process resume.

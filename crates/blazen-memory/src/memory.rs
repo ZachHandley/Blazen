@@ -385,7 +385,14 @@ mod tests {
                 hash ^= i as u64;
                 hash = hash.wrapping_mul(0x0100_0000_01b3);
                 // Map to [-1, 1]
-                *slot = ((hash as i64) as f64 / i64::MAX as f64) as f32;
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_precision_loss,
+                    clippy::cast_possible_wrap
+                )]
+                {
+                    *slot = ((hash as i64) as f64 / i64::MAX as f64) as f32;
+                }
             }
             embedding
         }
@@ -393,7 +400,7 @@ mod tests {
 
     #[async_trait]
     impl EmbeddingModel for MockEmbedder {
-        fn model_id(&self) -> &str {
+        fn model_id(&self) -> &'static str {
             "mock-embedder"
         }
 

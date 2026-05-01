@@ -185,8 +185,9 @@ impl WasmChatMessage {
     )]
     pub fn tool_result_payload(&self) -> Result<JsValue, JsValue> {
         match &self.inner.tool_result {
-            Some(out) => serde_wasm_bindgen::to_value(out)
-                .map_err(|e| JsValue::from_str(&e.to_string())),
+            Some(out) => {
+                serde_wasm_bindgen::to_value(out).map_err(|e| JsValue::from_str(&e.to_string()))
+            }
             None => Ok(JsValue::null()),
         }
     }
@@ -194,24 +195,21 @@ impl WasmChatMessage {
     /// Serialize this message to a JSON object.
     #[wasm_bindgen(js_name = "toJSON")]
     pub fn to_json(&self) -> Result<JsValue, JsValue> {
-        serde_wasm_bindgen::to_value(&self.inner)
-            .map_err(|e| JsValue::from_str(&e.to_string()))
+        serde_wasm_bindgen::to_value(&self.inner).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
     /// Deserialize a ChatMessage from a JSON object.
     #[wasm_bindgen(js_name = "fromJSON")]
     pub fn from_json(value: JsValue) -> Result<WasmChatMessage, JsValue> {
-        let inner: InnerChatMessage = serde_wasm_bindgen::from_value(value)
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let inner: InnerChatMessage =
+            serde_wasm_bindgen::from_value(value).map_err(|e| JsValue::from_str(&e.to_string()))?;
         Ok(Self { inner })
     }
 }
 
 /// Convert a `JsValue` (expected to be a JS array of ChatMessage or JSON objects)
 /// into a `Vec<InnerChatMessage>`.
-pub(crate) fn js_messages_to_vec(
-    messages: &JsValue,
-) -> Result<Vec<InnerChatMessage>, JsValue> {
+pub(crate) fn js_messages_to_vec(messages: &JsValue) -> Result<Vec<InnerChatMessage>, JsValue> {
     let array = js_sys::Array::from(messages);
     let mut result = Vec::with_capacity(array.length() as usize);
 

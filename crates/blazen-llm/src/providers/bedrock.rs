@@ -11,6 +11,7 @@ use futures_util::Stream;
 use super::openai_compat::{AuthMethod, OpenAiCompatConfig, OpenAiCompatProvider};
 use crate::error::BlazenError;
 use crate::http::HttpClient;
+use crate::retry::RetryConfig;
 use crate::traits::{
     CompletionModel, ModelInfo, ModelRegistry, ProviderCapabilities, ProviderInfo,
 };
@@ -35,6 +36,7 @@ use crate::types::{CompletionRequest, CompletionResponse, StreamChunk};
 /// ```
 pub struct BedrockProvider {
     inner: OpenAiCompatProvider,
+    retry_config: Option<Arc<RetryConfig>>,
     base_url: String,
 }
 
@@ -50,6 +52,7 @@ impl Clone for BedrockProvider {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
+            retry_config: self.retry_config.clone(),
             base_url: self.base_url.clone(),
         }
     }
@@ -78,6 +81,7 @@ impl BedrockProvider {
                 query_params: Vec::new(),
                 supports_model_listing: true,
             }),
+            retry_config: None,
             base_url,
         }
     }
@@ -105,6 +109,7 @@ impl BedrockProvider {
                 },
                 client,
             ),
+            retry_config: None,
             base_url,
         }
     }
@@ -120,6 +125,24 @@ impl BedrockProvider {
     #[must_use]
     pub fn with_http_client(mut self, client: Arc<dyn HttpClient>) -> Self {
         self.inner = self.inner.with_http_client(client);
+        self
+    }
+
+    /// Return a clone of the underlying HTTP client.
+    ///
+    /// Escape hatch delegating to the wrapped
+    /// [`OpenAiCompatProvider`]. Useful for issuing raw HTTP requests
+    /// (custom headers, debugging, endpoints not yet covered by Blazen)
+    /// while reusing the provider's connection pool and TLS config.
+    #[must_use]
+    pub fn http_client(&self) -> Arc<dyn HttpClient> {
+        self.inner.http_client()
+    }
+
+    /// Configure retry behavior for this provider.
+    #[must_use]
+    pub fn with_retry_config(mut self, config: RetryConfig) -> Self {
+        self.retry_config = Some(Arc::new(config));
         self
     }
 
@@ -155,6 +178,14 @@ impl BedrockProvider {
 impl CompletionModel for BedrockProvider {
     fn model_id(&self) -> &str {
         self.inner.model_id()
+    }
+
+    fn retry_config(&self) -> Option<&Arc<RetryConfig>> {
+        self.retry_config.as_ref()
+    }
+
+    fn http_client(&self) -> Option<Arc<dyn HttpClient>> {
+        Some(Self::http_client(self))
     }
 
     async fn complete(

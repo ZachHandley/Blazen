@@ -14,7 +14,9 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use crate::compute::request_types::PySpeechRequest;
 use crate::compute::result_types::PyAudioResult;
 use crate::error::blazen_error_to_pyerr;
+use crate::providers::config::PyRetryConfig;
 use crate::providers::options::PyProviderOptions;
+use crate::types::PyHttpClientHandle;
 use blazen_llm::compute::AudioGeneration;
 use blazen_llm::providers::openai::OpenAiProvider;
 
@@ -85,5 +87,20 @@ impl PyOpenAiProvider {
                 .map_err(blazen_error_to_pyerr)?;
             Ok(PyAudioResult { inner: result })
         })
+    }
+
+    /// Set the provider-level default retry config.
+    pub fn with_retry_config(&self, config: PyRetryConfig) -> Self {
+        let inner = (*self.inner).clone().with_retry_config(config.inner);
+        Self {
+            inner: Arc::new(inner),
+        }
+    }
+
+    /// Return an opaque handle to the underlying HTTP client.
+    pub fn http_client(&self) -> PyHttpClientHandle {
+        PyHttpClientHandle {
+            inner: self.inner.http_client(),
+        }
     }
 }

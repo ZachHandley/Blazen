@@ -9,6 +9,7 @@ pub mod completion_request;
 pub mod embedding;
 pub mod finish_reason;
 pub mod http;
+pub mod http_client_handle;
 pub mod media;
 pub mod memory;
 pub mod memory_entry;
@@ -40,7 +41,8 @@ pub use completion::PyCompletionResponse;
 pub use completion_request::PyCompletionRequest;
 pub use embedding::{PyEmbeddingModel, PyEmbeddingResponse};
 pub use finish_reason::PyFinishReason;
-pub use http::PyHttpClient;
+pub use http::{PyHttpClient, PyHttpClientConfig};
+pub use http_client_handle::PyHttpClientHandle;
 pub use media::{
     PyGenerated3DModel, PyGeneratedAudio, PyGeneratedImage, PyGeneratedVideo, PyMediaOutput,
     PyMediaType,

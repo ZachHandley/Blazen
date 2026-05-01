@@ -256,12 +256,339 @@ impl CompletionModel for RetryCompletionModel {
 }
 
 // ---------------------------------------------------------------------------
+// RetryEmbeddingModel
+// ---------------------------------------------------------------------------
+
+/// An [`EmbeddingModel`] decorator that retries transient errors with
+/// exponential backoff.
+pub struct RetryEmbeddingModel {
+    inner: Arc<dyn crate::traits::EmbeddingModel>,
+    config: RetryConfig,
+}
+
+impl RetryEmbeddingModel {
+    /// Wrap `inner` with the given retry configuration.
+    pub fn new(inner: impl crate::traits::EmbeddingModel + 'static, config: RetryConfig) -> Self {
+        Self {
+            inner: Arc::new(inner),
+            config,
+        }
+    }
+
+    /// Wrap an already-`Arc`'d embedding model.
+    #[must_use]
+    pub fn from_arc(inner: Arc<dyn crate::traits::EmbeddingModel>, config: RetryConfig) -> Self {
+        Self { inner, config }
+    }
+
+    /// Compute the delay for a given attempt.
+    fn compute_delay(&self, attempt: u32, retry_after_ms: Option<u64>) -> Duration {
+        let initial_delay = Duration::from_millis(self.config.initial_delay_ms);
+        let max_delay = Duration::from_millis(self.config.max_delay_ms);
+        let base = if self.config.honor_retry_after {
+            if let Some(ms) = retry_after_ms {
+                Duration::from_millis(ms)
+            } else {
+                exp_backoff(initial_delay, attempt, max_delay)
+            }
+        } else {
+            exp_backoff(initial_delay, attempt, max_delay)
+        };
+        let capped = base.min(max_delay);
+        if self.config.jitter {
+            add_jitter(capped)
+        } else {
+            capped
+        }
+    }
+}
+
+#[async_trait]
+impl crate::traits::EmbeddingModel for RetryEmbeddingModel {
+    fn model_id(&self) -> &str {
+        self.inner.model_id()
+    }
+
+    fn dimensions(&self) -> usize {
+        self.inner.dimensions()
+    }
+
+    async fn embed(
+        &self,
+        texts: &[String],
+    ) -> Result<crate::types::EmbeddingResponse, BlazenError> {
+        let max = self.config.max_retries;
+        let mut last_err: Option<BlazenError> = None;
+        for attempt in 0..=max {
+            match self.inner.embed(texts).await {
+                Ok(resp) => return Ok(resp),
+                Err(err) => {
+                    if !err.is_retryable() || attempt == max {
+                        return Err(err);
+                    }
+                    let retry_after = retry_after_from_error(&err);
+                    let delay = self.compute_delay(attempt, retry_after);
+                    tracing::warn!(
+                        attempt = attempt + 1,
+                        max_retries = max,
+                        delay_ms = u64::try_from(delay.as_millis()).unwrap_or(u64::MAX),
+                        error = %err,
+                        "embed retrying after {}ms, attempt {}/{}",
+                        delay.as_millis(),
+                        attempt + 1,
+                        max,
+                    );
+                    last_err = Some(err);
+                    crate::sleep::sleep(delay).await;
+                }
+            }
+        }
+        Err(last_err.unwrap_or_else(|| BlazenError::request("all retry attempts exhausted")))
+    }
+
+    fn retry_config(&self) -> Option<&Arc<RetryConfig>> {
+        // The decorator's own config is held by-value; we don't expose an Arc
+        // here so we return None — callers reading retry_config from a Retry-
+        // wrapped model are usually trying to layer another retry on top,
+        // which is a no-op anyway.
+        None
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Layered resolver
+// ---------------------------------------------------------------------------
+
+/// Resolve the effective retry configuration from a stack of scopes.
+///
+/// Scope precedence (most specific wins): `call > step > workflow > pipeline > provider`.
+/// When all scopes are `None`, returns `Arc::new(RetryConfig::default())`.
+///
+/// The returned value is `Arc`-shared so callers can pass it through to a
+/// [`RetryCompletionModel`] / `RetryEmbeddingModel` decorator without
+/// cloning the underlying config.
+#[must_use]
+pub fn resolve_retry(
+    call: Option<&Arc<RetryConfig>>,
+    step: Option<&Arc<RetryConfig>>,
+    workflow: Option<&Arc<RetryConfig>>,
+    pipeline: Option<&Arc<RetryConfig>>,
+    provider: Option<&Arc<RetryConfig>>,
+) -> Arc<RetryConfig> {
+    if let Some(c) = call {
+        return Arc::clone(c);
+    }
+    if let Some(c) = step {
+        return Arc::clone(c);
+    }
+    if let Some(c) = workflow {
+        return Arc::clone(c);
+    }
+    if let Some(c) = pipeline {
+        return Arc::clone(c);
+    }
+    if let Some(c) = provider {
+        return Arc::clone(c);
+    }
+    Arc::new(RetryConfig::default())
+}
+
+/// A snapshot of every scope's retry configuration, for callers that want
+/// to capture the stack before resolving against a per-call override.
+#[derive(Debug, Clone, Default)]
+pub struct RetryStack {
+    /// Provider-level default (lowest priority).
+    pub provider: Option<Arc<RetryConfig>>,
+    /// Pipeline-level default.
+    pub pipeline: Option<Arc<RetryConfig>>,
+    /// Workflow-level override.
+    pub workflow: Option<Arc<RetryConfig>>,
+    /// Step-level override (highest priority before the per-call override).
+    pub step: Option<Arc<RetryConfig>>,
+}
+
+impl RetryStack {
+    /// Return the effective retry config given an optional per-call override.
+    #[must_use]
+    pub fn resolve(&self, call: Option<&Arc<RetryConfig>>) -> Arc<RetryConfig> {
+        resolve_retry(
+            call,
+            self.step.as_ref(),
+            self.workflow.as_ref(),
+            self.pipeline.as_ref(),
+            self.provider.as_ref(),
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// RetryHttpClient
+// ---------------------------------------------------------------------------
+
+/// An [`HttpClient`] decorator that retries transient errors (rate limits,
+/// timeouts, 5xx responses, network errors) with exponential backoff.
+///
+/// Use this anywhere you'd otherwise hold an `Arc<dyn HttpClient>` and want
+/// retries on raw HTTP — including non-LLM use cases like
+/// [`http_fetch.rs`](crate::http_fetch) bridge code, memory backends, or
+/// custom data fetchers.
+///
+/// Streaming requests are not retried mid-stream; only the initial connection
+/// (the call to `send_streaming`) is retried.
+#[derive(Debug)]
+pub struct RetryHttpClient {
+    inner: Arc<dyn crate::http::HttpClient>,
+    config: RetryConfig,
+}
+
+impl RetryHttpClient {
+    /// Wrap an existing client with the given retry config.
+    #[must_use]
+    pub fn new(inner: Arc<dyn crate::http::HttpClient>, config: RetryConfig) -> Self {
+        Self { inner, config }
+    }
+
+    /// Wrap `Self` in an `Arc` for use as `Arc<dyn HttpClient>`.
+    #[must_use]
+    pub fn into_arc(self) -> Arc<dyn crate::http::HttpClient> {
+        Arc::new(self)
+    }
+
+    fn compute_delay(&self, attempt: u32, retry_after_ms: Option<u64>) -> Duration {
+        let initial_delay = Duration::from_millis(self.config.initial_delay_ms);
+        let max_delay = Duration::from_millis(self.config.max_delay_ms);
+        let base = if self.config.honor_retry_after {
+            if let Some(ms) = retry_after_ms {
+                Duration::from_millis(ms)
+            } else {
+                exp_backoff(initial_delay, attempt, max_delay)
+            }
+        } else {
+            exp_backoff(initial_delay, attempt, max_delay)
+        };
+        let capped = base.min(max_delay);
+        if self.config.jitter {
+            add_jitter(capped)
+        } else {
+            capped
+        }
+    }
+}
+
+#[async_trait]
+impl crate::http::HttpClient for RetryHttpClient {
+    async fn send(
+        &self,
+        request: crate::http::HttpRequest,
+    ) -> Result<crate::http::HttpResponse, BlazenError> {
+        let max = self.config.max_retries;
+        let mut last_err: Option<BlazenError> = None;
+        for attempt in 0..=max {
+            match self.inner.send(request.clone()).await {
+                Ok(resp) => {
+                    // Surface 4xx/5xx as a `Provider`-like retryable signal
+                    // when the status code indicates a server / rate-limit
+                    // failure. Below 400 is success.
+                    let status = resp.status;
+                    if status < 400 || status == 401 || status == 403 || status == 404 {
+                        return Ok(resp);
+                    }
+                    let retryable = matches!(status, 408 | 425 | 429 | 500 | 502 | 503 | 504);
+                    if !retryable || attempt == max {
+                        return Ok(resp);
+                    }
+                    let retry_after = parse_retry_after_header(&resp);
+                    let delay = self.compute_delay(attempt, retry_after);
+                    tracing::warn!(
+                        attempt = attempt + 1,
+                        max_retries = max,
+                        status,
+                        delay_ms = u64::try_from(delay.as_millis()).unwrap_or(u64::MAX),
+                        "http retrying after {}ms, status {}, attempt {}/{}",
+                        delay.as_millis(),
+                        status,
+                        attempt + 1,
+                        max,
+                    );
+                    last_err = Some(BlazenError::Provider {
+                        provider: "http".into(),
+                        message: format!("status {status}"),
+                        status_code: Some(status),
+                    });
+                    crate::sleep::sleep(delay).await;
+                }
+                Err(err) => {
+                    if !err.is_retryable() || attempt == max {
+                        return Err(err);
+                    }
+                    let retry_after = retry_after_from_error(&err);
+                    let delay = self.compute_delay(attempt, retry_after);
+                    tracing::warn!(
+                        attempt = attempt + 1,
+                        max_retries = max,
+                        delay_ms = u64::try_from(delay.as_millis()).unwrap_or(u64::MAX),
+                        error = %err,
+                        "http retrying after {}ms, attempt {}/{}",
+                        delay.as_millis(),
+                        attempt + 1,
+                        max,
+                    );
+                    last_err = Some(err);
+                    crate::sleep::sleep(delay).await;
+                }
+            }
+        }
+        Err(last_err.unwrap_or_else(|| BlazenError::request("all retry attempts exhausted")))
+    }
+
+    async fn send_streaming(
+        &self,
+        request: crate::http::HttpRequest,
+    ) -> Result<(u16, Vec<(String, String)>, crate::http::ByteStream), BlazenError> {
+        // Retry only the initial connect.
+        let max = self.config.max_retries;
+        let mut last_err: Option<BlazenError> = None;
+        for attempt in 0..=max {
+            match self.inner.send_streaming(request.clone()).await {
+                Ok(t) => return Ok(t),
+                Err(err) => {
+                    if !err.is_retryable() || attempt == max {
+                        return Err(err);
+                    }
+                    let retry_after = retry_after_from_error(&err);
+                    let delay = self.compute_delay(attempt, retry_after);
+                    last_err = Some(err);
+                    crate::sleep::sleep(delay).await;
+                    let _ = attempt; // suppress unused-var clippy
+                }
+            }
+        }
+        Err(last_err.unwrap_or_else(|| BlazenError::request("all retry attempts exhausted")))
+    }
+
+    fn config(&self) -> &crate::http::HttpClientConfig {
+        self.inner.config()
+    }
+}
+
+/// Parse a `Retry-After` header (in seconds) into milliseconds.
+fn parse_retry_after_header(resp: &crate::http::HttpResponse) -> Option<u64> {
+    let v = resp.header("Retry-After")?;
+    // Numeric: seconds.
+    if let Ok(secs) = v.trim().parse::<u64>() {
+        return Some(secs.saturating_mul(1000));
+    }
+    None
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::traits::EmbeddingModel as _;
     use crate::types::{ChatMessage, CompletionResponse, StreamChunk};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -547,5 +874,292 @@ mod tests {
 
         assert!(stream.is_ok());
         assert_eq!(mock.calls(), 2);
+    }
+
+    #[test]
+    fn resolver_prefers_call_over_all_others() {
+        let call = Arc::new(RetryConfig {
+            max_retries: 1,
+            ..RetryConfig::default()
+        });
+        let step = Arc::new(RetryConfig {
+            max_retries: 2,
+            ..RetryConfig::default()
+        });
+        let workflow = Arc::new(RetryConfig {
+            max_retries: 3,
+            ..RetryConfig::default()
+        });
+        let pipeline = Arc::new(RetryConfig {
+            max_retries: 4,
+            ..RetryConfig::default()
+        });
+        let provider = Arc::new(RetryConfig {
+            max_retries: 5,
+            ..RetryConfig::default()
+        });
+        let r = resolve_retry(
+            Some(&call),
+            Some(&step),
+            Some(&workflow),
+            Some(&pipeline),
+            Some(&provider),
+        );
+        assert_eq!(r.max_retries, 1);
+    }
+
+    #[test]
+    fn resolver_falls_through_in_order() {
+        let provider = Arc::new(RetryConfig {
+            max_retries: 5,
+            ..RetryConfig::default()
+        });
+        let r = resolve_retry(None, None, None, None, Some(&provider));
+        assert_eq!(r.max_retries, 5);
+
+        let pipeline = Arc::new(RetryConfig {
+            max_retries: 4,
+            ..RetryConfig::default()
+        });
+        let r = resolve_retry(None, None, None, Some(&pipeline), Some(&provider));
+        assert_eq!(r.max_retries, 4);
+    }
+
+    #[test]
+    fn resolver_default_when_all_none() {
+        let r = resolve_retry(None, None, None, None, None);
+        let d = RetryConfig::default();
+        assert_eq!(r.max_retries, d.max_retries);
+        assert_eq!(r.initial_delay_ms, d.initial_delay_ms);
+    }
+
+    #[test]
+    fn retry_stack_resolve_with_call_override() {
+        let stack = RetryStack {
+            provider: Some(Arc::new(RetryConfig {
+                max_retries: 5,
+                ..RetryConfig::default()
+            })),
+            pipeline: Some(Arc::new(RetryConfig {
+                max_retries: 4,
+                ..RetryConfig::default()
+            })),
+            workflow: None,
+            step: None,
+        };
+        let call = Arc::new(RetryConfig {
+            max_retries: 1,
+            ..RetryConfig::default()
+        });
+        assert_eq!(stack.resolve(Some(&call)).max_retries, 1);
+        assert_eq!(stack.resolve(None).max_retries, 4);
+    }
+
+    // -- RetryEmbeddingModel tests ----------------------------------------
+
+    struct MockEmbeddingModel {
+        model_id: String,
+        results: Vec<Result<crate::types::EmbeddingResponse, BlazenError>>,
+        call_count: AtomicUsize,
+    }
+
+    impl MockEmbeddingModel {
+        fn new(results: Vec<Result<crate::types::EmbeddingResponse, BlazenError>>) -> Self {
+            Self {
+                model_id: "mock-embed".to_string(),
+                results,
+                call_count: AtomicUsize::new(0),
+            }
+        }
+        fn calls(&self) -> usize {
+            self.call_count.load(Ordering::SeqCst)
+        }
+    }
+
+    fn ok_embedding() -> crate::types::EmbeddingResponse {
+        crate::types::EmbeddingResponse {
+            embeddings: vec![vec![0.1, 0.2, 0.3]],
+            model: "mock-embed".to_string(),
+            usage: None,
+            cost: None,
+            timing: None,
+            metadata: serde_json::Value::Null,
+        }
+    }
+
+    #[async_trait]
+    impl crate::traits::EmbeddingModel for MockEmbeddingModel {
+        fn model_id(&self) -> &str {
+            &self.model_id
+        }
+        fn dimensions(&self) -> usize {
+            3
+        }
+
+        async fn embed(
+            &self,
+            _texts: &[String],
+        ) -> Result<crate::types::EmbeddingResponse, BlazenError> {
+            let idx = self.call_count.fetch_add(1, Ordering::SeqCst);
+            if idx < self.results.len() {
+                match &self.results[idx] {
+                    Ok(r) => Ok(r.clone()),
+                    Err(e) => Err(reconstruct_error(e)),
+                }
+            } else {
+                Ok(ok_embedding())
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_retry_embedding_no_retry_on_success() {
+        let mock = Arc::new(MockEmbeddingModel::new(vec![Ok(ok_embedding())]));
+        let model = RetryEmbeddingModel::from_arc(mock.clone(), fast_config(3));
+        let resp = model.embed(&["hi".to_string()]).await.unwrap();
+        assert_eq!(resp.embeddings.len(), 1);
+        assert_eq!(mock.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_retry_embedding_retries_on_rate_limit() {
+        let mock = Arc::new(MockEmbeddingModel::new(vec![
+            Err(BlazenError::RateLimit {
+                retry_after_ms: None,
+            }),
+            Err(BlazenError::RateLimit {
+                retry_after_ms: None,
+            }),
+            Ok(ok_embedding()),
+        ]));
+        let model = RetryEmbeddingModel::from_arc(mock.clone(), fast_config(3));
+        let resp = model.embed(&["hi".to_string()]).await.unwrap();
+        assert_eq!(resp.embeddings.len(), 1);
+        assert_eq!(mock.calls(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_retry_embedding_max_retries_exhausted() {
+        let mock = Arc::new(MockEmbeddingModel::new(vec![
+            Err(BlazenError::RateLimit {
+                retry_after_ms: None,
+            }),
+            Err(BlazenError::RateLimit {
+                retry_after_ms: None,
+            }),
+            Err(BlazenError::RateLimit {
+                retry_after_ms: None,
+            }),
+        ]));
+        let model = RetryEmbeddingModel::from_arc(mock.clone(), fast_config(2));
+        let result = model.embed(&["hi".to_string()]).await;
+        assert!(result.is_err());
+        assert_eq!(mock.calls(), 3);
+    }
+
+    // -- RetryHttpClient tests --------------------------------------------
+
+    use crate::http::{ByteStream, HttpClient, HttpRequest, HttpResponse};
+
+    #[derive(Debug)]
+    struct MockHttpClient {
+        responses: std::sync::Mutex<Vec<Result<HttpResponse, BlazenError>>>,
+        call_count: AtomicUsize,
+    }
+
+    impl MockHttpClient {
+        fn new(responses: Vec<Result<HttpResponse, BlazenError>>) -> Self {
+            Self {
+                responses: std::sync::Mutex::new(responses),
+                call_count: AtomicUsize::new(0),
+            }
+        }
+        fn calls(&self) -> usize {
+            self.call_count.load(Ordering::SeqCst)
+        }
+    }
+
+    #[async_trait]
+    impl HttpClient for MockHttpClient {
+        async fn send(&self, _request: HttpRequest) -> Result<HttpResponse, BlazenError> {
+            self.call_count.fetch_add(1, Ordering::SeqCst);
+            let mut q = self.responses.lock().unwrap();
+            if q.is_empty() {
+                return Ok(HttpResponse {
+                    status: 200,
+                    headers: vec![],
+                    body: vec![],
+                });
+            }
+            match q.remove(0) {
+                Ok(r) => Ok(r),
+                Err(e) => Err(reconstruct_error(&e)),
+            }
+        }
+        async fn send_streaming(
+            &self,
+            _request: HttpRequest,
+        ) -> Result<(u16, Vec<(String, String)>, ByteStream), BlazenError> {
+            self.call_count.fetch_add(1, Ordering::SeqCst);
+            let mut q = self.responses.lock().unwrap();
+            if q.is_empty() {
+                let stream: ByteStream = Box::pin(futures_util::stream::empty());
+                return Ok((200, vec![], stream));
+            }
+            match q.remove(0) {
+                Ok(r) => {
+                    let _ = r;
+                    let stream: ByteStream = Box::pin(futures_util::stream::empty());
+                    Ok((200, vec![], stream))
+                }
+                Err(e) => Err(reconstruct_error(&e)),
+            }
+        }
+    }
+
+    fn ok_http_response(status: u16) -> HttpResponse {
+        HttpResponse {
+            status,
+            headers: vec![],
+            body: vec![],
+        }
+    }
+
+    #[tokio::test]
+    async fn test_retry_http_503_then_success() {
+        let mock = Arc::new(MockHttpClient::new(vec![
+            Ok(ok_http_response(503)),
+            Ok(ok_http_response(200)),
+        ]));
+        let client = RetryHttpClient::new(mock.clone() as Arc<dyn HttpClient>, fast_config(3));
+        let req = HttpRequest::get("https://example.com");
+        let resp = client.send(req).await.unwrap();
+        assert_eq!(resp.status, 200);
+        assert_eq!(mock.calls(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_retry_http_404_does_not_retry() {
+        let mock = Arc::new(MockHttpClient::new(vec![Ok(ok_http_response(404))]));
+        let client = RetryHttpClient::new(mock.clone() as Arc<dyn HttpClient>, fast_config(3));
+        let req = HttpRequest::get("https://example.com");
+        let resp = client.send(req).await.unwrap();
+        assert_eq!(resp.status, 404);
+        assert_eq!(mock.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_retry_http_max_retries_exhausted_returns_last_response() {
+        let mock = Arc::new(MockHttpClient::new(vec![
+            Ok(ok_http_response(503)),
+            Ok(ok_http_response(503)),
+            Ok(ok_http_response(503)),
+        ]));
+        let client = RetryHttpClient::new(mock.clone() as Arc<dyn HttpClient>, fast_config(2));
+        let req = HttpRequest::get("https://example.com");
+        let resp = client.send(req).await.unwrap();
+        // After exhausting retries, last 503 is returned (not an error).
+        assert_eq!(resp.status, 503);
+        assert_eq!(mock.calls(), 3);
     }
 }

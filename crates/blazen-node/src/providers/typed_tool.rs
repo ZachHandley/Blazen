@@ -54,12 +54,20 @@ pub struct JsTypedTool {
 pub(crate) struct JsToolImpl {
     pub def: ToolDefinition,
     pub handler: Arc<TypedToolHandlerTsfn>,
+    /// When `true`, [`Tool::is_exit`] returns `true` so the agent loop
+    /// stops after this tool is invoked. Mirrors
+    /// [`blazen_llm::TypedTool::exit_tool`] (Wave 6).
+    pub is_exit: bool,
 }
 
 #[async_trait::async_trait]
 impl Tool for JsToolImpl {
     fn definition(&self) -> ToolDefinition {
         self.def.clone()
+    }
+
+    fn is_exit(&self) -> bool {
+        self.is_exit
     }
 
     async fn execute(
@@ -99,6 +107,7 @@ impl JsTypedTool {
                     parameters,
                 },
                 handler: Arc::new(handler),
+                is_exit: false,
             }),
         })
     }
@@ -119,6 +128,39 @@ impl JsTypedTool {
     #[napi(getter)]
     pub fn parameters(&self) -> serde_json::Value {
         self.inner.def.parameters.clone()
+    }
+
+    /// Whether this tool is marked as an "exit" tool, signalling the agent
+    /// loop to stop after it runs. Mirrors
+    /// [`blazen_llm::Tool::is_exit`] (Wave 6).
+    #[napi(getter, js_name = "isExit")]
+    pub fn is_exit(&self) -> bool {
+        self.inner.is_exit
+    }
+
+    /// Builder-style toggle for the exit-tool marker. Returns a new
+    /// [`JsTypedTool`] that shares the same underlying handler but
+    /// reports the requested [`Tool::is_exit`] value. Mirrors
+    /// [`blazen_llm::TypedTool::exit_tool`] (Wave 6).
+    ///
+    /// ```typescript
+    /// const exit = new TypedTool(
+    ///   "submit",
+    ///   "Submit the final answer and exit",
+    ///   { type: "object", properties: { answer: { type: "string" } }, required: ["answer"] },
+    ///   async (_n, args) => ({ submitted: args.answer }),
+    /// ).exitTool(true);
+    /// ```
+    #[napi(js_name = "exitTool")]
+    #[must_use]
+    pub fn exit_tool(&self, exit: bool) -> JsTypedTool {
+        JsTypedTool {
+            inner: Arc::new(JsToolImpl {
+                def: self.inner.def.clone(),
+                handler: Arc::clone(&self.inner.handler),
+                is_exit: exit,
+            }),
+        }
     }
 }
 

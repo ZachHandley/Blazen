@@ -327,7 +327,7 @@ mod tests {
             //   tokens_per_message(3) + role("user" = 1 token) + 3 priming = 7
             let overhead = message_tokens - raw_tokens;
             assert!(
-                overhead >= 4 && overhead <= 10,
+                (4..=10).contains(&overhead),
                 "unexpected overhead {overhead}"
             );
         }

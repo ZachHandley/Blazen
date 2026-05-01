@@ -22,6 +22,8 @@ pub fn register_pricing(model_id: &str, input_per_million: f64, output_per_milli
         blazen_llm::PricingEntry {
             input_per_million,
             output_per_million,
+            per_image: None,
+            per_second: None,
         },
     );
 }

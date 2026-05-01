@@ -33,7 +33,11 @@ use wasm_bindgen_futures::future_to_promise;
 
 /// Call a `JsValue` that is expected to be a function with one argument and
 /// await the returned value if it is a `Promise`.
-async fn call1_await(func: &js_sys::Function, this: &JsValue, arg: JsValue) -> Result<JsValue, JsValue> {
+pub(crate) async fn call1_await(
+    func: &js_sys::Function,
+    this: &JsValue,
+    arg: JsValue,
+) -> Result<JsValue, JsValue> {
     let result = func
         .call1(this, &arg)
         .map_err(|e| JsValue::from_str(&format!("callback threw: {e:?}")))?;
@@ -130,12 +134,10 @@ impl WasmImageModel {
     /// Returns a `Promise<any>` resolving to the value the callback returned.
     #[wasm_bindgen(js_name = "generateImage")]
     pub fn generate_image(&self, request: JsValue) -> js_sys::Promise {
-        let func: js_sys::Function = js_sys::Reflect::get(
-            &self.impl_obj,
-            &JsValue::from_str("generateImage"),
-        )
-        .unwrap_or(JsValue::UNDEFINED)
-        .unchecked_into();
+        let func: js_sys::Function =
+            js_sys::Reflect::get(&self.impl_obj, &JsValue::from_str("generateImage"))
+                .unwrap_or(JsValue::UNDEFINED)
+                .unchecked_into();
         let this = self.impl_obj.clone();
         future_to_promise(async move { call1_await(&func, &this, request).await })
     }
@@ -146,12 +148,10 @@ impl WasmImageModel {
     /// Returns a `Promise<any>` resolving to the value the callback returned.
     #[wasm_bindgen(js_name = "upscaleImage")]
     pub fn upscale_image(&self, request: JsValue) -> js_sys::Promise {
-        let func: js_sys::Function = js_sys::Reflect::get(
-            &self.impl_obj,
-            &JsValue::from_str("upscaleImage"),
-        )
-        .unwrap_or(JsValue::UNDEFINED)
-        .unchecked_into();
+        let func: js_sys::Function =
+            js_sys::Reflect::get(&self.impl_obj, &JsValue::from_str("upscaleImage"))
+                .unwrap_or(JsValue::UNDEFINED)
+                .unchecked_into();
         let this = self.impl_obj.clone();
         future_to_promise(async move { call1_await(&func, &this, request).await })
     }
@@ -242,9 +242,9 @@ impl WasmEmbedModel {
                 arr.set(i as u32, JsValue::from_str(t));
             }
             let result = call1_await(&func, &this, arr.into()).await?;
-            let outer: &js_sys::Array = result.dyn_ref::<js_sys::Array>().ok_or_else(|| {
-                JsValue::from_str("EmbedModel.embed must return an array")
-            })?;
+            let outer: &js_sys::Array = result
+                .dyn_ref::<js_sys::Array>()
+                .ok_or_else(|| JsValue::from_str("EmbedModel.embed must return an array"))?;
             let out = js_sys::Array::new_with_length(outer.length());
             for i in 0..outer.length() {
                 let entry = outer.get(i);

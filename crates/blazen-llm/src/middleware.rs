@@ -108,6 +108,20 @@ impl MiddlewareStack {
         self.layer(RetryMiddleware { config })
     }
 
+    /// Convenience: add a [`RetryMiddleware`] layer with a pre-built
+    /// `Arc<RetryConfig>`.
+    ///
+    /// Prefer this over [`with_retry`](Self::with_retry) when you already
+    /// hold an `Arc<RetryConfig>` (e.g. from
+    /// [`resolve_retry`](crate::retry::resolve_retry)) so it can be shared
+    /// across layers without cloning the config.
+    #[must_use]
+    pub fn with_retry_arc(self, config: std::sync::Arc<RetryConfig>) -> Self {
+        self.layer(RetryMiddleware {
+            config: std::sync::Arc::unwrap_or_clone(config),
+        })
+    }
+
     /// Convenience: add a [`CacheMiddleware`] layer.
     #[must_use]
     pub fn with_cache(self, config: CacheConfig) -> Self {
@@ -395,5 +409,14 @@ mod tests {
 
         // The inner model was only called once thanks to the cache layer.
         assert_eq!(counter.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_with_retry_arc_accepts_pre_built_arc() {
+        let cfg = std::sync::Arc::new(RetryConfig::default());
+        let mock = MockCompletionModel::new("inner");
+        let model: Arc<dyn CompletionModel> = Arc::new(mock);
+        let wrapped = MiddlewareStack::new().with_retry_arc(cfg).apply(model);
+        assert_eq!(wrapped.model_id(), "inner");
     }
 }

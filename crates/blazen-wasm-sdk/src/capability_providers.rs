@@ -48,7 +48,11 @@ impl<F: std::future::Future> std::future::Future for SendFuture<F> {
 /// Extract a named handler function from a JS object and call it with
 /// the given request argument, awaiting the result if it returns a
 /// `Promise`.
-async fn call_handler(handlers: &JsValue, method: &str, request: &JsValue) -> Result<JsValue, JsValue> {
+async fn call_handler(
+    handlers: &JsValue,
+    method: &str,
+    request: &JsValue,
+) -> Result<JsValue, JsValue> {
     let handler = js_sys::Reflect::get(handlers, &JsValue::from_str(method))
         .map_err(|e| JsValue::from_str(&format!("failed to get handler '{method}': {e:?}")))?;
 

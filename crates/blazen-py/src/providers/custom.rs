@@ -55,6 +55,8 @@ use crate::compute::result_types::{
     PyVoiceHandle,
 };
 use crate::error::blazen_error_to_pyerr;
+use crate::providers::config::PyRetryConfig;
+use crate::types::PyHttpClientHandle;
 
 // ---------------------------------------------------------------------------
 // PyHostDispatch
@@ -262,9 +264,23 @@ impl HostDispatch for PyHostDispatch {
 ///     >>> result = await provider.text_to_speech(SpeechRequest(text="hi", voice="rachel"))
 #[gen_stub_pyclass]
 #[pyclass(name = "CustomProvider", from_py_object)]
-#[derive(Clone)]
 pub struct PyCustomProvider {
     inner: Arc<CustomProvider<PyHostDispatch>>,
+    /// Cached host object reference, kept so [`Self::with_retry_config`]
+    /// can rebuild a fresh [`CustomProvider`] (which is not [`Clone`]).
+    host: Py<PyAny>,
+    /// Cached provider id, kept for the same reason as [`Self::host`].
+    provider_id_str: String,
+}
+
+impl Clone for PyCustomProvider {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+            host: Python::attach(|py| self.host.clone_ref(py)),
+            provider_id_str: self.provider_id_str.clone(),
+        }
+    }
 }
 
 #[gen_stub_pymethods]
@@ -284,9 +300,12 @@ impl PyCustomProvider {
     #[pyo3(signature = (host_object, *, provider_id=None))]
     fn new(host_object: Py<PyAny>, provider_id: Option<String>) -> Self {
         let id = provider_id.unwrap_or_else(|| "custom".to_owned());
+        let host_clone = Python::attach(|py| host_object.clone_ref(py));
         let dispatch = PyHostDispatch::new(host_object);
         Self {
-            inner: Arc::new(CustomProvider::new(id, dispatch)),
+            inner: Arc::new(CustomProvider::new(id.clone(), dispatch)),
+            host: host_clone,
+            provider_id_str: id,
         }
     }
 
@@ -557,6 +576,36 @@ impl PyCustomProvider {
     fn provider_id(&self) -> &str {
         use blazen_llm::compute::ComputeProvider;
         ComputeProvider::provider_id(self.inner.as_ref())
+    }
+
+    /// Set the provider-level default retry config.
+    ///
+    /// Returns a new provider sharing the same host object, with the given
+    /// retry config applied. Pipeline / workflow / step / call scopes can
+    /// override this; if all are unset, this is the fallback.
+    pub fn with_retry_config(&self, config: PyRetryConfig) -> Self {
+        let host_for_dispatch = Python::attach(|py| self.host.clone_ref(py));
+        let host_for_self = Python::attach(|py| self.host.clone_ref(py));
+        let dispatch = PyHostDispatch::new(host_for_dispatch);
+        let inner = CustomProvider::new(self.provider_id_str.clone(), dispatch)
+            .with_retry_config(config.inner);
+        Self {
+            inner: Arc::new(inner),
+            host: host_for_self,
+            provider_id_str: self.provider_id_str.clone(),
+        }
+    }
+
+    /// Return an opaque handle to the underlying HTTP client, if any.
+    ///
+    /// [`CustomProvider`] dispatches entirely through the host language,
+    /// so it owns no wire-level HTTP client. This method always returns
+    /// ``None``; the shape mirrors the trait-level `http_client` accessor
+    /// for uniform probing across providers.
+    pub fn http_client(&self) -> Option<PyHttpClientHandle> {
+        self.inner
+            .http_client()
+            .map(|inner| PyHttpClientHandle { inner })
     }
 
     fn __repr__(&self) -> String {

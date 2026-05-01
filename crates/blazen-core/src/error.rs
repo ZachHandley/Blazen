@@ -110,6 +110,31 @@ pub enum WorkflowError {
     /// A catch-all for other errors.
     #[error("{0}")]
     Other(#[from] anyhow::Error),
+
+    /// A per-step timeout fired before the step's handler completed.
+    #[error("step '{step_name}' timed out after {elapsed_ms}ms")]
+    StepTimeout {
+        /// The name of the step whose handler exceeded its configured
+        /// timeout.
+        step_name: String,
+        /// How long the handler ran (in milliseconds) before being
+        /// terminated by `tokio::time::timeout`.
+        elapsed_ms: u64,
+    },
+
+    /// A sub-workflow step failed, either because the inner workflow
+    /// errored, its per-step timeout elapsed, or all of its retries were
+    /// exhausted. The `message` carries a string-formatted version of
+    /// the underlying [`WorkflowError`] so the error type can stay
+    /// `Send + Sync + 'static` without requiring a recursive `Box<Self>`.
+    #[error("sub-workflow '{step_name}' failed: {message}")]
+    SubWorkflowFailed {
+        /// The name of the sub-workflow step that failed.
+        step_name: String,
+        /// String-formatted underlying error (typically a
+        /// [`WorkflowError`] from the inner workflow run).
+        message: String,
+    },
 }
 
 /// Convenience alias for `Result<T, WorkflowError>`.

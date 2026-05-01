@@ -502,12 +502,9 @@ mod tests {
         // We can construct a fake model without downloading by hand-building
         // the struct — but that's fragile. Instead, skip if the default model
         // isn't already cached locally; otherwise, exercise the empty path.
-        let model = match TractEmbedModel::from_options(TractOptions::default()) {
-            Ok(m) => m,
-            Err(_) => {
-                eprintln!("skipping embed_empty_input_returns_empty: model not available");
-                return;
-            }
+        let Ok(model) = TractEmbedModel::from_options(TractOptions::default()) else {
+            eprintln!("skipping embed_empty_input_returns_empty: model not available");
+            return;
         };
         let response = model.embed(&[]).await.expect("empty embed should succeed");
         assert!(response.embeddings.is_empty());

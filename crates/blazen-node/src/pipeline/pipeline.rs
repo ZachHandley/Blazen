@@ -2,6 +2,7 @@ use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
 use crate::error::pipeline_error_to_napi;
+use crate::generated::JsRetryConfig;
 use crate::pipeline::handler::JsPipelineHandler;
 use crate::pipeline::snapshot::JsPipelineSnapshot;
 
@@ -46,6 +47,18 @@ impl JsPipeline {
         };
         let handler = pipeline.start(input);
         Ok(JsPipelineHandler::new(handler))
+    }
+
+    /// Inspect the pipeline-level default retry configuration, if any.
+    /// Mirrors [`blazen_pipeline::Pipeline::retry_config`] (Wave 2).
+    /// Returns `null` after the pipeline has been consumed.
+    #[napi(js_name = "retryConfig")]
+    pub fn retry_config(&self) -> Option<JsRetryConfig> {
+        let guard = self.inner.lock().expect("poisoned");
+        let pipeline = guard.as_ref()?;
+        pipeline
+            .retry_config()
+            .map(|arc| arc.as_ref().clone().into())
     }
 
     /// Resume the pipeline from a previously captured snapshot.

@@ -38,8 +38,8 @@ use async_trait::async_trait;
 use futures_util::Stream;
 use wasm_bindgen::prelude::*;
 
-use blazen_llm::types::{CompletionRequest, CompletionResponse, StreamChunk};
 use blazen_llm::BlazenError;
+use blazen_llm::types::{CompletionRequest, CompletionResponse, StreamChunk};
 
 // ---------------------------------------------------------------------------
 // SendFuture wrapper (same pattern as agent.rs)
@@ -187,7 +187,11 @@ impl JsCompletionHandler {
 
         // Call stream_handler(request, onChunk).
         let result = stream_handler
-            .call2(&JsValue::NULL, &js_request, on_chunk.as_ref().unchecked_ref())
+            .call2(
+                &JsValue::NULL,
+                &js_request,
+                on_chunk.as_ref().unchecked_ref(),
+            )
             .map_err(|e| BlazenError::provider("js_handler", format!("{e:?}")))?;
 
         // Await the promise if returned.
@@ -230,8 +234,7 @@ impl blazen_llm::traits::CompletionModel for JsCompletionHandler {
             // Use the JS stream handler: collect all chunks, then yield them.
             // This is a v1 approach -- true incremental streaming would require
             // an async-iterable bridge (Phase 13.5.c).
-            let chunks =
-                SendFuture(self.stream_with_handler_impl(request, handler)).await?;
+            let chunks = SendFuture(self.stream_with_handler_impl(request, handler)).await?;
             Ok(Box::pin(futures_util::stream::iter(
                 chunks.into_iter().map(Ok),
             )))

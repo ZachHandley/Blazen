@@ -63,8 +63,7 @@ macro_rules! impl_compat_provider {
                 let api_key_opt = read_string(&options, "apiKey");
                 let model_opt = read_string(&options, "model");
                 let api_key = resolve_key($env_provider, api_key_opt)?;
-                let mut provider =
-                    <$rust_provider>::new_with_client(api_key, fetch_client());
+                let mut provider = <$rust_provider>::new_with_client(api_key, fetch_client());
                 if let Some(m) = model_opt {
                     provider = provider.with_model(m);
                 }
@@ -82,18 +81,13 @@ macro_rules! impl_compat_provider {
             /// Convert into a generic [`CompletionModel`].
             #[wasm_bindgen(js_name = "toCompletionModel")]
             pub fn to_completion_model(&self) -> WasmCompletionModel {
-                WasmCompletionModel::from_arc(
-                    as_dyn_completion(Arc::clone(&self.inner))
-                )
+                WasmCompletionModel::from_arc(as_dyn_completion(Arc::clone(&self.inner)))
             }
 
             /// Perform a non-streaming chat completion.
             #[wasm_bindgen]
             pub fn complete(&self, messages: JsValue) -> js_sys::Promise {
-                complete_promise(
-                    as_dyn_completion(Arc::clone(&self.inner)),
-                    messages,
-                )
+                complete_promise(as_dyn_completion(Arc::clone(&self.inner)), messages)
             }
 
             /// Perform a non-streaming completion with additional options.
@@ -119,11 +113,7 @@ macro_rules! impl_compat_provider {
 
             /// Perform a streaming chat completion.
             #[wasm_bindgen]
-            pub fn stream(
-                &self,
-                messages: JsValue,
-                callback: js_sys::Function,
-            ) -> js_sys::Promise {
+            pub fn stream(&self, messages: JsValue, callback: js_sys::Function) -> js_sys::Promise {
                 stream_promise(
                     as_dyn_completion(Arc::clone(&self.inner)),
                     messages,

@@ -113,9 +113,8 @@ async fn yield_to_js() {
         let global = js_sys::global();
         let set_timeout = js_sys::Reflect::get(&global, &JsValue::from_str("setTimeout"))
             .expect("setTimeout missing from global scope");
-        let set_timeout: js_sys::Function = set_timeout
-            .dyn_into()
-            .expect("setTimeout not a function");
+        let set_timeout: js_sys::Function =
+            set_timeout.dyn_into().expect("setTimeout not a function");
         // setTimeout(resolve, 0) — a 0ms macrotask. Workerd treats this as
         // a real I/O wait and drains the microtask queue first.
         let _ = set_timeout.call2(&JsValue::NULL, &resolve, &JsValue::from(0));
@@ -445,8 +444,8 @@ impl WasmWorkflowHandler {
 
         *self.inner.borrow_mut() = Some(handler);
 
-        let snapshot = snapshot_result
-            .map_err(|e| JsValue::from_str(&format!("snapshot failed: {e}")))?;
+        let snapshot =
+            snapshot_result.map_err(|e| JsValue::from_str(&format!("snapshot failed: {e}")))?;
 
         let id = snapshot.run_id.to_string();
         *self.cached_run_id.borrow_mut() = Some(id.clone());
@@ -467,11 +466,7 @@ impl WasmWorkflowHandler {
     /// Rejects if the handler was already consumed, the response payload
     /// can't be deserialised, or the event loop has already exited.
     #[wasm_bindgen(js_name = "respondToInput")]
-    pub fn respond_to_input(
-        &self,
-        request_id: String,
-        response: JsValue,
-    ) -> Result<(), JsValue> {
+    pub fn respond_to_input(&self, request_id: String, response: JsValue) -> Result<(), JsValue> {
         let inner = self.inner.borrow();
         let handler = inner
             .as_ref()
@@ -531,8 +526,8 @@ impl WasmWorkflowHandler {
 
         *self.inner.borrow_mut() = Some(handler);
 
-        let snapshot = snapshot_result
-            .map_err(|e| JsValue::from_str(&format!("snapshot failed: {e}")))?;
+        let snapshot =
+            snapshot_result.map_err(|e| JsValue::from_str(&format!("snapshot failed: {e}")))?;
 
         marshal_to_js(&snapshot)
     }

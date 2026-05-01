@@ -136,6 +136,12 @@ struct JsStepRegistration {
     name: String,
     event_types: Vec<String>,
     handler: Arc<StepHandlerTsfn>,
+    /// Per-step wall-clock timeout (mirrors Rust `StepRegistration::timeout`).
+    /// `None` means inherit the workflow-level timeout.
+    timeout_secs: Option<f64>,
+    /// Per-step retry override (mirrors Rust `StepRegistration::retry_config`).
+    /// `None` means inherit from the workflow / pipeline / provider scope.
+    retry_config: Option<blazen_llm::retry::RetryConfig>,
 }
 
 // ---------------------------------------------------------------------------
@@ -150,6 +156,35 @@ pub struct JsWorkflowResult {
     pub event_type: String,
     /// The result data as a JSON object.
     pub data: serde_json::Value,
+    /// Aggregated token usage across the run, mirroring
+    /// [`blazen_core::WorkflowResult::usage_total`].
+    #[napi(js_name = "usageTotal")]
+    pub usage_total: crate::generated::JsTokenUsage,
+    /// Aggregated cost in USD across the run, mirroring
+    /// [`blazen_core::WorkflowResult::cost_total_usd`].
+    #[napi(js_name = "costTotalUsd")]
+    pub cost_total_usd: f64,
+}
+
+/// Plain-object descriptor for one branch of a parallel fan-out — every
+/// field except `workflowName` is metadata. The actual child `Workflow`
+/// instances are passed alongside the spec array in
+/// [`JsWorkflow::addParallelSubworkflows`] (napi cannot embed napi-class
+/// values inside `#[napi(object)]` shapes).
+#[napi(object, js_name = "SubWorkflowBranchSpec")]
+pub struct SubWorkflowBranchSpec {
+    /// Human-readable name for this branch.
+    pub name: String,
+    /// Event types this branch's parent step accepts.
+    pub accepts: Vec<String>,
+    /// Event types this branch's parent step may emit (informational).
+    pub emits: Vec<String>,
+    /// Optional wall-clock timeout in seconds for this branch.
+    #[napi(js_name = "timeoutSecs")]
+    pub timeout_secs: Option<f64>,
+    /// Optional retry config for this branch.
+    #[napi(js_name = "retryConfig")]
+    pub retry_config: Option<crate::generated::JsRetryConfig>,
 }
 
 // ---------------------------------------------------------------------------
@@ -175,8 +210,38 @@ pub struct JsWorkflow {
     name: String,
     steps: Vec<JsStepRegistration>,
     timeout_secs: Option<f64>,
+    /// Workflow-level default retry config; threaded into
+    /// [`blazen_core::WorkflowBuilder::retry_config`] at build time.
+    retry_config: Option<blazen_llm::retry::RetryConfig>,
+    /// Sub-workflow steps registered via
+    /// [`Self::add_subworkflow_step`] (Wave 5).
+    subworkflow_steps: Vec<JsSubWorkflowStepInner>,
+    /// Parallel sub-workflow fan-outs registered via
+    /// [`Self::add_parallel_subworkflows`] (Wave 5).
+    parallel_subworkflow_steps: Vec<JsParallelSubWorkflowsInner>,
     session_pause_policy: JsSessionPausePolicy,
     auto_publish_events: bool,
+}
+
+/// Internal record for a sub-workflow step pending registration.
+#[derive(Clone)]
+struct JsSubWorkflowStepInner {
+    name: String,
+    accepts: Vec<String>,
+    emits: Vec<String>,
+    inner_workflow: Arc<blazen_core::Workflow>,
+    timeout_secs: Option<f64>,
+    retry_config: Option<blazen_llm::retry::RetryConfig>,
+}
+
+/// Internal record for a parallel sub-workflows fan-out pending registration.
+#[derive(Clone)]
+struct JsParallelSubWorkflowsInner {
+    name: String,
+    accepts: Vec<String>,
+    emits: Vec<String>,
+    branches: Vec<JsSubWorkflowStepInner>,
+    join_strategy: blazen_core::JoinStrategy,
 }
 
 #[napi]
@@ -189,8 +254,12 @@ impl JsWorkflow {
             name,
             steps: Vec::new(),
             timeout_secs: Some(300.0), // 5 min default
+            retry_config: None,
+            subworkflow_steps: Vec::new(),
+            parallel_subworkflow_steps: Vec::new(),
             session_pause_policy: JsSessionPausePolicy::PickleOrError,
-            auto_publish_events: false,
+            // Mirror the Rust `WorkflowBuilder` default (Wave 7).
+            auto_publish_events: true,
         }
     }
 
@@ -230,6 +299,99 @@ impl JsWorkflow {
         self.auto_publish_events = enabled;
     }
 
+    /// Register a sub-workflow step that delegates to another `Workflow`.
+    /// Mirrors [`blazen_core::WorkflowBuilder::add_subworkflow_step`].
+    ///
+    /// - `name`: human-readable step name.
+    /// - `accepts`: array of event type strings this step handles.
+    /// - `emits`: array of event type strings this step may emit (informational).
+    /// - `inner`: the child `Workflow` to run.
+    /// - `timeoutSecs`: optional wall-clock timeout for the child run.
+    /// - `retryConfig`: optional retry policy for the child run.
+    #[napi(js_name = "addSubworkflowStep")]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn add_subworkflow_step(
+        &mut self,
+        name: String,
+        accepts: Vec<String>,
+        emits: Vec<String>,
+        inner: &JsWorkflow,
+        timeout_secs: Option<f64>,
+        retry_config: Option<crate::generated::JsRetryConfig>,
+    ) -> Result<()> {
+        let inner_workflow = Arc::new(inner.build_workflow()?);
+        self.subworkflow_steps.push(JsSubWorkflowStepInner {
+            name,
+            accepts,
+            emits,
+            inner_workflow,
+            timeout_secs,
+            retry_config: retry_config.map(Into::into),
+        });
+        Ok(())
+    }
+
+    /// Register a parallel sub-workflows fan-out step. Mirrors
+    /// [`blazen_core::WorkflowBuilder::add_parallel_subworkflows`].
+    ///
+    /// `branchSpecs` and `branchWorkflows` are parallel arrays of equal
+    /// length: each `(spec, wf)` pair becomes one branch. They're split
+    /// into two parameters because napi-rs cannot embed napi-class values
+    /// (the `Workflow` instances) inside `#[napi(object)]` shapes.
+    ///
+    /// `joinStrategy` defaults to `WaitAll`.
+    #[napi(js_name = "addParallelSubworkflows")]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn add_parallel_subworkflows(
+        &mut self,
+        name: String,
+        accepts: Vec<String>,
+        emits: Vec<String>,
+        branch_specs: Vec<SubWorkflowBranchSpec>,
+        branch_workflows: Vec<&JsWorkflow>,
+        join_strategy: Option<crate::pipeline::stage::JsJoinStrategy>,
+    ) -> Result<()> {
+        if branch_specs.len() != branch_workflows.len() {
+            return Err(napi::Error::new(
+                Status::InvalidArg,
+                format!(
+                    "addParallelSubworkflows: branchSpecs ({}) and branchWorkflows ({}) must be the same length",
+                    branch_specs.len(),
+                    branch_workflows.len()
+                ),
+            ));
+        }
+        let mut inner_branches = Vec::with_capacity(branch_specs.len());
+        for (spec, wf) in branch_specs.into_iter().zip(branch_workflows.into_iter()) {
+            let inner_workflow = Arc::new(wf.build_workflow()?);
+            inner_branches.push(JsSubWorkflowStepInner {
+                name: spec.name,
+                accepts: spec.accepts,
+                emits: spec.emits,
+                inner_workflow,
+                timeout_secs: spec.timeout_secs,
+                retry_config: spec.retry_config.map(Into::into),
+            });
+        }
+        let join_core = match join_strategy
+            .unwrap_or(crate::pipeline::stage::JsJoinStrategy::WaitAll)
+        {
+            crate::pipeline::stage::JsJoinStrategy::WaitAll => blazen_core::JoinStrategy::WaitAll,
+            crate::pipeline::stage::JsJoinStrategy::FirstCompletes => {
+                blazen_core::JoinStrategy::FirstCompletes
+            }
+        };
+        self.parallel_subworkflow_steps
+            .push(JsParallelSubWorkflowsInner {
+                name,
+                accepts,
+                emits,
+                branches: inner_branches,
+                join_strategy: join_core,
+            });
+        Ok(())
+    }
+
     /// Add a step to the workflow.
     ///
     /// - `name`: Human-readable step name.
@@ -247,6 +409,8 @@ impl JsWorkflow {
             name,
             event_types,
             handler: Arc::new(handler),
+            timeout_secs: None,
+            retry_config: None,
         });
         Ok(())
     }
@@ -275,7 +439,7 @@ impl JsWorkflow {
 
         let result = handler.result().await.map_err(workflow_error_to_napi)?;
 
-        Ok(make_result(&*result.event))
+        Ok(make_result(&result))
     }
 
     /// Run the workflow with streaming.
@@ -320,7 +484,7 @@ impl JsWorkflow {
         // Wait for the stream consumer to finish.
         let _ = stream_handle.await;
 
-        Ok(make_result(&*result.event))
+        Ok(make_result(&result))
     }
 
     /// Run the workflow and return a handler object.
@@ -459,15 +623,73 @@ impl JsWorkflow {
             builder = builder.no_timeout();
         }
 
+        if let Some(cfg) = self.retry_config.as_ref() {
+            builder = builder.retry_config(cfg.clone());
+        }
+
         for step in &self.steps {
             let registration = make_step_registration(step);
             builder = builder.step(registration);
+        }
+
+        for sub in &self.subworkflow_steps {
+            builder = builder.add_subworkflow_step(make_subworkflow_step(sub));
+        }
+
+        for par in &self.parallel_subworkflow_steps {
+            builder = builder.add_parallel_subworkflows(make_parallel_subworkflows_step(par));
         }
 
         builder = builder.session_pause_policy(self.session_pause_policy.into());
         builder = builder.auto_publish_events(self.auto_publish_events);
 
         builder.build().map_err(workflow_error_to_napi)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Sub-workflow step helpers (Wave 5)
+// ---------------------------------------------------------------------------
+
+fn make_subworkflow_step(sub: &JsSubWorkflowStepInner) -> blazen_core::SubWorkflowStep {
+    let accepts: Vec<&'static str> = sub.accepts.iter().map(|s| intern_event_type(s)).collect();
+    let emits: Vec<&'static str> = sub.emits.iter().map(|s| intern_event_type(s)).collect();
+
+    // Identity input mapper: pass through the parent event's `to_json()`.
+    let input_mapper: blazen_core::SubWorkflowInputMapper = Arc::new(|event| event.to_json());
+    // Wrap the child workflow's terminal `StopEvent.result` JSON in a
+    // generic `DynamicEvent` so the parent step can consume it.
+    let output_mapper: blazen_core::SubWorkflowOutputMapper = Arc::new(|json| {
+        Box::new(blazen_events::DynamicEvent {
+            event_type: "blazen::StopEvent".to_owned(),
+            data: serde_json::json!({ "type": "blazen::StopEvent", "result": json }),
+        }) as Box<dyn AnyEvent>
+    });
+
+    blazen_core::SubWorkflowStep {
+        name: sub.name.clone(),
+        accepts,
+        emits,
+        workflow: Arc::clone(&sub.inner_workflow),
+        input_mapper,
+        output_mapper,
+        timeout: sub.timeout_secs.map(Duration::from_secs_f64),
+        retry_config: sub.retry_config.as_ref().map(|c| Arc::new(c.clone())),
+    }
+}
+
+fn make_parallel_subworkflows_step(
+    par: &JsParallelSubWorkflowsInner,
+) -> blazen_core::ParallelSubWorkflowsStep {
+    let accepts: Vec<&'static str> = par.accepts.iter().map(|s| intern_event_type(s)).collect();
+    let emits: Vec<&'static str> = par.emits.iter().map(|s| intern_event_type(s)).collect();
+    let branches = par.branches.iter().map(make_subworkflow_step).collect();
+    blazen_core::ParallelSubWorkflowsStep {
+        name: par.name.clone(),
+        accepts,
+        emits,
+        branches,
+        join_strategy: par.join_strategy,
     }
 }
 
@@ -483,6 +705,10 @@ struct WorkflowBuilderState {
     name: String,
     steps: Vec<JsStepRegistration>,
     timeout_secs: Option<f64>,
+    /// Workflow-level default retry configuration (mirrors
+    /// `blazen_core::WorkflowBuilder::retry_config`). `None` means inherit
+    /// from the next-outer scope.
+    retry_config: Option<blazen_llm::retry::RetryConfig>,
     session_pause_policy: JsSessionPausePolicy,
     auto_publish_events: bool,
     /// Mirrors the `with_history` flag on
@@ -570,6 +796,8 @@ impl JsWorkflowBuilder {
             name,
             event_types,
             handler: Arc::new(handler),
+            timeout_secs: None,
+            retry_config: None,
         });
         Ok(self)
     }
@@ -624,6 +852,118 @@ impl JsWorkflowBuilder {
             .as_mut()
             .ok_or_else(JsWorkflowBuilder::consumed_error)?;
         state.session_pause_policy = policy;
+        Ok(self)
+    }
+
+    /// Set a per-step wall-clock timeout in seconds on the most-recently
+    /// added step. Mirrors [`blazen_core::WorkflowBuilder::step_timeout`].
+    /// Errors if no step has been registered yet.
+    #[napi(js_name = "stepTimeout")]
+    pub fn step_timeout(&self, seconds: f64) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let state = guard
+            .as_mut()
+            .ok_or_else(JsWorkflowBuilder::consumed_error)?;
+        let step = state.steps.last_mut().ok_or_else(|| {
+            napi::Error::new(
+                Status::GenericFailure,
+                "stepTimeout() called before any step was registered",
+            )
+        })?;
+        step.timeout_secs = Some(seconds);
+        Ok(self)
+    }
+
+    /// Clear the per-step timeout on the most-recently added step.
+    #[napi(js_name = "noStepTimeout")]
+    pub fn no_step_timeout(&self) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let state = guard
+            .as_mut()
+            .ok_or_else(JsWorkflowBuilder::consumed_error)?;
+        let step = state.steps.last_mut().ok_or_else(|| {
+            napi::Error::new(
+                Status::GenericFailure,
+                "noStepTimeout() called before any step was registered",
+            )
+        })?;
+        step.timeout_secs = None;
+        Ok(self)
+    }
+
+    /// Set a per-step retry config on the most-recently added step.
+    /// Mirrors [`blazen_core::WorkflowBuilder::step_retry`].
+    #[napi(js_name = "stepRetry")]
+    pub fn step_retry(&self, config: crate::generated::JsRetryConfig) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let state = guard
+            .as_mut()
+            .ok_or_else(JsWorkflowBuilder::consumed_error)?;
+        let step = state.steps.last_mut().ok_or_else(|| {
+            napi::Error::new(
+                Status::GenericFailure,
+                "stepRetry() called before any step was registered",
+            )
+        })?;
+        step.retry_config = Some(config.into());
+        Ok(self)
+    }
+
+    /// Disable retries on the most-recently added step (`maxRetries = 0`).
+    #[napi(js_name = "noStepRetry")]
+    pub fn no_step_retry(&self) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let state = guard
+            .as_mut()
+            .ok_or_else(JsWorkflowBuilder::consumed_error)?;
+        let step = state.steps.last_mut().ok_or_else(|| {
+            napi::Error::new(
+                Status::GenericFailure,
+                "noStepRetry() called before any step was registered",
+            )
+        })?;
+        step.retry_config = Some(blazen_llm::retry::RetryConfig {
+            max_retries: 0,
+            ..blazen_llm::retry::RetryConfig::default()
+        });
+        Ok(self)
+    }
+
+    /// Set a workflow-level default retry config. Step / per-call
+    /// overrides take precedence; pipeline / provider defaults take
+    /// lower precedence.
+    #[napi(js_name = "retryConfig")]
+    pub fn retry_config(&self, config: crate::generated::JsRetryConfig) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let state = guard
+            .as_mut()
+            .ok_or_else(JsWorkflowBuilder::consumed_error)?;
+        state.retry_config = Some(config.into());
+        Ok(self)
+    }
+
+    /// Disable workflow-level retries (`maxRetries = 0`).
+    #[napi(js_name = "noRetry")]
+    pub fn no_retry(&self) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let state = guard
+            .as_mut()
+            .ok_or_else(JsWorkflowBuilder::consumed_error)?;
+        state.retry_config = Some(blazen_llm::retry::RetryConfig {
+            max_retries: 0,
+            ..blazen_llm::retry::RetryConfig::default()
+        });
+        Ok(self)
+    }
+
+    /// Clear any workflow-level retry config.
+    #[napi(js_name = "clearRetryConfig")]
+    pub fn clear_retry_config(&self) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let state = guard
+            .as_mut()
+            .ok_or_else(JsWorkflowBuilder::consumed_error)?;
+        state.retry_config = None;
         Ok(self)
     }
 
@@ -706,6 +1046,9 @@ impl JsWorkflowBuilder {
             name: state.name,
             steps: state.steps,
             timeout_secs: state.timeout_secs,
+            retry_config: state.retry_config,
+            subworkflow_steps: Vec::new(),
+            parallel_subworkflow_steps: Vec::new(),
             session_pause_policy: state.session_pause_policy,
             auto_publish_events: state.auto_publish_events,
         })
@@ -721,8 +1064,10 @@ impl JsWorkflowBuilder {
                 name,
                 steps: Vec::new(),
                 timeout_secs: Some(300.0),
+                retry_config: None,
                 session_pause_policy: JsSessionPausePolicy::PickleOrError,
-                auto_publish_events: false,
+                // Mirror Rust default — Wave 7.
+                auto_publish_events: true,
                 collect_history: false,
                 checkpoint_after_step: false,
                 checkpoint_store_set: false,
@@ -832,17 +1177,25 @@ fn make_step_registration(step: &JsStepRegistration) -> blazen_core::StepRegistr
         },
     );
 
-    blazen_core::StepRegistration::new(
+    let mut reg = blazen_core::StepRegistration::new(
         step.name.clone(),
         accepts,
         vec![], // JS steps don't declare emits statically.
         handler,
         0, // unlimited concurrency
-    )
+    );
+    if let Some(secs) = step.timeout_secs {
+        reg = reg.with_timeout(Duration::from_secs_f64(secs));
+    }
+    if let Some(cfg) = step.retry_config.as_ref() {
+        reg = reg.with_retry_config(cfg.clone());
+    }
+    reg
 }
 
 /// Convert a result event to a [`JsWorkflowResult`].
-fn make_result(event: &dyn AnyEvent) -> JsWorkflowResult {
+fn make_result(result: &blazen_core::WorkflowResult) -> JsWorkflowResult {
+    let event = &*result.event;
     let event_type = event.event_type_id().to_owned();
     let json = event.to_json();
 
@@ -855,5 +1208,10 @@ fn make_result(event: &dyn AnyEvent) -> JsWorkflowResult {
         json
     };
 
-    JsWorkflowResult { event_type, data }
+    JsWorkflowResult {
+        event_type,
+        data,
+        usage_total: result.usage_total.clone().into(),
+        cost_total_usd: result.cost_total_usd,
+    }
 }

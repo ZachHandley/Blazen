@@ -291,7 +291,7 @@ mod tests {
         }
     }
 
-    async fn backend() -> ValkeyBackend {
+    fn backend() -> ValkeyBackend {
         ValkeyBackend::new(&valkey_url())
             .expect("failed to create ValkeyBackend")
             .with_prefix(&test_prefix())
@@ -308,9 +308,9 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires running Valkey at $VALKEY_URL"]
     async fn test_valkey_put_get() {
-        let b = backend().await;
+        let b = backend();
         let entry = make_entry("e1", "hello world", vec!["b0".into(), "b1".into()]);
 
         b.put(entry).await.unwrap();
@@ -326,17 +326,17 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires running Valkey at $VALKEY_URL"]
     async fn test_valkey_get_missing() {
-        let b = backend().await;
+        let b = backend();
         let got = b.get("nonexistent").await.unwrap();
         assert!(got.is_none());
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires running Valkey at $VALKEY_URL"]
     async fn test_valkey_delete() {
-        let b = backend().await;
+        let b = backend();
         b.put(make_entry("d1", "delete me", vec!["x".into()]))
             .await
             .unwrap();
@@ -349,9 +349,9 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires running Valkey at $VALKEY_URL"]
     async fn test_valkey_put_overwrites() {
-        let b = backend().await;
+        let b = backend();
         b.put(make_entry("o1", "first", vec!["a".into()]))
             .await
             .unwrap();
@@ -367,9 +367,9 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires running Valkey at $VALKEY_URL"]
     async fn test_valkey_list() {
-        let b = backend().await;
+        let b = backend();
         b.put(make_entry("l1", "alpha", vec![])).await.unwrap();
         b.put(make_entry("l2", "beta", vec![])).await.unwrap();
 
@@ -380,9 +380,9 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires running Valkey at $VALKEY_URL"]
     async fn test_valkey_len() {
-        let b = backend().await;
+        let b = backend();
         assert_eq!(b.len().await.unwrap(), 0);
 
         b.put(make_entry("n1", "one", vec![])).await.unwrap();
@@ -395,9 +395,9 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires running Valkey at $VALKEY_URL"]
     async fn test_valkey_search_by_bands() {
-        let b = backend().await;
+        let b = backend();
 
         b.put(make_entry("s1", "alpha", vec!["aaa".into(), "bbb".into()]))
             .await
@@ -424,9 +424,9 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires running Valkey at $VALKEY_URL"]
     async fn test_valkey_search_by_bands_no_match() {
-        let b = backend().await;
+        let b = backend();
         b.put(make_entry("x1", "solo", vec!["aaa".into()]))
             .await
             .unwrap();
@@ -438,9 +438,9 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires running Valkey at $VALKEY_URL"]
     async fn test_valkey_search_by_bands_respects_limit() {
-        let b = backend().await;
+        let b = backend();
 
         for i in 0..10 {
             b.put(make_entry(
@@ -459,9 +459,9 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires running Valkey at $VALKEY_URL"]
     async fn test_valkey_delete_cleans_bands() {
-        let b = backend().await;
+        let b = backend();
         b.put(make_entry("bc1", "band cleanup", vec!["band_x".into()]))
             .await
             .unwrap();
@@ -476,7 +476,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires running Valkey at $VALKEY_URL"]
     async fn test_valkey_custom_prefix() {
         let b = ValkeyBackend::new(&valkey_url())
             .unwrap()

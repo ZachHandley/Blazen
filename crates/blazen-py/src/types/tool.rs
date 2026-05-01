@@ -182,12 +182,14 @@ impl PyLlmPayload {
 /// is left unset and each provider applies its default conversion.
 ///
 /// Construct an explicit override when the structured payload should differ
-/// from what the LLM sees::
+/// from what the LLM sees:
 ///
-///     return ToolOutput(
-///         data={"items": [...], "total": 1234},
-///         llm_override=LlmPayload.text("Found 1234 items."),
-///     )
+/// ```text
+/// return ToolOutput(
+///     data={"items": [...], "total": 1234},
+///     llm_override=LlmPayload.text("Found 1234 items."),
+/// )
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ToolOutput", from_py_object)]
 #[derive(Clone)]

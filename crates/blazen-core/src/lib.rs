@@ -50,7 +50,10 @@ pub use session_ref::{
     SessionRefRegistry, SessionRefSerializable, current_session_registry, with_session_registry,
 };
 pub use snapshot::{SNAPSHOT_VERSION, SerializedEvent, WorkflowSnapshot};
-pub use step::{StepFn, StepOutput, StepRegistration};
+pub use step::{
+    JoinStrategy, ParallelSubWorkflowsStep, StepFn, StepKind, StepOutput, StepRegistration,
+    SubWorkflowInputMapper, SubWorkflowOutputMapper, SubWorkflowStep,
+};
 pub use step_registry::{
     StepBuilderFn, StepDeserializerRegistry, lookup_step_builder, register_step_builder,
     registered_step_ids,

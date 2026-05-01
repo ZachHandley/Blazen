@@ -403,17 +403,18 @@ impl WasmWorkflow {
             .take()
             .ok_or_else(|| JsValue::from_str("Workflow already run; reuse not supported"))?;
 
-        let snapshot: WorkflowSnapshot =
-            serde_wasm_bindgen::from_value(snapshot_js).map_err(|e| {
-                JsValue::from_str(&format!("snapshot deserialize failed: {e}"))
-            })?;
+        let snapshot: WorkflowSnapshot = serde_wasm_bindgen::from_value(snapshot_js)
+            .map_err(|e| JsValue::from_str(&format!("snapshot deserialize failed: {e}")))?;
 
         let workflow_name = self.name.clone();
 
         let pending = std::mem::take(&mut self.pending_steps);
         let mut steps = Vec::with_capacity(pending.len());
         for pending_step in pending {
-            steps.push(step_registration_from_js(pending_step, workflow_name.clone()));
+            steps.push(step_registration_from_js(
+                pending_step,
+                workflow_name.clone(),
+            ));
         }
 
         let handler = Workflow::resume(snapshot, steps, None)
@@ -615,32 +616,29 @@ impl WasmWorkflow {
         // tag -> Function lookup. `undefined` / `null` is treated as
         // an empty map so callers can omit the second argument from
         // JS.
-        let user_callbacks: HashMap<String, js_sys::Function> = if deserializers.is_undefined()
-            || deserializers.is_null()
-        {
-            HashMap::new()
-        } else {
-            let obj = deserializers
-                .dyn_ref::<js_sys::Object>()
-                .ok_or_else(|| JsValue::from_str("deserializers must be a JS object"))?;
-            let mut map = HashMap::new();
-            let entries = js_sys::Object::entries(obj);
-            for i in 0..entries.length() {
-                let pair: js_sys::Array = entries.get(i).unchecked_into();
-                let key = pair
-                    .get(0)
-                    .as_string()
-                    .ok_or_else(|| JsValue::from_str("deserializer key must be a string"))?;
-                let value = pair.get(1);
-                let func: js_sys::Function = value.dyn_into().map_err(|_| {
-                    JsValue::from_str(&format!(
-                        "deserializer for '{key}' must be a function"
-                    ))
-                })?;
-                map.insert(key, func);
-            }
-            map
-        };
+        let user_callbacks: HashMap<String, js_sys::Function> =
+            if deserializers.is_undefined() || deserializers.is_null() {
+                HashMap::new()
+            } else {
+                let obj = deserializers
+                    .dyn_ref::<js_sys::Object>()
+                    .ok_or_else(|| JsValue::from_str("deserializers must be a JS object"))?;
+                let mut map = HashMap::new();
+                let entries = js_sys::Object::entries(obj);
+                for i in 0..entries.length() {
+                    let pair: js_sys::Array = entries.get(i).unchecked_into();
+                    let key = pair
+                        .get(0)
+                        .as_string()
+                        .ok_or_else(|| JsValue::from_str("deserializer key must be a string"))?;
+                    let value = pair.get(1);
+                    let func: js_sys::Function = value.dyn_into().map_err(|_| {
+                        JsValue::from_str(&format!("deserializer for '{key}' must be a function"))
+                    })?;
+                    map.insert(key, func);
+                }
+                map
+            };
 
         // Walk the snapshot's serialized-refs sidecar to discover
         // every tag we need to register a trampoline for, and to
@@ -705,7 +703,10 @@ impl WasmWorkflow {
         let pending = std::mem::take(&mut self.pending_steps);
         let mut steps = Vec::with_capacity(pending.len());
         for pending_step in pending {
-            steps.push(step_registration_from_js(pending_step, workflow_name.clone()));
+            steps.push(step_registration_from_js(
+                pending_step,
+                workflow_name.clone(),
+            ));
         }
 
         let handler =
@@ -1105,10 +1106,7 @@ fn parse_session_pause_policy(s: &str) -> Result<SessionPausePolicy, JsValue> {
 ///   the number of times JS code calls `new Workflow(...)` — typically a
 ///   small number per session.
 /// - The leaked strings are tiny (event type names, e.g. `"StartEvent"`).
-fn step_registration_from_js(
-    pending_step: PendingStep,
-    workflow_name: String,
-) -> StepRegistration {
+fn step_registration_from_js(pending_step: PendingStep, workflow_name: String) -> StepRegistration {
     let PendingStep {
         name,
         event_types,
@@ -1177,9 +1175,7 @@ async fn dispatch_js_step(
         wasm_bindgen_futures::JsFuture::from(promise)
             .await
             .map_err(|e| {
-                WorkflowError::Context(format!(
-                    "JS step handler '{step_name}' rejected: {e:?}"
-                ))
+                WorkflowError::Context(format!("JS step handler '{step_name}' rejected: {e:?}"))
             })?
     } else {
         result_js
@@ -1193,11 +1189,12 @@ async fn dispatch_js_step(
         return Ok(StepOutput::None);
     }
 
-    let event_obj: serde_json::Value = serde_wasm_bindgen::from_value(resolved_js).map_err(|e| {
-        WorkflowError::Context(format!(
-            "JS step handler '{step_name}' return value not JSON-serializable: {e}"
-        ))
-    })?;
+    let event_obj: serde_json::Value =
+        serde_wasm_bindgen::from_value(resolved_js).map_err(|e| {
+            WorkflowError::Context(format!(
+                "JS step handler '{step_name}' return value not JSON-serializable: {e}"
+            ))
+        })?;
 
     let event_type = event_obj
         .get("type")
@@ -1276,14 +1273,13 @@ unsafe impl Sync for WasmSessionRefSerializable {}
 impl SessionRefSerializable for WasmSessionRefSerializable {
     fn blazen_serialize(&self) -> Result<Vec<u8>, SessionRefError> {
         let tag_bytes = self.type_tag.as_bytes();
-        let tag_len: u32 = u32::try_from(tag_bytes.len()).map_err(|_| {
-            SessionRefError::SerializationFailed {
+        let tag_len: u32 =
+            u32::try_from(tag_bytes.len()).map_err(|_| SessionRefError::SerializationFailed {
                 type_tag: self.type_tag.to_owned(),
                 source: Box::<dyn std::error::Error + Send + Sync>::from(
                     "type tag longer than u32::MAX bytes",
                 ),
-            }
-        })?;
+            })?;
         let mut out = Vec::with_capacity(4 + tag_bytes.len() + self.user_bytes.len());
         out.extend_from_slice(&tag_len.to_be_bytes());
         out.extend_from_slice(tag_bytes);

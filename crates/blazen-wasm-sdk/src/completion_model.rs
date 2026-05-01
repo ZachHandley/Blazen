@@ -449,18 +449,22 @@ impl WasmCompletionModel {
             // Register pricing if provided.
             if let Ok(pricing_val) = js_sys::Reflect::get(&config, &JsValue::from_str("pricing")) {
                 if pricing_val.is_object() {
-                    let input = js_sys::Reflect::get(&pricing_val, &JsValue::from_str("inputPerMillion"))
-                        .ok()
-                        .and_then(|v| v.as_f64());
-                    let output = js_sys::Reflect::get(&pricing_val, &JsValue::from_str("outputPerMillion"))
-                        .ok()
-                        .and_then(|v| v.as_f64());
+                    let input =
+                        js_sys::Reflect::get(&pricing_val, &JsValue::from_str("inputPerMillion"))
+                            .ok()
+                            .and_then(|v| v.as_f64());
+                    let output =
+                        js_sys::Reflect::get(&pricing_val, &JsValue::from_str("outputPerMillion"))
+                            .ok()
+                            .and_then(|v| v.as_f64());
                     if let (Some(inp), Some(out)) = (input, output) {
                         blazen_llm::register_pricing(
                             &model_id,
                             blazen_llm::PricingEntry {
                                 input_per_million: inp,
                                 output_per_million: out,
+                                per_image: None,
+                                per_second: None,
                             },
                         );
                     }
@@ -550,8 +554,7 @@ impl WasmCompletionModel {
         );
 
         // `new Function("request", body)` creates `function anonymous(request) { body }`.
-        let complete_handler =
-            js_sys::Function::new_with_args("request", &handler_body);
+        let complete_handler = js_sys::Function::new_with_args("request", &handler_body);
 
         let handler = JsCompletionHandler::new(
             model_id,
@@ -709,11 +712,7 @@ impl WasmCompletionModel {
     ///
     /// Returns a `Promise<CompletionResponse>`.
     #[wasm_bindgen(js_name = "completeWithOptions")]
-    pub fn complete_with_options(
-        &self,
-        messages: JsValue,
-        options: JsValue,
-    ) -> js_sys::Promise {
+    pub fn complete_with_options(&self, messages: JsValue, options: JsValue) -> js_sys::Promise {
         let model = Arc::clone(&self.inner);
         future_to_promise(async move {
             let msgs = js_messages_to_vec(&messages)?;
@@ -797,8 +796,7 @@ impl WasmCompletionModel {
 
             use futures_util::StreamExt;
             while let Some(chunk_result) = stream.next().await {
-                let chunk = chunk_result
-                    .map_err(|e| JsValue::from_str(&e.to_string()))?;
+                let chunk = chunk_result.map_err(|e| JsValue::from_str(&e.to_string()))?;
                 let js_chunk = serde_wasm_bindgen::to_value(&chunk)
                     .map_err(|e| JsValue::from_str(&e.to_string()))?;
                 // Invoke the JS callback with the chunk.

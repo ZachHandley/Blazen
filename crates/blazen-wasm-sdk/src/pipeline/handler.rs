@@ -27,6 +27,29 @@ use crate::pipeline::event::WasmPipelineEvent;
 use crate::pipeline::snapshot::{WasmPipelineResult, WasmPipelineSnapshot};
 
 // ---------------------------------------------------------------------------
+// TypeScript type augmentation
+// ---------------------------------------------------------------------------
+
+#[wasm_bindgen(typescript_custom_section)]
+const TS_PROGRESS_SNAPSHOT: &str = r#"
+/**
+ * Best-effort, polled snapshot of a running pipeline's progress as
+ * returned by `PipelineHandler.progress()`. Mirrors the canonical
+ * `blazen_pipeline::ProgressSnapshot` Rust struct.
+ */
+export interface PipelineProgressSnapshot {
+    /** 1-based index of the stage currently executing (or just completed). */
+    currentStageIndex: number;
+    /** Total number of stages declared on the pipeline. */
+    totalStages: number;
+    /** Progress as a percentage in `0.0..=100.0`. */
+    percent: number;
+    /** Name of the current stage, when available. */
+    currentStageName: string | null;
+}
+"#;
+
+// ---------------------------------------------------------------------------
 // Marshalling helpers
 // ---------------------------------------------------------------------------
 
@@ -190,6 +213,50 @@ impl WasmPipelineHandler {
             .as_ref()
             .ok_or_else(|| JsValue::from_str("PipelineHandler already consumed"))?;
         handler.abort().map_err(pipeline_err)
+    }
+
+    /// Snapshot the pipeline's current progress without affecting execution.
+    ///
+    /// Returns a plain JS object matching
+    /// [`blazen_pipeline::ProgressSnapshot`]:
+    /// `{ currentStageIndex, totalStages, percent, currentStageName }`.
+    /// Best-effort — may briefly be one stage behind the actual position.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if the handler has already been consumed.
+    #[wasm_bindgen]
+    pub fn progress(&self) -> Result<JsValue, JsValue> {
+        let inner = self.inner.borrow();
+        let handler = inner
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("PipelineHandler already consumed"))?;
+        let snapshot = handler.progress();
+        let obj = js_sys::Object::new();
+        js_sys::Reflect::set(
+            &obj,
+            &JsValue::from_str("currentStageIndex"),
+            &JsValue::from_f64(f64::from(snapshot.current_stage_index)),
+        )?;
+        js_sys::Reflect::set(
+            &obj,
+            &JsValue::from_str("totalStages"),
+            &JsValue::from_f64(f64::from(snapshot.total_stages)),
+        )?;
+        js_sys::Reflect::set(
+            &obj,
+            &JsValue::from_str("percent"),
+            &JsValue::from_f64(f64::from(snapshot.percent)),
+        )?;
+        js_sys::Reflect::set(
+            &obj,
+            &JsValue::from_str("currentStageName"),
+            &snapshot
+                .current_stage_name
+                .as_deref()
+                .map_or(JsValue::NULL, JsValue::from_str),
+        )?;
+        Ok(obj.into())
     }
 
     /// Subscribe to intermediate events from pipeline stages.

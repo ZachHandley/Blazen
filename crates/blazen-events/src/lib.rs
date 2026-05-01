@@ -17,6 +17,12 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+mod progress_event;
+mod usage_event;
+
+pub use progress_event::{ProgressEvent, ProgressKind};
+pub use usage_event::{Modality, UsageEvent};
+
 // ---------------------------------------------------------------------------
 // Core traits
 // ---------------------------------------------------------------------------

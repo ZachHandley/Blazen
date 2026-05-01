@@ -39,6 +39,24 @@ impl JsStageResult {
     pub fn duration_ms(&self) -> i64 {
         self.inner.duration_ms as i64
     }
+
+    /// Token usage for this stage, if any LLM calls inside the stage
+    /// emitted [`UsageEvent`](blazen_events::UsageEvent)s. Mirrors
+    /// [`blazen_pipeline::StageResult::usage`] (Wave 3).
+    #[napi(getter)]
+    pub fn usage(&self) -> Option<crate::types::JsTokenUsageClass> {
+        self.inner
+            .usage
+            .as_ref()
+            .map(crate::types::JsTokenUsageClass::from)
+    }
+
+    /// Cost in USD for this stage, if known. Mirrors
+    /// [`blazen_pipeline::StageResult::cost_usd`] (Wave 3).
+    #[napi(getter, js_name = "costUsd")]
+    pub fn cost_usd(&self) -> Option<f64> {
+        self.inner.cost_usd
+    }
 }
 
 impl JsStageResult {
@@ -212,6 +230,20 @@ impl JsPipelineResult {
     pub fn shared_state(&self) -> serde_json::Value {
         let map: HashMap<String, serde_json::Value> = self.inner.shared_state.clone();
         serde_json::Value::Object(map.into_iter().collect())
+    }
+
+    /// Aggregated token usage across the pipeline run. Mirrors
+    /// [`blazen_pipeline::PipelineResult::usage_total`] (Wave 3).
+    #[napi(getter, js_name = "usageTotal")]
+    pub fn usage_total(&self) -> crate::types::JsTokenUsageClass {
+        crate::types::JsTokenUsageClass::from(&self.inner.usage_total)
+    }
+
+    /// Aggregated cost in USD across the pipeline run. Mirrors
+    /// [`blazen_pipeline::PipelineResult::cost_total_usd`] (Wave 3).
+    #[napi(getter, js_name = "costTotalUsd")]
+    pub fn cost_total_usd(&self) -> f64 {
+        self.inner.cost_total_usd
     }
 }
 

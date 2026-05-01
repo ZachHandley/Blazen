@@ -20,12 +20,18 @@ use crate::types::TokenUsage;
 // ---------------------------------------------------------------------------
 
 /// Pricing for a model in USD per million tokens.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct PricingEntry {
     /// USD per million input (prompt) tokens.
     pub input_per_million: f64,
     /// USD per million output (completion) tokens.
     pub output_per_million: f64,
+    /// USD per generated image, when applicable (image / video / 3D models).
+    pub per_image: Option<f64>,
+    /// USD per second of generated or transcribed audio / video, when applicable.
+    pub per_second: Option<f64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -103,6 +109,8 @@ fn default_pricing() -> HashMap<String, PricingEntry> {
                 PricingEntry {
                     input_per_million: input,
                     output_per_million: output,
+                    per_image: None,
+                    per_second: None,
                 },
             )
         })
@@ -142,6 +150,33 @@ pub fn compute_cost(model_id: &str, usage: &TokenUsage) -> Option<f64> {
     Some(input_cost + output_cost)
 }
 
+/// Compute USD cost of an image-generation request given a model ID and an
+/// image count. Returns `None` if the model has no `per_image` price.
+#[must_use]
+pub fn compute_image_cost(model_id: &str, image_count: u32) -> Option<f64> {
+    let pricing = lookup_pricing(model_id)?;
+    let per_image = pricing.per_image?;
+    Some(per_image * f64::from(image_count))
+}
+
+/// Compute USD cost of an audio request (TTS or STT) given a model ID and a
+/// duration in seconds. Returns `None` if the model has no `per_second` price.
+#[must_use]
+pub fn compute_audio_cost(model_id: &str, seconds: f64) -> Option<f64> {
+    let pricing = lookup_pricing(model_id)?;
+    let per_second = pricing.per_second?;
+    Some(per_second * seconds)
+}
+
+/// Compute USD cost of a video-generation request given a model ID and a
+/// duration in seconds. Returns `None` if the model has no `per_second` price.
+#[must_use]
+pub fn compute_video_cost(model_id: &str, seconds: f64) -> Option<f64> {
+    let pricing = lookup_pricing(model_id)?;
+    let per_second = pricing.per_second?;
+    Some(per_second * seconds)
+}
+
 /// Look up pricing for a model by its ID.
 ///
 /// Returns `None` if the model is unknown.
@@ -173,15 +208,21 @@ pub fn register_from_model_info(info: &ModelInfo) {
 }
 
 /// Convert a [`ModelPricing`] to a [`PricingEntry`], returning `None` if
-/// both input and output are missing.
+/// all pricing fields are missing.
 fn model_pricing_to_entry(pricing: &ModelPricing) -> Option<PricingEntry> {
-    match (pricing.input_per_million, pricing.output_per_million) {
-        (Some(input), Some(output)) => Some(PricingEntry {
-            input_per_million: input,
-            output_per_million: output,
-        }),
-        _ => None,
+    let has_any = pricing.input_per_million.is_some()
+        || pricing.output_per_million.is_some()
+        || pricing.per_image.is_some()
+        || pricing.per_second.is_some();
+    if !has_any {
+        return None;
     }
+    Some(PricingEntry {
+        input_per_million: pricing.input_per_million.unwrap_or(0.0),
+        output_per_million: pricing.output_per_million.unwrap_or(0.0),
+        per_image: pricing.per_image,
+        per_second: pricing.per_second,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -472,6 +513,8 @@ mod tests {
             PricingEntry {
                 input_per_million: 5.0,
                 output_per_million: 20.0,
+                per_image: None,
+                per_second: None,
             },
         );
 
@@ -487,6 +530,8 @@ mod tests {
         let new_entry = PricingEntry {
             input_per_million: 99.0,
             output_per_million: 99.0,
+            per_image: None,
+            per_second: None,
         };
         register_pricing("gpt-4.1", new_entry);
 
@@ -510,12 +555,73 @@ mod tests {
                 per_image: None,
                 per_second: None,
             }),
-            capabilities: Default::default(),
+            capabilities: crate::traits::ModelCapabilities::default(),
         };
 
         register_from_model_info(&info);
         let entry = lookup_pricing("test-registry-model").expect("should find model");
         assert!((entry.input_per_million - 1.5).abs() < f64::EPSILON);
         assert!((entry.output_per_million - 6.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_register_from_model_info_with_per_image() {
+        let info = ModelInfo {
+            id: "test-image-model".into(),
+            name: None,
+            provider: "test".into(),
+            context_length: None,
+            pricing: Some(ModelPricing {
+                input_per_million: None,
+                output_per_million: None,
+                per_image: Some(0.04),
+                per_second: None,
+            }),
+            capabilities: crate::traits::ModelCapabilities::default(),
+        };
+        register_from_model_info(&info);
+        let entry = lookup_pricing("test-image-model").expect("should find model");
+        assert_eq!(entry.per_image, Some(0.04));
+        assert_eq!(entry.per_second, None);
+    }
+
+    #[test]
+    fn test_compute_image_cost() {
+        register_pricing(
+            "test-img-cost",
+            PricingEntry {
+                per_image: Some(0.05),
+                ..Default::default()
+            },
+        );
+        let cost = compute_image_cost("test-img-cost", 4).unwrap();
+        assert!((cost - 0.20).abs() < f64::EPSILON);
+        assert!(compute_image_cost("totally-unknown-img-model", 1).is_none());
+    }
+
+    #[test]
+    fn test_compute_audio_cost() {
+        register_pricing(
+            "test-tts-cost",
+            PricingEntry {
+                per_second: Some(0.001),
+                ..Default::default()
+            },
+        );
+        let cost = compute_audio_cost("test-tts-cost", 60.0).unwrap();
+        assert!((cost - 0.06).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_compute_video_cost() {
+        register_pricing(
+            "test-vid-cost",
+            PricingEntry {
+                per_second: Some(0.10),
+                ..Default::default()
+            },
+        );
+        let cost = compute_video_cost("test-vid-cost", 5.0).unwrap();
+        assert!((cost - 0.50).abs() < f64::EPSILON);
     }
 }

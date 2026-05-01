@@ -74,19 +74,12 @@ impl WasmOpenAiProvider {
     /// Perform a non-streaming chat completion.
     #[wasm_bindgen]
     pub fn complete(&self, messages: JsValue) -> js_sys::Promise {
-        complete_promise(
-            as_dyn_completion(Arc::clone(&self.inner)),
-            messages,
-        )
+        complete_promise(as_dyn_completion(Arc::clone(&self.inner)), messages)
     }
 
     /// Perform a non-streaming completion with additional options.
     #[wasm_bindgen(js_name = "completeWithOptions")]
-    pub fn complete_with_options(
-        &self,
-        messages: JsValue,
-        options: JsValue,
-    ) -> js_sys::Promise {
+    pub fn complete_with_options(&self, messages: JsValue, options: JsValue) -> js_sys::Promise {
         let model = as_dyn_completion(Arc::clone(&self.inner));
         future_to_promise(async move {
             let msgs = crate::chat_message::js_messages_to_vec(&messages)?;
@@ -96,8 +89,7 @@ impl WasmOpenAiProvider {
                 .complete(request)
                 .await
                 .map_err(|e| JsValue::from_str(&e.to_string()))?;
-            serde_wasm_bindgen::to_value(&response)
-                .map_err(|e| JsValue::from_str(&e.to_string()))
+            serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
         })
     }
 
@@ -119,8 +111,9 @@ impl WasmOpenAiProvider {
     pub fn text_to_speech(&self, request: JsValue) -> js_sys::Promise {
         let provider = Arc::clone(&self.inner);
         future_to_promise(async move {
-            let req: blazen_llm::compute::SpeechRequest = serde_wasm_bindgen::from_value(request)
-                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            let req: blazen_llm::compute::SpeechRequest =
+                serde_wasm_bindgen::from_value(request)
+                    .map_err(|e| JsValue::from_str(&e.to_string()))?;
             let result = AudioGeneration::text_to_speech(provider.as_ref(), req)
                 .await
                 .map_err(|e| JsValue::from_str(&e.to_string()))?;

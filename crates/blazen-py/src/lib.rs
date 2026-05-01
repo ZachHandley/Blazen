@@ -2,6 +2,7 @@
 #![allow(clippy::missing_errors_doc)] // PyO3 functions return PyResult; errors are self-evident.
 #![allow(clippy::needless_pass_by_value)] // PyO3 extractors require owned types.
 #![allow(clippy::must_use_candidate)] // PyO3 methods are called from Python.
+#![allow(clippy::return_self_not_must_use)] // PyO3 builder methods don't surface #[must_use] to Python callers.
 #![allow(clippy::unused_self)] // PyO3 requires &self for some methods.
 #![allow(clippy::used_underscore_binding)] // Convention for unused params in conversion functions.
 #![allow(clippy::doc_link_with_quotes)] // Docstring style preference.
@@ -39,12 +40,15 @@ pub mod batch;
 pub mod compute;
 pub mod core_types;
 pub mod error;
+pub mod events;
 pub mod manager;
 pub mod model_cache;
 pub mod peer;
 pub mod persist;
 pub mod pipeline;
 pub mod providers;
+pub mod retry;
+pub mod sync;
 pub mod telemetry;
 pub mod types;
 pub mod workflow;
@@ -75,6 +79,23 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Version
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+
+    // Foundation event types (from `blazen-events`)
+    m.add_class::<events::PyModality>()?;
+    m.add_class::<events::PyUsageEvent>()?;
+    m.add_class::<events::PyProgressKind>()?;
+    m.add_class::<events::PyProgressEvent>()?;
+    m.add_class::<events::PyProgressSnapshot>()?;
+
+    // Constants
+    m.add(
+        "FINISH_WORKFLOW_TOOL_NAME",
+        blazen_llm::FINISH_WORKFLOW_TOOL_NAME,
+    )?;
+
+    // Synchronous (blocking) wrappers for the most common async surfaces.
+    m.add_class::<sync::PyBlockingCompletionModel>()?;
+    m.add_class::<sync::PyBlockingEmbeddingModel>()?;
 
     // Event classes
     m.add_class::<workflow::event::PyEvent>()?;
@@ -203,6 +224,8 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::PyToolCall>()?;
     m.add_class::<types::PyToolDefinition>()?;
     m.add_class::<types::PyHttpClient>()?;
+    m.add_class::<types::PyHttpClientConfig>()?;
+    m.add_class::<types::PyHttpClientHandle>()?;
     m.add_class::<types::PyProviderId>()?;
     m.add_class::<types::PyPricingEntry>()?;
     m.add_class::<types::PyMessageContent>()?;
@@ -291,6 +314,11 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<providers::PyCachedCompletionModel>()?;
     m.add_class::<providers::PyFallbackModel>()?;
 
+    // Retry plumbing exposed to Python beyond CompletionModel.
+    m.add_class::<retry::PyRetryStack>()?;
+    m.add_class::<retry::PyRetryEmbeddingModel>()?;
+    m.add_class::<retry::PyRetryHttpClient>()?;
+
     // Middleware surface
     m.add_class::<providers::PyMiddleware>()?;
     m.add_class::<providers::PyRetryMiddleware>()?;
@@ -322,6 +350,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<agent::PyAgentEvent>()?;
     m.add_function(wrap_pyfunction!(agent::run_agent, m)?)?;
     m.add_function(wrap_pyfunction!(agent::run_agent_with_callback, m)?)?;
+    m.add_function(wrap_pyfunction!(agent::finish_workflow_tool, m)?)?;
 
     // Batch completion
     m.add_class::<batch::PyBatchConfig>()?;
@@ -508,6 +537,9 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::pricing::PyModelPricing>()?;
     m.add_function(wrap_pyfunction!(types::pricing::register_pricing, m)?)?;
     m.add_function(wrap_pyfunction!(types::pricing::lookup_pricing, m)?)?;
+    m.add_function(wrap_pyfunction!(types::pricing::compute_image_cost, m)?)?;
+    m.add_function(wrap_pyfunction!(types::pricing::compute_audio_cost, m)?)?;
+    m.add_function(wrap_pyfunction!(types::pricing::compute_video_cost, m)?)?;
 
     // Prompts
     m.add_class::<types::PyTemplateRole>()?;

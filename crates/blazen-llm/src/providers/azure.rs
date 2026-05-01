@@ -27,6 +27,7 @@ use super::sse::{OaiResponse, SseParser};
 use super::{provider_http_error, provider_http_error_parts};
 use crate::error::BlazenError;
 use crate::http::{HttpClient, HttpRequest, HttpResponse};
+use crate::retry::RetryConfig;
 use crate::traits::{ModelCapabilities, ModelInfo, ModelRegistry};
 use crate::types::{
     CompletionRequest, CompletionResponse, Role, StreamChunk, TokenUsage, ToolCall,
@@ -58,6 +59,7 @@ const DEFAULT_API_VERSION: &str = "2025-04-01-preview";
 /// ```
 pub struct AzureOpenAiProvider {
     client: Arc<dyn HttpClient>,
+    retry_config: Option<Arc<RetryConfig>>,
     api_key: String,
     resource_name: String,
     deployment_name: String,
@@ -78,6 +80,7 @@ impl Clone for AzureOpenAiProvider {
     fn clone(&self) -> Self {
         Self {
             client: Arc::clone(&self.client),
+            retry_config: self.retry_config.clone(),
             api_key: self.api_key.clone(),
             resource_name: self.resource_name.clone(),
             deployment_name: self.deployment_name.clone(),
@@ -104,6 +107,7 @@ impl AzureOpenAiProvider {
     ) -> Self {
         Self {
             client: crate::default_http_client(),
+            retry_config: None,
             api_key: api_key.into(),
             resource_name: resource_name.into(),
             deployment_name: deployment_name.into(),
@@ -121,6 +125,7 @@ impl AzureOpenAiProvider {
     ) -> Self {
         Self {
             client,
+            retry_config: None,
             api_key: api_key.into(),
             resource_name: resource_name.into(),
             deployment_name: deployment_name.into(),
@@ -163,6 +168,24 @@ impl AzureOpenAiProvider {
     #[must_use]
     pub fn with_http_client(mut self, client: Arc<dyn HttpClient>) -> Self {
         self.client = client;
+        self
+    }
+
+    /// Return a clone of the underlying HTTP client.
+    ///
+    /// Escape hatch for power users who need to issue raw HTTP requests
+    /// (custom headers, endpoints not yet covered by Blazen's typed
+    /// surface, debugging) while reusing the same connection pool, TLS
+    /// config, and timeouts as this provider.
+    #[must_use]
+    pub fn http_client(&self) -> Arc<dyn HttpClient> {
+        Arc::clone(&self.client)
+    }
+
+    /// Configure retry behavior for this provider.
+    #[must_use]
+    pub fn with_retry_config(mut self, config: RetryConfig) -> Self {
+        self.retry_config = Some(Arc::new(config));
         self
     }
 
@@ -319,6 +342,14 @@ impl AzureOpenAiProvider {
 impl crate::traits::CompletionModel for AzureOpenAiProvider {
     fn model_id(&self) -> &str {
         &self.deployment_name
+    }
+
+    fn retry_config(&self) -> Option<&Arc<RetryConfig>> {
+        self.retry_config.as_ref()
+    }
+
+    fn http_client(&self) -> Option<Arc<dyn HttpClient>> {
+        Some(Self::http_client(self))
     }
 
     async fn complete(

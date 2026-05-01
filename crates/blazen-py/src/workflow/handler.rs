@@ -24,7 +24,9 @@ use blazen_core::session_ref::SessionRefRegistry;
 
 use super::event::{PyInputResponseEvent, any_event_to_py_event};
 use super::session_ref::with_session_registry;
+use crate::core_types::PyWorkflowResult;
 use crate::error::BlazenPyError;
+use crate::types::PyTokenUsage;
 
 /// Handle to a running workflow.
 ///
@@ -72,13 +74,14 @@ impl PyWorkflowHandler {
 impl PyWorkflowHandler {
     /// Await the final workflow result.
     ///
-    /// Consumes the handler. Returns the terminal event (typically a
-    /// `StopEvent`). Raises `RuntimeError` if the handler was already
-    /// consumed.
+    /// Consumes the handler. Returns a :class:`WorkflowResult` bundling
+    /// the terminal event (typically a ``StopEvent``), the session-ref
+    /// registry, and aggregated ``usage_total`` / ``cost_total_usd``.
+    /// Raises ``RuntimeError`` if the handler was already consumed.
     ///
     /// Returns:
-    ///     The final Event produced by the workflow.
-    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, Event]", imports = ("typing",)))]
+    ///     The :class:`WorkflowResult` produced by the workflow.
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, WorkflowResult]", imports = ("typing",)))]
     fn result<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
@@ -92,16 +95,30 @@ impl PyWorkflowHandler {
             let wf_result = handler.result().await.map_err(BlazenPyError::from)?;
             let session_refs = wf_result.session_refs;
             let event = wf_result.event;
+            let usage_total = wf_result.usage_total;
+            let cost_total_usd = wf_result.cost_total_usd;
 
             // Install the registry as the current session-ref scope while we
             // build the `PyEvent`. `any_event_to_py_event` calls
             // `current_session_registry()` to capture the Arc into the
             // returned `PyEvent`, so attribute access (`__getattr__`) keeps
             // working even after this future resolves.
+            let registry_for_event = Arc::clone(&session_refs);
             let py_event =
-                with_session_registry(session_refs, async move { any_event_to_py_event(&*event) })
-                    .await;
-            Ok(py_event)
+                with_session_registry(
+                    registry_for_event,
+                    async move { any_event_to_py_event(&*event) },
+                )
+                .await;
+            Python::attach(|py| {
+                let py_event = Py::new(py, py_event)?;
+                Ok(PyWorkflowResult::new_with_usage(
+                    py_event,
+                    session_refs,
+                    usage_total,
+                    cost_total_usd,
+                ))
+            })
         })
     }
 
@@ -252,6 +269,41 @@ impl PyWorkflowHandler {
                 .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
             handler.abort().map_err(BlazenPyError::from)?;
             Ok(())
+        })
+    }
+
+    /// Snapshot the running aggregate `TokenUsage` for this workflow run.
+    ///
+    /// Safe to call at any point during or after the run; the value matches
+    /// `WorkflowResult.usage_total` once `result()` has been awaited.
+    /// Raises `RuntimeError` if the handler was already consumed.
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, TokenUsage]", imports = ("typing",)))]
+    fn usage_total<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let guard = inner.lock().await;
+            let handler = guard
+                .as_ref()
+                .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
+            let usage = handler.usage_total().await;
+            Ok(PyTokenUsage::from(usage))
+        })
+    }
+
+    /// Snapshot the running aggregate cost in USD for this workflow run.
+    ///
+    /// Sums `UsageEvent::cost_usd` across every emitted usage event. Events
+    /// with `cost_usd == None` contribute zero. Raises `RuntimeError` if the
+    /// handler was already consumed.
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, builtins.float]", imports = ("typing", "builtins")))]
+    fn cost_total_usd<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let guard = inner.lock().await;
+            let handler = guard
+                .as_ref()
+                .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?;
+            Ok(handler.cost_total_usd().await)
         })
     }
 

@@ -272,23 +272,30 @@ fn py_result_to_step_output(
 ///
 /// The decorated function should have the signature:
 ///
-///     async def my_step(ctx: Context, ev: Event) -> Event | list[Event] | None
+/// ```text
+/// async def my_step(ctx: Context, ev: Event) -> Event | list[Event] | None
+/// ```
 ///
 /// or:
 ///
-///     def my_step(ctx: Context, ev: Event) -> Event | list[Event] | None
+/// ```text
+/// def my_step(ctx: Context, ev: Event) -> Event | list[Event] | None
+/// ```
 ///
 /// By default the step accepts `StartEvent` and emits any event type.
 /// Override with `.accepts` and `.emits` attributes on the returned wrapper.
 ///
-/// Example:
-///     >>> @step
-///     ... async def analyze(ctx: Context, ev: Event) -> Event:
-///     ...     return StopEvent(result={"done": True})
+/// # Example
 ///
-///     # Customize accepted event types:
-///     >>> analyze.accepts = ["AnalyzeEvent"]
-///     >>> analyze.emits = ["StopEvent"]
+/// ```text
+/// @step
+/// async def analyze(ctx: Context, ev: Event) -> Event:
+///     return StopEvent(result={"done": True})
+///
+/// # Customize accepted event types:
+/// analyze.accepts = ["AnalyzeEvent"]
+/// analyze.emits = ["StopEvent"]
+/// ```
 /// Infer the `accepts` list from the type annotation of the `ev` parameter.
 ///
 /// If the second parameter (after `ctx`) is annotated with an `Event` subclass,

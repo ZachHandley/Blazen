@@ -2,6 +2,7 @@
 //! [`WorkflowBuilder`](blazen_core::WorkflowBuilder).
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use pyo3::prelude::*;
@@ -13,6 +14,7 @@ use blazen_core::session_ref::{
     SERIALIZED_SESSION_REFS_META_KEY, SessionPausePolicy as CoreSessionPausePolicy,
 };
 use blazen_core::snapshot::WorkflowSnapshot;
+use blazen_llm::retry::RetryConfig;
 
 use super::handler::PyWorkflowHandler;
 use super::step::PyStepWrapper;
@@ -99,6 +101,22 @@ pub struct PyWorkflow {
     steps: Vec<Py<PyStepWrapper>>,
     timeout: Option<f64>,
     session_pause_policy: PySessionPausePolicy,
+    /// Whether to publish lifecycle events on the broadcast stream.
+    /// Defaults to `true` (matches the canonical Rust default flip from
+    /// Wave 7).
+    auto_publish_events: bool,
+    /// Workflow-level default `RetryConfig`. Layered into the
+    /// `Context.retry_stack` at the workflow scope so every LLM call
+    /// inherits unless a step or per-call override fires.
+    retry_config: Option<Arc<RetryConfig>>,
+    /// Optional per-step default timeout applied to every step that
+    /// hasn't set its own. Currently a passthrough placeholder — wiring
+    /// it through the canonical `WorkflowBuilder::step_timeout` requires
+    /// per-step access, so for now we store it on the Python wrapper for
+    /// introspection and bake it into individual steps when materializing
+    /// the workflow if the canonical builder grows a "default-step-timeout"
+    /// helper (tracked sibling-crate tweak).
+    step_timeout_default: Option<Duration>,
 }
 
 impl PyWorkflow {
@@ -117,7 +135,26 @@ impl PyWorkflow {
             steps,
             timeout,
             session_pause_policy,
+            auto_publish_events: true,
+            retry_config: None,
+            step_timeout_default: None,
         }
+    }
+
+    /// Set whether lifecycle events are auto-published. Used by the
+    /// `WorkflowBuilder` plumbing.
+    pub(crate) fn set_auto_publish_events(&mut self, enabled: bool) {
+        self.auto_publish_events = enabled;
+    }
+
+    /// Set the workflow-level default retry config (or clear with `None`).
+    pub(crate) fn set_retry_config(&mut self, cfg: Option<Arc<RetryConfig>>) {
+        self.retry_config = cfg;
+    }
+
+    /// Set the workflow-level default step timeout (or clear with `None`).
+    pub(crate) fn set_step_timeout_default(&mut self, t: Option<Duration>) {
+        self.step_timeout_default = t;
     }
 
     /// Build a `blazen_core::Workflow` from this `PyWorkflow` using the
@@ -131,13 +168,22 @@ impl PyWorkflow {
         let mut builder = blazen_core::WorkflowBuilder::new(&self.name);
         for step in &self.steps {
             let step_ref = step.borrow(py);
-            let registration = step_ref.to_registration_with_locals(locals.clone())?;
+            let mut registration = step_ref.to_registration_with_locals(locals.clone())?;
+            if let Some(t) = self.step_timeout_default
+                && registration.timeout.is_none()
+            {
+                registration = registration.with_timeout(t);
+            }
             builder = builder.step(registration);
         }
         if let Some(t) = self.timeout {
             builder = builder.timeout(Duration::from_secs_f64(t));
         }
         builder = builder.session_pause_policy(self.session_pause_policy.into());
+        builder = builder.auto_publish_events(self.auto_publish_events);
+        if let Some(cfg) = self.retry_config.as_ref() {
+            builder = builder.retry_config((**cfg).clone());
+        }
         builder.build().map_err(|e| BlazenPyError::from(e).into())
     }
 }
@@ -158,12 +204,21 @@ impl PyWorkflow {
     ///         `__blazen_serialize__` / `__blazen_deserialize__`
     ///         protocol on value classes.
     #[new]
-    #[pyo3(signature = (name, steps, timeout=None, session_pause_policy=None))]
+    #[pyo3(signature = (
+        name,
+        steps,
+        timeout=None,
+        session_pause_policy=None,
+        auto_publish_events=None,
+        retry_config=None,
+    ))]
     fn new(
         name: &str,
         steps: Vec<PyRef<'_, PyStepWrapper>>,
         timeout: Option<f64>,
         session_pause_policy: Option<PySessionPausePolicy>,
+        auto_publish_events: Option<bool>,
+        retry_config: Option<PyRef<'_, crate::providers::config::PyRetryConfig>>,
     ) -> Self {
         let step_refs: Vec<Py<PyStepWrapper>> = steps.into_iter().map(Into::into).collect();
 
@@ -173,6 +228,9 @@ impl PyWorkflow {
             timeout,
             session_pause_policy: session_pause_policy
                 .unwrap_or(PySessionPausePolicy::PickleOrError),
+            auto_publish_events: auto_publish_events.unwrap_or(true),
+            retry_config: retry_config.map(|c| Arc::new(c.inner.clone())),
+            step_timeout_default: None,
         }
     }
 

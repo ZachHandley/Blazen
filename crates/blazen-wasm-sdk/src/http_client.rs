@@ -167,7 +167,7 @@ export type HttpStreamHandler = (
 /// ```
 #[wasm_bindgen(js_name = "HttpClient")]
 pub struct WasmHttpClient {
-    inner: Arc<JsHttpClient>,
+    inner: Arc<dyn HttpClient>,
 }
 
 // SAFETY: WASM is single-threaded.
@@ -190,7 +190,7 @@ impl WasmHttpClient {
             inner: Arc::new(JsHttpClient {
                 send_handler,
                 send_stream_handler,
-            }),
+            }) as Arc<dyn HttpClient>,
         }
     }
 }
@@ -200,9 +200,15 @@ impl WasmHttpClient {
     /// modules that wire a custom client into `OpenAiCompatProvider`,
     /// `AnthropicProvider`, etc.
     #[must_use]
-    #[allow(dead_code)]
     pub(crate) fn inner_arc(&self) -> Arc<dyn HttpClient> {
-        Arc::clone(&self.inner) as Arc<dyn HttpClient>
+        Arc::clone(&self.inner)
+    }
+
+    /// Wrap an existing `Arc<dyn HttpClient>` (e.g. a `RetryHttpClient`) as
+    /// a JS-facing [`WasmHttpClient`].
+    #[must_use]
+    pub(crate) fn from_inner(inner: Arc<dyn HttpClient>) -> Self {
+        Self { inner }
     }
 }
 
@@ -271,7 +277,11 @@ impl JsHttpClient {
         }) as Box<dyn FnMut(JsValue)>);
 
         let raw = handler
-            .call2(&JsValue::NULL, &js_request, on_chunk.as_ref().unchecked_ref())
+            .call2(
+                &JsValue::NULL,
+                &js_request,
+                on_chunk.as_ref().unchecked_ref(),
+            )
             .map_err(|e| BlazenError::request(format!("HTTP stream handler threw: {e:?}")))?;
         let resolved = await_promise(raw).await?;
         drop(on_chunk);
@@ -307,4 +317,3 @@ impl HttpClient for JsHttpClient {
         SendFuture(self.send_streaming_impl(request)).await
     }
 }
-

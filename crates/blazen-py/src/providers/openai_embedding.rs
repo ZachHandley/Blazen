@@ -9,8 +9,9 @@ use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use crate::error::{BlazenPyError, blazen_error_to_pyerr};
+use crate::providers::config::PyRetryConfig;
 use crate::providers::options::PyProviderOptions;
-use crate::types::PyEmbeddingResponse;
+use crate::types::{PyEmbeddingResponse, PyHttpClientHandle};
 use blazen_llm::providers::openai::OpenAiEmbeddingModel;
 use blazen_llm::traits::EmbeddingModel;
 
@@ -76,6 +77,21 @@ impl PyOpenAiEmbeddingModel {
                 .map_err(BlazenPyError::from)?;
             Ok(PyEmbeddingResponse { inner: response })
         })
+    }
+
+    /// Set the provider-level default retry config.
+    pub fn with_retry_config(&self, config: PyRetryConfig) -> Self {
+        let inner = (*self.inner).clone().with_retry_config(config.inner);
+        Self {
+            inner: Arc::new(inner),
+        }
+    }
+
+    /// Return an opaque handle to the underlying HTTP client.
+    pub fn http_client(&self) -> PyHttpClientHandle {
+        PyHttpClientHandle {
+            inner: self.inner.http_client(),
+        }
     }
 
     fn __repr__(&self) -> String {

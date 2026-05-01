@@ -63,9 +63,8 @@ impl WasmPipeline {
         let input_json: serde_json::Value = if input.is_undefined() || input.is_null() {
             serde_json::Value::Null
         } else {
-            serde_wasm_bindgen::from_value(input).map_err(|e| {
-                JsValue::from_str(&format!("input must be JSON-serializable: {e}"))
-            })?
+            serde_wasm_bindgen::from_value(input)
+                .map_err(|e| JsValue::from_str(&format!("input must be JSON-serializable: {e}")))?
         };
 
         let handler = pipeline.start(input_json);

@@ -43,6 +43,8 @@
 //!         handler,
 //!         max_concurrency: 0,
 //!         semaphore: None,
+//!         timeout: None,
+//!         retry_config: None,
 //!     }
 //! }
 //!
@@ -228,6 +230,8 @@ mod tests {
             handler,
             max_concurrency: 0,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     }
 

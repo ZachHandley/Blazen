@@ -28,6 +28,7 @@ use super::sse::{OaiResponse, SseParser};
 use super::{provider_http_error, provider_http_error_parts};
 use crate::error::BlazenError;
 use crate::http::{HttpClient, HttpRequest, HttpResponse};
+use crate::retry::RetryConfig;
 use crate::traits::{ModelCapabilities, ModelInfo, ModelPricing, ModelRegistry};
 use crate::types::{
     Citation, CompletionRequest, CompletionResponse, EmbeddingResponse, ReasoningTrace, Role,
@@ -87,6 +88,9 @@ pub struct OpenAiCompatConfig {
 pub struct OpenAiCompatProvider {
     config: OpenAiCompatConfig,
     client: Arc<dyn HttpClient>,
+    /// Provider-level default retry config. Pipeline / workflow / step / call
+    /// scopes can override this; if all are `None`, this is the fallback.
+    retry_config: Option<Arc<RetryConfig>>,
 }
 
 impl std::fmt::Debug for OpenAiCompatProvider {
@@ -102,6 +106,7 @@ impl Clone for OpenAiCompatProvider {
         Self {
             config: self.config.clone(),
             client: Arc::clone(&self.client),
+            retry_config: self.retry_config.clone(),
         }
     }
 }
@@ -117,13 +122,18 @@ impl OpenAiCompatProvider {
         Self {
             config,
             client: crate::default_http_client(),
+            retry_config: None,
         }
     }
 
     /// Create a provider from a configuration with an explicit HTTP client backend.
     #[must_use]
     pub fn new_with_client(config: OpenAiCompatConfig, client: Arc<dyn HttpClient>) -> Self {
-        Self { config, client }
+        Self {
+            config,
+            client,
+            retry_config: None,
+        }
     }
 }
 
@@ -157,6 +167,24 @@ impl OpenAiCompatProvider {
     #[must_use]
     pub fn with_http_client(mut self, client: Arc<dyn HttpClient>) -> Self {
         self.client = client;
+        self
+    }
+
+    /// Return a clone of the underlying HTTP client.
+    ///
+    /// Escape hatch for power users who need to issue raw HTTP requests
+    /// (custom headers, endpoints not yet covered by Blazen's typed
+    /// surface, debugging) while reusing the same connection pool, TLS
+    /// config, and timeouts as this provider.
+    #[must_use]
+    pub fn http_client(&self) -> Arc<dyn HttpClient> {
+        Arc::clone(&self.client)
+    }
+
+    /// Set the provider-level default retry configuration.
+    #[must_use]
+    pub fn with_retry_config(mut self, config: RetryConfig) -> Self {
+        self.retry_config = Some(Arc::new(config));
         self
     }
 
@@ -435,6 +463,14 @@ fn parse_citations(entries: Vec<serde_json::Value>) -> Vec<Citation> {
 impl crate::traits::CompletionModel for OpenAiCompatProvider {
     fn model_id(&self) -> &str {
         &self.config.default_model
+    }
+
+    fn retry_config(&self) -> Option<&Arc<RetryConfig>> {
+        self.retry_config.as_ref()
+    }
+
+    fn http_client(&self) -> Option<Arc<dyn HttpClient>> {
+        Some(Self::http_client(self))
     }
 
     async fn complete(
@@ -802,6 +838,9 @@ impl OpenAiCompatProvider {
 pub struct OpenAiCompatEmbeddingModel {
     config: OpenAiCompatConfig,
     client: Arc<dyn HttpClient>,
+    /// Provider-level default retry config. Pipeline / workflow / step / call
+    /// scopes can override this; if all are `None`, this is the fallback.
+    retry_config: Option<Arc<RetryConfig>>,
     model: String,
     dimensions: usize,
 }
@@ -822,6 +861,7 @@ impl Clone for OpenAiCompatEmbeddingModel {
         Self {
             config: self.config.clone(),
             client: Arc::clone(&self.client),
+            retry_config: self.retry_config.clone(),
             model: self.model.clone(),
             dimensions: self.dimensions,
         }
@@ -839,6 +879,7 @@ impl OpenAiCompatEmbeddingModel {
         Self {
             config,
             client: crate::default_http_client(),
+            retry_config: None,
             model: model.into(),
             dimensions,
         }
@@ -855,6 +896,7 @@ impl OpenAiCompatEmbeddingModel {
         Self {
             config,
             client,
+            retry_config: None,
             model: model.into(),
             dimensions,
         }
@@ -953,6 +995,23 @@ impl OpenAiCompatEmbeddingModel {
         self
     }
 
+    /// Return a clone of the underlying HTTP client.
+    ///
+    /// Escape hatch for power users who need to issue raw HTTP requests
+    /// while reusing the same connection pool, TLS config, and timeouts
+    /// as this embedding model.
+    #[must_use]
+    pub fn http_client(&self) -> Arc<dyn HttpClient> {
+        Arc::clone(&self.client)
+    }
+
+    /// Set the provider-level default retry configuration.
+    #[must_use]
+    pub fn with_retry_config(mut self, config: RetryConfig) -> Self {
+        self.retry_config = Some(Arc::new(config));
+        self
+    }
+
     // -----------------------------------------------------------------------
     // Internal helpers
     // -----------------------------------------------------------------------
@@ -1027,6 +1086,14 @@ impl crate::traits::EmbeddingModel for OpenAiCompatEmbeddingModel {
 
     fn dimensions(&self) -> usize {
         self.dimensions
+    }
+
+    fn retry_config(&self) -> Option<&Arc<RetryConfig>> {
+        self.retry_config.as_ref()
+    }
+
+    fn http_client(&self) -> Option<Arc<dyn HttpClient>> {
+        Some(Self::http_client(self))
     }
 
     async fn embed(&self, texts: &[String]) -> Result<EmbeddingResponse, BlazenError> {
@@ -1109,6 +1176,87 @@ impl crate::traits::ProviderInfo for OpenAiCompatProvider {
             embeddings: true,
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// ComputeProvider (stub -- required as a supertrait for AudioGeneration)
+// ---------------------------------------------------------------------------
+
+// OpenAI-compatible services use plain POST/response, not a queue-based
+// compute job, so the queue-lifecycle methods return Unsupported.
+
+#[async_trait]
+impl crate::compute::traits::ComputeProvider for OpenAiCompatProvider {
+    fn provider_id(&self) -> &str {
+        &self.config.provider_name
+    }
+
+    async fn submit(
+        &self,
+        _request: crate::compute::job::ComputeRequest,
+    ) -> Result<crate::compute::job::JobHandle, BlazenError> {
+        Err(BlazenError::unsupported(
+            "OpenAI-compatible provider does not expose a queue-based compute API",
+        ))
+    }
+
+    async fn status(
+        &self,
+        _job: &crate::compute::job::JobHandle,
+    ) -> Result<crate::compute::job::JobStatus, BlazenError> {
+        Err(BlazenError::unsupported(
+            "OpenAI-compatible provider does not expose a queue-based compute API",
+        ))
+    }
+
+    async fn result(
+        &self,
+        _job: crate::compute::job::JobHandle,
+    ) -> Result<crate::compute::job::ComputeResult, BlazenError> {
+        Err(BlazenError::unsupported(
+            "OpenAI-compatible provider does not expose a queue-based compute API",
+        ))
+    }
+
+    async fn cancel(&self, _job: &crate::compute::job::JobHandle) -> Result<(), BlazenError> {
+        Err(BlazenError::unsupported(
+            "OpenAI-compatible provider does not expose a queue-based compute API",
+        ))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AudioGeneration (text-to-speech via /v1/audio/speech)
+// ---------------------------------------------------------------------------
+
+// Only Bearer auth is currently supported for TTS because the underlying
+// helper (`openai_audio::text_to_speech_request`) applies bearer auth
+// unconditionally. Non-Bearer compat services (Azure, custom header,
+// KeyPrefix) return Unsupported until the helper gains multi-auth support.
+
+#[async_trait]
+impl crate::compute::traits::AudioGeneration for OpenAiCompatProvider {
+    async fn text_to_speech(
+        &self,
+        request: crate::compute::requests::SpeechRequest,
+    ) -> Result<crate::compute::results::AudioResult, BlazenError> {
+        match &self.config.auth_method {
+            AuthMethod::Bearer => {
+                super::openai_audio::text_to_speech_request(
+                    self.client.as_ref(),
+                    &self.config.base_url,
+                    &self.config.api_key,
+                    request,
+                )
+                .await
+            }
+            _ => Err(BlazenError::unsupported(
+                "OpenAI-compatible TTS currently supports Bearer auth only",
+            )),
+        }
+    }
+    // generate_music and generate_sfx intentionally NOT overridden --
+    // they fall through to the default `Err(Unsupported)` impls in the trait.
 }
 
 // ---------------------------------------------------------------------------
@@ -1502,85 +1650,4 @@ mod tests {
         assert_eq!(usage.prompt_tokens, 25);
         assert_eq!(usage.total_tokens, 25);
     }
-}
-
-// ---------------------------------------------------------------------------
-// ComputeProvider (stub -- required as a supertrait for AudioGeneration)
-// ---------------------------------------------------------------------------
-
-// OpenAI-compatible services use plain POST/response, not a queue-based
-// compute job, so the queue-lifecycle methods return Unsupported.
-
-#[async_trait]
-impl crate::compute::traits::ComputeProvider for OpenAiCompatProvider {
-    fn provider_id(&self) -> &str {
-        &self.config.provider_name
-    }
-
-    async fn submit(
-        &self,
-        _request: crate::compute::job::ComputeRequest,
-    ) -> Result<crate::compute::job::JobHandle, BlazenError> {
-        Err(BlazenError::unsupported(
-            "OpenAI-compatible provider does not expose a queue-based compute API",
-        ))
-    }
-
-    async fn status(
-        &self,
-        _job: &crate::compute::job::JobHandle,
-    ) -> Result<crate::compute::job::JobStatus, BlazenError> {
-        Err(BlazenError::unsupported(
-            "OpenAI-compatible provider does not expose a queue-based compute API",
-        ))
-    }
-
-    async fn result(
-        &self,
-        _job: crate::compute::job::JobHandle,
-    ) -> Result<crate::compute::job::ComputeResult, BlazenError> {
-        Err(BlazenError::unsupported(
-            "OpenAI-compatible provider does not expose a queue-based compute API",
-        ))
-    }
-
-    async fn cancel(&self, _job: &crate::compute::job::JobHandle) -> Result<(), BlazenError> {
-        Err(BlazenError::unsupported(
-            "OpenAI-compatible provider does not expose a queue-based compute API",
-        ))
-    }
-}
-
-// ---------------------------------------------------------------------------
-// AudioGeneration (text-to-speech via /v1/audio/speech)
-// ---------------------------------------------------------------------------
-
-// Only Bearer auth is currently supported for TTS because the underlying
-// helper (`openai_audio::text_to_speech_request`) applies bearer auth
-// unconditionally. Non-Bearer compat services (Azure, custom header,
-// KeyPrefix) return Unsupported until the helper gains multi-auth support.
-
-#[async_trait]
-impl crate::compute::traits::AudioGeneration for OpenAiCompatProvider {
-    async fn text_to_speech(
-        &self,
-        request: crate::compute::requests::SpeechRequest,
-    ) -> Result<crate::compute::results::AudioResult, BlazenError> {
-        match &self.config.auth_method {
-            AuthMethod::Bearer => {
-                super::openai_audio::text_to_speech_request(
-                    self.client.as_ref(),
-                    &self.config.base_url,
-                    &self.config.api_key,
-                    request,
-                )
-                .await
-            }
-            _ => Err(BlazenError::unsupported(
-                "OpenAI-compatible TTS currently supports Bearer auth only",
-            )),
-        }
-    }
-    // generate_music and generate_sfx intentionally NOT overridden --
-    // they fall through to the default `Err(Unsupported)` impls in the trait.
 }

@@ -232,11 +232,7 @@ impl WasmEmbeddingModel {
     /// ```
     #[must_use]
     #[wasm_bindgen(js_name = "fromJsHandler")]
-    pub fn from_js_handler(
-        model_id: String,
-        dimensions: u32,
-        handler: js_sys::Function,
-    ) -> Self {
+    pub fn from_js_handler(model_id: String, dimensions: u32, handler: js_sys::Function) -> Self {
         let wrapper = JsEmbeddingHandler::new(model_id, dimensions as usize, handler);
         Self {
             inner: Arc::new(wrapper),
@@ -310,8 +306,7 @@ impl WasmEmbeddingModel {
         // `new Function("texts", body)` creates `function anonymous(texts) { body }`.
         let handler = js_sys::Function::new_with_args("texts", &handler_body);
 
-        let wrapper =
-            JsEmbeddingHandler::new(model_id, dimensions as usize, handler);
+        let wrapper = JsEmbeddingHandler::new(model_id, dimensions as usize, handler);
         Ok(Self {
             inner: Arc::new(wrapper),
         })

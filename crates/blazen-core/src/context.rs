@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use blazen_events::{AnyEvent, Event, EventEnvelope};
+use blazen_llm::retry::{RetryConfig, RetryStack};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tokio::sync::{RwLock, broadcast, mpsc};
@@ -85,6 +86,10 @@ struct ContextInner {
 #[derive(Clone)]
 pub struct Context {
     inner: Arc<RwLock<ContextInner>>,
+    /// Per-clone retry stack. Lives outside the inner lock so concurrent
+    /// step clones can carry different stacks without contention. Cloned
+    /// (Arc-bumped) cheaply when cloning Context.
+    retry_stack: RetryStack,
 }
 
 impl Context {
@@ -113,6 +118,7 @@ impl Context {
                 peer_client: None,
                 owns_registry: true,
             })),
+            retry_stack: RetryStack::default(),
         }
     }
 
@@ -146,6 +152,7 @@ impl Context {
                 peer_client: None,
                 owns_registry: false,
             })),
+            retry_stack: RetryStack::default(),
         }
     }
 
@@ -173,6 +180,7 @@ impl Context {
                 peer_client: Some(peer_client),
                 owns_registry: false,
             })),
+            retry_stack: RetryStack::default(),
         }
     }
 
@@ -200,6 +208,56 @@ impl Context {
     pub(crate) async fn set_peer_client(&self, client: Arc<dyn crate::distributed::PeerClient>) {
         let mut inner = self.inner.write().await;
         inner.peer_client = Some(client);
+    }
+
+    // -----------------------------------------------------------------
+    // Retry stack accessors
+    // -----------------------------------------------------------------
+
+    /// Returns a reference to this context's per-clone retry stack.
+    #[must_use]
+    pub fn retry_stack(&self) -> &RetryStack {
+        &self.retry_stack
+    }
+
+    /// Resolve the effective retry config given an optional per-call override.
+    ///
+    /// The resolver walks `call > step > workflow > pipeline > provider`,
+    /// falling back to [`RetryConfig::default`] when every scope is `None`.
+    #[must_use]
+    pub fn resolved_retry(&self, call: Option<&Arc<RetryConfig>>) -> Arc<RetryConfig> {
+        self.retry_stack.resolve(call)
+    }
+
+    /// Return a clone of this context with the pipeline-scope retry set.
+    /// Use this when a pipeline runtime is dispatching into a workflow.
+    #[must_use]
+    pub fn with_pipeline_retry(mut self, cfg: Option<Arc<RetryConfig>>) -> Self {
+        self.retry_stack.pipeline = cfg;
+        self
+    }
+
+    /// Return a clone of this context with the workflow-scope retry set.
+    #[must_use]
+    pub fn with_workflow_retry(mut self, cfg: Option<Arc<RetryConfig>>) -> Self {
+        self.retry_stack.workflow = cfg;
+        self
+    }
+
+    /// Return a clone of this context with the step-scope retry set.
+    #[must_use]
+    pub fn with_step_retry(mut self, cfg: Option<Arc<RetryConfig>>) -> Self {
+        self.retry_stack.step = cfg;
+        self
+    }
+
+    /// Return a clone of this context with the provider-scope default retry.
+    /// Useful when a step is wrapping an external provider whose
+    /// `retry_config()` getter is `None` and the user wants to inject one.
+    #[must_use]
+    pub fn with_provider_retry(mut self, cfg: Option<Arc<RetryConfig>>) -> Self {
+        self.retry_stack.provider = cfg;
+        self
     }
 
     // -----------------------------------------------------------------
@@ -426,6 +484,23 @@ impl Context {
         let inner = self.inner.read().await;
         // Ignore send errors -- there may be no active subscribers.
         let _ = inner.stream_tx.send(Box::new(event));
+    }
+
+    /// Emit a [`UsageEvent`](blazen_events::UsageEvent) on this workflow's
+    /// broadcast stream so consumers (`Pipeline` rollups, telemetry, callers
+    /// via [`stream_events`](crate::WorkflowHandler::stream_events)) can
+    /// aggregate cost / token usage across the run.
+    ///
+    /// The workflow runtime spawns an internal accumulator that subscribes
+    /// to this same stream and folds every emitted `UsageEvent` into the
+    /// running totals exposed via
+    /// [`WorkflowHandler::usage_total`](crate::WorkflowHandler::usage_total)
+    /// and
+    /// [`WorkflowHandler::cost_total_usd`](crate::WorkflowHandler::cost_total_usd),
+    /// and surfaced on [`WorkflowResult`](crate::WorkflowResult) once the
+    /// run completes.
+    pub async fn emit_usage(&self, event: blazen_events::UsageEvent) {
+        self.write_event_to_stream(event).await;
     }
 
     // -----------------------------------------------------------------
@@ -976,5 +1051,51 @@ mod tests {
         let dropped = ctx.clear_session_refs().await;
         assert_eq!(dropped, 2);
         assert_eq!(reg.len().await, 0);
+    }
+
+    // -----------------------------------------------------------------
+    // Retry stack
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn context_default_retry_stack_resolves_to_default_config() {
+        let (event_tx, _event_rx) = mpsc::unbounded_channel();
+        let (stream_tx, _) = broadcast::channel(8);
+        let ctx = Context::new(event_tx, stream_tx);
+        let resolved = ctx.resolved_retry(None);
+        let default_cfg = RetryConfig::default();
+        assert_eq!(resolved.max_retries, default_cfg.max_retries);
+    }
+
+    #[test]
+    fn context_with_step_retry_overrides_workflow_retry() {
+        let (event_tx, _event_rx) = mpsc::unbounded_channel();
+        let (stream_tx, _) = broadcast::channel(8);
+        let ctx = Context::new(event_tx, stream_tx)
+            .with_workflow_retry(Some(Arc::new(RetryConfig {
+                max_retries: 7,
+                ..RetryConfig::default()
+            })))
+            .with_step_retry(Some(Arc::new(RetryConfig {
+                max_retries: 3,
+                ..RetryConfig::default()
+            })));
+        let resolved = ctx.resolved_retry(None);
+        assert_eq!(resolved.max_retries, 3);
+    }
+
+    #[test]
+    fn context_call_override_beats_everything() {
+        let (event_tx, _event_rx) = mpsc::unbounded_channel();
+        let (stream_tx, _) = broadcast::channel(8);
+        let ctx = Context::new(event_tx, stream_tx).with_step_retry(Some(Arc::new(RetryConfig {
+            max_retries: 3,
+            ..RetryConfig::default()
+        })));
+        let call = Arc::new(RetryConfig {
+            max_retries: 1,
+            ..RetryConfig::default()
+        });
+        assert_eq!(ctx.resolved_retry(Some(&call)).max_retries, 1);
     }
 }

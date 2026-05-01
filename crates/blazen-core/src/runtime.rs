@@ -168,6 +168,17 @@ mod imp {
         pub fn len(&self) -> usize {
             self.inner.len()
         }
+
+        /// Abort every spawned task. Mirrors
+        /// [`tokio::task::JoinSet::abort_all`]. On `wasm32-unknown-unknown`
+        /// the underlying tasks were dispatched via `spawn_local` and
+        /// cannot be cancelled cooperatively after spawn — the set is
+        /// simply drained so subsequent `join_next` calls return `None`.
+        /// Called by sub-workflow fan-out cleanup paths in
+        /// `blazen-core::event_loop`.
+        pub fn abort_all(&mut self) {
+            self.inner = FuturesUnordered::new();
+        }
     }
 
     impl<T: 'static> Default for JoinSet<T> {

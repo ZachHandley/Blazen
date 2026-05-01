@@ -95,6 +95,8 @@ pub fn register_pricing(model_id: &str, pricing: &PyModelPricing) {
             blazen_llm::PricingEntry {
                 input_per_million: input,
                 output_per_million: output,
+                per_image: pricing.inner.per_image,
+                per_second: pricing.inner.per_second,
             },
         );
     }
@@ -122,8 +124,44 @@ pub fn lookup_pricing(model_id: &str) -> Option<PyModelPricing> {
         inner: ModelPricing {
             input_per_million: Some(e.input_per_million),
             output_per_million: Some(e.output_per_million),
-            per_image: None,
-            per_second: None,
+            per_image: e.per_image,
+            per_second: e.per_second,
         },
     })
+}
+
+/// Compute USD cost of an image-generation request.
+///
+/// Looks up the registered ``per_image`` price for ``model_id`` and returns
+/// ``per_image * image_count``. Returns ``None`` if the model is unknown or
+/// has no per-image price.
+#[gen_stub_pyfunction]
+#[pyfunction]
+#[must_use]
+pub fn compute_image_cost(model_id: &str, image_count: u32) -> Option<f64> {
+    blazen_llm::pricing::compute_image_cost(model_id, image_count)
+}
+
+/// Compute USD cost of an audio request (TTS or STT).
+///
+/// Looks up the registered ``per_second`` price for ``model_id`` and returns
+/// ``per_second * seconds``. Returns ``None`` if the model is unknown or has
+/// no per-second price.
+#[gen_stub_pyfunction]
+#[pyfunction]
+#[must_use]
+pub fn compute_audio_cost(model_id: &str, seconds: f64) -> Option<f64> {
+    blazen_llm::pricing::compute_audio_cost(model_id, seconds)
+}
+
+/// Compute USD cost of a video-generation request.
+///
+/// Looks up the registered ``per_second`` price for ``model_id`` and returns
+/// ``per_second * seconds``. Returns ``None`` if the model is unknown or has
+/// no per-second price.
+#[gen_stub_pyfunction]
+#[pyfunction]
+#[must_use]
+pub fn compute_video_cost(model_id: &str, seconds: f64) -> Option<f64> {
+    blazen_llm::pricing::compute_video_cost(model_id, seconds)
 }

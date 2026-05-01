@@ -216,9 +216,9 @@ impl WasmStateValue {
     #[wasm_bindgen(js_name = "asBytes")]
     #[must_use]
     pub fn as_bytes(&self) -> JsValue {
-        self.inner.as_bytes().map_or(JsValue::NULL, |b| {
-            js_sys::Uint8Array::from(b).into()
-        })
+        self.inner
+            .as_bytes()
+            .map_or(JsValue::NULL, |b| js_sys::Uint8Array::from(b).into())
     }
 
     /// Return the inner native bytes as a `Uint8Array`, or `null` if this
@@ -226,9 +226,9 @@ impl WasmStateValue {
     #[wasm_bindgen(js_name = "asNative")]
     #[must_use]
     pub fn as_native(&self) -> JsValue {
-        self.inner.as_native().map_or(JsValue::NULL, |b| {
-            js_sys::Uint8Array::from(b).into()
-        })
+        self.inner
+            .as_native()
+            .map_or(JsValue::NULL, |b| js_sys::Uint8Array::from(b).into())
     }
 
     /// Marshal this value into a JS-friendly representation:

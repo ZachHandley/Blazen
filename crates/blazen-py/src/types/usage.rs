@@ -102,6 +102,30 @@ impl PyTokenUsage {
         self.inner.audio_output_tokens
     }
 
+    /// Construct a zero-initialised `TokenUsage` (every counter is `0`).
+    ///
+    /// Equivalent to `TokenUsage()` but kept as an explicit factory for
+    /// readability at call sites that build running tallies.
+    #[staticmethod]
+    fn zero() -> Self {
+        Self {
+            inner: TokenUsage::zero(),
+        }
+    }
+
+    /// Saturating field-wise addition: returns a new `TokenUsage` whose
+    /// counters are `self + other`.
+    ///
+    /// `TokenUsage` is exposed as a frozen value so this method intentionally
+    /// returns a new instance rather than mutating in place. For high-volume
+    /// rollups, prefer doing the arithmetic in Rust via the workflow / pipeline
+    /// machinery.
+    fn add(&self, other: &PyTokenUsage) -> PyTokenUsage {
+        let mut out = self.inner.clone();
+        out.add(&other.inner);
+        Self { inner: out }
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "TokenUsage(prompt={}, completion={}, total={}, reasoning={})",

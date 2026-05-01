@@ -6,13 +6,17 @@
 //! inside each stage is materialized at `Pipeline.start()` time so the current
 //! Python task locals are captured.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
+use blazen_llm::retry::RetryConfig;
+
 use crate::pipeline::pipeline::PyPipeline;
 use crate::pipeline::stage::{PendingStage, PyParallelStage, PyStage};
+use crate::providers::config::PyRetryConfig;
 
 /// Fluent builder for constructing a [`Pipeline`].
 ///
@@ -28,12 +32,17 @@ use crate::pipeline::stage::{PendingStage, PyParallelStage, PyStage};
 ///     ... )
 #[gen_stub_pyclass]
 #[pyclass(name = "PipelineBuilder")]
+#[allow(clippy::struct_excessive_bools)]
 pub struct PyPipelineBuilder {
     pub(crate) name: String,
     pub(crate) pending_stages: Vec<PendingStage>,
     pub(crate) on_persist: Option<Py<PyAny>>,
     pub(crate) on_persist_json: Option<Py<PyAny>>,
     pub(crate) timeout_per_stage: Option<Duration>,
+    pub(crate) total_timeout: Option<Duration>,
+    pub(crate) total_timeout_set: bool,
+    pub(crate) retry_config: Option<Arc<RetryConfig>>,
+    pub(crate) retry_config_set: bool,
 }
 
 #[gen_stub_pymethods]
@@ -48,6 +57,10 @@ impl PyPipelineBuilder {
             on_persist: None,
             on_persist_json: None,
             timeout_per_stage: None,
+            total_timeout: None,
+            total_timeout_set: false,
+            retry_config: None,
+            retry_config_set: false,
         }
     }
 
@@ -84,6 +97,50 @@ impl PyPipelineBuilder {
         slf
     }
 
+    /// Set the maximum wall-clock duration for the entire pipeline run, in
+    /// seconds. Cumulative across all stages.
+    fn total_timeout(mut slf: PyRefMut<'_, Self>, seconds: f64) -> PyRefMut<'_, Self> {
+        slf.total_timeout = Some(Duration::from_secs_f64(seconds));
+        slf.total_timeout_set = true;
+        slf
+    }
+
+    /// Disable the pipeline-level total-timeout (run until every stage
+    /// completes or fails).
+    fn no_total_timeout(mut slf: PyRefMut<'_, Self>) -> PyRefMut<'_, Self> {
+        slf.total_timeout = None;
+        slf.total_timeout_set = true;
+        slf
+    }
+
+    /// Set the pipeline-level default `RetryConfig` for every LLM call.
+    /// Workflow / step / per-call overrides take precedence over this value.
+    fn retry_config<'py>(
+        mut slf: PyRefMut<'py, Self>,
+        config: PyRef<'py, PyRetryConfig>,
+    ) -> PyRefMut<'py, Self> {
+        slf.retry_config = Some(Arc::new(config.inner.clone()));
+        slf.retry_config_set = true;
+        slf
+    }
+
+    /// Disable retries at the pipeline level (`max_retries = 0`).
+    fn no_retry(mut slf: PyRefMut<'_, Self>) -> PyRefMut<'_, Self> {
+        slf.retry_config = Some(Arc::new(RetryConfig {
+            max_retries: 0,
+            ..RetryConfig::default()
+        }));
+        slf.retry_config_set = true;
+        slf
+    }
+
+    /// Clear any pipeline-level retry config (defer to next-outer scope).
+    fn clear_retry_config(mut slf: PyRefMut<'_, Self>) -> PyRefMut<'_, Self> {
+        slf.retry_config = None;
+        slf.retry_config_set = true;
+        slf
+    }
+
     /// Validate and build the pipeline.
     ///
     /// Raises `PipelineError` if the pipeline has no stages or if any
@@ -105,6 +162,10 @@ impl PyPipelineBuilder {
             on_persist: self.on_persist.take(),
             on_persist_json: self.on_persist_json.take(),
             timeout_per_stage: self.timeout_per_stage,
+            total_timeout: self.total_timeout,
+            total_timeout_set: self.total_timeout_set,
+            retry_config: self.retry_config.clone(),
+            retry_config_set: self.retry_config_set,
         })
     }
 

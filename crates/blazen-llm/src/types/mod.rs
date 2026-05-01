@@ -20,4 +20,4 @@ pub use message::{
 };
 pub use tool::{ToolCall, ToolDefinition};
 pub use tool_output::{LlmPayload, ProviderId, ToolOutput};
-pub use usage::{RequestTiming, TokenUsage};
+pub use usage::{Modality, RequestTiming, TokenUsage};

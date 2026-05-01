@@ -38,6 +38,7 @@ use crate::compute::traits::{
     Transcription, VideoGeneration, VoiceCloning,
 };
 use crate::error::BlazenError;
+use crate::retry::RetryConfig;
 
 // ---------------------------------------------------------------------------
 // HostDispatch trait
@@ -118,6 +119,9 @@ pub trait HostDispatch: Send + Sync + 'static {
 pub struct CustomProvider<D: HostDispatch> {
     provider_id: String,
     dispatch: Arc<D>,
+    /// Provider-level default retry config. Pipeline / workflow / step / call
+    /// scopes can override this; if all are `None`, this is the fallback.
+    retry_config: Option<Arc<RetryConfig>>,
 }
 
 impl<D: HostDispatch> CustomProvider<D> {
@@ -130,7 +134,38 @@ impl<D: HostDispatch> CustomProvider<D> {
         Self {
             provider_id: provider_id.into(),
             dispatch: Arc::new(dispatch),
+            retry_config: None,
         }
+    }
+
+    /// Set the provider-level default retry configuration.
+    #[must_use]
+    pub fn with_retry_config(mut self, config: RetryConfig) -> Self {
+        self.retry_config = Some(Arc::new(config));
+        self
+    }
+
+    /// Provider-level default retry configuration, if any.
+    #[must_use]
+    pub fn retry_config(&self) -> Option<&Arc<RetryConfig>> {
+        self.retry_config.as_ref()
+    }
+
+    /// Escape hatch for the underlying HTTP client.
+    ///
+    /// [`CustomProvider`] always returns `None` because dispatch happens
+    /// entirely in the host language ([`HostDispatch::call`]) -- there is
+    /// no wire-level HTTP client owned by Blazen. If the host-language
+    /// implementation makes HTTP requests internally, those are managed
+    /// by the host runtime (Python `httpx`, Node `fetch`, etc.) and are
+    /// not exposed through this trait.
+    ///
+    /// The shape mirrors the trait-level `http_client` accessor on
+    /// [`crate::traits::CompletionModel`] / [`crate::traits::EmbeddingModel`]
+    /// so that callers can probe arbitrary providers uniformly.
+    #[must_use]
+    pub fn http_client(&self) -> Option<Arc<dyn crate::http::HttpClient>> {
+        None
     }
 
     /// Shared dispatch helper: serialize the typed request, call through

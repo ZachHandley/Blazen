@@ -2612,7 +2612,7 @@ export type JsModelCache = ModelCache
  *
  * ```javascript
  * const manager = new ModelManager({ budgetGb: 8.0 });
- * await manager.register("llama-7b", model, 4_000_000_000);
+ * await manager.register("llama-7b", model, 4_000_000_000n);  // BigInt
  * await manager.load("llama-7b");
  * ```
  */
@@ -2633,7 +2633,7 @@ export declare class ModelManager {
    * Only local in-process providers (mistral.rs, llama.cpp, candle) can be
    * registered -- remote HTTP providers will throw.
    */
-  register(id: string, model: JsCompletionModel, vramEstimateBytes?: number | undefined | null): Promise<void>
+  register(id: string, model: JsCompletionModel, vramEstimateBytes?: bigint | undefined | null): Promise<void>
   /**
    * Load a model, evicting LRU models if the budget would be exceeded.
    *
@@ -2657,9 +2657,9 @@ export declare class ModelManager {
    */
   ensureLoaded(id: string): Promise<void>
   /** Total VRAM currently used by loaded models (in bytes). */
-  usedBytes(): Promise<number>
+  usedBytes(): Promise<bigint>
   /** Available VRAM within the budget (in bytes). */
-  availableBytes(): Promise<number>
+  availableBytes(): Promise<bigint>
   /** Status of all registered models. */
   status(): Promise<Array<JsModelStatus>>
 }
@@ -2898,6 +2898,12 @@ export declare class Pipeline {
    */
   start(input: any): Promise<PipelineHandler>
   /**
+   * Inspect the pipeline-level default retry configuration, if any.
+   * Mirrors [`blazen_pipeline::Pipeline::retry_config`] (Wave 2).
+   * Returns `null` after the pipeline has been consumed.
+   */
+  retryConfig(): JsRetryConfig | null
+  /**
    * Resume the pipeline from a previously captured snapshot.
    * Consumes the pipeline.
    */
@@ -2914,6 +2920,31 @@ export declare class PipelineBuilder {
   parallel(parallel: JsParallelStage): this
   /** Set a per-stage timeout in seconds. Each stage's workflow gets this duration. */
   timeoutPerStage(seconds: number): this
+  /**
+   * Set a total wall-clock timeout for the entire pipeline run, in
+   * seconds. When the pipeline does not finish within this duration the
+   * run is cancelled with a `PipelineError::Timeout`. Default is no
+   * total timeout. Mirrors [`blazen_pipeline::PipelineBuilder::total_timeout`].
+   */
+  totalTimeout(seconds: number): this
+  /** Disable the total-pipeline timeout (default). */
+  noTotalTimeout(): this
+  /**
+   * Set a default retry configuration applied to every LLM call inside
+   * the pipeline. Workflow / step / per-call overrides take precedence.
+   * Mirrors [`blazen_pipeline::PipelineBuilder::retry_config`].
+   */
+  retryConfig(config: JsRetryConfig): this
+  /**
+   * Disable pipeline-level retries (`maxRetries = 0`). Workflow / step /
+   * per-call overrides still take precedence.
+   */
+  noRetry(): this
+  /**
+   * Clear any pipeline-level retry config; LLM calls fall through to
+   * workflow / step / provider defaults.
+   */
+  clearRetryConfig(): this
   /**
    * Register a persist callback that receives a typed `PipelineSnapshot`
    * after each stage completes.
@@ -2954,6 +2985,13 @@ export declare class PipelineHandler {
   resumeInPlace(): Promise<void>
   /** Capture a snapshot without stopping the pipeline. */
   snapshot(): Promise<JsPipelineSnapshot>
+  /**
+   * Best-effort polled view of the pipeline's stage cursor. Mirrors
+   * [`blazen_pipeline::PipelineHandler::progress`].
+   *
+   * Returns `null` after [`Self::result`] has consumed the handler.
+   */
+  progress(): Promise<JsProgressSnapshot | null>
   /** Abort the pipeline. */
   abort(): Promise<void>
   /**
@@ -2971,6 +3009,16 @@ export declare class PipelineResult {
   get finalOutput(): any
   get stageResults(): Array<StageResult>
   get sharedState(): any
+  /**
+   * Aggregated token usage across the pipeline run. Mirrors
+   * [`blazen_pipeline::PipelineResult::usage_total`] (Wave 3).
+   */
+  get usageTotal(): JsTokenUsageClass
+  /**
+   * Aggregated cost in USD across the pipeline run. Mirrors
+   * [`blazen_pipeline::PipelineResult::cost_total_usd`] (Wave 3).
+   */
+  get costTotalUsd(): number
 }
 export type JsPipelineResult = PipelineResult
 
@@ -3525,6 +3573,17 @@ export declare class StageResult {
   get output(): any
   get skipped(): boolean
   get durationMs(): number
+  /**
+   * Token usage for this stage, if any LLM calls inside the stage
+   * emitted [`UsageEvent`](blazen_events::UsageEvent)s. Mirrors
+   * [`blazen_pipeline::StageResult::usage`] (Wave 3).
+   */
+  get usage(): JsTokenUsageClass | null
+  /**
+   * Cost in USD for this stage, if known. Mirrors
+   * [`blazen_pipeline::StageResult::cost_usd`] (Wave 3).
+   */
+  get costUsd(): number | null
 }
 export type JsStageResult = StageResult
 
@@ -4113,6 +4172,28 @@ export declare class TypedTool {
   get description(): string
   /** The JSON Schema parameter definition. */
   get parameters(): any
+  /**
+   * Whether this tool is marked as an "exit" tool, signalling the agent
+   * loop to stop after it runs. Mirrors
+   * [`blazen_llm::Tool::is_exit`] (Wave 6).
+   */
+  get isExit(): boolean
+  /**
+   * Builder-style toggle for the exit-tool marker. Returns a new
+   * [`JsTypedTool`] that shares the same underlying handler but
+   * reports the requested [`Tool::is_exit`] value. Mirrors
+   * [`blazen_llm::TypedTool::exit_tool`] (Wave 6).
+   *
+   * ```typescript
+   * const exit = new TypedTool(
+   *   "submit",
+   *   "Submit the final answer and exit",
+   *   { type: "object", properties: { answer: { type: "string" } }, required: ["answer"] },
+   *   async (_n, args) => ({ submitted: args.answer }),
+   * ).exitTool(true);
+   * ```
+   */
+  exitTool(exit: boolean): TypedTool
 }
 export type JsTypedTool = TypedTool
 
@@ -4308,6 +4389,30 @@ export declare class Workflow {
    */
   setAutoPublishEvents(enabled: boolean): void
   /**
+   * Register a sub-workflow step that delegates to another `Workflow`.
+   * Mirrors [`blazen_core::WorkflowBuilder::add_subworkflow_step`].
+   *
+   * - `name`: human-readable step name.
+   * - `accepts`: array of event type strings this step handles.
+   * - `emits`: array of event type strings this step may emit (informational).
+   * - `inner`: the child `Workflow` to run.
+   * - `timeoutSecs`: optional wall-clock timeout for the child run.
+   * - `retryConfig`: optional retry policy for the child run.
+   */
+  addSubworkflowStep(name: string, accepts: Array<string>, emits: Array<string>, inner: Workflow, timeoutSecs?: number | undefined | null, retryConfig?: JsRetryConfig | undefined | null): void
+  /**
+   * Register a parallel sub-workflows fan-out step. Mirrors
+   * [`blazen_core::WorkflowBuilder::add_parallel_subworkflows`].
+   *
+   * `branchSpecs` and `branchWorkflows` are parallel arrays of equal
+   * length: each `(spec, wf)` pair becomes one branch. They're split
+   * into two parameters because napi-rs cannot embed napi-class values
+   * (the `Workflow` instances) inside `#[napi(object)]` shapes.
+   *
+   * `joinStrategy` defaults to `WaitAll`.
+   */
+  addParallelSubworkflows(name: string, accepts: Array<string>, emits: Array<string>, branchSpecs: Array<SubWorkflowBranchSpec>, branchWorkflows: Array<Workflow>, joinStrategy?: JoinStrategy | undefined | null): void
+  /**
    * Add a step to the workflow.
    *
    * - `name`: Human-readable step name.
@@ -4463,6 +4568,31 @@ export declare class WorkflowBuilder {
    */
   sessionPausePolicy(policy: SessionPausePolicy): this
   /**
+   * Set a per-step wall-clock timeout in seconds on the most-recently
+   * added step. Mirrors [`blazen_core::WorkflowBuilder::step_timeout`].
+   * Errors if no step has been registered yet.
+   */
+  stepTimeout(seconds: number): this
+  /** Clear the per-step timeout on the most-recently added step. */
+  noStepTimeout(): this
+  /**
+   * Set a per-step retry config on the most-recently added step.
+   * Mirrors [`blazen_core::WorkflowBuilder::step_retry`].
+   */
+  stepRetry(config: JsRetryConfig): this
+  /** Disable retries on the most-recently added step (`maxRetries = 0`). */
+  noStepRetry(): this
+  /**
+   * Set a workflow-level default retry config. Step / per-call
+   * overrides take precedence; pipeline / provider defaults take
+   * lower precedence.
+   */
+  retryConfig(config: JsRetryConfig): this
+  /** Disable workflow-level retries (`maxRetries = 0`). */
+  noRetry(): this
+  /** Clear any workflow-level retry config. */
+  clearRetryConfig(): this
+  /**
    * Enable history collection.
    *
    * Mirrors [`blazen_core::WorkflowBuilder::with_history`]. The
@@ -4611,6 +4741,19 @@ export declare class WorkflowHandler {
    * they may have built earlier.
    */
   respondToInputTyped(event: InputResponseEvent): Promise<void>
+  /**
+   * Aggregated token usage across the workflow run so far.
+   *
+   * Mirrors [`blazen_core::WorkflowHandler::usage_total`]. Returns
+   * `null` after the handler has been consumed by [`Self::result`].
+   */
+  usageTotal(): Promise<TokenUsage | null>
+  /**
+   * Aggregated cost in USD across the workflow run so far. Mirrors
+   * [`blazen_core::WorkflowHandler::cost_total_usd`]. Returns `null`
+   * after the handler has been consumed by [`Self::result`].
+   */
+  costTotalUsd(): Promise<number | null>
   /** Abort the running workflow. */
   abort(): Promise<void>
   /**
@@ -4732,6 +4875,19 @@ export declare class XaiProvider {
 export type JsXaiProvider = XaiProvider
 
 /**
+ * Aggregate one [`JsUsageEvent`] into a [`crate::types::JsTokenUsageClass`].
+ * Returns a fresh class instance that adds the seven token counters from the
+ * event into the existing usage. Mirrors the Rust `TokenUsage::add` /
+ * `PipelineState::record_usage` flow at the JS layer.
+ *
+ * # Errors
+ *
+ * Currently never returns an error; the [`Result`] return is reserved for
+ * future validation (e.g. parsing the `runId` UUID).
+ */
+export declare function addUsageToTokenUsage(base: JsTokenUsageClass, event: UsageEvent): JsTokenUsageClass
+
+/**
  * Typed configuration for the agentic tool execution loop.
  *
  * Mirrors the [`blazen_llm::AgentConfig`] fields. The existing
@@ -4742,8 +4898,23 @@ export type JsXaiProvider = XaiProvider
 export interface AgentConfig {
   /** Maximum number of tool call rounds before forcing a stop. */
   maxIterations: number
-  /** Whether to add an implicit "finish" tool the model can call to exit early. */
+  /**
+   * Whether to add the legacy implicit "finish" tool the model can call
+   * to exit early.
+   */
   addFinishTool: boolean
+  /**
+   * Suppress automatic registration of the built-in `finish_workflow`
+   * exit tool. Default `false`. Mirrors
+   * [`blazen_llm::AgentConfig::no_finish_tool`] (Wave 6).
+   */
+  noFinishTool: boolean
+  /**
+   * Override the name of the built-in `finish_workflow` tool. `null`
+   * uses the canonical [`crate::agent::FINISH_WORKFLOW_TOOL_NAME`].
+   * Mirrors [`blazen_llm::AgentConfig::finish_tool_name`] (Wave 6).
+   */
+  finishToolName?: string
   /** Optional system prompt prepended to messages. */
   systemPrompt?: string
   /** Sampling temperature. */
@@ -4949,6 +5120,14 @@ export interface CompletionRequest {
 }
 
 /**
+ * Compute the cost in USD for an audio call (TTS / STT) given the model id
+ * and the duration in seconds. Returns `null` when the model has no
+ * `perSecond` pricing entry registered. Mirrors
+ * [`blazen_llm::compute_audio_cost`].
+ */
+export declare function computeAudioCost(modelId: string, seconds: number): number | null
+
+/**
  * Compute ELID-based similarity between two embedding vectors.
  *
  * Encodes each vector with the default Mini128 ELID profile, then computes
@@ -4966,12 +5145,32 @@ export declare function computeElidSimilarity(a: Array<number>, b: Array<number>
 export declare function computeEmbeddingSimhashSimilarity(a: Array<number>, b: Array<number>): number
 
 /**
+ * Compute the cost in USD for an image-generation call given the model id
+ * and the number of images returned. Returns `null` when the model has no
+ * `perImage` pricing entry registered. Mirrors
+ * [`blazen_llm::compute_image_cost`].
+ *
+ * ```javascript
+ * const cost = computeImageCost("dall-e-3", 4);
+ * ```
+ */
+export declare function computeImageCost(modelId: string, imageCount: number): number | null
+
+/**
  * Compute similarity between two text strings using 64-bit `SimHash`.
  *
  * Hashes each input with `elid::simhash` and compares using normalized
  * Hamming distance over 64 bits. Returns a value in `[0.0, 1.0]`.
  */
 export declare function computeTextSimhashSimilarity(a: string, b: string): number
+
+/**
+ * Compute the cost in USD for a video-generation call given the model id
+ * and the output duration in seconds. Returns `null` when the model has no
+ * `perSecond` pricing entry registered. Mirrors
+ * [`blazen_llm::compute_video_cost`].
+ */
+export declare function computeVideoCost(modelId: string, seconds: number): number | null
 
 /**
  * Estimate the total token count for an array of chat messages.
@@ -4998,6 +5197,9 @@ export interface CustomProviderOptions {
    */
   providerId?: string
 }
+
+/** Build a default [`JsHttpClientConfig`] (60s request, 10s connect, no UA). */
+export declare function defaultHttpClientConfig(): HttpClientConfig
 
 /**
  * Configuration for subclassed `EmbeddingModel` instances.
@@ -5098,6 +5300,20 @@ export interface FileContent {
 }
 
 /**
+ * Canonical name of the built-in `finish_workflow` exit tool. Mirrors
+ * [`blazen_llm::FINISH_WORKFLOW_TOOL_NAME`].
+ */
+export const FINISH_WORKFLOW_TOOL_NAME: string
+
+/**
+ * Build a fresh JSON-Schema description of the built-in `finish_workflow`
+ * exit tool. The shape mirrors [`blazen_llm::finish_workflow_tool`] —
+ * callers that want to surface the same tool to a JS-side agent loop can
+ * use this object as a [`JsToolDef`] entry.
+ */
+export declare function finishWorkflowToolDef(): JsToolDef
+
+/**
  * Format the tail of a `ProviderHttp` error message, the same way
  * `BlazenError::ProviderHttp` does internally.
  */
@@ -5151,6 +5367,40 @@ export declare const enum HistoryEventKindTag {
   WorkflowCompleted = 'WorkflowCompleted',
   WorkflowFailed = 'WorkflowFailed',
   WorkflowTimedOut = 'WorkflowTimedOut'
+}
+
+/**
+ * Configuration applied when constructing the default HTTP client.
+ *
+ * Mirrors [`HttpClientConfig`]. All fields are optional in JS — pass
+ * `null` / `undefined` for any field to mean "no timeout / no UA
+ * override".
+ *
+ * ```typescript
+ * const cfg: HttpClientConfig = {
+ *   requestTimeoutMs: 30_000,
+ *   connectTimeoutMs: 5_000,
+ *   userAgent: "my-app/1.0",
+ * };
+ * const unlimited = HttpClientConfig.unlimited();
+ * ```
+ */
+export interface HttpClientConfig {
+  /**
+   * Maximum wall-clock duration for a single request, in milliseconds.
+   * `null` / `undefined` means unlimited.
+   */
+  requestTimeoutMs?: number
+  /**
+   * Maximum duration for the connection-establishment phase, in
+   * milliseconds. `null` / `undefined` means unlimited.
+   */
+  connectTimeoutMs?: number
+  /**
+   * User-Agent header string. `null` / `undefined` uses the underlying
+   * client's default.
+   */
+  userAgent?: string
 }
 
 /**
@@ -5252,10 +5502,22 @@ export interface JsAgentRunOptions {
   /** Maximum tokens per completion call. */
   maxTokens?: number
   /**
-   * Whether to add a built-in "finish" tool that the model can call to
-   * signal it has a final answer.
+   * Whether to add the legacy implicit "finish" tool the model can call
+   * to signal it has a final answer.
    */
   addFinishTool?: boolean
+  /**
+   * Suppress automatic registration of the built-in `finish_workflow`
+   * exit tool (default `false`, i.e. it is auto-added). Mirrors
+   * [`blazen_llm::AgentConfig::no_finish_tool`] (Wave 6).
+   */
+  noFinishTool?: boolean
+  /**
+   * Override the name of the built-in `finish_workflow` tool. Defaults
+   * to [`FINISH_WORKFLOW_TOOL_NAME`]. Mirrors
+   * [`blazen_llm::AgentConfig::finish_tool_name`] (Wave 6).
+   */
+  finishToolName?: string
   /**
    * Maximum number of tool calls to execute concurrently within a single
    * model response. `0` means unlimited (all in parallel). Defaults to 0.
@@ -5319,6 +5581,8 @@ export interface JsAudioResult {
   audio: Array<JsGeneratedAudio>
   timing: JsRequestTiming
   cost?: number
+  usage?: JsTokenUsage
+  audioSeconds?: number
   metadata: any
 }
 
@@ -5768,6 +6032,8 @@ export interface JsImageResult {
   images: Array<JsGeneratedImage>
   timing: JsRequestTiming
   cost?: number
+  usage?: JsTokenUsage
+  imageCount?: number
   metadata: any
 }
 
@@ -5922,7 +6188,7 @@ export interface JsModelStatus {
   /** Whether the model is currently loaded into VRAM. */
   loaded: boolean
   /** Estimated VRAM footprint in bytes. */
-  vramEstimate: number
+  vramEstimate: bigint
 }
 
 export interface JsMusicRequest {
@@ -6239,6 +6505,7 @@ export interface JsThreeDResult {
   models: Array<JsGenerated3DModel>
   timing: JsRequestTiming
   cost?: number
+  usage?: JsTokenUsage
   metadata: any
 }
 
@@ -6337,6 +6604,8 @@ export interface JsTranscriptionResult {
   language?: string
   timing: JsRequestTiming
   cost?: number
+  usage?: JsTokenUsage
+  audioSeconds?: number
   metadata: any
 }
 
@@ -6376,6 +6645,8 @@ export interface JsVideoResult {
   videos: Array<JsGeneratedVideo>
   timing: JsRequestTiming
   cost?: number
+  usage?: JsTokenUsage
+  videoSeconds?: number
   metadata: any
 }
 
@@ -6481,6 +6752,16 @@ export interface JsWorkflowResult {
   type: string
   /** The result data as a JSON object. */
   data: any
+  /**
+   * Aggregated token usage across the run, mirroring
+   * [`blazen_core::WorkflowResult::usage_total`].
+   */
+  usageTotal: JsTokenUsage
+  /**
+   * Aggregated cost in USD across the run, mirroring
+   * [`blazen_core::WorkflowResult::cost_total_usd`].
+   */
+  costTotalUsd: number
 }
 
 /**
@@ -6586,6 +6867,28 @@ export interface MessageContent {
 }
 
 /**
+ * Discriminant for the kind of provider call a [`JsUsageEvent`] describes.
+ *
+ * Mirrors [`blazen_events::Modality`]. The string-enum representation
+ * matches the `Modality::*` unit variants. Custom modalities (the Rust
+ * `Modality::Custom(String)` variant) are surfaced via the
+ * [`JsUsageEvent::modalityCustom`] string field — when `modalityCustom`
+ * is non-null, callers should treat `modality` as `Custom` regardless of
+ * its value.
+ */
+export declare const enum Modality {
+  Llm = 'Llm',
+  Embedding = 'Embedding',
+  ImageGen = 'ImageGen',
+  AudioTts = 'AudioTts',
+  AudioStt = 'AudioStt',
+  Video = 'Video',
+  ThreeD = 'ThreeD',
+  BackgroundRemoval = 'BackgroundRemoval',
+  Custom = 'Custom'
+}
+
+/**
  * Capability flags advertised by a model.
  *
  * Mirrors [`blazen_llm::traits::ModelCapabilities`].
@@ -6645,9 +6948,19 @@ export interface ModelInfo {
 export interface ModelManagerConfig {
   /** VRAM budget in gigabytes (e.g. `8.0` for 8 GiB). */
   budgetGb?: number
-  /** VRAM budget in bytes. */
-  budgetBytes?: number
+  /** VRAM budget in bytes (pass as JS `BigInt` to support values >4 GiB). */
+  budgetBytes?: bigint
 }
+
+/** Build an empty [`JsRetryStack`] with every scope set to `null`. */
+export declare function newRetryStack(): RetryStack
+
+/**
+ * Build a default [`JsUsageEvent`] for the given provider / model, with
+ * every numeric field zeroed and `modality = Llm`. Useful as a starting
+ * point for emitter shims that only know a subset of the fields.
+ */
+export declare function newUsageEvent(provider: string, model: string, runId: string): UsageEvent
 
 /**
  * Why a workflow was paused.
@@ -6679,14 +6992,76 @@ export interface PersistedEvent {
  *
  * Mirrors [`blazen_llm::PricingEntry`]. The existing
  * [`crate::types::pricing::JsModelPricing`] is a richer "input" type that
- * also carries `perImage` / `perSecond`; this shape only covers the
- * per-million token rates the registry actually stores.
+ * also carries `perImage` / `perSecond`; this shape covers the
+ * per-million token rates the registry actually stores, plus optional
+ * per-image and per-second rates for multimodal/audio/video models.
  */
 export interface PricingEntry {
   /** USD per million input (prompt) tokens. */
   inputPerMillion: number
   /** USD per million output (completion) tokens. */
   outputPerMillion: number
+  /** USD per image (for multimodal models). `null` if not applicable. */
+  perImage?: number
+  /** USD per second (for audio/video models). `null` if not applicable. */
+  perSecond?: number
+}
+
+/**
+ * Per-stage / per-step progress tick emitted by Pipeline and Workflow
+ * runners. Mirrors [`blazen_events::ProgressEvent`].
+ *
+ * `total` and `percent` are absent (`undefined`) when the step set is
+ * dynamic and the total is not known up front.
+ */
+export interface ProgressEvent {
+  /** What this progress event describes. */
+  kind: ProgressKind
+  /** Current step / stage index (1-based). */
+  current: number
+  /** Total number of steps / stages, when known. */
+  total?: number
+  /** Progress as a percentage in `0.0..=100.0`, when computable. */
+  percent?: number
+  /** Human-readable label for this progress tick (typically the step name). */
+  label: string
+  /** UUID of the run this progress belongs to. */
+  runId: string
+}
+
+/**
+ * What a [`JsProgressEvent`] describes. Mirrors
+ * [`blazen_events::ProgressKind`].
+ */
+export declare const enum ProgressKind {
+  Pipeline = 'Pipeline',
+  Workflow = 'Workflow',
+  SubWorkflow = 'SubWorkflow',
+  Stage = 'Stage'
+}
+
+/**
+ * Lightweight, polled view of a running pipeline's progress.
+ *
+ * Mirrors [`ProgressSnapshot`]. Reads are best-effort and may briefly be
+ * one stage behind the actual position because they do not synchronise
+ * with the executor task.
+ */
+export interface ProgressSnapshot {
+  /**
+   * 1-based index of the stage currently executing (or just completed).
+   * `0` before the first stage starts.
+   */
+  currentStageIndex: number
+  /** Total number of stages declared on the pipeline. */
+  totalStages: number
+  /** Progress as a percentage in `0.0..=100.0`. */
+  percent: number
+  /**
+   * Name of the current stage, when available. Always `null` from the
+   * current atomic-index implementation; reserved for future use.
+   */
+  currentStageName?: string
 }
 
 /** Options for creating a `PromptTemplate`. */
@@ -6914,6 +7289,39 @@ export declare function resolveApiKey(provider: string, explicit?: string | unde
  * or empty.
  */
 export declare function resolveBeerToken(): string | null
+
+/**
+ * Resolve the effective [`JsRetryConfig`] for the given stack and an
+ * optional per-call override. Mirrors [`RetryStack::resolve`].
+ *
+ * ```typescript
+ * const effective = resolveRetryStack(
+ *   { workflow: { maxRetries: 5 } },
+ *   { maxRetries: 9 }, // per-call override wins
+ * );
+ * // effective.maxRetries === 9
+ * ```
+ */
+export declare function resolveRetryStack(stack: RetryStack, callOverride?: JsRetryConfig | undefined | null): JsRetryConfig
+
+/**
+ * Snapshot of every scope's retry configuration. Mirrors
+ * [`RetryStack`].
+ *
+ * All fields are optional; any combination of `null` / `undefined`
+ * scopes is valid and falls through to the next-outer non-`None` scope
+ * when [`resolveRetryStack`] is called.
+ */
+export interface RetryStack {
+  /** Provider-level default (lowest priority). */
+  provider?: JsRetryConfig
+  /** Pipeline-level default. */
+  pipeline?: JsRetryConfig
+  /** Workflow-level override. */
+  workflow?: JsRetryConfig
+  /** Step-level override (highest priority before the per-call override). */
+  step?: JsRetryConfig
+}
 
 /**
  * Run an agentic tool execution loop.
@@ -7146,6 +7554,26 @@ export interface StructuredResponse {
 }
 
 /**
+ * Plain-object descriptor for one branch of a parallel fan-out — every
+ * field except `workflowName` is metadata. The actual child `Workflow`
+ * instances are passed alongside the spec array in
+ * [`JsWorkflow::addParallelSubworkflows`] (napi cannot embed napi-class
+ * values inside `#[napi(object)]` shapes).
+ */
+export interface SubWorkflowBranchSpec {
+  /** Human-readable name for this branch. */
+  name: string
+  /** Event types this branch's parent step accepts. */
+  accepts: Array<string>
+  /** Event types this branch's parent step may emit (informational). */
+  emits: Array<string>
+  /** Optional wall-clock timeout in seconds for this branch. */
+  timeoutSecs?: number
+  /** Optional retry config for this branch. */
+  retryConfig?: JsRetryConfig
+}
+
+/**
  * The role for a prompt template.
  *
  * Mirrors [`blazen_prompts::TemplateRole`] and serializes as a lowercase
@@ -7238,6 +7666,82 @@ export declare function tryDeserializeEvent(name: string, jsonStr: string): Prom
  * ```
  */
 export declare function typedToolSimple(name: string, description: string, parameters: any, handler: TypedToolHandlerTsfn): TypedTool
+
+/**
+ * Build a [`JsHttpClientConfig`] with no request or connect timeout.
+ * Mirrors [`HttpClientConfig::unlimited`].
+ */
+export declare function unlimitedHttpClientConfig(): HttpClientConfig
+
+/**
+ * Token / cost / latency snapshot for a single provider call, emitted
+ * after each LLM / embedding / image / audio / video / 3D request.
+ *
+ * Pipelines and workflows aggregate these into [`PipelineState.usageTotal`]
+ * and [`PipelineState.costTotalUsd`] when a `UsageEmitter` is wired up.
+ *
+ * ```typescript
+ * import { UsageEvent, Modality } from 'blazen';
+ *
+ * const ev: UsageEvent = {
+ *     provider: "openai",
+ *     model: "gpt-4o-mini",
+ *     modality: Modality.Llm,
+ *     promptTokens: 100,
+ *     completionTokens: 25,
+ *     totalTokens: 125,
+ *     reasoningTokens: 0,
+ *     cachedInputTokens: 0,
+ *     audioInputTokens: 0,
+ *     audioOutputTokens: 0,
+ *     imageCount: 0,
+ *     audioSeconds: 0,
+ *     videoSeconds: 0,
+ *     latencyMs: 432,
+ *     costUsd: 0.000_25,
+ *     runId: "...",
+ * };
+ * ```
+ */
+export interface UsageEvent {
+  /** The provider that served the call (e.g. `"openai"`, `"anthropic"`). */
+  provider: string
+  /** The model identifier. */
+  model: string
+  /** Discriminant for the kind of call. */
+  modality: Modality
+  /**
+   * Free-form custom-modality label. Populated when [`Self::modality`] is
+   * [`JsModality::Custom`]; ignored otherwise.
+   */
+  modalityCustom?: string
+  /** Number of prompt / input tokens billed. */
+  promptTokens: number
+  /** Number of completion / output tokens billed. */
+  completionTokens: number
+  /** Total tokens billed (typically `promptTokens + completionTokens`). */
+  totalTokens: number
+  /** Reasoning tokens (e.g. `OpenAI` o-series, Anthropic extended thinking). */
+  reasoningTokens: number
+  /** Tokens served from the provider's prompt cache at a discount. */
+  cachedInputTokens: number
+  /** Audio input tokens (multimodal speech-in models). */
+  audioInputTokens: number
+  /** Audio output tokens (multimodal speech-out models). */
+  audioOutputTokens: number
+  /** Number of images generated or processed. */
+  imageCount: number
+  /** Audio duration in seconds (for STT inputs and TTS outputs). */
+  audioSeconds: number
+  /** Video duration in seconds. */
+  videoSeconds: number
+  /** Cost in USD as reported (or computed) for this call. */
+  costUsd?: number
+  /** Wall-clock latency of the provider call in milliseconds. */
+  latencyMs: number
+  /** UUID of the run / pipeline invocation this usage belongs to. */
+  runId: string
+}
 
 /** Returns the version of the blazen library. */
 export declare function version(): string

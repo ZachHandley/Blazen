@@ -18,14 +18,22 @@ use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 
+use blazen_events::UsageEvent;
 use blazen_llm::cache::{CacheConfig, CacheStrategy, CachedCompletionModel};
 use blazen_llm::fallback::FallbackModel;
-use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
-use blazen_llm::traits::CompletionModel;
+use blazen_llm::http::HttpClient;
+use blazen_llm::retry::{RetryCompletionModel, RetryConfig, RetryEmbeddingModel, RetryHttpClient};
+use blazen_llm::traits::{CompletionModel, EmbeddingModel};
 use blazen_llm::types::CompletionRequest;
+use blazen_llm::usage_recording::{
+    UsageEmitter, UsageRecordingCompletionModel, UsageRecordingEmbeddingModel,
+};
+use uuid::Uuid;
 
 use crate::chat_message::js_messages_to_vec;
 use crate::completion_model::WasmCompletionModel;
+use crate::embedding::WasmEmbeddingModel;
+use crate::http_client::WasmHttpClient;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -194,8 +202,7 @@ impl WasmFallbackModel {
                 .complete(request)
                 .await
                 .map_err(|e| JsValue::from_str(&e.to_string()))?;
-            serde_wasm_bindgen::to_value(&response)
-                .map_err(|e| JsValue::from_str(&e.to_string()))
+            serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
         })
     }
 
@@ -291,8 +298,7 @@ impl WasmRetryCompletionModel {
                 .complete(request)
                 .await
                 .map_err(|e| JsValue::from_str(&e.to_string()))?;
-            serde_wasm_bindgen::to_value(&response)
-                .map_err(|e| JsValue::from_str(&e.to_string()))
+            serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
         })
     }
 
@@ -407,8 +413,7 @@ impl WasmCachedCompletionModel {
                 .complete(request)
                 .await
                 .map_err(|e| JsValue::from_str(&e.to_string()))?;
-            serde_wasm_bindgen::to_value(&response)
-                .map_err(|e| JsValue::from_str(&e.to_string()))
+            serde_wasm_bindgen::to_value(&response).map_err(|e| JsValue::from_str(&e.to_string()))
         })
     }
 
@@ -437,3 +442,275 @@ impl WasmCachedCompletionModel {
     }
 }
 
+// ---------------------------------------------------------------------------
+// RetryEmbeddingModel
+// ---------------------------------------------------------------------------
+
+/// An [`EmbeddingModel`] decorator that retries transient failures with
+/// exponential backoff.
+///
+/// ```js
+/// const embed = EmbeddingModel.openai();
+/// const resilient = new RetryEmbeddingModel(embed, { maxRetries: 5 });
+/// const result = await resilient.toEmbeddingModel().embed(['hello']);
+/// ```
+#[wasm_bindgen(js_name = "RetryEmbeddingModel")]
+pub struct WasmRetryEmbeddingModel {
+    inner: Arc<dyn EmbeddingModel>,
+}
+
+// SAFETY: WASM is single-threaded.
+unsafe impl Send for WasmRetryEmbeddingModel {}
+unsafe impl Sync for WasmRetryEmbeddingModel {}
+
+#[wasm_bindgen(js_class = "RetryEmbeddingModel")]
+impl WasmRetryEmbeddingModel {
+    /// Wrap `model` with the given retry options. `options` accepts the same
+    /// keys as [`WasmRetryCompletionModel::new`].
+    #[wasm_bindgen(constructor)]
+    pub fn new(model: &WasmEmbeddingModel, options: JsValue) -> WasmRetryEmbeddingModel {
+        let config = build_retry_config(&options);
+        Self {
+            inner: Arc::new(RetryEmbeddingModel::from_arc(model.inner_arc(), config)),
+        }
+    }
+
+    /// The default model identifier of the wrapped embedding provider.
+    #[wasm_bindgen(getter, js_name = "modelId")]
+    pub fn model_id(&self) -> String {
+        self.inner.model_id().to_owned()
+    }
+
+    /// The embedding dimensionality of the wrapped model.
+    #[wasm_bindgen(getter)]
+    pub fn dimensions(&self) -> u32 {
+        u32::try_from(self.inner.dimensions()).unwrap_or(u32::MAX)
+    }
+
+    /// Convert this retry wrapper into a generic `EmbeddingModel`.
+    #[wasm_bindgen(js_name = "toEmbeddingModel")]
+    pub fn to_embedding_model(&self) -> WasmEmbeddingModel {
+        WasmEmbeddingModel::from_inner(Arc::clone(&self.inner))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// RetryHttpClient
+// ---------------------------------------------------------------------------
+
+/// An [`HttpClient`] decorator that retries transient failures (rate limits,
+/// timeouts, 5xx responses, network errors) with exponential backoff.
+///
+/// Streaming requests retry only the initial connection; mid-stream failures
+/// propagate to the caller.
+///
+/// ```js
+/// const base = new HttpClient(fetchHandler);
+/// const resilient = new RetryHttpClient(base, { maxRetries: 5 });
+/// // pass `resilient.toHttpClient()` anywhere `HttpClient` is accepted.
+/// ```
+#[wasm_bindgen(js_name = "RetryHttpClient")]
+pub struct WasmRetryHttpClient {
+    inner: Arc<dyn HttpClient>,
+}
+
+// SAFETY: WASM is single-threaded.
+unsafe impl Send for WasmRetryHttpClient {}
+unsafe impl Sync for WasmRetryHttpClient {}
+
+#[wasm_bindgen(js_class = "RetryHttpClient")]
+impl WasmRetryHttpClient {
+    /// Wrap `client` with the given retry options. `options` accepts the same
+    /// keys as [`WasmRetryCompletionModel::new`].
+    #[wasm_bindgen(constructor)]
+    pub fn new(client: &WasmHttpClient, options: JsValue) -> WasmRetryHttpClient {
+        let config = build_retry_config(&options);
+        let wrapped = RetryHttpClient::new(client.inner_arc(), config);
+        Self {
+            inner: wrapped.into_arc(),
+        }
+    }
+
+    /// Convert this retry wrapper into a generic `HttpClient` suitable for
+    /// `OpenAiCompatProvider`, `AnthropicProvider`, etc.
+    #[wasm_bindgen(js_name = "toHttpClient")]
+    pub fn to_http_client(&self) -> WasmHttpClient {
+        WasmHttpClient::from_inner(Arc::clone(&self.inner))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// UsageEmitter (JS-backed) + UsageRecording decorators
+// ---------------------------------------------------------------------------
+
+/// A `UsageEmitter` that forwards every `UsageEvent` to a JS callback.
+struct JsUsageEmitter {
+    callback: js_sys::Function,
+}
+
+// SAFETY: WASM is single-threaded.
+unsafe impl Send for JsUsageEmitter {}
+unsafe impl Sync for JsUsageEmitter {}
+
+impl std::fmt::Debug for JsUsageEmitter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("JsUsageEmitter").finish_non_exhaustive()
+    }
+}
+
+impl UsageEmitter for JsUsageEmitter {
+    fn emit(&self, event: UsageEvent) {
+        if let Ok(js_event) = serde_wasm_bindgen::to_value(&event) {
+            let _ = self.callback.call1(&JsValue::NULL, &js_event);
+        }
+    }
+}
+
+fn parse_run_id(value: &JsValue) -> Uuid {
+    if let Some(s) = value.as_string() {
+        Uuid::parse_str(&s).unwrap_or_else(|_| Uuid::new_v4())
+    } else {
+        Uuid::new_v4()
+    }
+}
+
+/// A [`CompletionModel`] decorator that emits a [`UsageEvent`] after each
+/// successful `complete` / `stream` call.
+///
+/// ```js
+/// const observed = new UsageRecordingCompletionModel(
+///     model,
+///     (event) => console.log('usage', event),
+///     { providerLabel: 'openai', runId: '00000000-0000-0000-0000-000000000000' },
+/// );
+/// ```
+#[wasm_bindgen(js_name = "UsageRecordingCompletionModel")]
+pub struct WasmUsageRecordingCompletionModel {
+    inner: Arc<dyn CompletionModel>,
+}
+
+// SAFETY: WASM is single-threaded.
+unsafe impl Send for WasmUsageRecordingCompletionModel {}
+unsafe impl Sync for WasmUsageRecordingCompletionModel {}
+
+#[wasm_bindgen(js_class = "UsageRecordingCompletionModel")]
+impl WasmUsageRecordingCompletionModel {
+    /// Wrap `model` so each successful call emits a [`UsageEvent`] to the JS
+    /// `emitter` callback.
+    ///
+    /// `options` (optional) keys:
+    /// - `providerLabel` (string) -- defaults to `model.modelId`-derived label.
+    /// - `runId` (string, UUID) -- defaults to a freshly generated UUID v4.
+    #[wasm_bindgen(constructor)]
+    pub fn new(
+        model: &WasmCompletionModel,
+        emitter: js_sys::Function,
+        options: JsValue,
+    ) -> WasmUsageRecordingCompletionModel {
+        let provider_label = if options.is_object() {
+            js_sys::Reflect::get(&options, &JsValue::from_str("providerLabel"))
+                .ok()
+                .and_then(|v| v.as_string())
+                .unwrap_or_else(|| "wasm".to_string())
+        } else {
+            "wasm".to_string()
+        };
+        let run_id = if options.is_object() {
+            let v = js_sys::Reflect::get(&options, &JsValue::from_str("runId"))
+                .unwrap_or(JsValue::UNDEFINED);
+            parse_run_id(&v)
+        } else {
+            Uuid::new_v4()
+        };
+        let emitter_arc: Arc<dyn UsageEmitter> = Arc::new(JsUsageEmitter { callback: emitter });
+        let wrapped = UsageRecordingCompletionModel::from_arc(
+            model.inner_arc(),
+            emitter_arc,
+            provider_label,
+            run_id,
+        );
+        Self {
+            inner: Arc::new(wrapped),
+        }
+    }
+
+    /// The default model identifier of the wrapped completion provider.
+    #[wasm_bindgen(getter, js_name = "modelId")]
+    pub fn model_id(&self) -> String {
+        self.inner.model_id().to_owned()
+    }
+
+    /// Convert this usage-recording wrapper into a generic `CompletionModel`.
+    #[wasm_bindgen(js_name = "toCompletionModel")]
+    pub fn to_completion_model(&self) -> WasmCompletionModel {
+        WasmCompletionModel::from_arc(Arc::clone(&self.inner))
+    }
+}
+
+/// An [`EmbeddingModel`] decorator that emits a [`UsageEvent`] after each
+/// successful `embed` call.
+#[wasm_bindgen(js_name = "UsageRecordingEmbeddingModel")]
+pub struct WasmUsageRecordingEmbeddingModel {
+    inner: Arc<dyn EmbeddingModel>,
+}
+
+// SAFETY: WASM is single-threaded.
+unsafe impl Send for WasmUsageRecordingEmbeddingModel {}
+unsafe impl Sync for WasmUsageRecordingEmbeddingModel {}
+
+#[wasm_bindgen(js_class = "UsageRecordingEmbeddingModel")]
+impl WasmUsageRecordingEmbeddingModel {
+    /// Wrap `model` so each successful embed call emits a [`UsageEvent`] to
+    /// the JS `emitter` callback. See
+    /// [`WasmUsageRecordingCompletionModel::new`] for `options` keys.
+    #[wasm_bindgen(constructor)]
+    pub fn new(
+        model: &WasmEmbeddingModel,
+        emitter: js_sys::Function,
+        options: JsValue,
+    ) -> WasmUsageRecordingEmbeddingModel {
+        let provider_label = if options.is_object() {
+            js_sys::Reflect::get(&options, &JsValue::from_str("providerLabel"))
+                .ok()
+                .and_then(|v| v.as_string())
+                .unwrap_or_else(|| "wasm".to_string())
+        } else {
+            "wasm".to_string()
+        };
+        let run_id = if options.is_object() {
+            let v = js_sys::Reflect::get(&options, &JsValue::from_str("runId"))
+                .unwrap_or(JsValue::UNDEFINED);
+            parse_run_id(&v)
+        } else {
+            Uuid::new_v4()
+        };
+        let emitter_arc: Arc<dyn UsageEmitter> = Arc::new(JsUsageEmitter { callback: emitter });
+        let wrapped = UsageRecordingEmbeddingModel::from_arc(
+            model.inner_arc(),
+            emitter_arc,
+            provider_label,
+            run_id,
+        );
+        Self {
+            inner: Arc::new(wrapped),
+        }
+    }
+
+    /// The default model identifier of the wrapped embedding provider.
+    #[wasm_bindgen(getter, js_name = "modelId")]
+    pub fn model_id(&self) -> String {
+        self.inner.model_id().to_owned()
+    }
+
+    /// The embedding dimensionality of the wrapped model.
+    #[wasm_bindgen(getter)]
+    pub fn dimensions(&self) -> u32 {
+        u32::try_from(self.inner.dimensions()).unwrap_or(u32::MAX)
+    }
+
+    /// Convert this usage-recording wrapper into a generic `EmbeddingModel`.
+    #[wasm_bindgen(js_name = "toEmbeddingModel")]
+    pub fn to_embedding_model(&self) -> WasmEmbeddingModel {
+        WasmEmbeddingModel::from_inner(Arc::clone(&self.inner))
+    }
+}

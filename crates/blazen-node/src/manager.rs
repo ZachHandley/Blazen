@@ -1,5 +1,6 @@
 //! Node.js binding for the VRAM-aware model manager.
 
+use napi::bindgen_prelude::BigInt;
 use napi_derive::napi;
 use std::sync::Arc;
 
@@ -14,8 +15,8 @@ use crate::providers::completion_model::JsCompletionModel;
 pub struct ModelManagerConfig {
     /// VRAM budget in gigabytes (e.g. `8.0` for 8 GiB).
     pub budget_gb: Option<f64>,
-    /// VRAM budget in bytes.
-    pub budget_bytes: Option<u32>,
+    /// VRAM budget in bytes (pass as JS `BigInt` to support values >4 GiB).
+    pub budget_bytes: Option<BigInt>,
 }
 
 /// Status snapshot for a single registered model.
@@ -26,7 +27,7 @@ pub struct JsModelStatus {
     /// Whether the model is currently loaded into VRAM.
     pub loaded: bool,
     /// Estimated VRAM footprint in bytes.
-    pub vram_estimate: u32,
+    pub vram_estimate: BigInt,
 }
 
 /// VRAM budget-aware model manager with LRU eviction.
@@ -37,7 +38,7 @@ pub struct JsModelStatus {
 ///
 /// ```javascript
 /// const manager = new ModelManager({ budgetGb: 8.0 });
-/// await manager.register("llama-7b", model, 4_000_000_000);
+/// await manager.register("llama-7b", model, 4_000_000_000n);  // BigInt
 /// await manager.load("llama-7b");
 /// ```
 #[napi(js_name = "ModelManager")]
@@ -61,7 +62,7 @@ impl JsModelManager {
                     (gb * 1_073_741_824.0) as u64
                 }
             }
-            (_, Some(b)) => u64::from(b),
+            (_, Some(b)) => b.get_u64().1,
             (None, None) => {
                 return Err(napi::Error::from_reason(
                     "must provide either budgetGb or budgetBytes",
@@ -85,13 +86,13 @@ impl JsModelManager {
         &self,
         id: String,
         model: &JsCompletionModel,
-        vram_estimate_bytes: Option<u32>,
+        vram_estimate_bytes: Option<BigInt>,
     ) -> napi::Result<()> {
         let local_model = model
             .local_model
             .clone()
             .ok_or_else(|| napi::Error::from_reason("model does not support local loading"))?;
-        let vram = vram_estimate_bytes.map_or(0, u64::from);
+        let vram = vram_estimate_bytes.map_or(0, |b| b.get_u64().1);
         self.inner.register(&id, local_model, vram).await;
         Ok(())
     }
@@ -139,16 +140,14 @@ impl JsModelManager {
 
     /// Total VRAM currently used by loaded models (in bytes).
     #[napi(js_name = "usedBytes")]
-    #[allow(clippy::cast_possible_truncation)]
-    pub async fn used_bytes(&self) -> u32 {
-        self.inner.used_bytes().await as u32
+    pub async fn used_bytes(&self) -> BigInt {
+        BigInt::from(self.inner.used_bytes().await)
     }
 
     /// Available VRAM within the budget (in bytes).
     #[napi(js_name = "availableBytes")]
-    #[allow(clippy::cast_possible_truncation)]
-    pub async fn available_bytes(&self) -> u32 {
-        self.inner.available_bytes().await as u32
+    pub async fn available_bytes(&self) -> BigInt {
+        BigInt::from(self.inner.available_bytes().await)
     }
 
     /// Status of all registered models.
@@ -158,13 +157,10 @@ impl JsModelManager {
             .status()
             .await
             .into_iter()
-            .map(|s| {
-                #[allow(clippy::cast_possible_truncation)]
-                JsModelStatus {
-                    id: s.id,
-                    loaded: s.loaded,
-                    vram_estimate: s.vram_estimate as u32,
-                }
+            .map(|s| JsModelStatus {
+                id: s.id,
+                loaded: s.loaded,
+                vram_estimate: BigInt::from(s.vram_estimate),
             })
             .collect()
     }

@@ -8,6 +8,7 @@ use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 
 use crate::error::pipeline_error_to_napi;
+use crate::pipeline::progress::JsProgressSnapshot;
 use crate::pipeline::snapshot::{JsPipelineResult, JsPipelineSnapshot};
 use crate::workflow::event::any_event_to_js_value;
 
@@ -91,6 +92,19 @@ impl JsPipelineHandler {
         })?;
         let snapshot = handler.snapshot().await.map_err(pipeline_error_to_napi)?;
         Ok(JsPipelineSnapshot::from_inner(snapshot))
+    }
+
+    /// Best-effort polled view of the pipeline's stage cursor. Mirrors
+    /// [`blazen_pipeline::PipelineHandler::progress`].
+    ///
+    /// Returns `null` after [`Self::result`] has consumed the handler.
+    #[napi]
+    pub async fn progress(&self) -> Result<Option<JsProgressSnapshot>> {
+        let guard = self.inner.lock().await;
+        let Some(handler) = guard.as_ref() else {
+            return Ok(None);
+        };
+        Ok(Some(handler.progress().into()))
     }
 
     /// Abort the pipeline.

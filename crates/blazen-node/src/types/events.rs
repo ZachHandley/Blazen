@@ -247,9 +247,20 @@ pub struct JsAgentConfig {
     /// Maximum number of tool call rounds before forcing a stop.
     #[napi(js_name = "maxIterations")]
     pub max_iterations: u32,
-    /// Whether to add an implicit "finish" tool the model can call to exit early.
+    /// Whether to add the legacy implicit "finish" tool the model can call
+    /// to exit early.
     #[napi(js_name = "addFinishTool")]
     pub add_finish_tool: bool,
+    /// Suppress automatic registration of the built-in `finish_workflow`
+    /// exit tool. Default `false`. Mirrors
+    /// [`blazen_llm::AgentConfig::no_finish_tool`] (Wave 6).
+    #[napi(js_name = "noFinishTool")]
+    pub no_finish_tool: bool,
+    /// Override the name of the built-in `finish_workflow` tool. `null`
+    /// uses the canonical [`crate::agent::FINISH_WORKFLOW_TOOL_NAME`].
+    /// Mirrors [`blazen_llm::AgentConfig::finish_tool_name`] (Wave 6).
+    #[napi(js_name = "finishToolName")]
+    pub finish_tool_name: Option<String>,
     /// Optional system prompt prepended to messages.
     #[napi(js_name = "systemPrompt")]
     pub system_prompt: Option<String>,
@@ -269,6 +280,8 @@ impl Default for JsAgentConfig {
         Self {
             max_iterations: 10,
             add_finish_tool: false,
+            no_finish_tool: false,
+            finish_tool_name: None,
             system_prompt: None,
             temperature: None,
             max_tokens: None,

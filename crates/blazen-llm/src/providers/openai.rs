@@ -24,6 +24,7 @@ use super::sse::{OaiResponse, SseParser};
 use super::{provider_http_error, provider_http_error_parts};
 use crate::error::BlazenError;
 use crate::http::{HttpClient, HttpRequest, HttpResponse};
+use crate::retry::RetryConfig;
 use crate::traits::{ModelCapabilities, ModelInfo, ModelRegistry};
 use crate::types::{
     CompletionRequest, CompletionResponse, EmbeddingResponse, Role, StreamChunk, TokenUsage,
@@ -46,6 +47,9 @@ use crate::types::{
 /// ```
 pub struct OpenAiProvider {
     client: Arc<dyn HttpClient>,
+    /// Provider-level default retry config. Pipeline / workflow / step / call
+    /// scopes can override this; if all are `None`, this is the fallback.
+    retry_config: Option<Arc<RetryConfig>>,
     api_key: String,
     base_url: String,
     default_model: String,
@@ -64,6 +68,7 @@ impl Clone for OpenAiProvider {
     fn clone(&self) -> Self {
         Self {
             client: Arc::clone(&self.client),
+            retry_config: self.retry_config.clone(),
             api_key: self.api_key.clone(),
             base_url: self.base_url.clone(),
             default_model: self.default_model.clone(),
@@ -82,6 +87,7 @@ impl OpenAiProvider {
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             client: crate::default_http_client(),
+            retry_config: None,
             api_key: api_key.into(),
             base_url: "https://api.openai.com/v1".to_owned(),
             default_model: "gpt-4.1".to_owned(),
@@ -93,6 +99,7 @@ impl OpenAiProvider {
     pub fn new_with_client(api_key: impl Into<String>, client: Arc<dyn HttpClient>) -> Self {
         Self {
             client,
+            retry_config: None,
             api_key: api_key.into(),
             base_url: "https://api.openai.com/v1".to_owned(),
             default_model: "gpt-4.1".to_owned(),
@@ -117,6 +124,24 @@ impl OpenAiProvider {
     #[must_use]
     pub fn with_http_client(mut self, client: Arc<dyn HttpClient>) -> Self {
         self.client = client;
+        self
+    }
+
+    /// Return a clone of the underlying HTTP client.
+    ///
+    /// Escape hatch for power users who need to issue raw HTTP requests
+    /// (custom headers, endpoints not yet covered by Blazen's typed
+    /// surface, debugging) while reusing the same connection pool, TLS
+    /// config, and timeouts as this provider.
+    #[must_use]
+    pub fn http_client(&self) -> Arc<dyn HttpClient> {
+        Arc::clone(&self.client)
+    }
+
+    /// Set the provider-level default retry configuration.
+    #[must_use]
+    pub fn with_retry_config(mut self, config: RetryConfig) -> Self {
+        self.retry_config = Some(Arc::new(config));
         self
     }
 
@@ -289,6 +314,14 @@ super::impl_simple_from_options!(OpenAiProvider, "openai");
 impl crate::traits::CompletionModel for OpenAiProvider {
     fn model_id(&self) -> &str {
         &self.default_model
+    }
+
+    fn retry_config(&self) -> Option<&Arc<RetryConfig>> {
+        self.retry_config.as_ref()
+    }
+
+    fn http_client(&self) -> Option<Arc<dyn HttpClient>> {
+        Some(Self::http_client(self))
     }
 
     async fn complete(
@@ -529,6 +562,9 @@ impl ModelRegistry for OpenAiProvider {
 /// ```
 pub struct OpenAiEmbeddingModel {
     client: Arc<dyn HttpClient>,
+    /// Provider-level default retry config. Pipeline / workflow / step / call
+    /// scopes can override this; if all are `None`, this is the fallback.
+    retry_config: Option<Arc<RetryConfig>>,
     api_key: String,
     base_url: String,
     model: String,
@@ -549,6 +585,7 @@ impl Clone for OpenAiEmbeddingModel {
     fn clone(&self) -> Self {
         Self {
             client: Arc::clone(&self.client),
+            retry_config: self.retry_config.clone(),
             api_key: self.api_key.clone(),
             base_url: self.base_url.clone(),
             model: self.model.clone(),
@@ -569,6 +606,7 @@ impl OpenAiEmbeddingModel {
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             client: crate::default_http_client(),
+            retry_config: None,
             api_key: api_key.into(),
             base_url: "https://api.openai.com/v1".to_owned(),
             model: "text-embedding-3-small".to_owned(),
@@ -581,6 +619,7 @@ impl OpenAiEmbeddingModel {
     pub fn new_with_client(api_key: impl Into<String>, client: Arc<dyn HttpClient>) -> Self {
         Self {
             client,
+            retry_config: None,
             api_key: api_key.into(),
             base_url: "https://api.openai.com/v1".to_owned(),
             model: "text-embedding-3-small".to_owned(),
@@ -607,6 +646,23 @@ impl OpenAiEmbeddingModel {
     #[must_use]
     pub fn with_http_client(mut self, client: Arc<dyn HttpClient>) -> Self {
         self.client = client;
+        self
+    }
+
+    /// Return a clone of the underlying HTTP client.
+    ///
+    /// Escape hatch for power users who need to issue raw HTTP requests
+    /// while reusing the same connection pool, TLS config, and timeouts
+    /// as this embedding model.
+    #[must_use]
+    pub fn http_client(&self) -> Arc<dyn HttpClient> {
+        Arc::clone(&self.client)
+    }
+
+    /// Set the provider-level default retry configuration.
+    #[must_use]
+    pub fn with_retry_config(mut self, config: RetryConfig) -> Self {
+        self.retry_config = Some(Arc::new(config));
         self
     }
 }
@@ -669,6 +725,14 @@ impl crate::traits::EmbeddingModel for OpenAiEmbeddingModel {
 
     fn dimensions(&self) -> usize {
         self.dimensions
+    }
+
+    fn retry_config(&self) -> Option<&Arc<RetryConfig>> {
+        self.retry_config.as_ref()
+    }
+
+    fn http_client(&self) -> Option<Arc<dyn HttpClient>> {
+        Some(Self::http_client(self))
     }
 
     async fn embed(&self, texts: &[String]) -> Result<EmbeddingResponse, BlazenError> {
@@ -748,6 +812,79 @@ impl crate::traits::ProviderInfo for OpenAiProvider {
             embeddings: true,
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// ComputeProvider (stub — required as a supertrait for AudioGeneration)
+// ---------------------------------------------------------------------------
+
+// OpenAI's TTS is a plain POST/response, not a queue-based compute job, so
+// the queue-lifecycle methods return Unsupported. The only reason this impl
+// exists is that `AudioGeneration: ComputeProvider` is a trait bound; any
+// queue-oriented code calling into the OpenAI provider should return a
+// clear "not supported" error rather than compiling at all is unhelpful.
+
+#[async_trait]
+impl crate::compute::traits::ComputeProvider for OpenAiProvider {
+    #[allow(clippy::unnecessary_literal_bound)]
+    fn provider_id(&self) -> &str {
+        "openai"
+    }
+
+    async fn submit(
+        &self,
+        _request: crate::compute::job::ComputeRequest,
+    ) -> Result<crate::compute::job::JobHandle, BlazenError> {
+        Err(BlazenError::unsupported(
+            "OpenAI provider does not expose a queue-based compute API",
+        ))
+    }
+
+    async fn status(
+        &self,
+        _job: &crate::compute::job::JobHandle,
+    ) -> Result<crate::compute::job::JobStatus, BlazenError> {
+        Err(BlazenError::unsupported(
+            "OpenAI provider does not expose a queue-based compute API",
+        ))
+    }
+
+    async fn result(
+        &self,
+        _job: crate::compute::job::JobHandle,
+    ) -> Result<crate::compute::job::ComputeResult, BlazenError> {
+        Err(BlazenError::unsupported(
+            "OpenAI provider does not expose a queue-based compute API",
+        ))
+    }
+
+    async fn cancel(&self, _job: &crate::compute::job::JobHandle) -> Result<(), BlazenError> {
+        Err(BlazenError::unsupported(
+            "OpenAI provider does not expose a queue-based compute API",
+        ))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AudioGeneration (text-to-speech via /v1/audio/speech)
+// ---------------------------------------------------------------------------
+
+#[async_trait]
+impl crate::compute::traits::AudioGeneration for OpenAiProvider {
+    async fn text_to_speech(
+        &self,
+        request: crate::compute::requests::SpeechRequest,
+    ) -> Result<crate::compute::results::AudioResult, BlazenError> {
+        super::openai_audio::text_to_speech_request(
+            self.client.as_ref(),
+            &self.base_url,
+            &self.api_key,
+            request,
+        )
+        .await
+    }
+    // generate_music and generate_sfx intentionally NOT overridden —
+    // they fall through to the default `Err(Unsupported)` impls in the trait.
 }
 
 // ---------------------------------------------------------------------------
@@ -985,77 +1122,4 @@ mod tests {
         assert_eq!(usage.prompt_tokens, 10);
         assert_eq!(usage.total_tokens, 10);
     }
-}
-
-// ---------------------------------------------------------------------------
-// ComputeProvider (stub — required as a supertrait for AudioGeneration)
-// ---------------------------------------------------------------------------
-
-// OpenAI's TTS is a plain POST/response, not a queue-based compute job, so
-// the queue-lifecycle methods return Unsupported. The only reason this impl
-// exists is that `AudioGeneration: ComputeProvider` is a trait bound; any
-// queue-oriented code calling into the OpenAI provider should return a
-// clear "not supported" error rather than compiling at all is unhelpful.
-
-#[async_trait]
-impl crate::compute::traits::ComputeProvider for OpenAiProvider {
-    #[allow(clippy::unnecessary_literal_bound)]
-    fn provider_id(&self) -> &str {
-        "openai"
-    }
-
-    async fn submit(
-        &self,
-        _request: crate::compute::job::ComputeRequest,
-    ) -> Result<crate::compute::job::JobHandle, BlazenError> {
-        Err(BlazenError::unsupported(
-            "OpenAI provider does not expose a queue-based compute API",
-        ))
-    }
-
-    async fn status(
-        &self,
-        _job: &crate::compute::job::JobHandle,
-    ) -> Result<crate::compute::job::JobStatus, BlazenError> {
-        Err(BlazenError::unsupported(
-            "OpenAI provider does not expose a queue-based compute API",
-        ))
-    }
-
-    async fn result(
-        &self,
-        _job: crate::compute::job::JobHandle,
-    ) -> Result<crate::compute::job::ComputeResult, BlazenError> {
-        Err(BlazenError::unsupported(
-            "OpenAI provider does not expose a queue-based compute API",
-        ))
-    }
-
-    async fn cancel(&self, _job: &crate::compute::job::JobHandle) -> Result<(), BlazenError> {
-        Err(BlazenError::unsupported(
-            "OpenAI provider does not expose a queue-based compute API",
-        ))
-    }
-}
-
-// ---------------------------------------------------------------------------
-// AudioGeneration (text-to-speech via /v1/audio/speech)
-// ---------------------------------------------------------------------------
-
-#[async_trait]
-impl crate::compute::traits::AudioGeneration for OpenAiProvider {
-    async fn text_to_speech(
-        &self,
-        request: crate::compute::requests::SpeechRequest,
-    ) -> Result<crate::compute::results::AudioResult, BlazenError> {
-        super::openai_audio::text_to_speech_request(
-            self.client.as_ref(),
-            &self.base_url,
-            &self.api_key,
-            request,
-        )
-        .await
-    }
-    // generate_music and generate_sfx intentionally NOT overridden —
-    // they fall through to the default `Err(Unsupported)` impls in the trait.
 }

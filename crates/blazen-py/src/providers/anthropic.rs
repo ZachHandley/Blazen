@@ -13,8 +13,9 @@ use crate::error::blazen_error_to_pyerr;
 use crate::providers::completion_model::{
     LazyStreamState, PendingStream, PyCompletionOptions, PyLazyCompletionStream, build_request,
 };
+use crate::providers::config::PyRetryConfig;
 use crate::providers::options::PyProviderOptions;
-use crate::types::{PyChatMessage, PyCompletionResponse};
+use crate::types::{PyChatMessage, PyCompletionResponse, PyHttpClientHandle};
 use blazen_llm::ChatMessage;
 use blazen_llm::providers::anthropic::AnthropicProvider;
 use blazen_llm::traits::CompletionModel;
@@ -113,6 +114,31 @@ impl PyAnthropicProvider {
             )))),
         };
         Bound::new(py, stream)
+    }
+
+    /// Set the provider-level default retry config.
+    ///
+    /// Returns a new provider sharing the same HTTP client and other
+    /// settings, with the given retry config applied. Pipeline / workflow /
+    /// step / call scopes can override this; if all are unset, this is the
+    /// fallback.
+    pub fn with_retry_config(&self, config: PyRetryConfig) -> Self {
+        let inner = (*self.inner).clone().with_retry_config(config.inner);
+        Self {
+            inner: Arc::new(inner),
+        }
+    }
+
+    /// Return an opaque handle to the underlying HTTP client.
+    ///
+    /// Escape hatch for power users who need to issue raw HTTP requests
+    /// (custom headers, endpoints not yet covered by Blazen's typed
+    /// surface, debugging) while reusing the same connection pool, TLS
+    /// config, and timeouts as this provider.
+    pub fn http_client(&self) -> PyHttpClientHandle {
+        PyHttpClientHandle {
+            inner: self.inner.http_client(),
+        }
     }
 
     fn __repr__(&self) -> String {

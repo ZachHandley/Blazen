@@ -27,20 +27,23 @@ use blazen_llm::compute::Transcription;
 /// Use the static constructor methods to create a transcriber for a specific
 /// provider, then call :meth:`transcribe` to convert audio to text.
 ///
-/// Example:
-///     >>> # Local, offline transcription via whisper.cpp
-///     >>> opts = WhisperOptions(model=WhisperModel.Base)
-///     >>> transcriber = Transcription.whispercpp(options=opts)
-///     >>> result = await transcriber.transcribe(
-///     ...     TranscriptionRequest.from_file("audio.wav")
-///     ... )
-///     >>> print(result.text)
+/// # Example
 ///
-///     >>> # Remote transcription via fal.ai (requires API key)
-///     >>> transcriber = Transcription.fal()
-///     >>> result = await transcriber.transcribe(
-///     ...     TranscriptionRequest(audio_url="https://example.com/audio.mp3")
-///     ... )
+/// ```text
+/// >>> # Local, offline transcription via whisper.cpp
+/// >>> opts = WhisperOptions(model=WhisperModel.Base)
+/// >>> transcriber = Transcription.whispercpp(options=opts)
+/// >>> result = await transcriber.transcribe(
+/// ...     TranscriptionRequest.from_file("audio.wav")
+/// ... )
+/// >>> print(result.text)
+///
+/// >>> # Remote transcription via fal.ai (requires API key)
+/// >>> transcriber = Transcription.fal()
+/// >>> result = await transcriber.transcribe(
+/// ...     TranscriptionRequest(audio_url="https://example.com/audio.mp3")
+/// ... )
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "Transcription", subclass, from_py_object)]
 #[derive(Clone)]

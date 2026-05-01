@@ -179,6 +179,51 @@ impl HttpResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Client config
+// ---------------------------------------------------------------------------
+
+/// Configuration applied when constructing an [`HttpClient`].
+///
+/// `request_timeout` caps the wall-clock duration of a single HTTP request
+/// (including reading the response body). `connect_timeout` caps the TCP /
+/// TLS connection-establishment phase. `None` means *no timeout* — the
+/// underlying client will wait indefinitely.
+///
+/// `user_agent` is sent as the `User-Agent` header on every request when
+/// `Some`. When `None`, the underlying client's default User-Agent is used.
+#[derive(Debug, Clone)]
+pub struct HttpClientConfig {
+    /// Maximum wall-clock duration for a single request. `None` = unlimited.
+    pub request_timeout: Option<std::time::Duration>,
+    /// Maximum duration for the connection-establishment phase. `None` = unlimited.
+    pub connect_timeout: Option<std::time::Duration>,
+    /// User-Agent header string. `None` uses the underlying client's default.
+    pub user_agent: Option<String>,
+}
+
+impl Default for HttpClientConfig {
+    fn default() -> Self {
+        Self {
+            request_timeout: Some(std::time::Duration::from_secs(60)),
+            connect_timeout: Some(std::time::Duration::from_secs(10)),
+            user_agent: None,
+        }
+    }
+}
+
+impl HttpClientConfig {
+    /// Construct a config with no request or connect timeout.
+    #[must_use]
+    pub fn unlimited() -> Self {
+        Self {
+            request_timeout: None,
+            connect_timeout: None,
+            user_agent: None,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Trait
 // ---------------------------------------------------------------------------
 
@@ -200,4 +245,34 @@ pub trait HttpClient: Send + Sync + std::fmt::Debug {
         &self,
         request: HttpRequest,
     ) -> Result<(u16, Vec<(String, String)>, ByteStream), BlazenError>;
+
+    /// Return the configuration (timeouts, user-agent) this client was built
+    /// with. Default impl returns a process-wide default config; concrete
+    /// implementations should override.
+    fn config(&self) -> &HttpClientConfig {
+        static DEFAULT: std::sync::LazyLock<HttpClientConfig> =
+            std::sync::LazyLock::new(HttpClientConfig::default);
+        &DEFAULT
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn config_default_has_request_and_connect_timeouts() {
+        let cfg = HttpClientConfig::default();
+        assert_eq!(cfg.request_timeout, Some(Duration::from_secs(60)));
+        assert_eq!(cfg.connect_timeout, Some(Duration::from_secs(10)));
+        assert!(cfg.user_agent.is_none());
+    }
+
+    #[test]
+    fn config_unlimited_has_no_timeouts() {
+        let cfg = HttpClientConfig::unlimited();
+        assert!(cfg.request_timeout.is_none());
+        assert!(cfg.connect_timeout.is_none());
+    }
 }

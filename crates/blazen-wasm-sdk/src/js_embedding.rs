@@ -24,8 +24,8 @@ use js_sys::{Array, Float32Array, Function, Promise};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
-use blazen_llm::types::EmbeddingResponse;
 use blazen_llm::BlazenError;
+use blazen_llm::types::EmbeddingResponse;
 
 // ---------------------------------------------------------------------------
 // SendFuture wrapper (same pattern as agent.rs)

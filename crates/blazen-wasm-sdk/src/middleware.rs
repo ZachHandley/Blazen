@@ -228,9 +228,7 @@ impl WasmCustomMiddleware {
         let inner_value: JsValue = inner_js.into();
         let returned = self.apply.call1(&JsValue::NULL, &inner_value)?;
         WasmCompletionModel::try_from_js_value(returned).map_err(|_| {
-            JsValue::from_str(
-                "Middleware apply callback must return a CompletionModel instance",
-            )
+            JsValue::from_str("Middleware apply callback must return a CompletionModel instance")
         })
     }
 }

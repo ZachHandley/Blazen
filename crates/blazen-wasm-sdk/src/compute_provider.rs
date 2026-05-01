@@ -72,9 +72,7 @@ async fn call_with_arg(
 async fn sleep_ms(ms: u32) {
     let promise = js_sys::Promise::new(&mut |resolve, _| {
         let global = js_sys::global();
-        if let Ok(set_timeout) =
-            js_sys::Reflect::get(&global, &JsValue::from_str("setTimeout"))
-        {
+        if let Ok(set_timeout) = js_sys::Reflect::get(&global, &JsValue::from_str("setTimeout")) {
             if set_timeout.is_function() {
                 let func: &js_sys::Function = set_timeout.unchecked_ref();
                 let _ = func.call2(
@@ -240,8 +238,7 @@ impl WasmComputeProvider {
             let mut poll_interval_ms: u32 = 1000;
             let mut max_polls: u32 = 600;
             if options.is_object() {
-                if let Ok(v) =
-                    js_sys::Reflect::get(&options, &JsValue::from_str("pollIntervalMs"))
+                if let Ok(v) = js_sys::Reflect::get(&options, &JsValue::from_str("pollIntervalMs"))
                 {
                     if let Some(n) = v.as_f64() {
                         if n.is_finite() && n >= 0.0 {

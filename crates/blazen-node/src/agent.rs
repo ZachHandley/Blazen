@@ -43,6 +43,31 @@ type ToolHandlerTsfn = ThreadsafeFunction<
 >;
 
 // ---------------------------------------------------------------------------
+// Wave 6 — finish-workflow tool surface
+// ---------------------------------------------------------------------------
+
+/// Canonical name of the built-in `finish_workflow` exit tool. Mirrors
+/// [`blazen_llm::FINISH_WORKFLOW_TOOL_NAME`].
+#[napi]
+pub const FINISH_WORKFLOW_TOOL_NAME: &str = blazen_llm::FINISH_WORKFLOW_TOOL_NAME;
+
+/// Build a fresh JSON-Schema description of the built-in `finish_workflow`
+/// exit tool. The shape mirrors [`blazen_llm::finish_workflow_tool`] —
+/// callers that want to surface the same tool to a JS-side agent loop can
+/// use this object as a [`JsToolDef`] entry.
+#[napi(js_name = "finishWorkflowToolDef")]
+#[must_use]
+pub fn finish_workflow_tool_def() -> JsToolDef {
+    let tool = blazen_llm::finish_workflow_tool();
+    let def = tool.definition();
+    JsToolDef {
+        name: def.name,
+        description: def.description,
+        parameters: def.parameters,
+    }
+}
+
+// ---------------------------------------------------------------------------
 // JsToolDef
 // ---------------------------------------------------------------------------
 
@@ -77,10 +102,20 @@ pub struct JsAgentRunOptions {
     /// Maximum tokens per completion call.
     #[napi(js_name = "maxTokens")]
     pub max_tokens: Option<i32>,
-    /// Whether to add a built-in "finish" tool that the model can call to
-    /// signal it has a final answer.
+    /// Whether to add the legacy implicit "finish" tool the model can call
+    /// to signal it has a final answer.
     #[napi(js_name = "addFinishTool")]
     pub add_finish_tool: Option<bool>,
+    /// Suppress automatic registration of the built-in `finish_workflow`
+    /// exit tool (default `false`, i.e. it is auto-added). Mirrors
+    /// [`blazen_llm::AgentConfig::no_finish_tool`] (Wave 6).
+    #[napi(js_name = "noFinishTool")]
+    pub no_finish_tool: Option<bool>,
+    /// Override the name of the built-in `finish_workflow` tool. Defaults
+    /// to [`FINISH_WORKFLOW_TOOL_NAME`]. Mirrors
+    /// [`blazen_llm::AgentConfig::finish_tool_name`] (Wave 6).
+    #[napi(js_name = "finishToolName")]
+    pub finish_tool_name: Option<String>,
     /// Maximum number of tool calls to execute concurrently within a single
     /// model response. `0` means unlimited (all in parallel). Defaults to 0.
     #[napi(js_name = "toolConcurrency")]
@@ -329,6 +364,12 @@ pub async fn run_agent(
     if opts.add_finish_tool.unwrap_or(false) {
         config = config.with_finish_tool();
     }
+    if opts.no_finish_tool.unwrap_or(false) {
+        config = config.no_finish_tool();
+    }
+    if let Some(name) = opts.finish_tool_name {
+        config = config.finish_tool_name(name);
+    }
     if let Some(tc) = opts.tool_concurrency {
         config = config.with_tool_concurrency(tc as usize);
     }
@@ -448,6 +489,12 @@ pub async fn run_agent_with_callback(
     }
     if opts.add_finish_tool.unwrap_or(false) {
         config = config.with_finish_tool();
+    }
+    if opts.no_finish_tool.unwrap_or(false) {
+        config = config.no_finish_tool();
+    }
+    if let Some(name) = opts.finish_tool_name {
+        config = config.finish_tool_name(name);
     }
     if let Some(tc) = opts.tool_concurrency {
         config = config.with_tool_concurrency(tc as usize);

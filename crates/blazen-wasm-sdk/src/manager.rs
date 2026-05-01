@@ -23,7 +23,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use js_sys::{Function, Object, Promise, Reflect};
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::{future_to_promise, JsFuture};
+use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
 use blazen_llm::{BlazenError, LocalModel};
 use blazen_manager::ModelManager;
@@ -220,7 +220,11 @@ impl WasmModelManager {
     /// Rejects if `lifecycle` is not an object or its `load`/`unload` keys
     /// are not functions.
     #[wasm_bindgen]
-    #[allow(clippy::needless_pass_by_value, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[allow(
+        clippy::needless_pass_by_value,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
     pub fn register(
         &self,
         id: String,
@@ -357,4 +361,3 @@ impl WasmModelManager {
         }))
     }
 }
-

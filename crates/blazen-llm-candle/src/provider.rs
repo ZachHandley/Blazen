@@ -939,7 +939,7 @@ mod tests {
     /// Ignored by default because it requires network access and downloads
     /// a large model file.
     #[tokio::test]
-    #[ignore]
+    #[ignore = "downloads a large model + needs network"]
     async fn test_candle_llm_inference() {
         let opts = CandleLlmOptions {
             model_id: Some("TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF".into()),

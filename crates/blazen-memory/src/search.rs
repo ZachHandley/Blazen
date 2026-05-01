@@ -117,7 +117,7 @@ mod tests {
 
     #[test]
     fn test_simhash_hex_roundtrip() {
-        let original: u128 = 0x0123456789ABCDEF_FEDCBA9876543210;
+        let original: u128 = 0x0123_4567_89AB_CDEF_FEDC_BA98_7654_3210;
         let hex = simhash_to_hex(original);
         let recovered = simhash_from_hex(&hex).unwrap();
         assert_eq!(original, recovered);

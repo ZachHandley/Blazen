@@ -43,7 +43,10 @@ use crate::session_ref::{
     SessionRefSerializable,
 };
 use crate::snapshot::WorkflowSnapshot;
-use crate::step::StepRegistration;
+use crate::step::{StepKind, StepRegistration};
+
+// Re-export `RetryConfig` so users can `use blazen_core::RetryConfig;`.
+pub use blazen_llm::retry::RetryConfig;
 
 /// Deserializer callback used by
 /// [`Workflow::resume_with_deserializers`] to reconstruct a
@@ -59,8 +62,12 @@ pub type SessionRefDeserializerFn =
 /// A validated, ready-to-run workflow.
 pub struct Workflow {
     pub(crate) name: String,
-    pub(crate) step_registry: HashMap<String, Vec<StepRegistration>>,
+    pub(crate) step_registry: HashMap<String, Vec<StepKind>>,
     pub(crate) timeout: Option<Duration>,
+    /// Default retry configuration applied to LLM calls inside this workflow.
+    /// Step / per-call overrides take precedence; pipeline / provider
+    /// defaults take lower precedence.
+    pub retry_config: Option<std::sync::Arc<blazen_llm::retry::RetryConfig>>,
     /// Optional inline handler for input requests (HITL without pausing).
     pub(crate) input_handler: Option<InputHandlerFn>,
     /// Whether to automatically publish lifecycle events to the broadcast stream.
@@ -85,6 +92,7 @@ impl std::fmt::Debug for Workflow {
             .field("name", &self.name)
             .field("step_count", &self.step_registry.len())
             .field("timeout", &self.timeout)
+            .field("retry_config", &self.retry_config)
             .finish_non_exhaustive()
     }
 }
@@ -166,6 +174,12 @@ impl Workflow {
             Some(refs) => Context::new_with_session_refs(event_tx.clone(), stream_tx.clone(), refs),
             None => Context::new(event_tx.clone(), stream_tx.clone()),
         };
+
+        // Install the workflow-scope retry config onto the context so every
+        // step clone created by the event loop inherits it through
+        // `RetryStack::workflow`. Per-step `with_step_retry` runs on top of
+        // this, and per-call overrides take precedence over both.
+        let ctx = ctx.with_workflow_retry(self.retry_config.clone());
 
         // Apply the configured session pause policy.
         ctx.set_session_pause_policy(self.session_pause_policy)
@@ -308,14 +322,17 @@ impl Workflow {
         deserializers: HashMap<&'static str, SessionRefDeserializerFn>,
         timeout: Option<Duration>,
     ) -> crate::error::Result<WorkflowHandler> {
-        // Rebuild the registry from the provided steps.
-        let mut registry: HashMap<String, Vec<StepRegistration>> = HashMap::new();
+        // Rebuild the registry from the provided steps. Resume only
+        // accepts `Vec<StepRegistration>` (regular steps); sub-workflow
+        // steps cannot currently round-trip through a snapshot because
+        // their inner `Workflow` is not serializable.
+        let mut registry: HashMap<String, Vec<StepKind>> = HashMap::new();
         for step in steps {
             for &event_type in &step.accepts {
                 registry
                     .entry(event_type.to_owned())
                     .or_default()
-                    .push(step.clone());
+                    .push(StepKind::Regular(step.clone()));
             }
         }
 
@@ -455,9 +472,10 @@ impl Workflow {
         let mut seen = std::collections::HashSet::new();
         let mut names = Vec::new();
         for registrations in self.step_registry.values() {
-            for reg in registrations {
-                if seen.insert(&reg.name) {
-                    names.push(reg.name.clone());
+            for kind in registrations {
+                let name = kind.name();
+                if seen.insert(name.to_owned()) {
+                    names.push(name.to_owned());
                 }
             }
         }
@@ -540,6 +558,11 @@ impl Workflow {
         Ok(WorkflowResult {
             event: Box::new(stop_event),
             session_refs: registry,
+            // Remote sub-workflows do not (yet) report aggregate usage
+            // back through the wire protocol; surface zero totals so the
+            // local caller never sees a stale or partial number.
+            usage_total: blazen_llm::types::TokenUsage::zero(),
+            cost_total_usd: 0.0,
         })
     }
 
@@ -702,6 +725,8 @@ mod tests {
             handler,
             max_concurrency: 0,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     }
 
@@ -743,6 +768,8 @@ mod tests {
             handler: handler_b,
             max_concurrency: 0,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         };
 
         let workflow = WorkflowBuilder::new("step-names-test")
@@ -774,6 +801,8 @@ mod tests {
             handler,
             max_concurrency: 0,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         };
 
         let workflow = WorkflowBuilder::new("timeout-test")
@@ -801,6 +830,8 @@ mod tests {
             handler,
             max_concurrency: 0,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         };
 
         let workflow = WorkflowBuilder::new("error-test")
@@ -877,6 +908,8 @@ mod tests {
             handler,
             max_concurrency: 0,
             semaphore: None,
+            timeout: None,
+            retry_config: None,
         }
     }
 

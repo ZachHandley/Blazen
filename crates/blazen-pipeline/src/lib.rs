@@ -31,7 +31,7 @@ pub mod state;
 pub use builder::{PersistFn, PersistJsonFn, PipelineBuilder};
 pub use error::PipelineError;
 pub use handler::{PipelineEvent, PipelineHandler};
-pub use pipeline::Pipeline;
+pub use pipeline::{Pipeline, ProgressSnapshot};
 pub use snapshot::{ActiveWorkflowSnapshot, PipelineResult, PipelineSnapshot, StageResult};
 pub use stage::{ConditionFn, InputMapperFn, JoinStrategy, ParallelStage, Stage, StageKind};
 pub use state::PipelineState;

@@ -15,7 +15,9 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{Headers, Request, RequestInit, Response};
 
 use crate::error::BlazenError;
-use crate::http::{ByteStream, HttpClient, HttpMethod, HttpRequest, HttpResponse};
+use crate::http::{
+    ByteStream, HttpClient, HttpClientConfig, HttpMethod, HttpRequest, HttpResponse,
+};
 
 // ---------------------------------------------------------------------------
 // SendFuture wrapper
@@ -55,7 +57,9 @@ impl<F: std::future::Future> std::future::Future for SendFuture<F> {
 /// [`HttpClient`] are vacuously satisfied. We mark the struct accordingly
 /// so it can be stored in an `Arc<dyn HttpClient>`.
 #[derive(Debug, Clone)]
-pub struct FetchHttpClient;
+pub struct FetchHttpClient {
+    config: HttpClientConfig,
+}
 
 // SAFETY: WASM is single-threaded; there is no thread to race with.
 #[allow(unsafe_code)]
@@ -64,10 +68,22 @@ unsafe impl Send for FetchHttpClient {}
 unsafe impl Sync for FetchHttpClient {}
 
 impl FetchHttpClient {
-    /// Create a new `FetchHttpClient`.
+    /// Create a new `FetchHttpClient` with default configuration.
     #[must_use]
     pub fn new() -> Self {
-        Self
+        Self::with_config(HttpClientConfig::default())
+    }
+
+    /// Create a new `FetchHttpClient` with the given configuration.
+    ///
+    /// The browser `fetch()` API does not natively support a request timeout —
+    /// when `config.request_timeout` is set, requests are wrapped in an
+    /// `AbortController`-style race against a `setTimeout` timer. There is no
+    /// usable equivalent for `connect_timeout` in browser fetch, so it is
+    /// ignored.
+    #[must_use]
+    pub fn with_config(config: HttpClientConfig) -> Self {
+        Self { config }
     }
 
     /// Wrap `Self` in an `Arc` for use as `Arc<dyn HttpClient>`.
@@ -179,6 +195,45 @@ async fn read_body(resp: &Response) -> Result<Vec<u8>, BlazenError> {
     Ok(uint8.to_vec())
 }
 
+/// Race a `JsFuture` against a `setTimeout` timer. If the timer fires first,
+/// returns `BlazenError::Timeout { elapsed_ms }`.
+async fn race_with_timeout(
+    fut: JsFuture,
+    duration: std::time::Duration,
+) -> Result<JsValue, BlazenError> {
+    use futures_util::future::{Either, select};
+    let timer = make_timeout_promise(duration);
+    let timer_future = JsFuture::from(timer);
+
+    futures_util::pin_mut!(fut);
+    futures_util::pin_mut!(timer_future);
+    match select(fut, timer_future).await {
+        Either::Left((Ok(value), _)) => Ok(value),
+        Either::Left((Err(e), _)) => Err(BlazenError::request(format!("{e:?}"))),
+        Either::Right(_) => Err(BlazenError::Timeout {
+            elapsed_ms: u64::try_from(duration.as_millis()).unwrap_or(u64::MAX),
+        }),
+    }
+}
+
+/// Build a JS promise that resolves after `duration` via `setTimeout`.
+fn make_timeout_promise(duration: std::time::Duration) -> js_sys::Promise {
+    js_sys::Promise::new(&mut |resolve, _reject| {
+        let global = js_sys::global();
+        let set_timeout = js_sys::Reflect::get(&global, &JsValue::from_str("setTimeout")).ok();
+        if let Some(set_timeout) = set_timeout {
+            if let Ok(set_timeout_fn) = set_timeout.dyn_into::<js_sys::Function>() {
+                let ms = i32::try_from(duration.as_millis()).unwrap_or(i32::MAX);
+                let _ = set_timeout_fn.call2(
+                    &JsValue::NULL,
+                    &resolve,
+                    &JsValue::from_f64(f64::from(ms)),
+                );
+            }
+        }
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Streaming support
 // ---------------------------------------------------------------------------
@@ -233,9 +288,14 @@ impl FetchHttpClient {
         let web_request = build_web_request(&request)?;
         let resp_promise = call_fetch(&web_request)?;
 
-        let resp_value = JsFuture::from(resp_promise)
-            .await
-            .map_err(|e| BlazenError::request(format!("{e:?}")))?;
+        let resp_future = JsFuture::from(resp_promise);
+
+        let resp_value = match self.config.request_timeout {
+            Some(d) => race_with_timeout(resp_future, d).await?,
+            None => resp_future
+                .await
+                .map_err(|e| BlazenError::request(format!("{e:?}")))?,
+        };
 
         let resp: Response = resp_value
             .dyn_into()
@@ -259,9 +319,14 @@ impl FetchHttpClient {
         let web_request = build_web_request(&request)?;
         let resp_promise = call_fetch(&web_request)?;
 
-        let resp_value = JsFuture::from(resp_promise)
-            .await
-            .map_err(|e| BlazenError::request(format!("{e:?}")))?;
+        let resp_future = JsFuture::from(resp_promise);
+
+        let resp_value = match self.config.request_timeout {
+            Some(d) => race_with_timeout(resp_future, d).await?,
+            None => resp_future
+                .await
+                .map_err(|e| BlazenError::request(format!("{e:?}")))?,
+        };
 
         let resp: Response = resp_value
             .dyn_into()
@@ -298,5 +363,9 @@ impl HttpClient for FetchHttpClient {
     ) -> Result<(u16, Vec<(String, String)>, ByteStream), BlazenError> {
         // SAFETY: WASM is single-threaded, Send is vacuously satisfied.
         SendFuture(self.send_streaming_impl(request)).await
+    }
+
+    fn config(&self) -> &HttpClientConfig {
+        &self.config
     }
 }
