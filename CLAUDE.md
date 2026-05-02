@@ -69,14 +69,17 @@ pnpm --filter blazen run build
 pnpm exec ava --timeout 30s
 # Or a single file: `pnpm exec ava tests/node/test_workflow.mjs`.
 #
-# KNOWN ISSUE: a process that calls `await wf.run(...)` more than ~2 times in
-# sequence currently hangs on the 3rd workflow — likely a TSFN/tokio handle
-# leak in the napi binding. Files with many workflow tests (test_workflow.mjs,
-# test_e2e.mjs, test_session_refs.mjs, etc.) report ~30 "remained pending
-# after a timeout" entries because of this. Files that don't repeatedly run
-# workflows pass cleanly. The issue is binding-side, not test-side; fixing it
-# is a separate task. ava produces a clean tally even for the hung files
-# (each is its own subprocess so the hang is contained per file).
+# KNOWN ISSUE — workflow rerun hang in single process:
+#   await wf.run() takes ~8s on first call, ~0.6s on second call, hangs
+#   indefinitely on third. Reproduces with: same workflow reused, fresh
+#   workflow per call, debug build, release build, with/without auto-publish,
+#   with/without GC forcing. Suggests a napi-rs Promise<T> / TSFN refcount
+#   issue specific to repeated `Promise<T>` returns from threadsafe functions
+#   on the same Node process. ava's per-file subprocess isolation contains
+#   the hang so the rest of the suite still tallies, but files with >2
+#   workflow tests show "remained pending after a timeout" (~30 across the
+#   suite). Investigate by tracing napi-rs Promise refs / step TSFN call
+#   queue drain when the 3rd `tsfn.call_async` would dispatch.
 
 # 4. WASM SDK (blazen-wasm-sdk) — wasm-bindgen-test based
 # Headless browser run; firefox or chrome must be installed.
