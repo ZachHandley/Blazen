@@ -21,8 +21,7 @@
  *     node --test tests/node/test_whispercpp_smoke.mjs
  */
 
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import test from "ava";
 import { existsSync } from "node:fs";
 
 import { Transcription } from "../../crates/blazen-node/index.js";
@@ -32,68 +31,65 @@ const AUDIO_PATH = process.env.BLAZEN_WHISPER_AUDIO_PATH;
 
 const hasAudio = Boolean(AUDIO_PATH && existsSync(AUDIO_PATH));
 
-describe("whisper.cpp local transcription", { skip: !BLAZEN_TEST_WHISPERCPP }, () => {
-  it("exposes a whispercpp factory when built with the feature", async () => {
-    if (typeof Transcription.whispercpp !== "function") {
-      // Not built with whispercpp feature -- skip gracefully.
-      return;
-    }
+const T = BLAZEN_TEST_WHISPERCPP ? test : test.skip;
+const TAudio = BLAZEN_TEST_WHISPERCPP && hasAudio ? test : test.skip;
 
-    const transcriber = await Transcription.whispercpp({ model: "base" });
-    assert.equal(transcriber.providerId, "whispercpp");
+T("whisper.cpp local transcription · exposes a whispercpp factory when built with the feature", async (t) => {
+  if (typeof Transcription.whispercpp !== "function") {
+    // Not built with whispercpp feature -- skip gracefully.
+    t.pass("whispercpp feature not built");
+    return;
+  }
+
+  const transcriber = await Transcription.whispercpp({ model: "base" });
+  t.is(transcriber.providerId, "whispercpp");
+});
+
+T("whisper.cpp local transcription · accepts WhisperOptions fields without error", async (t) => {
+  if (typeof Transcription.whispercpp !== "function") {
+    t.pass("whispercpp feature not built");
+    return;
+  }
+
+  const transcriber = await Transcription.whispercpp({
+    model: "base",
+    language: "en",
+    device: "cpu",
   });
+  t.is(transcriber.providerId, "whispercpp");
+});
 
-  it("accepts WhisperOptions fields without error", async () => {
-    if (typeof Transcription.whispercpp !== "function") {
-      return;
-    }
+TAudio("whisper.cpp local transcription · transcribes a local WAV file to non-empty text", async (t) => {
+  if (typeof Transcription.whispercpp !== "function") {
+    t.pass("whispercpp feature not built");
+    return;
+  }
 
-    const transcriber = await Transcription.whispercpp({
-      model: "base",
-      language: "en",
-      device: "cpu",
-    });
-    assert.equal(transcriber.providerId, "whispercpp");
+  const transcriber = await Transcription.whispercpp({ model: "base" });
+  const result = await transcriber.transcribe({ audioUrl: AUDIO_PATH });
+
+  t.truthy(result.text, "expected non-empty transcription text");
+  t.truthy(result.text.length > 0, "text should not be empty");
+  t.truthy(result.segments.length >= 1, "expected at least one segment");
+
+  for (const segment of result.segments) {
+    t.truthy(segment.end >= segment.start, "segment timestamps must be ordered");
+    t.truthy(segment.text != null, "segment must carry text");
+  }
+});
+
+TAudio("whisper.cpp local transcription · respects a language hint passed via WhisperOptions", async (t) => {
+  if (typeof Transcription.whispercpp !== "function") {
+    t.pass("whispercpp feature not built");
+    return;
+  }
+
+  const transcriber = await Transcription.whispercpp({
+    model: "base",
+    language: "en",
   });
+  const result = await transcriber.transcribe({ audioUrl: AUDIO_PATH });
 
-  it(
-    "transcribes a local WAV file to non-empty text",
-    { skip: !hasAudio },
-    async () => {
-      if (typeof Transcription.whispercpp !== "function") {
-        return;
-      }
-
-      const transcriber = await Transcription.whispercpp({ model: "base" });
-      const result = await transcriber.transcribe({ audioUrl: AUDIO_PATH });
-
-      assert.ok(result.text, "expected non-empty transcription text");
-      assert.ok(result.text.length > 0, "text should not be empty");
-      assert.ok(result.segments.length >= 1, "expected at least one segment");
-
-      for (const segment of result.segments) {
-        assert.ok(segment.end >= segment.start, "segment timestamps must be ordered");
-        assert.ok(segment.text != null, "segment must carry text");
-      }
-    },
-  );
-
-  it(
-    "respects a language hint passed via WhisperOptions",
-    { skip: !hasAudio },
-    async () => {
-      if (typeof Transcription.whispercpp !== "function") {
-        return;
-      }
-
-      const transcriber = await Transcription.whispercpp({
-        model: "base",
-        language: "en",
-      });
-      const result = await transcriber.transcribe({ audioUrl: AUDIO_PATH });
-
-      assert.ok(result.text, "expected non-empty transcription text");
-      assert.ok(result.language, "expected a detected/specified language code");
-    },
-  );
+  t.truthy(result.text, "expected non-empty transcription text");
+  t.truthy(result.language, "expected a detected/specified language code");
 });

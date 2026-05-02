@@ -4,11 +4,26 @@
   "scripts": {
     "build:node": "pnpm --filter blazen run build",
     "build:website": "pnpm --filter blazen-website run build",
-    "test:node": "node --test tests/node/test_workflow.mjs",
-    "test:smoke:fast": "node --test tests/node/test_llm_smoke.mjs tests/node/test_capabilities_smoke.mjs tests/node/test_provider_smoke.mjs",
-    "test:smoke:fal": "node --test tests/node/test_fal_smoke.mjs",
-    "test:smoke:fal:compute": "BLAZEN_TEST_FAL_COMPUTE=1 node --test tests/node/test_fal_smoke.mjs",
-    "test:smoke:fal:video": "BLAZEN_TEST_FAL_VIDEO=1 node --test tests/node/test_fal_smoke.mjs",
-    "test:smoke:full": "BLAZEN_TEST_FAL_COMPUTE=1 BLAZEN_TEST_FAL_VIDEO=1 node --test --test-timeout=2100000 tests/node/"
+    "test:node": "ava",
+    "test:smoke:fast": "ava tests/node/test_llm_smoke.mjs tests/node/test_capabilities_smoke.mjs tests/node/test_provider_smoke.mjs",
+    "test:smoke:fal": "ava tests/node/test_fal_smoke.mjs",
+    "test:smoke:fal:compute": "BLAZEN_TEST_FAL_COMPUTE=1 ava tests/node/test_fal_smoke.mjs",
+    "test:smoke:fal:video": "BLAZEN_TEST_FAL_VIDEO=1 ava tests/node/test_fal_smoke.mjs",
+    "test:smoke:full": "BLAZEN_TEST_FAL_COMPUTE=1 BLAZEN_TEST_FAL_VIDEO=1 ava --timeout=2100s"
+  },
+  "devDependencies": {
+    "ava": "^6.4.1"
+  },
+  "ava": {
+    "files": [
+      "tests/node/test_*.mjs"
+    ],
+    "extensions": [
+      "mjs"
+    ],
+    "timeout": "120s",
+    "concurrency": 1,
+    "verbose": true,
+    "workerThreads": false
   }
 }

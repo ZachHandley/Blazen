@@ -15,8 +15,7 @@
 // Build the native binding first:
 //   pnpm --filter blazen run build
 
-import { describe, test } from "node:test";
-import assert from "node:assert/strict";
+import test from "ava";
 
 import {
   ChatMessage,
@@ -58,108 +57,106 @@ class StubEmbed extends EmbeddingModel {
 // e2e parity (shape)
 // ===========================================================================
 
-describe("e2e parity (shape)", () => {
-  test("Pipeline + CustomProvider + InMemoryBackend + PromptTemplate wire together", () => {
-    // 1. PromptTemplate -- exercise the parity primitive.
-    const template = new PromptTemplate(
-      "Summarize the following text: {{text}}",
-      { role: "user", name: "summarize" },
-    );
-    assert.strictEqual(template.role, "user");
-    assert.strictEqual(template.name, "summarize");
-    assert.deepStrictEqual(template.variables, ["text"]);
+test("e2e parity (shape) · Pipeline + CustomProvider + InMemoryBackend + PromptTemplate wire together", (t) => {
+  // 1. PromptTemplate -- exercise the parity primitive.
+  const template = new PromptTemplate(
+    "Summarize the following text: {{text}}",
+    { role: "user", name: "summarize" },
+  );
+  t.is(template.role, "user");
+  t.is(template.name, "summarize");
+  t.deepEqual(template.variables, ["text"]);
 
-    const rendered = template.render({ text: "hello world" });
-    assert.ok(rendered instanceof ChatMessage);
-    assert.strictEqual(rendered.role, "user");
-    assert.ok(rendered.content && rendered.content.includes("hello world"));
+  const rendered = template.render({ text: "hello world" });
+  t.truthy(rendered instanceof ChatMessage);
+  t.is(rendered.role, "user");
+  t.truthy(rendered.content && rendered.content.includes("hello world"));
 
-    // 2. CustomProvider -- wrap a host object exposing a TTS-shaped method.
-    // No method is invoked here; we only verify the wrapper constructs.
-    const host = {
-      async textToSpeech(_request) {
-        return { audio: [], timing: {}, metadata: {} };
-      },
+  // 2. CustomProvider -- wrap a host object exposing a TTS-shaped method.
+  // No method is invoked here; we only verify the wrapper constructs.
+  const host = {
+    async textToSpeech(_request) {
+      return { audio: [], timing: {}, metadata: {} };
+    },
+  };
+  const customProvider = new CustomProvider(host, {
+    providerId: "stub-custom",
+  });
+  t.is(customProvider.providerId, "stub-custom");
+
+  // 3. InMemoryBackend wrapped in a Memory (local-only mode -- no
+  // embedder needed, and avoids the "subclassed EmbeddingModel" rejection
+  // that Memory's full constructor enforces).
+  const backend = new InMemoryBackend();
+  const memory = Memory.local(backend);
+  t.truthy(memory instanceof Memory);
+
+  // Sanity: ensure StubEmbed/StubLLM also construct so their inclusion
+  // in this parity test mirrors the Python file's surface, even though
+  // we don't hand them to Memory.
+  const embedder = new StubEmbed();
+  const llm = new StubLLM();
+  t.is(embedder.modelId, "stub-embed");
+  t.is(llm.modelId, "stub-llm");
+
+  // 4. Build two distinct workflows and wrap them as Stages.
+  const wf1 = new Workflow("stage-1");
+  wf1.addStep("ingest", ["blazen::StartEvent"], (_event, _ctx) => {
+    // Hand off to stage 2 via StopEvent containing prompt text.
+    return {
+      type: "blazen::StopEvent",
+      result: { prompt: "hello world" },
     };
-    const customProvider = new CustomProvider(host, {
-      providerId: "stub-custom",
-    });
-    assert.strictEqual(customProvider.providerId, "stub-custom");
-
-    // 3. InMemoryBackend wrapped in a Memory (local-only mode -- no
-    // embedder needed, and avoids the "subclassed EmbeddingModel" rejection
-    // that Memory's full constructor enforces).
-    const backend = new InMemoryBackend();
-    const memory = Memory.local(backend);
-    assert.ok(memory instanceof Memory);
-
-    // Sanity: ensure StubEmbed/StubLLM also construct so their inclusion
-    // in this parity test mirrors the Python file's surface, even though
-    // we don't hand them to Memory.
-    const embedder = new StubEmbed();
-    const llm = new StubLLM();
-    assert.strictEqual(embedder.modelId, "stub-embed");
-    assert.strictEqual(llm.modelId, "stub-llm");
-
-    // 4. Build two distinct workflows and wrap them as Stages.
-    const wf1 = new Workflow("stage-1");
-    wf1.addStep("ingest", ["blazen::StartEvent"], (_event, _ctx) => {
-      // Hand off to stage 2 via StopEvent containing prompt text.
-      return {
-        type: "blazen::StopEvent",
-        result: { prompt: "hello world" },
-      };
-    });
-
-    const wf2 = new Workflow("stage-2");
-    wf2.addStep("respond", ["blazen::StartEvent"], (_event, _ctx) => {
-      return {
-        type: "blazen::StopEvent",
-        result: { reply: "ok" },
-      };
-    });
-
-    const stage1 = new Stage("ingest", wf1);
-    const stage2 = new Stage("respond", wf2);
-    assert.strictEqual(stage1.name, "ingest");
-    assert.strictEqual(stage2.name, "respond");
-
-    // 5. Build the 2-stage Pipeline.
-    const pipeline = new PipelineBuilder("e2e-parity")
-      .stage(stage1)
-      .stage(stage2)
-      .build();
-
-    assert.ok(pipeline instanceof Pipeline);
-    assert.strictEqual(typeof pipeline.start, "function");
-    assert.strictEqual(typeof pipeline.resume, "function");
   });
 
-  test("PromptTemplate role override flows through to ChatMessage", () => {
-    const sysTemplate = new PromptTemplate(
-      "You are a helpful assistant named {{name}}.",
-      { role: "system", name: "system-prompt" },
-    );
-    assert.strictEqual(sysTemplate.role, "system");
-
-    const msg = sysTemplate.render({ name: "Blazen" });
-    assert.strictEqual(msg.role, "system");
-    assert.ok(msg.content && msg.content.includes("Blazen"));
+  const wf2 = new Workflow("stage-2");
+  wf2.addStep("respond", ["blazen::StartEvent"], (_event, _ctx) => {
+    return {
+      type: "blazen::StopEvent",
+      result: { reply: "ok" },
+    };
   });
 
-  test("PipelineBuilder rejects empty pipelines (parity with Python)", () => {
-    // Mirrors the Python parity assertion that an empty pipeline cannot be
-    // built -- the builder must require at least one stage.
-    assert.throws(
-      () => new PipelineBuilder("empty").build(),
-      /stage|empty|at least/i,
-    );
-  });
+  const stage1 = new Stage("ingest", wf1);
+  const stage2 = new Stage("respond", wf2);
+  t.is(stage1.name, "ingest");
+  t.is(stage2.name, "respond");
 
-  test("CustomProvider providerId defaults to 'custom' when omitted", () => {
-    // Mirrors the Python parity expectation that an unspecified provider id
-    // falls back to a stable default.
-    const provider = new CustomProvider({});
-    assert.strictEqual(provider.providerId, "custom");
-  });
+  // 5. Build the 2-stage Pipeline.
+  const pipeline = new PipelineBuilder("e2e-parity")
+    .stage(stage1)
+    .stage(stage2)
+    .build();
+
+  t.truthy(pipeline instanceof Pipeline);
+  t.is(typeof pipeline.start, "function");
+  t.is(typeof pipeline.resume, "function");
+});
+
+test("e2e parity (shape) · PromptTemplate role override flows through to ChatMessage", (t) => {
+  const sysTemplate = new PromptTemplate(
+    "You are a helpful assistant named {{name}}.",
+    { role: "system", name: "system-prompt" },
+  );
+  t.is(sysTemplate.role, "system");
+
+  const msg = sysTemplate.render({ name: "Blazen" });
+  t.is(msg.role, "system");
+  t.truthy(msg.content && msg.content.includes("Blazen"));
+});
+
+test("e2e parity (shape) · PipelineBuilder rejects empty pipelines (parity with Python)", (t) => {
+  // Mirrors the Python parity assertion that an empty pipeline cannot be
+  // built -- the builder must require at least one stage.
+  t.throws(
+    () => new PipelineBuilder("empty").build(),
+    { message: /stage|empty|at least/i },
+  );
+});
+
+test("e2e parity (shape) · CustomProvider providerId defaults to 'custom' when omitted", (t) => {
+  // Mirrors the Python parity expectation that an unspecified provider id
+  // falls back to a stable default.
+  const provider = new CustomProvider({});
+  t.is(provider.providerId, "custom");
 });

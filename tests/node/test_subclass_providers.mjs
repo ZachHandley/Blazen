@@ -12,8 +12,7 @@
  *   pnpm --filter blazen run build
  */
 
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import test from "ava";
 
 import {
   ChatMessage,
@@ -39,645 +38,613 @@ import {
 // CompletionModel subclassing
 // ===========================================================================
 
-describe("CompletionModel subclassing", () => {
-  it("can be subclassed with modelId via super(config)", () => {
-    class MockLLM extends CompletionModel {
-      constructor() {
-        super({ modelId: "mock-llm", contextLength: 4096 });
-      }
+test("CompletionModel subclassing · can be subclassed with modelId via super(config)", (t) => {
+  class MockLLM extends CompletionModel {
+    constructor() {
+      super({ modelId: "mock-llm", contextLength: 4096 });
     }
-    const model = new MockLLM();
-    assert.equal(model.modelId, "mock-llm");
-  });
+  }
+  const model = new MockLLM();
+  t.is(model.modelId, "mock-llm");
+});
 
-  it("can be subclassed with no config", () => {
-    class BareLLM extends CompletionModel {
-      constructor() {
-        super();
-      }
+test("CompletionModel subclassing · can be subclassed with no config", (t) => {
+  class BareLLM extends CompletionModel {
+    constructor() {
+      super();
     }
-    const model = new BareLLM();
-    // With no config, modelId defaults to empty string
-    assert.equal(model.modelId, "");
-  });
+  }
+  const model = new BareLLM();
+  // With no config, modelId defaults to empty string
+  t.is(model.modelId, "");
+});
 
-  it("can be subclassed with all config fields", () => {
-    class FullConfigLLM extends CompletionModel {
-      constructor() {
-        super({
-          modelId: "full-model",
-          contextLength: 8192,
-          baseUrl: "https://example.com/v1",
-          vramEstimateBytes: 4_000_000_000,
-          maxOutputTokens: 2048,
-        });
-      }
+test("CompletionModel subclassing · can be subclassed with all config fields", (t) => {
+  class FullConfigLLM extends CompletionModel {
+    constructor() {
+      super({
+        modelId: "full-model",
+        contextLength: 8192,
+        baseUrl: "https://example.com/v1",
+        vramEstimateBytes: 4_000_000_000,
+        maxOutputTokens: 2048,
+      });
     }
-    const model = new FullConfigLLM();
-    assert.equal(model.modelId, "full-model");
-  });
+  }
+  const model = new FullConfigLLM();
+  t.is(model.modelId, "full-model");
+});
 
-  it("complete() throws 'subclass must override' for subclassed instances", async () => {
-    class NoOverrideLLM extends CompletionModel {
-      constructor() {
-        super({ modelId: "no-override" });
-      }
+test("CompletionModel subclassing · complete() throws 'subclass must override' for subclassed instances", async (t) => {
+  class NoOverrideLLM extends CompletionModel {
+    constructor() {
+      super({ modelId: "no-override" });
     }
-    const model = new NoOverrideLLM();
-    await assert.rejects(
-      () => model.complete([ChatMessage.user("test")]),
-      /subclass must override/
-    );
-  });
+  }
+  const model = new NoOverrideLLM();
+  await t.throwsAsync(
+    () => model.complete([ChatMessage.user("test")]),
+    { message: /subclass must override/ }
+  );
+});
 
-  it("completeWithOptions() throws for subclassed instances without override", async () => {
-    class NoOverrideLLM extends CompletionModel {
-      constructor() {
-        super({ modelId: "no-override" });
-      }
+test("CompletionModel subclassing · completeWithOptions() throws for subclassed instances without override", async (t) => {
+  class NoOverrideLLM extends CompletionModel {
+    constructor() {
+      super({ modelId: "no-override" });
     }
-    const model = new NoOverrideLLM();
-    await assert.rejects(
-      () =>
-        model.completeWithOptions([ChatMessage.user("test")], {
-          maxTokens: 10,
-        }),
-      /subclass must override/
-    );
-  });
+  }
+  const model = new NoOverrideLLM();
+  await t.throwsAsync(
+    () =>
+      model.completeWithOptions([ChatMessage.user("test")], {
+        maxTokens: 10,
+      }),
+    { message: /subclass must override/ }
+  );
+});
 
-  it("withRetry() throws for subclassed instances", () => {
-    class SubLLM extends CompletionModel {
-      constructor() {
-        super({ modelId: "sub" });
-      }
+test("CompletionModel subclassing · withRetry() throws for subclassed instances", (t) => {
+  class SubLLM extends CompletionModel {
+    constructor() {
+      super({ modelId: "sub" });
     }
-    const model = new SubLLM();
-    assert.throws(
-      () => model.withRetry({ maxRetries: 3 }),
-      /not supported on subclassed/
-    );
-  });
+  }
+  const model = new SubLLM();
+  t.throws(
+    () => model.withRetry({ maxRetries: 3 }),
+    { message: /not supported on subclassed/ }
+  );
+});
 
-  it("withCache() throws for subclassed instances", () => {
-    class SubLLM extends CompletionModel {
-      constructor() {
-        super({ modelId: "sub" });
-      }
+test("CompletionModel subclassing · withCache() throws for subclassed instances", (t) => {
+  class SubLLM extends CompletionModel {
+    constructor() {
+      super({ modelId: "sub" });
     }
-    const model = new SubLLM();
-    assert.throws(
-      () => model.withCache({ ttlSeconds: 60 }),
-      /not supported on subclassed/
-    );
-  });
+  }
+  const model = new SubLLM();
+  t.throws(
+    () => model.withCache({ ttlSeconds: 60 }),
+    { message: /not supported on subclassed/ }
+  );
+});
 
-  it("isLoaded() returns false for subclassed instances", async () => {
-    class SubLLM extends CompletionModel {
-      constructor() {
-        super({ modelId: "sub" });
-      }
+test("CompletionModel subclassing · isLoaded() returns false for subclassed instances", async (t) => {
+  class SubLLM extends CompletionModel {
+    constructor() {
+      super({ modelId: "sub" });
     }
-    const model = new SubLLM();
-    const loaded = await model.isLoaded();
-    assert.strictEqual(loaded, false);
-  });
+  }
+  const model = new SubLLM();
+  const loaded = await model.isLoaded();
+  t.is(loaded, false);
+});
 
-  it("vramBytes() returns null for subclassed instances", async () => {
-    class SubLLM extends CompletionModel {
-      constructor() {
-        super({ modelId: "sub" });
-      }
+test("CompletionModel subclassing · vramBytes() returns null for subclassed instances", async (t) => {
+  class SubLLM extends CompletionModel {
+    constructor() {
+      super({ modelId: "sub" });
     }
-    const model = new SubLLM();
-    const bytes = await model.vramBytes();
-    assert.strictEqual(bytes, null);
-  });
+  }
+  const model = new SubLLM();
+  const bytes = await model.vramBytes();
+  t.is(bytes, null);
 });
 
 // ===========================================================================
 // EmbeddingModel subclassing
 // ===========================================================================
 
-describe("EmbeddingModel subclassing", () => {
-  it("can be subclassed with modelId and dimensions", () => {
-    class MockEmbed extends EmbeddingModel {
-      constructor() {
-        super({ modelId: "mock-embed", dimensions: 768 });
-      }
+test("EmbeddingModel subclassing · can be subclassed with modelId and dimensions", (t) => {
+  class MockEmbed extends EmbeddingModel {
+    constructor() {
+      super({ modelId: "mock-embed", dimensions: 768 });
     }
-    const model = new MockEmbed();
-    assert.equal(model.modelId, "mock-embed");
-    assert.equal(model.dimensions, 768);
-  });
+  }
+  const model = new MockEmbed();
+  t.is(model.modelId, "mock-embed");
+  t.is(model.dimensions, 768);
+});
 
-  it("can be subclassed with no config", () => {
-    class BareEmbed extends EmbeddingModel {
-      constructor() {
-        super();
-      }
+test("EmbeddingModel subclassing · can be subclassed with no config", (t) => {
+  class BareEmbed extends EmbeddingModel {
+    constructor() {
+      super();
     }
-    const model = new BareEmbed();
-    assert.equal(model.modelId, "");
-    assert.equal(model.dimensions, 0);
-  });
+  }
+  const model = new BareEmbed();
+  t.is(model.modelId, "");
+  t.is(model.dimensions, 0);
+});
 
-  it("can be subclassed with baseUrl", () => {
-    class RemoteEmbed extends EmbeddingModel {
-      constructor() {
-        super({
-          modelId: "remote-embed",
-          dimensions: 1536,
-          baseUrl: "https://embed.example.com/v1",
-        });
-      }
+test("EmbeddingModel subclassing · can be subclassed with baseUrl", (t) => {
+  class RemoteEmbed extends EmbeddingModel {
+    constructor() {
+      super({
+        modelId: "remote-embed",
+        dimensions: 1536,
+        baseUrl: "https://embed.example.com/v1",
+      });
     }
-    const model = new RemoteEmbed();
-    assert.equal(model.modelId, "remote-embed");
-    assert.equal(model.dimensions, 1536);
-  });
+  }
+  const model = new RemoteEmbed();
+  t.is(model.modelId, "remote-embed");
+  t.is(model.dimensions, 1536);
+});
 
-  it("embed() throws 'subclass must override' for subclassed instances", async () => {
-    class NoOverrideEmbed extends EmbeddingModel {
-      constructor() {
-        super({ modelId: "no-override-embed", dimensions: 384 });
-      }
+test("EmbeddingModel subclassing · embed() throws 'subclass must override' for subclassed instances", async (t) => {
+  class NoOverrideEmbed extends EmbeddingModel {
+    constructor() {
+      super({ modelId: "no-override-embed", dimensions: 384 });
     }
-    const model = new NoOverrideEmbed();
-    await assert.rejects(
-      () => model.embed(["hello", "world"]),
-      /subclass must override/
-    );
-  });
+  }
+  const model = new NoOverrideEmbed();
+  await t.throwsAsync(
+    () => model.embed(["hello", "world"]),
+    { message: /subclass must override/ }
+  );
 });
 
 // ===========================================================================
 // Capability providers -- TTSProvider
 // ===========================================================================
 
-describe("TTSProvider subclassing", () => {
-  it("can be constructed with providerId", () => {
-    const provider = new TTSProvider({ providerId: "mock-tts" });
-    assert.equal(provider.providerId, "mock-tts");
-  });
+test("TTSProvider subclassing · can be constructed with providerId", (t) => {
+  const provider = new TTSProvider({ providerId: "mock-tts" });
+  t.is(provider.providerId, "mock-tts");
+});
 
-  it("can be constructed with baseUrl and vramEstimateBytes", () => {
-    const provider = new TTSProvider({
-      providerId: "local-tts",
-      baseUrl: "http://localhost:5000",
-      vramEstimateBytes: 2_000_000_000,
-    });
-    assert.equal(provider.providerId, "local-tts");
-    assert.equal(provider.baseUrl, "http://localhost:5000");
-    assert.equal(provider.vramEstimateBytes, 2_000_000_000);
+test("TTSProvider subclassing · can be constructed with baseUrl and vramEstimateBytes", (t) => {
+  const provider = new TTSProvider({
+    providerId: "local-tts",
+    baseUrl: "http://localhost:5000",
+    vramEstimateBytes: 2_000_000_000,
   });
+  t.is(provider.providerId, "local-tts");
+  t.is(provider.baseUrl, "http://localhost:5000");
+  t.is(provider.vramEstimateBytes, 2_000_000_000);
+});
 
-  it("textToSpeech() throws 'subclass must override' by default", async () => {
-    const provider = new TTSProvider({ providerId: "base-tts" });
-    await assert.rejects(
-      () => provider.textToSpeech({ text: "hello" }),
-      /subclass must override textToSpeech/
-    );
-  });
+test("TTSProvider subclassing · textToSpeech() throws 'subclass must override' by default", async (t) => {
+  const provider = new TTSProvider({ providerId: "base-tts" });
+  await t.throwsAsync(
+    () => provider.textToSpeech({ text: "hello" }),
+    { message: /subclass must override textToSpeech/ }
+  );
 });
 
 // ===========================================================================
 // Capability providers -- MusicProvider
 // ===========================================================================
 
-describe("MusicProvider subclassing", () => {
-  it("can be constructed with providerId", () => {
-    const provider = new MusicProvider({ providerId: "mock-music" });
-    assert.equal(provider.providerId, "mock-music");
-  });
+test("MusicProvider subclassing · can be constructed with providerId", (t) => {
+  const provider = new MusicProvider({ providerId: "mock-music" });
+  t.is(provider.providerId, "mock-music");
+});
 
-  it("generateMusic() throws 'subclass must override' by default", async () => {
-    const provider = new MusicProvider({ providerId: "base-music" });
-    await assert.rejects(
-      () => provider.generateMusic({ prompt: "epic battle" }),
-      /subclass must override generateMusic/
-    );
-  });
+test("MusicProvider subclassing · generateMusic() throws 'subclass must override' by default", async (t) => {
+  const provider = new MusicProvider({ providerId: "base-music" });
+  await t.throwsAsync(
+    () => provider.generateMusic({ prompt: "epic battle" }),
+    { message: /subclass must override generateMusic/ }
+  );
+});
 
-  it("generateSfx() throws 'subclass must override' by default", async () => {
-    const provider = new MusicProvider({ providerId: "base-music" });
-    await assert.rejects(
-      () => provider.generateSfx({ prompt: "explosion" }),
-      /subclass must override generateSfx/
-    );
-  });
+test("MusicProvider subclassing · generateSfx() throws 'subclass must override' by default", async (t) => {
+  const provider = new MusicProvider({ providerId: "base-music" });
+  await t.throwsAsync(
+    () => provider.generateSfx({ prompt: "explosion" }),
+    { message: /subclass must override generateSfx/ }
+  );
 });
 
 // ===========================================================================
 // Capability providers -- ImageProvider
 // ===========================================================================
 
-describe("ImageProvider subclassing", () => {
-  it("can be constructed with providerId", () => {
-    const provider = new ImageProvider({ providerId: "mock-image" });
-    assert.equal(provider.providerId, "mock-image");
-  });
+test("ImageProvider subclassing · can be constructed with providerId", (t) => {
+  const provider = new ImageProvider({ providerId: "mock-image" });
+  t.is(provider.providerId, "mock-image");
+});
 
-  it("generateImage() throws 'subclass must override' by default", async () => {
-    const provider = new ImageProvider({ providerId: "base-image" });
-    await assert.rejects(
-      () => provider.generateImage({ prompt: "cat" }),
-      /subclass must override generateImage/
-    );
-  });
+test("ImageProvider subclassing · generateImage() throws 'subclass must override' by default", async (t) => {
+  const provider = new ImageProvider({ providerId: "base-image" });
+  await t.throwsAsync(
+    () => provider.generateImage({ prompt: "cat" }),
+    { message: /subclass must override generateImage/ }
+  );
+});
 
-  it("upscaleImage() throws 'subclass must override' by default", async () => {
-    const provider = new ImageProvider({ providerId: "base-image" });
-    await assert.rejects(
-      () => provider.upscaleImage({ image: "base64data" }),
-      /subclass must override upscaleImage/
-    );
-  });
+test("ImageProvider subclassing · upscaleImage() throws 'subclass must override' by default", async (t) => {
+  const provider = new ImageProvider({ providerId: "base-image" });
+  await t.throwsAsync(
+    () => provider.upscaleImage({ image: "base64data" }),
+    { message: /subclass must override upscaleImage/ }
+  );
 });
 
 // ===========================================================================
 // Capability providers -- VideoProvider
 // ===========================================================================
 
-describe("VideoProvider subclassing", () => {
-  it("can be constructed with providerId", () => {
-    const provider = new VideoProvider({ providerId: "mock-video" });
-    assert.equal(provider.providerId, "mock-video");
-  });
+test("VideoProvider subclassing · can be constructed with providerId", (t) => {
+  const provider = new VideoProvider({ providerId: "mock-video" });
+  t.is(provider.providerId, "mock-video");
+});
 
-  it("textToVideo() throws 'subclass must override' by default", async () => {
-    const provider = new VideoProvider({ providerId: "base-video" });
-    await assert.rejects(
-      () => provider.textToVideo({ prompt: "sunset" }),
-      /subclass must override textToVideo/
-    );
-  });
+test("VideoProvider subclassing · textToVideo() throws 'subclass must override' by default", async (t) => {
+  const provider = new VideoProvider({ providerId: "base-video" });
+  await t.throwsAsync(
+    () => provider.textToVideo({ prompt: "sunset" }),
+    { message: /subclass must override textToVideo/ }
+  );
+});
 
-  it("imageToVideo() throws 'subclass must override' by default", async () => {
-    const provider = new VideoProvider({ providerId: "base-video" });
-    await assert.rejects(
-      () => provider.imageToVideo({ image: "base64data" }),
-      /subclass must override imageToVideo/
-    );
-  });
+test("VideoProvider subclassing · imageToVideo() throws 'subclass must override' by default", async (t) => {
+  const provider = new VideoProvider({ providerId: "base-video" });
+  await t.throwsAsync(
+    () => provider.imageToVideo({ image: "base64data" }),
+    { message: /subclass must override imageToVideo/ }
+  );
 });
 
 // ===========================================================================
 // Capability providers -- ThreeDProvider
 // ===========================================================================
 
-describe("ThreeDProvider subclassing", () => {
-  it("can be constructed with providerId", () => {
-    const provider = new ThreeDProvider({ providerId: "mock-3d" });
-    assert.equal(provider.providerId, "mock-3d");
-  });
+test("ThreeDProvider subclassing · can be constructed with providerId", (t) => {
+  const provider = new ThreeDProvider({ providerId: "mock-3d" });
+  t.is(provider.providerId, "mock-3d");
+});
 
-  it("generate3d() throws 'subclass must override' by default", async () => {
-    const provider = new ThreeDProvider({ providerId: "base-3d" });
-    await assert.rejects(
-      () => provider.generate3d({ prompt: "chair" }),
-      /subclass must override generate3d/
-    );
-  });
+test("ThreeDProvider subclassing · generate3d() throws 'subclass must override' by default", async (t) => {
+  const provider = new ThreeDProvider({ providerId: "base-3d" });
+  await t.throwsAsync(
+    () => provider.generate3d({ prompt: "chair" }),
+    { message: /subclass must override generate3d/ }
+  );
 });
 
 // ===========================================================================
 // Capability providers -- BackgroundRemovalProvider
 // ===========================================================================
 
-describe("BackgroundRemovalProvider subclassing", () => {
-  it("can be constructed with providerId", () => {
-    const provider = new BackgroundRemovalProvider({
-      providerId: "mock-bgremoval",
-    });
-    assert.equal(provider.providerId, "mock-bgremoval");
+test("BackgroundRemovalProvider subclassing · can be constructed with providerId", (t) => {
+  const provider = new BackgroundRemovalProvider({
+    providerId: "mock-bgremoval",
   });
+  t.is(provider.providerId, "mock-bgremoval");
+});
 
-  it("removeBackground() throws 'subclass must override' by default", async () => {
-    const provider = new BackgroundRemovalProvider({
-      providerId: "base-bgremoval",
-    });
-    await assert.rejects(
-      () => provider.removeBackground({ image: "base64data" }),
-      /subclass must override removeBackground/
-    );
+test("BackgroundRemovalProvider subclassing · removeBackground() throws 'subclass must override' by default", async (t) => {
+  const provider = new BackgroundRemovalProvider({
+    providerId: "base-bgremoval",
   });
+  await t.throwsAsync(
+    () => provider.removeBackground({ image: "base64data" }),
+    { message: /subclass must override removeBackground/ }
+  );
 });
 
 // ===========================================================================
 // Capability providers -- VoiceProvider
 // ===========================================================================
 
-describe("VoiceProvider subclassing", () => {
-  it("can be constructed with providerId", () => {
-    const provider = new VoiceProvider({ providerId: "mock-voice" });
-    assert.equal(provider.providerId, "mock-voice");
-  });
+test("VoiceProvider subclassing · can be constructed with providerId", (t) => {
+  const provider = new VoiceProvider({ providerId: "mock-voice" });
+  t.is(provider.providerId, "mock-voice");
+});
 
-  it("cloneVoice() throws 'subclass must override' by default", async () => {
-    const provider = new VoiceProvider({ providerId: "base-voice" });
-    await assert.rejects(
-      () => provider.cloneVoice({ name: "Alice", samples: [] }),
-      /subclass must override cloneVoice/
-    );
-  });
+test("VoiceProvider subclassing · cloneVoice() throws 'subclass must override' by default", async (t) => {
+  const provider = new VoiceProvider({ providerId: "base-voice" });
+  await t.throwsAsync(
+    () => provider.cloneVoice({ name: "Alice", samples: [] }),
+    { message: /subclass must override cloneVoice/ }
+  );
+});
 
-  it("listVoices() throws 'subclass must override' by default", async () => {
-    const provider = new VoiceProvider({ providerId: "base-voice" });
-    await assert.rejects(
-      () => provider.listVoices(),
-      /subclass must override listVoices/
-    );
-  });
+test("VoiceProvider subclassing · listVoices() throws 'subclass must override' by default", async (t) => {
+  const provider = new VoiceProvider({ providerId: "base-voice" });
+  await t.throwsAsync(
+    () => provider.listVoices(),
+    { message: /subclass must override listVoices/ }
+  );
+});
 
-  it("deleteVoice() throws 'subclass must override' by default", async () => {
-    const provider = new VoiceProvider({ providerId: "base-voice" });
-    await assert.rejects(
-      () => provider.deleteVoice({ voiceId: "v1" }),
-      /subclass must override deleteVoice/
-    );
-  });
+test("VoiceProvider subclassing · deleteVoice() throws 'subclass must override' by default", async (t) => {
+  const provider = new VoiceProvider({ providerId: "base-voice" });
+  await t.throwsAsync(
+    () => provider.deleteVoice({ voiceId: "v1" }),
+    { message: /subclass must override deleteVoice/ }
+  );
 });
 
 // ===========================================================================
 // Capability providers -- common getter coverage
 // ===========================================================================
 
-describe("capability provider common getters", () => {
-  it("baseUrl returns null when not set", () => {
-    const provider = new TTSProvider({ providerId: "no-url" });
-    assert.strictEqual(provider.baseUrl, null);
-  });
+test("capability provider common getters · baseUrl returns null when not set", (t) => {
+  const provider = new TTSProvider({ providerId: "no-url" });
+  t.is(provider.baseUrl, null);
+});
 
-  it("vramEstimateBytes returns null when not set", () => {
-    const provider = new ImageProvider({ providerId: "no-vram" });
-    assert.strictEqual(provider.vramEstimateBytes, null);
-  });
+test("capability provider common getters · vramEstimateBytes returns null when not set", (t) => {
+  const provider = new ImageProvider({ providerId: "no-vram" });
+  t.is(provider.vramEstimateBytes, null);
 });
 
 // ===========================================================================
 // MemoryBackend subclassing
 // ===========================================================================
 
-describe("MemoryBackend subclassing", () => {
-  it("can be constructed", () => {
-    const backend = new MemoryBackend();
-    assert.ok(backend);
-  });
+test("MemoryBackend subclassing · can be constructed", (t) => {
+  const backend = new MemoryBackend();
+  t.truthy(backend);
+});
 
-  it("can be subclassed", () => {
-    class DictBackend extends MemoryBackend {
-      constructor() {
-        super();
-        this.store = new Map();
-      }
+test("MemoryBackend subclassing · can be subclassed", (t) => {
+  class DictBackend extends MemoryBackend {
+    constructor() {
+      super();
+      this.store = new Map();
     }
-    const backend = new DictBackend();
-    assert.ok(backend);
-    assert.ok(backend.store instanceof Map);
-  });
+  }
+  const backend = new DictBackend();
+  t.truthy(backend);
+  t.truthy(backend.store instanceof Map);
+});
 
-  it("put() throws 'subclass must override' by default", async () => {
-    const backend = new MemoryBackend();
-    await assert.rejects(
-      () => backend.put({ id: "x", text: "hi" }),
-      /subclass must override put/
-    );
-  });
+test("MemoryBackend subclassing · put() throws 'subclass must override' by default", async (t) => {
+  const backend = new MemoryBackend();
+  await t.throwsAsync(
+    () => backend.put({ id: "x", text: "hi" }),
+    { message: /subclass must override put/ }
+  );
+});
 
-  it("get() throws 'subclass must override' by default", async () => {
-    const backend = new MemoryBackend();
-    await assert.rejects(
-      () => backend.get("x"),
-      /subclass must override get/
-    );
-  });
+test("MemoryBackend subclassing · get() throws 'subclass must override' by default", async (t) => {
+  const backend = new MemoryBackend();
+  await t.throwsAsync(
+    () => backend.get("x"),
+    { message: /subclass must override get/ }
+  );
+});
 
-  it("delete() throws 'subclass must override' by default", async () => {
-    const backend = new MemoryBackend();
-    await assert.rejects(
-      () => backend.delete("x"),
-      /subclass must override delete/
-    );
-  });
+test("MemoryBackend subclassing · delete() throws 'subclass must override' by default", async (t) => {
+  const backend = new MemoryBackend();
+  await t.throwsAsync(
+    () => backend.delete("x"),
+    { message: /subclass must override delete/ }
+  );
+});
 
-  it("list() throws 'subclass must override' by default", async () => {
-    const backend = new MemoryBackend();
-    await assert.rejects(
-      () => backend.list(),
-      /subclass must override list/
-    );
-  });
+test("MemoryBackend subclassing · list() throws 'subclass must override' by default", async (t) => {
+  const backend = new MemoryBackend();
+  await t.throwsAsync(
+    () => backend.list(),
+    { message: /subclass must override list/ }
+  );
+});
 
-  it("len() throws 'subclass must override' by default", async () => {
-    const backend = new MemoryBackend();
-    await assert.rejects(
-      () => backend.len(),
-      /subclass must override len/
-    );
-  });
+test("MemoryBackend subclassing · len() throws 'subclass must override' by default", async (t) => {
+  const backend = new MemoryBackend();
+  await t.throwsAsync(
+    () => backend.len(),
+    { message: /subclass must override len/ }
+  );
+});
 
-  it("searchByBands() throws 'subclass must override' by default", async () => {
-    const backend = new MemoryBackend();
-    await assert.rejects(
-      () => backend.searchByBands(["band1"], 5),
-      /subclass must override searchByBands/
-    );
-  });
+test("MemoryBackend subclassing · searchByBands() throws 'subclass must override' by default", async (t) => {
+  const backend = new MemoryBackend();
+  await t.throwsAsync(
+    () => backend.searchByBands(["band1"], 5),
+    { message: /subclass must override searchByBands/ }
+  );
 });
 
 // ===========================================================================
 // ModelManager
 // ===========================================================================
 
-describe("ModelManager", () => {
-  it("can be created with budgetGb", () => {
-    const manager = new ModelManager({ budgetGb: 24 });
-    assert.ok(manager);
-  });
+test("ModelManager · can be created with budgetGb", (t) => {
+  const manager = new ModelManager({ budgetGb: 24 });
+  t.truthy(manager);
+});
 
-  it("can be created with budgetBytes", () => {
-    const manager = new ModelManager({ budgetBytes: 8_000_000_000 });
-    assert.ok(manager);
-  });
+test("ModelManager · can be created with budgetBytes", (t) => {
+  const manager = new ModelManager({ budgetBytes: 8_000_000_000n });
+  t.truthy(manager);
+});
 
-  it("throws when neither budgetGb nor budgetBytes is given", () => {
-    assert.throws(
-      () => new ModelManager({}),
-      /must provide either budgetGb or budgetBytes/
-    );
-  });
+test("ModelManager · throws when neither budgetGb nor budgetBytes is given", (t) => {
+  t.throws(
+    () => new ModelManager({}),
+    { message: /must provide either budgetGb or budgetBytes/ }
+  );
+});
 
-  it("reports zero usedBytes when empty", async () => {
-    const manager = new ModelManager({ budgetGb: 8 });
-    const used = await manager.usedBytes();
-    assert.strictEqual(used, 0);
-  });
+test("ModelManager · reports zero usedBytes when empty", async (t) => {
+  const manager = new ModelManager({ budgetGb: 8 });
+  const used = await manager.usedBytes();
+  t.is(used, 0n);
+});
 
-  it("reports full budget as availableBytes when empty", async () => {
-    const manager = new ModelManager({ budgetGb: 8 });
-    const available = await manager.availableBytes();
-    assert.ok(available > 0);
-  });
+test("ModelManager · reports full budget as availableBytes when empty", async (t) => {
+  const manager = new ModelManager({ budgetGb: 8 });
+  const available = await manager.availableBytes();
+  t.truthy(available > 0n);
+});
 
-  it("status() returns empty array when no models registered", async () => {
-    const manager = new ModelManager({ budgetGb: 8 });
-    const statuses = await manager.status();
-    assert.deepStrictEqual(statuses, []);
-  });
+test("ModelManager · status() returns empty array when no models registered", async (t) => {
+  const manager = new ModelManager({ budgetGb: 8 });
+  const statuses = await manager.status();
+  t.deepEqual(statuses, []);
+});
 
-  it("register() throws for remote (non-local) models", async () => {
-    const manager = new ModelManager({ budgetGb: 8 });
-    const model = CompletionModel.openai({ apiKey: "fake-key" });
-    await assert.rejects(
-      () => manager.register("gpt-4", model),
-      /does not support local loading/
-    );
-  });
+test("ModelManager · register() throws for remote (non-local) models", async (t) => {
+  const manager = new ModelManager({ budgetGb: 8 });
+  const model = CompletionModel.openai({ apiKey: "fake-key" });
+  await t.throwsAsync(
+    () => manager.register("gpt-4", model),
+    { message: /does not support local loading/ }
+  );
 });
 
 // ===========================================================================
 // Pricing registration and lookup
 // ===========================================================================
 
-describe("pricing registration and lookup", () => {
-  it("registerPricing and lookupPricing round-trip", () => {
-    registerPricing("test-subclass-model", {
-      inputPerMillion: 1.5,
-      outputPerMillion: 3.0,
-    });
-    const pricing = lookupPricing("test-subclass-model");
-    assert.ok(pricing, "expected pricing to be found");
-    assert.strictEqual(pricing.inputPerMillion, 1.5);
-    assert.strictEqual(pricing.outputPerMillion, 3.0);
+test("pricing registration and lookup · registerPricing and lookupPricing round-trip", (t) => {
+  registerPricing("test-subclass-model", {
+    inputPerMillion: 1.5,
+    outputPerMillion: 3.0,
   });
+  const pricing = lookupPricing("test-subclass-model");
+  t.truthy(pricing, "expected pricing to be found");
+  t.is(pricing.inputPerMillion, 1.5);
+  t.is(pricing.outputPerMillion, 3.0);
+});
 
-  it("lookupPricing returns null for unknown models", () => {
-    const pricing = lookupPricing("definitely-not-a-real-model-xyz-12345");
-    assert.strictEqual(pricing, null);
-  });
+test("pricing registration and lookup · lookupPricing returns null for unknown models", (t) => {
+  const pricing = lookupPricing("definitely-not-a-real-model-xyz-12345");
+  t.is(pricing, null);
+});
 
-  it("registerPricing with per_image and per_second", () => {
-    registerPricing("multimodal-test-model", {
-      inputPerMillion: 5.0,
-      outputPerMillion: 15.0,
-      perImage: 0.02,
-      perSecond: 0.001,
-    });
-    const pricing = lookupPricing("multimodal-test-model");
-    assert.ok(pricing, "expected pricing to be found");
-    assert.strictEqual(pricing.inputPerMillion, 5.0);
-    assert.strictEqual(pricing.outputPerMillion, 15.0);
+test("pricing registration and lookup · registerPricing with per_image and per_second", (t) => {
+  registerPricing("multimodal-test-model", {
+    inputPerMillion: 5.0,
+    outputPerMillion: 15.0,
+    perImage: 0.02,
+    perSecond: 0.001,
   });
+  const pricing = lookupPricing("multimodal-test-model");
+  t.truthy(pricing, "expected pricing to be found");
+  t.is(pricing.inputPerMillion, 5.0);
+  t.is(pricing.outputPerMillion, 15.0);
+});
 
-  it("registerPricing overwrites previous registration", () => {
-    registerPricing("overwrite-test-model", {
-      inputPerMillion: 1.0,
-      outputPerMillion: 2.0,
-    });
-    registerPricing("overwrite-test-model", {
-      inputPerMillion: 10.0,
-      outputPerMillion: 20.0,
-    });
-    const pricing = lookupPricing("overwrite-test-model");
-    assert.ok(pricing);
-    assert.strictEqual(pricing.inputPerMillion, 10.0);
-    assert.strictEqual(pricing.outputPerMillion, 20.0);
+test("pricing registration and lookup · registerPricing overwrites previous registration", (t) => {
+  registerPricing("overwrite-test-model", {
+    inputPerMillion: 1.0,
+    outputPerMillion: 2.0,
   });
+  registerPricing("overwrite-test-model", {
+    inputPerMillion: 10.0,
+    outputPerMillion: 20.0,
+  });
+  const pricing = lookupPricing("overwrite-test-model");
+  t.truthy(pricing);
+  t.is(pricing.inputPerMillion, 10.0);
+  t.is(pricing.outputPerMillion, 20.0);
 });
 
 // ===========================================================================
 // CustomProvider (host-dispatch wrapper)
 // ===========================================================================
 
-describe("CustomProvider", () => {
-  it("can wrap a host object with textToSpeech", () => {
-    const host = {
-      async textToSpeech(request) {
-        return { audio: [], timing: {}, metadata: {} };
-      },
-    };
-    const provider = new CustomProvider(host, { providerId: "test-tts" });
-    assert.equal(provider.providerId, "test-tts");
-  });
+test("CustomProvider · can wrap a host object with textToSpeech", (t) => {
+  const host = {
+    async textToSpeech(request) {
+      return { audio: [], timing: {}, metadata: {} };
+    },
+  };
+  const provider = new CustomProvider(host, { providerId: "test-tts" });
+  t.is(provider.providerId, "test-tts");
+});
 
-  it("defaults providerId to 'custom' when not specified", () => {
-    const host = {};
-    const provider = new CustomProvider(host);
-    assert.equal(provider.providerId, "custom");
-  });
+test("CustomProvider · defaults providerId to 'custom' when not specified", (t) => {
+  const host = {};
+  const provider = new CustomProvider(host);
+  t.is(provider.providerId, "custom");
+});
 
-  it("can wrap a host object with multiple capabilities", () => {
-    const host = {
-      async textToSpeech(request) {
-        return {};
-      },
-      async generateImage(request) {
-        return {};
-      },
-      async textToVideo(request) {
-        return {};
-      },
-    };
-    const provider = new CustomProvider(host, {
-      providerId: "multi-cap",
-    });
-    assert.equal(provider.providerId, "multi-cap");
+test("CustomProvider · can wrap a host object with multiple capabilities", (t) => {
+  const host = {
+    async textToSpeech(request) {
+      return {};
+    },
+    async generateImage(request) {
+      return {};
+    },
+    async textToVideo(request) {
+      return {};
+    },
+  };
+  const provider = new CustomProvider(host, {
+    providerId: "multi-cap",
   });
+  t.is(provider.providerId, "multi-cap");
+});
 
-  it("can wrap an empty host object (no capabilities)", () => {
-    const host = {};
-    const provider = new CustomProvider(host, { providerId: "empty" });
-    assert.equal(provider.providerId, "empty");
-  });
+test("CustomProvider · can wrap an empty host object (no capabilities)", (t) => {
+  const host = {};
+  const provider = new CustomProvider(host, { providerId: "empty" });
+  t.is(provider.providerId, "empty");
 });
 
 // ===========================================================================
 // CompletionModel factory sanity (no network calls)
 // ===========================================================================
 
-describe("CompletionModel factories (construction only)", () => {
-  it("openai factory sets modelId", () => {
-    const model = CompletionModel.openai({ apiKey: "fake-key" });
-    assert.ok(model.modelId, "expected non-empty modelId");
-  });
+test("CompletionModel factories (construction only) · openai factory sets modelId", (t) => {
+  const model = CompletionModel.openai({ apiKey: "fake-key" });
+  t.truthy(model.modelId, "expected non-empty modelId");
+});
 
-  it("multiple subclass instances are independent", () => {
-    class LLM_A extends CompletionModel {
-      constructor() {
-        super({ modelId: "model-a" });
-      }
+test("CompletionModel factories (construction only) · multiple subclass instances are independent", (t) => {
+  class LLM_A extends CompletionModel {
+    constructor() {
+      super({ modelId: "model-a" });
     }
-    class LLM_B extends CompletionModel {
-      constructor() {
-        super({ modelId: "model-b" });
-      }
+  }
+  class LLM_B extends CompletionModel {
+    constructor() {
+      super({ modelId: "model-b" });
     }
-    const a = new LLM_A();
-    const b = new LLM_B();
-    assert.equal(a.modelId, "model-a");
-    assert.equal(b.modelId, "model-b");
-    assert.notEqual(a.modelId, b.modelId);
-  });
+  }
+  const a = new LLM_A();
+  const b = new LLM_B();
+  t.is(a.modelId, "model-a");
+  t.is(b.modelId, "model-b");
+  t.not(a.modelId, b.modelId);
 });
 
 // ===========================================================================
 // EmbeddingModel + Memory integration (local mode, no API key)
 // ===========================================================================
 
-describe("EmbeddingModel subclass cannot be used with Memory", () => {
-  it("Memory constructor rejects subclassed EmbeddingModel without inner provider", () => {
-    class FakeEmbed extends EmbeddingModel {
-      constructor() {
-        super({ modelId: "fake", dimensions: 32 });
-      }
+test("EmbeddingModel subclass cannot be used with Memory · Memory constructor rejects subclassed EmbeddingModel without inner provider", (t) => {
+  class FakeEmbed extends EmbeddingModel {
+    constructor() {
+      super({ modelId: "fake", dimensions: 32 });
     }
-    const embedder = new FakeEmbed();
-    const backend = new InMemoryBackend();
+  }
+  const embedder = new FakeEmbed();
+  const backend = new InMemoryBackend();
 
-    assert.throws(
-      () => new Memory(embedder, backend),
-      /concrete EmbeddingModel|not a subclassed instance/
-    );
-  });
+  t.throws(
+    () => new Memory(embedder, backend),
+    { message: /concrete EmbeddingModel|not a subclassed instance/ }
+  );
 });

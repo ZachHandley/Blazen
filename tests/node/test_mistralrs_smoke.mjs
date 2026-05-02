@@ -8,8 +8,7 @@
  *   cd crates/blazen-node && npm install && npm run build -- --features mistralrs
  */
 
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import test from "ava";
 
 import { CompletionModel, ChatMessage } from "../../crates/blazen-node/index.js";
 
@@ -17,47 +16,50 @@ const BLAZEN_TEST_MISTRALRS = process.env.BLAZEN_TEST_MISTRALRS;
 
 const MODEL_ID = "TheBloke/Mistral-7B-Instruct-v0.2-GGUF";
 
-describe("mistral.rs local LLM", { skip: !BLAZEN_TEST_MISTRALRS }, () => {
-  it("completes a prompt and returns non-empty content", async () => {
-    // Feature gate: if mistralrs factory is not available, skip gracefully.
-    if (typeof CompletionModel.mistralrs !== "function") {
-      return; // not built with mistralrs feature
-    }
+const T = BLAZEN_TEST_MISTRALRS ? test : test.skip;
 
-    const model = CompletionModel.mistralrs({ modelId: MODEL_ID });
+T("mistral.rs local LLM · completes a prompt and returns non-empty content", async (t) => {
+  // Feature gate: if mistralrs factory is not available, skip gracefully.
+  if (typeof CompletionModel.mistralrs !== "function") {
+    t.pass("mistralrs feature not built");
+    return; // not built with mistralrs feature
+  }
 
-    const response = await model.complete([
-      ChatMessage.user("What is 2+2? Answer with just the number."),
-    ]);
+  const model = CompletionModel.mistralrs({ modelId: MODEL_ID });
 
-    assert.ok(response.content, "expected non-empty response content");
-    assert.ok(response.content.length > 0, "content should not be empty");
-  });
+  const response = await model.complete([
+    ChatMessage.user("What is 2+2? Answer with just the number."),
+  ]);
 
-  it("exposes model_id on the constructed model", async () => {
-    if (typeof CompletionModel.mistralrs !== "function") {
-      return;
-    }
+  t.truthy(response.content, "expected non-empty response content");
+  t.truthy(response.content.length > 0, "content should not be empty");
+});
 
-    const model = CompletionModel.mistralrs({ modelId: MODEL_ID });
+T("mistral.rs local LLM · exposes model_id on the constructed model", async (t) => {
+  if (typeof CompletionModel.mistralrs !== "function") {
+    t.pass("mistralrs feature not built");
+    return;
+  }
 
-    assert.ok(model.modelId, "expected a non-empty model ID");
-    assert.ok(model.modelId.length > 0, "modelId should not be empty");
-  });
+  const model = CompletionModel.mistralrs({ modelId: MODEL_ID });
 
-  it("handles system + user message pairs", async () => {
-    if (typeof CompletionModel.mistralrs !== "function") {
-      return;
-    }
+  t.truthy(model.modelId, "expected a non-empty model ID");
+  t.truthy(model.modelId.length > 0, "modelId should not be empty");
+});
 
-    const model = CompletionModel.mistralrs({ modelId: MODEL_ID });
+T("mistral.rs local LLM · handles system + user message pairs", async (t) => {
+  if (typeof CompletionModel.mistralrs !== "function") {
+    t.pass("mistralrs feature not built");
+    return;
+  }
 
-    const response = await model.complete([
-      ChatMessage.system("You are a helpful assistant. Be concise."),
-      ChatMessage.user("What is the capital of France?"),
-    ]);
+  const model = CompletionModel.mistralrs({ modelId: MODEL_ID });
 
-    assert.ok(response.content, "expected non-empty response content");
-    assert.ok(response.content.length > 0, "content should not be empty");
-  });
+  const response = await model.complete([
+    ChatMessage.system("You are a helpful assistant. Be concise."),
+    ChatMessage.user("What is the capital of France?"),
+  ]);
+
+  t.truthy(response.content, "expected non-empty response content");
+  t.truthy(response.content.length > 0, "content should not be empty");
 });

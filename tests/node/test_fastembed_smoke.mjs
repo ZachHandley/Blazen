@@ -13,8 +13,7 @@
 // Run shape-only tests:
 //     node --test tests/node/test_fastembed_smoke.mjs
 
-import { test, describe } from "node:test";
-import assert from "node:assert/strict";
+import test from "ava";
 
 import * as blazen from "../../crates/blazen-node/index.js";
 
@@ -23,88 +22,104 @@ import * as blazen from "../../crates/blazen-node/index.js";
 // every fastembed-related symbol will also be absent.
 const HAS_FASTEMBED = typeof blazen.FastEmbedModel === "function";
 
-describe("FastEmbed typed bindings", () => {
-  test("FastEmbedOptions is an object-literal interface (no runtime class)", () => {
-    if (!HAS_FASTEMBED) return;
-    // `JsFastEmbedOptions` is a TypeScript interface -- at runtime it is just
-    // a plain object passed to `FastEmbedModel.create`. Confirm there is no
-    // accidental class export shadowing it.
-    assert.equal(blazen.FastEmbedOptions, undefined);
-    assert.equal(blazen.JsFastEmbedOptions, undefined);
-  });
+test("FastEmbed typed bindings · FastEmbedOptions is an object-literal interface (no runtime class)", (t) => {
+  if (!HAS_FASTEMBED) {
+    t.pass("fastembed feature not built");
+    return;
+  }
+  // `JsFastEmbedOptions` is a TypeScript interface -- at runtime it is just
+  // a plain object passed to `FastEmbedModel.create`. Confirm there is no
+  // accidental class export shadowing it.
+  t.is(blazen.FastEmbedOptions, undefined);
+  t.is(blazen.JsFastEmbedOptions, undefined);
+});
 
-  test("FastEmbedModel class shape (static create + instance methods + getters)", () => {
-    if (!HAS_FASTEMBED) return;
-    assert.equal(typeof blazen.FastEmbedModel, "function");
-    assert.equal(typeof blazen.FastEmbedModel.create, "function");
+test("FastEmbed typed bindings · FastEmbedModel class shape (static create + instance methods + getters)", (t) => {
+  if (!HAS_FASTEMBED) {
+    t.pass("fastembed feature not built");
+    return;
+  }
+  t.is(typeof blazen.FastEmbedModel, "function");
+  t.is(typeof blazen.FastEmbedModel.create, "function");
 
-    const proto = blazen.FastEmbedModel.prototype;
-    // `embed` is an async instance method.
-    assert.equal(
-      typeof proto.embed,
-      "function",
-      "FastEmbedModel.prototype.embed must be a function",
+  const proto = blazen.FastEmbedModel.prototype;
+  // `embed` is an async instance method.
+  t.is(
+    typeof proto.embed,
+    "function",
+    "FastEmbedModel.prototype.embed must be a function",
+  );
+
+  // `modelId` and `dimensions` are getters, not methods.
+  for (const name of ["modelId", "dimensions"]) {
+    const desc = Object.getOwnPropertyDescriptor(proto, name);
+    t.truthy(desc, `${name} getter must exist on prototype`);
+    t.is(typeof desc.get, "function");
+  }
+});
+
+test("FastEmbed typed bindings · JsFastEmbedModel is a TypeScript-only alias (no runtime value)", (t) => {
+  if (!HAS_FASTEMBED) {
+    t.pass("fastembed feature not built");
+    return;
+  }
+  // `JsFastEmbedModel` is declared in `index.d.ts` as a type alias of
+  // `FastEmbedModel`. The native binding only exposes the canonical
+  // `FastEmbedModel` constructor; the alias carries no runtime value.
+  t.is(blazen.JsFastEmbedModel, undefined);
+});
+
+test("FastEmbed typed bindings · FastEmbedResponse is an object-literal interface (no runtime class)", (t) => {
+  if (!HAS_FASTEMBED) {
+    t.pass("fastembed feature not built");
+    return;
+  }
+  // `JsFastEmbedResponse` is a TypeScript interface -- at runtime it is a
+  // plain object yielded by `FastEmbedModel.embed`. Confirm no runtime
+  // class export shadows it.
+  t.is(blazen.FastEmbedResponse, undefined);
+  t.is(blazen.JsFastEmbedResponse, undefined);
+});
+
+test("FastEmbed typed bindings · fastembed error classes form a ProviderError hierarchy", (t) => {
+  if (!HAS_FASTEMBED) {
+    t.pass("fastembed feature not built");
+    return;
+  }
+  // The typed error tree is declared in `index.d.ts` but is only present in
+  // `index.js` once the runtime error-wiring lands. Skip gracefully when
+  // the classes are absent so this smoke test can run on partial builds.
+  if (typeof blazen.FastEmbedError !== "function") {
+    t.pass("FastEmbedError runtime class not present");
+    return;
+  }
+
+  t.is(typeof blazen.EmbedUnknownModelError, "function");
+  t.is(typeof blazen.EmbedInitError, "function");
+  t.is(typeof blazen.EmbedEmbedError, "function");
+  t.is(typeof blazen.EmbedMutexPoisonedError, "function");
+  t.is(typeof blazen.EmbedTaskPanickedError, "function");
+
+  // Each subclass extends FastEmbedError.
+  for (const sub of [
+    blazen.EmbedUnknownModelError,
+    blazen.EmbedInitError,
+    blazen.EmbedEmbedError,
+    blazen.EmbedMutexPoisonedError,
+    blazen.EmbedTaskPanickedError,
+  ]) {
+    t.truthy(
+      sub.prototype instanceof blazen.FastEmbedError,
+      `${sub.name} must extend FastEmbedError`,
     );
+  }
 
-    // `modelId` and `dimensions` are getters, not methods.
-    for (const name of ["modelId", "dimensions"]) {
-      const desc = Object.getOwnPropertyDescriptor(proto, name);
-      assert.ok(desc, `${name} getter must exist on prototype`);
-      assert.equal(typeof desc.get, "function");
-    }
-  });
-
-  test("JsFastEmbedModel is a TypeScript-only alias (no runtime value)", () => {
-    if (!HAS_FASTEMBED) return;
-    // `JsFastEmbedModel` is declared in `index.d.ts` as a type alias of
-    // `FastEmbedModel`. The native binding only exposes the canonical
-    // `FastEmbedModel` constructor; the alias carries no runtime value.
-    assert.equal(blazen.JsFastEmbedModel, undefined);
-  });
-
-  test("FastEmbedResponse is an object-literal interface (no runtime class)", () => {
-    if (!HAS_FASTEMBED) return;
-    // `JsFastEmbedResponse` is a TypeScript interface -- at runtime it is a
-    // plain object yielded by `FastEmbedModel.embed`. Confirm no runtime
-    // class export shadows it.
-    assert.equal(blazen.FastEmbedResponse, undefined);
-    assert.equal(blazen.JsFastEmbedResponse, undefined);
-  });
-
-  test("fastembed error classes form a ProviderError hierarchy", () => {
-    if (!HAS_FASTEMBED) return;
-    // The typed error tree is declared in `index.d.ts` but is only present in
-    // `index.js` once the runtime error-wiring lands. Skip gracefully when
-    // the classes are absent so this smoke test can run on partial builds.
-    if (typeof blazen.FastEmbedError !== "function") return;
-
-    assert.equal(typeof blazen.EmbedUnknownModelError, "function");
-    assert.equal(typeof blazen.EmbedInitError, "function");
-    assert.equal(typeof blazen.EmbedEmbedError, "function");
-    assert.equal(typeof blazen.EmbedMutexPoisonedError, "function");
-    assert.equal(typeof blazen.EmbedTaskPanickedError, "function");
-
-    // Each subclass extends FastEmbedError.
-    for (const sub of [
-      blazen.EmbedUnknownModelError,
-      blazen.EmbedInitError,
-      blazen.EmbedEmbedError,
-      blazen.EmbedMutexPoisonedError,
-      blazen.EmbedTaskPanickedError,
-    ]) {
-      assert.ok(
-        sub.prototype instanceof blazen.FastEmbedError,
-        `${sub.name} must extend FastEmbedError`,
-      );
-    }
-
-    // And FastEmbedError itself extends ProviderError when that base is
-    // present (only true for the standard typed-error tree).
-    if (typeof blazen.ProviderError === "function") {
-      assert.ok(
-        blazen.FastEmbedError.prototype instanceof blazen.ProviderError,
-        "FastEmbedError must extend ProviderError",
-      );
-    }
-  });
+  // And FastEmbedError itself extends ProviderError when that base is
+  // present (only true for the standard typed-error tree).
+  if (typeof blazen.ProviderError === "function") {
+    t.truthy(
+      blazen.FastEmbedError.prototype instanceof blazen.ProviderError,
+      "FastEmbedError must extend ProviderError",
+    );
+  }
 });

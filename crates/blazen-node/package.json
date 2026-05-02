@@ -40,7 +40,8 @@
   ],
   "devDependencies": {
     "@napi-rs/cli": "^3.0.0",
-    "@biomejs/biome": "^2"
+    "@biomejs/biome": "^2",
+    "ava": "^6.4.1"
   },
   "engines": {
     "node": ">= 18"
@@ -48,8 +49,20 @@
   "scripts": {
     "build": "napi build --release --platform --features local-all,langfuse --js index.js && node scripts/post-build.mjs",
     "build:debug": "napi build --platform --features local-all,langfuse --js index.js && node scripts/post-build.mjs",
-    "test": "node --test ../../tests/node/test_workflow.mjs",
-    "test:smoke": "node --test ../../tests/node/test_llm_smoke.mjs",
+    "test": "ava",
+    "test:workflow": "ava ../../tests/node/test_workflow.mjs",
+    "test:smoke": "ava ../../tests/node/test_llm_smoke.mjs",
     "prepublishOnly": "napi prepublish -t npm --no-gh-release"
+  },
+  "ava": {
+    "files": [
+      "../../tests/node/test_*.mjs"
+    ],
+    "extensions": [
+      "mjs"
+    ],
+    "timeout": "120s",
+    "concurrency": 4,
+    "verbose": true
   }
 }

@@ -37,8 +37,7 @@
  * Rust<->JS boundary is NOT tested here (Phase 13).
  */
 
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import test from "ava";
 
 import { Workflow } from "../../crates/blazen-node/index.js";
 
@@ -46,105 +45,103 @@ import { Workflow } from "../../crates/blazen-node/index.js";
 // Sub-workflow session ref handoff
 // ---------------------------------------------------------------------------
 
-describe("sub-workflow session ref handoff", () => {
-  it("parent invokes child sub-workflow from inside a step", async () => {
-    // Inner workflow: read `parent_token` from its session namespace and
-    // echo it out in the StopEvent result.
-    const innerWf = new Workflow("inner");
-    innerWf.addStep("read", ["blazen::StartEvent"], async (_event, ctx) => {
-      const token = await ctx.session.get("parent_token");
-      return {
-        type: "blazen::StopEvent",
-        result: { token },
-      };
-    });
-
-    // Outer workflow: write `parent_token` into its session namespace,
-    // await the inner run, and return whatever the inner run reported.
-    const outerWf = new Workflow("outer");
-    outerWf.addStep("wrap", ["blazen::StartEvent"], async (_event, ctx) => {
-      await ctx.session.set("parent_token", "the-secret-123");
-      const inner = await innerWf.run({});
-      return {
-        type: "blazen::StopEvent",
-        result: { innerToken: inner.data.token },
-      };
-    });
-
-    const result = await outerWf.run({});
-
-    // Today: child gets its own context with an empty `objects` map, so
-    // the token is null. This assertion documents the current behavior.
-    //
-    // TARGET (after follow-up fix):
-    //   assert.strictEqual(result.data.innerToken, "the-secret-123");
-    //
-    // When the step dispatcher wraps handlers in with_session_registry
-    // AND ctx.session routes through the shared registry (instead of
-    // per-context objects), flip this assertion to "the-secret-123".
-    assert.strictEqual(
-      result.data.innerToken,
-      null,
-      "child workflow currently gets its own empty session namespace " +
-        "because (a) the Node step dispatcher does not install " +
-        "with_session_registry around the handler, and (b) ctx.session " +
-        "uses per-context ContextInner.objects, not the shared " +
-        "SessionRefRegistry. See test file header for details.",
-    );
+test("sub-workflow session ref handoff · parent invokes child sub-workflow from inside a step", async (t) => {
+  // Inner workflow: read `parent_token` from its session namespace and
+  // echo it out in the StopEvent result.
+  const innerWf = new Workflow("inner");
+  innerWf.addStep("read", ["blazen::StartEvent"], async (_event, ctx) => {
+    const token = await ctx.session.get("parent_token");
+    return {
+      type: "blazen::StopEvent",
+      result: { token },
+    };
   });
 
-  it("child sub-workflow returns JSON data through nested run", async () => {
-    // This is the minimal proof that `run_with_optional_parent_registry`
-    // is on the code path and does NOT break nested workflow execution.
-    // The child returns a JSON payload that the parent wraps in its own
-    // StopEvent. The round-trip works regardless of which branch the
-    // helper takes (fresh vs shared registry).
-    const innerWf = new Workflow("inner-json");
-    innerWf.addStep("echo", ["blazen::StartEvent"], async (event, _ctx) => {
-      return {
-        type: "blazen::StopEvent",
-        result: { echoed: event.message, source: "child" },
-      };
-    });
-
-    const outerWf = new Workflow("outer-json");
-    outerWf.addStep("wrap", ["blazen::StartEvent"], async (_event, ctx) => {
-      const inner = await innerWf.run({ message: "from-parent" });
-      return {
-        type: "blazen::StopEvent",
-        result: { childResult: inner.data, source: "parent" },
-      };
-    });
-
-    const result = await outerWf.run({});
-
-    assert.strictEqual(result.data.source, "parent");
-    assert.strictEqual(result.data.childResult.echoed, "from-parent");
-    assert.strictEqual(result.data.childResult.source, "child");
+  // Outer workflow: write `parent_token` into its session namespace,
+  // await the inner run, and return whatever the inner run reported.
+  const outerWf = new Workflow("outer");
+  outerWf.addStep("wrap", ["blazen::StartEvent"], async (_event, ctx) => {
+    await ctx.session.set("parent_token", "the-secret-123");
+    const inner = await innerWf.run({});
+    return {
+      type: "blazen::StopEvent",
+      result: { innerToken: inner.data.token },
+    };
   });
 
-  // ---------------------------------------------------------------------
-  // Top-level isolation sanity check
-  // ---------------------------------------------------------------------
-  it("fresh top-level run sees an empty session namespace", async () => {
-    const innerWf = new Workflow("inner-isolated");
-    innerWf.addStep("read", ["blazen::StartEvent"], async (_event, ctx) => {
-      const token = await ctx.session.get("parent_token");
-      const has = await ctx.session.has("parent_token");
-      return {
-        type: "blazen::StopEvent",
-        result: { token, has },
-      };
-    });
+  const result = await outerWf.run({});
 
-    // Run at top level (not inside a parent step). No ambient registry.
-    const result = await innerWf.run({});
+  // Today: child gets its own context with an empty `objects` map, so
+  // the token is null. This assertion documents the current behavior.
+  //
+  // TARGET (after follow-up fix):
+  //   t.is(result.data.innerToken, "the-secret-123");
+  //
+  // When the step dispatcher wraps handlers in with_session_registry
+  // AND ctx.session routes through the shared registry (instead of
+  // per-context objects), flip this assertion to "the-secret-123".
+  t.is(
+    result.data.innerToken,
+    null,
+    "child workflow currently gets its own empty session namespace " +
+      "because (a) the Node step dispatcher does not install " +
+      "with_session_registry around the handler, and (b) ctx.session " +
+      "uses per-context ContextInner.objects, not the shared " +
+      "SessionRefRegistry. See test file header for details.",
+  );
+});
 
-    assert.strictEqual(
-      result.data.token,
-      null,
-      "top-level run must not leak session state.",
-    );
-    assert.strictEqual(result.data.has, false);
+test("sub-workflow session ref handoff · child sub-workflow returns JSON data through nested run", async (t) => {
+  // This is the minimal proof that `run_with_optional_parent_registry`
+  // is on the code path and does NOT break nested workflow execution.
+  // The child returns a JSON payload that the parent wraps in its own
+  // StopEvent. The round-trip works regardless of which branch the
+  // helper takes (fresh vs shared registry).
+  const innerWf = new Workflow("inner-json");
+  innerWf.addStep("echo", ["blazen::StartEvent"], async (event, _ctx) => {
+    return {
+      type: "blazen::StopEvent",
+      result: { echoed: event.message, source: "child" },
+    };
   });
+
+  const outerWf = new Workflow("outer-json");
+  outerWf.addStep("wrap", ["blazen::StartEvent"], async (_event, ctx) => {
+    const inner = await innerWf.run({ message: "from-parent" });
+    return {
+      type: "blazen::StopEvent",
+      result: { childResult: inner.data, source: "parent" },
+    };
+  });
+
+  const result = await outerWf.run({});
+
+  t.is(result.data.source, "parent");
+  t.is(result.data.childResult.echoed, "from-parent");
+  t.is(result.data.childResult.source, "child");
+});
+
+// ---------------------------------------------------------------------
+// Top-level isolation sanity check
+// ---------------------------------------------------------------------
+test("sub-workflow session ref handoff · fresh top-level run sees an empty session namespace", async (t) => {
+  const innerWf = new Workflow("inner-isolated");
+  innerWf.addStep("read", ["blazen::StartEvent"], async (_event, ctx) => {
+    const token = await ctx.session.get("parent_token");
+    const has = await ctx.session.has("parent_token");
+    return {
+      type: "blazen::StopEvent",
+      result: { token, has },
+    };
+  });
+
+  // Run at top level (not inside a parent step). No ambient registry.
+  const result = await innerWf.run({});
+
+  t.is(
+    result.data.token,
+    null,
+    "top-level run must not leak session state.",
+  );
+  t.is(result.data.has, false);
 });

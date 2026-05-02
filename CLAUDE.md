@@ -62,16 +62,21 @@ uv run --no-sync maturin develop -m crates/blazen-py/Cargo.toml \
 uv run --no-sync pytest tests/python/ -p no:xdist     # serial — clearer tracebacks on first failure
 uv run --no-sync pytest tests/python/ -n auto         # xdist — confirms no parallel-mode regressions
 
-# 3. Node bindings (blazen-node)
-# `pnpm --filter blazen run build` rebuilds the napi binary AND regenerates index.d.ts.
-# Sync smoke check (this MUST work — confirms the binary loads + new bindings export):
-#   node -e "const b = require('./crates/blazen-node/index.js'); console.log(b.version(), typeof b.ModelManager, typeof b.ModelRegistry);"
-# Full async suite (`node --test tests/node/*.mjs`) currently hangs because the
-# tests use `async () => {…}` and napi-rs's tokio runtime handle keeps the
-# event loop alive past the test end — known issue, not the binding's fault.
-# Convert tests to sync (Promise.then chains) before relying on this for CI.
+# 3. Node bindings (blazen-node) — uses ava (canonical napi-rs runner)
+# Build the napi binary + regenerate index.d.ts:
 pnpm --filter blazen run build
-node -e "const b = require('./crates/blazen-node/index.js'); console.log('node binding ok:', b.version(), typeof b.ModelManager, typeof b.ModelRegistry);"
+# Run the test suite from repo root (ava config is in root package.json):
+pnpm exec ava --timeout 30s
+# Or a single file: `pnpm exec ava tests/node/test_workflow.mjs`.
+#
+# KNOWN ISSUE: a process that calls `await wf.run(...)` more than ~2 times in
+# sequence currently hangs on the 3rd workflow — likely a TSFN/tokio handle
+# leak in the napi binding. Files with many workflow tests (test_workflow.mjs,
+# test_e2e.mjs, test_session_refs.mjs, etc.) report ~30 "remained pending
+# after a timeout" entries because of this. Files that don't repeatedly run
+# workflows pass cleanly. The issue is binding-side, not test-side; fixing it
+# is a separate task. ava produces a clean tally even for the hung files
+# (each is its own subprocess so the hang is contained per file).
 
 # 4. WASM SDK (blazen-wasm-sdk) — wasm-bindgen-test based
 # Headless browser run; firefox or chrome must be installed.
