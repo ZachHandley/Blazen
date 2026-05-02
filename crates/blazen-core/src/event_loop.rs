@@ -1087,7 +1087,7 @@ fn dispatch_regular_step(
                 let start = Instant::now();
                 let handler_fut = handler(event_clone, ctx_clone);
                 let handler_outcome = if let Some(d) = step_timeout {
-                    let Ok(inner) = tokio::time::timeout(d, handler_fut).await else {
+                    let Ok(inner) = crate::runtime::timeout(d, handler_fut).await else {
                         let elapsed_ms = u64::try_from(d.as_millis()).unwrap_or(u64::MAX);
                         // Emit StepFailed history event.
                         #[cfg(feature = "telemetry")]
@@ -1671,7 +1671,7 @@ async fn run_subworkflow_once(
     // 3. Await completion, optionally with a wall-clock timeout that
     //    spans the whole child run.
     let wf_result = if let Some(d) = step.timeout {
-        if let Ok(r) = tokio::time::timeout(d, handler.result()).await {
+        if let Ok(r) = crate::runtime::timeout(d, handler.result()).await {
             r?
         } else {
             let elapsed_ms = u64::try_from(d.as_millis()).unwrap_or(u64::MAX);

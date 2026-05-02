@@ -13,13 +13,15 @@
 //! the final result. Mode 3 can be used alongside modes 1 and 2.
 
 use std::sync::Arc;
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
 
 use crate::runtime::JoinHandle;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::runtime::timeout;
 use blazen_events::{AnyEvent, InputResponseEvent, UsageEvent};
 use blazen_llm::types::TokenUsage;
 use tokio::sync::{Mutex, broadcast, mpsc, oneshot};
-use tokio::time::timeout;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -251,28 +253,40 @@ impl WorkflowHandler {
         let owned_sender = std::mem::replace(&mut self.stream_tx, drained_stream_tx);
         drop(owned_sender);
 
-        // Drain the accumulator with a bounded timeout. By the time
-        // `event_loop_handle.await` resolved, every step task has
-        // completed and no further `UsageEvent`s can be emitted —
-        // anything still relevant is already buffered in the
-        // broadcast channel. We do NOT wait for the channel's
-        // senders to fully drop, because `Context` clones may stay
-        // alive in binding-side wrappers (e.g. napi-rs `JsContext`)
-        // until the host GC reclaims them, which is unpredictable
-        // and can be effectively unbounded. A 50 ms window is more
-        // than enough for the accumulator to drain everything in
-        // the buffer; if it doesn't exit by then, abort it so we
-        // don't leak the task.
+        // Drain the accumulator. On native, bound it with a 50 ms timeout
+        // and abort on elapse: every step task has completed by this
+        // point, so no further `UsageEvent`s can be emitted -- anything
+        // still relevant is already buffered. We do NOT wait for the
+        // broadcast channel's senders to fully drop, because `Context`
+        // clones may stay alive in binding-side wrappers (e.g. napi-rs
+        // `JsContext`) until the host GC reclaims them, which is
+        // unpredictable and can be effectively unbounded.
+        //
+        // On wasm32 we just await the handle: the wasm32 timeout
+        // polyfill in `crate::runtime` wraps a `JsFuture` whose
+        // `Rc<RefCell<...>>` is `!Send`, which would propagate up and
+        // make `result()`'s future `!Send` -- breaking
+        // `tokio::spawn(...)` callers like `blazen-pipeline`. The
+        // JS-GC-delay issue lives in the napi-rs binding shape and
+        // doesn't affect `blazen-wasm-sdk`, so the bounded drain is
+        // not load-bearing on wasm32.
         if let Some(mut handle) = self.usage_accumulator_handle.take() {
-            // `JoinHandle` is `Unpin` on both tokio (native) and the
-            // wasm32 polyfill in `crate::runtime`, so awaiting `&mut
-            // handle` lets us still abort the underlying task on
-            // timeout without consuming the handle.
-            if timeout(Duration::from_millis(50), &mut handle)
-                .await
-                .is_err()
+            #[cfg(not(target_arch = "wasm32"))]
             {
-                handle.abort();
+                // `JoinHandle` is `Unpin` on both tokio (native) and the
+                // wasm32 polyfill in `crate::runtime`, so awaiting `&mut
+                // handle` lets us still abort the underlying task on
+                // timeout without consuming the handle.
+                if timeout(Duration::from_millis(50), &mut handle)
+                    .await
+                    .is_err()
+                {
+                    handle.abort();
+                }
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                let _ = (&mut handle).await;
             }
         }
 

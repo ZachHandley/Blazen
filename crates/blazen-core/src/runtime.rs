@@ -20,6 +20,7 @@ mod imp {
     pub use std::time::Instant;
     pub use tokio::task::{JoinError, JoinHandle, JoinSet};
     pub use tokio::time::sleep;
+    pub use tokio::time::timeout;
 
     /// Native [`tokio::spawn`].
     pub fn spawn<F>(fut: F) -> JoinHandle<F::Output>
@@ -211,6 +212,37 @@ mod imp {
             let _ = set_timeout.call2(&JsValue::NULL, &resolve, &JsValue::from(ms));
         });
         let _ = JsFuture::from(promise).await;
+    }
+
+    /// Wasm32 mirror of [`tokio::time::timeout`].
+    ///
+    /// Races the supplied future against a [`sleep`] of `dur` using
+    /// [`tokio::select!`] (the `macros` feature is available on wasm32; the
+    /// `time` feature is not, which is why this polyfill exists). Returns
+    /// `Ok(F::Output)` if the future completes first, `Err(Elapsed)` if the
+    /// sleep fires first.
+    ///
+    /// The error type is a unit-like marker so callers using `is_err()` /
+    /// `Ok(_)` / `Err(_)` keep working unchanged.
+    #[derive(Debug)]
+    pub struct Elapsed;
+
+    impl core::fmt::Display for Elapsed {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            f.write_str("deadline has elapsed")
+        }
+    }
+
+    impl std::error::Error for Elapsed {}
+
+    pub async fn timeout<F>(dur: std::time::Duration, fut: F) -> Result<F::Output, Elapsed>
+    where
+        F: Future,
+    {
+        tokio::select! {
+            v = fut => Ok(v),
+            () = sleep(dur) => Err(Elapsed),
+        }
     }
 }
 
