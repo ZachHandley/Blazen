@@ -71,26 +71,45 @@ impl PyEmbeddingModel {
     ///     base_url: Base URL for HTTP-based providers.
     ///     pricing: Optional pricing information.
     ///     vram_estimate_bytes: Estimated VRAM footprint in bytes.
+    /// `__new__` for `EmbeddingModel`. Accepts arbitrary positional and
+    /// keyword arguments so Python subclasses can use any `__init__`
+    /// signature; the real configuration happens in `__init__` below.
     #[new]
-    #[pyo3(signature = (*, model_id=None, dimensions=None, base_url=None, pricing=None, vram_estimate_bytes=None))]
+    #[pyo3(signature = (*_args, **_kwargs))]
     fn new(
+        _args: &Bound<'_, pyo3::types::PyTuple>,
+        _kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
+    ) -> Self {
+        Self {
+            inner: None,
+            config: Some(blazen_llm::ProviderConfig::default()),
+            dimensions_override: None,
+        }
+    }
+
+    /// Subclass-friendly `__init__`. Mirrors the documented constructor
+    /// keyword signature and re-populates ``self.config`` so a Python
+    /// subclass that calls `super().__init__(model_id=..., dimensions=...)`
+    /// sees the values it passed.
+    #[pyo3(signature = (*, model_id=None, dimensions=None, base_url=None, pricing=None, vram_estimate_bytes=None))]
+    fn __init__(
+        &mut self,
         model_id: Option<String>,
         dimensions: Option<usize>,
         base_url: Option<String>,
         pricing: Option<PyRef<'_, crate::types::pricing::PyModelPricing>>,
         vram_estimate_bytes: Option<u64>,
-    ) -> Self {
-        Self {
-            inner: None,
-            config: Some(blazen_llm::ProviderConfig {
+    ) {
+        if self.inner.is_none() {
+            self.config = Some(blazen_llm::ProviderConfig {
                 model_id,
                 context_length: dimensions.map(|d| d as u64),
                 base_url,
                 vram_estimate_bytes,
                 pricing: pricing.map(|p| p.inner.clone()),
                 ..Default::default()
-            }),
-            dimensions_override: dimensions,
+            });
+            self.dimensions_override = dimensions;
         }
     }
 

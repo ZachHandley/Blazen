@@ -20,8 +20,10 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use blazen_core::session_ref::SessionRefRegistry;
 use blazen_llm::types::TokenUsage;
 
+use crate::convert::json_to_py;
 use crate::types::PyTokenUsage;
 use crate::workflow::event::PyEvent;
+use crate::workflow::session_ref::CURRENT_SESSION_REGISTRY;
 
 use super::session_ref::PySessionRefRegistry;
 
@@ -80,6 +82,42 @@ impl PyWorkflowResult {
     #[getter]
     fn event(&self, py: Python<'_>) -> Py<PyEvent> {
         self.event.clone_ref(py)
+    }
+
+    /// The terminal event's `event_type` string (e.g. `"blazen::StopEvent"`
+    /// for a completed workflow). Convenience pass-through to
+    /// `self.event.event_type`.
+    #[getter]
+    fn event_type(&self, py: Python<'_>) -> String {
+        self.event.bind(py).borrow().event_type.clone()
+    }
+
+    /// Terminal event's payload.
+    ///
+    /// For a `StopEvent` (the canonical terminal event), this is the value
+    /// passed to `StopEvent(result=...)` — i.e. the `"result"` slot of the
+    /// underlying event data. For other terminal events, this falls back to
+    /// the full event data as a Python object.
+    ///
+    /// Any `__blazen_session_ref__` markers carried on the payload are
+    /// resolved against the registry attached to the wrapped event, mirroring
+    /// `PyEvent.to_dict` / `PyEvent.__getattr__`.
+    #[getter]
+    #[gen_stub(override_return_type(type_repr = "typing.Any", imports = ("typing",)))]
+    fn result(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let event = self.event.bind(py).borrow();
+        let value = event
+            .data
+            .get("result")
+            .cloned()
+            .unwrap_or_else(|| event.data.clone());
+        // Resolve session-ref markers against the event's captured registry,
+        // matching the discipline used by PyEvent::to_dict.
+        if let Some(reg) = event.session_refs.as_ref() {
+            CURRENT_SESSION_REGISTRY.sync_scope(Arc::clone(reg), || json_to_py(py, &value))
+        } else {
+            json_to_py(py, &value)
+        }
     }
 
     /// The session-ref registry owning the in-process objects that any

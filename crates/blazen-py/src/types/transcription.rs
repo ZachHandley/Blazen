@@ -71,23 +71,41 @@ impl PyTranscription {
     ///     base_url: Base URL for HTTP-based providers.
     ///     pricing: Optional pricing information.
     ///     vram_estimate_bytes: Estimated VRAM footprint in bytes.
+    /// `__new__` for `Transcription`. Accepts arbitrary positional and
+    /// keyword arguments so Python subclasses can use any `__init__`
+    /// signature; the real configuration happens in `__init__` below.
     #[new]
-    #[pyo3(signature = (*, provider_id=None, base_url=None, pricing=None, vram_estimate_bytes=None))]
+    #[pyo3(signature = (*_args, **_kwargs))]
     fn new(
+        _args: &Bound<'_, pyo3::types::PyTuple>,
+        _kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
+    ) -> Self {
+        Self {
+            inner: None,
+            config: Some(blazen_llm::ProviderConfig::default()),
+        }
+    }
+
+    /// Subclass-friendly `__init__`. Mirrors the documented constructor
+    /// keyword signature and re-populates ``self.config`` so a Python
+    /// subclass that calls `super().__init__(provider_id=...)` sees the
+    /// values it passed.
+    #[pyo3(signature = (*, provider_id=None, base_url=None, pricing=None, vram_estimate_bytes=None))]
+    fn __init__(
+        &mut self,
         provider_id: Option<String>,
         base_url: Option<String>,
         pricing: Option<PyRef<'_, crate::types::pricing::PyModelPricing>>,
         vram_estimate_bytes: Option<u64>,
-    ) -> Self {
-        Self {
-            inner: None,
-            config: Some(blazen_llm::ProviderConfig {
+    ) {
+        if self.inner.is_none() {
+            self.config = Some(blazen_llm::ProviderConfig {
                 provider_id,
                 base_url,
                 vram_estimate_bytes,
                 pricing: pricing.map(|p| p.inner.clone()),
                 ..Default::default()
-            }),
+            });
         }
     }
 

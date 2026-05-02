@@ -200,6 +200,13 @@ impl PyMemoryBackend {
         Self {}
     }
 
+    /// Subclass-friendly `__init__` no-op. PyO3's `#[new]` only implements
+    /// `__new__`; without an explicit `__init__` here, a Python subclass that
+    /// chains `super().__init__()` falls through to `object.__init__` and
+    /// raises ``TypeError``. The base `MemoryBackend` carries no state, so
+    /// this is a true no-op.
+    fn __init__(&self) {}
+
     /// Store an entry.
     fn put(&self, _entry: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         Err(pyo3::exceptions::PyNotImplementedError::new_err(

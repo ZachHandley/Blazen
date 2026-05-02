@@ -133,20 +133,49 @@ impl PyCompletionModel {
     ///     pricing: Optional pricing information.
     ///     vram_estimate_bytes: Estimated VRAM footprint in bytes.
     ///     max_output_tokens: Maximum output tokens the model supports.
+    /// `__new__` for `CompletionModel`. PyO3's `#[new]` is the `__new__`
+    /// slot; when a Python subclass like
+    /// `class MockLLM(CompletionModel): def __init__(self): super().__init__(model_id=...)`
+    /// is instantiated, Python calls `MockLLM.__new__(MockLLM, *outer_args)`.
+    /// To let arbitrary subclass `__init__` signatures (positional or keyword)
+    /// flow through without erroring at `__new__` time, we accept `*args,
+    /// **kwargs` here and ignore them -- the real configuration work happens
+    /// in `__init__` below.
     #[new]
-    #[pyo3(signature = (*, model_id=None, context_length=None, base_url=None, pricing=None, vram_estimate_bytes=None, max_output_tokens=None))]
+    #[pyo3(signature = (*_args, **_kwargs))]
     fn new(
+        _args: &Bound<'_, pyo3::types::PyTuple>,
+        _kwargs: Option<&Bound<'_, pyo3::types::PyDict>>,
+    ) -> Self {
+        Self {
+            inner: None,
+            local_model: None,
+            config: Some(blazen_llm::ProviderConfig::default()),
+        }
+    }
+
+    /// Subclass-friendly `__init__`. PyO3's `#[new]` only implements
+    /// `__new__`; without an `__init__` here, a Python subclass that calls
+    /// `super().__init__(model_id=..., context_length=...)` falls through to
+    /// `object.__init__` and raises ``TypeError``. We accept the same typed
+    /// keyword arguments the constructor documents and re-populate
+    /// ``self.config`` so subclasses see the values they passed.
+    #[pyo3(signature = (*, model_id=None, context_length=None, base_url=None, pricing=None, vram_estimate_bytes=None, max_output_tokens=None))]
+    fn __init__(
+        &mut self,
         model_id: Option<String>,
         context_length: Option<u64>,
         base_url: Option<String>,
         pricing: Option<PyRef<'_, crate::types::pricing::PyModelPricing>>,
         vram_estimate_bytes: Option<u64>,
         max_output_tokens: Option<u64>,
-    ) -> Self {
-        Self {
-            inner: None,
-            local_model: None,
-            config: Some(blazen_llm::ProviderConfig {
+    ) {
+        // Only mutate config when this instance was constructed via the
+        // subclass path (`#[new]` set `config = Some(...)` and `inner = None`).
+        // Built-in providers (`from_options`) leave `config = None` and we
+        // must not stomp on `inner`.
+        if self.inner.is_none() {
+            self.config = Some(blazen_llm::ProviderConfig {
                 model_id,
                 context_length,
                 base_url,
@@ -154,7 +183,7 @@ impl PyCompletionModel {
                 max_output_tokens,
                 pricing: pricing.map(|p| p.inner.clone()),
                 ..Default::default()
-            }),
+            });
         }
     }
 

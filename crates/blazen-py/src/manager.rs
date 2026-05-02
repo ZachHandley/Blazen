@@ -56,9 +56,12 @@ impl PyModelManager {
     /// Args:
     ///     budget_gb: VRAM budget in gigabytes.
     ///     budget_bytes: VRAM budget in bytes (alternative to budget_gb).
+    ///
+    /// When neither is provided, the budget is unlimited (`u64::MAX` bytes),
+    /// useful for tests and runtime-unconstrained environments.
     #[new]
     #[pyo3(signature = (*, budget_gb=None, budget_bytes=None))]
-    fn new(budget_gb: Option<f64>, budget_bytes: Option<u64>) -> PyResult<Self> {
+    fn new(budget_gb: Option<f64>, budget_bytes: Option<u64>) -> Self {
         let bytes = match (budget_gb, budget_bytes) {
             (Some(gb), _) => {
                 #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
@@ -67,15 +70,11 @@ impl PyModelManager {
                 }
             }
             (_, Some(b)) => b,
-            (None, None) => {
-                return Err(pyo3::exceptions::PyValueError::new_err(
-                    "must provide either budget_gb or budget_bytes",
-                ));
-            }
+            (None, None) => u64::MAX,
         };
-        Ok(Self {
+        Self {
             inner: Arc::new(ModelManager::new(bytes)),
-        })
+        }
     }
 
     /// Register a model with its estimated VRAM footprint.

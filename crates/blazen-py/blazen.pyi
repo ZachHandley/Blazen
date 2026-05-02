@@ -789,7 +789,20 @@ class BackgroundRemovalProvider:
         r"""
         Estimated VRAM footprint in bytes, if set.
         """
-    def __new__(cls, *, provider_id: builtins.str, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> BackgroundRemovalProvider: ...
+    def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> BackgroundRemovalProvider:
+        r"""
+        `__new__` accepting arbitrary positional/keyword args so Python
+        subclasses can use any `__init__` signature. Real configuration
+        happens in `__init__` below.
+        """
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+        r"""
+        Subclass-friendly `__init__`. Mirrors the documented constructor
+        keyword signature and populates ``self.config`` so a Python
+        subclass that calls `super().__init__(provider_id=...)` sees the
+        values it passed (without falling through to `object.__init__`,
+        which would raise ``TypeError``).
+        """
     def remove_background(self, request: BackgroundRemovalRequest) -> typing.Any:
         r"""
         Remove the background from an image.
@@ -1845,7 +1858,7 @@ class CompletionModel:
         Returns:
             The string identifier of the model.
         """
-    def __new__(cls, *, model_id: typing.Optional[builtins.str] = None, context_length: typing.Optional[builtins.int] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None, max_output_tokens: typing.Optional[builtins.int] = None) -> CompletionModel:
+    def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> CompletionModel:
         r"""
         Create a custom completion model by subclassing.
         
@@ -1859,6 +1872,23 @@ class CompletionModel:
             pricing: Optional pricing information.
             vram_estimate_bytes: Estimated VRAM footprint in bytes.
             max_output_tokens: Maximum output tokens the model supports.
+        `__new__` for `CompletionModel`. PyO3's `#[new]` is the `__new__`
+        slot; when a Python subclass like
+        `class MockLLM(CompletionModel): def __init__(self): super().__init__(model_id=...)`
+        is instantiated, Python calls `MockLLM.__new__(MockLLM, *outer_args)`.
+        To let arbitrary subclass `__init__` signatures (positional or keyword)
+        flow through without erroring at `__new__` time, we accept `*args,
+        **kwargs` here and ignore them -- the real configuration work happens
+        in `__init__` below.
+        """
+    def __init__(self, *, model_id: typing.Optional[builtins.str] = None, context_length: typing.Optional[builtins.int] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None, max_output_tokens: typing.Optional[builtins.int] = None) -> None:
+        r"""
+        Subclass-friendly `__init__`. PyO3's `#[new]` only implements
+        `__new__`; without an `__init__` here, a Python subclass that calls
+        `super().__init__(model_id=..., context_length=...)` falls through to
+        `object.__init__` and raises ``TypeError``. We accept the same typed
+        keyword arguments the constructor documents and re-populate
+        ``self.config`` so subclasses see the values they passed.
         """
     @staticmethod
     def openai(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
@@ -3020,7 +3050,7 @@ class EmbeddingModel:
         Returns:
             The number of dimensions in the output vectors.
         """
-    def __new__(cls, *, model_id: typing.Optional[builtins.str] = None, dimensions: typing.Optional[builtins.int] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> EmbeddingModel:
+    def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> EmbeddingModel:
         r"""
         Create a custom embedding model by subclassing.
         
@@ -3033,6 +3063,16 @@ class EmbeddingModel:
             base_url: Base URL for HTTP-based providers.
             pricing: Optional pricing information.
             vram_estimate_bytes: Estimated VRAM footprint in bytes.
+        `__new__` for `EmbeddingModel`. Accepts arbitrary positional and
+        keyword arguments so Python subclasses can use any `__init__`
+        signature; the real configuration happens in `__init__` below.
+        """
+    def __init__(self, *, model_id: typing.Optional[builtins.str] = None, dimensions: typing.Optional[builtins.int] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+        r"""
+        Subclass-friendly `__init__`. Mirrors the documented constructor
+        keyword signature and re-populates ``self.config`` so a Python
+        subclass that calls `super().__init__(model_id=..., dimensions=...)`
+        sees the values it passed.
         """
     @staticmethod
     def openai(*, options: typing.Optional[ProviderOptions] = None, model: typing.Optional[builtins.str] = None, dimensions: typing.Optional[builtins.int] = None) -> EmbeddingModel:
@@ -4166,7 +4206,20 @@ class ImageProvider:
         r"""
         Estimated VRAM footprint in bytes, if set.
         """
-    def __new__(cls, *, provider_id: builtins.str, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> ImageProvider: ...
+    def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> ImageProvider:
+        r"""
+        `__new__` accepting arbitrary positional/keyword args so Python
+        subclasses can use any `__init__` signature. Real configuration
+        happens in `__init__` below.
+        """
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+        r"""
+        Subclass-friendly `__init__`. Mirrors the documented constructor
+        keyword signature and populates ``self.config`` so a Python
+        subclass that calls `super().__init__(provider_id=...)` sees the
+        values it passed (without falling through to `object.__init__`,
+        which would raise ``TypeError``).
+        """
     def generate_image(self, request: ImageRequest) -> typing.Any:
         r"""
         Generate an image from a prompt.
@@ -5211,6 +5264,14 @@ class MemoryBackend:
         ...     async def search_by_bands(self, bands, limit): ...
     """
     def __new__(cls) -> MemoryBackend: ...
+    def __init__(self) -> None:
+        r"""
+        Subclass-friendly `__init__` no-op. PyO3's `#[new]` only implements
+        `__new__`; without an explicit `__init__` here, a Python subclass that
+        chains `super().__init__()` falls through to `object.__init__` and
+        raises ``TypeError``. The base `MemoryBackend` carries no state, so
+        this is a true no-op.
+        """
     def put(self, _entry: typing.Any) -> typing.Any:
         r"""
         Store an entry.
@@ -5895,6 +5956,9 @@ class ModelManager:
         Args:
             budget_gb: VRAM budget in gigabytes.
             budget_bytes: VRAM budget in bytes (alternative to budget_gb).
+        
+        When neither is provided, the budget is unlimited (`u64::MAX` bytes),
+        useful for tests and runtime-unconstrained environments.
         """
     async def register(self, id: builtins.str, model: typing.Any, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
         r"""
@@ -6025,7 +6089,20 @@ class MusicProvider:
         r"""
         Estimated VRAM footprint in bytes, if set.
         """
-    def __new__(cls, *, provider_id: builtins.str, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> MusicProvider: ...
+    def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> MusicProvider:
+        r"""
+        `__new__` accepting arbitrary positional/keyword args so Python
+        subclasses can use any `__init__` signature. Real configuration
+        happens in `__init__` below.
+        """
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+        r"""
+        Subclass-friendly `__init__`. Mirrors the documented constructor
+        keyword signature and populates ``self.config`` so a Python
+        subclass that calls `super().__init__(provider_id=...)` sees the
+        values it passed (without falling through to `object.__init__`,
+        which would raise ``TypeError``).
+        """
     def generate_music(self, request: MusicRequest) -> typing.Any:
         r"""
         Generate music from a prompt.
@@ -8968,7 +9045,20 @@ class TTSProvider:
         r"""
         Estimated VRAM footprint in bytes, if set.
         """
-    def __new__(cls, *, provider_id: builtins.str, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> TTSProvider: ...
+    def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> TTSProvider:
+        r"""
+        `__new__` accepting arbitrary positional/keyword args so Python
+        subclasses can use any `__init__` signature. Real configuration
+        happens in `__init__` below.
+        """
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+        r"""
+        Subclass-friendly `__init__`. Mirrors the documented constructor
+        keyword signature and populates ``self.config`` so a Python
+        subclass that calls `super().__init__(provider_id=...)` sees the
+        values it passed (without falling through to `object.__init__`,
+        which would raise ``TypeError``).
+        """
     def text_to_speech(self, request: SpeechRequest) -> typing.Any:
         r"""
         Synthesize speech from text.
@@ -8995,7 +9085,20 @@ class ThreeDProvider:
         r"""
         Estimated VRAM footprint in bytes, if set.
         """
-    def __new__(cls, *, provider_id: builtins.str, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> ThreeDProvider: ...
+    def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> ThreeDProvider:
+        r"""
+        `__new__` accepting arbitrary positional/keyword args so Python
+        subclasses can use any `__init__` signature. Real configuration
+        happens in `__init__` below.
+        """
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+        r"""
+        Subclass-friendly `__init__`. Mirrors the documented constructor
+        keyword signature and populates ``self.config`` so a Python
+        subclass that calls `super().__init__(provider_id=...)` sees the
+        values it passed (without falling through to `object.__init__`,
+        which would raise ``TypeError``).
+        """
     def generate_3d(self, request: ThreeDRequest) -> typing.Any:
         r"""
         Generate a 3D model from a prompt or image.
@@ -9465,7 +9568,7 @@ class Transcription:
         r"""
         Get the provider identifier (e.g. "fal", "whispercpp").
         """
-    def __new__(cls, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> Transcription:
+    def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> Transcription:
         r"""
         Create a custom transcription provider by subclassing.
         
@@ -9477,6 +9580,16 @@ class Transcription:
             base_url: Base URL for HTTP-based providers.
             pricing: Optional pricing information.
             vram_estimate_bytes: Estimated VRAM footprint in bytes.
+        `__new__` for `Transcription`. Accepts arbitrary positional and
+        keyword arguments so Python subclasses can use any `__init__`
+        signature; the real configuration happens in `__init__` below.
+        """
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+        r"""
+        Subclass-friendly `__init__`. Mirrors the documented constructor
+        keyword signature and re-populates ``self.config`` so a Python
+        subclass that calls `super().__init__(provider_id=...)` sees the
+        values it passed.
         """
     @staticmethod
     def fal(*, options: typing.Optional[FalOptions] = None) -> Transcription:
@@ -9835,7 +9948,20 @@ class VideoProvider:
         r"""
         Estimated VRAM footprint in bytes, if set.
         """
-    def __new__(cls, *, provider_id: builtins.str, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> VideoProvider: ...
+    def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> VideoProvider:
+        r"""
+        `__new__` accepting arbitrary positional/keyword args so Python
+        subclasses can use any `__init__` signature. Real configuration
+        happens in `__init__` below.
+        """
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+        r"""
+        Subclass-friendly `__init__`. Mirrors the documented constructor
+        keyword signature and populates ``self.config`` so a Python
+        subclass that calls `super().__init__(provider_id=...)` sees the
+        values it passed (without falling through to `object.__init__`,
+        which would raise ``TypeError``).
+        """
     def text_to_video(self, request: VideoRequest) -> typing.Any:
         r"""
         Generate a video from a text prompt.
@@ -9959,7 +10085,20 @@ class VoiceProvider:
         r"""
         Estimated VRAM footprint in bytes, if set.
         """
-    def __new__(cls, *, provider_id: builtins.str, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> VoiceProvider: ...
+    def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> VoiceProvider:
+        r"""
+        `__new__` accepting arbitrary positional/keyword args so Python
+        subclasses can use any `__init__` signature. Real configuration
+        happens in `__init__` below.
+        """
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+        r"""
+        Subclass-friendly `__init__`. Mirrors the documented constructor
+        keyword signature and populates ``self.config`` so a Python
+        subclass that calls `super().__init__(provider_id=...)` sees the
+        values it passed (without falling through to `object.__init__`,
+        which would raise ``TypeError``).
+        """
     def clone_voice(self, request: VoiceCloneRequest) -> typing.Any:
         r"""
         Clone a voice from audio samples.
@@ -10570,6 +10709,27 @@ class WorkflowResult:
     def event(self) -> Event:
         r"""
         The terminal event produced by the workflow.
+        """
+    @property
+    def event_type(self) -> builtins.str:
+        r"""
+        The terminal event's `event_type` string (e.g. `"blazen::StopEvent"`
+        for a completed workflow). Convenience pass-through to
+        `self.event.event_type`.
+        """
+    @property
+    def result(self) -> typing.Any:
+        r"""
+        Terminal event's payload.
+        
+        For a `StopEvent` (the canonical terminal event), this is the value
+        passed to `StopEvent(result=...)` — i.e. the `"result"` slot of the
+        underlying event data. For other terminal events, this falls back to
+        the full event data as a Python object.
+        
+        Any `__blazen_session_ref__` markers carried on the payload are
+        resolved against the registry attached to the wrapped event, mirroring
+        `PyEvent.to_dict` / `PyEvent.__getattr__`.
         """
     @property
     def session_refs(self) -> SessionRefRegistry:
