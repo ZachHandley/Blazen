@@ -291,18 +291,20 @@ jobs:
 
       - name: Run Node.js E2E tests
         if: steps.check.outputs.completed != 'true'
-        run: node --test tests/node/test_workflow.mjs
+        # ava is the canonical napi-rs runner for this repo (see CLAUDE.md
+        # § 3 Node bindings). The Node tests were migrated from
+        # `node:test` to ava in commit fe723d54 because the napi-rs tokio
+        # handle lifecycle hangs Node's built-in runner across repeated
+        # `Promise<T>` returns.
+        run: pnpm exec ava tests/node/test_workflow.mjs
 
       - name: Run Node.js free tests (no API keys)
         if: steps.check.outputs.completed != 'true'
-        run: |
-          node --test tests/node/test_session_refs.mjs
-          node --test tests/node/test_capabilities_smoke.mjs
-          node --test tests/node/test_e2e.mjs
+        run: pnpm exec ava tests/node/test_session_refs.mjs tests/node/test_capabilities_smoke.mjs tests/node/test_e2e.mjs
 
       - name: Run Node.js LLM smoke tests
         if: steps.check.outputs.completed != 'true'
-        run: node --test tests/node/test_llm_smoke.mjs tests/node/test_fal_smoke.mjs
+        run: pnpm exec ava tests/node/test_llm_smoke.mjs tests/node/test_fal_smoke.mjs
         env:
           FAL_API_KEY: ${{ secrets.FAL_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -592,7 +594,10 @@ jobs:
 
       - name: Run Node compute smoke tests
         if: steps.check.outputs.completed != 'true'
-        run: node --test tests/node/test_fal_smoke.mjs
+        # ava per CLAUDE.md § 3 Node bindings (migrated in fe723d54).
+        # Compute smokes hit fal.ai with per-test timeouts up to 1200 s,
+        # so override ava's default 120 s file-level timeout.
+        run: pnpm exec ava --timeout=2100s tests/node/test_fal_smoke.mjs
         env:
           FAL_API_KEY: ${{ secrets.FAL_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
