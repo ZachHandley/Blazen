@@ -68,18 +68,6 @@ pnpm --filter blazen run build
 # Run the test suite from repo root (ava config is in root package.json):
 pnpm exec ava --timeout 30s
 # Or a single file: `pnpm exec ava tests/node/test_workflow.mjs`.
-#
-# KNOWN ISSUE — workflow rerun hang in single process:
-#   await wf.run() takes ~8s on first call, ~0.6s on second call, hangs
-#   indefinitely on third. Reproduces with: same workflow reused, fresh
-#   workflow per call, debug build, release build, with/without auto-publish,
-#   with/without GC forcing. Suggests a napi-rs Promise<T> / TSFN refcount
-#   issue specific to repeated `Promise<T>` returns from threadsafe functions
-#   on the same Node process. ava's per-file subprocess isolation contains
-#   the hang so the rest of the suite still tallies, but files with >2
-#   workflow tests show "remained pending after a timeout" (~30 across the
-#   suite). Investigate by tracing napi-rs Promise refs / step TSFN call
-#   queue drain when the 3rd `tsfn.call_async` would dispatch.
 
 # 4. WASM SDK (blazen-wasm-sdk) — wasm-bindgen-test based
 # Headless browser run; firefox or chrome must be installed.

@@ -13,11 +13,13 @@
 //! the final result. Mode 3 can be used alongside modes 1 and 2.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::runtime::JoinHandle;
 use blazen_events::{AnyEvent, InputResponseEvent, UsageEvent};
 use blazen_llm::types::TokenUsage;
 use tokio::sync::{Mutex, broadcast, mpsc, oneshot};
+use tokio::time::timeout;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -249,9 +251,29 @@ impl WorkflowHandler {
         let owned_sender = std::mem::replace(&mut self.stream_tx, drained_stream_tx);
         drop(owned_sender);
 
-        // Now wait for the accumulator to fold any in-flight UsageEvents.
-        if let Some(handle) = self.usage_accumulator_handle.take() {
-            let _ = handle.await;
+        // Drain the accumulator with a bounded timeout. By the time
+        // `event_loop_handle.await` resolved, every step task has
+        // completed and no further `UsageEvent`s can be emitted —
+        // anything still relevant is already buffered in the
+        // broadcast channel. We do NOT wait for the channel's
+        // senders to fully drop, because `Context` clones may stay
+        // alive in binding-side wrappers (e.g. napi-rs `JsContext`)
+        // until the host GC reclaims them, which is unpredictable
+        // and can be effectively unbounded. A 50 ms window is more
+        // than enough for the accumulator to drain everything in
+        // the buffer; if it doesn't exit by then, abort it so we
+        // don't leak the task.
+        if let Some(mut handle) = self.usage_accumulator_handle.take() {
+            // `JoinHandle` is `Unpin` on both tokio (native) and the
+            // wasm32 polyfill in `crate::runtime`, so awaiting `&mut
+            // handle` lets us still abort the underlying task on
+            // timeout without consuming the handle.
+            if timeout(Duration::from_millis(50), &mut handle)
+                .await
+                .is_err()
+            {
+                handle.abort();
+            }
         }
 
         let totals = self.usage_totals.lock().await.clone();

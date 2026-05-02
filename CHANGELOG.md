@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- core: bound the `WorkflowHandler::result` accumulator drain with a 50 ms timeout-then-abort. Previously it awaited the broadcast channel's `Closed` state, which only arrives once every `Sender` clone (including those held by binding-side `Context` wrappers like napi-rs `JsContext`) is dropped. JS GC could keep `JsContext` alive arbitrarily long, leaving the accumulator awaiting a sender that never dropped — `await wf.run()` would hang in Node after the workflow completed cleanly. By the time the accumulator-drain runs, no further `UsageEvent`s can be emitted, so the bounded window is sufficient. Also bumped `napi` to 3.8.6 and `napi-derive` to 3.5.5.
+
 ### Added — Library finish-out (Waves 0–11)
 
 - **Timeouts** — `Pipeline.total_timeout`, `StepRegistration.timeout` + `with_timeout`/`no_timeout` builders, `HttpClientConfig` with `request_timeout`/`connect_timeout`/`unlimited()`, applied in `ReqwestHttpClient` and the WASM `FetchHttpClient` (via `AbortController` race).
