@@ -60,12 +60,14 @@ struct SendTimeoutFuture(gloo_timers::future::TimeoutFuture);
 // SAFETY: wasm32 is single-threaded; no other thread can observe the
 // wrapped JS Promise state.
 #[cfg(target_arch = "wasm32")]
+#[allow(unsafe_code)]
 unsafe impl Send for SendTimeoutFuture {}
 
 #[cfg(target_arch = "wasm32")]
 impl std::future::Future for SendTimeoutFuture {
     type Output = ();
 
+    #[allow(unsafe_code)]
     fn poll(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
