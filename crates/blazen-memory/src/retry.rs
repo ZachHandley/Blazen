@@ -24,6 +24,58 @@ use crate::error::{MemoryError, Result};
 use crate::store::MemoryBackend;
 use crate::types::StoredEntry;
 
+/// Sleep for `delay`. Native uses `tokio::time::sleep`; wasm32 routes through
+/// `gloo_timers::future::TimeoutFuture` because tokio's time driver does not
+/// exist on `wasm32-unknown-unknown` (calling `tokio::time::sleep` there panics
+/// at runtime even though it compiles via workspace feature unification).
+///
+/// `gloo_timers::future::TimeoutFuture` is `!Send` (it wraps a JS Promise via
+/// `wasm_bindgen_futures`), so we wrap it in a [`SendTimeoutFuture`] newtype
+/// whose `Send` impl is vacuously safe on `wasm32-unknown-unknown` (single
+/// thread). The `MemoryBackend` trait requires `Send` on its returned futures,
+/// and without this wrapper the entire trait impl would become `!Send`.
+async fn sleep_ms(delay: Duration) {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        tokio::time::sleep(delay).await;
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        // gloo-timers takes u32 millis; saturating cast is safe because retry
+        // delays are bounded by `RetryConfig::max_delay_ms` (well under
+        // `u32::MAX` ms ≈ 49 days).
+        let ms = u32::try_from(delay.as_millis()).unwrap_or(u32::MAX);
+        SendTimeoutFuture(gloo_timers::future::TimeoutFuture::new(ms)).await;
+    }
+}
+
+/// `Send` wrapper around [`gloo_timers::future::TimeoutFuture`]. The inner
+/// future drives a JS Promise via `wasm_bindgen_futures` and is `!Send`
+/// because of the embedded `Rc<RefCell<...>>`. On `wasm32-unknown-unknown`
+/// there is exactly one OS thread, so no other thread can ever observe the
+/// wrapped state — the `Send` impl is vacuously safe.
+#[cfg(target_arch = "wasm32")]
+struct SendTimeoutFuture(gloo_timers::future::TimeoutFuture);
+
+// SAFETY: wasm32 is single-threaded; no other thread can observe the
+// wrapped JS Promise state.
+#[cfg(target_arch = "wasm32")]
+unsafe impl Send for SendTimeoutFuture {}
+
+#[cfg(target_arch = "wasm32")]
+impl std::future::Future for SendTimeoutFuture {
+    type Output = ();
+
+    fn poll(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        // SAFETY: we never move the inner field out of `self`.
+        let inner = unsafe { self.as_mut().map_unchecked_mut(|s| &mut s.0) };
+        std::future::Future::poll(inner, cx)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Decorator
 // ---------------------------------------------------------------------------
@@ -113,7 +165,7 @@ impl MemoryBackend for RetryMemoryBackend {
                         max,
                     );
                     last_err = Some(err);
-                    tokio::time::sleep(delay).await;
+                    sleep_ms(delay).await;
                 }
             }
         }
@@ -143,7 +195,7 @@ impl MemoryBackend for RetryMemoryBackend {
                         max,
                     );
                     last_err = Some(err);
-                    tokio::time::sleep(delay).await;
+                    sleep_ms(delay).await;
                 }
             }
         }
@@ -173,7 +225,7 @@ impl MemoryBackend for RetryMemoryBackend {
                         max,
                     );
                     last_err = Some(err);
-                    tokio::time::sleep(delay).await;
+                    sleep_ms(delay).await;
                 }
             }
         }
@@ -203,7 +255,7 @@ impl MemoryBackend for RetryMemoryBackend {
                         max,
                     );
                     last_err = Some(err);
-                    tokio::time::sleep(delay).await;
+                    sleep_ms(delay).await;
                 }
             }
         }
@@ -233,7 +285,7 @@ impl MemoryBackend for RetryMemoryBackend {
                         max,
                     );
                     last_err = Some(err);
-                    tokio::time::sleep(delay).await;
+                    sleep_ms(delay).await;
                 }
             }
         }
@@ -263,7 +315,7 @@ impl MemoryBackend for RetryMemoryBackend {
                         max,
                     );
                     last_err = Some(err);
-                    tokio::time::sleep(delay).await;
+                    sleep_ms(delay).await;
                 }
             }
         }

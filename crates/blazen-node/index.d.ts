@@ -2720,6 +2720,21 @@ export declare class MusicProvider {
 export type JsMusicProvider = MusicProvider
 
 /**
+ * A no-op emitter that drops every event.
+ *
+ * Useful as a default when no downstream observer is wired up:
+ *
+ * ```javascript
+ * const model = new UsageRecordingCompletionModel(base, new NoopUsageEmitter(), "openai");
+ * ```
+ */
+export declare class NoopUsageEmitter {
+  /** Construct a no-op emitter. */
+  constructor()
+}
+export type JsNoopUsageEmitter = NoopUsageEmitter
+
+/**
  * An `OpenAI`-compatible embedding model (Together, Cohere, Fireworks).
  *
  * Constructed via the per-provider `embeddingModel(...)` factory on
@@ -2872,6 +2887,37 @@ export declare class ParallelStage {
   get name(): string
 }
 export type JsParallelStage = ParallelStage
+
+/**
+ * Fan out into multiple parallel sub-workflow branches.
+ *
+ * Each branch is a `SubWorkflowStep` that runs concurrently. The
+ * `joinStrategy` controls whether the parent waits for all branches
+ * (`JoinStrategy.WaitAll`) or only the first to complete
+ * (`JoinStrategy.FirstCompletes`).
+ */
+export declare class ParallelSubWorkflowsStep {
+  /**
+   * Create a parallel sub-workflow fan-out step.
+   *
+   * `branches` is an array of already-constructed `SubWorkflowStep`
+   * instances. The branches' inner workflows are captured by reference
+   * so the parent step keeps a stable view even if the originals are
+   * dropped from JS.
+   *
+   * `joinStrategy` defaults to `JoinStrategy.WaitAll`.
+   */
+  constructor(name: string, accepts: Array<string>, emits: Array<string>, branches: Array<SubWorkflowStep>, joinStrategy?: JoinStrategy | undefined | null)
+  /** The step name. */
+  get name(): string
+  /** Event type identifiers this step accepts. */
+  get accepts(): Array<string>
+  /** Event type identifiers this step may emit. */
+  get emits(): Array<string>
+  /** The join strategy used to combine branch results. */
+  get joinStrategy(): JoinStrategy
+}
+export type JsParallelSubWorkflowsStep = ParallelSubWorkflowsStep
 
 /** A Perplexity chat completion provider. */
 export declare class PerplexityProvider {
@@ -3386,6 +3432,34 @@ export declare class RetryCompletionModel {
 export type JsRetryCompletionModel = RetryCompletionModel
 
 /**
+ * A `MemoryBackend` decorator that retries transient errors with
+ * exponential backoff.
+ *
+ * Mirrors `RetryCompletionModel` for `MemoryBackend`. Use one of the
+ * `wrapInMemory` / `wrapJsonl` / `wrapValkey` factories to wrap the
+ * matching backend.
+ *
+ * ```javascript
+ * const inner = new InMemoryBackend();
+ * const retried = RetryMemoryBackend.wrapInMemory(inner, { maxRetries: 5 });
+ * ```
+ */
+export declare class RetryMemoryBackend {
+  /** Wrap an `InMemoryBackend` with retry-on-transient-error behaviour. */
+  static wrapInMemory(backend: InMemoryBackend, config?: JsRetryConfig | undefined | null): RetryMemoryBackend
+  /** Wrap a `JsonlBackend` with retry-on-transient-error behaviour. */
+  static wrapJsonl(backend: JsonlBackend, config?: JsRetryConfig | undefined | null): RetryMemoryBackend
+  /** Wrap a `ValkeyBackend` with retry-on-transient-error behaviour. */
+  static wrapValkey(backend: ValkeyBackend, config?: JsRetryConfig | undefined | null): RetryMemoryBackend
+  /**
+   * Generic factory accepting any of the three concrete backends. Useful
+   * when the caller doesn't statically know which backend is in hand.
+   */
+  static wrap(backend: AnyBackend, config?: JsRetryConfig | undefined | null): RetryMemoryBackend
+}
+export type JsRetryMemoryBackend = RetryMemoryBackend
+
+/**
  * Built-in middleware that wraps the inner model with retry-on-transient-
  * error behaviour. Equivalent to constructing a
  * [`super::wrappers::JsRetryCompletionModel`] but composable inside a
@@ -3834,6 +3908,41 @@ export declare class StructuredOutput {
 export type JsStructuredOutput = StructuredOutput
 
 /**
+ * A workflow step that delegates to another `Workflow`.
+ *
+ * The parent workflow's event loop spawns the child via `Workflow.run()`,
+ * converts the parent event to JSON for the child's input, and wraps the
+ * child's terminal `StopEvent.result` into a `DynamicEvent` named
+ * `"<stepName>::output"` for the parent.
+ *
+ * ```javascript
+ * const child = new Workflow("enrich");
+ * child.addStep("enrich", ["blazen::StartEvent"], async (ev) => ({ type: "blazen::StopEvent", result: { ok: true } }));
+ * const step = new SubWorkflowStep("enrich", ["blazen::StartEvent"], ["enrich::output"], child);
+ * const parent = new Workflow("parent");
+ * parent.addSubworkflowStepObj(step);
+ * ```
+ */
+export declare class SubWorkflowStep {
+  /**
+   * Create a sub-workflow step.
+   *
+   * `name` / `accepts` / `emits` describe routing. `inner` is the child
+   * workflow whose event loop is spawned for each parent dispatch. The
+   * inner workflow is cloned (and built) at construction time so this
+   * step instance can be reused across builders.
+   */
+  constructor(name: string, accepts: Array<string>, emits: Array<string>, inner: JsWorkflow, timeoutSecs?: number | undefined | null, retryConfig?: JsRetryConfig | undefined | null)
+  /** The step name. */
+  get name(): string
+  /** Event type identifiers this step accepts. */
+  get accepts(): Array<string>
+  /** Event type identifiers this step may emit. */
+  get emits(): Array<string>
+}
+export type JsSubWorkflowStep = SubWorkflowStep
+
+/**
  * r" Base class for 3D model generation providers.
  * r"
  * r" Subclass and override `generate3d()` to implement a custom 3D
@@ -4198,6 +4307,68 @@ export declare class TypedTool {
 export type JsTypedTool = TypedTool
 
 /**
+ * A sink for emitted [`JsUsageEvent`]s.
+ *
+ * Construct with a JS callback that handles each event. The callback runs
+ * on the libuv main thread, so it can do anything synchronous; a thrown
+ * error is caught and logged, never propagated into the completion call.
+ *
+ * ```javascript
+ * const events: UsageEvent[] = [];
+ * const emitter = new UsageEmitter((event) => { events.push(event); });
+ * const model = new UsageRecordingCompletionModel(base, emitter, "openai");
+ * ```
+ */
+export declare class UsageEmitter {
+  /**
+   * Create an emitter from a JS callback. The callback is invoked once
+   * per emitted event.
+   */
+  constructor(callback: ((arg: UsageEvent) => void))
+}
+export type JsUsageEmitter = UsageEmitter
+
+/**
+ * A `CompletionModel` decorator that emits a `UsageEvent` after each
+ * successful `complete` call. Mirrors
+ * `blazen_llm::usage_recording::UsageRecordingCompletionModel`.
+ *
+ * ```javascript
+ * const base = CompletionModel.openai();
+ * const events = [];
+ * const emitter = new UsageEmitter((e) => events.push(e));
+ * const model = new UsageRecordingCompletionModel(base, emitter, "openai");
+ * const response = await model.complete([ChatMessage.user("hi")]);
+ * ```
+ */
+export declare class UsageRecordingCompletionModel {
+  /** Wrap a `CompletionModel` with a usage-recording layer. */
+  constructor(model: CompletionModel, emitter: AnyEmitter, providerLabel: string, runId?: string | undefined | null)
+  /** The underlying provider's model id. */
+  get modelId(): string
+  /**
+   * Convert this decorator into a `CompletionModel` so it can be passed to
+   * APIs that expect the base type (`runAgent`, further decorators, …).
+   */
+  toCompletionModel(): CompletionModel
+}
+export type JsUsageRecordingCompletionModel = UsageRecordingCompletionModel
+
+/**
+ * An `EmbeddingModel` decorator that emits a `UsageEvent` after each
+ * successful `embed` call.
+ */
+export declare class UsageRecordingEmbeddingModel {
+  /** Wrap an `EmbeddingModel` with a usage-recording layer. */
+  constructor(model: EmbeddingModel, emitter: AnyEmitter, providerLabel: string, runId?: string | undefined | null)
+  /** The underlying provider's model id. */
+  get modelId(): string
+  /** Output dimensionality. */
+  get dimensions(): number
+}
+export type JsUsageRecordingEmbeddingModel = UsageRecordingEmbeddingModel
+
+/**
  * A Valkey/Redis-backed backend for the memory store.
  *
  * ```javascript
@@ -4412,6 +4583,21 @@ export declare class Workflow {
    * `joinStrategy` defaults to `WaitAll`.
    */
   addParallelSubworkflows(name: string, accepts: Array<string>, emits: Array<string>, branchSpecs: Array<SubWorkflowBranchSpec>, branchWorkflows: Array<Workflow>, joinStrategy?: JoinStrategy | undefined | null): void
+  /**
+   * Register a pre-built [`SubWorkflowStep`] wrapper.
+   *
+   * Object-form of [`Self::add_subworkflow_step`]: the same step instance
+   * can be reused across multiple workflows since its inner child
+   * workflow is captured in `Arc` form at construction time.
+   */
+  addSubworkflowStepObj(step: SubWorkflowStep): void
+  /**
+   * Register a pre-built [`ParallelSubWorkflowsStep`] wrapper.
+   *
+   * Object-form of [`Self::add_parallel_subworkflows`]: lifts the
+   * awkward parallel-arrays signature into a single class instance.
+   */
+  addParallelSubworkflowsObj(step: ParallelSubWorkflowsStep): void
   /**
    * Add a step to the workflow.
    *
@@ -5304,6 +5490,16 @@ export interface FileContent {
  * [`blazen_llm::FINISH_WORKFLOW_TOOL_NAME`].
  */
 export const FINISH_WORKFLOW_TOOL_NAME: string
+
+/**
+ * Alias of [`finish_workflow_tool_def`] under the canonical Rust name
+ * (`finish_workflow_tool` → `finishWorkflowTool` in JS). Returns a
+ * `JsToolDef` for the built-in exit tool.
+ *
+ * Mirrors `blazen_llm::finish_workflow_tool` and `blazen-py`'s
+ * `finish_workflow_tool()` for cross-binding parity.
+ */
+export declare function finishWorkflowTool(): JsToolDef
 
 /**
  * Build a fresh JSON-Schema description of the built-in `finish_workflow`

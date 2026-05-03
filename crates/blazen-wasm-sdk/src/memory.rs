@@ -15,8 +15,8 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 
 use blazen_memory::search as mem_search;
-use blazen_memory::store::MemoryStore;
-use blazen_memory::{InMemoryBackend, Memory, MemoryEntry, StoredEntry};
+use blazen_memory::store::{MemoryBackend, MemoryStore};
+use blazen_memory::{InMemoryBackend, Memory, MemoryEntry, RetryMemoryBackend, StoredEntry};
 
 use crate::embedding::WasmEmbeddingModel;
 
@@ -1555,5 +1555,61 @@ impl From<blazen_memory::MemoryResult> for WasmMemoryResult {
 impl From<WasmMemoryResult> for blazen_memory::MemoryResult {
     fn from(value: WasmMemoryResult) -> Self {
         value.inner
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WasmRetryMemoryBackend — wraps an InMemoryBackend with retry-on-error
+// ---------------------------------------------------------------------------
+
+/// A `MemoryBackend` decorator that retries transient errors with exponential
+/// backoff. Mirrors `blazen_memory::RetryMemoryBackend`.
+///
+/// The wasm-sdk only ships [`InMemoryBackend`] today (the `JsonlBackend` and
+/// `ValkeyBackend` flavours are native-only — they pull in `tokio::fs` and
+/// the redis client respectively, neither of which compiles to wasm32). The
+/// wrap factory is named accordingly.
+///
+/// ```js
+/// import { InMemoryBackend, RetryMemoryBackend } from '@blazen/sdk';
+///
+/// const inner = new InMemoryBackend();
+/// const retried = RetryMemoryBackend.wrapInMemory(inner, { maxRetries: 5 });
+/// ```
+#[wasm_bindgen(js_name = "RetryMemoryBackend")]
+pub struct WasmRetryMemoryBackend {
+    #[allow(dead_code)] // Held to keep the wrapped backend alive.
+    inner: Arc<dyn MemoryBackend>,
+}
+
+// SAFETY: WASM is single-threaded.
+unsafe impl Send for WasmRetryMemoryBackend {}
+unsafe impl Sync for WasmRetryMemoryBackend {}
+
+#[wasm_bindgen(js_class = "RetryMemoryBackend")]
+#[allow(clippy::must_use_candidate)]
+impl WasmRetryMemoryBackend {
+    /// Wrap an [`InMemoryBackend`] with retry-on-transient-error behaviour.
+    ///
+    /// `options` is an optional plain JS object with the same shape as
+    /// `RetryCompletionModel`'s options:
+    /// - `maxRetries` (number) — default 3
+    /// - `initialDelayMs` (number) — default 1000
+    /// - `maxDelayMs` (number) — default 30000
+    /// - `honorRetryAfter` (boolean) — default true
+    /// - `jitter` (boolean) — default true
+    #[wasm_bindgen(js_name = "wrapInMemory")]
+    pub fn wrap_in_memory(
+        backend: &WasmInMemoryBackend,
+        options: JsValue,
+    ) -> WasmRetryMemoryBackend {
+        let cfg = crate::decorators::build_retry_config(&options);
+        let wrapped = RetryMemoryBackend::new(
+            Arc::clone(&backend.inner) as Arc<dyn MemoryBackend>,
+            cfg,
+        );
+        Self {
+            inner: wrapped.into_arc(),
+        }
     }
 }

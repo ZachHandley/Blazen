@@ -506,7 +506,7 @@ impl PyMiddlewareStack {
     }
 
     fn __repr__(&self) -> String {
-        let n = self.layers.lock().map(|l| l.len()).unwrap_or(0);
+        let n = self.layers.lock().map_or(0, |l| l.len());
         format!("MiddlewareStack(layers={n})")
     }
 }

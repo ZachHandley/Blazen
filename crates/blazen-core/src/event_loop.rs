@@ -1860,8 +1860,7 @@ fn compute_retry_delay(cfg: &blazen_llm::retry::RetryConfig, attempt: u32) -> Du
         let nanos = u128::from(u64::try_from(delay.as_nanos()).unwrap_or(u64::MAX));
         let seed = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_nanos());
         // Random factor in [0, 50); subtract 25 to land in [-25, 24].
         let mixed = seed.wrapping_mul(2_862_933_555_777_941_757) % 50;
         // `mixed` is at most 49, well within `i128::MAX`, so the

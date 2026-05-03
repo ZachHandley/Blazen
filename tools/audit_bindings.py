@@ -139,6 +139,13 @@ WHITELIST: frozenset[str] = frozenset(
         "SessionRefDeserializerFn",
         "StepBuilderFn",
         "InputHandlerFn",
+        # `pub use submod::{SubWorkflowInputMapper, SubWorkflowOutputMapper}`
+        # in `crates/blazen-core/src/lib.rs` re-exports lose the
+        # KIND_TYPE_ALIAS auto-skip (the auditor tags re-exports as
+        # KIND_REEXPORT, see audit_bindings.py:813-814), so they need
+        # explicit whitelist entries even though they're closure aliases.
+        "SubWorkflowInputMapper",
+        "SubWorkflowOutputMapper",
         # --- Traits exposed only as Rust ergonomics (not as ABCs in bindings) ---
         # Traits that ARE bound as ABCs (CheckpointStore, MemoryBackend,
         # Middleware, PeerClient, MemoryStore, ProgressCallback) intentionally
@@ -269,6 +276,21 @@ WHITELIST: frozenset[str] = frozenset(
         # `StageKind` enum (Sequential / Parallel) for snapshot inspection;
         # Node currently has no consumer for the discriminant.
         "StageKind",
+        # `StepKind` is the workflow analogue of `StageKind`: a Rust
+        # enum-with-data (`Regular(StepRegistration)` /
+        # `SubWorkflow(SubWorkflowStep)` /
+        # `ParallelSubWorkflows(ParallelSubWorkflowsStep)`) that cannot
+        # round-trip through a JS string enum. Bindings expose the
+        # variants as separate classes (Step / SubWorkflowStep /
+        # ParallelSubWorkflowsStep), which is the JS-idiomatic equivalent
+        # of the discriminated union.
+        "StepKind",
+        # Module-level string constant exposed via `m.add(...)` in the
+        # PyO3 binding (see `crates/blazen-py/src/lib.rs:92`) and via a
+        # `#[napi] pub const` re-export in the napi binding -- the
+        # auditor's `class X:` / `export declare class X` regex doesn't
+        # see module-attribute literals.
+        "FINISH_WORKFLOW_TOOL_NAME",
         # `StepDeserializerRegistry` is a Rust runtime registry parameterised
         # by raw `fn` pointers (typed-step builders); function pointers cannot
         # round-trip through PyO3 / napi-rs / wasm-bindgen, so the registry
@@ -520,6 +542,8 @@ WHITELIST_REASONS: dict[str, str] = {
             "SessionRefDeserializerFn",
             "StepBuilderFn",
             "InputHandlerFn",
+            "SubWorkflowInputMapper",
+            "SubWorkflowOutputMapper",
         )
     },
     # Pure-Rust traits
@@ -604,6 +628,10 @@ WHITELIST_REASONS: dict[str, str] = {
     ),
     # Module-level constants and napi-aliased enums.
     "ENVELOPE_VERSION": "module-level constant, not a class",
+    "FINISH_WORKFLOW_TOOL_NAME": (
+        "module-level &'static str constant; bound via PyModule::add() / "
+        "napi const re-export, not visible in the auditor's class-regex"
+    ),
     "MediaType": "bound as JsMediaType in napi (string enum)",
     "Quantization": "bound as JsQuantization in napi (string enum)",
     # Pipeline internals + Rust enum-with-data + fn-pointer registry.
@@ -613,6 +641,11 @@ WHITELIST_REASONS: dict[str, str] = {
     "StageKind": (
         "Rust enum-with-data (Sequential(Stage) / Parallel(ParallelStage)) -- "
         "bindings expose Stage + ParallelStage as separate classes"
+    ),
+    "StepKind": (
+        "Rust enum-with-data (Regular(StepRegistration) / SubWorkflow(SubWorkflowStep) / "
+        "ParallelSubWorkflows(ParallelSubWorkflowsStep)) -- bindings expose the variants "
+        "as separate classes (Step / SubWorkflowStep / ParallelSubWorkflowsStep)"
     ),
     "StepDeserializerRegistry": (
         "fn-pointer registry -- not bindable across FFI; surfaced via snapshot APIs"

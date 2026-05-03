@@ -153,6 +153,7 @@ __all__ = [
     "ModelStatus",
     "MusicProvider",
     "MusicRequest",
+    "NoopUsageEmitter",
     "OpenAiCompatConfig",
     "OpenAiCompatEmbeddingModel",
     "OpenAiCompatProvider",
@@ -161,6 +162,7 @@ __all__ = [
     "OpenRouterProvider",
     "OtlpConfig",
     "ParallelStage",
+    "ParallelSubWorkflowsStep",
     "PauseReason",
     "PeerClient",
     "PeerRemoteRefDescriptor",
@@ -217,6 +219,7 @@ __all__ = [
     "RetryConfig",
     "RetryEmbeddingModel",
     "RetryHttpClient",
+    "RetryMemoryBackend",
     "RetryMiddleware",
     "RetryStack",
     "Role",
@@ -242,6 +245,7 @@ __all__ = [
     "StructuredResponse",
     "SubWorkflowRequest",
     "SubWorkflowResponse",
+    "SubWorkflowStep",
     "TTSProvider",
     "TemplateRole",
     "ThreeDProvider",
@@ -264,7 +268,10 @@ __all__ = [
     "TypedTool",
     "UnsupportedError",
     "UpscaleRequest",
+    "UsageEmitter",
     "UsageEvent",
+    "UsageRecordingCompletionModel",
+    "UsageRecordingEmbeddingModel",
     "ValidationError",
     "ValkeyBackend",
     "ValkeyCheckpointStore",
@@ -6127,6 +6134,20 @@ class MusicRequest:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class NoopUsageEmitter(UsageEmitter):
+    r"""
+    A no-op `UsageEmitter` that drops every event.
+    
+    Useful as a default when no downstream observer is wired up.
+    """
+    def __new__(cls) -> tuple[NoopUsageEmitter, UsageEmitter]: ...
+    def emit(self, _event: typing.Any) -> None:
+        r"""
+        No-op emit; the event is discarded.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class OpenAiCompatConfig:
     r"""
     Configuration for a generic OpenAI-compatible provider.
@@ -6419,6 +6440,59 @@ class ParallelStage:
             name: Human-readable name for the parallel group.
             branches: A list of `Stage` objects to run concurrently.
             join_strategy: How to join branch results. Defaults to
+                `JoinStrategy.WaitAll`.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ParallelSubWorkflowsStep:
+    r"""
+    Fan out into multiple parallel sub-workflow branches.
+    
+    Each branch is a `SubWorkflowStep` that runs concurrently. The
+    `join_strategy` controls whether the parent waits for all branches
+    (`JoinStrategy.WaitAll`) or only the first to complete
+    (`JoinStrategy.FirstCompletes`).
+    
+    Example:
+        >>> step = ParallelSubWorkflowsStep(
+        ...     name="enrich-fanout",
+        ...     accepts=["StartEvent"],
+        ...     emits=["enrich-fanout::output"],
+        ...     branches=[step_a, step_b, step_c],
+        ...     join_strategy=JoinStrategy.WaitAll,
+        ... )
+    """
+    @property
+    def name(self) -> builtins.str:
+        r"""
+        The step name.
+        """
+    @property
+    def accepts(self) -> builtins.list[builtins.str]:
+        r"""
+        Event type identifiers this step accepts.
+        """
+    @property
+    def emits(self) -> builtins.list[builtins.str]:
+        r"""
+        Event type identifiers this step may emit.
+        """
+    @property
+    def join_strategy(self) -> JoinStrategy:
+        r"""
+        The join strategy used to combine branch results.
+        """
+    def __new__(cls, name: builtins.str, accepts: typing.Sequence[builtins.str], emits: typing.Sequence[builtins.str], branches: typing.Sequence[SubWorkflowStep], join_strategy: typing.Optional[JoinStrategy] = None) -> ParallelSubWorkflowsStep:
+        r"""
+        Create a parallel sub-workflow fan-out step.
+        
+        Args:
+            name: Human-readable name for this fan-out step.
+            accepts: Event type identifiers this step accepts.
+            emits: Event type identifiers this step may emit.
+            branches: List of `SubWorkflowStep` instances to run concurrently.
+            join_strategy: How to join the branch results. Defaults to
                 `JoinStrategy.WaitAll`.
         """
     def __repr__(self) -> builtins.str: ...
@@ -8164,6 +8238,33 @@ class RetryHttpClient:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class RetryMemoryBackend:
+    r"""
+    A `MemoryBackend` decorator that retries transient errors with exponential
+    backoff.
+    
+    Mirrors :class:`RetryCompletionModel` for `CompletionModel`. Wraps any
+    `MemoryBackend` (subclass or built-in) and reissues each `put`/`get`/
+    `delete`/`list`/`len`/`search_by_bands` call up to `config.max_retries`
+    times when the underlying backend raises.
+    
+    Example:
+        >>> backend = InMemoryBackend()
+        >>> retried = RetryMemoryBackend(backend, RetryConfig(max_retries=5))
+        >>> memory = Memory(embedder, retried)
+    """
+    def __new__(cls, backend: typing.Any, config: typing.Optional[RetryConfig] = None) -> RetryMemoryBackend:
+        r"""
+        Wrap a `MemoryBackend` with automatic retry on transient failures.
+        
+        Args:
+            backend: The `MemoryBackend` to wrap (any built-in or subclass).
+            config: Optional typed `RetryConfig`. Defaults to
+                `RetryConfig()` (3 retries, 1s initial, 30s max).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class RetryMiddleware:
     r"""
     Middleware that wraps a model with `RetryCompletionModel`.
@@ -9024,6 +9125,57 @@ class SubWorkflowResponse:
         """
     def __repr__(self) -> builtins.str: ...
 
+@typing.final
+class SubWorkflowStep:
+    r"""
+    A workflow step that delegates to another `Workflow`.
+    
+    The parent workflow's event loop spawns the child via `Workflow.run()`,
+    converts the parent event to JSON for the child's input, and wraps the
+    child's terminal `StopEvent.result` into a `DynamicEvent` named
+    `"<step_name>::output"` for the parent.
+    
+    Example:
+        >>> child = Workflow("enrich", [enrich_step])
+        >>> step = SubWorkflowStep(
+        ...     name="enrich",
+        ...     accepts=["StartEvent"],
+        ...     emits=["enrich::output"],
+        ...     workflow=child,
+        ... )
+        >>> wf = Workflow.builder("parent").add_subworkflow_step(step).build()
+    """
+    @property
+    def name(self) -> builtins.str:
+        r"""
+        The step name.
+        """
+    @property
+    def accepts(self) -> builtins.list[builtins.str]:
+        r"""
+        Event type identifiers this step accepts.
+        """
+    @property
+    def emits(self) -> builtins.list[builtins.str]:
+        r"""
+        Event type identifiers this step may emit.
+        """
+    def __new__(cls, name: builtins.str, accepts: typing.Sequence[builtins.str], emits: typing.Sequence[builtins.str], workflow: Workflow, timeout: typing.Optional[builtins.float] = None, retry_config: typing.Optional[RetryConfig] = None) -> SubWorkflowStep:
+        r"""
+        Create a sub-workflow step.
+        
+        Args:
+            name: Human-readable name for this step.
+            accepts: Event type identifiers this step accepts.
+            emits: Event type identifiers this step may emit.
+            workflow: The child `Workflow` to run as this step.
+            timeout: Optional per-step wall-clock timeout (seconds) for the
+                entire child run. ``None`` inherits the child's own timeout.
+            retry_config: Optional per-step `RetryConfig` applied to the
+                child run as a whole.
+        """
+    def __repr__(self) -> builtins.str: ...
+
 class TTSProvider:
     r"""
     Base class for text-to-speech providers.
@@ -9762,6 +9914,34 @@ class UpscaleRequest:
     def __new__(cls, *, image_url: builtins.str, scale: builtins.float, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> UpscaleRequest: ...
     def __repr__(self) -> builtins.str: ...
 
+class UsageEmitter:
+    r"""
+    Subclassable ABC mirroring `blazen_llm::usage_recording::UsageEmitter`.
+    
+    Implementations sink emitted `UsageEvent`s somewhere observable: a
+    workflow's broadcast stream, a tokio channel, a tracing span field, etc.
+    
+    Override ``emit`` in a subclass to handle each event. The default
+    implementation raises ``NotImplementedError``.
+    
+    Example:
+        >>> class CountingEmitter(UsageEmitter):
+        ...     def __init__(self):
+        ...         self.count = 0
+        ...     def emit(self, event: UsageEvent) -> None:
+        ...         self.count += 1
+    """
+    def __new__(cls) -> UsageEmitter: ...
+    def __init__(self) -> None:
+        r"""
+        Subclass-friendly `__init__` no-op so `super().__init__()` chains
+        don't fall through to `object.__init__` and raise ``TypeError``.
+        """
+    def emit(self, _event: typing.Any) -> None:
+        r"""
+        Sink a single `UsageEvent`. Subclasses override this method.
+        """
+
 @typing.final
 class UsageEvent:
     r"""
@@ -9831,6 +10011,87 @@ class UsageEvent:
             latency_ms: Wall-clock latency.
             run_id: Pipeline / workflow run identifier (UUID string). When
                 `None`, a fresh `uuid4` is generated so events are unique.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class UsageRecordingCompletionModel:
+    r"""
+    A `CompletionModel` decorator that emits a `UsageEvent` after each
+    successful `complete` / `stream` call.
+    
+    Mirrors `blazen_llm::usage_recording::UsageRecordingCompletionModel`.
+    
+    Example:
+        >>> base = CompletionModel.openai()
+        >>> emitter = NoopUsageEmitter()
+        >>> model = UsageRecordingCompletionModel(base, emitter, "openai")
+    """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        The model id reported by the underlying provider.
+        """
+    def __new__(cls, model: CompletionModel, emitter: typing.Any, provider_label: builtins.str, run_id: typing.Optional[builtins.str] = None) -> UsageRecordingCompletionModel:
+        r"""
+        Wrap a `CompletionModel` with a usage-recording layer.
+        
+        Args:
+            model: The `CompletionModel` to wrap.
+            emitter: A `UsageEmitter` that receives each emitted event.
+            provider_label: A string used as the `provider` field on each
+                emitted `UsageEvent` (e.g. `"openai"`).
+            run_id: Optional UUID string identifying the workflow run. If
+                omitted, a random UUID is generated.
+        """
+    def as_model(self) -> CompletionModel:
+        r"""
+        Convert this decorator into a `CompletionModel` so it can be passed to
+        APIs that expect a `CompletionModel`.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+        r"""
+        Perform a chat completion, emitting a `UsageEvent` on success.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class UsageRecordingEmbeddingModel:
+    r"""
+    An `EmbeddingModel` decorator that emits a `UsageEvent` after each
+    successful `embed` call.
+    
+    Mirrors `blazen_llm::usage_recording::UsageRecordingEmbeddingModel`.
+    
+    Example:
+        >>> base = EmbeddingModel.openai()
+        >>> model = UsageRecordingEmbeddingModel(base, NoopUsageEmitter(), "openai")
+    """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        The model id reported by the underlying provider.
+        """
+    @property
+    def dimensions(self) -> builtins.int:
+        r"""
+        Output dimensionality.
+        """
+    def __new__(cls, model: EmbeddingModel, emitter: typing.Any, provider_label: builtins.str, run_id: typing.Optional[builtins.str] = None) -> UsageRecordingEmbeddingModel:
+        r"""
+        Wrap an `EmbeddingModel` with a usage-recording layer.
+        
+        Args:
+            model: The `EmbeddingModel` to wrap.
+            emitter: A `UsageEmitter` that receives each emitted event.
+            provider_label: A string used as the `provider` field on each
+                emitted `UsageEvent`.
+            run_id: Optional UUID string identifying the workflow run. If
+                omitted, a random UUID is generated.
+        """
+    async def embed(self, texts: typing.Sequence[builtins.str]) -> EmbeddingResponse:
+        r"""
+        Embed a list of texts, emitting a `UsageEvent` on success.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -10383,6 +10644,19 @@ class WorkflowBuilder:
         r"""
         Register a step (an `@step`-decorated function).
         """
+    def add_subworkflow_step(self, step: SubWorkflowStep) -> WorkflowBuilder:
+        r"""
+        Register a `SubWorkflowStep` that delegates to a child workflow.
+        
+        Mirrors `blazen_core::WorkflowBuilder::add_subworkflow_step`.
+        """
+    def add_parallel_subworkflows(self, step: ParallelSubWorkflowsStep) -> WorkflowBuilder:
+        r"""
+        Register a `ParallelSubWorkflowsStep` that fans out into
+        multiple concurrent child workflows.
+        
+        Mirrors `blazen_core::WorkflowBuilder::add_parallel_subworkflows`.
+        """
     def timeout(self, seconds: builtins.float) -> WorkflowBuilder:
         r"""
         Set the maximum execution time for the workflow in seconds.
@@ -10438,7 +10712,8 @@ class WorkflowBuilder:
         r"""
         Build the [`Workflow`].
         
-        Validation: the workflow must have at least one registered step.
+        Validation: the workflow must have at least one registered step
+        (regular, sub-workflow, or parallel-sub-workflow).
         """
     def __repr__(self) -> builtins.str: ...
 

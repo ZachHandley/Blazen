@@ -8,10 +8,13 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
 
+use blazen_llm::retry::RetryConfig;
 use blazen_memory::search;
 use blazen_memory::store::MemoryBackend;
 use blazen_memory::types::{MemoryEntry, MemoryResult, StoredEntry};
-use blazen_memory::{InMemoryBackend, JsonlBackend, Memory, MemoryError, MemoryStore};
+use blazen_memory::{
+    InMemoryBackend, JsonlBackend, Memory, MemoryError, MemoryStore, RetryMemoryBackend,
+};
 use blazen_memory_valkey::ValkeyBackend;
 
 /// Local alias for the memory-crate result type.
@@ -47,12 +50,15 @@ fn extract_backend(obj: &Bound<'_, PyAny>) -> PyResult<Arc<dyn MemoryBackend>> {
     if let Ok(b) = obj.extract::<PyRef<'_, PyValkeyBackend>>() {
         return Ok(b.inner.clone());
     }
+    if let Ok(b) = obj.extract::<PyRef<'_, PyRetryMemoryBackend>>() {
+        return Ok(b.inner.clone());
+    }
     // Try MemoryBackend subclass
     if obj.is_instance_of::<PyMemoryBackend>() {
         return Ok(Arc::new(PyHostMemoryBackend::new(obj.clone().unbind())));
     }
     Err(PyTypeError::new_err(
-        "expected InMemoryBackend, JsonlBackend, ValkeyBackend, or MemoryBackend subclass",
+        "expected InMemoryBackend, JsonlBackend, ValkeyBackend, RetryMemoryBackend, or MemoryBackend subclass",
     ))
 }
 
@@ -561,6 +567,57 @@ impl PyValkeyBackend {
 
     fn __repr__(&self) -> &'static str {
         "ValkeyBackend(...)"
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PyRetryMemoryBackend
+// ---------------------------------------------------------------------------
+
+/// A `MemoryBackend` decorator that retries transient errors with exponential
+/// backoff.
+///
+/// Mirrors :class:`RetryCompletionModel` for `CompletionModel`. Wraps any
+/// `MemoryBackend` (subclass or built-in) and reissues each `put`/`get`/
+/// `delete`/`list`/`len`/`search_by_bands` call up to `config.max_retries`
+/// times when the underlying backend raises.
+///
+/// Example:
+///     >>> backend = InMemoryBackend()
+///     >>> retried = RetryMemoryBackend(backend, RetryConfig(max_retries=5))
+///     >>> memory = Memory(embedder, retried)
+#[gen_stub_pyclass]
+#[pyclass(name = "RetryMemoryBackend", from_py_object)]
+#[derive(Clone)]
+pub struct PyRetryMemoryBackend {
+    pub(crate) inner: Arc<dyn MemoryBackend>,
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyRetryMemoryBackend {
+    /// Wrap a `MemoryBackend` with automatic retry on transient failures.
+    ///
+    /// Args:
+    ///     backend: The `MemoryBackend` to wrap (any built-in or subclass).
+    ///     config: Optional typed `RetryConfig`. Defaults to
+    ///         `RetryConfig()` (3 retries, 1s initial, 30s max).
+    #[new]
+    #[pyo3(signature = (backend, config=None))]
+    fn new(
+        backend: &Bound<'_, PyAny>,
+        config: Option<PyRef<'_, crate::providers::config::PyRetryConfig>>,
+    ) -> PyResult<Self> {
+        let inner_backend = extract_backend(backend)?;
+        let retry_config: RetryConfig = config.map(|c| c.inner.clone()).unwrap_or_default();
+        let wrapped = RetryMemoryBackend::new(inner_backend, retry_config);
+        Ok(Self {
+            inner: wrapped.into_arc(),
+        })
+    }
+
+    fn __repr__(&self) -> &'static str {
+        "RetryMemoryBackend(...)"
     }
 }
 

@@ -49,6 +49,7 @@ pub mod pipeline;
 pub mod pricing;
 pub mod providers;
 pub mod session_pause_policy;
+pub mod subworkflow_step;
 pub mod telemetry;
 pub mod tokens;
 pub mod types;

@@ -128,6 +128,8 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<workflow::workflow::PyWorkflow>()?;
     m.add_class::<workflow::workflow::PySessionPausePolicy>()?;
     m.add_class::<workflow::builder::PyWorkflowBuilder>()?;
+    m.add_class::<workflow::subworkflow::PySubWorkflowStep>()?;
+    m.add_class::<workflow::subworkflow::PyParallelSubWorkflowsStep>()?;
 
     // Handler
     m.add_class::<workflow::handler::PyWorkflowHandler>()?;
@@ -313,6 +315,12 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<providers::PyRetryCompletionModel>()?;
     m.add_class::<providers::PyCachedCompletionModel>()?;
     m.add_class::<providers::PyFallbackModel>()?;
+
+    // Usage emitter ABC + decorators
+    m.add_class::<types::PyUsageEmitter>()?;
+    m.add_class::<types::PyNoopUsageEmitter>()?;
+    m.add_class::<types::PyUsageRecordingCompletionModel>()?;
+    m.add_class::<types::PyUsageRecordingEmbeddingModel>()?;
 
     // Retry plumbing exposed to Python beyond CompletionModel.
     m.add_class::<retry::PyRetryStack>()?;
@@ -521,6 +529,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::PyInMemoryBackend>()?;
     m.add_class::<types::PyJsonlBackend>()?;
     m.add_class::<types::PyValkeyBackend>()?;
+    m.add_class::<types::PyRetryMemoryBackend>()?;
     m.add_class::<types::PyMemoryResult>()?;
     m.add_class::<types::PyStoredEntry>()?;
     m.add_function(wrap_pyfunction!(types::compute_text_simhash_similarity, m)?)?;

@@ -238,56 +238,64 @@ impl WorkflowHandler {
             .expect("result() called after result was already consumed");
         let event = rx.await.unwrap_or(Err(WorkflowError::ChannelClosed))?;
 
-        // Wait for the event loop task to fully exit so there are no orphaned
-        // Tokio tasks keeping runtimes alive (critical for napi-rs / Node.js).
-        if let Some(handle) = self.event_loop_handle.take() {
-            let _ = handle.await;
-        }
-
-        // Drop our owned sender clone so the accumulator task observes a
-        // closed broadcast channel once every other sender (held by the
-        // event loop's Context clones) has also been released. This must
-        // happen BEFORE we await the accumulator handle, otherwise the
-        // task would hang waiting for further events that can never arrive.
-        let (drained_stream_tx, _) = broadcast::channel::<Box<dyn AnyEvent>>(1);
-        let owned_sender = std::mem::replace(&mut self.stream_tx, drained_stream_tx);
-        drop(owned_sender);
-
-        // Drain the accumulator. On native, bound it with a 50 ms timeout
-        // and abort on elapse: every step task has completed by this
-        // point, so no further `UsageEvent`s can be emitted -- anything
-        // still relevant is already buffered. We do NOT wait for the
-        // broadcast channel's senders to fully drop, because `Context`
-        // clones may stay alive in binding-side wrappers (e.g. napi-rs
-        // `JsContext`) until the host GC reclaims them, which is
-        // unpredictable and can be effectively unbounded.
+        // The cleanup chain below (event-loop join + broadcast drop +
+        // usage-accumulator drain) is meaningful on native — it keeps tokio
+        // task lifecycle deterministic for napi-rs / Node.js shutdown — but
+        // on wasm32 it deadlocks workerd: each await needs a JS event-loop
+        // turn to poll the spawn_local'd futures, but a single
+        // wasm-bindgen export call doesn't yield to the host between
+        // sequential awaits. Workerd then trips its "code had hung"
+        // detector before the chain can complete.
         //
-        // On wasm32 we just await the handle: the wasm32 timeout
-        // polyfill in `crate::runtime` wraps a `JsFuture` whose
-        // `Rc<RefCell<...>>` is `!Send`, which would propagate up and
-        // make `result()`'s future `!Send` -- breaking
-        // `tokio::spawn(...)` callers like `blazen-pipeline`. The
-        // JS-GC-delay issue lives in the napi-rs binding shape and
-        // doesn't affect `blazen-wasm-sdk`, so the bounded drain is
-        // not load-bearing on wasm32.
-        if let Some(mut handle) = self.usage_accumulator_handle.take() {
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                // `JoinHandle` is `Unpin` on both tokio (native) and the
-                // wasm32 polyfill in `crate::runtime`, so awaiting `&mut
-                // handle` lets us still abort the underlying task on
-                // timeout without consuming the handle.
-                if timeout(Duration::from_millis(50), &mut handle)
+        // Skipping the chain on wasm32 is safe: spawn_local'd tasks are
+        // garbage-collected with the `WebAssembly.Instance`, there's no
+        // tokio runtime to keep alive, and the JS-binding caller is
+        // expected to drop the handler immediately after `result()`.
+        // The workerd request resolves cleanly because the result event
+        // is already on the oneshot before this function is awaited from
+        // the wasm-sdk's `WasmWorkflow::run` (which yields_to_js after
+        // dispatching, see `crates/blazen-wasm-sdk/src/handler.rs`).
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // Wait for the event loop task to fully exit so there are no
+            // orphaned Tokio tasks keeping runtimes alive (critical for
+            // napi-rs / Node.js).
+            if let Some(handle) = self.event_loop_handle.take() {
+                let _ = handle.await;
+            }
+
+            // Drop our owned sender clone so the accumulator task observes
+            // a closed broadcast channel once every other sender (held by
+            // the event loop's Context clones) has also been released.
+            // This must happen BEFORE we await the accumulator handle,
+            // otherwise the task would hang waiting for further events
+            // that can never arrive.
+            let (drained_stream_tx, _) = broadcast::channel::<Box<dyn AnyEvent>>(1);
+            let owned_sender = std::mem::replace(&mut self.stream_tx, drained_stream_tx);
+            drop(owned_sender);
+
+            // Drain the accumulator with a 50 ms timeout. Every step task
+            // has completed by this point, so anything relevant is already
+            // buffered. We do NOT wait for the broadcast channel's senders
+            // to fully drop because `Context` clones may stay alive in
+            // binding-side wrappers (e.g. napi-rs `JsContext`) until the
+            // host GC reclaims them, which is unpredictable.
+            if let Some(mut handle) = self.usage_accumulator_handle.take()
+                && timeout(Duration::from_millis(50), &mut handle)
                     .await
                     .is_err()
-                {
-                    handle.abort();
-                }
-            }
-            #[cfg(target_arch = "wasm32")]
             {
-                let _ = (&mut handle).await;
+                handle.abort();
             }
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            // Drop the handles without awaiting them — wasm32 has no
+            // tokio runtime to keep alive, the spawn_local'd tasks are
+            // GC'd with the WebAssembly instance, and the broadcast
+            // sender drops here implicitly via `Drop for self`.
+            self.event_loop_handle.take();
+            self.usage_accumulator_handle.take();
         }
 
         let totals = self.usage_totals.lock().await.clone();

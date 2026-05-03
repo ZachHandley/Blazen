@@ -566,6 +566,88 @@ impl UsageEmitter for JsUsageEmitter {
     }
 }
 
+/// A standalone, JS-visible wrapper around the JS-backed `JsUsageEmitter`.
+///
+/// Mirrors `blazen_llm::usage_recording::UsageEmitter` for cross-binding
+/// parity. The constructor takes a JS callback that receives every
+/// `UsageEvent`. Pass an instance to `UsageRecordingCompletionModel.fromEmitter`
+/// (etc.) when you want to share one emitter across multiple decorators.
+///
+/// ```js
+/// import { UsageEmitter, UsageRecordingCompletionModel, CompletionModel } from '@blazen/sdk';
+///
+/// const emitter = new UsageEmitter((event) => console.log('usage', event));
+/// // pass through the JS-callback constructor today; an Emitter-aware
+/// // `fromEmitter` factory is sketched below for binding-parity.
+/// ```
+#[wasm_bindgen(js_name = "UsageEmitter")]
+pub struct WasmUsageEmitter {
+    inner: Arc<dyn UsageEmitter>,
+}
+
+// SAFETY: WASM is single-threaded.
+unsafe impl Send for WasmUsageEmitter {}
+unsafe impl Sync for WasmUsageEmitter {}
+
+#[wasm_bindgen(js_class = "UsageEmitter")]
+#[allow(clippy::must_use_candidate)]
+impl WasmUsageEmitter {
+    /// Construct an emitter that forwards every event to the supplied
+    /// JS callback. The callback runs synchronously on the wasm event
+    /// loop; thrown errors are caught and discarded.
+    #[wasm_bindgen(constructor)]
+    pub fn new(callback: js_sys::Function) -> WasmUsageEmitter {
+        Self {
+            inner: Arc::new(JsUsageEmitter { callback }),
+        }
+    }
+}
+
+impl WasmUsageEmitter {
+    /// Internal accessor used by `UsageRecording*` factories.
+    pub(crate) fn inner_arc(&self) -> Arc<dyn UsageEmitter> {
+        Arc::clone(&self.inner)
+    }
+}
+
+/// A no-op `UsageEmitter` that drops every event. Mirrors
+/// `blazen_llm::usage_recording::NoopUsageEmitter`.
+///
+/// Useful as a default when no downstream observer is wired up:
+///
+/// ```js
+/// const model = UsageRecordingCompletionModel.fromEmitter(base, new NoopUsageEmitter(), {});
+/// ```
+#[wasm_bindgen(js_name = "NoopUsageEmitter")]
+pub struct WasmNoopUsageEmitter;
+
+// SAFETY: WASM is single-threaded; this struct holds no state.
+unsafe impl Send for WasmNoopUsageEmitter {}
+unsafe impl Sync for WasmNoopUsageEmitter {}
+
+impl Default for WasmNoopUsageEmitter {
+    fn default() -> Self {
+        Self
+    }
+}
+
+#[wasm_bindgen(js_class = "NoopUsageEmitter")]
+#[allow(clippy::must_use_candidate)]
+impl WasmNoopUsageEmitter {
+    /// Construct a no-op emitter.
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> WasmNoopUsageEmitter {
+        Self
+    }
+}
+
+impl WasmNoopUsageEmitter {
+    /// Internal accessor used by `UsageRecording*` factories.
+    pub(crate) fn inner_arc() -> Arc<dyn UsageEmitter> {
+        Arc::new(blazen_llm::usage_recording::NoopUsageEmitter)
+    }
+}
+
 fn parse_run_id(value: &JsValue) -> Uuid {
     if let Some(s) = value.as_string() {
         Uuid::parse_str(&s).unwrap_or_else(|_| Uuid::new_v4())

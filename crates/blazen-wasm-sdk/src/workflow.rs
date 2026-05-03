@@ -141,6 +141,50 @@ impl WasmWorkflow {
         self.name.clone()
     }
 
+    /// Register a sub-workflow step that delegates to a pre-built
+    /// [`crate::subworkflow_step::WasmSubWorkflowStep`].
+    ///
+    /// Mirrors `blazen_core::WorkflowBuilder::add_subworkflow_step`. The
+    /// sub-workflow's child workflow is captured by the wrapper at its
+    /// construction time, so this method just hands a finalised
+    /// [`SubWorkflowStep`] to the underlying builder.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if the workflow has already been run.
+    #[wasm_bindgen(js_name = "addSubworkflowStep")]
+    pub fn add_subworkflow_step(
+        &mut self,
+        step: &crate::subworkflow_step::WasmSubWorkflowStep,
+    ) -> Result<(), JsValue> {
+        let builder = self
+            .builder
+            .take()
+            .ok_or_else(|| JsValue::from_str("Workflow already run; reuse not supported"))?;
+        self.builder = Some(builder.add_subworkflow_step(step.to_core()));
+        Ok(())
+    }
+
+    /// Register a parallel-sub-workflows fan-out step.
+    ///
+    /// Mirrors `blazen_core::WorkflowBuilder::add_parallel_subworkflows`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if the workflow has already been run.
+    #[wasm_bindgen(js_name = "addParallelSubworkflows")]
+    pub fn add_parallel_subworkflows(
+        &mut self,
+        step: &crate::subworkflow_step::WasmParallelSubWorkflowsStep,
+    ) -> Result<(), JsValue> {
+        let builder = self
+            .builder
+            .take()
+            .ok_or_else(|| JsValue::from_str("Workflow already run; reuse not supported"))?;
+        self.builder = Some(builder.add_parallel_subworkflows(step.to_core()));
+        Ok(())
+    }
+
     /// Register a step handler.
     ///
     /// - `name` -- unique step identifier
@@ -272,6 +316,14 @@ impl WasmWorkflow {
             .run(input_json)
             .await
             .map_err(|e| JsValue::from_str(&format!("workflow run failed: {e}")))?;
+
+        // Required for workerd: give the spawn_local'd event-loop future a
+        // chance to advance before parking on the result oneshot. Without
+        // this, the second await sits inside the same wasm-bindgen export
+        // call and workerd never re-enters the JS event loop, so the loop
+        // never gets polled and the request hits "code had hung" timeout.
+        // See `crate::handler::yield_to_js` for the full explanation.
+        crate::handler::yield_to_js().await;
 
         let result = handler
             .result()
@@ -521,6 +573,12 @@ impl WasmWorkflow {
                 let _ = callback.call1(&JsValue::NULL, &event_js);
             }
         });
+
+        // Same workerd yield pattern as `run()`: the spawn_local'd loop
+        // (and the forwarding task above) need a JS event-loop turn
+        // before this fn parks on the result oneshot. See
+        // `crate::handler::yield_to_js` for the full rationale.
+        crate::handler::yield_to_js().await;
 
         let result = handler
             .result()

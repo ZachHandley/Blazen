@@ -18,6 +18,7 @@ use blazen_llm::retry::RetryConfig;
 
 use super::handler::PyWorkflowHandler;
 use super::step::PyStepWrapper;
+use super::subworkflow::{PyParallelSubWorkflowsStep, PySubWorkflowStep};
 use crate::convert::dict_to_json;
 use crate::error::{BlazenPyError, to_py_result};
 use crate::session_ref_serializable::{DESERIALIZER_FN, intern_type_tag};
@@ -99,6 +100,15 @@ impl From<CoreSessionPausePolicy> for PySessionPausePolicy {
 pub struct PyWorkflow {
     name: String,
     steps: Vec<Py<PyStepWrapper>>,
+    /// Sub-workflow steps registered via
+    /// [`PyWorkflowBuilder::add_subworkflow_step`]. Materialized into
+    /// `blazen_core::SubWorkflowStep` lazily inside
+    /// `build_workflow_with_locals` so each child workflow's Python step
+    /// handlers run on the active asyncio loop.
+    subworkflow_steps: Vec<Py<PySubWorkflowStep>>,
+    /// Parallel sub-workflow fan-out steps registered via
+    /// [`PyWorkflowBuilder::add_parallel_subworkflows`].
+    parallel_subworkflow_steps: Vec<Py<PyParallelSubWorkflowsStep>>,
     timeout: Option<f64>,
     session_pause_policy: PySessionPausePolicy,
     /// Whether to publish lifecycle events on the broadcast stream.
@@ -133,12 +143,28 @@ impl PyWorkflow {
         Self {
             name,
             steps,
+            subworkflow_steps: Vec::new(),
+            parallel_subworkflow_steps: Vec::new(),
             timeout,
             session_pause_policy,
             auto_publish_events: true,
             retry_config: None,
             step_timeout_default: None,
         }
+    }
+
+    /// Replace the workflow's sub-workflow step list. Called from
+    /// [`PyWorkflowBuilder::build`].
+    pub(crate) fn set_subworkflow_steps(&mut self, steps: Vec<Py<PySubWorkflowStep>>) {
+        self.subworkflow_steps = steps;
+    }
+
+    /// Replace the workflow's parallel-sub-workflow step list.
+    pub(crate) fn set_parallel_subworkflow_steps(
+        &mut self,
+        steps: Vec<Py<PyParallelSubWorkflowsStep>>,
+    ) {
+        self.parallel_subworkflow_steps = steps;
     }
 
     /// Set whether lifecycle events are auto-published. Used by the
@@ -175,6 +201,16 @@ impl PyWorkflow {
                 registration = registration.with_timeout(t);
             }
             builder = builder.step(registration);
+        }
+        for sub in &self.subworkflow_steps {
+            let sub_ref = sub.borrow(py);
+            let core_step = sub_ref.to_core(py, locals.clone())?;
+            builder = builder.add_subworkflow_step(core_step);
+        }
+        for par in &self.parallel_subworkflow_steps {
+            let par_ref = par.borrow(py);
+            let core_step = par_ref.to_core(py, locals.clone())?;
+            builder = builder.add_parallel_subworkflows(core_step);
         }
         if let Some(t) = self.timeout {
             builder = builder.timeout(Duration::from_secs_f64(t));
@@ -225,6 +261,8 @@ impl PyWorkflow {
         Self {
             name: name.to_string(),
             steps: step_refs,
+            subworkflow_steps: Vec::new(),
+            parallel_subworkflow_steps: Vec::new(),
             timeout,
             session_pause_policy: session_pause_policy
                 .unwrap_or(PySessionPausePolicy::PickleOrError),

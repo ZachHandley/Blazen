@@ -383,7 +383,7 @@ async fn parallel_subworkflows_first_completes_aborts_losers() {
         name: "slow".to_owned(),
         accepts: vec![StartEvent::event_type()],
         emits: vec![StopEvent::event_type()],
-        workflow: Arc::new(child_workflow_sleeping("slow", Duration::from_secs(60))),
+        workflow: Arc::new(child_workflow_sleeping("slow", Duration::from_mins(1))),
         input_mapper: passthrough_input_mapper(),
         output_mapper: stop_event_output_mapper(),
         timeout: None,

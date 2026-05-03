@@ -204,7 +204,7 @@ pub struct HttpClientConfig {
 impl Default for HttpClientConfig {
     fn default() -> Self {
         Self {
-            request_timeout: Some(std::time::Duration::from_secs(60)),
+            request_timeout: Some(std::time::Duration::from_mins(1)),
             connect_timeout: Some(std::time::Duration::from_secs(10)),
             user_agent: None,
         }
@@ -264,7 +264,7 @@ mod tests {
     #[test]
     fn config_default_has_request_and_connect_timeouts() {
         let cfg = HttpClientConfig::default();
-        assert_eq!(cfg.request_timeout, Some(Duration::from_secs(60)));
+        assert_eq!(cfg.request_timeout, Some(Duration::from_mins(1)));
         assert_eq!(cfg.connect_timeout, Some(Duration::from_secs(10)));
         assert!(cfg.user_agent.is_none());
     }

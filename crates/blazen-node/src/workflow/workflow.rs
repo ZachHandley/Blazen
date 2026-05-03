@@ -362,7 +362,7 @@ impl JsWorkflow {
             ));
         }
         let mut inner_branches = Vec::with_capacity(branch_specs.len());
-        for (spec, wf) in branch_specs.into_iter().zip(branch_workflows.into_iter()) {
+        for (spec, wf) in branch_specs.into_iter().zip(branch_workflows) {
             let inner_workflow = Arc::new(wf.build_workflow()?);
             inner_branches.push(JsSubWorkflowStepInner {
                 name: spec.name,
@@ -387,6 +387,66 @@ impl JsWorkflow {
                 accepts,
                 emits,
                 branches: inner_branches,
+                join_strategy: join_core,
+            });
+        Ok(())
+    }
+
+    /// Register a pre-built [`SubWorkflowStep`] wrapper.
+    ///
+    /// Object-form of [`Self::add_subworkflow_step`]: the same step instance
+    /// can be reused across multiple workflows since its inner child
+    /// workflow is captured in `Arc` form at construction time.
+    #[napi(js_name = "addSubworkflowStepObj")]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn add_subworkflow_step_obj(
+        &mut self,
+        step: &crate::workflow::subworkflow_step::JsSubWorkflowStep,
+    ) -> Result<()> {
+        self.subworkflow_steps.push(JsSubWorkflowStepInner {
+            name: step.name.clone(),
+            accepts: step.accepts.clone(),
+            emits: step.emits.clone(),
+            inner_workflow: Arc::clone(&step.inner_workflow),
+            timeout_secs: step.timeout_secs,
+            retry_config: step.retry_config.clone(),
+        });
+        Ok(())
+    }
+
+    /// Register a pre-built [`ParallelSubWorkflowsStep`] wrapper.
+    ///
+    /// Object-form of [`Self::add_parallel_subworkflows`]: lifts the
+    /// awkward parallel-arrays signature into a single class instance.
+    #[napi(js_name = "addParallelSubworkflowsObj")]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn add_parallel_subworkflows_obj(
+        &mut self,
+        step: &crate::workflow::subworkflow_step::JsParallelSubWorkflowsStep,
+    ) -> Result<()> {
+        let mut branches = Vec::with_capacity(step.branches.len());
+        for b in &step.branches {
+            branches.push(JsSubWorkflowStepInner {
+                name: b.name.clone(),
+                accepts: b.accepts.clone(),
+                emits: b.emits.clone(),
+                inner_workflow: Arc::clone(&b.inner_workflow),
+                timeout_secs: b.timeout_secs,
+                retry_config: b.retry_config.clone(),
+            });
+        }
+        let join_core = match step.join_strategy {
+            crate::pipeline::stage::JsJoinStrategy::WaitAll => blazen_core::JoinStrategy::WaitAll,
+            crate::pipeline::stage::JsJoinStrategy::FirstCompletes => {
+                blazen_core::JoinStrategy::FirstCompletes
+            }
+        };
+        self.parallel_subworkflow_steps
+            .push(JsParallelSubWorkflowsInner {
+                name: step.name.clone(),
+                accepts: step.accepts.clone(),
+                emits: step.emits.clone(),
+                branches,
                 join_strategy: join_core,
             });
         Ok(())

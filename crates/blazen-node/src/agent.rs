@@ -67,6 +67,18 @@ pub fn finish_workflow_tool_def() -> JsToolDef {
     }
 }
 
+/// Alias of [`finish_workflow_tool_def`] under the canonical Rust name
+/// (`finish_workflow_tool` → `finishWorkflowTool` in JS). Returns a
+/// `JsToolDef` for the built-in exit tool.
+///
+/// Mirrors `blazen_llm::finish_workflow_tool` and `blazen-py`'s
+/// `finish_workflow_tool()` for cross-binding parity.
+#[napi(js_name = "finishWorkflowTool")]
+#[must_use]
+pub fn finish_workflow_tool() -> JsToolDef {
+    finish_workflow_tool_def()
+}
+
 // ---------------------------------------------------------------------------
 // JsToolDef
 // ---------------------------------------------------------------------------

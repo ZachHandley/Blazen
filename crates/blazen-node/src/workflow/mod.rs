@@ -7,6 +7,7 @@ pub mod handler;
 pub mod session_ref;
 pub mod session_ref_convert;
 pub mod session_ref_serializable;
+pub mod subworkflow_step;
 #[allow(clippy::module_inception)]
 pub mod workflow;
 
@@ -16,4 +17,5 @@ pub use events_typed::{
     JsDynamicEvent, JsEventEnvelope, JsInputRequestEvent, JsInputResponseEvent,
 };
 pub use handler::JsWorkflowHandler;
+pub use subworkflow_step::{JsParallelSubWorkflowsStep, JsSubWorkflowStep};
 pub use workflow::{JsSessionPausePolicy, JsWorkflow, JsWorkflowBuilder, JsWorkflowResult};

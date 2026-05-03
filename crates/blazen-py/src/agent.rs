@@ -205,7 +205,7 @@ impl PyToolDef {
     }
 
     fn __repr__(&self) -> String {
-        format!("ToolDef(name='{}', is_exit={})", self.name, self.is_exit,)
+        format!("ToolDef(name='{}', is_exit={})", self.name, self.is_exit)
     }
 }
 

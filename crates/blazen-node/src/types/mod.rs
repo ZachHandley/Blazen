@@ -28,6 +28,7 @@ pub mod tokens;
 pub mod tool;
 pub mod tool_output;
 pub mod usage;
+pub mod usage_recording;
 
 // Re-export all public types for convenient access.
 pub use crate::generated::{
@@ -63,7 +64,7 @@ pub use http_client_config::{
 pub use media::{Generated3DModel, GeneratedAudio, GeneratedImage, GeneratedVideo, MediaOutput};
 pub use memory::{
     JsAddEntry, JsInMemoryBackend, JsJsonlBackend, JsMemory, JsMemoryBackend, JsMemoryEntry,
-    JsMemoryResult, JsValkeyBackend,
+    JsMemoryResult, JsRetryMemoryBackend, JsValkeyBackend,
 };
 pub use message::{
     ChatMessageOptions, JsChatMessage, JsContentPart, JsImageContent, JsImageSource, JsRole,
@@ -93,4 +94,8 @@ pub use tool_output::{LlmPayload, ToolOutput};
 pub use usage::{
     JsRequestTimingClass, JsTokenUsageClass, RequestTiming, RequestTimingOptions, TokenUsage,
     TokenUsageOptions,
+};
+pub use usage_recording::{
+    JsNoopUsageEmitter, JsUsageEmitter, JsUsageRecordingCompletionModel,
+    JsUsageRecordingEmbeddingModel,
 };

@@ -101,43 +101,14 @@ function buildSnapshotWorkflow(name: string): Workflow {
 }
 
 // Exercises `runHandler` + `pause()` + `resumeFromSnapshot` end-to-end on
-// real workerd. The "easy" timing strategy: run to completion via
-// `awaitResult()`, then snapshot the finished engine state, JSON-roundtrip
-// the snapshot, and resume into a fresh `Workflow` instance.
-//
-// TODO(blazen-wasm-sdk): this route currently hangs on workerd. Empirical
-// finding from agent A2.5-fu (2026-04-27): after `runHandler(...)` returns,
-// the *very next* `await` on the handler — even `runId()`, which only reads
-// snapshot metadata — never resolves and workerd's hang detector kills the
-// request with "Worker's code had hung". The single-shot `run()` path
-// (used by `/js-workflow`) works fine, so the engine itself runs; the
-// problem is specifically that the spawned event-loop task is not driven
-// across two separate JS Promise boundaries inside a workerd request.
-//
-// Most likely cause: `crates/blazen-core/src/runtime.rs` uses
-// `wasm_bindgen_futures::spawn_local` to drive the event loop on wasm32.
-// In a contiguous async chain (the `run()` path) the spawned future gets
-// polled because the JS microtask queue keeps running. In `runHandler` we
-// hand a JS object back to the caller, the caller awaits *another* SDK
-// method, and workerd's per-request I/O context apparently doesn't
-// re-poll the spawn_local future. This needs a fix in the SDK: either
-// keep the handler's broadcast receiver tied to the same JsFuture chain
-// that `runHandler` returns, or expose a "drive one tick" entry point.
-//
-// Until that's resolved the corresponding test is `test.skip`'d in
-// `test/worker.test.ts`; the route stays here so re-enabling the test
-// after the SDK fix is a one-liner. We kept the original
-// pause-after-completion + mid-flight fallback flow intact so once the
-// hang is fixed we can see immediately which timing strategy works.
+// real workerd. Both handler-method entry points (`awaitResult`, `pause`,
+// `nextEvent`, `runId`, `snapshot`, `streamEvents`) and the single-shot
+// `run()` / `runStreaming()` paths await `setTimeout(0)` macrotasks before
+// parking on engine futures so the `wasm_bindgen_futures::spawn_local`'d
+// event-loop task gets a JS event-loop turn between dispatching events
+// and waiting on the result. See `crate::handler::yield_to_js` in
+// crates/blazen-wasm-sdk for the full rationale.
 async function handleSnapshotRoundtripInner(): Promise<Response> {
-  // The hang fix this route validates: prior to A2.5-fu2's SDK fix,
-  // calling ANY method on a `WasmWorkflowHandler` returned by
-  // `runHandler()` would hang on workerd. The fix adds a
-  // `setTimeout(0)` macrotask yield at the top of each async handler
-  // method (`awaitResult`, `pause`, `nextEvent`, `runId`) so the
-  // spawn_local'd event loop gets a turn before the method parks on a
-  // oneshot/broadcast wait. The route below exercises every one of
-  // those entry points in sequence.
 
   // Step A — `runHandler` + `awaitResult`: the original failing flow.
   // Pre-fix, this hung at workerd's "code had hung" timeout. Post-fix,

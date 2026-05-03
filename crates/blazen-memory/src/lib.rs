@@ -53,11 +53,11 @@
 pub mod backends;
 pub mod error;
 pub mod memory;
-// `retry` uses `tokio::time::sleep`, which requires tokio's `time` feature.
-// We don't enable that feature on wasm32 (no tokio runtime there to drive
-// timers), so the retry decorator is native-only. Wasm callers that need
-// retry semantics can wrap the backend on the host side.
-#[cfg(not(target_arch = "wasm32"))]
+// `retry` is available on both native and wasm32. On wasm32 the
+// `RetryMemoryBackend::sleep_ms` helper routes through `gloo-timers`
+// (see `crates/blazen-memory/src/retry.rs`) instead of
+// `tokio::time::sleep`, which has no time driver on
+// `wasm32-unknown-unknown`.
 pub mod retry;
 pub mod search;
 pub mod store;
@@ -69,7 +69,6 @@ pub use backends::InMemoryBackend;
 pub use backends::JsonlBackend;
 pub use error::MemoryError;
 pub use memory::Memory;
-#[cfg(not(target_arch = "wasm32"))]
 pub use retry::RetryMemoryBackend;
 pub use store::{MemoryBackend, MemoryStore};
 pub use types::{MemoryEntry, MemoryResult, StoredEntry};

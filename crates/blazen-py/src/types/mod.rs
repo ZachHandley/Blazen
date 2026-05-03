@@ -29,6 +29,7 @@ pub mod tool;
 pub mod transcription;
 pub mod typed_tool;
 pub mod usage;
+pub mod usage_recording;
 
 pub use abc::{
     PyHostDispatchAbc, PyImageModel, PyLocalModel, PyModelRegistry, PyStructuredOutput,
@@ -49,8 +50,9 @@ pub use media::{
 };
 pub use memory::{
     PyInMemoryBackend, PyJsonlBackend, PyMemory, PyMemoryBackend, PyMemoryResult, PyMemoryStore,
-    PyStoredEntry, PyValkeyBackend, compute_elid_similarity, compute_embedding_simhash_similarity,
-    compute_text_simhash_similarity, simhash_from_hex, simhash_to_hex,
+    PyRetryMemoryBackend, PyStoredEntry, PyValkeyBackend, compute_elid_similarity,
+    compute_embedding_simhash_similarity, compute_text_simhash_similarity, simhash_from_hex,
+    simhash_to_hex,
 };
 pub use memory_entry::PyMemoryEntry;
 pub use message::{PyChatMessage, PyContentPart, PyRole};
@@ -74,3 +76,7 @@ pub use tokens::{PyEstimateCounter, PyTokenCounter, count_message_tokens, estima
 pub use tool::{PyLlmPayload, PyToolCall, PyToolDefinition, PyToolOutput};
 pub use transcription::PyTranscription;
 pub use usage::{PyTokenUsage, RequestTiming};
+pub use usage_recording::{
+    PyNoopUsageEmitter, PyUsageEmitter, PyUsageRecordingCompletionModel,
+    PyUsageRecordingEmbeddingModel,
+};

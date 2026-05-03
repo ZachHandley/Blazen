@@ -105,7 +105,7 @@ fn marshal_to_js<T: Serialize + ?Sized>(value: &T) -> Result<JsValue, JsValue> {
 /// inside a wasm-bindgen export does NOT cause the JS engine to run other
 /// microtasks; it just resumes the same async chain. A macrotask
 /// (`setTimeout`) forces a full event-loop turn, which is what we need.
-async fn yield_to_js() {
+pub(crate) async fn yield_to_js() {
     use js_sys::Promise;
     use wasm_bindgen_futures::JsFuture;
 

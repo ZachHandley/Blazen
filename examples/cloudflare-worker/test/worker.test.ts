@@ -29,27 +29,11 @@ describe("Blazen real workflow engine on Cloudflare Workers", () => {
     expect(body).toEqual({ greeting: "Hello, From-JS!" });
   });
 
-  // SKIPPED — the `/snapshot-roundtrip` route hangs on workerd because the
-  // `runHandler` -> `awaitResult`/`pause`/`runId` flow never resolves once
-  // control has returned to JS. The single-shot `run()` path used by the
-  // first two tests works fine, so the engine itself executes; the bug is
-  // that `wasm_bindgen_futures::spawn_local` (used inside
-  // `crates/blazen-core/src/runtime.rs` to drive the event loop on wasm32)
-  // is not re-polled by workerd between two separate JS Promise
-  // boundaries inside one request. Even probing `handler.runId()` (which
-  // only reads metadata, no broadcast wait) hangs, so the deadlock is at
-  // the spawn-local layer, not at the broadcast channel.
-  //
-  // The route is wired up end-to-end in `worker.ts` with both pause-
-  // after-completion and mid-flight pause fallbacks, so once the SDK fix
-  // lands (keep the spawned event-loop future tied to the same JsFuture
-  // chain `runHandler` returns, or expose a "drive one tick" entry point)
-  // change `test.skip` -> `test` and the assertions below will validate
-  // the round-trip.
-  //
-  // Confirmed reproducer: `pnpm wrangler dev --local src/worker.ts` then
-  // `curl http://localhost:8787/snapshot-roundtrip` returns
-  // 500 "Worker's code had hung" after the workerd timeout.
+  // Exercises `runHandler` + `awaitResult` + `pause` + single-shot `run`
+  // across multiple JS Promise boundaries. Validates the workerd
+  // `setTimeout(0)` yield workaround in both handler methods and
+  // `WasmWorkflow::run` — without it, every await in this route hangs at
+  // workerd's "code had hung" timeout. See `crate::handler::yield_to_js`.
   test("snapshot/resume round-trip works", async () => {
     const resp = await worker.fetch("/snapshot-roundtrip");
     expect(resp.status).toBe(200);

@@ -378,6 +378,90 @@ impl JsValkeyBackend {
 }
 
 // ---------------------------------------------------------------------------
+// JsRetryMemoryBackend
+// ---------------------------------------------------------------------------
+
+use crate::generated::JsRetryConfig;
+use blazen_memory::RetryMemoryBackend;
+use napi::Either;
+
+/// Type alias for the napi-rs union accepted by `RetryMemoryBackend.wrap*`
+/// constructors. napi-rs cannot accept trait objects across the FFI, so we
+/// enumerate the concrete backend classes the binding ships.
+type AnyBackend<'a> =
+    Either<&'a JsInMemoryBackend, Either<&'a JsJsonlBackend, &'a JsValkeyBackend>>;
+
+/// A `MemoryBackend` decorator that retries transient errors with
+/// exponential backoff.
+///
+/// Mirrors `RetryCompletionModel` for `MemoryBackend`. Use one of the
+/// `wrapInMemory` / `wrapJsonl` / `wrapValkey` factories to wrap the
+/// matching backend.
+///
+/// ```javascript
+/// const inner = new InMemoryBackend();
+/// const retried = RetryMemoryBackend.wrapInMemory(inner, { maxRetries: 5 });
+/// ```
+#[napi(js_name = "RetryMemoryBackend")]
+pub struct JsRetryMemoryBackend {
+    #[allow(dead_code)] // Held to keep the wrapped backend alive; future
+    // memory ABI expansions will let callers pass this through to `Memory.local*`.
+    inner: Arc<dyn MemoryBackend>,
+}
+
+#[napi]
+#[allow(
+    clippy::must_use_candidate,
+    clippy::missing_errors_doc,
+    clippy::needless_pass_by_value
+)]
+impl JsRetryMemoryBackend {
+    /// Wrap an `InMemoryBackend` with retry-on-transient-error behaviour.
+    #[napi(factory, js_name = "wrapInMemory")]
+    pub fn wrap_in_memory(backend: &JsInMemoryBackend, config: Option<JsRetryConfig>) -> Self {
+        let cfg = config.map(Into::into).unwrap_or_default();
+        let wrapped =
+            RetryMemoryBackend::new(Arc::clone(&backend.inner) as Arc<dyn MemoryBackend>, cfg);
+        Self {
+            inner: wrapped.into_arc(),
+        }
+    }
+
+    /// Wrap a `JsonlBackend` with retry-on-transient-error behaviour.
+    #[napi(factory, js_name = "wrapJsonl")]
+    pub fn wrap_jsonl(backend: &JsJsonlBackend, config: Option<JsRetryConfig>) -> Self {
+        let cfg = config.map(Into::into).unwrap_or_default();
+        let wrapped =
+            RetryMemoryBackend::new(Arc::clone(&backend.inner) as Arc<dyn MemoryBackend>, cfg);
+        Self {
+            inner: wrapped.into_arc(),
+        }
+    }
+
+    /// Wrap a `ValkeyBackend` with retry-on-transient-error behaviour.
+    #[napi(factory, js_name = "wrapValkey")]
+    pub fn wrap_valkey(backend: &JsValkeyBackend, config: Option<JsRetryConfig>) -> Self {
+        let cfg = config.map(Into::into).unwrap_or_default();
+        let wrapped =
+            RetryMemoryBackend::new(Arc::clone(&backend.inner) as Arc<dyn MemoryBackend>, cfg);
+        Self {
+            inner: wrapped.into_arc(),
+        }
+    }
+
+    /// Generic factory accepting any of the three concrete backends. Useful
+    /// when the caller doesn't statically know which backend is in hand.
+    #[napi(factory, js_name = "wrap")]
+    pub fn wrap(backend: AnyBackend<'_>, config: Option<JsRetryConfig>) -> Self {
+        match backend {
+            Either::A(b) => Self::wrap_in_memory(b, config),
+            Either::B(Either::A(b)) => Self::wrap_jsonl(b, config),
+            Either::B(Either::B(b)) => Self::wrap_valkey(b, config),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Result / Entry objects
 // ---------------------------------------------------------------------------
 

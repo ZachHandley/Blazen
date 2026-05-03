@@ -15,6 +15,7 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_llm::retry::RetryConfig;
 
+use super::subworkflow::{PyParallelSubWorkflowsStep, PySubWorkflowStep};
 use super::workflow::{PySessionPausePolicy, PyWorkflow};
 use crate::providers::config::PyRetryConfig;
 
@@ -36,6 +37,8 @@ use crate::providers::config::PyRetryConfig;
 pub struct PyWorkflowBuilder {
     pub(crate) name: String,
     pub(crate) steps: Vec<Py<super::step::PyStepWrapper>>,
+    pub(crate) subworkflow_steps: Vec<Py<PySubWorkflowStep>>,
+    pub(crate) parallel_subworkflow_steps: Vec<Py<PyParallelSubWorkflowsStep>>,
     pub(crate) timeout: Option<f64>,
     pub(crate) timeout_set: bool,
     pub(crate) session_pause_policy: PySessionPausePolicy,
@@ -62,6 +65,8 @@ impl PyWorkflowBuilder {
         Self {
             name: name.to_owned(),
             steps: Vec::new(),
+            subworkflow_steps: Vec::new(),
+            parallel_subworkflow_steps: Vec::new(),
             timeout: Some(300.0),
             timeout_set: false,
             session_pause_policy: PySessionPausePolicy::PickleOrError,
@@ -89,6 +94,26 @@ impl PyWorkflowBuilder {
     /// Register a step (an `@step`-decorated function).
     fn step(mut slf: PyRefMut<'_, Self>, registration: Py<super::step::PyStepWrapper>) -> Py<Self> {
         slf.steps.push(registration);
+        slf.into()
+    }
+
+    /// Register a `SubWorkflowStep` that delegates to a child workflow.
+    ///
+    /// Mirrors `blazen_core::WorkflowBuilder::add_subworkflow_step`.
+    fn add_subworkflow_step(mut slf: PyRefMut<'_, Self>, step: Py<PySubWorkflowStep>) -> Py<Self> {
+        slf.subworkflow_steps.push(step);
+        slf.into()
+    }
+
+    /// Register a `ParallelSubWorkflowsStep` that fans out into
+    /// multiple concurrent child workflows.
+    ///
+    /// Mirrors `blazen_core::WorkflowBuilder::add_parallel_subworkflows`.
+    fn add_parallel_subworkflows(
+        mut slf: PyRefMut<'_, Self>,
+        step: Py<PyParallelSubWorkflowsStep>,
+    ) -> Py<Self> {
+        slf.parallel_subworkflow_steps.push(step);
         slf.into()
     }
 
@@ -179,9 +204,13 @@ impl PyWorkflowBuilder {
 
     /// Build the [`Workflow`].
     ///
-    /// Validation: the workflow must have at least one registered step.
+    /// Validation: the workflow must have at least one registered step
+    /// (regular, sub-workflow, or parallel-sub-workflow).
     fn build(&self, py: Python<'_>) -> PyResult<PyWorkflow> {
-        if self.steps.is_empty() {
+        if self.steps.is_empty()
+            && self.subworkflow_steps.is_empty()
+            && self.parallel_subworkflow_steps.is_empty()
+        {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "workflow must have at least one step",
             ));
@@ -191,6 +220,16 @@ impl PyWorkflowBuilder {
         // and the resulting workflow owns its own references.
         let steps: Vec<Py<super::step::PyStepWrapper>> =
             self.steps.iter().map(|s| s.clone_ref(py)).collect();
+        let subworkflow_steps: Vec<Py<PySubWorkflowStep>> = self
+            .subworkflow_steps
+            .iter()
+            .map(|s| s.clone_ref(py))
+            .collect();
+        let parallel_subworkflow_steps: Vec<Py<PyParallelSubWorkflowsStep>> = self
+            .parallel_subworkflow_steps
+            .iter()
+            .map(|s| s.clone_ref(py))
+            .collect();
 
         let mut wf = PyWorkflow::from_parts(
             self.name.clone(),
@@ -198,6 +237,8 @@ impl PyWorkflowBuilder {
             self.timeout,
             self.session_pause_policy,
         );
+        wf.set_subworkflow_steps(subworkflow_steps);
+        wf.set_parallel_subworkflow_steps(parallel_subworkflow_steps);
         wf.set_auto_publish_events(self.auto_publish_events);
         if self.retry_config_set {
             wf.set_retry_config(self.retry_config.clone());

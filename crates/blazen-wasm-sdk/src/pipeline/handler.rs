@@ -217,46 +217,20 @@ impl WasmPipelineHandler {
 
     /// Snapshot the pipeline's current progress without affecting execution.
     ///
-    /// Returns a plain JS object matching
-    /// [`blazen_pipeline::ProgressSnapshot`]:
-    /// `{ currentStageIndex, totalStages, percent, currentStageName }`.
-    /// Best-effort — may briefly be one stage behind the actual position.
+    /// Returns a [`WasmProgressSnapshot`] mirroring
+    /// [`blazen_pipeline::ProgressSnapshot`]. Best-effort — may briefly be
+    /// one stage behind the actual position.
     ///
     /// # Errors
     ///
     /// Returns a `JsValue` error if the handler has already been consumed.
     #[wasm_bindgen]
-    pub fn progress(&self) -> Result<JsValue, JsValue> {
+    pub fn progress(&self) -> Result<WasmProgressSnapshot, JsValue> {
         let inner = self.inner.borrow();
         let handler = inner
             .as_ref()
             .ok_or_else(|| JsValue::from_str("PipelineHandler already consumed"))?;
-        let snapshot = handler.progress();
-        let obj = js_sys::Object::new();
-        js_sys::Reflect::set(
-            &obj,
-            &JsValue::from_str("currentStageIndex"),
-            &JsValue::from_f64(f64::from(snapshot.current_stage_index)),
-        )?;
-        js_sys::Reflect::set(
-            &obj,
-            &JsValue::from_str("totalStages"),
-            &JsValue::from_f64(f64::from(snapshot.total_stages)),
-        )?;
-        js_sys::Reflect::set(
-            &obj,
-            &JsValue::from_str("percent"),
-            &JsValue::from_f64(f64::from(snapshot.percent)),
-        )?;
-        js_sys::Reflect::set(
-            &obj,
-            &JsValue::from_str("currentStageName"),
-            &snapshot
-                .current_stage_name
-                .as_deref()
-                .map_or(JsValue::NULL, JsValue::from_str),
-        )?;
-        Ok(obj.into())
+        Ok(WasmProgressSnapshot::from(handler.progress()))
     }
 
     /// Subscribe to intermediate events from pipeline stages.
@@ -313,5 +287,56 @@ async fn pump_events(mut stream: PipelineEventStream, callback: js_sys::Function
         // Ignore JS-side throws: a misbehaving callback should not tear
         // down the subscription or surface as a Rust panic.
         let _ = callback.call1(&JsValue::NULL, &js_payload);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WasmProgressSnapshot
+// ---------------------------------------------------------------------------
+
+/// JS-visible mirror of [`blazen_pipeline::ProgressSnapshot`].
+///
+/// Returned by [`WasmPipelineHandler::progress`] for callers that want a
+/// typed snapshot of where the pipeline is in its stage list. Best-effort —
+/// may briefly be one stage behind the actual position because the
+/// underlying counter is updated atomically without a write barrier.
+#[wasm_bindgen(js_name = "ProgressSnapshot")]
+pub struct WasmProgressSnapshot {
+    inner: blazen_pipeline::ProgressSnapshot,
+}
+
+#[wasm_bindgen(js_class = "ProgressSnapshot")]
+#[allow(clippy::must_use_candidate)]
+impl WasmProgressSnapshot {
+    /// 1-based index of the stage currently executing (or just completed).
+    /// `0` before the first stage starts.
+    #[wasm_bindgen(getter, js_name = "currentStageIndex")]
+    pub fn current_stage_index(&self) -> u32 {
+        self.inner.current_stage_index
+    }
+
+    /// Total number of stages declared on the pipeline.
+    #[wasm_bindgen(getter, js_name = "totalStages")]
+    pub fn total_stages(&self) -> u32 {
+        self.inner.total_stages
+    }
+
+    /// Progress as a percentage in `0.0..=100.0`.
+    #[wasm_bindgen(getter)]
+    pub fn percent(&self) -> f32 {
+        self.inner.percent
+    }
+
+    /// Name of the current stage, when available. May be `null` for
+    /// implementations that don't track stage names alongside the index.
+    #[wasm_bindgen(getter, js_name = "currentStageName")]
+    pub fn current_stage_name(&self) -> Option<String> {
+        self.inner.current_stage_name.clone()
+    }
+}
+
+impl From<blazen_pipeline::ProgressSnapshot> for WasmProgressSnapshot {
+    fn from(inner: blazen_pipeline::ProgressSnapshot) -> Self {
+        Self { inner }
     }
 }

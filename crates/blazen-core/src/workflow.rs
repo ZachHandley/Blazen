@@ -789,7 +789,7 @@ mod tests {
         let handler: StepFn = Arc::new(|_event, _ctx| {
             Box::pin(async move {
                 // Sleep forever.
-                tokio::time::sleep(Duration::from_secs(3600)).await;
+                tokio::time::sleep(Duration::from_hours(1)).await;
                 Ok(StepOutput::None)
             })
         });

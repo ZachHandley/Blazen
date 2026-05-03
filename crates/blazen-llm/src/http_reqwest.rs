@@ -191,7 +191,7 @@ mod tests {
         let client = ReqwestHttpClient::new();
         assert_eq!(
             client.config().request_timeout,
-            Some(Duration::from_secs(60))
+            Some(Duration::from_mins(1))
         );
         assert_eq!(
             client.config().connect_timeout,
