@@ -2625,15 +2625,50 @@ export declare class ModelManager {
    */
   constructor(config: ModelManagerConfig)
   /**
-   * Register a model with the manager.
+   * Register a `CompletionModel`-backed local model with the manager.
    *
    * The model starts in the unloaded state.  An optional
    * `vramEstimateBytes` overrides the model's self-reported estimate.
    *
    * Only local in-process providers (mistral.rs, llama.cpp, candle) can be
-   * registered -- remote HTTP providers will throw.
+   * registered -- remote HTTP providers will throw. To register an
+   * arbitrary JS-managed resource (embedding model, tokenizer, custom
+   * runtime, …), use [`Self::register_local_model`] instead.
    */
   register(id: string, model: JsCompletionModel, vramEstimateBytes?: bigint | undefined | null): Promise<void>
+  /**
+   * Register an arbitrary JS-managed local model with the manager.
+   *
+   * Unlike [`Self::register`] -- which expects a [`JsCompletionModel`]
+   * backed by an in-process provider -- this entrypoint takes raw
+   * lifecycle callbacks. The manager will invoke `load()` when the model
+   * is brought into VRAM (potentially after evicting an LRU peer) and
+   * `unload()` when it is evicted or explicitly released.
+   *
+   * Both callbacks must return a `Promise<void>` (or be `async`). A
+   * rejection from `load()` aborts the load operation; a rejection from
+   * `unload()` is propagated as a manager error.
+   *
+   * `isLoaded()` is optional: when omitted, the manager's own
+   * loaded-flag bookkeeping is the source of truth.
+   * `vramEstimateBytes` reports the model's footprint so the manager
+   * can enforce the global budget; defaults to `0` when not provided.
+   *
+   * ```javascript
+   * let loaded = false;
+   * await manager.registerLocalModel(
+   *   "my-resource",
+   *   async () => { /* materialize *\/ loaded = true; },
+   *   async () => { /* release *\/    loaded = false; },
+   *   async () => loaded,
+   *   2_000_000_000n,
+   * );
+   * ```
+   *
+   * `isLoaded` is `null`-able (pass `null` or `undefined` to omit) and
+   * `vramEstimateBytes` may also be omitted.
+   */
+  registerLocalModel(id: string, load: LifecycleTsfn, unload: LifecycleTsfn, isLoaded?: IsLoadedTsfn | undefined | null, vramEstimateBytes?: bigint | undefined | null): Promise<void>
   /**
    * Load a model, evicting LRU models if the budget would be exceeded.
    *

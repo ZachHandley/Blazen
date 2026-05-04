@@ -8,9 +8,18 @@
 //! const manager = new ModelManager(8); // 8 GB budget
 //!
 //! const model = CompletionModel.webLlm('Llama-3.1-8B-Instruct-q4f32_1-MLC');
+//! let loaded = false;
 //! await manager.register('llama-8b', model, 4_000_000_000, {
-//!   load: async () => { /* load model */ },
-//!   unload: async () => { /* unload model */ },
+//!   load: async () => { loaded = true; /* load model */ },
+//!   unload: async () => { loaded = false; /* unload model */ },
+//!   isLoaded: () => loaded,           // optional: sync or async, returns bool
+//!   vramBytes: async () => 4_000_000_000, // optional: sync or async, returns number
+//! });
+//!
+//! // The `model` argument is also optional -- pass `null` if you don't have one:
+//! await manager.register('m2', null, 1_000_000_000, {
+//!   load: async () => {},
+//!   unload: async () => {},
 //! });
 //!
 //! await manager.load('llama-8b');
@@ -70,12 +79,15 @@ unsafe impl Sync for JsClosure {}
 /// Adapter that implements [`LocalModel`] by invoking JS callbacks.
 ///
 /// `load` and `unload` call the corresponding JS functions and await the
-/// returned `Promise`. `is_loaded` mirrors a Rust-side flag updated by
-/// the manager's `load`/`unload` paths.
+/// returned `Promise`. `is_loaded` and `vram_bytes` invoke their optional
+/// JS callbacks if provided; otherwise they fall back to conservative
+/// defaults (`false` and `Some(vram_estimate)` respectively).
 struct JsLocalModelAdapter {
     id: String,
     load_fn: Arc<JsClosure>,
     unload_fn: Arc<JsClosure>,
+    is_loaded_fn: Option<Arc<JsClosure>>,
+    vram_bytes_fn: Option<Arc<JsClosure>>,
     vram_estimate: u64,
 }
 
@@ -102,12 +114,75 @@ impl JsLocalModelAdapter {
         Ok(())
     }
 
+    /// Invoke a JS callback that returns a value (or a `Promise` resolving to a
+    /// value) and return the resolved [`JsValue`].
+    async fn invoke_with_result(
+        func: &Function,
+        label: &str,
+        model_id: &str,
+    ) -> Result<JsValue, BlazenError> {
+        let result = func.call0(&JsValue::NULL).map_err(|e| {
+            BlazenError::provider(
+                "wasm_model_manager",
+                format!("model '{model_id}' lifecycle.{label}() threw: {e:?}"),
+            )
+        })?;
+
+        if result.has_type::<Promise>() {
+            let promise: Promise = result.unchecked_into();
+            let val = JsFuture::from(promise).await.map_err(|e| {
+                BlazenError::provider(
+                    "wasm_model_manager",
+                    format!("model '{model_id}' lifecycle.{label}() rejected: {e:?}"),
+                )
+            })?;
+            Ok(val)
+        } else {
+            Ok(result)
+        }
+    }
+
     async fn load_impl(&self) -> Result<(), BlazenError> {
         Self::invoke(&self.load_fn.0, "load", &self.id).await
     }
 
     async fn unload_impl(&self) -> Result<(), BlazenError> {
         Self::invoke(&self.unload_fn.0, "unload", &self.id).await
+    }
+
+    async fn is_loaded_impl(&self) -> bool {
+        let Some(cb) = self.is_loaded_fn.as_ref() else {
+            // No callback provided -- the upstream `ModelManager` tracks the
+            // loaded flag itself, so we conservatively report `false`.
+            return false;
+        };
+        match Self::invoke_with_result(&cb.0, "isLoaded", &self.id).await {
+            Ok(val) => val.as_bool().unwrap_or(false),
+            Err(_) => false,
+        }
+    }
+
+    async fn vram_bytes_impl(&self) -> Option<u64> {
+        let Some(cb) = self.vram_bytes_fn.as_ref() else {
+            return Some(self.vram_estimate);
+        };
+        match Self::invoke_with_result(&cb.0, "vramBytes", &self.id).await {
+            Ok(val) => {
+                if val.is_null() || val.is_undefined() {
+                    return None;
+                }
+                match val.as_f64() {
+                    #[allow(
+                        clippy::cast_possible_truncation,
+                        clippy::cast_sign_loss,
+                        clippy::cast_precision_loss
+                    )]
+                    Some(n) if n.is_finite() && n >= 0.0 => Some(n as u64),
+                    _ => Some(self.vram_estimate),
+                }
+            }
+            Err(_) => Some(self.vram_estimate),
+        }
     }
 }
 
@@ -124,15 +199,13 @@ impl LocalModel for JsLocalModelAdapter {
     }
 
     async fn is_loaded(&self) -> bool {
-        // The upstream `ModelManager` tracks the loaded flag itself; this
-        // implementation has no separate runtime state to query, so we
-        // conservatively report `false`. Callers should use
-        // `ModelManager::is_loaded` (exposed via `WasmModelManager::isLoaded`).
-        false
+        // SAFETY: WASM is single-threaded; the future is vacuously Send.
+        SendFuture(self.is_loaded_impl()).await
     }
 
     async fn vram_bytes(&self) -> Option<u64> {
-        Some(self.vram_estimate)
+        // SAFETY: WASM is single-threaded; the future is vacuously Send.
+        SendFuture(self.vram_bytes_impl()).await
     }
 }
 
@@ -167,8 +240,16 @@ pub struct WasmModelManager {
 unsafe impl Send for WasmModelManager {}
 unsafe impl Sync for WasmModelManager {}
 
-/// Extract the `load` and `unload` JS functions from a `lifecycle` object.
-fn extract_lifecycle(lifecycle: &JsValue) -> Result<(Function, Function), JsValue> {
+/// Extract the lifecycle callbacks from a `lifecycle` JS object.
+///
+/// Returns a tuple of `(load, unload, isLoaded, vramBytes)`:
+/// - `load` and `unload` are required and must be functions.
+/// - `isLoaded` and `vramBytes` are optional. If absent (or `undefined`/`null`)
+///   they are returned as `None`. If present but not a function, an error is
+///   returned.
+fn extract_lifecycle(
+    lifecycle: &JsValue,
+) -> Result<(Function, Function, Option<Function>, Option<Function>), JsValue> {
     if !lifecycle.is_object() {
         return Err(JsValue::from_str("lifecycle must be an object"));
     }
@@ -185,7 +266,27 @@ fn extract_lifecycle(lifecycle: &JsValue) -> Result<(Function, Function), JsValu
         .dyn_into()
         .map_err(|_| JsValue::from_str("lifecycle.unload must be a function"))?;
 
-    Ok((load, unload))
+    let is_loaded = extract_optional_fn(lifecycle, "isLoaded")?;
+    let vram_bytes = extract_optional_fn(lifecycle, "vramBytes")?;
+
+    Ok((load, unload, is_loaded, vram_bytes))
+}
+
+/// Read an optional function-valued key from a JS object.
+///
+/// - Missing / `undefined` / `null` -> `Ok(None)`.
+/// - Present and a function -> `Ok(Some(fn))`.
+/// - Present but not a function -> `Err(...)`.
+fn extract_optional_fn(obj: &JsValue, key: &str) -> Result<Option<Function>, JsValue> {
+    let val = Reflect::get(obj, &JsValue::from_str(key))
+        .map_err(|e| JsValue::from_str(&format!("lifecycle.{key} lookup failed: {e:?}")))?;
+    if val.is_undefined() || val.is_null() {
+        return Ok(None);
+    }
+    let func: Function = val
+        .dyn_into()
+        .map_err(|_| JsValue::from_str(&format!("lifecycle.{key} must be a function")))?;
+    Ok(Some(func))
 }
 
 #[wasm_bindgen(js_class = "ModelManager")]
@@ -206,19 +307,40 @@ impl WasmModelManager {
     ///
     /// The model starts in the unloaded state. The `lifecycle` object must
     /// implement `load()` and `unload()` async methods that are called when
-    /// the manager needs to load or unload the model.
+    /// the manager needs to load or unload the model. It may also provide
+    /// optional `isLoaded()` and `vramBytes()` callbacks (sync or async) which
+    /// are forwarded to the underlying [`LocalModel`] trait methods.
     ///
     /// Returns a `Promise<void>` that resolves once registration completes.
     ///
     /// @param id            - Unique identifier for this model.
-    /// @param model         - The model value (`CompletionModel`, etc.). Reserved for future use.
+    /// @param model         - The model value (`CompletionModel`, etc.) or `null`. Reserved for future use; optional.
     /// @param vramEstimate  - Estimated VRAM footprint in bytes.
-    /// @param lifecycle     - Object with `load()` and `unload()` async methods.
+    /// @param lifecycle     - Object with `load()` and `unload()` async methods,
+    ///                        plus optional `isLoaded()` and `vramBytes()` callbacks.
+    ///
+    /// ```js
+    /// // Minimal: only required callbacks.
+    /// await manager.register('m1', null, 5e9, {
+    ///   load: async () => {},
+    ///   unload: async () => {},
+    /// });
+    ///
+    /// // Full: opt into runtime is_loaded / vram queries from JS.
+    /// let loaded = false;
+    /// await manager.register('m2', null, 5e9, {
+    ///   load: async () => { loaded = true; },
+    ///   unload: async () => { loaded = false; },
+    ///   isLoaded: () => loaded,           // sync return
+    ///   vramBytes: async () => 5e9,       // async return
+    /// });
+    /// ```
     ///
     /// # Errors
     ///
-    /// Rejects if `lifecycle` is not an object or its `load`/`unload` keys
-    /// are not functions.
+    /// Rejects if `lifecycle` is not an object, its `load`/`unload` keys are
+    /// not functions, or its optional `isLoaded`/`vramBytes` keys are present
+    /// but not functions.
     #[wasm_bindgen]
     #[allow(
         clippy::needless_pass_by_value,
@@ -228,16 +350,19 @@ impl WasmModelManager {
     pub fn register(
         &self,
         id: String,
-        _model: JsValue,
+        _model: Option<JsValue>,
         vram_estimate: f64,
         lifecycle: Object,
     ) -> Result<Promise, JsValue> {
-        let (load_fn, unload_fn) = extract_lifecycle(lifecycle.as_ref())?;
+        let (load_fn, unload_fn, is_loaded_fn, vram_bytes_fn) =
+            extract_lifecycle(lifecycle.as_ref())?;
 
         let adapter: Arc<dyn LocalModel> = Arc::new(JsLocalModelAdapter {
             id: id.clone(),
             load_fn: Arc::new(JsClosure(load_fn)),
             unload_fn: Arc::new(JsClosure(unload_fn)),
+            is_loaded_fn: is_loaded_fn.map(|f| Arc::new(JsClosure(f))),
+            vram_bytes_fn: vram_bytes_fn.map(|f| Arc::new(JsClosure(f))),
             vram_estimate: vram_estimate as u64,
         });
 

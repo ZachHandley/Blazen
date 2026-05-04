@@ -5971,12 +5971,21 @@ class ModelManager:
         r"""
         Register a model with its estimated VRAM footprint.
         
-        The model must be a local provider (e.g. created via
-        ``CompletionModel.mistralrs(...)`` or similar local factory).
+        The `model` argument can be either:
+        
+        * A :class:`CompletionModel` produced by a local factory (e.g.
+          ``CompletionModel.mistralrs(...)``), in which case its built-in
+          ``LocalModel`` implementation is used.
+        * Any Python object exposing callable ``load`` and ``unload``
+          attributes (sync or async). It does *not* need to subclass
+          :class:`blazen.LocalModel`. ``is_loaded`` and ``vram_bytes`` are
+          optional; if absent or unimplemented the manager falls back to
+          ``False`` and ``vram_estimate_bytes`` respectively.
         
         Args:
             id: A unique identifier for this model.
-            model: A CompletionModel with local model support.
+            model: A CompletionModel with local model support, or a duck-typed
+                object with ``load`` and ``unload`` methods.
             vram_estimate_bytes: Estimated VRAM footprint in bytes.
         """
     async def load(self, id: builtins.str) -> None:

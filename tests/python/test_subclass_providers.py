@@ -18,6 +18,7 @@ from blazen import (
     EmbeddingModel,
     ImageProvider,
     InMemoryBackend,
+    LocalModel,
     Memory,
     MemoryBackend,
     ModelManager,
@@ -672,6 +673,256 @@ async def test_model_manager_is_loaded_nonexistent():
     manager = ModelManager(budget_gb=8.0)
     loaded = await manager.is_loaded("nonexistent-model")
     assert loaded is False
+
+
+@pytest.mark.asyncio
+async def test_model_manager_register_custom_async_class():
+    """Registering a LocalModel subclass with async load/unload/is_loaded works.
+
+    The manager should drive the user's async ``load`` and ``unload`` methods,
+    and ``mgr.is_loaded(id)`` should reflect the manager's internal state.
+    The Python instance flag confirms the methods actually executed.
+    """
+
+    class AsyncLocal(LocalModel):
+        def __init__(self):
+            super().__init__()
+            self.loaded = False
+            self.load_calls = 0
+            self.unload_calls = 0
+
+        async def load(self):
+            self.load_calls += 1
+            self.loaded = True
+
+        async def unload(self):
+            self.unload_calls += 1
+            self.loaded = False
+
+        async def is_loaded(self):
+            return self.loaded
+
+    vram = 2 * 1024 * 1024 * 1024  # 2 GiB, well under 8 GB budget
+    mgr = ModelManager(budget_gb=8.0)
+    instance = AsyncLocal()
+
+    await mgr.register("async-local", instance, vram_estimate_bytes=vram)
+
+    # Before load: manager reports not loaded; instance flag is False.
+    assert await mgr.is_loaded("async-local") is False
+    assert instance.loaded is False
+    assert instance.load_calls == 0
+
+    # status reflects registration with the right vram_estimate.
+    pre_status = await mgr.status()
+    assert len(pre_status) == 1
+    assert pre_status[0].id == "async-local"
+    assert pre_status[0].loaded is False
+    assert pre_status[0].vram_estimate == vram
+
+    # Load: drives the user's async load(), updates manager state.
+    await mgr.load("async-local")
+    assert await mgr.is_loaded("async-local") is True
+    assert instance.loaded is True
+    assert instance.load_calls == 1
+
+    # status reflects loaded state.
+    loaded_status = await mgr.status()
+    assert loaded_status[0].loaded is True
+    assert loaded_status[0].vram_estimate == vram
+
+    # Unload: drives the user's async unload(), clears manager state.
+    await mgr.unload("async-local")
+    assert await mgr.is_loaded("async-local") is False
+    assert instance.loaded is False
+    assert instance.unload_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_model_manager_register_custom_sync_class():
+    """Sync (non-async) load/unload methods are dispatched correctly.
+
+    The wrapper detects coroutine-vs-plain-callable per method and adjusts
+    its calling convention. This exercises the sync branch.
+    """
+
+    class SyncLocal(LocalModel):
+        def __init__(self):
+            super().__init__()
+            self.loaded = False
+            self.load_calls = 0
+            self.unload_calls = 0
+
+        def load(self):
+            self.load_calls += 1
+            self.loaded = True
+
+        def unload(self):
+            self.unload_calls += 1
+            self.loaded = False
+
+        async def is_loaded(self):
+            return self.loaded
+
+    vram = 1 * 1024 * 1024 * 1024  # 1 GiB
+    mgr = ModelManager(budget_gb=8.0)
+    instance = SyncLocal()
+
+    await mgr.register("sync-local", instance, vram_estimate_bytes=vram)
+
+    assert await mgr.is_loaded("sync-local") is False
+    await mgr.load("sync-local")
+    assert await mgr.is_loaded("sync-local") is True
+    assert instance.loaded is True
+    assert instance.load_calls == 1
+
+    await mgr.unload("sync-local")
+    assert await mgr.is_loaded("sync-local") is False
+    assert instance.loaded is False
+    assert instance.unload_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_model_manager_register_duck_typed_no_subclass():
+    """A plain class with only async load/unload (no subclass, no extras) works.
+
+    The wrapper should duck-type purely on ``load`` / ``unload`` callability.
+    ``is_loaded`` and ``vram_bytes`` are absent, so the manager's internal
+    flag and the registered ``vram_estimate_bytes`` are the source of truth.
+    """
+
+    class DuckLocal:  # NOTE: no inheritance from LocalModel
+        def __init__(self):
+            self.load_calls = 0
+            self.unload_calls = 0
+
+        async def load(self):
+            self.load_calls += 1
+
+        async def unload(self):
+            self.unload_calls += 1
+
+    vram = 512 * 1024 * 1024  # 512 MiB
+    mgr = ModelManager(budget_gb=8.0)
+    instance = DuckLocal()
+
+    await mgr.register("duck-local", instance, vram_estimate_bytes=vram)
+
+    statuses = await mgr.status()
+    assert len(statuses) == 1
+    assert statuses[0].id == "duck-local"
+    assert statuses[0].loaded is False
+    assert statuses[0].vram_estimate == vram
+
+    await mgr.load("duck-local")
+    assert instance.load_calls == 1
+    # Manager's internal flag is the source of truth (user did not override
+    # is_loaded, so the wrapper does not consult the instance).
+    assert await mgr.is_loaded("duck-local") is True
+
+    statuses_after = await mgr.status()
+    assert statuses_after[0].loaded is True
+
+
+@pytest.mark.asyncio
+async def test_model_manager_register_rejects_non_callable_load():
+    """Registering an object whose ``load`` is not callable raises TypeError."""
+
+    class BadLocal:
+        load = "not a callable"  # string, not a method
+
+        async def unload(self):
+            pass
+
+    mgr = ModelManager(budget_gb=8.0)
+    with pytest.raises(TypeError):
+        await mgr.register("bad-local", BadLocal(), vram_estimate_bytes=1_000_000)
+
+
+@pytest.mark.asyncio
+async def test_model_manager_register_propagates_load_errors():
+    """Errors raised by the user's async load() propagate out of mgr.load().
+
+    The wrapper translates the Python exception into a Rust BlazenError with
+    provider name "python_local_model"; the test matches on either substring
+    so it is robust to whichever surfaces in the Python-side exception.
+    """
+
+    class ExplodingLocal(LocalModel):
+        def __init__(self):
+            super().__init__()
+
+        async def load(self):
+            raise RuntimeError("boom")
+
+        async def unload(self):
+            pass
+
+    mgr = ModelManager(budget_gb=8.0)
+    instance = ExplodingLocal()
+    await mgr.register("exploding", instance, vram_estimate_bytes=1_000_000)
+
+    with pytest.raises(Exception, match="boom|python_local_model"):
+        await mgr.load("exploding")
+
+    # Manager state should still report not loaded after a failed load.
+    assert await mgr.is_loaded("exploding") is False
+
+
+@pytest.mark.asyncio
+async def test_model_manager_register_existing_completion_model_path_still_works():
+    """Smoke test: legacy CompletionModel registration path is unchanged.
+
+    Most local CompletionModel factories require model weights / native
+    backends that are not available in CI, so this test skips when the
+    factory cannot be constructed. The point is to catch a regression in
+    which the new duck-typing branch swallows the legacy ``PyCompletionModel``
+    extraction.
+    """
+    factory = getattr(CompletionModel, "mistralrs", None)
+    if factory is None:
+        pytest.skip("no local CompletionModel factory available in this build")
+
+    try:
+        # Use a clearly-fake path so we do not actually load weights -- we
+        # only need the CompletionModel handle to verify register() accepts it.
+        model = factory(
+            model_id="local-smoke-test",
+            model_path="/nonexistent/path/that/will/fail/to/load",
+        )
+    except Exception:
+        pytest.skip("local CompletionModel cannot be constructed without weights")
+
+    mgr = ModelManager(budget_gb=8.0)
+    # Registration itself should succeed (it does not load the model).
+    await mgr.register("local-smoke", model, vram_estimate_bytes=1_000_000_000)
+
+    statuses = await mgr.status()
+    assert any(s.id == "local-smoke" for s in statuses)
+
+
+@pytest.mark.asyncio
+async def test_model_manager_register_vram_estimate_fallback():
+    """When the user does not supply ``vram_bytes()``, ``status()`` reports
+    the ``vram_estimate_bytes`` passed to ``register``."""
+
+    class NoVramLocal:
+        async def load(self):
+            pass
+
+        async def unload(self):
+            pass
+
+    vram = 1_000_000_000  # 1 GB, fits in 8 GB budget
+    mgr = ModelManager(budget_gb=8.0)
+
+    await mgr.register("no-vram", NoVramLocal(), vram_estimate_bytes=vram)
+
+    statuses = await mgr.status()
+    matching = [s for s in statuses if s.id == "no-vram"]
+    assert len(matching) == 1
+    assert matching[0].vram_estimate == vram
+    assert matching[0].loaded is False
 
 
 # ---------------------------------------------------------------------------
