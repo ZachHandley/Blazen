@@ -59,6 +59,7 @@ pub mod batch;
 pub mod cache;
 pub mod chat_window;
 pub mod compute;
+pub mod content;
 pub mod device;
 pub mod error;
 pub mod events;

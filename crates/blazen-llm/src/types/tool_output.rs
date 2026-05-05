@@ -60,9 +60,24 @@ pub enum LlmPayload {
     /// `OpenAI` / Responses stringify at the wire boundary.
     Json { value: Value },
 
-    /// Multimodal content blocks (Anthropic supports natively as
-    /// `tool_result.content` blocks; `OpenAI` falls back to text;
-    /// Gemini falls back to a JSON object).
+    /// Multimodal content blocks. Universally preserved across providers
+    /// via per-provider strategies:
+    /// - **Anthropic**: native pass-through into `tool_result.content`.
+    /// - **`OpenAI` Chat / Responses / Azure / `OpenAI`-compat / Fal**: the
+    ///   text portion goes into the tool message's `content` (or
+    ///   `function_call_output.output`); image / audio / file / video
+    ///   parts are emitted as a separate immediately-following
+    ///   multimodal `role: "user"` message (or `input_image` /
+    ///   `input_file` items on the Responses API).
+    /// - **Gemini**: text portion goes into `functionResponse.response`
+    ///   as `{"result": <text>}`; non-text parts are emitted as a
+    ///   follow-up `Content` carrying `inlineData` / `fileData` parts.
+    /// - **Custom**: the dispatcher receives the payload as-is.
+    ///
+    /// Providers / models that do not support multimodal user-message
+    /// content (e.g. text-only chat models) will reject the follow-up;
+    /// this is the same failure mode as sending a regular multimodal
+    /// user message to such a model.
     Parts { parts: Vec<ContentPart> },
 
     /// Provider-specific escape hatch. The named provider gets `value`

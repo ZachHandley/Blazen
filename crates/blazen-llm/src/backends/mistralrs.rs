@@ -79,6 +79,37 @@ fn convert_image(img: &ImageContent) -> Result<InferenceImage, BlazenError> {
             "mistralrs backend does not fetch image URLs -- \
              pass an ImageSource::File or ImageSource::Base64 instead",
         )),
+        ImageSource::ProviderFile { provider, id } => {
+            tracing::warn!(
+                target: "blazen::content",
+                provider = ?provider,
+                id = %id,
+                "mistralrs: ProviderFile not supported by local inference backend; dropped. \
+                 Provider file references describe remote, cloud-hosted assets, but mistralrs \
+                 runs entirely on-device and cannot resolve them. Materialise the image into \
+                 ImageSource::File or ImageSource::Base64 before sending."
+            );
+            Err(BlazenError::unsupported(
+                "mistralrs backend does not support ImageSource::ProviderFile -- \
+                 local inference cannot resolve remote provider file references; \
+                 pass an ImageSource::File or ImageSource::Base64 instead",
+            ))
+        }
+        ImageSource::Handle { handle } => {
+            tracing::warn!(
+                target: "blazen::content",
+                handle = ?handle,
+                "mistralrs: ContentHandle not supported by local inference backend; dropped. \
+                 Content handles point at externally-stored bytes that the local engine \
+                 cannot dereference. Resolve the handle to ImageSource::File or \
+                 ImageSource::Base64 before sending."
+            );
+            Err(BlazenError::unsupported(
+                "mistralrs backend does not support ImageSource::Handle -- \
+                 local inference cannot dereference external content handles; \
+                 pass an ImageSource::File or ImageSource::Base64 instead",
+            ))
+        }
     }
 }
 

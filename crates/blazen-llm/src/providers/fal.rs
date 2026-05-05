@@ -502,6 +502,29 @@ fn url_from_source(src: &crate::types::ImageSource) -> Option<String> {
     match src {
         ImageSource::Url { url } => Some(url.clone()),
         ImageSource::Base64 { .. } | ImageSource::File { .. } => None,
+        ImageSource::ProviderFile { provider, id } => {
+            if matches!(provider, crate::types::ProviderId::Fal) {
+                // fal.ai stores files at https://v3.fal.media/files/... so the
+                // provider-issued ID is already a fully-qualified URL.
+                Some(id.clone())
+            } else {
+                crate::content::render::warn_provider_file_mismatch(
+                    crate::types::ProviderId::Fal,
+                    *provider,
+                    id,
+                    crate::content::render::MediaKindLabel::Image,
+                );
+                None
+            }
+        }
+        ImageSource::Handle { handle } => {
+            crate::content::render::warn_handle_unresolved(
+                crate::types::ProviderId::Fal,
+                handle,
+                crate::content::render::MediaKindLabel::Image,
+            );
+            None
+        }
     }
 }
 
@@ -996,51 +1019,68 @@ impl FalProvider {
     /// `messages` array, multimodal content blocks, and tool calls.
     fn build_openai_chat_body(&self, request: &CompletionRequest) -> serde_json::Value {
         use crate::providers::openai_format::{
-            content_to_openai_value, tool_result_to_openai_string,
+            content_part_to_openai, content_to_openai_value, split_tool_result_parts,
         };
         use crate::types::{ProviderId, Role};
 
         let llm_model = request.model.as_deref().unwrap_or(&self.llm_model);
 
-        let messages: Vec<serde_json::Value> = request
-            .messages
-            .iter()
-            .map(|msg| {
-                let role = match msg.role {
-                    Role::System => "system",
-                    Role::User => "user",
-                    Role::Assistant => "assistant",
-                    Role::Tool => "tool",
-                };
-                let content = if msg.role == Role::Tool {
-                    serde_json::Value::String(tool_result_to_openai_string(msg, ProviderId::Fal))
-                } else {
-                    content_to_openai_value(&msg.content)
-                };
-                let mut entry = serde_json::json!({ "role": role, "content": content });
-                if let Some(id) = &msg.tool_call_id {
-                    entry["tool_call_id"] = id.clone().into();
-                }
-                if !msg.tool_calls.is_empty() {
-                    let tcs: Vec<_> = msg
-                        .tool_calls
-                        .iter()
-                        .map(|tc| {
-                            serde_json::json!({
-                                "id": &tc.id,
-                                "type": "function",
-                                "function": {
-                                    "name": &tc.name,
-                                    "arguments": tc.arguments.to_string(),
-                                }
-                            })
+        let mut messages: Vec<serde_json::Value> = Vec::with_capacity(request.messages.len());
+        for msg in &request.messages {
+            let role = match msg.role {
+                Role::System => "system",
+                Role::User => "user",
+                Role::Assistant => "assistant",
+                Role::Tool => "tool",
+            };
+
+            // Tool messages: split text content from non-text parts; emit a
+            // follow-up `role: "user"` message for any image / audio / file
+            // / video content so multimodal tool results survive on Fal's
+            // OpenAI-compatible chat endpoint.
+            let (content, follow_up_parts) = if msg.role == Role::Tool {
+                let split = split_tool_result_parts(msg, ProviderId::Fal);
+                (serde_json::Value::String(split.text), split.follow_up_parts)
+            } else {
+                (content_to_openai_value(&msg.content), Vec::new())
+            };
+            let mut entry = serde_json::json!({ "role": role, "content": content });
+            if let Some(id) = &msg.tool_call_id {
+                entry["tool_call_id"] = id.clone().into();
+            }
+            if !msg.tool_calls.is_empty() {
+                let tcs: Vec<_> = msg
+                    .tool_calls
+                    .iter()
+                    .map(|tc| {
+                        serde_json::json!({
+                            "id": &tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": &tc.name,
+                                "arguments": tc.arguments.to_string(),
+                            }
                         })
-                        .collect();
-                    entry["tool_calls"] = tcs.into();
+                    })
+                    .collect();
+                entry["tool_calls"] = tcs.into();
+            }
+            messages.push(entry);
+
+            if !follow_up_parts.is_empty() {
+                let blocks: Vec<serde_json::Value> = follow_up_parts
+                    .iter()
+                    .map(content_part_to_openai)
+                    .filter(|v| !v.is_null())
+                    .collect();
+                if !blocks.is_empty() {
+                    messages.push(serde_json::json!({
+                        "role": "user",
+                        "content": blocks,
+                    }));
                 }
-                entry
-            })
-            .collect();
+            }
+        }
 
         let mut body = serde_json::json!({
             "model": llm_model,
@@ -3821,6 +3861,34 @@ mod tests {
         let content = &messages[0]["content"];
         // Multi-part content should be a JSON array (not a string).
         assert!(content.is_array(), "content: {content}");
+    }
+
+    #[test]
+    fn fal_chat_tool_result_with_image_emits_follow_up_user_message() {
+        use crate::types::{ContentPart, LlmPayload, ToolOutput};
+
+        let provider = FalProvider::new("fal-test");
+        let tool_msg = ChatMessage::tool_result(
+            "call_1",
+            "render",
+            ToolOutput::with_override(
+                serde_json::json!({}),
+                LlmPayload::Parts {
+                    parts: vec![
+                        ContentPart::text("rendered"),
+                        ContentPart::image_base64("AAAA", "image/png"),
+                    ],
+                },
+            ),
+        );
+        let request = CompletionRequest::new(vec![tool_msg]);
+        let body = provider.build_openai_chat_body(&request);
+        let messages = body["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0]["role"], "tool");
+        assert_eq!(messages[0]["content"], "rendered");
+        assert_eq!(messages[1]["role"], "user");
+        assert_eq!(messages[1]["content"][0]["type"], "image_url");
     }
 
     #[test]

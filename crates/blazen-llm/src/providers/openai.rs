@@ -18,7 +18,7 @@ use tracing::debug;
 use serde::Deserialize;
 
 use super::openai_format::{
-    content_to_openai_value, parse_retry_after, tool_result_to_openai_string,
+    content_part_to_openai, content_to_openai_value, parse_retry_after, split_tool_result_parts,
 };
 use super::sse::{OaiResponse, SseParser};
 use super::{provider_http_error, provider_http_error_parts};
@@ -150,59 +150,73 @@ impl OpenAiProvider {
     fn build_body(&self, request: &CompletionRequest, stream: bool) -> serde_json::Value {
         let model = request.model.as_deref().unwrap_or(&self.default_model);
 
-        let messages: Vec<serde_json::Value> = request
-            .messages
-            .iter()
-            .map(|m| {
-                let role = match m.role {
-                    Role::System => "system",
-                    Role::User => "user",
-                    Role::Assistant => "assistant",
-                    Role::Tool => "tool",
-                };
-                let content = if m.role == Role::Tool {
-                    serde_json::Value::String(tool_result_to_openai_string(
-                        m,
-                        crate::types::ProviderId::OpenAi,
-                    ))
-                } else {
-                    content_to_openai_value(&m.content)
-                };
-                let mut msg = serde_json::json!({ "role": role, "content": content });
+        let mut messages: Vec<serde_json::Value> = Vec::with_capacity(request.messages.len());
+        for m in &request.messages {
+            let role = match m.role {
+                Role::System => "system",
+                Role::User => "user",
+                Role::Assistant => "assistant",
+                Role::Tool => "tool",
+            };
 
-                // Tool result messages must include the tool_call_id.
-                if let Some(ref id) = m.tool_call_id {
-                    msg["tool_call_id"] = serde_json::json!(id);
-                }
+            // For tool messages, split into text content + non-text follow-up
+            // parts. Chat Completions requires `role: "tool"` content to be a
+            // string, so any image / audio / file / video parts are emitted as
+            // an immediately-following multimodal `role: "user"` message.
+            let (content, follow_up_parts) = if m.role == Role::Tool {
+                let split = split_tool_result_parts(m, crate::types::ProviderId::OpenAi);
+                (serde_json::Value::String(split.text), split.follow_up_parts)
+            } else {
+                (content_to_openai_value(&m.content), Vec::new())
+            };
+            let mut msg = serde_json::json!({ "role": role, "content": content });
 
-                // Assistant messages with tool calls must include the tool_calls
-                // array and may have null content.
-                if !m.tool_calls.is_empty() {
-                    let tc_arr: Vec<serde_json::Value> = m
-                        .tool_calls
-                        .iter()
-                        .map(|tc| {
-                            serde_json::json!({
-                                "id": tc.id,
-                                "type": "function",
-                                "function": {
-                                    "name": tc.name,
-                                    "arguments": tc.arguments.to_string(),
-                                }
-                            })
+            // Tool result messages must include the tool_call_id.
+            if let Some(ref id) = m.tool_call_id {
+                msg["tool_call_id"] = serde_json::json!(id);
+            }
+
+            // Assistant messages with tool calls must include the tool_calls
+            // array and may have null content.
+            if !m.tool_calls.is_empty() {
+                let tc_arr: Vec<serde_json::Value> = m
+                    .tool_calls
+                    .iter()
+                    .map(|tc| {
+                        serde_json::json!({
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.name,
+                                "arguments": tc.arguments.to_string(),
+                            }
                         })
-                        .collect();
-                    msg["tool_calls"] = serde_json::json!(tc_arr);
-                    // OpenAI expects content to be null when tool_calls are present
-                    // and there is no meaningful text.
-                    if m.content.as_text().is_none_or(str::is_empty) {
-                        msg["content"] = serde_json::Value::Null;
-                    }
+                    })
+                    .collect();
+                msg["tool_calls"] = serde_json::json!(tc_arr);
+                // OpenAI expects content to be null when tool_calls are present
+                // and there is no meaningful text.
+                if m.content.as_text().is_none_or(str::is_empty) {
+                    msg["content"] = serde_json::Value::Null;
                 }
+            }
 
-                msg
-            })
-            .collect();
+            messages.push(msg);
+
+            if !follow_up_parts.is_empty() {
+                let blocks: Vec<serde_json::Value> = follow_up_parts
+                    .iter()
+                    .map(content_part_to_openai)
+                    .filter(|v| !v.is_null())
+                    .collect();
+                if !blocks.is_empty() {
+                    messages.push(serde_json::json!({
+                        "role": "user",
+                        "content": blocks,
+                    }));
+                }
+            }
+        }
 
         let mut body = serde_json::json!({
             "model": model,
@@ -1036,6 +1050,100 @@ mod tests {
         assert_eq!(content[0]["text"], "First");
         assert_eq!(content[1]["type"], "image_url");
         assert_eq!(content[2]["text"], "Second");
+    }
+
+    #[test]
+    fn tool_result_with_image_emits_follow_up_user_message() {
+        use crate::types::{ContentPart, LlmPayload, ToolCall, ToolOutput};
+
+        let provider = OpenAiProvider::new("test-key");
+        let assistant = ChatMessage::assistant_with_tool_calls(
+            None,
+            vec![ToolCall {
+                id: "call_1".into(),
+                name: "render".into(),
+                arguments: serde_json::json!({}),
+            }],
+        );
+        let tool_msg = ChatMessage::tool_result(
+            "call_1",
+            "render",
+            ToolOutput::with_override(
+                serde_json::json!({}),
+                LlmPayload::Parts {
+                    parts: vec![
+                        ContentPart::text("rendered"),
+                        ContentPart::image_base64("AAAA", "image/png"),
+                    ],
+                },
+            ),
+        );
+        let request =
+            CompletionRequest::new(vec![ChatMessage::user("draw a cat"), assistant, tool_msg]);
+
+        let body = provider.build_body(&request, false);
+        let messages = body["messages"].as_array().unwrap();
+        // user, assistant, tool, follow-up user (4 wire messages from 3 Blazen messages).
+        assert_eq!(messages.len(), 4);
+        assert_eq!(messages[2]["role"], "tool");
+        assert_eq!(messages[2]["content"], "rendered");
+        assert_eq!(messages[2]["tool_call_id"], "call_1");
+        assert_eq!(messages[3]["role"], "user");
+        let follow_up = messages[3]["content"].as_array().unwrap();
+        assert_eq!(follow_up.len(), 1);
+        assert_eq!(follow_up[0]["type"], "image_url");
+    }
+
+    #[test]
+    fn tool_result_text_only_no_follow_up() {
+        use crate::types::{LlmPayload, ToolOutput};
+
+        let provider = OpenAiProvider::new("test-key");
+        let tool_msg = ChatMessage::tool_result(
+            "call_1",
+            "search",
+            ToolOutput::with_override(
+                serde_json::json!({}),
+                LlmPayload::Text {
+                    text: "found three results".into(),
+                },
+            ),
+        );
+        let request = CompletionRequest::new(vec![tool_msg]);
+
+        let body = provider.build_body(&request, false);
+        let messages = body["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0]["role"], "tool");
+        assert_eq!(messages[0]["content"], "found three results");
+    }
+
+    #[test]
+    fn tool_result_parts_constructor_emits_follow_up() {
+        use crate::types::ContentPart;
+
+        let provider = OpenAiProvider::new("test-key");
+        let tool_msg = ChatMessage::tool_result_parts(
+            "call_1",
+            "render",
+            vec![
+                ContentPart::text("see attached"),
+                ContentPart::image_url("https://example.com/x.png", None),
+            ],
+        );
+        let request = CompletionRequest::new(vec![tool_msg]);
+
+        let body = provider.build_body(&request, false);
+        let messages = body["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0]["content"], "see attached");
+        assert_eq!(messages[1]["role"], "user");
+        let follow_up = messages[1]["content"].as_array().unwrap();
+        assert_eq!(follow_up.len(), 1);
+        assert_eq!(
+            follow_up[0]["image_url"]["url"],
+            "https://example.com/x.png"
+        );
     }
 
     // Verify SSE tests still pass through shared module

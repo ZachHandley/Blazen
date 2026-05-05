@@ -16,6 +16,7 @@
 pub mod agent;
 pub mod batch;
 pub mod compute;
+pub mod content;
 pub mod core;
 pub mod error;
 pub mod generated;

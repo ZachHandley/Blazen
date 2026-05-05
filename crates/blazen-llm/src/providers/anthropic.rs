@@ -78,6 +78,34 @@ fn image_content_to_anthropic(img: &ImageContent) -> serde_json::Value {
             );
             serde_json::Value::Null
         }
+        ImageSource::ProviderFile { provider, id } => {
+            if matches!(provider, crate::types::ProviderId::Anthropic) {
+                // Anthropic natively accepts file IDs from its Files API.
+                serde_json::json!({
+                    "type": "image",
+                    "source": {
+                        "type": "file",
+                        "file_id": id,
+                    }
+                })
+            } else {
+                crate::content::render::warn_provider_file_mismatch(
+                    crate::types::ProviderId::Anthropic,
+                    *provider,
+                    id,
+                    crate::content::render::MediaKindLabel::Image,
+                );
+                serde_json::Value::Null
+            }
+        }
+        ImageSource::Handle { handle } => {
+            crate::content::render::warn_handle_unresolved(
+                crate::types::ProviderId::Anthropic,
+                handle,
+                crate::content::render::MediaKindLabel::Image,
+            );
+            serde_json::Value::Null
+        }
     }
 }
 
@@ -114,6 +142,33 @@ fn content_part_to_anthropic(part: &ContentPart) -> serde_json::Value {
                     tracing::warn!(
                         "anthropic: local file source is not supported — use a URL or base64 \
                          source instead; file content dropped."
+                    );
+                    serde_json::Value::Null
+                }
+                ImageSource::ProviderFile { provider, id } => {
+                    if matches!(provider, crate::types::ProviderId::Anthropic) {
+                        serde_json::json!({
+                            "type": "document",
+                            "source": {
+                                "type": "file",
+                                "file_id": id,
+                            }
+                        })
+                    } else {
+                        crate::content::render::warn_provider_file_mismatch(
+                            crate::types::ProviderId::Anthropic,
+                            *provider,
+                            id,
+                            crate::content::render::MediaKindLabel::Document,
+                        );
+                        serde_json::Value::Null
+                    }
+                }
+                ImageSource::Handle { handle } => {
+                    crate::content::render::warn_handle_unresolved(
+                        crate::types::ProviderId::Anthropic,
+                        handle,
+                        crate::content::render::MediaKindLabel::Document,
                     );
                     serde_json::Value::Null
                 }
@@ -1643,5 +1698,37 @@ mod tests {
             super::tool_result_to_anthropic_content(&msg),
             serde_json::json!([{"type":"text","text":"raw block"}])
         );
+    }
+
+    #[test]
+    fn anthropic_helper_parts_with_image_passes_native_blocks() {
+        // Anthropic's `tool_result.content` natively accepts a content-block
+        // array including text and image blocks. `LlmPayload::Parts` should
+        // pass through as such an array, preserving multimodal payloads.
+        use crate::types::{ContentPart, LlmPayload, ToolOutput};
+        let msg = ChatMessage::tool_result(
+            "call_1",
+            "render",
+            ToolOutput::with_override(
+                serde_json::json!({}),
+                LlmPayload::Parts {
+                    parts: vec![
+                        ContentPart::text("rendered"),
+                        ContentPart::image_base64("AAAA", "image/png"),
+                    ],
+                },
+            ),
+        );
+        let value = super::tool_result_to_anthropic_content(&msg);
+        let arr = value.as_array().expect("expected content-block array");
+        assert_eq!(arr.len(), 2);
+        // First: text part.
+        assert_eq!(arr[0]["type"], "text");
+        assert_eq!(arr[0]["text"], "rendered");
+        // Second: image part. ContentPart::Image serializes as
+        // {"type":"image","source":{"type":"base64","data":"AAAA"},...}
+        assert_eq!(arr[1]["type"], "image");
+        assert_eq!(arr[1]["source"]["type"], "base64");
+        assert_eq!(arr[1]["source"]["data"], "AAAA");
     }
 }

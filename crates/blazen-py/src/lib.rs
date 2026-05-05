@@ -38,6 +38,7 @@ pub(crate) mod session_ref_serializable;
 pub mod agent;
 pub mod batch;
 pub mod compute;
+pub mod content;
 pub mod core_types;
 pub mod error;
 pub mod events;
@@ -394,6 +395,25 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<compute::PyTranscriptionResult>()?;
     m.add_class::<compute::PyComputeResult>()?;
     m.add_class::<compute::PyVoiceHandle>()?;
+
+    // Content subsystem (handle / kind / store + tool-input schema builders)
+    m.add_class::<content::PyContentKind>()?;
+    m.add_class::<content::PyContentHandle>()?;
+    m.add_class::<content::PyContentStore>()?;
+    m.add_function(wrap_pyfunction!(
+        content::tool_input::content_ref_property,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        content::tool_input::content_ref_required_object,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(content::tool_input::image_input, m)?)?;
+    m.add_function(wrap_pyfunction!(content::tool_input::audio_input, m)?)?;
+    m.add_function(wrap_pyfunction!(content::tool_input::video_input, m)?)?;
+    m.add_function(wrap_pyfunction!(content::tool_input::file_input, m)?)?;
+    m.add_function(wrap_pyfunction!(content::tool_input::three_d_input, m)?)?;
+    m.add_function(wrap_pyfunction!(content::tool_input::cad_input, m)?)?;
 
     // Generated media output types
     m.add_class::<types::media::PyMediaOutput>()?;

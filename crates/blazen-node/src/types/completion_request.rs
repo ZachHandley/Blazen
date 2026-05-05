@@ -9,11 +9,11 @@
 
 use napi_derive::napi;
 
-use blazen_llm::types::{FileContent as RustFileContent, MediaSource as RustMediaSource};
+use blazen_llm::types::FileContent as RustFileContent;
 
 use super::artifact::JsArtifact;
 use super::citation::JsCitation;
-use super::message::{JsContentPart, JsImageSource};
+use super::message::{JsContentPart, JsImageSource, rust_source_to_js};
 use super::reasoning::JsReasoningTrace;
 use crate::generated::{JsRequestTiming, JsTokenUsage, JsToolDefinition};
 
@@ -36,21 +36,8 @@ pub struct JsFileContent {
 
 impl From<&RustFileContent> for JsFileContent {
     fn from(f: &RustFileContent) -> Self {
-        let (source_type, url, data) = match &f.source {
-            RustMediaSource::Url { url } => ("url".to_owned(), Some(url.clone()), None),
-            RustMediaSource::Base64 { data } => ("base64".to_owned(), None, Some(data.clone())),
-            RustMediaSource::File { path } => (
-                "file".to_owned(),
-                Some(path.to_string_lossy().into_owned()),
-                None,
-            ),
-        };
         Self {
-            source: JsImageSource {
-                source_type,
-                url,
-                data,
-            },
+            source: rust_source_to_js(&f.source),
             media_type: f.media_type.clone(),
             filename: f.filename.clone(),
         }

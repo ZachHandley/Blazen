@@ -58,8 +58,11 @@ __all__ = [
     "ComputeError",
     "ComputeRequest",
     "ComputeResult",
+    "ContentHandle",
+    "ContentKind",
     "ContentPart",
     "ContentPolicyError",
+    "ContentStore",
     "Context",
     "CustomProvider",
     "DeepSeekProvider",
@@ -293,6 +296,8 @@ __all__ = [
     "WorkflowResult",
     "WorkflowSnapshot",
     "XaiProvider",
+    "audio_input",
+    "cad_input",
     "complete_batch",
     "compute_audio_cost",
     "compute_elid_similarity",
@@ -300,13 +305,17 @@ __all__ = [
     "compute_image_cost",
     "compute_text_simhash_similarity",
     "compute_video_cost",
+    "content_ref_property",
+    "content_ref_required_object",
     "count_message_tokens",
     "env_var_for_provider",
     "estimate_tokens",
     "extract_inline_artifacts",
+    "file_input",
     "finish_workflow_tool",
     "format_provider_http_tail",
     "get_context_window",
+    "image_input",
     "init_langfuse",
     "init_otlp",
     "init_prometheus",
@@ -327,8 +336,10 @@ __all__ = [
     "simhash_from_hex",
     "simhash_to_hex",
     "step",
+    "three_d_input",
     "try_deserialize_event",
     "typed_tool_simple",
+    "video_input",
     "wrap_with_tracing",
 ]
 
@@ -2482,6 +2493,55 @@ class ComputeResult:
         """
 
 @typing.final
+class ContentHandle:
+    r"""
+    Stable reference to content registered with a
+    [`ContentStore`](super::store::PyContentStore).
+    
+    `id` is opaque (store-defined). The other fields are metadata captured
+    at `put` time and can be used for routing without dereferencing.
+    
+    Example:
+        >>> handle = await store.put(b"...", kind=ContentKind.Image)
+        >>> handle.id
+        'blazen_a1b2c3d4...'
+        >>> handle.kind
+        ContentKind.Image
+    """
+    @property
+    def id(self) -> builtins.str:
+        r"""
+        Opaque, stable identifier. Format is store-defined; treat as a
+        black box.
+        """
+    @property
+    def kind(self) -> ContentKind:
+        r"""
+        What kind of content this handle refers to.
+        """
+    @property
+    def mime_type(self) -> typing.Optional[builtins.str]:
+        r"""
+        MIME type if known.
+        """
+    @property
+    def byte_size(self) -> typing.Optional[builtins.int]:
+        r"""
+        Byte size if known.
+        """
+    @property
+    def display_name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Human-readable display name (e.g. original filename) if known.
+        """
+    def __new__(cls, id: builtins.str, kind: ContentKind, *, mime_type: typing.Optional[builtins.str] = None, byte_size: typing.Optional[builtins.int] = None, display_name: typing.Optional[builtins.str] = None) -> ContentHandle:
+        r"""
+        Construct a handle directly. Most callers obtain handles from
+        [`ContentStore.put`](super::store::PyContentStore::put) instead.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class ContentPart:
     @staticmethod
     def text(*, text: builtins.str) -> ContentPart:
@@ -2517,6 +2577,90 @@ class ContentPart:
     def video_base64(*, data: builtins.str, media_type: builtins.str) -> ContentPart:
         r"""
         Create a video content part from base64-encoded data.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ContentStore:
+    r"""
+    A pluggable content registry that backs handle resolution.
+    
+    Wraps any backend implementing `blazen_llm::content::ContentStore`.
+    Construct with one of the static factory methods (`in_memory`,
+    `local_file`, `openai_files`, `anthropic_files`, `gemini_files`,
+    `fal_storage`).
+    
+    All I/O methods return awaitables.
+    
+    Example:
+        >>> store = ContentStore.in_memory()
+        >>> handle = await store.put(b"hello", kind=ContentKind.Other)
+        >>> source = await store.resolve(handle)
+        >>> source["type"]
+        'base64'
+    """
+    @staticmethod
+    def in_memory() -> ContentStore:
+        r"""
+        Create the default in-memory store. Suitable for ephemeral / test
+        workloads; switch to `local_file` or a provider store for
+        persistence.
+        """
+    @staticmethod
+    def local_file(path: builtins.str | os.PathLike | pathlib.Path) -> ContentStore:
+        r"""
+        Create a filesystem-backed store rooted at `path`. The directory
+        is created (recursively) if it does not already exist.
+        """
+    @staticmethod
+    def openai_files(api_key: builtins.str, *, base_url: typing.Optional[builtins.str] = None) -> ContentStore:
+        r"""
+        Create a store backed by the OpenAI Files API.
+        """
+    @staticmethod
+    def anthropic_files(api_key: builtins.str, *, base_url: typing.Optional[builtins.str] = None) -> ContentStore:
+        r"""
+        Create a store backed by the Anthropic Files API (beta).
+        """
+    @staticmethod
+    def gemini_files(api_key: builtins.str, *, base_url: typing.Optional[builtins.str] = None) -> ContentStore:
+        r"""
+        Create a store backed by the Google Gemini Files API.
+        """
+    @staticmethod
+    def fal_storage(api_key: builtins.str, *, base_url: typing.Optional[builtins.str] = None) -> ContentStore:
+        r"""
+        Create a store backed by fal.ai object storage.
+        """
+    def put(self, body: typing.Any, *, kind: typing.Optional[ContentKind] = None, mime_type: typing.Optional[builtins.str] = None, display_name: typing.Optional[builtins.str] = None, byte_size: typing.Optional[builtins.int] = None) -> typing.Any:
+        r"""
+        Persist content and return a freshly-issued `ContentHandle`.
+        
+        `body` may be `bytes`, a URL `str`, or a `pathlib.Path`. All
+        keyword arguments are optional hints; the store may auto-detect
+        the kind / MIME from the bytes when not provided.
+        """
+    def resolve(self, handle: ContentHandle) -> typing.Any:
+        r"""
+        Resolve a handle to a wire-renderable media source. Returns a
+        dict with the serialized `MediaSource` shape (e.g.
+        `{"type": "url", "url": "..."}` or
+        `{"type": "base64", "data": "..."}`).
+        """
+    def fetch_bytes(self, handle: ContentHandle) -> typing.Any:
+        r"""
+        Fetch the raw bytes for a handle. Stores that hold only references
+        (URL / provider-file / local-path) may raise `UnsupportedError`.
+        """
+    def metadata(self, handle: ContentHandle) -> typing.Any:
+        r"""
+        Cheap metadata lookup (no byte materialization). Returns a dict
+        with `kind`, `mime_type`, `byte_size`, `display_name`.
+        """
+    def delete(self, handle: ContentHandle) -> typing.Any:
+        r"""
+        Optional cleanup hook. Default backends drop the entry; provider
+        backends issue a delete call to the upstream API.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -4268,7 +4412,8 @@ class ImageSource:
     @property
     def kind(self) -> builtins.str:
         r"""
-        Variant tag: ``"url"``, ``"base64"``, or ``"file"``.
+        Variant tag: ``"url"``, ``"base64"``, ``"file"``,
+        ``"provider_file"``, or ``"handle"``.
         """
     @property
     def url_value(self) -> typing.Optional[builtins.str]:
@@ -11273,6 +11418,58 @@ class ChatRole(enum.Enum):
     Tool = ...
 
 @typing.final
+class ContentKind(enum.Enum):
+    r"""
+    Taxonomy of multimodal content kinds.
+    
+    Mirrors [`blazen_llm::content::ContentKind`]. Used by tool-input
+    declarations and [`ContentStore`](super::store::PyContentStore) routing.
+    
+    Example:
+        >>> ContentKind.Image
+        >>> ContentKind.from_str("image")
+        >>> ContentKind.from_mime("image/png")
+    """
+    Image = ...
+    Audio = ...
+    Video = ...
+    Document = ...
+    ThreeDModel = ...
+    Cad = ...
+    Archive = ...
+    Font = ...
+    Code = ...
+    Data = ...
+    Other = ...
+
+    @property
+    def name_str(self) -> builtins.str:
+        r"""
+        The canonical short name (matches the JSON / serde tag).
+        """
+    @staticmethod
+    def from_str(value: builtins.str) -> ContentKind:
+        r"""
+        Parse a content kind from its canonical wire name (e.g. `"image"`,
+        `"three_d_model"`, `"cad"`). Unknown names raise `ValueError`.
+        """
+    @staticmethod
+    def from_mime(mime: builtins.str) -> ContentKind:
+        r"""
+        Map a MIME type to a content kind. Unknown MIME types resolve to
+        `ContentKind.Other`.
+        """
+    @staticmethod
+    def from_extension(ext: builtins.str) -> ContentKind:
+        r"""
+        Map a filename extension (without leading dot) to a content kind.
+        Matching is case-insensitive. Unknown extensions resolve to
+        `ContentKind.Other`.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __str__(self) -> builtins.str: ...
+
+@typing.final
 class Device(enum.Enum):
     r"""
     Hardware device selection for compute backends.
@@ -11503,6 +11700,16 @@ class WhisperModel(enum.Enum):
     Medium = ...
     LargeV3 = ...
 
+def audio_input(name: builtins.str, description: builtins.str) -> typing.Any:
+    r"""
+    Schema declaring a single required audio input.
+    """
+
+def cad_input(name: builtins.str, description: builtins.str) -> typing.Any:
+    r"""
+    Schema declaring a single required CAD-file input.
+    """
+
 async def complete_batch(model: CompletionModel, requests: typing.Sequence[typing.Sequence[ChatMessage]], *, config: typing.Optional[BatchConfig] = None, concurrency: builtins.int = 0, options: typing.Optional[CompletionOptions] = None) -> BatchResult:
     r"""
     Execute multiple completion requests in parallel with bounded concurrency.
@@ -11614,6 +11821,24 @@ def compute_video_cost(model_id: builtins.str, seconds: builtins.float) -> typin
     no per-second price.
     """
 
+def content_ref_property(kind: ContentKind, description: builtins.str) -> typing.Any:
+    r"""
+    Build a JSON Schema property fragment for a content-reference input.
+    
+    Returns a dict of the form
+    ``{"type": "string", "description": ..., "x-blazen-content-ref": {"kind": ...}}``
+    ready to be embedded inside an object-typed schema's `properties` map.
+    """
+
+def content_ref_required_object(name: builtins.str, kind: ContentKind, description: builtins.str, *, extra_properties: typing.Optional[dict] = None) -> typing.Any:
+    r"""
+    Build a complete object-typed JSON Schema declaring a single required
+    content-reference input plus optional companion fields.
+    
+    `extra_properties` is an optional dict of additional schema properties
+    (already JSON-Schema-shaped) to merge alongside the content reference.
+    """
+
 def count_message_tokens(messages: typing.Sequence[ChatMessage], context_size: builtins.int = 128000) -> builtins.int:
     r"""
     Estimate the number of tokens for a list of chat messages.
@@ -11681,6 +11906,11 @@ def extract_inline_artifacts(content: builtins.str) -> builtins.list[Artifact]:
         A list of [`Artifact`] objects.
     """
 
+def file_input(name: builtins.str, description: builtins.str) -> typing.Any:
+    r"""
+    Schema declaring a single required generic-file / document input.
+    """
+
 def finish_workflow_tool() -> ToolDef:
     r"""
     Build the synthetic ``finish_workflow`` tool that the agent loop adds by
@@ -11712,6 +11942,12 @@ def get_context_window(model: builtins.str) -> builtins.int:
     
     Falls back to 128 000 when the model string does not match any known
     pattern.
+    """
+
+def image_input(name: builtins.str, description: builtins.str) -> typing.Any:
+    r"""
+    Schema declaring a single required image input. Sugar over
+    [`content_ref_required_object`] with `kind=ContentKind.Image`.
     """
 
 def init_langfuse(config: LangfuseConfig) -> None:
@@ -11970,6 +12206,11 @@ def simhash_to_hex(value: builtins.int) -> builtins.str:
 
 def step(func: typing.Optional[typing.Any] = None, *, accepts: typing.Optional[typing.Sequence[builtins.str]] = None, emits: typing.Optional[typing.Sequence[builtins.str]] = None, max_concurrency: builtins.int = 0) -> typing.Any: ...
 
+def three_d_input(name: builtins.str, description: builtins.str) -> typing.Any:
+    r"""
+    Schema declaring a single required 3D-model input.
+    """
+
 def try_deserialize_event(name: builtins.str, json_str: builtins.str) -> typing.Optional[Event]:
     r"""
     Attempt to deserialize a JSON string into a [`PyEvent`] using the registry.
@@ -11984,6 +12225,11 @@ def typed_tool_simple(*, name: builtins.str, description: builtins.str, args_mod
     
     Returns a [`ToolDef`] directly so it can be passed straight to
     [`run_agent`].
+    """
+
+def video_input(name: builtins.str, description: builtins.str) -> typing.Any:
+    r"""
+    Schema declaring a single required video input.
     """
 
 def wrap_with_tracing(model: CompletionModel, provider_name: builtins.str) -> CompletionModel:

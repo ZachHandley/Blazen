@@ -212,6 +212,16 @@ impl BlazenError {
         }
     }
 
+    /// Internal-state error suitable for invariants that should not happen
+    /// in correct callers (e.g. mutex poisoning, missing-but-expected
+    /// records). Maps to a `Request` variant under the hood.
+    pub fn internal(message: impl Into<String>) -> Self {
+        Self::Request {
+            message: format!("internal: {}", message.into()),
+            source: None,
+        }
+    }
+
     pub fn provider(provider: impl Into<String>, message: impl Into<String>) -> Self {
         Self::Provider {
             provider: provider.into(),

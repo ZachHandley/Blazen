@@ -21,7 +21,7 @@ use serde::Deserialize;
 use tracing::debug;
 
 use super::openai_format::{
-    content_to_openai_value, parse_retry_after, tool_result_to_openai_string,
+    content_part_to_openai, content_to_openai_value, parse_retry_after, split_tool_result_parts,
 };
 use super::sse::{OaiResponse, SseParser};
 use super::{provider_http_error, provider_http_error_parts};
@@ -201,57 +201,70 @@ impl AzureOpenAiProvider {
     /// `model` field since the deployment determines the model).
     #[allow(clippy::unused_self)]
     fn build_body(&self, request: &CompletionRequest, stream: bool) -> serde_json::Value {
-        let messages: Vec<serde_json::Value> = request
-            .messages
-            .iter()
-            .map(|m| {
-                let role = match m.role {
-                    Role::System => "system",
-                    Role::User => "user",
-                    Role::Assistant => "assistant",
-                    Role::Tool => "tool",
-                };
-                let content = if m.role == Role::Tool {
-                    serde_json::Value::String(tool_result_to_openai_string(
-                        m,
-                        crate::types::ProviderId::Azure,
-                    ))
-                } else {
-                    content_to_openai_value(&m.content)
-                };
-                let mut msg = serde_json::json!({ "role": role, "content": content });
+        let mut messages: Vec<serde_json::Value> = Vec::with_capacity(request.messages.len());
+        for m in &request.messages {
+            let role = match m.role {
+                Role::System => "system",
+                Role::User => "user",
+                Role::Assistant => "assistant",
+                Role::Tool => "tool",
+            };
 
-                // Tool result messages must include the tool_call_id.
-                if let Some(ref id) = m.tool_call_id {
-                    msg["tool_call_id"] = serde_json::json!(id);
-                }
+            // Tool messages: split text content from non-text parts; emit a
+            // follow-up `role: "user"` message for any image / audio / file
+            // / video content so multimodal tool results survive.
+            let (content, follow_up_parts) = if m.role == Role::Tool {
+                let split = split_tool_result_parts(m, crate::types::ProviderId::Azure);
+                (serde_json::Value::String(split.text), split.follow_up_parts)
+            } else {
+                (content_to_openai_value(&m.content), Vec::new())
+            };
+            let mut msg = serde_json::json!({ "role": role, "content": content });
 
-                // Assistant messages with tool calls must include the tool_calls
-                // array and may have null content.
-                if !m.tool_calls.is_empty() {
-                    let tc_arr: Vec<serde_json::Value> = m
-                        .tool_calls
-                        .iter()
-                        .map(|tc| {
-                            serde_json::json!({
-                                "id": tc.id,
-                                "type": "function",
-                                "function": {
-                                    "name": tc.name,
-                                    "arguments": tc.arguments.to_string(),
-                                }
-                            })
+            // Tool result messages must include the tool_call_id.
+            if let Some(ref id) = m.tool_call_id {
+                msg["tool_call_id"] = serde_json::json!(id);
+            }
+
+            // Assistant messages with tool calls must include the tool_calls
+            // array and may have null content.
+            if !m.tool_calls.is_empty() {
+                let tc_arr: Vec<serde_json::Value> = m
+                    .tool_calls
+                    .iter()
+                    .map(|tc| {
+                        serde_json::json!({
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.name,
+                                "arguments": tc.arguments.to_string(),
+                            }
                         })
-                        .collect();
-                    msg["tool_calls"] = serde_json::json!(tc_arr);
-                    if m.content.as_text().is_none_or(str::is_empty) {
-                        msg["content"] = serde_json::Value::Null;
-                    }
+                    })
+                    .collect();
+                msg["tool_calls"] = serde_json::json!(tc_arr);
+                if m.content.as_text().is_none_or(str::is_empty) {
+                    msg["content"] = serde_json::Value::Null;
                 }
+            }
 
-                msg
-            })
-            .collect();
+            messages.push(msg);
+
+            if !follow_up_parts.is_empty() {
+                let blocks: Vec<serde_json::Value> = follow_up_parts
+                    .iter()
+                    .map(content_part_to_openai)
+                    .filter(|v| !v.is_null())
+                    .collect();
+                if !blocks.is_empty() {
+                    messages.push(serde_json::json!({
+                        "role": "user",
+                        "content": blocks,
+                    }));
+                }
+            }
+        }
 
         let mut body = serde_json::json!({
             "messages": messages,
@@ -653,6 +666,34 @@ mod tests {
         let tools = body["tools"].as_array().unwrap();
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0]["function"]["name"], "search");
+    }
+
+    #[test]
+    fn tool_result_with_image_emits_follow_up_user_message() {
+        use crate::types::{ContentPart, LlmPayload, ToolOutput};
+
+        let provider = AzureOpenAiProvider::new("key", "res", "deploy");
+        let tool_msg = ChatMessage::tool_result(
+            "call_1",
+            "render",
+            ToolOutput::with_override(
+                serde_json::json!({}),
+                LlmPayload::Parts {
+                    parts: vec![
+                        ContentPart::text("rendered"),
+                        ContentPart::image_base64("AAAA", "image/png"),
+                    ],
+                },
+            ),
+        );
+        let request = CompletionRequest::new(vec![tool_msg]);
+        let body = provider.build_body(&request, false);
+        let messages = body["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0]["role"], "tool");
+        assert_eq!(messages[0]["content"], "rendered");
+        assert_eq!(messages[1]["role"], "user");
+        assert_eq!(messages[1]["content"][0]["type"], "image_url");
     }
 
     #[test]

@@ -59,13 +59,19 @@ impl PyImageSource {
         }
     }
 
-    /// Variant tag: ``"url"``, ``"base64"``, or ``"file"``.
+    /// Variant tag: ``"url"``, ``"base64"``, ``"file"``,
+    /// ``"provider_file"``, or ``"handle"``.
     #[getter]
     fn kind(&self) -> &'static str {
         match &self.inner {
             ImageSource::Url { .. } => "url",
             ImageSource::Base64 { .. } => "base64",
             ImageSource::File { .. } => "file",
+            ImageSource::ProviderFile { .. } => "provider_file",
+            ImageSource::Handle { .. } => "handle",
+            // `ImageSource` is `#[non_exhaustive]`; future variants
+            // surface as `"unknown"` until we extend Python coverage.
+            _ => "unknown",
         }
     }
 
@@ -106,6 +112,16 @@ impl PyImageSource {
                 format!("ImageSource.base64(<{} chars>)", data.len())
             }
             ImageSource::File { path } => format!("ImageSource.file({})", path.display()),
+            ImageSource::ProviderFile { provider, id } => {
+                format!("ImageSource.provider_file(provider={provider:?}, id={id:?})")
+            }
+            ImageSource::Handle { handle } => {
+                format!(
+                    "ImageSource.handle(id={:?}, kind={})",
+                    handle.id, handle.kind
+                )
+            }
+            _ => "ImageSource(<unknown>)".to_owned(),
         }
     }
 }

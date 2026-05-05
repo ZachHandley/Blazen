@@ -56,6 +56,30 @@ fn resolve_audio_path(request: &TranscriptionRequest) -> Result<PathBuf, BlazenE
                      write the audio to a temporary file and use `MediaSource::File`",
                 ));
             }
+            MediaSource::ProviderFile { provider, id } => {
+                tracing::warn!(
+                    ?provider,
+                    %id,
+                    "whisper.cpp received ProviderFile audio source; cannot fetch remote bytes",
+                );
+                return Err(BlazenError::unsupported(format!(
+                    "whisper.cpp: ProviderFile audio sources require a content store to \
+                     materialize bytes; fetch and supply as Base64 or File first \
+                     (provider={provider:?}, id={id})"
+                )));
+            }
+            MediaSource::Handle { handle } => {
+                tracing::warn!(
+                    handle.id = %handle.id,
+                    handle.kind = ?handle.kind,
+                    "whisper.cpp received ContentHandle audio source; no ContentStore wired here",
+                );
+                return Err(BlazenError::unsupported(format!(
+                    "whisper.cpp: ContentHandle audio sources require a wired ContentStore to \
+                     materialize bytes (handle.id={}, handle.kind={:?})",
+                    handle.id, handle.kind
+                )));
+            }
         }
     }
 

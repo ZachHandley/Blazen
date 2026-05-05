@@ -30,12 +30,27 @@ pub enum Role {
 ///
 /// Used by [`ImageContent`], [`AudioContent`], [`VideoContent`], and
 /// [`FileContent`] — all media kinds share this URL-or-base64 envelope.
-/// The [`File`](ImageSource::File) variant allows local backends to
-/// reference files directly on disk.
+///
+/// Variants differ by *who* knows how to fetch / serialize the bytes:
+/// - [`Url`](ImageSource::Url) and [`Base64`](ImageSource::Base64) — every
+///   provider's request builder can render these directly on the wire.
+/// - [`File`](ImageSource::File) — local backends (whisper.cpp, diffusion)
+///   read the path directly. Cloud APIs reject it.
+/// - [`ProviderFile`](ImageSource::ProviderFile) — references content
+///   already uploaded to a provider's file API (`OpenAI` Files, Anthropic
+///   Files, Gemini Files, fal.ai storage). The named provider renders it
+///   natively; other providers fall back to fetching+rehosting via the
+///   active [`ContentStore`].
+/// - [`Handle`](ImageSource::Handle) — Blazen-managed reference; the
+///   active [`ContentStore`] resolves it to one of the above variants at
+///   request-build time.
+///
+/// [`ContentStore`]: crate::content::store::ContentStore
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum ImageSource {
     /// Media provided via URL.
     Url { url: String },
@@ -48,6 +63,30 @@ pub enum ImageSource {
     /// Cloud API providers do **not** support this variant and will return
     /// an [`Unsupported`](crate::error::BlazenError::Unsupported) error.
     File { path: PathBuf },
+    /// Reference to content stored in a provider's file API.
+    ///
+    /// The matching provider's request builder uses the `id` directly on
+    /// the wire (e.g. an `OpenAI` `file_abc123` ID becomes part of an
+    /// `input_file` block). Other providers must rehost via the active
+    /// [`ContentStore`](crate::content::store::ContentStore); if no store
+    /// is wired, the content is dropped with a warning.
+    ProviderFile {
+        /// Provider that owns the file ID.
+        provider: super::ProviderId,
+        /// Provider-issued file identifier.
+        id: String,
+    },
+    /// Reference to content registered with the active
+    /// [`ContentStore`](crate::content::store::ContentStore).
+    ///
+    /// The store resolves the handle to one of the wire-renderable variants
+    /// (`Url` / `Base64` / `File` / `ProviderFile`) at request-build time.
+    /// If no store is wired or the store cannot resolve the handle, the
+    /// content is dropped with a warning.
+    Handle {
+        /// Stable, store-defined identifier for the content.
+        handle: crate::content::ContentHandle,
+    },
 }
 
 impl ImageSource {

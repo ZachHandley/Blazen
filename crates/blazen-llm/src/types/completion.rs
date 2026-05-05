@@ -307,6 +307,126 @@ impl CompletionRequest {
         self.audio_config = Some(config);
         self
     }
+
+    /// Resolve every [`crate::types::ImageSource::Handle`] in this request
+    /// against the supplied content store, in place.
+    ///
+    /// Walks every message's `content`, every multimodal tool-result
+    /// payload, and every assistant tool-call argument. For each `Handle`
+    /// source found, calls [`crate::content::ContentStore::resolve`] and
+    /// replaces the source with the wire-renderable variant the store
+    /// returns. Sources that are already wire-renderable (`Url`, `Base64`,
+    /// `File`, `ProviderFile`) are left alone.
+    ///
+    /// Call this before dispatching the request to a provider when the
+    /// agent runner has a content store wired in. Without this step, any
+    /// `Handle`-backed multimodal content is dropped at the per-provider
+    /// serializer with a warning.
+    ///
+    /// Returns the number of handles successfully resolved. Errors abort
+    /// the walk — partial in-place mutation may have occurred. Callers
+    /// that need transactional resolution should clone the request first.
+    ///
+    /// # Errors
+    ///
+    /// Returns the first error returned by
+    /// [`ContentStore::resolve`](crate::content::ContentStore::resolve).
+    pub async fn resolve_handles_with(
+        &mut self,
+        store: &dyn crate::content::ContentStore,
+    ) -> Result<usize, crate::error::BlazenError> {
+        let mut resolved = 0usize;
+        for msg in &mut self.messages {
+            resolved += resolve_message_content(&mut msg.content, store).await?;
+            if let Some(tool_result) = msg.tool_result.as_mut()
+                && let Some(payload) = tool_result.llm_override.as_mut()
+            {
+                resolved += resolve_payload(payload, store).await?;
+            }
+        }
+        Ok(resolved)
+    }
+}
+
+/// Walk a [`MessageContent`] and resolve any `ImageSource::Handle` sources
+/// in place. Returns the number of handles resolved.
+async fn resolve_message_content(
+    content: &mut crate::types::MessageContent,
+    store: &dyn crate::content::ContentStore,
+) -> Result<usize, crate::error::BlazenError> {
+    use crate::types::{ContentPart, MessageContent};
+    let mut resolved = 0usize;
+    match content {
+        MessageContent::Text(_) => {}
+        MessageContent::Image(img) => {
+            resolved += resolve_image_source(&mut img.source, store).await?;
+        }
+        MessageContent::Parts(parts) => {
+            for part in parts {
+                match part {
+                    ContentPart::Text { .. } => {}
+                    ContentPart::Image(img) => {
+                        resolved += resolve_image_source(&mut img.source, store).await?;
+                    }
+                    ContentPart::Audio(a) => {
+                        resolved += resolve_image_source(&mut a.source, store).await?;
+                    }
+                    ContentPart::Video(v) => {
+                        resolved += resolve_image_source(&mut v.source, store).await?;
+                    }
+                    ContentPart::File(f) => {
+                        resolved += resolve_image_source(&mut f.source, store).await?;
+                    }
+                }
+            }
+        }
+    }
+    Ok(resolved)
+}
+
+/// Resolve any `Handle` sources inside a tool-result payload.
+async fn resolve_payload(
+    payload: &mut crate::types::LlmPayload,
+    store: &dyn crate::content::ContentStore,
+) -> Result<usize, crate::error::BlazenError> {
+    use crate::types::{ContentPart, LlmPayload};
+    let mut resolved = 0usize;
+    if let LlmPayload::Parts { parts } = payload {
+        for part in parts {
+            match part {
+                ContentPart::Text { .. } => {}
+                ContentPart::Image(img) => {
+                    resolved += resolve_image_source(&mut img.source, store).await?;
+                }
+                ContentPart::Audio(a) => {
+                    resolved += resolve_image_source(&mut a.source, store).await?;
+                }
+                ContentPart::Video(v) => {
+                    resolved += resolve_image_source(&mut v.source, store).await?;
+                }
+                ContentPart::File(f) => {
+                    resolved += resolve_image_source(&mut f.source, store).await?;
+                }
+            }
+        }
+    }
+    Ok(resolved)
+}
+
+/// If `source` is `ImageSource::Handle`, replace it with whatever the
+/// store resolves it to. Returns 1 if a resolution happened, 0 otherwise.
+async fn resolve_image_source(
+    source: &mut crate::types::ImageSource,
+    store: &dyn crate::content::ContentStore,
+) -> Result<usize, crate::error::BlazenError> {
+    use crate::types::ImageSource;
+    if let ImageSource::Handle { handle } = source {
+        let resolved = store.resolve(handle).await?;
+        *source = resolved;
+        Ok(1)
+    } else {
+        Ok(0)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -519,5 +639,111 @@ mod response_format_tests {
         assert_eq!(v["type"], "json_schema");
         assert_eq!(v["name"], "MyType");
         assert_eq!(v["strict"], true);
+    }
+}
+
+#[cfg(test)]
+mod resolve_handles_tests {
+    use super::*;
+    use crate::content::{
+        ContentBody, ContentHint, ContentKind, ContentStore, InMemoryContentStore,
+    };
+    use crate::types::{ChatMessage, ContentPart, ImageContent, ImageSource, MessageContent};
+
+    #[tokio::test]
+    async fn handle_in_user_image_part_is_resolved_to_url() {
+        let store = InMemoryContentStore::new();
+        let handle = store
+            .put(
+                ContentBody::Url("https://example.com/cat.png".into()),
+                ContentHint::default().with_kind(ContentKind::Image),
+            )
+            .await
+            .unwrap();
+
+        let msg = ChatMessage {
+            role: crate::types::Role::User,
+            content: MessageContent::Parts(vec![ContentPart::Image(ImageContent {
+                source: ImageSource::Handle {
+                    handle: handle.clone(),
+                },
+                media_type: Some("image/png".into()),
+            })]),
+            tool_call_id: None,
+            name: None,
+            tool_calls: Vec::new(),
+            tool_result: None,
+        };
+        let mut req = CompletionRequest::new(vec![msg]);
+
+        let n = req.resolve_handles_with(&store).await.unwrap();
+        assert_eq!(n, 1);
+
+        let MessageContent::Parts(parts) = &req.messages[0].content else {
+            panic!("expected Parts content")
+        };
+        let ContentPart::Image(img) = &parts[0] else {
+            panic!("expected image part")
+        };
+        match &img.source {
+            ImageSource::Url { url } => assert_eq!(url, "https://example.com/cat.png"),
+            other => panic!("expected resolved URL, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn no_handles_returns_zero() {
+        let store = InMemoryContentStore::new();
+        let mut req = CompletionRequest::new(vec![ChatMessage::user("plain text")]);
+        assert_eq!(req.resolve_handles_with(&store).await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn handle_in_tool_result_payload_is_resolved() {
+        use crate::types::{LlmPayload, ToolOutput};
+        let store = InMemoryContentStore::new();
+        let handle = store
+            .put(
+                ContentBody::Bytes(vec![1u8, 2, 3]),
+                ContentHint::default().with_kind(ContentKind::Image),
+            )
+            .await
+            .unwrap();
+
+        let tool_msg = ChatMessage::tool_result(
+            "call_1",
+            "render",
+            ToolOutput::with_override(
+                serde_json::json!({}),
+                LlmPayload::Parts {
+                    parts: vec![ContentPart::Image(ImageContent {
+                        source: ImageSource::Handle {
+                            handle: handle.clone(),
+                        },
+                        media_type: Some("image/png".into()),
+                    })],
+                },
+            ),
+        );
+        let mut req = CompletionRequest::new(vec![tool_msg]);
+
+        let n = req.resolve_handles_with(&store).await.unwrap();
+        assert_eq!(n, 1);
+
+        let payload = req.messages[0]
+            .tool_result
+            .as_ref()
+            .unwrap()
+            .llm_override
+            .as_ref()
+            .unwrap();
+        let LlmPayload::Parts { parts } = payload else {
+            panic!("expected Parts payload")
+        };
+        let ContentPart::Image(img) = &parts[0] else {
+            panic!("expected image")
+        };
+        // InMemoryContentStore stores bytes and returns base64 on resolve.
+        assert!(matches!(img.source, ImageSource::Base64 { .. }));
     }
 }

@@ -65,6 +65,23 @@ pub(crate) fn image_content_to_openai(img: &ImageContent) -> serde_json::Value {
             );
             return serde_json::Value::Null;
         }
+        ImageSource::ProviderFile { provider, id } => {
+            crate::content::render::warn_provider_file_mismatch(
+                crate::types::ProviderId::OpenAi,
+                *provider,
+                id,
+                crate::content::render::MediaKindLabel::Image,
+            );
+            return serde_json::Value::Null;
+        }
+        ImageSource::Handle { handle } => {
+            crate::content::render::warn_handle_unresolved(
+                crate::types::ProviderId::OpenAi,
+                handle,
+                crate::content::render::MediaKindLabel::Image,
+            );
+            return serde_json::Value::Null;
+        }
     };
     serde_json::json!({
         "type": "image_url",
@@ -91,6 +108,23 @@ pub(crate) fn content_part_to_openai(part: &ContentPart) -> serde_json::Value {
                     tracing::warn!(
                         "openai-compat: local file source is not supported — use a URL or base64 \
                          source instead; file content dropped."
+                    );
+                    return serde_json::Value::Null;
+                }
+                ImageSource::ProviderFile { provider, id } => {
+                    crate::content::render::warn_provider_file_mismatch(
+                        crate::types::ProviderId::OpenAi,
+                        *provider,
+                        id,
+                        crate::content::render::MediaKindLabel::File,
+                    );
+                    return serde_json::Value::Null;
+                }
+                ImageSource::Handle { handle } => {
+                    crate::content::render::warn_handle_unresolved(
+                        crate::types::ProviderId::OpenAi,
+                        handle,
+                        crate::content::render::MediaKindLabel::File,
                     );
                     return serde_json::Value::Null;
                 }
@@ -131,6 +165,23 @@ pub(crate) fn content_part_to_openai(part: &ContentPart) -> serde_json::Value {
                     );
                     serde_json::Value::Null
                 }
+                ImageSource::ProviderFile { provider, id } => {
+                    crate::content::render::warn_provider_file_mismatch(
+                        crate::types::ProviderId::OpenAi,
+                        *provider,
+                        id,
+                        crate::content::render::MediaKindLabel::Audio,
+                    );
+                    serde_json::Value::Null
+                }
+                ImageSource::Handle { handle } => {
+                    crate::content::render::warn_handle_unresolved(
+                        crate::types::ProviderId::OpenAi,
+                        handle,
+                        crate::content::render::MediaKindLabel::Audio,
+                    );
+                    serde_json::Value::Null
+                }
             }
         }
         ContentPart::Video(_) => {
@@ -168,49 +219,111 @@ pub(crate) fn content_to_openai_value(content: &MessageContent) -> serde_json::V
     }
 }
 
-/// Render a tool-result message as a string for OpenAI-family wire formats.
+/// Result of splitting a tool-result message for OpenAI-shaped serialization.
 ///
-/// Honors `LlmPayload::Text`, `Json`, `Parts`, and `ProviderRaw` overrides
-/// when present. `ProviderRaw` only applies if `self_provider` matches the
-/// payload's `provider`; otherwise it falls back to the default conversion
-/// of `data`. Plain-string `data` passes through unchanged; structured
-/// `data` is JSON-stringified once at this boundary.
+/// The `text` portion goes into the tool message's `content` field. When
+/// `follow_up_parts` is non-empty, callers should emit an immediately-
+/// following `role: "user"` message containing those parts as multimodal
+/// content blocks. `OpenAI` Chat Completions and OpenAI-compatible APIs do
+/// not allow non-string content in `role: "tool"` messages, but accept
+/// multimodal user messages, so the split-and-follow-up pattern preserves
+/// the tool result's media.
+pub(crate) struct ToolResultSplit {
+    /// Joined text portion of the tool result.
+    pub text: String,
+    /// Non-text content parts that need to be emitted as a follow-up
+    /// multimodal user message. Empty if the tool result is text-only.
+    pub follow_up_parts: Vec<crate::types::ContentPart>,
+}
+
+/// Split a tool-result message's payload into a text portion and a list
+/// of non-text parts.
 ///
-/// Returns an empty string when the message is not a tool-result message
-/// (i.e. `tool_result_view` returns `None`).
-pub(crate) fn tool_result_to_openai_string(
+/// Considers both sources of multimodal tool-result content:
+/// - `tool_result.llm_override = LlmPayload::Parts { parts }` (the
+///   structured-override path used by `ToolOutput::with_override`).
+/// - `content = MessageContent::Parts(parts)` (the path used by
+///   [`crate::types::ChatMessage::tool_result_parts`]).
+///
+/// `LlmPayload::Text` / `Json` / `ProviderRaw` overrides resolve to text-
+/// only with an empty `follow_up_parts`. `ProviderRaw` is honored only
+/// when `self_provider` matches the payload's `provider`.
+///
+/// Returns an empty `ToolResultSplit` when the message is not a tool-
+/// result message.
+pub(crate) fn split_tool_result_parts(
     msg: &crate::types::ChatMessage,
     self_provider: crate::types::ProviderId,
-) -> String {
-    let Some((data, override_payload)) = msg.tool_result_view() else {
-        return String::new();
-    };
+) -> ToolResultSplit {
+    use crate::types::{LlmPayload, MessageContent, Role};
 
-    if let Some(payload) = override_payload {
-        return match payload {
-            crate::types::LlmPayload::Text { text } => text.clone(),
-            crate::types::LlmPayload::Json { value } => stringify_value(value),
-            crate::types::LlmPayload::Parts { parts } => parts
-                .iter()
-                .filter_map(|p| match p {
-                    crate::types::ContentPart::Text { text } => Some(text.clone()),
-                    _ => None,
-                })
-                .collect::<Vec<_>>()
-                .join("\n"),
-            crate::types::LlmPayload::ProviderRaw { provider, value }
-                if *provider == self_provider =>
-            {
-                stringify_value(value)
-            }
-            crate::types::LlmPayload::ProviderRaw { .. } => stringify_value(&data),
+    if msg.role != Role::Tool {
+        return ToolResultSplit {
+            text: String::new(),
+            follow_up_parts: Vec::new(),
         };
     }
 
-    stringify_value(&data)
+    // Path 1: structured `tool_result` field with optional override.
+    if let Some(out) = &msg.tool_result {
+        if let Some(payload) = &out.llm_override {
+            return match payload {
+                LlmPayload::Text { text } => ToolResultSplit {
+                    text: text.clone(),
+                    follow_up_parts: Vec::new(),
+                },
+                LlmPayload::Json { value } => ToolResultSplit {
+                    text: stringify_value(value),
+                    follow_up_parts: Vec::new(),
+                },
+                LlmPayload::Parts { parts } => split_content_parts(parts),
+                LlmPayload::ProviderRaw { provider, value } if *provider == self_provider => {
+                    ToolResultSplit {
+                        text: stringify_value(value),
+                        follow_up_parts: Vec::new(),
+                    }
+                }
+                LlmPayload::ProviderRaw { .. } => ToolResultSplit {
+                    text: stringify_value(&out.data),
+                    follow_up_parts: Vec::new(),
+                },
+            };
+        }
+        return ToolResultSplit {
+            text: stringify_value(&out.data),
+            follow_up_parts: Vec::new(),
+        };
+    }
+
+    // Path 2: `tool_result` is None; payload lives in `content`.
+    match &msg.content {
+        MessageContent::Parts(parts) => split_content_parts(parts),
+        MessageContent::Text(s) => ToolResultSplit {
+            text: s.clone(),
+            follow_up_parts: Vec::new(),
+        },
+        MessageContent::Image(img) => ToolResultSplit {
+            text: String::new(),
+            follow_up_parts: vec![crate::types::ContentPart::Image(img.clone())],
+        },
+    }
 }
 
-#[allow(dead_code)] // Used by `tool_result_to_openai_string`; Wave 5 activates the call sites.
+fn split_content_parts(parts: &[crate::types::ContentPart]) -> ToolResultSplit {
+    let mut text_chunks: Vec<String> = Vec::new();
+    let mut non_text: Vec<crate::types::ContentPart> = Vec::new();
+    for part in parts {
+        match part {
+            crate::types::ContentPart::Text { text } => text_chunks.push(text.clone()),
+            other => non_text.push(other.clone()),
+        }
+    }
+    ToolResultSplit {
+        text: text_chunks.join("\n"),
+        follow_up_parts: non_text,
+    }
+}
+
 fn stringify_value(value: &serde_json::Value) -> String {
     match value {
         serde_json::Value::String(s) => s.clone(),
@@ -267,14 +380,14 @@ mod tests {
 
 #[cfg(test)]
 mod tool_result_string_tests {
-    use super::tool_result_to_openai_string;
+    use super::split_tool_result_parts;
     use crate::types::{ChatMessage, ContentPart, LlmPayload, ProviderId, ToolOutput};
 
     #[test]
     fn structured_data_stringifies_at_boundary() {
         let msg = ChatMessage::tool_result("call_1", "search", serde_json::json!({"k":"v"}));
         assert_eq!(
-            tool_result_to_openai_string(&msg, ProviderId::OpenAi),
+            split_tool_result_parts(&msg, ProviderId::OpenAi).text,
             "{\"k\":\"v\"}"
         );
     }
@@ -283,7 +396,7 @@ mod tool_result_string_tests {
     fn string_data_passes_through() {
         let msg = ChatMessage::tool_result("call_1", "search", serde_json::json!("hello"));
         assert_eq!(
-            tool_result_to_openai_string(&msg, ProviderId::OpenAi),
+            split_tool_result_parts(&msg, ProviderId::OpenAi).text,
             "hello"
         );
     }
@@ -301,7 +414,7 @@ mod tool_result_string_tests {
             ),
         );
         assert_eq!(
-            tool_result_to_openai_string(&msg, ProviderId::OpenAi),
+            split_tool_result_parts(&msg, ProviderId::OpenAi).text,
             "summary"
         );
     }
@@ -319,14 +432,12 @@ mod tool_result_string_tests {
                 },
             ),
         );
-        // OpenAI is not the target — falls back to default conversion of data.
         assert_eq!(
-            tool_result_to_openai_string(&msg, ProviderId::OpenAi),
+            split_tool_result_parts(&msg, ProviderId::OpenAi).text,
             "{\"k\":\"v\"}"
         );
-        // Anthropic IS the target — value passes through (stringified).
         assert_eq!(
-            tool_result_to_openai_string(&msg, ProviderId::Anthropic),
+            split_tool_result_parts(&msg, ProviderId::Anthropic).text,
             "anthropic-only"
         );
     }
@@ -344,8 +455,125 @@ mod tool_result_string_tests {
             ),
         );
         assert_eq!(
-            tool_result_to_openai_string(&msg, ProviderId::OpenAi),
+            split_tool_result_parts(&msg, ProviderId::OpenAi).text,
             "line1\nline2"
         );
+    }
+}
+
+#[cfg(test)]
+mod split_tool_result_tests {
+    use super::split_tool_result_parts;
+    use crate::types::{ChatMessage, ContentPart, LlmPayload, ProviderId, ToolOutput};
+
+    #[test]
+    fn text_only_parts_have_empty_follow_up() {
+        let msg = ChatMessage::tool_result(
+            "call_1",
+            "search",
+            ToolOutput::with_override(
+                serde_json::json!({}),
+                LlmPayload::Parts {
+                    parts: vec![ContentPart::text("hello"), ContentPart::text("world")],
+                },
+            ),
+        );
+        let split = split_tool_result_parts(&msg, ProviderId::OpenAi);
+        assert_eq!(split.text, "hello\nworld");
+        assert!(split.follow_up_parts.is_empty());
+    }
+
+    #[test]
+    fn parts_override_with_image_yields_follow_up() {
+        let msg = ChatMessage::tool_result(
+            "call_1",
+            "render",
+            ToolOutput::with_override(
+                serde_json::json!({}),
+                LlmPayload::Parts {
+                    parts: vec![
+                        ContentPart::text("rendered:"),
+                        ContentPart::image_base64("AAAA", "image/png"),
+                    ],
+                },
+            ),
+        );
+        let split = split_tool_result_parts(&msg, ProviderId::OpenAi);
+        assert_eq!(split.text, "rendered:");
+        assert_eq!(split.follow_up_parts.len(), 1);
+        assert!(matches!(split.follow_up_parts[0], ContentPart::Image(_)));
+    }
+
+    #[test]
+    fn tool_result_parts_constructor_path() {
+        // `ChatMessage::tool_result_parts` stores parts in `content` with
+        // `tool_result: None`. The split must still find the non-text parts.
+        let msg = ChatMessage::tool_result_parts(
+            "call_1",
+            "render",
+            vec![
+                ContentPart::text("see attached:"),
+                ContentPart::image_url("https://example.com/x.png", None),
+            ],
+        );
+        let split = split_tool_result_parts(&msg, ProviderId::OpenAi);
+        assert_eq!(split.text, "see attached:");
+        assert_eq!(split.follow_up_parts.len(), 1);
+    }
+
+    #[test]
+    fn audio_and_video_parts_appear_in_follow_up() {
+        let msg = ChatMessage::tool_result_parts(
+            "call_1",
+            "media",
+            vec![
+                ContentPart::audio_base64("AAA", "audio/mp3"),
+                ContentPart::video_url("https://example.com/v.mp4"),
+            ],
+        );
+        let split = split_tool_result_parts(&msg, ProviderId::OpenAi);
+        assert!(split.text.is_empty());
+        assert_eq!(split.follow_up_parts.len(), 2);
+    }
+
+    #[test]
+    fn text_payload_has_no_follow_up() {
+        let msg = ChatMessage::tool_result(
+            "call_1",
+            "search",
+            ToolOutput::with_override(
+                serde_json::json!({}),
+                LlmPayload::Text { text: "ok".into() },
+            ),
+        );
+        let split = split_tool_result_parts(&msg, ProviderId::OpenAi);
+        assert_eq!(split.text, "ok");
+        assert!(split.follow_up_parts.is_empty());
+    }
+
+    #[test]
+    fn provider_raw_match_uses_value_as_text() {
+        let msg = ChatMessage::tool_result(
+            "call_1",
+            "search",
+            ToolOutput::with_override(
+                serde_json::json!({"k":"v"}),
+                LlmPayload::ProviderRaw {
+                    provider: ProviderId::OpenAi,
+                    value: serde_json::json!("openai-only"),
+                },
+            ),
+        );
+        let split = split_tool_result_parts(&msg, ProviderId::OpenAi);
+        assert_eq!(split.text, "openai-only");
+        assert!(split.follow_up_parts.is_empty());
+    }
+
+    #[test]
+    fn non_tool_message_returns_empty() {
+        let msg = ChatMessage::user("hello");
+        let split = split_tool_result_parts(&msg, ProviderId::OpenAi);
+        assert!(split.text.is_empty());
+        assert!(split.follow_up_parts.is_empty());
     }
 }

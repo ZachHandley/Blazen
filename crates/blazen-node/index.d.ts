@@ -902,6 +902,61 @@ export declare class CompletionModel {
 export type JsCompletionModel = CompletionModel
 
 /**
+ * Pluggable registry for multimodal content. Wraps
+ * [`Arc<dyn blazen_llm::content::ContentStore>`].
+ *
+ * Construct via the static factories (e.g. `ContentStore.inMemory()`).
+ * Stores are cheap to clone — internally an `Arc` — so passing the same
+ * instance across multiple agents / requests is fine.
+ */
+export declare class ContentStore {
+  /** Build a default ephemeral in-memory store. */
+  static inMemory(): ContentStore
+  /**
+   * Build a filesystem-backed store rooted at `root`. The directory is
+   * created if it doesn't yet exist.
+   */
+  static localFile(root: string): ContentStore
+  /** Build a store backed by the `OpenAI` Files API. */
+  static openaiFiles(apiKey: string, baseUrl?: string | undefined | null): ContentStore
+  /** Build a store backed by the Anthropic Files API. */
+  static anthropicFiles(apiKey: string, baseUrl?: string | undefined | null): ContentStore
+  /** Build a store backed by the Gemini Files API. */
+  static geminiFiles(apiKey: string, baseUrl?: string | undefined | null): ContentStore
+  /** Build a store backed by fal.ai's storage API. */
+  static falStorage(apiKey: string, baseUrl?: string | undefined | null): ContentStore
+  /**
+   * Persist content and return a freshly-issued handle.
+   *
+   * `body` is either:
+   * - a `Buffer` — inline bytes uploaded to the store, or
+   * - a `string` — interpreted as a URL when it contains `"://"` (the
+   *   store records the reference) and as a local filesystem path
+   *   otherwise (the store reads or copies the file as needed).
+   */
+  put(body: Buffer | string, options: PutOptions): Promise<JsContentHandle>
+  /**
+   * Resolve a handle to a wire-renderable [`MediaSource`] (returned as a
+   * JS object — the same JSON shape Blazen's request builders accept).
+   */
+  resolve(handle: JsContentHandle): Promise<any>
+  /**
+   * Fetch raw bytes for a handle. Tools that need to operate on the
+   * actual content (parse a PDF, transcribe audio) call this; most tools
+   * reason over the handle and let `resolve` produce the wire form.
+   */
+  fetchBytes(handle: JsContentHandle): Promise<Buffer>
+  /** Cheap metadata lookup without materializing the bytes. */
+  metadata(handle: JsContentHandle): Promise<JsContentMetadata>
+  /**
+   * Optional cleanup — remove the handle from the store. Default
+   * implementations on most stores are no-ops.
+   */
+  delete(handle: JsContentHandle): Promise<void>
+}
+export type JsContentStore = ContentStore
+
+/**
  * Shared workflow context accessible by all steps.
  *
  * Provides typed key/value storage, event emission, and stream publishing.
@@ -5181,6 +5236,12 @@ export interface AgentEvent {
   hadToolCalls?: boolean
 }
 
+/** Build a JSON Schema declaring a single required audio-handle input. */
+export declare function audioInput(name: string, description: string): any
+
+/** Build a JSON Schema declaring a single required CAD-file-handle input. */
+export declare function cadInput(name: string, description: string): any
+
 /** Configuration passed to any capability provider constructor. */
 export interface CapabilityProviderConfig {
   /** Short identifier for this provider (e.g. `"elevenlabs"`, `"fal"`). */
@@ -5520,6 +5581,9 @@ export interface FileContent {
   filename?: string
 }
 
+/** Build a JSON Schema declaring a single required document/file-handle input. */
+export declare function fileInput(name: string, description: string): any
+
 /**
  * Canonical name of the built-in `finish_workflow` exit tool. Mirrors
  * [`blazen_llm::FINISH_WORKFLOW_TOOL_NAME`].
@@ -5633,6 +5697,15 @@ export interface HttpClientConfig {
    */
   userAgent?: string
 }
+
+/**
+ * Build a JSON Schema declaring a single required image-handle input.
+ *
+ * The model fills the property with a content-handle id string; Blazen
+ * resolves it against the active [`super::store::JsContentStore`] before
+ * the tool's handler runs.
+ */
+export declare function imageInput(name: string, description: string): any
 
 /**
  * Initialize the Langfuse exporter and install it as a layer on the global
@@ -5987,6 +6060,59 @@ export interface JsComputeResult {
 }
 
 /**
+ * Reference to content stored in a [`super::store::JsContentStore`].
+ *
+ * Mirrors [`blazen_llm::content::ContentHandle`]. Pass instances to a
+ * store's `resolve` / `fetchBytes` / `metadata` / `delete` methods, or
+ * embed the `id` in tool arguments where a content reference is expected.
+ */
+export interface JsContentHandle {
+  /** Opaque, store-defined identifier. Treat as a black box. */
+  id: string
+  /** What kind of content this handle refers to. */
+  kind: JsContentKind
+  /** MIME type if known. */
+  mimeType?: string
+  /** Byte size if known. `i64` because napi has no `u64`. */
+  byteSize?: number
+  /** Human-readable display name (e.g. original filename). */
+  displayName?: string
+}
+
+/**
+ * Taxonomy of multimodal content kinds. Mirrors
+ * [`blazen_llm::content::ContentKind`].
+ *
+ * String values match the JSON / `serde` tag (`"image"`, `"three_d_model"`,
+ * etc.) so they can be round-tripped against any Blazen API that accepts a
+ * kind string.
+ */
+export declare const enum JsContentKind {
+  Image = 'image',
+  Audio = 'audio',
+  Video = 'video',
+  Document = 'document',
+  ThreeDModel = 'three_d_model',
+  Cad = 'cad',
+  Archive = 'archive',
+  Font = 'font',
+  Code = 'code',
+  Data = 'data',
+  Other = 'other'
+}
+
+/**
+ * Cheap metadata summary returned by
+ * [`JsContentStore::metadata`](JsContentStore::metadata).
+ */
+export interface JsContentMetadata {
+  kind: JsContentKind
+  mimeType?: string
+  byteSize?: number
+  displayName?: string
+}
+
+/**
  * A single part in a multi-part message.
  *
  * `partType` is one of `"text"`, `"image"`, `"audio"`, `"video"`. Set the
@@ -6268,11 +6394,38 @@ export interface JsImageResult {
   metadata: any
 }
 
-/** How an image is provided (URL or base64). */
+/**
+ * How an image / audio / video / file is provided.
+ *
+ * `sourceType` is one of:
+ * - `"url"` — set `url` to a public URL.
+ * - `"base64"` — set `data` to the base64-encoded payload.
+ * - `"file"` — set `url` to a local filesystem path (local backends only).
+ * - `"providerFile"` — set `provider` and `id` to reference an
+ *   already-uploaded file in a provider's file API (`OpenAI` Files,
+ *   Anthropic Files, Gemini Files, fal.ai storage).
+ * - `"handle"` — set `handleId` (and optionally `handleKind`) to reference
+ *   content registered with a `ContentStore`. The store resolves the
+ *   handle at request-build time.
+ */
 export interface JsImageSource {
   sourceType: string
   url?: string
   data?: string
+  /**
+   * Provider name for `sourceType: "providerFile"` (e.g. `"openai"`,
+   * `"anthropic"`, `"gemini"`, `"fal"`).
+   */
+  provider?: string
+  /** Provider-issued file id for `sourceType: "providerFile"`. */
+  id?: string
+  /** Content handle id for `sourceType: "handle"`. */
+  handleId?: string
+  /**
+   * Content handle kind for `sourceType: "handle"` (e.g. `"image"`,
+   * `"audio"`, `"three_d_model"`). See `ContentKind` for the full set.
+   */
+  handleKind?: string
 }
 
 export interface JsJobHandle {
@@ -7376,6 +7529,24 @@ export declare const enum ProviderId {
   Fal = 'fal'
 }
 
+/**
+ * Optional hints attached to a `put` call.
+ *
+ * Mirrors [`blazen_llm::content::ContentHint`] minus its builder API. Every
+ * field is optional; the store may auto-detect from the bytes when a hint is
+ * missing.
+ */
+export interface PutOptions {
+  /** MIME type, if known. */
+  mimeType?: string
+  /** Caller's preferred classification — overrides any auto-detection. */
+  kind?: JsContentKind
+  /** Human-readable display name (filename, caption). */
+  displayName?: string
+  /** Byte size, if known up-front. `i64` since napi has no `u64`. */
+  byteSize?: number
+}
+
 /** Options for constructing a [`JsReasoningTraceClass`] from JavaScript. */
 export interface ReasoningTraceOptions {
   /** Plain-text rendering of the reasoning content. */
@@ -7819,6 +7990,9 @@ export declare const enum TemplateRole {
   Assistant = 'Assistant'
 }
 
+/** Build a JSON Schema declaring a single required 3D-model-handle input. */
+export declare function threeDInput(name: string, description: string): any
+
 /** Options for constructing a [`JsTokenUsageClass`] from JavaScript. */
 export interface TokenUsageOptions {
   promptTokens: number
@@ -7977,9 +8151,15 @@ export interface UsageEvent {
 /** Returns the version of the blazen library. */
 export declare function version(): string
 
+/** Build a JSON Schema declaring a single required video-handle input. */
+export declare function videoInput(name: string, description: string): any
+
 // --- post-build: type aliases mirroring blazen-llm ---
 export type MediaSource = JsImageSource
 export type ImageSource = JsImageSource
+export type ContentHandle = JsContentHandle
+export type ContentMetadata = JsContentMetadata
+export type ContentKind = JsContentKind
 
 // --- post-build: typed error classes ---
 export class BlazenError extends Error {}

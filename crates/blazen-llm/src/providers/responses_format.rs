@@ -41,8 +41,12 @@ pub(crate) fn messages_to_responses_input(messages: &[ChatMessage]) -> Vec<serde
                 }
             }
             Role::Tool => {
-                // Tool result -> function_call_output block.
-                let output = super::openai_format::tool_result_to_openai_string(
+                // Tool result -> function_call_output block. The Responses API
+                // requires `output` to be a string. Multimodal parts (images,
+                // audio, files) are emitted as a separate, immediately-
+                // following `role: "user"` input item so the model can see
+                // them in connection with the tool output.
+                let split = super::openai_format::split_tool_result_parts(
                     msg,
                     crate::types::ProviderId::Responses,
                 );
@@ -50,8 +54,23 @@ pub(crate) fn messages_to_responses_input(messages: &[ChatMessage]) -> Vec<serde
                 out.push(serde_json::json!({
                     "type": "function_call_output",
                     "call_id": call_id,
-                    "output": output,
+                    "output": split.text,
                 }));
+
+                if !split.follow_up_parts.is_empty() {
+                    let blocks: Vec<serde_json::Value> = split
+                        .follow_up_parts
+                        .iter()
+                        .filter_map(|p| content_part_to_responses(p, "input_text"))
+                        .filter(|v| !v.is_null())
+                        .collect();
+                    if !blocks.is_empty() {
+                        out.push(serde_json::json!({
+                            "role": "user",
+                            "content": blocks,
+                        }));
+                    }
+                }
             }
         }
     }
@@ -90,64 +109,117 @@ fn content_part_to_responses(part: &ContentPart, text_kind: &str) -> Option<serd
         ContentPart::Image(img) => {
             Some(image_to_input_image(&img.source, img.media_type.as_deref()))
         }
-        ContentPart::Audio(audio) => match &audio.source {
-            ImageSource::Base64 { data } => {
-                let format = audio
-                    .media_type
-                    .as_deref()
-                    .and_then(|m| m.strip_prefix("audio/"))
-                    .unwrap_or("mp3");
-                Some(serde_json::json!({
-                    "type": "input_audio",
-                    "input_audio": { "data": data, "format": format }
-                }))
-            }
-            ImageSource::Url { .. } => {
-                tracing::warn!(
-                    "fal Responses API: audio URL inputs are not supported; \
-                     pass base64 data via AudioContent::from_base64 instead. \
-                     Audio content dropped."
-                );
-                None
-            }
-            ImageSource::File { .. } => {
-                tracing::warn!(
-                    "fal Responses API: local file source is not supported — use a URL or base64 \
-                     source instead; audio content dropped."
-                );
-                None
-            }
-        },
+        ContentPart::Audio(audio) => audio_part_to_responses(audio),
         ContentPart::Video(_) => {
             tracing::warn!(
                 "fal Responses API: video chat input is not supported; video content dropped."
             );
             None
         }
-        ContentPart::File(file) => {
-            let url = match &file.source {
-                ImageSource::Url { url } => url.clone(),
-                ImageSource::Base64 { data } => {
-                    format!("data:{};base64,{data}", file.media_type)
-                }
-                ImageSource::File { .. } => {
-                    tracing::warn!(
-                        "fal Responses API: local file source is not supported — use a URL or \
-                         base64 source instead; file content dropped."
-                    );
-                    return None;
-                }
-            };
-            let mut block = serde_json::json!({
-                "type": "input_file",
-                "file_url": url,
-            });
-            if let Some(name) = &file.filename {
-                block["filename"] = name.clone().into();
-            }
-            Some(block)
+        ContentPart::File(file) => file_part_to_responses(file),
+    }
+}
+
+fn audio_part_to_responses(audio: &crate::types::AudioContent) -> Option<serde_json::Value> {
+    match &audio.source {
+        ImageSource::Base64 { data } => {
+            let format = audio
+                .media_type
+                .as_deref()
+                .and_then(|m| m.strip_prefix("audio/"))
+                .unwrap_or("mp3");
+            Some(serde_json::json!({
+                "type": "input_audio",
+                "input_audio": { "data": data, "format": format }
+            }))
+        }
+        ImageSource::Url { .. } => {
+            tracing::warn!(
+                "fal Responses API: audio URL inputs are not supported; \
+                 pass base64 data via AudioContent::from_base64 instead. \
+                 Audio content dropped."
+            );
+            None
+        }
+        ImageSource::File { .. } => {
+            tracing::warn!(
+                "fal Responses API: local file source is not supported — use a URL or base64 \
+                 source instead; audio content dropped."
+            );
+            None
+        }
+        ImageSource::ProviderFile { provider, id } => {
+            crate::content::render::warn_provider_file_mismatch(
+                crate::types::ProviderId::Responses,
+                *provider,
+                id,
+                crate::content::render::MediaKindLabel::Audio,
+            );
+            None
+        }
+        ImageSource::Handle { handle } => {
+            crate::content::render::warn_handle_unresolved(
+                crate::types::ProviderId::Responses,
+                handle,
+                crate::content::render::MediaKindLabel::Audio,
+            );
+            None
         }
     }
+}
+
+fn file_part_to_responses(file: &crate::types::FileContent) -> Option<serde_json::Value> {
+    let url = match &file.source {
+        ImageSource::Url { url } => url.clone(),
+        ImageSource::Base64 { data } => {
+            format!("data:{};base64,{data}", file.media_type)
+        }
+        ImageSource::File { .. } => {
+            tracing::warn!(
+                "fal Responses API: local file source is not supported — use a URL or \
+                 base64 source instead; file content dropped."
+            );
+            return None;
+        }
+        ImageSource::ProviderFile { provider, id } => {
+            if matches!(
+                provider,
+                crate::types::ProviderId::OpenAi | crate::types::ProviderId::Responses
+            ) {
+                let mut block = serde_json::json!({
+                    "type": "input_file",
+                    "file_id": id,
+                });
+                if let Some(name) = &file.filename {
+                    block["filename"] = name.clone().into();
+                }
+                return Some(block);
+            }
+            crate::content::render::warn_provider_file_mismatch(
+                crate::types::ProviderId::Responses,
+                *provider,
+                id,
+                crate::content::render::MediaKindLabel::File,
+            );
+            return None;
+        }
+        ImageSource::Handle { handle } => {
+            crate::content::render::warn_handle_unresolved(
+                crate::types::ProviderId::Responses,
+                handle,
+                crate::content::render::MediaKindLabel::File,
+            );
+            return None;
+        }
+    };
+    let mut block = serde_json::json!({
+        "type": "input_file",
+        "file_url": url,
+    });
+    if let Some(name) = &file.filename {
+        block["filename"] = name.clone().into();
+    }
+    Some(block)
 }
 
 fn image_to_input_image(source: &ImageSource, media_type: Option<&str>) -> serde_json::Value {
@@ -161,6 +233,32 @@ fn image_to_input_image(source: &ImageSource, media_type: Option<&str>) -> serde
             tracing::warn!(
                 "fal Responses API: local file source is not supported — use a URL or base64 \
                  source instead; image content dropped."
+            );
+            return serde_json::Value::Null;
+        }
+        ImageSource::ProviderFile { provider, id } => {
+            if matches!(
+                provider,
+                crate::types::ProviderId::OpenAi | crate::types::ProviderId::Responses
+            ) {
+                return serde_json::json!({
+                    "type": "input_image",
+                    "file_id": id,
+                });
+            }
+            crate::content::render::warn_provider_file_mismatch(
+                crate::types::ProviderId::Responses,
+                *provider,
+                id,
+                crate::content::render::MediaKindLabel::Image,
+            );
+            return serde_json::Value::Null;
+        }
+        ImageSource::Handle { handle } => {
+            crate::content::render::warn_handle_unresolved(
+                crate::types::ProviderId::Responses,
+                handle,
+                crate::content::render::MediaKindLabel::Image,
             );
             return serde_json::Value::Null;
         }
@@ -232,6 +330,45 @@ mod tests {
             .expect("function_call_output block");
         assert_eq!(output_block["call_id"], "call_1");
         assert_eq!(output_block["output"], "4");
+    }
+
+    #[test]
+    fn tool_result_with_image_appends_input_image_item() {
+        use crate::types::{ContentPart, LlmPayload, ToolOutput};
+        let messages = vec![ChatMessage::tool_result(
+            "call_1",
+            "render",
+            ToolOutput::with_override(
+                serde_json::json!({}),
+                LlmPayload::Parts {
+                    parts: vec![
+                        ContentPart::text("rendered"),
+                        ContentPart::image_base64("AAAA", "image/png"),
+                    ],
+                },
+            ),
+        )];
+        let input = messages_to_responses_input(&messages);
+        assert_eq!(input.len(), 2);
+        assert_eq!(input[0]["type"], "function_call_output");
+        assert_eq!(input[0]["call_id"], "call_1");
+        assert_eq!(input[0]["output"], "rendered");
+        assert_eq!(input[1]["role"], "user");
+        let blocks = input[1]["content"].as_array().unwrap();
+        assert_eq!(blocks[0]["type"], "input_image");
+    }
+
+    #[test]
+    fn tool_result_text_only_yields_single_function_call_output() {
+        let messages = vec![ChatMessage::tool_result(
+            "call_1",
+            "search",
+            serde_json::json!("found 3 results"),
+        )];
+        let input = messages_to_responses_input(&messages);
+        assert_eq!(input.len(), 1);
+        assert_eq!(input[0]["type"], "function_call_output");
+        assert_eq!(input[0]["output"], "found 3 results");
     }
 
     #[test]

@@ -29,6 +29,9 @@ const jsPath = new URL('../index.js', import.meta.url)
   const aliases = [
     'export type MediaSource = JsImageSource',
     'export type ImageSource = JsImageSource',
+    'export type ContentHandle = JsContentHandle',
+    'export type ContentMetadata = JsContentMetadata',
+    'export type ContentKind = JsContentKind',
   ]
   const banner = '\n// --- post-build: type aliases mirroring blazen-llm ---\n'
   const missing = aliases.filter((line) => !current.includes(line))

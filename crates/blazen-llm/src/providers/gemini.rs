@@ -72,6 +72,38 @@ fn image_content_to_gemini(img: &ImageContent) -> serde_json::Value {
             );
             serde_json::Value::Null
         }
+        ImageSource::ProviderFile { provider, id } => {
+            if matches!(provider, crate::types::ProviderId::Gemini) {
+                // Gemini's Files API returns a fileUri like
+                // `https://generativelanguage.googleapis.com/v1beta/files/<id>`.
+                // We accept the bare ID and pass it through as `fileUri`;
+                // callers responsible for upload should store the full URI in
+                // the ID field.
+                let mime_type = img.media_type.as_deref().unwrap_or("image/png");
+                serde_json::json!({
+                    "fileData": {
+                        "mimeType": mime_type,
+                        "fileUri": id,
+                    }
+                })
+            } else {
+                crate::content::render::warn_provider_file_mismatch(
+                    crate::types::ProviderId::Gemini,
+                    *provider,
+                    id,
+                    crate::content::render::MediaKindLabel::Image,
+                );
+                serde_json::Value::Null
+            }
+        }
+        ImageSource::Handle { handle } => {
+            crate::content::render::warn_handle_unresolved(
+                crate::types::ProviderId::Gemini,
+                handle,
+                crate::content::render::MediaKindLabel::Image,
+            );
+            serde_json::Value::Null
+        }
     }
 }
 
@@ -80,70 +112,150 @@ fn content_part_to_gemini(part: &ContentPart) -> serde_json::Value {
     match part {
         ContentPart::Text { text } => serde_json::json!({ "text": text }),
         ContentPart::Image(img) => image_content_to_gemini(img),
-        ContentPart::File(file) => match &file.source {
-            ImageSource::Base64 { data } => {
-                serde_json::json!({
-                    "inlineData": {
-                        "mimeType": file.media_type,
-                        "data": data,
-                    }
-                })
-            }
-            ImageSource::Url { url } => {
+        ContentPart::File(file) => file_part_to_gemini(file),
+        ContentPart::Audio(audio) => audio_part_to_gemini(audio),
+        ContentPart::Video(video) => video_part_to_gemini(video),
+    }
+}
+
+fn file_part_to_gemini(file: &crate::types::FileContent) -> serde_json::Value {
+    match &file.source {
+        ImageSource::Base64 { data } => {
+            serde_json::json!({
+                "inlineData": {
+                    "mimeType": file.media_type,
+                    "data": data,
+                }
+            })
+        }
+        ImageSource::Url { url } => {
+            serde_json::json!({
+                "fileData": {
+                    "mimeType": file.media_type,
+                    "fileUri": url,
+                }
+            })
+        }
+        ImageSource::File { .. } => {
+            tracing::warn!(
+                "gemini: local file source is not supported — use a URL or base64 source \
+                 instead; file content dropped."
+            );
+            serde_json::Value::Null
+        }
+        ImageSource::ProviderFile { provider, id } => {
+            if matches!(provider, crate::types::ProviderId::Gemini) {
                 serde_json::json!({
                     "fileData": {
                         "mimeType": file.media_type,
-                        "fileUri": url,
+                        "fileUri": id,
                     }
                 })
-            }
-            ImageSource::File { .. } => {
-                tracing::warn!(
-                    "gemini: local file source is not supported — use a URL or base64 source \
-                     instead; file content dropped."
+            } else {
+                crate::content::render::warn_provider_file_mismatch(
+                    crate::types::ProviderId::Gemini,
+                    *provider,
+                    id,
+                    crate::content::render::MediaKindLabel::File,
                 );
                 serde_json::Value::Null
             }
-        },
-        ContentPart::Audio(audio) => {
-            // Gemini natively accepts audio via the same inlineData/fileData
-            // shape used for images and files. Default mime: audio/mp3.
-            let mime = audio.media_type.as_deref().unwrap_or("audio/mp3");
-            match &audio.source {
-                ImageSource::Base64 { data } => serde_json::json!({
-                    "inlineData": { "mimeType": mime, "data": data }
-                }),
-                ImageSource::Url { url } => serde_json::json!({
-                    "fileData": { "mimeType": mime, "fileUri": url }
-                }),
-                ImageSource::File { .. } => {
-                    tracing::warn!(
-                        "gemini: local file source is not supported — use a URL or base64 source \
-                         instead; audio content dropped."
-                    );
-                    serde_json::Value::Null
-                }
+        }
+        ImageSource::Handle { handle } => {
+            crate::content::render::warn_handle_unresolved(
+                crate::types::ProviderId::Gemini,
+                handle,
+                crate::content::render::MediaKindLabel::File,
+            );
+            serde_json::Value::Null
+        }
+    }
+}
+
+fn audio_part_to_gemini(audio: &crate::types::AudioContent) -> serde_json::Value {
+    // Gemini natively accepts audio via the same inlineData/fileData
+    // shape used for images and files. Default mime: audio/mp3.
+    let mime = audio.media_type.as_deref().unwrap_or("audio/mp3");
+    match &audio.source {
+        ImageSource::Base64 { data } => serde_json::json!({
+            "inlineData": { "mimeType": mime, "data": data }
+        }),
+        ImageSource::Url { url } => serde_json::json!({
+            "fileData": { "mimeType": mime, "fileUri": url }
+        }),
+        ImageSource::File { .. } => {
+            tracing::warn!(
+                "gemini: local file source is not supported — use a URL or base64 source \
+                 instead; audio content dropped."
+            );
+            serde_json::Value::Null
+        }
+        ImageSource::ProviderFile { provider, id } => {
+            if matches!(provider, crate::types::ProviderId::Gemini) {
+                serde_json::json!({
+                    "fileData": { "mimeType": mime, "fileUri": id }
+                })
+            } else {
+                crate::content::render::warn_provider_file_mismatch(
+                    crate::types::ProviderId::Gemini,
+                    *provider,
+                    id,
+                    crate::content::render::MediaKindLabel::Audio,
+                );
+                serde_json::Value::Null
             }
         }
-        ContentPart::Video(video) => {
-            // Gemini natively accepts video via the same inlineData/fileData
-            // shape. Default mime: video/mp4.
-            let mime = video.media_type.as_deref().unwrap_or("video/mp4");
-            match &video.source {
-                ImageSource::Base64 { data } => serde_json::json!({
-                    "inlineData": { "mimeType": mime, "data": data }
-                }),
-                ImageSource::Url { url } => serde_json::json!({
-                    "fileData": { "mimeType": mime, "fileUri": url }
-                }),
-                ImageSource::File { .. } => {
-                    tracing::warn!(
-                        "gemini: local file source is not supported — use a URL or base64 source \
-                         instead; video content dropped."
-                    );
-                    serde_json::Value::Null
-                }
+        ImageSource::Handle { handle } => {
+            crate::content::render::warn_handle_unresolved(
+                crate::types::ProviderId::Gemini,
+                handle,
+                crate::content::render::MediaKindLabel::Audio,
+            );
+            serde_json::Value::Null
+        }
+    }
+}
+
+fn video_part_to_gemini(video: &crate::types::VideoContent) -> serde_json::Value {
+    // Gemini natively accepts video via the same inlineData/fileData
+    // shape. Default mime: video/mp4.
+    let mime = video.media_type.as_deref().unwrap_or("video/mp4");
+    match &video.source {
+        ImageSource::Base64 { data } => serde_json::json!({
+            "inlineData": { "mimeType": mime, "data": data }
+        }),
+        ImageSource::Url { url } => serde_json::json!({
+            "fileData": { "mimeType": mime, "fileUri": url }
+        }),
+        ImageSource::File { .. } => {
+            tracing::warn!(
+                "gemini: local file source is not supported — use a URL or base64 source \
+                 instead; video content dropped."
+            );
+            serde_json::Value::Null
+        }
+        ImageSource::ProviderFile { provider, id } => {
+            if matches!(provider, crate::types::ProviderId::Gemini) {
+                serde_json::json!({
+                    "fileData": { "mimeType": mime, "fileUri": id }
+                })
+            } else {
+                crate::content::render::warn_provider_file_mismatch(
+                    crate::types::ProviderId::Gemini,
+                    *provider,
+                    id,
+                    crate::content::render::MediaKindLabel::Video,
+                );
+                serde_json::Value::Null
             }
+        }
+        ImageSource::Handle { handle } => {
+            crate::content::render::warn_handle_unresolved(
+                crate::types::ProviderId::Gemini,
+                handle,
+                crate::content::render::MediaKindLabel::Video,
+            );
+            serde_json::Value::Null
         }
     }
 }
@@ -284,16 +396,36 @@ impl GeminiProvider {
                 }
             } else if msg.role == Role::Tool && msg.tool_call_id.is_some() {
                 // Gemini expects tool results as functionResponse parts.
-                let response_value = tool_result_to_gemini_response(msg);
+                // The `response` field requires a JSON object — multimodal
+                // content cannot live there. We split text/JSON from any
+                // image / audio / file / video parts and emit the latter as
+                // a follow-up `Content` so the model sees them attached to
+                // the tool turn.
+                let split = tool_result_to_gemini_split(msg);
                 contents.push(serde_json::json!({
                     "role": "user",
                     "parts": [{
                         "functionResponse": {
                             "name": msg.name.as_deref().unwrap_or("unknown"),
-                            "response": response_value,
+                            "response": split.response,
                         }
                     }],
                 }));
+
+                if !split.follow_up_parts.is_empty() {
+                    let parts: Vec<serde_json::Value> = split
+                        .follow_up_parts
+                        .iter()
+                        .map(content_part_to_gemini)
+                        .filter(|v| !v.is_null())
+                        .collect();
+                    if !parts.is_empty() {
+                        contents.push(serde_json::json!({
+                            "role": "user",
+                            "parts": parts,
+                        }));
+                    }
+                }
             } else if msg.role == Role::Assistant && !msg.tool_calls.is_empty() {
                 // Gemini represents tool calls as functionCall parts.
                 let mut parts = content_to_gemini_parts(&msg.content);
@@ -997,34 +1129,108 @@ impl crate::traits::ProviderInfo for GeminiProvider {
 // Tool-result helpers
 // ---------------------------------------------------------------------------
 
-/// Render a tool-result payload for Gemini's `functionResponse.response`
-/// field, which **must** be a JSON object. Scalars are wrapped as
-/// `{"result": <scalar>}`.
-fn tool_result_to_gemini_response(msg: &crate::types::ChatMessage) -> serde_json::Value {
-    let Some((data, override_payload)) = msg.tool_result_view() else {
-        return serde_json::json!({});
-    };
+/// Result of splitting a tool-result message for Gemini serialization.
+///
+/// Gemini's `functionResponse.response` field requires a JSON object; it
+/// does not accept multimodal content. Image / audio / file / video parts
+/// are emitted as a separate immediately-following `Content` with role
+/// `user` carrying `inlineData` / `fileData` parts so the model can see
+/// them in connection with the tool output.
+pub(super) struct GeminiToolResultSplit {
+    /// The `functionResponse.response` JSON object.
+    pub response: serde_json::Value,
+    /// Non-text content parts to emit as a follow-up `Content` after the
+    /// `functionResponse` Content. Empty if the tool result is text-only.
+    pub follow_up_parts: Vec<crate::types::ContentPart>,
+}
 
-    if let Some(payload) = override_payload {
-        return match payload {
-            crate::types::LlmPayload::Text { text } => serde_json::json!({"result": text}),
-            crate::types::LlmPayload::Json { value } => match value {
-                serde_json::Value::Object(_) => value.clone(),
-                scalar => serde_json::json!({"result": scalar}),
-            },
-            crate::types::LlmPayload::Parts { parts } => {
-                serde_json::json!({"parts": parts})
-            }
-            crate::types::LlmPayload::ProviderRaw { provider, value }
-                if *provider == crate::types::ProviderId::Gemini =>
-            {
-                value.clone()
-            }
-            crate::types::LlmPayload::ProviderRaw { .. } => default_gemini_response(&data),
+/// Render a tool-result payload for Gemini, splitting any multimodal
+/// content into a separate follow-up `Content`. The `response` field is
+/// always a JSON object as Gemini requires; scalar text is wrapped as
+/// `{"result": <text>}`.
+///
+/// Considers both `tool_result.llm_override = LlmPayload::Parts` and
+/// `MessageContent::Parts` (from
+/// [`crate::types::ChatMessage::tool_result_parts`]) as multimodal sources.
+pub(super) fn tool_result_to_gemini_split(
+    msg: &crate::types::ChatMessage,
+) -> GeminiToolResultSplit {
+    use crate::types::{LlmPayload, MessageContent, Role};
+
+    if msg.role != Role::Tool {
+        return GeminiToolResultSplit {
+            response: serde_json::json!({}),
+            follow_up_parts: Vec::new(),
         };
     }
 
-    default_gemini_response(&data)
+    if let Some(out) = &msg.tool_result {
+        if let Some(payload) = &out.llm_override {
+            return match payload {
+                LlmPayload::Text { text } => GeminiToolResultSplit {
+                    response: serde_json::json!({"result": text}),
+                    follow_up_parts: Vec::new(),
+                },
+                LlmPayload::Json { value } => GeminiToolResultSplit {
+                    response: match value {
+                        serde_json::Value::Object(_) => value.clone(),
+                        scalar => serde_json::json!({"result": scalar}),
+                    },
+                    follow_up_parts: Vec::new(),
+                },
+                LlmPayload::Parts { parts } => split_parts_for_gemini(parts),
+                LlmPayload::ProviderRaw { provider, value }
+                    if *provider == crate::types::ProviderId::Gemini =>
+                {
+                    GeminiToolResultSplit {
+                        response: value.clone(),
+                        follow_up_parts: Vec::new(),
+                    }
+                }
+                LlmPayload::ProviderRaw { .. } => GeminiToolResultSplit {
+                    response: default_gemini_response(&out.data),
+                    follow_up_parts: Vec::new(),
+                },
+            };
+        }
+        return GeminiToolResultSplit {
+            response: default_gemini_response(&out.data),
+            follow_up_parts: Vec::new(),
+        };
+    }
+
+    // `tool_result` is None; payload lives in `content`.
+    match &msg.content {
+        MessageContent::Parts(parts) => split_parts_for_gemini(parts),
+        MessageContent::Text(s) => GeminiToolResultSplit {
+            response: serde_json::json!({"result": s}),
+            follow_up_parts: Vec::new(),
+        },
+        MessageContent::Image(img) => GeminiToolResultSplit {
+            response: serde_json::json!({}),
+            follow_up_parts: vec![crate::types::ContentPart::Image(img.clone())],
+        },
+    }
+}
+
+fn split_parts_for_gemini(parts: &[crate::types::ContentPart]) -> GeminiToolResultSplit {
+    let mut text_chunks: Vec<String> = Vec::new();
+    let mut non_text: Vec<crate::types::ContentPart> = Vec::new();
+    for part in parts {
+        match part {
+            crate::types::ContentPart::Text { text } => text_chunks.push(text.clone()),
+            other => non_text.push(other.clone()),
+        }
+    }
+    let response = if text_chunks.is_empty() {
+        serde_json::json!({})
+    } else {
+        serde_json::json!({"result": text_chunks.join("\n")})
+    };
+    GeminiToolResultSplit {
+        response,
+        follow_up_parts: non_text,
+    }
 }
 
 fn default_gemini_response(data: &serde_json::Value) -> serde_json::Value {
@@ -1380,25 +1586,23 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // tool_result_to_gemini_response helper
+    // tool_result_to_gemini_split helper
     // -----------------------------------------------------------------------
 
     #[test]
     fn gemini_helper_object_data_passes_through() {
         let msg = ChatMessage::tool_result("call_1", "search", serde_json::json!({"k":"v"}));
-        assert_eq!(
-            super::tool_result_to_gemini_response(&msg),
-            serde_json::json!({"k":"v"})
-        );
+        let split = super::tool_result_to_gemini_split(&msg);
+        assert_eq!(split.response, serde_json::json!({"k":"v"}));
+        assert!(split.follow_up_parts.is_empty());
     }
 
     #[test]
     fn gemini_helper_scalar_wraps_in_result() {
         let msg = ChatMessage::tool_result("call_1", "search", serde_json::json!("hello"));
-        assert_eq!(
-            super::tool_result_to_gemini_response(&msg),
-            serde_json::json!({"result":"hello"})
-        );
+        let split = super::tool_result_to_gemini_split(&msg);
+        assert_eq!(split.response, serde_json::json!({"result":"hello"}));
+        assert!(split.follow_up_parts.is_empty());
     }
 
     #[test]
@@ -1414,18 +1618,127 @@ mod tests {
                 },
             ),
         );
-        assert_eq!(
-            super::tool_result_to_gemini_response(&msg),
-            serde_json::json!({"result":"summary"})
-        );
+        let split = super::tool_result_to_gemini_split(&msg);
+        assert_eq!(split.response, serde_json::json!({"result":"summary"}));
+        assert!(split.follow_up_parts.is_empty());
     }
 
     #[test]
     fn gemini_helper_no_from_str_round_trip() {
-        // Smoke test: ensure that a message whose data is `Value::Object`
-        // round-trips identically without going through string parsing.
         let original = serde_json::json!({"weather": {"temp": 72, "humidity": 0.5}});
         let msg = ChatMessage::tool_result("call_1", "search", original.clone());
-        assert_eq!(super::tool_result_to_gemini_response(&msg), original);
+        let split = super::tool_result_to_gemini_split(&msg);
+        assert_eq!(split.response, original);
+        assert!(split.follow_up_parts.is_empty());
+    }
+
+    #[test]
+    fn gemini_helper_parts_split_text_and_image() {
+        use crate::types::{ContentPart, LlmPayload, ToolOutput};
+        let msg = ChatMessage::tool_result(
+            "call_1",
+            "render",
+            ToolOutput::with_override(
+                serde_json::json!({}),
+                LlmPayload::Parts {
+                    parts: vec![
+                        ContentPart::text("rendered"),
+                        ContentPart::image_base64("AAAA", "image/png"),
+                    ],
+                },
+            ),
+        );
+        let split = super::tool_result_to_gemini_split(&msg);
+        assert_eq!(split.response, serde_json::json!({"result":"rendered"}));
+        assert_eq!(split.follow_up_parts.len(), 1);
+    }
+
+    #[test]
+    fn gemini_helper_parts_text_only_yields_no_follow_up() {
+        use crate::types::{ContentPart, LlmPayload, ToolOutput};
+        let msg = ChatMessage::tool_result(
+            "call_1",
+            "search",
+            ToolOutput::with_override(
+                serde_json::json!({}),
+                LlmPayload::Parts {
+                    parts: vec![ContentPart::text("a"), ContentPart::text("b")],
+                },
+            ),
+        );
+        let split = super::tool_result_to_gemini_split(&msg);
+        assert_eq!(split.response, serde_json::json!({"result":"a\nb"}));
+        assert!(split.follow_up_parts.is_empty());
+    }
+
+    #[test]
+    fn gemini_build_body_emits_follow_up_for_image_tool_result() {
+        use crate::types::{ContentPart, LlmPayload, ToolOutput};
+        let provider = GeminiProvider::new("test-key");
+        let tool_msg = ChatMessage::tool_result(
+            "call_1",
+            "render",
+            ToolOutput::with_override(
+                serde_json::json!({}),
+                LlmPayload::Parts {
+                    parts: vec![
+                        ContentPart::text("rendered"),
+                        ContentPart::image_base64("AAAA", "image/png"),
+                    ],
+                },
+            ),
+        );
+        let request = CompletionRequest::new(vec![tool_msg]);
+        let body = provider.build_body(&request);
+        let contents = body["contents"].as_array().unwrap();
+        // functionResponse Content + follow-up user Content with inlineData.
+        assert_eq!(contents.len(), 2);
+        assert!(contents[0]["parts"][0].get("functionResponse").is_some());
+        assert_eq!(
+            contents[0]["parts"][0]["functionResponse"]["response"],
+            serde_json::json!({"result":"rendered"})
+        );
+        assert_eq!(contents[1]["role"], "user");
+        let follow_up_parts = contents[1]["parts"].as_array().unwrap();
+        assert_eq!(follow_up_parts.len(), 1);
+        assert!(follow_up_parts[0].get("inlineData").is_some());
+        assert_eq!(follow_up_parts[0]["inlineData"]["mimeType"], "image/png");
+    }
+
+    #[test]
+    fn gemini_build_body_text_only_tool_result_no_follow_up() {
+        let provider = GeminiProvider::new("test-key");
+        let tool_msg = ChatMessage::tool_result("call_1", "search", serde_json::json!("ok"));
+        let request = CompletionRequest::new(vec![tool_msg]);
+        let body = provider.build_body(&request);
+        let contents = body["contents"].as_array().unwrap();
+        assert_eq!(contents.len(), 1);
+        assert!(contents[0]["parts"][0].get("functionResponse").is_some());
+    }
+
+    #[test]
+    fn gemini_build_body_no_bogus_parts_envelope() {
+        // Regression guard: the old implementation emitted
+        // `{"parts": parts}` inside `functionResponse.response`. This shape
+        // is not recognized by Gemini and must never appear.
+        use crate::types::{ContentPart, LlmPayload, ToolOutput};
+        let provider = GeminiProvider::new("test-key");
+        let tool_msg = ChatMessage::tool_result(
+            "call_1",
+            "render",
+            ToolOutput::with_override(
+                serde_json::json!({}),
+                LlmPayload::Parts {
+                    parts: vec![ContentPart::image_base64("AAAA", "image/png")],
+                },
+            ),
+        );
+        let request = CompletionRequest::new(vec![tool_msg]);
+        let body = provider.build_body(&request);
+        let response = &body["contents"][0]["parts"][0]["functionResponse"]["response"];
+        assert!(
+            response.get("parts").is_none(),
+            "functionResponse.response must not contain a `parts` envelope; got: {response}",
+        );
     }
 }

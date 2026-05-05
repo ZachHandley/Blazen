@@ -3,9 +3,10 @@
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
+use blazen_llm::content::{ContentHandle, ContentKind};
 use blazen_llm::types::{
     AudioContent, ChatMessage, ContentPart, ImageContent, ImageSource, MediaSource, MessageContent,
-    Role, VideoContent,
+    ProviderId, Role, VideoContent,
 };
 
 // ---------------------------------------------------------------------------
@@ -29,13 +30,36 @@ pub enum JsRole {
 // Content part types for multimodal messages
 // ---------------------------------------------------------------------------
 
-/// How an image is provided (URL or base64).
+/// How an image / audio / video / file is provided.
+///
+/// `sourceType` is one of:
+/// - `"url"` — set `url` to a public URL.
+/// - `"base64"` — set `data` to the base64-encoded payload.
+/// - `"file"` — set `url` to a local filesystem path (local backends only).
+/// - `"providerFile"` — set `provider` and `id` to reference an
+///   already-uploaded file in a provider's file API (`OpenAI` Files,
+///   Anthropic Files, Gemini Files, fal.ai storage).
+/// - `"handle"` — set `handleId` (and optionally `handleKind`) to reference
+///   content registered with a `ContentStore`. The store resolves the
+///   handle at request-build time.
 #[napi(object)]
 pub struct JsImageSource {
     #[napi(js_name = "sourceType")]
     pub source_type: String,
     pub url: Option<String>,
     pub data: Option<String>,
+    /// Provider name for `sourceType: "providerFile"` (e.g. `"openai"`,
+    /// `"anthropic"`, `"gemini"`, `"fal"`).
+    pub provider: Option<String>,
+    /// Provider-issued file id for `sourceType: "providerFile"`.
+    pub id: Option<String>,
+    /// Content handle id for `sourceType: "handle"`.
+    #[napi(js_name = "handleId")]
+    pub handle_id: Option<String>,
+    /// Content handle kind for `sourceType: "handle"` (e.g. `"image"`,
+    /// `"audio"`, `"three_d_model"`). See `ContentKind` for the full set.
+    #[napi(js_name = "handleKind")]
+    pub handle_kind: Option<String>,
 }
 
 /// Image content for multimodal messages.
@@ -305,6 +329,169 @@ impl JsChatMessage {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// Parse a JS [`JsImageSource`] into a Rust [`ImageSource`].
+///
+/// Accepts `"url"` / `"base64"` / `"file"` / `"providerFile"` / `"handle"`
+/// for the `sourceType` field. Returns a napi error on unknown source
+/// types or missing required fields for the chosen type.
+pub(crate) fn js_source_to_rust(source: &JsImageSource, kind_label: &str) -> Result<ImageSource> {
+    match source.source_type.as_str() {
+        "url" => Ok(ImageSource::Url {
+            url: source.url.clone().unwrap_or_default(),
+        }),
+        "base64" => Ok(ImageSource::Base64 {
+            data: source.data.clone().unwrap_or_default(),
+        }),
+        "file" => Ok(ImageSource::File {
+            path: std::path::PathBuf::from(source.url.clone().unwrap_or_default()),
+        }),
+        "providerFile" => {
+            let provider_str = source.provider.as_deref().ok_or_else(|| {
+                napi::Error::new(
+                    napi::Status::InvalidArg,
+                    format!(
+                        "{kind_label} source with sourceType \"providerFile\" must include `provider`"
+                    ),
+                )
+            })?;
+            let provider = parse_provider_id(provider_str)?;
+            let id = source.id.clone().ok_or_else(|| {
+                napi::Error::new(
+                    napi::Status::InvalidArg,
+                    format!(
+                        "{kind_label} source with sourceType \"providerFile\" must include `id`"
+                    ),
+                )
+            })?;
+            Ok(ImageSource::ProviderFile { provider, id })
+        }
+        "handle" => {
+            let id = source.handle_id.clone().ok_or_else(|| {
+                napi::Error::new(
+                    napi::Status::InvalidArg,
+                    format!(
+                        "{kind_label} source with sourceType \"handle\" must include `handleId`"
+                    ),
+                )
+            })?;
+            let kind = match source.handle_kind.as_deref() {
+                Some(k) => parse_content_kind(k)?,
+                None => ContentKind::Other,
+            };
+            Ok(ImageSource::Handle {
+                handle: ContentHandle::new(id, kind),
+            })
+        }
+        other => Err(napi::Error::new(
+            napi::Status::InvalidArg,
+            format!(
+                "Invalid {kind_label} source type: \"{other}\". Must be one of: \
+                 url, base64, file, providerFile, handle"
+            ),
+        )),
+    }
+}
+
+fn parse_provider_id(s: &str) -> Result<ProviderId> {
+    match s.to_ascii_lowercase().as_str() {
+        "openai" => Ok(ProviderId::OpenAi),
+        "openai_compat" | "openaicompat" => Ok(ProviderId::OpenAiCompat),
+        "azure" => Ok(ProviderId::Azure),
+        "anthropic" => Ok(ProviderId::Anthropic),
+        "gemini" => Ok(ProviderId::Gemini),
+        "responses" => Ok(ProviderId::Responses),
+        "fal" => Ok(ProviderId::Fal),
+        other => Err(napi::Error::new(
+            napi::Status::InvalidArg,
+            format!("Invalid provider: \"{other}\""),
+        )),
+    }
+}
+
+fn parse_content_kind(s: &str) -> Result<ContentKind> {
+    match s.to_ascii_lowercase().as_str() {
+        "image" => Ok(ContentKind::Image),
+        "audio" => Ok(ContentKind::Audio),
+        "video" => Ok(ContentKind::Video),
+        "document" => Ok(ContentKind::Document),
+        "three_d_model" | "threedmodel" | "three-d-model" => Ok(ContentKind::ThreeDModel),
+        "cad" => Ok(ContentKind::Cad),
+        "archive" => Ok(ContentKind::Archive),
+        "font" => Ok(ContentKind::Font),
+        "code" => Ok(ContentKind::Code),
+        "data" => Ok(ContentKind::Data),
+        "other" => Ok(ContentKind::Other),
+        other => Err(napi::Error::new(
+            napi::Status::InvalidArg,
+            format!("Invalid content kind: \"{other}\""),
+        )),
+    }
+}
+
+/// Render a Rust [`ImageSource`] back to a JS [`JsImageSource`].
+#[must_use]
+pub(crate) fn rust_source_to_js(source: &MediaSource) -> JsImageSource {
+    match source {
+        ImageSource::Url { url } => JsImageSource {
+            source_type: "url".into(),
+            url: Some(url.clone()),
+            data: None,
+            provider: None,
+            id: None,
+            handle_id: None,
+            handle_kind: None,
+        },
+        ImageSource::Base64 { data } => JsImageSource {
+            source_type: "base64".into(),
+            url: None,
+            data: Some(data.clone()),
+            provider: None,
+            id: None,
+            handle_id: None,
+            handle_kind: None,
+        },
+        ImageSource::File { path } => JsImageSource {
+            source_type: "file".into(),
+            url: Some(path.to_string_lossy().into_owned()),
+            data: None,
+            provider: None,
+            id: None,
+            handle_id: None,
+            handle_kind: None,
+        },
+        ImageSource::ProviderFile { provider, id } => JsImageSource {
+            source_type: "providerFile".into(),
+            url: None,
+            data: None,
+            provider: Some(format!("{provider:?}").to_lowercase()),
+            id: Some(id.clone()),
+            handle_id: None,
+            handle_kind: None,
+        },
+        ImageSource::Handle { handle } => JsImageSource {
+            source_type: "handle".into(),
+            url: None,
+            data: None,
+            provider: None,
+            id: None,
+            handle_id: Some(handle.id.clone()),
+            handle_kind: Some(handle.kind.as_str().to_owned()),
+        },
+        // `ImageSource` is `#[non_exhaustive]`. Future variants degrade to
+        // `unknown` rather than panicking; the JS side can detect this and
+        // fall back appropriately.
+        _ => JsImageSource {
+            source_type: "unknown".into(),
+            url: None,
+            data: None,
+            provider: None,
+            id: None,
+            handle_id: None,
+            handle_kind: None,
+        },
+    }
+}
+
 /// Parse a role string into a [`Role`], returning a napi error on invalid input.
 pub(crate) fn parse_role(role_str: &str) -> Result<Role> {
     match role_str {
@@ -335,22 +522,7 @@ pub(crate) fn convert_js_parts(parts: Vec<JsContentPart>) -> Result<Vec<ContentP
                         "Content part with partType \"image\" must include an `image` field",
                     )
                 })?;
-                let source = match img.source.source_type.as_str() {
-                    "url" => ImageSource::Url {
-                        url: img.source.url.unwrap_or_default(),
-                    },
-                    "base64" => ImageSource::Base64 {
-                        data: img.source.data.unwrap_or_default(),
-                    },
-                    other => {
-                        return Err(napi::Error::new(
-                            napi::Status::InvalidArg,
-                            format!(
-                                "Invalid image source type: \"{other}\". Must be \"url\" or \"base64\""
-                            ),
-                        ))
-                    }
-                };
+                let source = js_source_to_rust(&img.source, "image")?;
                 Ok(ContentPart::Image(ImageContent {
                     source,
                     media_type: img.media_type,
@@ -363,22 +535,7 @@ pub(crate) fn convert_js_parts(parts: Vec<JsContentPart>) -> Result<Vec<ContentP
                         "Content part with partType \"audio\" must include an `audio` field",
                     )
                 })?;
-                let source = match audio.source.source_type.as_str() {
-                    "url" => MediaSource::Url {
-                        url: audio.source.url.unwrap_or_default(),
-                    },
-                    "base64" => MediaSource::Base64 {
-                        data: audio.source.data.unwrap_or_default(),
-                    },
-                    other => {
-                        return Err(napi::Error::new(
-                            napi::Status::InvalidArg,
-                            format!(
-                                "Invalid audio source type: \"{other}\". Must be \"url\" or \"base64\""
-                            ),
-                        ));
-                    }
-                };
+                let source = js_source_to_rust(&audio.source, "audio")?;
                 #[allow(clippy::cast_possible_truncation)]
                 let duration = audio.duration_seconds.map(|d| d as f32);
                 Ok(ContentPart::Audio(AudioContent {
@@ -394,22 +551,7 @@ pub(crate) fn convert_js_parts(parts: Vec<JsContentPart>) -> Result<Vec<ContentP
                         "Content part with partType \"video\" must include a `video` field",
                     )
                 })?;
-                let source = match video.source.source_type.as_str() {
-                    "url" => MediaSource::Url {
-                        url: video.source.url.unwrap_or_default(),
-                    },
-                    "base64" => MediaSource::Base64 {
-                        data: video.source.data.unwrap_or_default(),
-                    },
-                    other => {
-                        return Err(napi::Error::new(
-                            napi::Status::InvalidArg,
-                            format!(
-                                "Invalid video source type: \"{other}\". Must be \"url\" or \"base64\""
-                            ),
-                        ));
-                    }
-                };
+                let source = js_source_to_rust(&video.source, "video")?;
                 #[allow(clippy::cast_possible_truncation)]
                 let duration = video.duration_seconds.map(|d| d as f32);
                 Ok(ContentPart::Video(VideoContent {

@@ -84,6 +84,9 @@ bytes = "1"
 # Encoding
 base64 = "0.22"
 
+# Magic-number / file-type detection (used by blazen-llm content store).
+infer = { version = "0.16", default-features = false }
+
 # Python bindings
 pyo3 = { version = "0.28", features = ["multiple-pymethods"] }
 pyo3-async-runtimes = { version = "0.28", features = ["tokio-runtime"] }

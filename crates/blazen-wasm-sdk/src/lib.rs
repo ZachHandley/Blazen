@@ -29,6 +29,7 @@ pub mod chat_message;
 pub mod completion_model;
 pub mod completion_types;
 pub mod compute_provider;
+pub mod content;
 pub mod context;
 pub mod core_types;
 pub mod decorators;

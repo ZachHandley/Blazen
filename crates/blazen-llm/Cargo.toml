@@ -9,9 +9,13 @@ repository.workspace = true
 description = "LLM provider abstraction layer for the Blazen workflow engine"
 
 [features]
-default = []
+default = ["content-detect"]
 reqwest = ["dep:reqwest"]
 tiktoken = ["dep:tiktoken-rs"]
+# Magic-number-based file-type detection for the content store. Adds the
+# `infer` dependency. Disable for footprint-sensitive embedded targets;
+# detection then falls back to extension + MIME hints.
+content-detect = ["dep:infer"]
 tsify = ["dep:tsify-next", "dep:wasm-bindgen"]
 pyo3-serde = ["dep:pythonize", "dep:pyo3"]
 # Local inference backends (populated per-phase as crates land)
@@ -44,6 +48,7 @@ wasm-bindgen = { version = "=0.2.118", optional = true }
 pythonize = { version = "0.28", optional = true }
 pyo3 = { version = "0.28", optional = true }
 base64 = { workspace = true }
+infer = { workspace = true, optional = true }
 uuid.workspace = true
 blazen-embed = { workspace = true, optional = true }
 blazen-llm-mistralrs = { workspace = true, optional = true }
