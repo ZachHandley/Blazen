@@ -8,6 +8,8 @@ methods execute the Python implementation).
 None of these tests require API keys or network access.
 """
 
+import asyncio
+
 import pytest
 
 from blazen import (
@@ -923,6 +925,56 @@ async def test_model_manager_register_vram_estimate_fallback():
     assert len(matching) == 1
     assert matching[0].vram_estimate == vram
     assert matching[0].loaded is False
+
+
+def test_model_manager_register_works_across_event_loops():
+    """Registering on one asyncio loop and calling load/is_loaded from a
+    fresh loop must not raise ``RuntimeError: Event loop is closed``.
+
+    Regression: ``PyLocalModelWrapper`` previously captured ``TaskLocals``
+    at registration time, binding the wrapper to the first loop it saw.
+    """
+
+    class CrossLoopLocal(LocalModel):
+        def __init__(self):
+            super().__init__()
+            self.loaded = False
+
+        async def load(self):
+            self.loaded = True
+
+        async def unload(self):
+            self.loaded = False
+
+        async def is_loaded(self):
+            return self.loaded
+
+    instance = CrossLoopLocal()
+
+    async def register_phase():
+        mgr = ModelManager(budget_gb=8.0)
+        await mgr.register("cross-loop", instance, vram_estimate_bytes=1_000_000_000)
+        return mgr
+
+    # Loop A: build the manager and register the model.
+    mgr = asyncio.run(register_phase())
+    assert instance.loaded is False
+
+    async def use_phase():
+        await mgr.ensure_loaded("cross-loop")
+        return await mgr.is_loaded("cross-loop")
+
+    # Loop B: a brand-new asyncio.run.
+    assert asyncio.run(use_phase()) is True
+    assert instance.loaded is True
+
+    # And once more, on yet another fresh loop, to exercise unload too.
+    async def teardown_phase():
+        await mgr.unload("cross-loop")
+        return await mgr.is_loaded("cross-loop")
+
+    assert asyncio.run(teardown_phase()) is False
+    assert instance.loaded is False
 
 
 # ---------------------------------------------------------------------------

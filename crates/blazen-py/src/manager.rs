@@ -30,33 +30,37 @@ struct PyLocalModelWrapper {
     has_is_loaded: bool,
     has_vram_bytes: bool,
     vram_estimate: u64,
-    locals: pyo3_async_runtimes::TaskLocals,
 }
 
 impl PyLocalModelWrapper {
     /// Call a no-arg method on the wrapped Python object, transparently
     /// awaiting the result if `is_async` is true.
     ///
+    /// For async methods, [`pyo3_async_runtimes::tokio::get_current_locals`]
+    /// is captured at call time (not at registration time) so the awaited
+    /// coroutine is driven on the caller's currently-running asyncio event
+    /// loop rather than whichever loop happened to be active when the model
+    /// was registered.
+    ///
     /// The returned `Py<PyAny>` is the resolved value of the (possibly async)
     /// method call.
     async fn call_method(&self, name: &'static str, is_async: bool) -> PyResult<Py<PyAny>> {
-        let obj = Python::attach(|py| self.obj.clone_ref(py));
-
         if is_async {
-            let locals = self.locals.clone();
-
-            let coroutine: Py<PyAny> =
-                tokio::task::block_in_place(|| Python::attach(|py| obj.call_method0(py, name)))?;
-
-            let future = Python::attach(|py| {
-                pyo3_async_runtimes::into_future_with_locals(&locals, coroutine.into_bound(py))
+            let (fut, locals) = tokio::task::block_in_place(|| {
+                Python::attach(|py| -> PyResult<_> {
+                    let coro = self.obj.bind(py).call_method0(name)?;
+                    let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
+                    let fut = pyo3_async_runtimes::into_future_with_locals(&locals, coro)?;
+                    Ok((fut, locals))
+                })
             })?;
 
-            let py_result = pyo3_async_runtimes::tokio::scope(locals, future).await?;
+            let py_result = pyo3_async_runtimes::tokio::scope(locals, fut).await?;
             Ok(py_result)
         } else {
-            let py_result =
-                tokio::task::block_in_place(|| Python::attach(|py| obj.call_method0(py, name)))?;
+            let py_result = tokio::task::block_in_place(|| {
+                Python::attach(|py| self.obj.call_method0(py, name))
+            })?;
             Ok(py_result)
         }
     }
@@ -219,8 +223,6 @@ fn build_local_model_wrapper(
     let (has_is_loaded, is_loaded_is_async) = is_user_override("is_loaded");
     let (has_vram_bytes, vram_bytes_is_async) = is_user_override("vram_bytes");
 
-    let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
-
     Ok(PyLocalModelWrapper {
         obj: obj.clone().unbind(),
         load_is_async,
@@ -230,7 +232,6 @@ fn build_local_model_wrapper(
         has_is_loaded,
         has_vram_bytes,
         vram_estimate,
-        locals,
     })
 }
 
