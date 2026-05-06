@@ -13,6 +13,7 @@ __all__ = [
     "AgentResult",
     "AnthropicProvider",
     "Artifact",
+    "AsyncByteIter",
     "AudioContent",
     "AuthError",
     "AuthMethod",
@@ -35,6 +36,7 @@ __all__ = [
     "CacheMiddleware",
     "CacheStrategy",
     "CachedCompletionModel",
+    "CallbackFieldStore",
     "CandleEmbedError",
     "CandleEmbedModel",
     "CandleEmbedOptions",
@@ -679,6 +681,32 @@ class Artifact:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class AsyncByteIter:
+    r"""
+    Async iterator over a Rust [`ByteStream`], exposed to Python.
+    
+    Implements the ``__aiter__`` / ``__anext__`` protocol so Python code
+    can do ``async for chunk in stream: ...`` with each chunk arriving as
+    a ``bytes`` object. Chunks are pulled from a bounded
+    `mpsc::channel(STREAM_CHANNEL_CAPACITY)` fed by a background tokio
+    task that drains the underlying stream.
+    
+    Instances are produced by the runtime (e.g. as ``body["stream"]`` in
+    a streaming ``put`` callback); they are not constructible from Python.
+    """
+    def __aiter__(self) -> AsyncByteIter:
+        r"""
+        Return ``self``; the iterator is its own async iterator.
+        """
+    def __anext__(self) -> typing.Any:
+        r"""
+        Pull the next chunk. Returns an awaitable that resolves to
+        ``bytes`` (the next chunk) or raises ``StopAsyncIteration`` when
+        the underlying stream is exhausted. Errors from the source stream
+        surface here as the Blazen error type.
+        """
+
+@typing.final
 class AudioContent:
     r"""
     Audio content for multimodal messages (Gemini, gpt-4o-audio-preview).
@@ -1268,6 +1296,34 @@ class CachedCompletionModel:
     def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Optional[typing.Any] = None, options: typing.Optional[CompletionOptions] = None) -> typing.Any:
         r"""
         Stream a chat completion (always passes through; never cached).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class CallbackFieldStore:
+    r"""
+    Convenience implementation of the `FieldStore` structural protocol that
+    delegates to plain Python callables. Use as a value in
+    `BlazenState.Meta.store_by` to route a specific field through custom
+    storage (e.g. S3, a database, Redis) without having to subclass
+    anything.
+    """
+    def __new__(cls, save_fn: typing.Any, load_fn: typing.Any) -> CallbackFieldStore: ...
+    def save(self, key: builtins.str, value: typing.Any, _ctx: typing.Any) -> None:
+        r"""
+        Persist `value` under `key` by invoking the user-supplied `save_fn`.
+        
+        The `_ctx` argument is intentionally unused — the convenience wrapper
+        presents the simpler `(key, value)` signature to user callbacks. If
+        you need access to the context, implement the structural protocol
+        directly with your own class.
+        """
+    def load(self, key: builtins.str, _ctx: typing.Any) -> typing.Any:
+        r"""
+        Load and return the value stored under `key` by invoking the
+        user-supplied `load_fn`.
+        
+        The `_ctx` argument is intentionally unused — see `save` for details.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -2580,25 +2636,70 @@ class ContentPart:
         """
     def __repr__(self) -> builtins.str: ...
 
-@typing.final
 class ContentStore:
     r"""
     A pluggable content registry that backs handle resolution.
     
-    Wraps any backend implementing `blazen_llm::content::ContentStore`.
-    Construct with one of the static factory methods (`in_memory`,
-    `local_file`, `openai_files`, `anthropic_files`, `gemini_files`,
-    `fal_storage`).
+    Wraps any backend implementing
+    [`blazen_llm::content::ContentStore`]. Construct with one of the
+    static factory methods (``in_memory``, ``local_file``,
+    ``openai_files``, ``anthropic_files``, ``gemini_files``,
+    ``fal_storage``, ``custom``) or by subclassing and overriding the
+    async methods (``put``, ``resolve``, ``fetch_bytes``,
+    ``fetch_stream``, ``delete``).
     
     All I/O methods return awaitables.
     
-    Example:
+    Example (built-in factory):
         >>> store = ContentStore.in_memory()
         >>> handle = await store.put(b"hello", kind=ContentKind.Other)
         >>> source = await store.resolve(handle)
         >>> source["type"]
         'base64'
+    
+    Example (subclass):
+        >>> class S3ContentStore(ContentStore):
+        ...     def __init__(self, bucket: str):
+        ...         super().__init__()
+        ...         self.bucket = bucket
+        ...     async def put(self, body, hint): ...
+        ...     async def resolve(self, handle): ...
+        ...     async def fetch_bytes(self, handle): ...
+    
+    Example (streaming subclass):
+        >>> class StreamingStore(ContentStore):
+        ...     async def put(self, body, hint):
+        ...         # `body` is a serde-tagged dict; the streaming variant
+        ...         # exposes an AsyncByteIter under body["stream"].
+        ...         if body["type"] == "stream":
+        ...             async for chunk in body["stream"]:
+        ...                 await self._sink.write(chunk)
+        ...         else:
+        ...             ...  # handle "bytes" / "url" / "local_path" / "provider_file"
+        ...         return ContentHandle(...)
+        ...     async def fetch_stream(self, handle):
+        ...         # Yield chunks from an async generator; the runtime
+        ...         # drives __anext__() and bridges into a Rust ByteStream.
+        ...         async def gen():
+        ...             async for chunk in self._source.iter(handle):
+        ...                 yield chunk
+        ...         return gen()
+    
+    Example (callback factory):
+        >>> store = ContentStore.custom(
+        ...     put=async_put_fn,
+        ...     resolve=async_resolve_fn,
+        ...     fetch_bytes=async_fetch_fn,
+        ...     fetch_stream=async_fetch_stream_fn,  # may return bytes or AsyncIterator[bytes]
+        ...     name="my_s3_store",
+        ... )
     """
+    def __new__(cls) -> ContentStore:
+        r"""
+        Base-class constructor. Call from your subclass's ``__init__`` via
+        ``super().__init__()``. The base class on its own is not useful —
+        the default method implementations raise ``NotImplementedError``.
+        """
     @staticmethod
     def in_memory() -> ContentStore:
         r"""
@@ -2632,6 +2733,41 @@ class ContentStore:
         r"""
         Create a store backed by fal.ai object storage.
         """
+    @staticmethod
+    def custom(*, put: typing.Any, resolve: typing.Any, fetch_bytes: typing.Any, fetch_stream: typing.Optional[typing.Any] = None, delete: typing.Optional[typing.Any] = None, name: typing.Optional[builtins.str] = None) -> ContentStore:
+        r"""
+        Create a store backed by user-supplied async callables.
+        
+        Mirrors the Rust [`CustomContentStore::builder`] API. ``put``,
+        ``resolve``, and ``fetch_bytes`` are required; ``fetch_stream``
+        and ``delete`` are optional. All callables must be ``async def``;
+        they receive plain dicts for ``ContentBody`` / ``ContentHint``
+        and a [`ContentHandle`] object for resolve / fetch / delete.
+        
+        ``put(body, hint)`` receives ``body`` as a serde-tagged dict that
+        is one of:
+        
+        - ``{"type": "bytes", "data": [...]}`` — fully buffered payload.
+        - ``{"type": "url", "url": "..."}`` — remote URL reference.
+        - ``{"type": "local_path", "path": "..."}`` — local filesystem
+          reference.
+        - ``{"type": "provider_file", ...}`` — opaque provider-file
+          reference (shape mirrors the Rust ``ProviderFile`` variant).
+        - ``{"type": "stream", "stream": <AsyncByteIter>,
+          "size_hint": int | None}`` — chunk-by-chunk streaming. Iterate
+          the ``stream`` field with ``async for chunk in body["stream"]``
+          to consume the upload without buffering the full payload in
+          memory.
+        
+        ``put`` must return a [`ContentHandle`].
+        ``resolve`` must return a dict shaped like the serialized
+        [`MediaSource`] (e.g. ``{"type": "url", "url": "..."}`` or
+        ``{"type": "base64", "data": "..."}``).
+        ``fetch_bytes`` must return ``bytes``.
+        ``fetch_stream`` may return either ``bytes`` (drained) or an
+        ``AsyncIterator[bytes]`` for true chunk-by-chunk streaming.
+        ``delete`` returns ``None``.
+        """
     def put(self, body: typing.Any, *, kind: typing.Optional[ContentKind] = None, mime_type: typing.Optional[builtins.str] = None, display_name: typing.Optional[builtins.str] = None, byte_size: typing.Optional[builtins.int] = None) -> typing.Any:
         r"""
         Persist content and return a freshly-issued `ContentHandle`.
@@ -2651,6 +2787,17 @@ class ContentStore:
         r"""
         Fetch the raw bytes for a handle. Stores that hold only references
         (URL / provider-file / local-path) may raise `UnsupportedError`.
+        """
+    def fetch_stream(self, handle: ContentHandle) -> typing.Any:
+        r"""
+        Fetch the content as a chunk-by-chunk async iterator. Returns an
+        awaitable that resolves to an [`AsyncByteIter`]; iterate it with
+        ``async for chunk in await store.fetch_stream(handle)`` to consume
+        the payload without buffering it in memory.
+        
+        Stores that hold only references (URL / provider-file) may raise
+        `UnsupportedError`. Built-in stores fall back to a single-chunk
+        iterator over `fetch_bytes` when no native streaming path exists.
         """
     def metadata(self, handle: ContentHandle) -> typing.Any:
         r"""

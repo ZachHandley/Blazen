@@ -1604,10 +1604,8 @@ impl WasmRetryMemoryBackend {
         options: JsValue,
     ) -> WasmRetryMemoryBackend {
         let cfg = crate::decorators::build_retry_config(&options);
-        let wrapped = RetryMemoryBackend::new(
-            Arc::clone(&backend.inner) as Arc<dyn MemoryBackend>,
-            cfg,
-        );
+        let wrapped =
+            RetryMemoryBackend::new(Arc::clone(&backend.inner) as Arc<dyn MemoryBackend>, cfg);
         Self {
             inner: wrapped.into_arc(),
         }

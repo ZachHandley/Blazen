@@ -68,9 +68,10 @@ impl WasmModelRegistry {
     #[wasm_bindgen(constructor)]
     pub fn new(impl_obj: JsValue) -> Result<WasmModelRegistry, JsValue> {
         for method in &["listModels", "getModel"] {
-            let val = js_sys::Reflect::get(&impl_obj, &JsValue::from_str(method)).map_err(|_| {
-                JsValue::from_str(&format!("ModelRegistry impl missing '{method}'"))
-            })?;
+            let val =
+                js_sys::Reflect::get(&impl_obj, &JsValue::from_str(method)).map_err(|_| {
+                    JsValue::from_str(&format!("ModelRegistry impl missing '{method}'"))
+                })?;
             if !val.is_function() {
                 return Err(JsValue::from_str(&format!(
                     "ModelRegistry.{method} must be a function"
@@ -107,6 +108,8 @@ impl WasmModelRegistry {
                 .unwrap_or(JsValue::UNDEFINED)
                 .unchecked_into();
         let this = self.impl_obj.clone();
-        future_to_promise(async move { call1_await(&func, &this, JsValue::from_str(&model_id)).await })
+        future_to_promise(
+            async move { call1_await(&func, &this, JsValue::from_str(&model_id)).await },
+        )
     }
 }

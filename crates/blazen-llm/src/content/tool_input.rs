@@ -339,7 +339,9 @@ mod tests {
         let store = InMemoryContentStore::new();
         let handle = store
             .put(
-                ContentBody::Url("https://example.com/cat.png".into()),
+                ContentBody::Url {
+                    url: "https://example.com/cat.png".into(),
+                },
                 ContentHint::default()
                     .with_kind(ContentKind::Image)
                     .with_mime_type("image/png"),
@@ -373,7 +375,9 @@ mod tests {
         let schema = content_ref_required_object("photo", ContentKind::Image, "the photo", props);
         let h = store
             .put(
-                ContentBody::Url("https://example.com/x.png".into()),
+                ContentBody::Url {
+                    url: "https://example.com/x.png".into(),
+                },
                 ContentHint::default().with_kind(ContentKind::Image),
             )
             .await
@@ -401,7 +405,7 @@ mod tests {
         let store = InMemoryContentStore::new();
         let h = store
             .put(
-                ContentBody::Bytes(vec![1u8]),
+                ContentBody::Bytes { data: vec![1u8] },
                 ContentHint::default().with_kind(ContentKind::Audio),
             )
             .await

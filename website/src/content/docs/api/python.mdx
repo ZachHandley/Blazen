@@ -264,7 +264,9 @@ state = ctx.get("state")     # Reconstructs object, then calls restore()
 
 ## FieldStore
 
-Protocol for custom per-field persistence. Implement this to route specific `BlazenState` fields through custom storage (e.g., S3, a database, Redis).
+**Structural protocol** for custom per-field persistence. There is no `FieldStore` class to import — any object whose shape matches the two methods below can be used as a value in `BlazenState.Meta.store_by` to route specific fields through custom storage (e.g., S3, a database, Redis).
+
+Implement the shape directly with your own class, or use [`CallbackFieldStore`](#callbackfieldstore) below for the common case.
 
 | Method | Signature | Description |
 |---|---|---|
@@ -275,9 +277,11 @@ Protocol for custom per-field persistence. Implement this to route specific `Bla
 
 ## CallbackFieldStore
 
-Convenience implementation of `FieldStore` that delegates to plain callables.
+Convenience implementation of the `FieldStore` structural protocol that delegates to plain callables. Importable directly from `blazen`.
 
 ```python
+from blazen import CallbackFieldStore
+
 CallbackFieldStore(
     save_fn: Callable[[str, Any], None],
     load_fn: Callable[[str], Any],
@@ -289,7 +293,7 @@ CallbackFieldStore(
 | `save_fn` | `Callable[[str, Any], None]` | Called with `(key, value)` to persist a field. |
 | `load_fn` | `Callable[[str], Any]` | Called with `(key)` to load a field value. |
 
-Also exposes `save(key, value, ctx)` and `load(key, ctx)` methods matching the `FieldStore` protocol.
+Also exposes `save(key, value, ctx)` and `load(key, ctx)` methods matching the `FieldStore` protocol — the `ctx` argument is accepted but not forwarded to your callbacks.
 
 ```python
 from blazen import CallbackFieldStore
@@ -299,6 +303,8 @@ store = CallbackFieldStore(
     load_fn=lambda k: s3.get_object(Bucket="b", Key=k)["Body"].read(),
 )
 ```
+
+> This is a tiny ~15-line wrapper. If your store needs richer behavior (the `ctx` argument, async I/O, batching), implement the structural protocol directly with your own class.
 
 ---
 
@@ -905,6 +911,257 @@ src = MediaSource.from_path("./photo.png")
 ```
 
 The two names refer to the same class -- `isinstance(src, ImageSource)` is `True`.
+
+---
+
+## Content Subsystem
+
+A pluggable registry for multimodal blobs (images, audio, video, documents, 3D, CAD) that lets tool handlers emit and accept opaque handles instead of inline bytes. Handles are resolved to a wire-renderable `MediaSource` only when the model actually needs the content.
+
+### ContentKind
+
+Taxonomy enum of multimodal content kinds. Used by tool-input declarations and `ContentStore` routing.
+
+```python
+from blazen import ContentKind
+
+ContentKind.Image
+ContentKind.from_str("three_d_model")
+ContentKind.from_mime("image/png")
+ContentKind.from_extension("glb")
+```
+
+**Members**
+
+| Member | Wire name (`name_str`) |
+|---|---|
+| `ContentKind.Image` | `"image"` |
+| `ContentKind.Audio` | `"audio"` |
+| `ContentKind.Video` | `"video"` |
+| `ContentKind.Document` | `"document"` |
+| `ContentKind.ThreeDModel` | `"three_d_model"` |
+| `ContentKind.Cad` | `"cad"` |
+| `ContentKind.Archive` | `"archive"` |
+| `ContentKind.Font` | `"font"` |
+| `ContentKind.Code` | `"code"` |
+| `ContentKind.Data` | `"data"` |
+| `ContentKind.Other` | `"other"` |
+
+**Methods**
+
+| Method | Description |
+|---|---|
+| `kind.name_str` | Property returning the canonical wire name (matches the JSON / serde tag). |
+| `ContentKind.from_str(value: str)` | Parse a kind from its canonical wire name. Unknown names raise `ValueError`. |
+| `ContentKind.from_mime(mime: str)` | Map a MIME type to a kind. Unknown MIME types resolve to `ContentKind.Other`. |
+| `ContentKind.from_extension(ext: str)` | Map a filename extension (no leading dot, case-insensitive) to a kind. Unknown extensions resolve to `ContentKind.Other`. |
+
+---
+
+### ContentHandle
+
+Stable, opaque reference to content registered with a `ContentStore`. Most callers obtain handles from `ContentStore.put` rather than constructing them directly.
+
+```python
+ContentHandle(
+    id: str,
+    kind: ContentKind,
+    *,
+    mime_type: str | None = None,
+    byte_size: int | None = None,
+    display_name: str | None = None,
+)
+```
+
+**Properties** (all read-only)
+
+| Property | Type | Description |
+|---|---|---|
+| `.id` | `str` | Opaque, store-defined identifier. Treat as a black box. |
+| `.kind` | `ContentKind` | What kind of content this handle refers to. |
+| `.mime_type` | `str \| None` | MIME type if known. |
+| `.byte_size` | `int \| None` | Byte size if known. |
+| `.display_name` | `str \| None` | Human-readable display name (e.g. original filename) if known. |
+
+---
+
+### ContentStore
+
+A pluggable content registry that backs handle resolution. Construct via one of the static factories. All instance methods return awaitables.
+
+```python
+from blazen import ContentStore, ContentKind
+
+store = ContentStore.in_memory()
+handle = await store.put(b"...", kind=ContentKind.Image, mime_type="image/png")
+source = await store.resolve(handle)   # {"type": "base64", "data": "..."}
+```
+
+**Static factories**
+
+| Factory | Returns |
+|---|---|
+| `ContentStore.in_memory()` | `ContentStore` |
+| `ContentStore.local_file(path: str \| os.PathLike \| pathlib.Path)` | `ContentStore` |
+| `ContentStore.openai_files(api_key: str, *, base_url: str \| None = None)` | `ContentStore` |
+| `ContentStore.anthropic_files(api_key: str, *, base_url: str \| None = None)` | `ContentStore` |
+| `ContentStore.gemini_files(api_key: str, *, base_url: str \| None = None)` | `ContentStore` |
+| `ContentStore.fal_storage(api_key: str, *, base_url: str \| None = None)` | `ContentStore` |
+| `ContentStore.custom(*, put, resolve, fetch_bytes, fetch_stream=None, delete=None, name="custom")` | `ContentStore` |
+
+**Instance methods** (all `await`able)
+
+| Method | Description |
+|---|---|
+| `await store.put(body, *, kind=None, mime_type=None, display_name=None, byte_size=None)` | Persist content and return a freshly-issued `ContentHandle`. `body` may be `bytes`, a URL `str`, or a `pathlib.Path`. Keyword arguments are optional hints; the store may auto-detect kind / MIME from the bytes. |
+| `await store.resolve(handle)` | Resolve a handle to a wire-renderable media source. Returns a serialized `MediaSource` dict, e.g. `{"type": "url", "url": "..."}` or `{"type": "base64", "data": "..."}`. |
+| `await store.fetch_bytes(handle)` | Fetch raw bytes for a handle. Stores that hold only references (URL / provider-file / local-path) may raise `UnsupportedError`. |
+| `await store.metadata(handle)` | Cheap metadata lookup with no byte materialization. Returns `{"kind": ..., "mime_type": ..., "byte_size": ..., "display_name": ...}`. |
+| `await store.delete(handle)` | Optional cleanup hook. Default backends drop the entry; provider backends issue a delete call to the upstream API. |
+
+#### Subclassing `ContentStore`
+
+`ContentStore` is subclassable from Python. Override the methods your backend needs; the framework wraps your subclass in a Rust adapter (`PyHostContentStore`) that dispatches into your Python coroutines.
+
+```python
+from blazen import ContentStore, ContentHandle, ContentKind
+
+class S3ContentStore(ContentStore):
+    def __init__(self, bucket: str):
+        super().__init__()
+        self.bucket = bucket
+
+    async def put(self, body, hint) -> ContentHandle:
+        ...
+
+    async def resolve(self, handle) -> dict:
+        ...
+
+    async def fetch_bytes(self, handle) -> bytes:
+        ...
+
+    # Optional overrides:
+    async def fetch_stream(self, handle): ...
+    async def delete(self, handle) -> None: ...
+```
+
+Subclasses MUST override `put`, `resolve`, `fetch_bytes`. The base-class default impls raise `NotImplementedError` so any missing override is an immediate clear error rather than silent infinite recursion via `super()`.
+
+#### `ContentStore.custom(...)`
+
+Callback-based factory. Direct Python mirror of Rust `CustomContentStore::builder`.
+
+```python
+ContentStore.custom(
+    *,
+    put: Callable[..., Awaitable[ContentHandle]],
+    resolve: Callable[[ContentHandle], Awaitable[dict]],
+    fetch_bytes: Callable[[ContentHandle], Awaitable[bytes]],
+    fetch_stream: Callable[[ContentHandle], Awaitable[bytes]] | None = None,
+    delete: Callable[[ContentHandle], Awaitable[None]] | None = None,
+    name: str = "custom",
+) -> ContentStore
+```
+
+`put`, `resolve`, `fetch_bytes` are required. `fetch_stream` and `delete` are optional. The `body` argument to `put` arrives as a dict shaped like `{"type": "bytes", "data": [...]}` / `{"type": "url", "url": "..."}` / `{"type": "local_path", "path": "..."}` / `{"type": "provider_file", "provider": "openai", "id": "..."}` / `{"type": "stream", "stream": <AsyncByteIter>, "size_hint": int | None}`. The `hint` is a dict with optional `mime_type` / `kind_hint` / `display_name` / `byte_size`.
+
+`put` must return a `ContentHandle`. `resolve` returns a serialized `MediaSource` dict (e.g. `{"type": "url", "url": "..."}`). `fetch_bytes` returns raw `bytes`. `fetch_stream` may return either `bytes` (legacy, single-chunk) or an `AsyncIterator[bytes]` for true chunk-by-chunk streaming.
+
+---
+
+### Built-in stores
+
+| Factory | Purpose | Notes |
+|---|---|---|
+| `ContentStore.in_memory()` | Ephemeral / test workloads. | Holds bytes in process memory; resolves to `base64`. |
+| `ContentStore.local_file(path)` | Filesystem-backed persistence rooted at `path`. | Directory is created recursively if missing. Resolves to a local path / URL. |
+| `ContentStore.openai_files(api_key, *, base_url=None)` | OpenAI Files API. | Resolves to a provider file reference; `fetch_bytes` may not be supported. |
+| `ContentStore.anthropic_files(api_key, *, base_url=None)` | Anthropic Files API (beta). | Provider-file backed. |
+| `ContentStore.gemini_files(api_key, *, base_url=None)` | Google Gemini Files API. | Provider-file backed. |
+| `ContentStore.fal_storage(api_key, *, base_url=None)` | fal.ai object storage. | Resolves to URL references hosted on fal. |
+| `ContentStore.custom(...)` | User-defined backend via async callables (see above). | Required: `put`, `resolve`, `fetch_bytes`. Optional: `fetch_stream`, `delete`, `name`. |
+
+---
+
+### Tool-input schema helpers
+
+Top-level functions that return JSON-Schema-shaped `dict` fragments declaring a single required content-reference input. Each fragment carries an `x-blazen-content-ref` extension keyed to the appropriate `ContentKind`.
+
+| Helper | Description |
+|---|---|
+| `image_input(name, description)` | Schema declaring a single required image input. |
+| `audio_input(name, description)` | Schema declaring a single required audio input. |
+| `video_input(name, description)` | Schema declaring a single required video input. |
+| `file_input(name, description)` | Schema declaring a single required document / file input. |
+| `three_d_input(name, description)` | Schema declaring a single required 3D-model input. |
+| `cad_input(name, description)` | Schema declaring a single required CAD-file input. |
+
+```python
+from blazen import image_input
+
+schema = image_input("photo", "The photo to analyze")
+# {
+#   "type": "object",
+#   "properties": {
+#     "photo": {
+#       "type": "string",
+#       "description": "The photo to analyze",
+#       "x-blazen-content-ref": {"kind": "image"}
+#     }
+#   },
+#   "required": ["photo"]
+# }
+```
+
+---
+
+### Generic schema builders
+
+For schemas that need extra companion fields alongside the content reference, or for embedding a content-ref property inside a larger object schema you assemble yourself.
+
+| Helper | Description |
+|---|---|
+| `content_ref_property(kind: ContentKind, description: str)` | Build a single-property fragment of the form `{"type": "string", "description": ..., "x-blazen-content-ref": {"kind": ...}}`, ready to embed inside an object schema's `properties` map. |
+| `content_ref_required_object(name: str, kind: ContentKind, description: str, *, extra_properties: dict \| None = None)` | Build a complete object-typed schema declaring a single required content-reference input plus optional companion fields merged from `extra_properties`. |
+
+```python
+from blazen import ContentKind, content_ref_property, content_ref_required_object
+
+# Single property fragment for manual assembly.
+prop = content_ref_property(ContentKind.Image, "Source frame")
+schema = {
+    "type": "object",
+    "properties": {"frame": prop, "threshold": {"type": "number"}},
+    "required": ["frame"],
+}
+
+# Or the full-object form with companion fields merged in.
+schema = content_ref_required_object(
+    "frame",
+    ContentKind.Image,
+    "Source frame",
+    extra_properties={"threshold": {"type": "number"}},
+)
+```
+
+---
+
+### How resolution works
+
+The `x-blazen-content-ref` JSON Schema extension is invisible to the model and to the upstream provider -- they see a plain `string` property. When the model emits `{"photo": "blazen_a1b2c3..."}`, Blazen's resolver intercepts the tool-call arguments before invoking the handler, looks up each content-ref string in the active `ContentStore`, and substitutes the bare id with a typed content dict of the form:
+
+```python
+{
+    "kind": "image",
+    "handle_id": "blazen_a1b2c3...",
+    "mime_type": "image/png",
+    "byte_size": 48213,
+    "display_name": "frame.png",
+    "source": {"type": "url", "url": "..."},   # serialized MediaSource
+}
+```
+
+The tool handler receives the substituted shape and never has to call `store.resolve` itself. Handles produced by a tool's return value flow back through the same store, so subsequent turns can reference them by id without re-uploading bytes.
 
 ---
 

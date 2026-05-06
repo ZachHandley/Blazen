@@ -256,7 +256,9 @@ mod tests {
         let store = InMemoryContentStore::new();
         let h = store
             .put(
-                ContentBody::Url("https://example.com/x.png".into()),
+                ContentBody::Url {
+                    url: "https://example.com/x.png".into(),
+                },
                 ContentHint::default()
                     .with_kind(ContentKind::Image)
                     .with_mime_type("image/png")

@@ -33,7 +33,9 @@ blazen-persist = { workspace = true, features = ["redb", "valkey"] }
 blazen-pipeline.workspace = true
 blazen-prompts.workspace = true
 blazen-telemetry = { workspace = true, features = ["history", "spans"] }
+bytes.workspace = true
 chrono.workspace = true
+futures-util.workspace = true
 pyo3.workspace = true
 pyo3-async-runtimes.workspace = true
 tokio.workspace = true

@@ -75,6 +75,7 @@ impl InMemoryContentStore {
 
 #[async_trait]
 impl ContentStore for InMemoryContentStore {
+    #[allow(clippy::too_many_lines)]
     async fn put(
         &self,
         body: ContentBody,
@@ -84,7 +85,7 @@ impl ContentStore for InMemoryContentStore {
 
         let (record, kind, mime, byte_size): (Stored, ContentKind, Option<String>, Option<u64>) =
             match body {
-                ContentBody::Bytes(bytes) => {
+                ContentBody::Bytes { data: bytes } => {
                     let (auto_kind, auto_mime) = if hint.kind_hint.is_some() {
                         (ContentKind::Other, None)
                     } else {
@@ -104,7 +105,7 @@ impl ContentStore for InMemoryContentStore {
                     };
                     (record, kind, mime, size)
                 }
-                ContentBody::Url(url) => {
+                ContentBody::Url { url } => {
                     let kind = hint
                         .kind_hint
                         .unwrap_or_else(|| detect(None, hint.mime_type.as_deref(), Some(&url)).0);
@@ -115,7 +116,7 @@ impl ContentStore for InMemoryContentStore {
                         hint.byte_size,
                     )
                 }
-                ContentBody::LocalPath(path) => {
+                ContentBody::LocalPath { path } => {
                     let detected = detect(
                         None,
                         hint.mime_type.as_deref(),
@@ -139,6 +140,34 @@ impl ContentStore for InMemoryContentStore {
                         hint.mime_type.clone(),
                         hint.byte_size,
                     )
+                }
+                ContentBody::Stream { stream, size_hint } => {
+                    use futures_util::StreamExt;
+                    let mut buf: Vec<u8> =
+                        Vec::with_capacity(usize::try_from(size_hint.unwrap_or(0)).unwrap_or(0));
+                    let mut s = stream;
+                    while let Some(chunk) = s.next().await {
+                        buf.extend_from_slice(&chunk?);
+                    }
+                    // Now treat it like the existing Bytes path.
+                    let (auto_kind, auto_mime) = if hint.kind_hint.is_some() {
+                        (ContentKind::Other, None)
+                    } else {
+                        detect(
+                            Some(&buf),
+                            hint.mime_type.as_deref(),
+                            hint.display_name.as_deref(),
+                        )
+                    };
+                    let kind = hint.kind_hint.unwrap_or(auto_kind);
+                    let mime = hint.mime_type.clone().or(auto_mime);
+                    #[allow(clippy::cast_possible_truncation)]
+                    let size = Some(buf.len() as u64);
+                    let record = Stored::Bytes {
+                        bytes: buf,
+                        mime: mime.clone(),
+                    };
+                    (record, kind, mime, size)
                 }
             };
 
@@ -258,7 +287,9 @@ mod tests {
         let store = InMemoryContentStore::new();
         let handle = store
             .put(
-                ContentBody::Bytes(vec![1, 2, 3]),
+                ContentBody::Bytes {
+                    data: vec![1, 2, 3],
+                },
                 ContentHint::default().with_kind(ContentKind::Image),
             )
             .await
@@ -277,7 +308,9 @@ mod tests {
         let store = InMemoryContentStore::new();
         let handle = store
             .put(
-                ContentBody::Url("https://example.com/cat.png".into()),
+                ContentBody::Url {
+                    url: "https://example.com/cat.png".into(),
+                },
                 ContentHint::default().with_mime_type("image/png"),
             )
             .await
@@ -317,7 +350,9 @@ mod tests {
         let store = InMemoryContentStore::new();
         let h = store
             .put(
-                ContentBody::Url("https://example.com/x.png".into()),
+                ContentBody::Url {
+                    url: "https://example.com/x.png".into(),
+                },
                 ContentHint::default(),
             )
             .await
@@ -329,10 +364,35 @@ mod tests {
     async fn delete_removes_handle() {
         let store = InMemoryContentStore::new();
         let h = store
-            .put(ContentBody::Bytes(vec![0u8]), ContentHint::default())
+            .put(
+                ContentBody::Bytes { data: vec![0u8] },
+                ContentHint::default(),
+            )
             .await
             .unwrap();
         store.delete(&h).await.unwrap();
         assert!(store.resolve(&h).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn stream_body_round_trips_through_in_memory_store() {
+        use bytes::Bytes;
+        use futures_util::stream;
+        let store = InMemoryContentStore::new();
+        let chunks = vec![
+            Ok(Bytes::from_static(b"hello ")),
+            Ok(Bytes::from_static(b"wor")),
+            Ok(Bytes::from_static(b"ld")),
+        ];
+        let body = ContentBody::Stream {
+            stream: Box::pin(stream::iter(chunks)),
+            size_hint: Some(11),
+        };
+        let handle = store
+            .put(body, ContentHint::default().with_kind(ContentKind::Other))
+            .await
+            .unwrap();
+        let bytes = store.fetch_bytes(&handle).await.unwrap();
+        assert_eq!(bytes, b"hello world");
     }
 }

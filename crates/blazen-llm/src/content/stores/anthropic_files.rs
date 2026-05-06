@@ -177,6 +177,45 @@ impl AnthropicFilesStore {
             .header("anthropic-beta", &self.beta_header)
     }
 
+    /// Upload an in-memory byte buffer through the multipart endpoint and
+    /// build the resulting [`ContentHandle`]. Shared by the
+    /// [`ContentBody::Bytes`] and [`ContentBody::Stream`] arms of [`put`]
+    /// so streaming uploads buffer-then-multipart through exactly the same
+    /// code path as direct byte uploads.
+    ///
+    /// [`put`]: ContentStore::put
+    async fn put_bytes_inner(
+        &self,
+        bytes: Vec<u8>,
+        hint: ContentHint,
+    ) -> Result<ContentHandle, BlazenError> {
+        let (auto_kind, auto_mime) = if hint.kind_hint.is_some() {
+            (ContentKind::Other, None)
+        } else {
+            detect(
+                Some(&bytes),
+                hint.mime_type.as_deref(),
+                hint.display_name.as_deref(),
+            )
+        };
+        let kind = hint.kind_hint.unwrap_or(auto_kind);
+        let mime = hint.mime_type.clone().or(auto_mime);
+        let display = hint
+            .display_name
+            .clone()
+            .unwrap_or_else(|| "upload.bin".to_owned());
+        let upload = self.upload(bytes, &display, mime.as_deref()).await?;
+
+        let handle_id = Self::next_handle_id();
+        self.record(handle_id.clone(), upload.id.clone())?;
+
+        let mut handle = ContentHandle::new(handle_id, kind);
+        handle.mime_type = upload.mime_type.clone().or(mime);
+        handle.byte_size = upload.size_bytes.or(hint.byte_size);
+        handle.display_name = hint.display_name.or(upload.filename);
+        Ok(handle)
+    }
+
     /// Upload `bytes` to `POST /v1/files` and return the issued file id +
     /// (optional) server-reported MIME and byte size.
     async fn upload(
@@ -247,34 +286,8 @@ impl ContentStore for AnthropicFilesStore {
         hint: ContentHint,
     ) -> Result<ContentHandle, BlazenError> {
         match body {
-            ContentBody::Bytes(bytes) => {
-                let (auto_kind, auto_mime) = if hint.kind_hint.is_some() {
-                    (ContentKind::Other, None)
-                } else {
-                    detect(
-                        Some(&bytes),
-                        hint.mime_type.as_deref(),
-                        hint.display_name.as_deref(),
-                    )
-                };
-                let kind = hint.kind_hint.unwrap_or(auto_kind);
-                let mime = hint.mime_type.clone().or(auto_mime);
-                let display = hint
-                    .display_name
-                    .clone()
-                    .unwrap_or_else(|| "upload.bin".to_owned());
-                let upload = self.upload(bytes, &display, mime.as_deref()).await?;
-
-                let handle_id = Self::next_handle_id();
-                self.record(handle_id.clone(), upload.id.clone())?;
-
-                let mut handle = ContentHandle::new(handle_id, kind);
-                handle.mime_type = upload.mime_type.clone().or(mime);
-                handle.byte_size = upload.size_bytes.or(hint.byte_size);
-                handle.display_name = hint.display_name.or(upload.filename);
-                Ok(handle)
-            }
-            ContentBody::LocalPath(path) => {
+            ContentBody::Bytes { data: bytes } => self.put_bytes_inner(bytes, hint).await,
+            ContentBody::LocalPath { path } => {
                 #[cfg(target_arch = "wasm32")]
                 {
                     let _ = path;
@@ -315,7 +328,7 @@ impl ContentStore for AnthropicFilesStore {
                     Ok(handle)
                 }
             }
-            ContentBody::Url(_) => Err(BlazenError::unsupported(
+            ContentBody::Url { .. } => Err(BlazenError::unsupported(
                 "AnthropicFilesStore: URL bodies are not supported. Fetch the bytes first \
                  and call put(ContentBody::Bytes(..)) instead.",
             )),
@@ -335,6 +348,17 @@ impl ContentStore for AnthropicFilesStore {
                 handle.byte_size = hint.byte_size;
                 handle.display_name = hint.display_name;
                 Ok(handle)
+            }
+            ContentBody::Stream { stream, size_hint } => {
+                use futures_util::StreamExt;
+                let mut buf: Vec<u8> =
+                    Vec::with_capacity(usize::try_from(size_hint.unwrap_or(0)).unwrap_or(0));
+                let mut s = stream;
+                while let Some(chunk) = s.next().await {
+                    buf.extend_from_slice(&chunk?);
+                }
+                // TODO(blazen): true streaming multipart upload.
+                self.put_bytes_inner(buf, hint).await
             }
         }
     }
@@ -364,6 +388,40 @@ impl ContentStore for AnthropicFilesStore {
             ));
         }
         Ok(response.body)
+    }
+
+    /// Stream the file body back from the Files API content endpoint.
+    ///
+    /// Uses [`HttpClient::send_streaming`] so the bytes flow back to the
+    /// caller chunk-by-chunk instead of being buffered into a single
+    /// `Vec<u8>` first. Errors mid-stream are surfaced as
+    /// [`BlazenError::stream_error`] (matching the SSE parser convention).
+    async fn fetch_stream(
+        &self,
+        handle: &ContentHandle,
+    ) -> Result<crate::content::store::ByteStream, BlazenError> {
+        use futures_util::StreamExt;
+
+        let stored = self.lookup(&handle.id)?;
+        let url = format!(
+            "{}/files/{}/content",
+            self.base_url.trim_end_matches('/'),
+            stored.file_id
+        );
+        let request = self.with_anthropic_headers(HttpRequest::get(&url));
+        let (status, headers, byte_stream) = self.client.send_streaming(request).await?;
+        if !(200..300).contains(&status) {
+            return Err(crate::providers::provider_http_error_parts(
+                PROVIDER_TAG,
+                &url,
+                status,
+                &headers,
+                "",
+            ));
+        }
+        Ok(Box::pin(byte_stream.map(|chunk| {
+            chunk.map_err(|e| BlazenError::stream_error(e.to_string()))
+        })))
     }
 
     async fn delete(&self, handle: &ContentHandle) -> Result<(), BlazenError> {
@@ -580,7 +638,9 @@ mod tests {
 
         let handle = store
             .put(
-                ContentBody::Bytes(b"some-bytes".to_vec()),
+                ContentBody::Bytes {
+                    data: b"some-bytes".to_vec(),
+                },
                 ContentHint::default()
                     .with_mime_type("application/octet-stream")
                     .with_display_name("doc.bin"),
@@ -689,7 +749,9 @@ mod tests {
         let store = AnthropicFilesStore::new_with_client("sk-ant-test", client);
         let err = store
             .put(
-                ContentBody::Url("https://example.com/x.png".into()),
+                ContentBody::Url {
+                    url: "https://example.com/x.png".into(),
+                },
                 ContentHint::default(),
             )
             .await
@@ -716,7 +778,12 @@ mod tests {
         let store = AnthropicFilesStore::new_with_client("sk-ant-test", client.clone());
 
         let handle = store
-            .put(ContentBody::Bytes(b"hi".to_vec()), ContentHint::default())
+            .put(
+                ContentBody::Bytes {
+                    data: b"hi".to_vec(),
+                },
+                ContentHint::default(),
+            )
             .await
             .unwrap();
         let bytes = store.fetch_bytes(&handle).await.unwrap();
@@ -742,13 +809,23 @@ mod tests {
         let store = AnthropicFilesStore::new_with_client("sk-ant-test", client.clone());
 
         let h1 = store
-            .put(ContentBody::Bytes(b"a".to_vec()), ContentHint::default())
+            .put(
+                ContentBody::Bytes {
+                    data: b"a".to_vec(),
+                },
+                ContentHint::default(),
+            )
             .await
             .unwrap();
         store.delete(&h1).await.expect("200 delete should succeed");
 
         let h2 = store
-            .put(ContentBody::Bytes(b"b".to_vec()), ContentHint::default())
+            .put(
+                ContentBody::Bytes {
+                    data: b"b".to_vec(),
+                },
+                ContentHint::default(),
+            )
             .await
             .unwrap();
         store
@@ -773,12 +850,64 @@ mod tests {
         }]));
         let store = AnthropicFilesStore::new_with_client("sk-ant-test", client);
         let err = store
-            .put(ContentBody::Bytes(b"x".to_vec()), ContentHint::default())
+            .put(
+                ContentBody::Bytes {
+                    data: b"x".to_vec(),
+                },
+                ContentHint::default(),
+            )
             .await
             .expect_err("expected upload failure");
         assert!(
             matches!(err, BlazenError::ProviderHttp(ref d) if d.status == 500),
             "got {err:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn stream_put_drains_to_bytes_path() {
+        use bytes::Bytes;
+        use futures_util::stream;
+
+        let client = Arc::new(MockClient::new(vec![upload_ok("file_streamed")]));
+        let store = AnthropicFilesStore::new_with_client("sk-ant-test", client.clone());
+
+        let chunks = vec![
+            Ok(Bytes::from_static(b"hello ")),
+            Ok(Bytes::from_static(b"world")),
+        ];
+        let body = ContentBody::Stream {
+            stream: Box::pin(stream::iter(chunks)),
+            size_hint: Some(11),
+        };
+        let handle = store
+            .put(body, ContentHint::default().with_kind(ContentKind::Other))
+            .await
+            .expect("put should succeed");
+        assert!(!handle.id.is_empty());
+
+        // Streaming put must round-trip through the multipart upload path:
+        // exactly one POST /v1/files request whose body contains the
+        // concatenated stream bytes.
+        let reqs = client.requests();
+        assert_eq!(reqs.len(), 1, "expected one upload request");
+        assert_eq!(reqs[0].method, HttpMethod::Post);
+        assert_eq!(reqs[0].url, "https://api.anthropic.com/v1/files");
+        let body_bytes = reqs[0].body.as_ref().expect("multipart body missing");
+        let body_str = String::from_utf8_lossy(body_bytes);
+        assert!(
+            body_str.contains("hello world"),
+            "drained stream bytes missing from multipart body: {body_str}"
+        );
+
+        // And the issued handle must round-trip back to the Anthropic file id.
+        let resolved = store.resolve(&handle).await.unwrap();
+        match resolved {
+            MediaSource::ProviderFile { provider, id } => {
+                assert_eq!(provider, ProviderId::Anthropic);
+                assert_eq!(id, "file_streamed");
+            }
+            other => panic!("expected ProviderFile, got {other:?}"),
+        }
     }
 }

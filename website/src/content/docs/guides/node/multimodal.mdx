@@ -1,0 +1,376 @@
+---
+title: "Multimodal Content"
+description: "Pass images, audio, video, files, 3D models, and CAD files through Blazen -- and let tools accept them via content handles"
+language: "node"
+section: "guides"
+order: 9
+---
+
+LLMs that accept images, audio, video, or arbitrary files all want the bytes in slightly different shapes -- a public URL, an inline base64 blob, or a file id from the provider's own upload API. Blazen wraps that mess behind a single abstraction: you stash the bytes in a `ContentStore`, hold onto the resulting `ContentHandle`, and let Blazen pick the cheapest wire form per provider at request-build time.
+
+This guide covers the Node binding (`blazen` npm package). For the cross-cutting design notes, see [`/guides/tool-multimodal/`](/guides/tool-multimodal/).
+
+## Why content handles?
+
+LLMs emit JSON. JSON does not carry binary payloads gracefully -- you either base64 every blob (slow, expensive, hits payload limits) or shuffle around URLs the model can't actually reach. Worse, every provider has its own files API: OpenAI Files, Anthropic Files, Gemini Files, fal.ai storage. Wiring each one into your tool layer means you write the same upload-and-reference dance four times.
+
+A `ContentHandle` is Blazen's single source of truth for "a piece of content somewhere." It carries an opaque id, a `ContentKind`, an optional MIME type, byte size, and display name -- enough metadata to route, cost-estimate, and cache, but no bytes inline. When the request hits the provider, Blazen's resolver asks the store: "what's the cheapest way to render this for the active provider?" -- typically URL > providerFile > base64 -- and serializes accordingly.
+
+This means a single tool definition that returns a handle works against every provider Blazen supports, and your tool code never has to think about base64.
+
+## `ContentKind`
+
+The `JsContentKind` const enum is exported as both `JsContentKind` and `ContentKind` (a type alias). Each variant maps to a snake_case wire string used everywhere kinds are serialized:
+
+| Variant | Wire string |
+|---|---|
+| `Image` | `"image"` |
+| `Audio` | `"audio"` |
+| `Video` | `"video"` |
+| `Document` | `"document"` |
+| `ThreeDModel` | `"three_d_model"` |
+| `Cad` | `"cad"` |
+| `Archive` | `"archive"` |
+| `Font` | `"font"` |
+| `Code` | `"code"` |
+| `Data` | `"data"` |
+| `Other` | `"other"` |
+
+Both forms work interchangeably -- pass the enum variant when you have it, the string when you're crossing a JSON boundary.
+
+## `ContentStore`
+
+A store is a pluggable backend that persists bytes and hands back handles. Construct one via the static factories, then use the per-instance methods to manage content.
+
+```typescript
+import { ContentStore } from "blazen";
+import type { ContentHandle, PutOptions } from "blazen";
+
+const store = ContentStore.inMemory();
+
+// Put bytes -- options carry hints; the store may auto-detect when omitted.
+const photoBytes = await fetch("https://example.com/cat.png").then((r) => r.arrayBuffer());
+const handle: ContentHandle = await store.put(Buffer.from(photoBytes), {
+  kind: "image",
+  mimeType: "image/png",
+  displayName: "cat.png",
+});
+
+// Resolve to the wire-renderable MediaSource shape (URL > providerFile > base64).
+const wire = await store.resolve(handle);
+
+// Pull bytes back -- for tools that actually need to operate on the content
+// (parse a PDF, transcribe audio, etc.).
+const bytes: Buffer = await store.fetchBytes(handle);
+
+// Cheap metadata lookup without materializing bytes.
+const meta = await store.metadata(handle);
+console.log(meta.kind, meta.mimeType, meta.byteSize, meta.displayName);
+
+// Optional cleanup -- a no-op on most stores.
+await store.delete(handle);
+```
+
+The `put` body argument is `Buffer | string`. When you pass a string, Blazen looks for `"://"`: if present, the string is recorded as a URL (no upload happens, the store just holds the reference); otherwise the string is treated as a local filesystem path (the store reads or copies it as needed). Pass a `Buffer` when you have raw bytes in memory.
+
+`PutOptions` fields are all optional -- `mimeType`, `kind`, `displayName`, `byteSize`. Passing none is fine; the store does its best to detect from the body. Passing an explicit `kind` overrides any auto-detection, which matters if you want a `.bin` blob classified as `Cad` rather than `Other`.
+
+## Built-in stores
+
+| Factory | Purpose |
+|---|---|
+| `ContentStore.inMemory()` | Ephemeral in-process map. Good for tests and short-lived runs. |
+| `ContentStore.localFile(root)` | Filesystem-backed under `root` (created if absent). |
+| `ContentStore.openaiFiles(apiKey, baseUrl?)` | Backed by the OpenAI Files API. |
+| `ContentStore.anthropicFiles(apiKey, baseUrl?)` | Backed by the Anthropic Files API. |
+| `ContentStore.geminiFiles(apiKey, baseUrl?)` | Backed by the Gemini Files API. |
+| `ContentStore.falStorage(apiKey, baseUrl?)` | Backed by fal.ai's storage API. |
+
+Stores are cheap to clone -- internally they're an `Arc` -- so you can share one instance across multiple agents and requests without thinking about it.
+
+```typescript
+import { ContentStore } from "blazen";
+
+// In-memory: fast, ephemeral, lost on process exit.
+const memStore = ContentStore.inMemory();
+await memStore.put(Buffer.from("hello"), { kind: "document", mimeType: "text/plain" });
+
+// Local file: durable, lives under the given root.
+const fileStore = ContentStore.localFile("/var/lib/blazen/content");
+await fileStore.put("/home/me/diagram.png", { kind: "image", mimeType: "image/png" });
+
+// OpenAI Files: the bytes live in OpenAI's file storage; resolve() returns a providerFile reference.
+const oaiStore = ContentStore.openaiFiles(process.env.OPENAI_API_KEY!);
+await oaiStore.put(Buffer.from(pdfBytes), {
+  kind: "document",
+  mimeType: "application/pdf",
+  displayName: "report.pdf",
+});
+
+// Anthropic Files: same shape, Anthropic-side storage.
+const antStore = ContentStore.anthropicFiles(process.env.ANTHROPIC_API_KEY!);
+
+// Gemini Files: same shape, Gemini-side storage.
+const gemStore = ContentStore.geminiFiles(process.env.GEMINI_API_KEY!);
+
+// fal.ai storage: useful when the downstream consumer is fal.ai's own endpoints.
+const falStore = ContentStore.falStorage(process.env.FAL_API_KEY!);
+```
+
+The optional `baseUrl` argument on the four provider-file stores lets you point at a proxy or a regional endpoint. Pass `null` (or omit it) to use the provider's default.
+
+## Custom backends
+
+When the built-in factories aren't enough -- you want S3, R2, your own database, or any other backend -- the Node binding gives you two paths that mirror the Rust `CustomContentStore::builder` API. Pick whichever feels more natural; both end up wrapped in the same Rust adapter that dispatches back into JS via threadsafe functions.
+
+### Path A -- `ContentStore.custom({...})` factory
+
+Pass a plain object of async callbacks. `put`, `resolve`, and `fetchBytes` are required; `fetchStream` and `delete` are optional. `name` is a short identifier used in error / tracing messages and defaults to `"custom"`.
+
+```typescript
+import { ContentStore } from "blazen";
+import type { ContentHandle, ContentKind, JsContentMetadata } from "blazen";
+
+const store = ContentStore.custom({
+  put: async (body, hint) => {
+    // body is one of:
+    //   { type: "bytes",         data: number[] }
+    //   { type: "url",           url: string }
+    //   { type: "local_path",    path: string }
+    //   { type: "provider_file", provider: string, id: string }
+    // hint is a ContentHint dict (all fields optional).
+    // Must resolve to a ContentHandle-shaped object.
+    return {
+      id: "blazen_xxx",
+      kind: "image",
+      mimeType: "image/png",
+    };
+  },
+  resolve: async (handle) => ({
+    sourceType: "url",
+    url: "https://example.com/blob.png",
+  }),
+  fetchBytes: async (handle) => Buffer.from("...bytes..."),
+  // Optional:
+  fetchStream: async (handle) => Buffer.from("..."), // or return an AsyncIterable<Uint8Array> for true streaming -- see "Streaming large content" below
+  delete: async (handle) => {
+    /* no-op */
+  },
+  name: "my_s3_store",
+});
+```
+
+`fetchBytes` (and `fetchStream`) may return a `Buffer`, `Uint8Array`, `number[]`, or a base64 `string` -- the binding accepts all four shapes.
+
+### Path B -- subclass `ContentStore`
+
+`class MyStore extends ContentStore` works directly. Subclasses MUST override `put`, `resolve`, and `fetchBytes`; `fetchStream` and `delete` are optional. Don't call `super().put(...)` from a subclass -- the base-class methods raise on a `Subclass` instance because they exist only as a sentinel for the `super()` constructor.
+
+```typescript
+import { ContentStore } from "blazen";
+import type { ContentHandle } from "blazen";
+
+class S3ContentStore extends ContentStore {
+  constructor(bucket: string) {
+    super();
+    this.bucket = bucket;
+  }
+
+  async put(body, hint) {
+    // ...upload to S3, mint an id...
+    return { id: "...", kind: "image" };
+  }
+
+  async resolve(handle) {
+    return { sourceType: "url", url: "https://my-bucket.s3.amazonaws.com/..." };
+  }
+
+  async fetchBytes(handle) {
+    return Buffer.from("...");
+  }
+
+  // Optional overrides:
+  async fetchStream(handle) {
+    return Buffer.from("...");
+  }
+  async delete(handle) {
+    /* no-op */
+  }
+}
+```
+
+When a subclass instance is handed to a Blazen API that needs a content store, the binding wraps the JS object in an internal adapter that dispatches each call back into your overrides via threadsafe functions. The adapter checks at construction time that the three required methods exist and surfaces a clear error if any are missing.
+
+## `MediaSource` on the wire
+
+`store.resolve(handle)` returns a serialized `MediaSource` JS object -- the same JSON shape Blazen's request builders accept. The `sourceType` discriminator tells you which payload form the store picked:
+
+```typescript
+// URL form -- cheapest when the provider can fetch the URL itself.
+{
+  sourceType: "url",
+  url: "https://cdn.example.com/cat.png"
+}
+
+// providerFile form -- when the bytes already live in the active provider's
+// file API (OpenAI Files, Anthropic Files, Gemini Files, fal.ai storage).
+{
+  sourceType: "providerFile",
+  provider: "openai",
+  id: "file-abc123"
+}
+
+// base64 form -- the fallback when neither URL nor providerFile is available
+// (e.g. inMemory store + a provider that only takes inline payloads).
+{
+  sourceType: "base64",
+  data: "<base64-encoded bytes>"
+}
+
+// handle form -- carried in messages before resolution; the request builder
+// swaps it for one of the three above when serializing for the active provider.
+{
+  sourceType: "handle",
+  handleId: "...",
+  handleKind: "image"
+}
+```
+
+You normally don't construct these by hand. Blazen carries `handle`-form sources inside messages, and the resolver swaps them for the cheapest wire form during request build. The `MediaSource` type alias re-exports this object so you can type-narrow on `sourceType` if you ever inspect a resolved value.
+
+## Tool inputs
+
+The six helper functions -- `imageInput`, `audioInput`, `videoInput`, `fileInput`, `threeDInput`, `cadInput` -- generate JSON Schema fragments shaped for `runAgent`'s `tools` array. Each returns:
+
+```typescript
+{
+  type: "object",
+  properties: {
+    [name]: {
+      type: "string",
+      description,
+      "x-blazen-content-ref": { kind: "image" }   // or audio / video / document / three_d_model / cad
+    }
+  },
+  required: [name]
+}
+```
+
+The `x-blazen-content-ref` extension is a custom JSON Schema key. LLM providers ignore unknown keys, so the schema looks like a plain `string` parameter to the model. Blazen's resolver reads the extension and substitutes the handle id the model emits with the resolved typed content shape `{ kind, handleId, mimeType, byteSize, displayName, source }` before your tool handler runs. Your handler never sees raw handle ids -- it sees an already-resolved object.
+
+```typescript
+import {
+  CompletionModel,
+  ChatMessage,
+  ContentStore,
+  imageInput,
+  runAgent,
+} from "blazen";
+
+const model = CompletionModel.openai({ apiKey: process.env.OPENAI_API_KEY! });
+const store = ContentStore.inMemory();
+
+// Pre-stash a photo and surface its handle id to the model in a user message.
+const handle = await store.put(Buffer.from(photoBytes), {
+  kind: "image",
+  mimeType: "image/png",
+  displayName: "cat.png",
+});
+
+const result = await runAgent(
+  model,
+  [
+    ChatMessage.user(
+      `Here is a photo (handle id: ${handle.id}). Call analyze_photo on it.`,
+    ),
+  ],
+  [
+    {
+      name: "analyze_photo",
+      description: "Analyze the given photo and describe what you see.",
+      parameters: imageInput("photo", "The photo to analyze"),
+    },
+  ],
+  async (toolName, args) => {
+    if (toolName === "analyze_photo") {
+      // `args.photo` has already been resolved by Blazen -- it is the typed
+      // content shape, NOT the raw handle-id string.
+      const { kind, handleId, mimeType, byteSize, displayName, source } = args.photo;
+      const bytes = await store.fetchBytes({ id: handleId, kind });
+      // ...inspect, OCR, classify, whatever the tool actually does...
+      return { description: "A grumpy tabby cat sitting on a keyboard." };
+    }
+    throw new Error(`Unknown tool: ${toolName}`);
+  },
+  { maxIterations: 5 },
+);
+```
+
+The other five helpers work identically -- swap `imageInput` for `audioInput`, `videoInput`, `fileInput` (for `Document` kind), `threeDInput`, or `cadInput` depending on what the tool consumes. The `x-blazen-content-ref.kind` baked into the schema tells Blazen which `ContentKind` to expect when resolving.
+
+`runAgent`'s signature is `runAgent(model, messages, tools, toolHandler, options?)` -- see [`/api/node/`](/api/node/) for the full surface, including `runAgentWithCallback` for event observation.
+
+## Tool results with multimodal
+
+When a tool wants to return multimodal content (an image it generated, audio it transcribed, etc.) the cross-cutting `ToolOutput` + `LlmPayload` parts override produces the correct multimodal serialization across every provider -- Anthropic gets a native multimodal tool result, others receive an automatic follow-up user message. See [`/guides/tool-multimodal/`](/guides/tool-multimodal/) for the payload shape and worked examples.
+
+## Streaming large content
+
+The Node binding streams chunk-by-chunk in both directions across the FFI boundary. `fetchStream` callbacks can return `AsyncIterable<Uint8Array>`, and a streaming `put` body arrives as `body.stream`, an `AsyncIterable<Uint8Array>` you consume with `for await`.
+
+**Downloading.** Call `fetchStream(handle)` on any `ContentStore` wrapper:
+
+```typescript
+const iter = await store.fetchStream(handle);
+for await (const chunk of iter) {
+  process(chunk); // chunk is a Uint8Array
+}
+```
+
+When you implement a custom store via `ContentStore.custom({ fetchStream })` or override `fetchStream` on a subclass, you have two options:
+
+1. Return a `Buffer` / `Uint8Array` / `number[]` / base64 `string` for a single buffered chunk -- still supported.
+2. Return any `AsyncIterable<Uint8Array>` (a Node `Readable` qualifies, since it implements `[Symbol.asyncIterator]`) for chunk-by-chunk delivery:
+
+   ```typescript
+   class S3ContentStore extends ContentStore {
+     async *fetchStream(handle: ContentHandle) {
+       for await (const chunk of this.s3.getObjectStream(handle.id)) {
+         yield chunk; // Uint8Array
+       }
+     }
+   }
+   ```
+
+**Uploading.** When upstream Rust code hands your custom store a `ContentBody::Stream`, your `put(body, hint)` callback receives a body shaped `{ type: "stream", stream: AsyncIterable<Uint8Array>, sizeHint: number | null }`. Consume `body.stream` chunk-by-chunk without buffering:
+
+```typescript
+class S3ContentStore extends ContentStore {
+  async put(body, hint) {
+    if (body.type === "stream") {
+      for await (const chunk of body.stream) {
+        this.uploader.append(chunk);
+      }
+      return this.uploader.finish();
+    }
+    // bytes / url / local_path / provider_file paths handled below...
+  }
+}
+```
+
+Backpressure is honored across the FFI boundary via a small bounded channel (4 chunks), so a slow consumer pauses the producer naturally.
+
+For round-tripping bytes when streaming isn't needed, `fetchBytes` still materializes the full payload as a `Buffer`:
+
+```typescript
+const handle = await store.put(Buffer.from("..."), {
+  kind: "image",
+  mimeType: "image/png",
+});
+const bytes = await store.fetchBytes(handle);
+```
+
+## See also
+
+- [`/guides/tool-multimodal/`](/guides/tool-multimodal/) -- cross-cutting design notes and provider behavior.
+- [`/api/node/`](/api/node/) -- full Node API reference, including `runAgent`, `Agent`, and the `ContentStore` surface.

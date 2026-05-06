@@ -259,10 +259,10 @@ impl ContentStore for GeminiFilesStore {
         hint: ContentHint,
     ) -> Result<ContentHandle, BlazenError> {
         match body {
-            ContentBody::Bytes(bytes) => self.put_bytes_inner(bytes, hint).await,
+            ContentBody::Bytes { data: bytes } => self.put_bytes_inner(bytes, hint).await,
 
             #[cfg(not(target_arch = "wasm32"))]
-            ContentBody::LocalPath(path) => {
+            ContentBody::LocalPath { path } => {
                 let bytes = tokio::fs::read(&path).await.map_err(|e| {
                     BlazenError::request(format!(
                         "GeminiFilesStore: failed to read '{}': {e}",
@@ -278,12 +278,12 @@ impl ContentStore for GeminiFilesStore {
             }
 
             #[cfg(target_arch = "wasm32")]
-            ContentBody::LocalPath(_) => Err(BlazenError::unsupported(
+            ContentBody::LocalPath { .. } => Err(BlazenError::unsupported(
                 "GeminiFilesStore: LocalPath ContentBody not supported on wasm32; \
                  read the file manually and pass ContentBody::Bytes",
             )),
 
-            ContentBody::Url(_) => Err(BlazenError::unsupported(
+            ContentBody::Url { .. } => Err(BlazenError::unsupported(
                 "GeminiFilesStore: URL ContentBody not supported; \
                  fetch the bytes first and re-call put(ContentBody::Bytes(..))",
             )),
@@ -298,6 +298,18 @@ impl ContentStore for GeminiFilesStore {
                  store (only ProviderId::Gemini is accepted). Re-upload via the matching \
                  provider's store, or fetch the bytes and pass them directly."
             ))),
+
+            ContentBody::Stream { stream, size_hint } => {
+                use futures_util::StreamExt;
+                let mut buf: Vec<u8> =
+                    Vec::with_capacity(usize::try_from(size_hint.unwrap_or(0)).unwrap_or(0));
+                let mut s = stream;
+                while let Some(chunk) = s.next().await {
+                    buf.extend_from_slice(&chunk?);
+                }
+                // TODO(blazen): true streaming multipart upload.
+                self.put(ContentBody::Bytes { data: buf }, hint).await
+            }
         }
     }
 
@@ -626,7 +638,9 @@ mod tests {
 
         let handle = store
             .put(
-                ContentBody::Bytes(b"payload".to_vec()),
+                ContentBody::Bytes {
+                    data: b"payload".to_vec(),
+                },
                 ContentHint::default()
                     .with_kind(ContentKind::Document)
                     .with_display_name("hello.txt")
@@ -758,7 +772,9 @@ mod tests {
 
         let err = store
             .put(
-                ContentBody::Url("https://example.com/x.png".into()),
+                ContentBody::Url {
+                    url: "https://example.com/x.png".into(),
+                },
                 ContentHint::default(),
             )
             .await
@@ -843,7 +859,12 @@ mod tests {
         let store = GeminiFilesStore::new_with_client("ai-bad", client as Arc<dyn HttpClient>);
 
         let err = store
-            .put(ContentBody::Bytes(vec![1, 2, 3]), ContentHint::default())
+            .put(
+                ContentBody::Bytes {
+                    data: vec![1, 2, 3],
+                },
+                ContentHint::default(),
+            )
             .await
             .expect_err("expected auth error");
         assert!(matches!(err, BlazenError::Auth { .. }), "got {err:?}");
@@ -859,7 +880,12 @@ mod tests {
         let store = GeminiFilesStore::new_with_client("ai-test", client as Arc<dyn HttpClient>);
 
         let err = store
-            .put(ContentBody::Bytes(vec![1, 2, 3]), ContentHint::default())
+            .put(
+                ContentBody::Bytes {
+                    data: vec![1, 2, 3],
+                },
+                ContentHint::default(),
+            )
             .await
             .expect_err("expected rate-limit error");
         match err {
@@ -868,6 +894,53 @@ mod tests {
             }
             other => panic!("expected RateLimit, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn stream_put_drains_to_bytes_path() {
+        use bytes::Bytes;
+        use futures_util::stream;
+
+        let client = Arc::new(MockClient::new(vec![upload_ok(
+            "files/streamed",
+            "https://generativelanguage.googleapis.com/v1beta/files/streamed",
+        )]));
+        let store =
+            GeminiFilesStore::new_with_client("ai-test", client.clone() as Arc<dyn HttpClient>);
+
+        let chunks: Vec<Result<Bytes, BlazenError>> = vec![
+            Ok(Bytes::from_static(b"hello ")),
+            Ok(Bytes::from_static(b"world")),
+        ];
+        let body = ContentBody::Stream {
+            stream: Box::pin(stream::iter(chunks)),
+            size_hint: Some(11),
+        };
+
+        let handle = store
+            .put(body, ContentHint::default().with_kind(ContentKind::Other))
+            .await
+            .expect("put should succeed");
+        assert!(!handle.id.is_empty());
+        assert_eq!(
+            handle.id,
+            "https://generativelanguage.googleapis.com/v1beta/files/streamed"
+        );
+
+        // Confirm the drained stream was forwarded into the multipart body
+        // exactly once, via the same upload path used by `ContentBody::Bytes`.
+        let req = client.last();
+        assert_eq!(req.method, HttpMethod::Post);
+        assert_eq!(
+            req.url,
+            "https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=multipart"
+        );
+        let body_bytes = req.body.as_ref().expect("missing body");
+        let body_str = String::from_utf8_lossy(body_bytes);
+        assert!(
+            body_str.contains("hello world"),
+            "drained stream payload missing from multipart body: {body_str}"
+        );
     }
 
     #[tokio::test]
@@ -892,7 +965,12 @@ mod tests {
         let store = GeminiFilesStore::new_with_client("ai-test", client as Arc<dyn HttpClient>);
 
         let err = store
-            .put(ContentBody::Bytes(vec![1, 2, 3]), ContentHint::default())
+            .put(
+                ContentBody::Bytes {
+                    data: vec![1, 2, 3],
+                },
+                ContentHint::default(),
+            )
             .await
             .expect_err("expected protocol error from missing uri");
         assert!(matches!(err, BlazenError::Request { .. }), "got {err:?}");

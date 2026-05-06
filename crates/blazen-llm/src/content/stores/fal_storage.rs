@@ -161,7 +161,7 @@ impl ContentStore for FalStorageStore {
         hint: ContentHint,
     ) -> Result<ContentHandle, BlazenError> {
         match body {
-            ContentBody::Bytes(bytes) => {
+            ContentBody::Bytes { data: bytes } => {
                 let detected = detect(
                     Some(&bytes),
                     hint.mime_type.as_deref(),
@@ -187,7 +187,7 @@ impl ContentStore for FalStorageStore {
                 handle.display_name = hint.display_name;
                 Ok(handle)
             }
-            ContentBody::LocalPath(path) => {
+            ContentBody::LocalPath { path } => {
                 let bytes = read_local_file(&path)?;
                 let file_name = hint
                     .display_name
@@ -211,7 +211,7 @@ impl ContentStore for FalStorageStore {
                 handle.display_name = hint.display_name.or(Some(file_name));
                 Ok(handle)
             }
-            ContentBody::Url(url) => {
+            ContentBody::Url { url } => {
                 // fal accepts URL refs natively — record verbatim.
                 let kind = hint
                     .kind_hint
@@ -235,6 +235,17 @@ impl ContentStore for FalStorageStore {
                 handle.byte_size = hint.byte_size;
                 handle.display_name = hint.display_name;
                 Ok(handle)
+            }
+            ContentBody::Stream { stream, size_hint } => {
+                use futures_util::StreamExt;
+                let mut buf: Vec<u8> =
+                    Vec::with_capacity(usize::try_from(size_hint.unwrap_or(0)).unwrap_or(0));
+                let mut s = stream;
+                while let Some(chunk) = s.next().await {
+                    buf.extend_from_slice(&chunk?);
+                }
+                // TODO(blazen): true streaming PUT to fal storage.
+                return self.put(ContentBody::Bytes { data: buf }, hint).await;
             }
         }
     }
@@ -261,6 +272,31 @@ impl ContentStore for FalStorageStore {
             ));
         }
         Ok(response.body)
+    }
+
+    async fn fetch_stream(
+        &self,
+        handle: &ContentHandle,
+    ) -> Result<crate::content::store::ByteStream, BlazenError> {
+        use futures_util::StreamExt;
+
+        let request = HttpRequest::get(&handle.id);
+        let (status, _headers, http_stream) = self.client.send_streaming(request).await?;
+        if !(200..300).contains(&status) {
+            return Err(BlazenError::provider(
+                "fal",
+                format!(
+                    "FalStorageStore: fetch_stream failed for '{}' (status {})",
+                    handle.id, status,
+                ),
+            ));
+        }
+        let mapped = http_stream.map(|res| {
+            res.map_err(|e| {
+                BlazenError::request(format!("FalStorageStore: stream read error: {e}"))
+            })
+        });
+        Ok(Box::pin(mapped))
     }
 
     async fn delete(&self, _handle: &ContentHandle) -> Result<(), BlazenError> {
@@ -372,7 +408,9 @@ mod tests {
 
         let handle = store
             .put(
-                ContentBody::Bytes(vec![1, 2, 3, 4]),
+                ContentBody::Bytes {
+                    data: vec![1, 2, 3, 4],
+                },
                 ContentHint::default()
                     .with_mime_type("image/png")
                     .with_display_name("cat.png"),
@@ -411,7 +449,9 @@ mod tests {
         let store = FalStorageStore::new_with_client("k", mock.clone());
         let handle = store
             .put(
-                ContentBody::Url("https://example.com/x.png".into()),
+                ContentBody::Url {
+                    url: "https://example.com/x.png".into(),
+                },
                 ContentHint::default().with_mime_type("image/png"),
             )
             .await
@@ -485,5 +525,41 @@ mod tests {
         let captured = mock.captured();
         assert_eq!(captured.len(), 1);
         assert_eq!(captured[0].url, "https://v3.fal.media/files/x.png");
+    }
+
+    #[tokio::test]
+    async fn stream_put_drains_to_bytes_path() {
+        use bytes::Bytes;
+        use futures_util::stream;
+        let initiate_body = serde_json::to_vec(&serde_json::json!({
+            "upload_url": "https://upload.fal.test/presigned",
+            "file_url": "https://v3.fal.media/files/streamed.bin",
+        }))
+        .unwrap();
+        let mock = Arc::new(MockHttpClient::new(vec![
+            ok_response(initiate_body),
+            ok_response(Vec::new()),
+        ]));
+        let store = FalStorageStore::new_with_client("test_key", mock.clone());
+        let chunks: Vec<Result<Bytes, BlazenError>> = vec![
+            Ok(Bytes::from_static(b"hello ")),
+            Ok(Bytes::from_static(b"world")),
+        ];
+        let body = ContentBody::Stream {
+            stream: Box::pin(stream::iter(chunks)),
+            size_hint: Some(11),
+        };
+        let handle = store
+            .put(body, ContentHint::default().with_kind(ContentKind::Other))
+            .await
+            .expect("put should succeed");
+        assert!(!handle.id.is_empty());
+        assert_eq!(handle.id, "https://v3.fal.media/files/streamed.bin");
+
+        // The drain-to-bytes path should still issue the two-step upload, and
+        // the PUT body should contain the concatenated stream chunks.
+        let captured = mock.captured();
+        assert_eq!(captured.len(), 2);
+        assert_eq!(captured[1].body.as_deref(), Some(&b"hello world"[..]));
     }
 }

@@ -27,11 +27,26 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use bytes::Bytes;
+use serde::{Deserialize, Serialize};
 
 use super::handle::ContentHandle;
 use super::kind::ContentKind;
 use crate::error::BlazenError;
 use crate::types::{MediaSource, ProviderId};
+
+// ---------------------------------------------------------------------------
+// ByteStream — pinned, boxed, fallible stream of byte chunks
+// ---------------------------------------------------------------------------
+
+/// A pinned, boxed, fallible stream of byte chunks.
+///
+/// Used by [`ContentBody::Stream`] for streaming uploads and by
+/// [`ContentStore::fetch_stream`] for streaming downloads. Stores backed by
+/// HTTP, S3, or the filesystem should produce / consume these incrementally;
+/// memory-bound stores may buffer.
+pub type ByteStream =
+    std::pin::Pin<Box<dyn futures_core::Stream<Item = Result<Bytes, BlazenError>> + Send>>;
 
 // ---------------------------------------------------------------------------
 // ContentBody — what a caller provides to `put`
@@ -43,20 +58,35 @@ use crate::types::{MediaSource, ProviderId};
 /// `LocalPath` variants are universally supported, while `Url` and
 /// `ProviderFile` are intended for stores that can record a reference
 /// without copying the bytes.
-#[derive(Debug, Clone)]
+///
+/// `Clone` is implemented manually because the [`Stream`](Self::Stream)
+/// variant carries a non-clonable [`ByteStream`]; cloning a `Stream`
+/// variant panics with `unreachable!` and is a programmer error — consume
+/// streaming bodies by value.
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentBody {
     /// Inline byte payload. Universal — every store accepts this.
-    Bytes(Vec<u8>),
+    Bytes {
+        /// Raw bytes that make up the content.
+        data: Vec<u8>,
+    },
     /// Public URL. Stores that record references (e.g.
     /// [`InMemoryContentStore`](super::stores::InMemoryContentStore)) keep
     /// the URL and resolve directly to it; stores that materialize bytes
     /// (e.g. [`LocalFileContentStore`](super::stores::LocalFileContentStore))
     /// fetch and persist locally.
-    Url(String),
+    Url {
+        /// Public URL to the content.
+        url: String,
+    },
     /// Local filesystem path. Native-target stores treat this as a
     /// reference; stores that need to upload (provider file APIs) read the
     /// bytes during `put`.
-    LocalPath(PathBuf),
+    LocalPath {
+        /// Path to the file on the local filesystem.
+        path: PathBuf,
+    },
     /// Reference to content already in a provider's file API. Stores
     /// generally record this verbatim and resolve back to a matching
     /// [`MediaSource::ProviderFile`].
@@ -66,6 +96,66 @@ pub enum ContentBody {
         /// Provider-issued file identifier.
         id: String,
     },
+    /// Streaming byte source. The store consumes the stream during `put`
+    /// and is free to spool to disk, forward as a chunked upload, or
+    /// drain into bytes.
+    ///
+    /// Stores that have a true streaming upload path (filesystem, S3,
+    /// HTTP multipart) should consume the stream incrementally;
+    /// memory-bound stores may buffer.
+    ///
+    /// `#[serde(skip)]` excludes this variant from (de)serialization —
+    /// [`ByteStream`] is neither `Serialize` nor `Deserialize`. Bindings
+    /// that route `ContentBody` through `serde_json` must check for
+    /// `Stream` first and handle it on a separate path.
+    #[serde(skip)]
+    Stream {
+        /// The byte stream to be consumed by the store.
+        stream: ByteStream,
+        /// Hint for the total length when known up front (e.g. from a
+        /// `Content-Length` header). Stores can use this to pre-allocate
+        /// or to choose between simple and resumable upload paths.
+        size_hint: Option<u64>,
+    },
+}
+
+impl Clone for ContentBody {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Bytes { data } => Self::Bytes { data: data.clone() },
+            Self::Url { url } => Self::Url { url: url.clone() },
+            Self::LocalPath { path } => Self::LocalPath { path: path.clone() },
+            Self::ProviderFile { provider, id } => Self::ProviderFile {
+                provider: *provider,
+                id: id.clone(),
+            },
+            Self::Stream { .. } => {
+                unreachable!("ContentBody::Stream is not clonable; consume by value")
+            }
+        }
+    }
+}
+
+impl std::fmt::Debug for ContentBody {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Bytes { data } => f
+                .debug_struct("Bytes")
+                .field("data_len", &data.len())
+                .finish(),
+            Self::Url { url } => f.debug_struct("Url").field("url", url).finish(),
+            Self::LocalPath { path } => f.debug_struct("LocalPath").field("path", path).finish(),
+            Self::ProviderFile { provider, id } => f
+                .debug_struct("ProviderFile")
+                .field("provider", provider)
+                .field("id", id)
+                .finish(),
+            Self::Stream { size_hint, .. } => f
+                .debug_struct("Stream")
+                .field("size_hint", size_hint)
+                .finish_non_exhaustive(),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -77,16 +167,20 @@ pub enum ContentBody {
 ///
 /// All fields are optional; the store may auto-detect them from bytes
 /// (via [`super::detect`]) when not provided.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ContentHint {
     /// MIME type, if known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mime_type: Option<String>,
     /// Caller's preferred classification — overrides any automatic
     /// detection from bytes / extension / MIME.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind_hint: Option<ContentKind>,
     /// Human-readable display name (filename, caption, etc.).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
     /// Byte size, if known up-front.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub byte_size: Option<u64>,
 }
 
@@ -190,6 +284,16 @@ pub trait ContentStore: Send + Sync + std::fmt::Debug {
             byte_size: handle.byte_size,
             display_name: handle.display_name.clone(),
         })
+    }
+
+    /// Stream raw bytes back. Default impl buffers `fetch_bytes` into a
+    /// single chunk so existing impls keep working. Stores backed by
+    /// HTTP / S3 / disk should override to actually stream.
+    async fn fetch_stream(&self, handle: &ContentHandle) -> Result<ByteStream, BlazenError> {
+        let bytes = self.fetch_bytes(handle).await?;
+        Ok(Box::pin(futures_util::stream::once(async move {
+            Ok(Bytes::from(bytes))
+        })))
     }
 
     /// Optional cleanup hook. Default: no-op.

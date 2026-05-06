@@ -52,8 +52,18 @@ async fn js_api_model_manager_registers_with_lifecycle() {
     let vram_bytes = Function::new_no_args("return 1000000000;");
     Reflect::set(&lifecycle, &JsValue::from_str("load"), load.as_ref()).unwrap();
     Reflect::set(&lifecycle, &JsValue::from_str("unload"), unload.as_ref()).unwrap();
-    Reflect::set(&lifecycle, &JsValue::from_str("isLoaded"), is_loaded.as_ref()).unwrap();
-    Reflect::set(&lifecycle, &JsValue::from_str("vramBytes"), vram_bytes.as_ref()).unwrap();
+    Reflect::set(
+        &lifecycle,
+        &JsValue::from_str("isLoaded"),
+        is_loaded.as_ref(),
+    )
+    .unwrap();
+    Reflect::set(
+        &lifecycle,
+        &JsValue::from_str("vramBytes"),
+        vram_bytes.as_ref(),
+    )
+    .unwrap();
 
     // The new register signature: (id, model: Option<JsValue>, vram_estimate, lifecycle).
     // Pass `None` for the model to exercise the `Option<JsValue>` arm.

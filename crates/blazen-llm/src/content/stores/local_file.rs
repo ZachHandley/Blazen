@@ -21,7 +21,8 @@ use uuid::Uuid;
 
 use crate::content::detect::{detect, detect_from_path};
 use crate::content::handle::ContentHandle;
-use crate::content::store::{ContentBody, ContentHint, ContentStore};
+use crate::content::kind::ContentKind;
+use crate::content::store::{ByteStream, ContentBody, ContentHint, ContentStore};
 use crate::error::BlazenError;
 use crate::types::MediaSource;
 
@@ -121,7 +122,7 @@ impl ContentStore for LocalFileContentStore {
         hint: ContentHint,
     ) -> Result<ContentHandle, BlazenError> {
         match body {
-            ContentBody::Bytes(bytes) => {
+            ContentBody::Bytes { data: bytes } => {
                 let (auto_kind, auto_mime) = detect(
                     Some(&bytes),
                     hint.mime_type.as_deref(),
@@ -150,7 +151,7 @@ impl ContentStore for LocalFileContentStore {
                 handle.display_name = hint.display_name;
                 Ok(handle)
             }
-            ContentBody::LocalPath(src) => {
+            ContentBody::LocalPath { path: src } => {
                 // Reference, don't copy. The store's index points at the
                 // user-supplied path directly.
                 let (auto_kind, auto_mime) = detect_from_path(&src);
@@ -170,12 +171,61 @@ impl ContentStore for LocalFileContentStore {
                     .or_else(|| src.file_name().map(|n| n.to_string_lossy().into_owned()));
                 Ok(handle)
             }
-            ContentBody::Url(_) | ContentBody::ProviderFile { .. } => {
+            ContentBody::Url { .. } | ContentBody::ProviderFile { .. } => {
                 Err(BlazenError::unsupported(
                     "LocalFileContentStore: only Bytes and LocalPath bodies are supported. \
                      Use InMemoryContentStore or a provider-file store for URL / ProviderFile \
                      references, or fetch the bytes first.",
                 ))
+            }
+            ContentBody::Stream {
+                stream,
+                size_hint: _,
+            } => {
+                use futures_util::StreamExt;
+                use tokio::io::AsyncWriteExt;
+
+                // We can't sniff bytes ahead of time without buffering, so the
+                // path-extension hint comes only from the caller-supplied MIME
+                // (or display-name) — fall back to an extension-less filename
+                // when neither is provided.
+                let ext = hint.mime_type.as_deref().and_then(mime_to_ext).or_else(|| {
+                    hint.display_name
+                        .as_deref()
+                        .and_then(|n| Path::new(n).extension().and_then(|e| e.to_str()))
+                });
+                let (id, path) = self.next_id_and_path(ext);
+                let mut file = tokio::fs::File::create(&path).await.map_err(|e| {
+                    BlazenError::request(format!(
+                        "LocalFileContentStore: failed to create '{}': {e}",
+                        path.display()
+                    ))
+                })?;
+                let mut stream = stream;
+                while let Some(chunk) = stream.next().await {
+                    let chunk = chunk?;
+                    file.write_all(&chunk).await.map_err(|e| {
+                        BlazenError::request(format!(
+                            "LocalFileContentStore: write failed for '{}': {e}",
+                            path.display()
+                        ))
+                    })?;
+                }
+                file.flush().await.map_err(|e| {
+                    BlazenError::request(format!(
+                        "LocalFileContentStore: flush failed for '{}': {e}",
+                        path.display()
+                    ))
+                })?;
+                drop(file);
+                let kind = hint.kind_hint.unwrap_or(ContentKind::Other);
+                let byte_size = std::fs::metadata(&path).ok().map(|m| m.len());
+                self.record(id.clone(), path)?;
+                let mut handle = ContentHandle::new(id, kind);
+                handle.mime_type = hint.mime_type;
+                handle.byte_size = byte_size;
+                handle.display_name = hint.display_name;
+                Ok(handle)
             }
         }
     }
@@ -195,6 +245,28 @@ impl ContentStore for LocalFileContentStore {
         })
     }
 
+    async fn fetch_stream(&self, handle: &ContentHandle) -> Result<ByteStream, BlazenError> {
+        use futures_util::StreamExt;
+
+        let entry = self.lookup(&handle.id)?;
+        let file = tokio::fs::File::open(&entry.path).await.map_err(|e| {
+            BlazenError::request(format!(
+                "LocalFileContentStore: failed to open '{}': {e}",
+                entry.path.display()
+            ))
+        })?;
+        let path_for_err = entry.path.clone();
+        let stream = tokio_util::io::ReaderStream::new(file).map(move |res| {
+            res.map_err(|e| {
+                BlazenError::request(format!(
+                    "LocalFileContentStore: read error for '{}': {e}",
+                    path_for_err.display()
+                ))
+            })
+        });
+        Ok(Box::pin(stream))
+    }
+
     async fn delete(&self, handle: &ContentHandle) -> Result<(), BlazenError> {
         if let Some(entry) = self
             .index
@@ -212,7 +284,6 @@ impl ContentStore for LocalFileContentStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::content::kind::ContentKind;
 
     fn tmp_dir() -> PathBuf {
         let raw = Uuid::new_v4().simple().to_string();
@@ -230,7 +301,10 @@ mod tests {
             0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
         ];
         let handle = store
-            .put(ContentBody::Bytes(png.clone()), ContentHint::default())
+            .put(
+                ContentBody::Bytes { data: png.clone() },
+                ContentHint::default(),
+            )
             .await
             .unwrap();
         assert_eq!(handle.kind, ContentKind::Image);
@@ -254,7 +328,10 @@ mod tests {
         let src = dir.join("source.txt");
         std::fs::write(&src, b"hello").unwrap();
         let handle = store
-            .put(ContentBody::LocalPath(src.clone()), ContentHint::default())
+            .put(
+                ContentBody::LocalPath { path: src.clone() },
+                ContentHint::default(),
+            )
             .await
             .unwrap();
         let resolved = store.resolve(&handle).await.unwrap();
@@ -271,7 +348,9 @@ mod tests {
         let store = LocalFileContentStore::new(dir.clone()).unwrap();
         let res = store
             .put(
-                ContentBody::Url("https://example.com/x.png".into()),
+                ContentBody::Url {
+                    url: "https://example.com/x.png".into(),
+                },
                 ContentHint::default(),
             )
             .await;
@@ -280,11 +359,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn stream_body_round_trips_through_local_file_store() {
+        use bytes::Bytes;
+        use futures_util::{TryStreamExt, stream};
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = LocalFileContentStore::new(dir.path()).unwrap();
+        let chunks: Vec<Result<Bytes, BlazenError>> = vec![
+            Ok(Bytes::from_static(b"hello ")),
+            Ok(Bytes::from_static(b"world")),
+        ];
+        let body = ContentBody::Stream {
+            stream: Box::pin(stream::iter(chunks)),
+            size_hint: Some(11),
+        };
+        let handle = store
+            .put(body, ContentHint::default().with_kind(ContentKind::Other))
+            .await
+            .unwrap();
+        assert_eq!(handle.byte_size, Some(11));
+        let bytes = store.fetch_bytes(&handle).await.unwrap();
+        assert_eq!(bytes, b"hello world");
+
+        let mut s = store.fetch_stream(&handle).await.unwrap();
+        let mut got = Vec::new();
+        while let Some(chunk) = s.try_next().await.unwrap() {
+            got.extend_from_slice(&chunk);
+        }
+        assert_eq!(got, b"hello world");
+    }
+
+    #[tokio::test]
     async fn delete_removes_file() {
         let dir = tmp_dir();
         let store = LocalFileContentStore::new(dir.clone()).unwrap();
         let handle = store
-            .put(ContentBody::Bytes(vec![0u8, 1u8]), ContentHint::default())
+            .put(
+                ContentBody::Bytes {
+                    data: vec![0u8, 1u8],
+                },
+                ContentHint::default(),
+            )
             .await
             .unwrap();
         let path = match store.resolve(&handle).await.unwrap() {

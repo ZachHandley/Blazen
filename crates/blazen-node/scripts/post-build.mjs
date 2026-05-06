@@ -42,6 +42,47 @@ const jsPath = new URL('../index.js', import.meta.url)
 }
 
 // ---------------------------------------------------------------------------
+// Section 1b: ContentBody / ContentHint helper types referenced by
+// `CustomContentStoreOptions` callback signatures (`#[napi(ts_type = ...)]`
+// on the Rust side names these types but does not declare them).
+// ---------------------------------------------------------------------------
+
+{
+  const current = readFileSync(dtsPath, 'utf8')
+  const sentinel = '// --- post-build: ContentBody / ContentHint helper types ---'
+  if (!current.includes(sentinel)) {
+    const decls = [
+      '/**',
+      ' * JSON-tagged body passed to a custom store\'s `put` callback.',
+      ' *',
+      ' * Mirrors `blazen_llm::content::ContentBody`. The `stream` variant',
+      ' * carries a live `AsyncIterable<Uint8Array>` so chunks flow lazily',
+      ' * from Rust into JS without staging the whole payload in memory.',
+      ' */',
+      'export type ContentBody =',
+      '  | { type: \'bytes\'; data: Buffer | Uint8Array | number[] }',
+      '  | { type: \'url\'; url: string }',
+      '  | { type: \'local_path\'; path: string }',
+      '  | { type: \'provider_file\'; provider: string; id: string }',
+      '  | { type: \'stream\'; stream: AsyncIterable<Uint8Array>; sizeHint: number | null }',
+      '/**',
+      ' * Optional hints passed alongside a `ContentBody` into `put`.',
+      ' * Mirrors `blazen_llm::content::ContentHint` (every field optional).',
+      ' */',
+      'export interface ContentHint {',
+      '  mimeType?: string | null',
+      '  kind?: ContentKind | null',
+      '  displayName?: string | null',
+      '  byteSize?: number | null',
+      '}',
+    ]
+    const banner = `\n${sentinel}\n`
+    const block = `${current.endsWith('\n') ? '' : '\n'}${banner}${decls.join('\n')}\n`
+    appendFileSync(dtsPath, block)
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Section 2: append typed-error wrapping + re-exports to index.js
 // ---------------------------------------------------------------------------
 //
@@ -262,6 +303,10 @@ ${sentinel}
   const has = (haystack, needle) => haystack.includes(needle)
   const status = {
     'd.ts: type aliases': has(finalDts, 'export type MediaSource = JsImageSource'),
+    'd.ts: content helpers': has(
+      finalDts,
+      '// --- post-build: ContentBody / ContentHint helper types ---',
+    ),
     'd.ts: error classes': has(finalDts, '// --- post-build: typed error classes ---'),
     'js: error wrapping': has(finalJs, '// --- post-build: typed-error wrapping ---'),
   }

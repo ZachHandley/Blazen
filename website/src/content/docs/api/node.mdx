@@ -450,6 +450,251 @@ const tools: ToolDefinition[] = [
 
 ---
 
+## Content Subsystem
+
+Pluggable storage and handle plumbing for multimodal payloads (images, audio, video, documents, 3D models, CAD files). A `ContentStore` issues opaque handles; tools accept handle-id strings as arguments and Blazen substitutes the resolved typed content before the handler runs.
+
+```typescript
+import {
+  ContentStore,
+  imageInput,
+  audioInput,
+  videoInput,
+  fileInput,
+  threeDInput,
+  cadInput,
+} from "blazen";
+import type {
+  ContentHandle,
+  ContentKind,
+  JsContentMetadata,
+  PutOptions,
+} from "blazen";
+```
+
+### ContentKind
+
+String enum tagging what a handle refers to. Values match the serde-tag form so they round-trip across any Blazen API that takes a kind string.
+
+```typescript
+const enum ContentKind {
+  Image = "image",
+  Audio = "audio",
+  Video = "video",
+  Document = "document",
+  ThreeDModel = "three_d_model",
+  Cad = "cad",
+  Archive = "archive",
+  Font = "font",
+  Code = "code",
+  Data = "data",
+  Other = "other",
+}
+```
+
+### ContentHandle
+
+Opaque reference returned by `ContentStore.put()` and consumed by every other store method. Treat `id` as a black box -- store-defined.
+
+```typescript
+interface ContentHandle {
+  id: string;             // Opaque, store-defined identifier
+  kind: ContentKind;      // What kind of content this handle refers to
+  mimeType?: string;      // MIME type if known
+  byteSize?: number;      // Byte size if known (i64 -- napi has no u64)
+  displayName?: string;   // Human-readable display name (e.g. original filename)
+}
+```
+
+`ContentHandle` is a type alias for the underlying `JsContentHandle` interface.
+
+### ContentStore
+
+Pluggable registry for multimodal content. Construct via the static factories; instances are cheap to clone (internally an `Arc`), so reusing one store across multiple agents and requests is fine.
+
+```typescript
+class ContentStore {
+  // Factories
+  static inMemory(): ContentStore;
+  static localFile(root: string): ContentStore;
+  static openaiFiles(apiKey: string, baseUrl?: string | null): ContentStore;
+  static anthropicFiles(apiKey: string, baseUrl?: string | null): ContentStore;
+  static geminiFiles(apiKey: string, baseUrl?: string | null): ContentStore;
+  static falStorage(apiKey: string, baseUrl?: string | null): ContentStore;
+  static custom(options: CustomContentStoreOptions): ContentStore;
+
+  // Operations
+  put(body: Buffer | string, options: PutOptions): Promise<ContentHandle>;
+  resolve(handle: ContentHandle): Promise<any>;          // serialized MediaSource
+  fetchBytes(handle: ContentHandle): Promise<Buffer>;
+  metadata(handle: ContentHandle): Promise<JsContentMetadata>;
+  delete(handle: ContentHandle): Promise<void>;
+}
+```
+
+`put()` accepts either a `Buffer` (inline bytes uploaded to the store) or a `string` -- interpreted as a URL when it contains `"://"` (the store records the reference) and as a local filesystem path otherwise (the store reads or copies the file as needed).
+
+`resolve()` returns a serialized `MediaSource` -- the same JSON shape Blazen's request builders accept. `fetchBytes()` is for tools that need to operate on the raw payload (parse a PDF, transcribe audio); most tools reason over the handle and let `resolve()` produce the wire form. `delete()` is best-effort -- default implementations on most stores are no-ops.
+
+```typescript
+const store = ContentStore.inMemory();
+
+const handle = await store.put(Buffer.from(pngBytes), {
+  mimeType: "image/png",
+  kind: ContentKind.Image,
+  displayName: "diagram.png",
+});
+
+const meta = await store.metadata(handle);
+const bytes = await store.fetchBytes(handle);
+```
+
+### Subclassing `ContentStore`
+
+`ContentStore` is subclassable from JavaScript / TypeScript. Override the methods your backend needs; napi-rs wraps your subclass in a Rust adapter that dispatches into your JS async functions via `ThreadsafeFunction`.
+
+```typescript
+import { ContentStore } from "blazen";
+import type { ContentHandle, ContentKind } from "blazen";
+
+class S3ContentStore extends ContentStore {
+  constructor(bucket: string) {
+    super();
+    this.bucket = bucket;
+  }
+
+  async put(body, hint) {
+    // ...
+    return { id: "...", kind: "image" };
+  }
+
+  async resolve(handle) {
+    return { sourceType: "url", url: "..." };
+  }
+
+  async fetchBytes(handle) {
+    return Buffer.from("...");
+  }
+
+  // Optional:
+  async fetchStream(handle) { return Buffer.from("..."); }
+  async delete(handle) { /* no-op */ }
+}
+```
+
+Subclasses MUST override `put`, `resolve`, `fetchBytes`. The base-class default impls throw an error so any missing override is a clear failure rather than silent recursion via `super()`.
+
+### `ContentStore.custom({...})`
+
+Callback-based factory. Direct JS mirror of Rust `CustomContentStore::builder`.
+
+```typescript
+ContentStore.custom(options: {
+  put: (body: any, hint: any) => Promise<ContentHandle>;
+  resolve: (handle: ContentHandle) => Promise<any>;        // serialized MediaSource
+  fetchBytes: (handle: ContentHandle) => Promise<Buffer>;
+  fetchStream?: (handle: ContentHandle) => Promise<Buffer>; // single-chunk for now
+  delete?: (handle: ContentHandle) => Promise<void>;
+  name?: string;
+}): ContentStore
+```
+
+`put`, `resolve`, `fetchBytes` are required. `fetchStream` and `delete` are optional. The `body` argument arrives as a JS object shaped like `{type: "bytes", data: [...]}` / `{type: "url", url}` / `{type: "local_path", path}` / `{type: "provider_file", provider, id}` / `{type: "stream", stream: AsyncIterable<Uint8Array>, sizeHint: number | null}`. The `hint` has optional `mimeType` / `kindHint` / `displayName` / `byteSize`.
+
+`resolve` returns a serialized `MediaSource` JS object (e.g. `{sourceType: "url", url: "..."}`). `fetchBytes` returns a `Buffer`. `fetchStream` may return either `Buffer` / `Uint8Array` / `number[]` / base64 `string` (legacy, single-chunk) or an `AsyncIterable<Uint8Array>` for true chunk-by-chunk streaming -- a Node `Readable` qualifies since it implements `[Symbol.asyncIterator]`.
+
+### PutOptions
+
+Optional hints attached to a `put()` call. Every field is optional; the store may auto-detect from the bytes when a hint is missing.
+
+```typescript
+interface PutOptions {
+  mimeType?: string;      // MIME type, if known
+  kind?: ContentKind;     // Caller's preferred classification -- overrides any auto-detection
+  displayName?: string;   // Human-readable display name (filename, caption)
+  byteSize?: number;      // Byte size, if known up-front (i64 since napi has no u64)
+}
+```
+
+### ContentMetadata
+
+Cheap metadata summary returned by `ContentStore.metadata()`. No bytes are materialized.
+
+```typescript
+interface ContentMetadata {
+  kind: ContentKind;
+  mimeType?: string;
+  byteSize?: number;
+  displayName?: string;
+}
+```
+
+`ContentMetadata` is a type alias for the underlying `JsContentMetadata` interface.
+
+### Built-in stores
+
+| Factory | Purpose |
+|---|---|
+| `ContentStore.inMemory()` | Ephemeral in-memory store. Default for tests and short-lived sessions. |
+| `ContentStore.localFile(root)` | Filesystem-backed store rooted at `root`. Directory is created if missing. |
+| `ContentStore.openaiFiles(apiKey, baseUrl?)` | Backed by the OpenAI Files API. |
+| `ContentStore.anthropicFiles(apiKey, baseUrl?)` | Backed by the Anthropic Files API. |
+| `ContentStore.geminiFiles(apiKey, baseUrl?)` | Backed by the Gemini Files API. |
+| `ContentStore.falStorage(apiKey, baseUrl?)` | Backed by fal.ai's storage API. |
+| `ContentStore.custom({...})` | User-defined backend via async callbacks (see above). |
+
+### Tool-input schema helpers
+
+Each helper builds a JSON Schema fragment declaring a single required handle-id input. The model emits a handle-id string; Blazen swaps it for the resolved typed content before your tool runs.
+
+| Helper | Declares an input expecting a handle of kind |
+|---|---|
+| `imageInput(name, description)` | `image` |
+| `audioInput(name, description)` | `audio` |
+| `videoInput(name, description)` | `video` |
+| `fileInput(name, description)` | `document` |
+| `threeDInput(name, description)` | `three_d_model` |
+| `cadInput(name, description)` | `cad` |
+
+Each call returns the same shape (kind tag varies):
+
+```typescript
+imageInput("photo", "The image to describe");
+// =>
+// {
+//   type: "object",
+//   properties: {
+//     photo: {
+//       type: "string",
+//       description: "The image to describe",
+//       "x-blazen-content-ref": { kind: "image" }
+//     }
+//   },
+//   required: ["photo"]
+// }
+```
+
+The `x-blazen-content-ref` extension is invisible to providers -- they see a plain string parameter -- but Blazen's resolver uses it as a marker for handle substitution.
+
+### How resolution works
+
+When the model emits a tool call like `{"photo": "blazen_xxx"}`, Blazen scans the tool's parameter schema for `x-blazen-content-ref` markers. For each marked field, it looks up the handle id in the active `ContentStore` and replaces the bare string with a typed object before invoking your handler:
+
+```typescript
+{
+  kind: "image",
+  handleId: "blazen_xxx",
+  mimeType: "image/png",
+  byteSize: 24576,
+  displayName: "diagram.png",
+  source: { /* resolved MediaSource -- url, base64, or provider-native ref */ }
+}
+```
+
+`source` is the same wire form `ContentStore.resolve()` returns, so your handler can forward it straight into a downstream provider request, or call `store.fetchBytes(handle)` if it needs the raw payload. If the handle is unknown to the store the call fails before the handler runs.
+
+---
+
 ## TokenUsage
 
 Token usage statistics for a completion request.
@@ -1013,14 +1258,12 @@ Optional static metadata that controls how fields are stored and which fields ar
 ```typescript
 interface BlazenStateMeta {
   transient?: Set<string> | string[];
-  storeBy?: Record<string, FieldStore>;
 }
 ```
 
 | Field | Type | Description |
 |---|---|---|
 | `transient` | `Set<string> \| string[]` | Field names to exclude from persistence. These fields are not saved by `saveTo()` and will not be present after `loadFrom()`. |
-| `storeBy` | `Record<string, FieldStore>` | Per-field storage overrides. Fields not listed here use the default context `set`/`get` methods. |
 
 ### `restore?(): void | Promise<void>`
 
@@ -1036,53 +1279,6 @@ Restore a state instance from the workflow context. Reads each persisted field, 
 
 ```typescript
 const state = await AgentState.loadFrom<AgentState>(ctx, "state");
-```
-
----
-
-## FieldStore
-
-Interface for custom field persistence strategies.
-
-```typescript
-interface FieldStore {
-  save(key: string, value: any, ctx: Context): Promise<void>;
-  load(key: string, ctx: Context): Promise<any>;
-}
-```
-
-| Method | Description |
-|---|---|
-| `save(key, value, ctx)` | Persist a single field value into the context under the given key. |
-| `load(key, ctx)` | Retrieve a single field value from the context by key. Returns `null` if not found. |
-
----
-
-## CallbackFieldStore
-
-Convenience class that constructs a `FieldStore` from a pair of callback functions.
-
-### Constructor
-
-```typescript
-new CallbackFieldStore({
-  saveFn: (key: string, value: any, ctx: Context) => Promise<void>,
-  loadFn: (key: string, ctx: Context) => Promise<any>,
-})
-```
-
-```typescript
-import { CallbackFieldStore } from "blazen";
-
-const binaryStore = new CallbackFieldStore({
-  saveFn: async (key, value, ctx) => {
-    await ctx.setBytes(key, Buffer.from(JSON.stringify(value)));
-  },
-  loadFn: async (key, ctx) => {
-    const buf = await ctx.getBytes(key);
-    return buf ? JSON.parse(buf.toString()) : null;
-  },
-});
 ```
 
 ---

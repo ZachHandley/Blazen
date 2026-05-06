@@ -120,6 +120,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // State base class
     m.add_class::<workflow::state::PyBlazenState>()?;
+    m.add_class::<workflow::state::PyCallbackFieldStore>()?;
 
     // Step decorator
     m.add_function(wrap_pyfunction!(workflow::step::step, m)?)?;
@@ -400,6 +401,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<content::PyContentKind>()?;
     m.add_class::<content::PyContentHandle>()?;
     m.add_class::<content::PyContentStore>()?;
+    m.add_class::<content::store::PyAsyncByteIter>()?;
     m.add_function(wrap_pyfunction!(
         content::tool_input::content_ref_property,
         m

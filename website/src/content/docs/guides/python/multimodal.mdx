@@ -1,0 +1,407 @@
+---
+title: "Multimodal Content"
+description: "Pass images, audio, video, files, 3D models, and CAD files through Blazen -- and let tools accept them via content handles"
+language: "python"
+section: "guides"
+order: 9
+---
+
+This guide covers Blazen's content layer in Python: how to register multimodal payloads with a `ContentStore`, how the `ContentHandle` indirection works, and how to declare tools that accept images, audio, video, documents, 3D models, or CAD files as inputs.
+
+## Why content handles?
+
+LLM providers do not agree on how multimodal data crosses the wire. OpenAI exposes a Files API and accepts image URLs inline; Anthropic has its own Files API (beta) plus inline base64; Gemini has Files; fal.ai has its own object storage. On top of that, the model itself only ever emits JSON -- it has no mechanism to attach a 5 MB PNG to a tool call.
+
+A `ContentHandle` is the single source of truth that bridges those worlds. You `put` content into a store once and receive a stable handle. The handle is the only thing that travels through prompts, tool calls, and step boundaries. When the framework needs to render content for a specific provider, it asks the store to `resolve` the handle into whatever wire form fits -- a URL, base64, or a provider file ID.
+
+The same indirection lets tools accept content as input: a tool declares an `image_input` parameter, the model emits a handle ID as a JSON string, and the framework substitutes the resolved content before your tool handler runs.
+
+## `ContentKind`
+
+Every piece of content has a kind. Tool-input declarations and store routing both branch on it.
+
+| Variant | Wire name | Typical MIME |
+|---|---|---|
+| `Image` | `image` | `image/png`, `image/jpeg`, `image/webp` |
+| `Audio` | `audio` | `audio/mpeg`, `audio/wav`, `audio/ogg` |
+| `Video` | `video` | `video/mp4`, `video/webm` |
+| `Document` | `document` | `application/pdf`, `text/plain` |
+| `ThreeDModel` | `three_d_model` | `model/gltf+json`, `model/obj` |
+| `Cad` | `cad` | `application/step`, `application/dxf` |
+| `Archive` | `archive` | `application/zip` |
+| `Font` | `font` | `font/ttf`, `font/woff2` |
+| `Code` | `code` | `text/x-python` |
+| `Data` | `data` | `application/json`, `text/csv` |
+| `Other` | `other` | unknown |
+
+Three lookup helpers cover the common parsing cases:
+
+```python
+from blazen import ContentKind
+
+ContentKind.from_str("image")          # ContentKind.Image
+ContentKind.from_str("three_d_model")  # ContentKind.ThreeDModel
+ContentKind.from_mime("image/png")     # ContentKind.Image
+ContentKind.from_extension("PNG")      # ContentKind.Image (case-insensitive, no leading dot)
+ContentKind.from_mime("application/x-weird")  # ContentKind.Other (fallback, never raises)
+
+ContentKind.ThreeDModel.name_str       # "three_d_model" -- the canonical wire name
+```
+
+`from_str` raises `ValueError` on unknown wire names; `from_mime` and `from_extension` fall back to `ContentKind.Other` so they never blow up on unfamiliar inputs.
+
+## `ContentStore`
+
+A store is the lifecycle manager for content: register bytes / URLs / paths, resolve handles into wire forms, fetch raw bytes back out, look up metadata, and clean up when you are done.
+
+```python
+import asyncio
+from blazen import ContentKind, ContentStore
+
+async def main() -> None:
+    store = ContentStore.in_memory()
+
+    # 1. Register raw bytes -- store auto-detects kind/MIME if you omit the hints.
+    handle = await store.put(
+        b"\x89PNG\r\n\x1a\n...binary png data...",
+        kind=ContentKind.Image,
+        mime_type="image/png",
+        display_name="logo.png",
+    )
+
+    print(handle.id)            # "blazen_a1b2c3d4..."
+    print(handle.kind)          # ContentKind.Image
+    print(handle.mime_type)     # "image/png"
+    print(handle.byte_size)     # populated when known
+    print(handle.display_name)  # "logo.png"
+
+    # 2. Resolve it into a wire-renderable MediaSource dict.
+    source = await store.resolve(handle)
+    # In-memory store returns base64:
+    # {"type": "base64", "data": "iVBORw0KGgo...", "media_type": "image/png"}
+
+    # 3. Fetch the raw bytes back. Reference-only stores (URL / provider) may
+    #    raise UnsupportedError instead.
+    raw = await store.fetch_bytes(handle)
+    assert isinstance(raw, bytes)
+
+    # 4. Cheap metadata lookup -- never materializes the bytes.
+    meta = await store.metadata(handle)
+    # {"kind": "image", "mime_type": "image/png", "byte_size": 12345,
+    #  "display_name": "logo.png"}
+
+    # 5. Clean up.
+    await store.delete(handle)
+
+asyncio.run(main())
+```
+
+`put` accepts three body shapes: `bytes` (the content itself), a `str` (treated as a URL reference), or a `pathlib.Path` (read from disk on demand by stores that support it). All keyword hints (`kind`, `mime_type`, `display_name`, `byte_size`) are optional -- pass what you know, the store fills in what it can.
+
+`resolve` returns a serialized `MediaSource` dict whose `type` field tells you which variant came back:
+
+| `type` | Other fields | Used for |
+|---|---|---|
+| `url` | `url` | Public URL references (fal storage, user-supplied URLs). |
+| `base64` | `data`, `media_type` | Inline payloads (in-memory store, small files). |
+| `provider_file` | `provider`, `id` | Pre-uploaded provider Files API entries. |
+
+The framework picks the right wire form for each provider automatically when a store is wired to an agent; you rarely call `resolve` by hand outside of debugging.
+
+## Built-in stores
+
+| Factory | Backing | Notes |
+|---|---|---|
+| `ContentStore.in_memory()` | Process memory | Ephemeral; resolves to base64. Good for tests and short-lived runs. |
+| `ContentStore.local_file(path)` | Filesystem rooted at `path` | Directory created recursively if missing. Resolves to base64 or path. |
+| `ContentStore.openai_files(api_key)` | OpenAI Files API | `put` uploads, `resolve` returns a `provider_file` entry. |
+| `ContentStore.anthropic_files(api_key)` | Anthropic Files API (beta) | Same shape as OpenAI's factory. |
+| `ContentStore.gemini_files(api_key)` | Google Gemini Files API | Same shape. |
+| `ContentStore.fal_storage(api_key)` | fal.ai object storage | Resolves to a `url` entry. |
+
+Each provider-file factory accepts an optional `base_url` keyword for self-hosted gateways or proxies. The `put` interface is identical across all of them:
+
+```python
+from blazen import ContentKind, ContentStore
+
+# OpenAI Files API
+openai_store = ContentStore.openai_files(api_key="sk-...")
+handle = await openai_store.put(
+    b"...bytes...",
+    kind=ContentKind.Image,
+    mime_type="image/png",
+)
+
+# Anthropic Files API (beta)
+anthropic_store = ContentStore.anthropic_files(api_key="sk-ant-...")
+handle = await anthropic_store.put(
+    b"...bytes...",
+    kind=ContentKind.Document,
+    mime_type="application/pdf",
+)
+
+# Google Gemini Files API
+gemini_store = ContentStore.gemini_files(api_key="AIza...")
+handle = await gemini_store.put(
+    b"...bytes...",
+    kind=ContentKind.Video,
+    mime_type="video/mp4",
+)
+
+# fal.ai object storage (resolves to a public URL)
+fal_store = ContentStore.fal_storage(api_key="...")
+handle = await fal_store.put(
+    b"...bytes...",
+    kind=ContentKind.Image,
+    mime_type="image/png",
+)
+```
+
+A store-backed handle stays valid as long as the upstream entry exists. Provider-file stores will issue an upstream delete call when you call `await store.delete(handle)`; the in-memory and local-file stores drop the local entry.
+
+## Custom stores
+
+Two equivalent paths cover arbitrary backends -- S3, an internal blob service, anything you can implement async I/O against. Both produce the same `ContentStore` Python object the rest of the framework consumes; the only difference is whether your code lives in standalone callables or in a class.
+
+**Path A -- callback factory.** `ContentStore.custom(...)` mirrors the Rust `CustomContentStore::builder` API. `put`, `resolve`, and `fetch_bytes` are required; `fetch_stream` and `delete` are optional and fall back to sane defaults if you omit them.
+
+```python
+from blazen import ContentHandle, ContentStore
+
+# put receives a serialized ContentBody dict and a ContentHint dict.
+# Body shapes:
+#   {"type": "bytes", "data": [...]}
+#   {"type": "url", "url": "..."}
+#   {"type": "local_path", "path": "..."}
+#   {"type": "provider_file", "provider": "openai", "id": "..."}
+async def my_put(body: dict, hint: dict) -> ContentHandle:
+    ...
+    return ContentHandle(
+        id="blazen_xxx",
+        kind="image",
+        mime_type="image/png",
+    )
+
+# resolve must return a serialized MediaSource dict.
+async def my_resolve(handle: ContentHandle) -> dict:
+    return {"type": "url", "url": "https://example.com/blob.png"}
+
+async def my_fetch_bytes(handle: ContentHandle) -> bytes:
+    return b"...bytes..."
+
+store = ContentStore.custom(
+    put=my_put,
+    resolve=my_resolve,
+    fetch_bytes=my_fetch_bytes,
+    # fetch_stream=... and delete=... are optional
+    name="my_s3_store",
+)
+```
+
+**Path B -- subclass.** `ContentStore` is subclassable. Override `put`, `resolve`, and `fetch_bytes`; optionally override `fetch_stream`, `delete`, and `metadata`. Subclasses that forget to override a required method get a clear `NotImplementedError` rather than silent recursion.
+
+```python
+from blazen import ContentHandle, ContentStore
+
+class S3ContentStore(ContentStore):
+    def __init__(self, bucket: str):
+        super().__init__()
+        self.bucket = bucket
+
+    async def put(self, body, hint) -> ContentHandle:
+        ...
+
+    async def resolve(self, handle) -> dict:
+        ...
+
+    async def fetch_bytes(self, handle) -> bytes:
+        ...
+
+    # Optional overrides (defaults are reasonable if you skip them):
+    async def fetch_stream(self, handle): ...
+    async def delete(self, handle) -> None: ...
+```
+
+Pick whichever style matches your code -- the framework treats both identically. The callback form is convenient for one-off wiring inside a function; the subclass form is better when the backend carries state (clients, credentials, caches) that you want to keep in `__init__`.
+
+## Tool inputs
+
+A tool that accepts content declares the parameter with one of the typed helpers. Each helper returns a JSON Schema fragment shaped like an object with a single required string property carrying the `x-blazen-content-ref` extension:
+
+```python
+from blazen import image_input
+
+schema = image_input("photo", "The photo to analyze")
+# {
+#   "type": "object",
+#   "properties": {
+#     "photo": {
+#       "type": "string",
+#       "description": "The photo to analyze",
+#       "x-blazen-content-ref": {"kind": "image"}
+#     }
+#   },
+#   "required": ["photo"]
+# }
+```
+
+The `x-blazen-content-ref` extension is invisible to the model -- providers ignore unknown JSON Schema keys -- but the framework's tool-argument resolver looks for it to know which string properties hold handle IDs. When the model emits a tool call like `{"photo": "blazen_a1b2c3d4..."}` and an agent has a content store wired in, the resolver substitutes the resolved content before your handler runs. Your tool sees a dict shaped roughly like:
+
+```python
+{
+    "kind": "image",
+    "handle_id": "blazen_a1b2c3d4...",
+    "mime_type": "image/png",
+    "byte_size": 12345,
+    "display_name": "logo.png",
+    "source": {"type": "base64", "data": "iVBOR...", "media_type": "image/png"},
+}
+```
+
+The `source` field carries the same serialized `MediaSource` dict that `await store.resolve(handle)` would return.
+
+There is one helper per common kind. They all have the signature `(name: str, description: str) -> dict`:
+
+```python
+from blazen import (
+    audio_input,
+    cad_input,
+    file_input,
+    image_input,
+    three_d_input,
+    video_input,
+)
+
+image_input("photo",   "A photo to analyze")          # kind: image
+audio_input("clip",    "An audio clip to transcribe") # kind: audio
+video_input("scene",   "A video scene to summarize")  # kind: video
+file_input("doc",      "A document to extract from")  # kind: document
+three_d_input("mesh",  "A 3D model to inspect")       # kind: three_d_model
+cad_input("part",      "A CAD part to validate")      # kind: cad
+```
+
+For kinds without a dedicated helper (`Archive`, `Font`, `Code`, `Data`, `Other`), use `content_ref_property` to build the property fragment yourself, or `content_ref_required_object` to build a full object schema. See the next section.
+
+## Composing extra fields
+
+Tools that take content **plus** other arguments need a richer schema than the single-property helpers produce. `content_ref_required_object` is the building block: it builds the same object shape as `image_input` & friends, but lets you mix in additional non-content properties via `extra_properties`.
+
+```python
+from blazen import ContentKind, content_ref_required_object
+
+schema = content_ref_required_object(
+    "photo",
+    ContentKind.Image,
+    "Photo to analyze",
+    extra_properties={
+        "note": {
+            "type": "string",
+            "description": "Optional caller-supplied note about the photo.",
+        },
+        "include_exif": {
+            "type": "boolean",
+            "description": "Include EXIF metadata in the response.",
+        },
+    },
+)
+# {
+#   "type": "object",
+#   "properties": {
+#     "photo": {"type": "string", "description": "Photo to analyze",
+#                "x-blazen-content-ref": {"kind": "image"}},
+#     "note": {"type": "string", "description": "..."},
+#     "include_exif": {"type": "boolean", "description": "..."}
+#   },
+#   "required": ["photo"]
+# }
+```
+
+Only the content reference is added to `required` automatically; mark extra properties as required by adding them to the schema you build around it (or, more often, leave them optional and validate inside the handler).
+
+If you need just the property fragment -- because you are already building a larger object schema by hand -- use `content_ref_property` instead:
+
+```python
+from blazen import ContentKind, content_ref_property
+
+photo_prop = content_ref_property(ContentKind.Image, "Photo to analyze")
+# {"type": "string", "description": "Photo to analyze",
+#  "x-blazen-content-ref": {"kind": "image"}}
+
+custom_schema = {
+    "type": "object",
+    "properties": {
+        "photo": photo_prop,
+        "note":  {"type": "string"},
+    },
+    "required": ["photo", "note"],
+}
+```
+
+`content_ref_property` is what `image_input`, `audio_input`, etc. use internally for the inner property; `content_ref_required_object` is what they use for the outer object. Reach for them when the dedicated helpers do not give you enough room.
+
+## Tool results with multimodal
+
+Tool results can carry multimodal content too -- a tool that runs OCR or generates an image returns a `ToolOutput` whose `llm_override` is a multi-part `LlmPayload`. The framework serializes those parts correctly across every provider (Anthropic gets a native multi-part tool result; others receive a follow-up user message). See the cross-cutting [tool multimodal guide](/guides/tool-multimodal/) for the full pattern.
+
+## Pre-resolving handles before sending
+
+When a `ContentStore` is wired into an agent, the framework resolves every handle that crosses the wire automatically: tool-call arguments get substituted before your handler runs, and content parts in messages get rendered in whatever form the active provider expects. There is no separate Python `resolve_tool_arguments` you have to call -- that machinery lives below the binding and fires implicitly. See the [Python API reference](/api/python/) for the full set of agent-construction signatures.
+
+If you need a wire-form representation by hand (for logging, snapshotting, or custom transport), `await store.resolve(handle)` returns the same serialized `MediaSource` dict the framework uses internally.
+
+## Streaming large content
+
+Blazen's content layer streams chunk-by-chunk in both directions through the Python binding. `fetch_stream` callbacks can return `AsyncIterator[bytes]`, and a streaming `put` body arrives as an `AsyncByteIter` you iterate with `async for`.
+
+**Downloading.** Call `fetch_stream(handle)` on any `ContentStore` wrapper to iterate the bytes:
+
+```python
+iter = await store.fetch_stream(handle)
+async for chunk in iter:
+    process(chunk)
+```
+
+When you implement a custom store via `ContentStore.custom(fetch_stream=...)` or override `fetch_stream` on a subclass, you have two options:
+
+1. Return `bytes` for a single buffered chunk -- still supported.
+2. Return an async generator (or anything implementing `__aiter__` and yielding `bytes` / `bytearray` / buffer-protocol objects) for chunk-by-chunk delivery:
+
+   ```python
+   class S3ContentStore(ContentStore):
+       async def fetch_stream(self, handle):
+           async for chunk in self.s3.get_object_stream(handle.id):
+               yield chunk
+   ```
+
+If you omit `fetch_stream` entirely, the framework falls back to `fetch_bytes`.
+
+**Uploading.** When upstream Rust code hands your custom store a `ContentBody::Stream`, your `put(body, hint)` callback receives a body shaped `{"type": "stream", "stream": <AsyncByteIter>, "size_hint": int | None}`. Iterate `body["stream"]` to consume chunks without buffering the whole payload:
+
+```python
+class S3ContentStore(ContentStore):
+    async def put(self, body, hint):
+        if body["type"] == "stream":
+            async for chunk in body["stream"]:
+                self.uploader.append(chunk)
+            return self.uploader.finish()
+        # bytes / url / local_path / provider_file paths handled below...
+```
+
+Backpressure is honored across the FFI boundary via a small bounded channel (4 chunks), so a slow consumer pauses the producer naturally.
+
+**Built-in streaming stores.** These pull bytes from the network or disk chunk-by-chunk so any `fetch_stream` call against them streams end-to-end with no host code involved:
+
+| Store | `fetch_stream` |
+|---|---|
+| `local_file` | streamed (file read in chunks) |
+| `openai_files` | streamed (HTTP response body) |
+| `anthropic_files` | streamed (HTTP response body) |
+| `fal_storage` | streamed (HTTP response body) |
+| `in_memory` | buffered (no underlying source to stream from) |
+| `gemini_files` | buffered (Gemini Files exposes no download endpoint) |
+
+## See also
+
+- [Tool multimodal](/guides/tool-multimodal/) -- cross-cutting guide for tool results that return images, audio, etc.
+- [Python API reference](/api/python/) -- full signatures for `ContentStore`, `ContentHandle`, and the input helpers.
+- [Middleware & composition](/guides/python/middleware/) -- layer retry / cache / fallback around models that consume multimodal content.

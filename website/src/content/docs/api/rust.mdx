@@ -680,12 +680,29 @@ pub enum ContentPart {
 
 ### `ImageSource`
 
+The source of an image, file, or any other media payload. Marked `#[non_exhaustive]` so new variants can be added without breaking callers -- always pattern-match with a wildcard arm. `MediaSource` is a type alias for `ImageSource` and is the preferred name when the value is not specifically an image.
+
 ```rust
+#[non_exhaustive]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ImageSource {
     Url { url: String },
     Base64 { data: String },
+    File { path: PathBuf },
+    ProviderFile { provider: ProviderId, id: String },
+    Handle { handle: ContentHandle },
 }
+
+pub type MediaSource = ImageSource;
 ```
+
+| Variant | Description |
+|---------|-------------|
+| `Url { url }` | Public URL the provider can fetch directly. |
+| `Base64 { data }` | Inline base64-encoded bytes. Pair with `media_type` on the enclosing [`ImageContent`](#imagecontent) / [`FileContent`](#filecontent). |
+| `File { path }` | Local filesystem path. Use `ImageSource::file(path)` to construct. Resolved at request time by a [`ContentStore`](#contentstore) or by the provider adapter. |
+| `ProviderFile { provider, id }` | Reference to a file already uploaded to a provider's Files API (e.g. an OpenAI `file-xxx` id). Forwarded verbatim only when the active provider matches `provider`. |
+| `Handle { handle }` | Reference to a [`ContentHandle`](#contenthandle) registered with a [`ContentStore`](#contentstore). Resolved into a concrete `Url` / `Base64` / `ProviderFile` by [`CompletionRequest::resolve_handles_with`](#completionrequestresolve_handles_with) before the request hits a provider. |
 
 ### `FileContent`
 
@@ -838,6 +855,469 @@ A single chunk from a streaming completion response.
 | `delta` | `Option<String>` | Incremental text content |
 | `tool_calls` | `Vec<ToolCall>` | Tool invocations completed in this chunk |
 | `finish_reason` | `Option<String>` | Present in the final chunk to indicate why generation stopped |
+
+---
+
+## Content Subsystem
+
+A provider-agnostic layer for handing media (images, audio, video, documents, 3D, CAD, archives, fonts, code, generic data) to and from models. The core idea: instead of inlining bytes or URLs in every message, callers register payloads with a [`ContentStore`](#contentstore), receive a small [`ContentHandle`](#contenthandle), and reference the handle from messages, tool inputs, and tool outputs. Just before a request is sent, the runtime resolves every handle into the concrete representation the active provider expects -- a URL, a base64 blob, or a `ProviderFile` reference for providers with native Files APIs.
+
+Everything in this section is re-exported from `blazen_llm::content`.
+
+### `ContentKind`
+
+Coarse classification for a piece of content. Marked `#[non_exhaustive]`. Serde uses `rename_all = "snake_case"`, so `ThreeDModel` round-trips as `"three_d_model"`. Implements `Display`.
+
+```rust
+#[non_exhaustive]
+pub enum ContentKind {
+    Image,
+    Audio,
+    Video,
+    Document,
+    ThreeDModel,
+    Cad,
+    Archive,
+    Font,
+    Code,
+    Data,
+    Other,
+}
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `from_mime` | `fn(&str) -> Self` | Best-effort classification from a MIME string. |
+| `from_extension` | `fn(&str) -> Self` | Best-effort classification from a filename extension (no leading dot required). |
+| `as_str` | `fn(self) -> &'static str` | Snake-case string form (matches the serde representation). |
+
+```rust
+use blazen_llm::content::ContentKind;
+
+assert_eq!(ContentKind::from_mime("image/png"), ContentKind::Image);
+assert_eq!(ContentKind::from_extension("glb"), ContentKind::ThreeDModel);
+assert_eq!(ContentKind::ThreeDModel.as_str(), "three_d_model");
+```
+
+---
+
+### `ContentHandle`
+
+An opaque pointer to a payload owned by a [`ContentStore`](#contentstore). Cheap to clone, safe to embed in messages and tool arguments, and resolvable on demand.
+
+```rust
+pub struct ContentHandle {
+    pub id: String,
+    pub kind: ContentKind,
+    pub mime_type: Option<String>,
+    pub byte_size: Option<u64>,
+    pub display_name: Option<String>,
+}
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `new` | `fn(id: impl Into<String>, kind: ContentKind) -> Self` | Construct a handle with no metadata. |
+| `with_mime_type` | `fn(self, mime: impl Into<String>) -> Self` | Builder: attach a MIME type. |
+| `with_byte_size` | `fn(self, bytes: u64) -> Self` | Builder: attach a byte size. |
+| `with_display_name` | `fn(self, name: impl Into<String>) -> Self` | Builder: attach a human-readable name. |
+
+```rust
+use blazen_llm::content::{ContentHandle, ContentKind};
+
+let handle = ContentHandle::new("blob_abc123", ContentKind::Image)
+    .with_mime_type("image/png")
+    .with_byte_size(48_213)
+    .with_display_name("chart.png");
+```
+
+---
+
+### `ContentStore`
+
+The async trait every store implements. Stores own the bytes (or the URL, or the provider-side file id) and translate handles into something the provider can consume on demand.
+
+```rust
+#[async_trait]
+pub trait ContentStore: Send + Sync + std::fmt::Debug {
+    async fn put(&self, body: ContentBody, hint: ContentHint)
+        -> Result<ContentHandle, BlazenError>;
+    async fn resolve(&self, handle: &ContentHandle)
+        -> Result<MediaSource, BlazenError>;
+    async fn fetch_bytes(&self, handle: &ContentHandle)
+        -> Result<Vec<u8>, BlazenError>;
+    async fn metadata(&self, handle: &ContentHandle)
+        -> Result<ContentMetadata, BlazenError> { /* default */ }
+    async fn fetch_stream(&self, handle: &ContentHandle)
+        -> Result<ByteStream, BlazenError> { /* default */ }
+    async fn delete(&self, _handle: &ContentHandle)
+        -> Result<(), BlazenError> { Ok(()) }
+}
+```
+
+| Method | Description |
+|--------|-------------|
+| `put` | Ingest a [`ContentBody`](#contentbody) under a [`ContentHint`](#contenthint) and return a fresh handle. |
+| `resolve` | Produce the concrete [`MediaSource`](#imagesource) the provider will see (typically `Url`, `Base64`, or `ProviderFile`). Called by [`CompletionRequest::resolve_handles_with`](#completionrequestresolve_handles_with). |
+| `fetch_bytes` | Materialise the underlying bytes. Used when a tool needs to read the payload directly. |
+| `metadata` | Return [`ContentMetadata`](#contentmetadata). The default impl synthesises this from the handle's own fields; stores with richer indices should override. |
+| `fetch_stream` | Stream raw bytes back as a [`ByteStream`](#bytestream). The default impl buffers `fetch_bytes` into a single chunk via `futures::stream::once`, so existing impls keep working unchanged. Stores backed by HTTP / disk / object storage should override for true incremental streaming. Built-in overrides today: [`LocalFileContentStore`](#built-in-stores) (uses `tokio_util::io::ReaderStream`), [`OpenAiFilesStore`](#built-in-stores), [`AnthropicFilesStore`](#built-in-stores), [`FalStorageStore`](#built-in-stores) (all via the `HttpClient` trait's `send_streaming` method). [`InMemoryContentStore`](#built-in-stores) and [`GeminiFilesStore`](#built-in-stores) use the buffered default impl. |
+| `delete` | Best-effort deletion. Default is a no-op so read-only stores can leave it unimplemented. |
+
+```rust
+use std::sync::Arc;
+use blazen_llm::content::{ContentBody, ContentHint, ContentKind, InMemoryContentStore, ContentStore};
+
+let store = Arc::new(InMemoryContentStore::new());
+
+let handle = store.put(
+    ContentBody::Bytes { data: std::fs::read("chart.png")? },
+    ContentHint::default()
+        .with_mime_type("image/png")
+        .with_kind(ContentKind::Image)
+        .with_display_name("chart.png"),
+).await?;
+
+let source = store.resolve(&handle).await?;
+```
+
+---
+
+### `ContentBody`
+
+The five ways a caller can hand bytes (or a pointer to bytes) to a [`ContentStore`](#contentstore) via `put`. Variants are struct-form (named fields), and serde uses an internally-tagged representation (`tag = "type"`, `rename_all = "snake_case"`).
+
+```rust
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ContentBody {
+    Bytes { data: Vec<u8> },
+    Url { url: String },
+    LocalPath { path: PathBuf },
+    ProviderFile { provider: ProviderId, id: String },
+    /// Streaming byte source. The store consumes the stream during `put`
+    /// and is free to spool to disk, forward as a chunked upload, or
+    /// drain into bytes.
+    #[serde(skip)]
+    Stream {
+        stream: ByteStream,
+        size_hint: Option<u64>,
+    },
+}
+```
+
+| Variant | Description |
+|---------|-------------|
+| `Bytes { data }` | In-memory payload. The store decides whether to keep it in RAM, spill to disk, or upload to a provider. |
+| `Url { url }` | Remote URL the store may fetch lazily or pass through verbatim on resolve. |
+| `LocalPath { path }` | Local filesystem path. Native-only stores (e.g. [`LocalFileContentStore`](#built-in-stores)) can index it without copying. |
+| `ProviderFile { provider, id }` | A pre-existing file id on a provider's Files API. Lets you wrap an externally uploaded asset in a handle without re-uploading. |
+| `Stream { stream, size_hint }` | Streaming byte source built on [`ByteStream`](#bytestream). Stores with a true streaming upload path (filesystem, S3, HTTP multipart) consume the stream incrementally; memory-bound stores buffer. `size_hint` carries the total length when known up front (e.g. from a `Content-Length` header) so stores can pre-allocate or pick between simple and resumable upload paths. |
+
+`ContentBody::Stream` is **not** `Clone` (a [`ByteStream`](#bytestream) is single-use) and **not** `Serialize` -- the variant is annotated `#[serde(skip)]` because [`ByteStream`](#bytestream) implements neither `Serialize` nor `Deserialize`. The manual `Clone` impl panics with `unreachable!` if you clone a `Stream` variant; consume streaming bodies by value. Bindings that route `ContentBody` through `serde_json` must check for `Stream` first and handle it on a separate path.
+
+```rust
+use blazen_llm::content::ContentBody;
+
+let from_memory = ContentBody::Bytes { data: b"hello".to_vec() };
+let from_disk   = ContentBody::LocalPath { path: "./report.pdf".into() };
+let from_url    = ContentBody::Url { url: "https://example.com/a.png".into() };
+```
+
+---
+
+### `ByteStream`
+
+A pinned, boxed, fallible stream of byte chunks. Used by [`ContentBody::Stream`](#contentbody) for streaming uploads and by [`ContentStore::fetch_stream`](#contentstore) for streaming downloads.
+
+```rust
+pub type ByteStream = std::pin::Pin<
+    Box<dyn futures_core::Stream<Item = Result<bytes::Bytes, BlazenError>> + Send>
+>;
+```
+
+Stores backed by HTTP, S3, or the filesystem should produce / consume these incrementally; memory-bound stores may buffer.
+
+---
+
+### `ContentHint`
+
+Optional metadata callers pass alongside a [`ContentBody`](#contentbody) so the store can pick a sensible MIME type, classification, and display name without re-sniffing. Implements `Default`.
+
+```rust
+pub struct ContentHint {
+    pub mime_type: Option<String>,
+    pub kind_hint: Option<ContentKind>,
+    pub display_name: Option<String>,
+    pub byte_size: Option<u64>,
+}
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `with_mime_type` | `fn(self, mime: impl Into<String>) -> Self` | Pin the MIME type. |
+| `with_kind` | `fn(self, kind: ContentKind) -> Self` | Pin the [`ContentKind`](#contentkind). |
+| `with_display_name` | `fn(self, name: impl Into<String>) -> Self` | Pin a human-readable name. |
+| `with_byte_size` | `fn(self, bytes: u64) -> Self` | Pin the byte size when known up front (e.g. from a `Content-Length` header). |
+
+```rust
+use blazen_llm::content::{ContentHint, ContentKind};
+
+let hint = ContentHint::default()
+    .with_mime_type("audio/wav")
+    .with_kind(ContentKind::Audio)
+    .with_display_name("note.wav");
+```
+
+---
+
+### `ContentMetadata`
+
+The non-id fields of a [`ContentHandle`](#contenthandle), returned by `ContentStore::metadata`. Useful for cheap introspection without materialising bytes.
+
+```rust
+pub struct ContentMetadata {
+    pub kind: ContentKind,
+    pub mime_type: Option<String>,
+    pub byte_size: Option<u64>,
+    pub display_name: Option<String>,
+}
+```
+
+```rust
+use blazen_llm::content::ContentStore;
+
+let meta = store.metadata(&handle).await?;
+println!("{} ({} bytes)", meta.kind, meta.byte_size.unwrap_or(0));
+```
+
+---
+
+### `DynContentStore`
+
+Convenience alias for the shared, thread-safe form most code passes around.
+
+```rust
+pub type DynContentStore = std::sync::Arc<dyn ContentStore>;
+```
+
+```rust
+use std::sync::Arc;
+use blazen_llm::content::{DynContentStore, InMemoryContentStore};
+
+let store: DynContentStore = Arc::new(InMemoryContentStore::new());
+```
+
+---
+
+### Built-in stores
+
+| Store | Constructor | Notes |
+|-------|-------------|-------|
+| [`InMemoryContentStore`](#built-in-stores) | `InMemoryContentStore::new()` (also `Default`) | Bytes / URL / provider-file refs held in a `RwLock`-guarded map. Great for tests and short-lived sessions. |
+| [`LocalFileContentStore`](#built-in-stores) | `LocalFileContentStore::new(root: impl Into<PathBuf>) -> Result<Self, BlazenError>` | Native-only (`not(target_arch = "wasm32")`). Persists payloads under `root`; assigns each entry a UUID-derived filename and tracks the index in memory. |
+| [`OpenAiFilesStore`](#built-in-stores) | `OpenAiFilesStore::new(api_key)`, `.with_base_url(url)`, `.with_purpose(p)` | Uploads via OpenAI's `/v1/files` API. `purpose` defaults to `"user_data"` (override for assistants / fine-tuning / batch). |
+| [`AnthropicFilesStore`](#built-in-stores) | `AnthropicFilesStore::new(api_key)`, `.with_base_url(url)`, `.with_beta_header(h)` | Uploads via Anthropic's Files API. `beta_header` is forwarded as `anthropic-beta`. |
+| [`GeminiFilesStore`](#built-in-stores) | `GeminiFilesStore::new(api_key)`, `.with_base_url(url)` | Uploads via Google's Files API and resolves handles to `gs://`/file-uri refs. |
+| [`FalStorageStore`](#built-in-stores) | `FalStorageStore::new(api_key)`, `.with_base_url(url)` | Uploads to Fal's storage endpoint. |
+| [`CustomContentStore`](#built-in-stores) | `CustomContentStore::builder(name)` -> [`CustomContentStoreBuilder`](#built-in-stores) | Build a store from closures: `.put(...)`, `.resolve(...)`, `.fetch_bytes(...)`, `.fetch_stream(...)` (optional), `.delete(...)` (optional), `.build()`. The `.fetch_stream` callback is optional -- when omitted, the trait's default impl buffers `fetch_bytes` into one chunk via `stream::once`. Lets callers integrate their own blob backend without writing a new trait impl. |
+
+```rust
+use std::sync::Arc;
+use blazen_llm::content::{
+    AnthropicFilesStore, CustomContentStore, InMemoryContentStore,
+    LocalFileContentStore, OpenAiFilesStore,
+};
+
+let in_mem = Arc::new(InMemoryContentStore::new());
+let on_disk = Arc::new(LocalFileContentStore::new("/var/cache/blazen")?);
+let openai = Arc::new(OpenAiFilesStore::new(std::env::var("OPENAI_API_KEY")?)
+    .with_purpose("user_data"));
+let anthropic = Arc::new(AnthropicFilesStore::new(std::env::var("ANTHROPIC_API_KEY")?)
+    .with_beta_header("files-api-2025-04-14"));
+
+let custom = Arc::new(
+    CustomContentStore::builder("s3-store")
+        .put(|body, hint| async move { /* upload, return ContentHandle */ todo!() })
+        .resolve(|handle| async move { /* return MediaSource */ todo!() })
+        .fetch_bytes(|handle| async move { /* return Vec<u8> */ todo!() })
+        .fetch_stream(|handle| Box::pin(async move {
+            // OPTIONAL: stream bytes back chunk-by-chunk for large content.
+            // When omitted, the default impl buffers fetch_bytes into one chunk.
+            use bytes::Bytes;
+            use futures_util::stream;
+            let chunks: Vec<Result<Bytes, _>> = vec![Ok(Bytes::from_static(b"hello"))];
+            Ok(Box::pin(stream::iter(chunks)) as blazen_llm::content::ByteStream)
+        }))
+        .delete(|handle| async move { /* delete blob */ Ok(()) })
+        .build()?,
+);
+```
+
+---
+
+### Tool-input helpers
+
+Helpers that produce JSON Schema fragments for tool parameters that should accept a [`ContentHandle`](#contenthandle). Each fragment is tagged with `x-blazen-content-ref` so [`resolve_tool_arguments`](#tool-input-helpers) knows where to substitute resolved [`MediaSource`](#imagesource) values before the tool runs.
+
+```rust
+pub fn image_input(name: &str, description: &str) -> serde_json::Value;
+pub fn audio_input(name: &str, description: &str) -> serde_json::Value;
+pub fn video_input(name: &str, description: &str) -> serde_json::Value;
+pub fn file_input(name: &str, description: &str) -> serde_json::Value;
+pub fn three_d_input(name: &str, description: &str) -> serde_json::Value;
+pub fn cad_input(name: &str, description: &str) -> serde_json::Value;
+
+pub fn content_ref_property(
+    kind: ContentKind,
+    description: &str,
+) -> serde_json::Value;
+
+pub fn content_ref_required_object(
+    name: &str,
+    kind: ContentKind,
+    description: &str,
+    extra_properties: serde_json::Map<String, serde_json::Value>,
+) -> serde_json::Value;
+
+pub async fn resolve_tool_arguments(
+    arguments: &mut serde_json::Value,
+    schema: &serde_json::Value,
+    store: &dyn ContentStore,
+) -> Result<usize, BlazenError>;
+
+pub struct KindMismatch {
+    pub property: String,
+    pub expected: ContentKind,
+    pub actual: ContentKind,
+}
+```
+
+| Helper | Description |
+|--------|-------------|
+| `image_input` / `audio_input` / `video_input` / `file_input` / `three_d_input` / `cad_input` | Top-level convenience: returns a single-property required object schema for a typed content reference. |
+| `content_ref_property` | Schema for one property accepting a [`ContentHandle`](#contenthandle) of the given [`ContentKind`](#contentkind). Use when assembling a custom multi-property schema. |
+| `content_ref_required_object` | Build a required object schema mixing one content ref with `extra_properties` (other primitives, enums, etc.). |
+| `resolve_tool_arguments` | Walk `arguments` against `schema`, replace every `x-blazen-content-ref` site with the [`MediaSource`](#imagesource) returned by `store.resolve`. Returns the number of substitutions made. |
+| `KindMismatch` | Error variant returned when a handle's [`ContentKind`](#contentkind) does not match the schema's declared `expected` kind. |
+
+```rust
+use blazen_llm::content::tool_input::{image_input, resolve_tool_arguments};
+use serde_json::{json, Map};
+
+let schema = json!({
+    "type": "object",
+    "properties": {
+        "image": image_input("image", "The image to caption"),
+        "max_words": { "type": "integer" },
+    },
+    "required": ["image", "max_words"],
+});
+
+let mut args = json!({
+    "image": { "id": "blob_abc123", "kind": "image" },
+    "max_words": 20,
+});
+
+let n = resolve_tool_arguments(&mut args, &schema, store.as_ref()).await?;
+// `args["image"]` is now a concrete MediaSource (Url / Base64 / ProviderFile).
+println!("rewrote {n} content refs");
+```
+
+---
+
+### Visibility helpers
+
+Helpers for the runtime's "what handles is the model actually allowed to see right now?" pass.
+
+```rust
+pub fn collect_visible_handles(messages: &[ChatMessage]) -> Vec<ContentHandle>;
+
+pub fn build_handle_directory_system_note(
+    handles: &[ContentHandle],
+) -> Option<String>;
+
+pub async fn prepare_request_with_store(
+    request: &mut CompletionRequest,
+    store: &dyn ContentStore,
+) -> Result<usize, BlazenError>;
+```
+
+| Helper | Description |
+|--------|-------------|
+| `collect_visible_handles` | Walks `messages` and returns every distinct [`ContentHandle`](#contenthandle) referenced from user/assistant/tool content, deduped first-seen. |
+| `build_handle_directory_system_note` | Returns a system-note string listing the visible handles (id, kind, MIME, name) so the model can name them when calling tools. Returns `None` when `handles` is empty -- callers should not append an empty note. |
+| `prepare_request_with_store` | One-call convenience: runs [`CompletionRequest::resolve_handles_with`](#completionrequestresolve_handles_with), then builds and prepends the system note. Returns the number of resolved handles. This is what the agent loop calls before dispatching a request. |
+
+```rust
+use blazen_llm::content::visibility::{
+    collect_visible_handles, build_handle_directory_system_note, prepare_request_with_store,
+};
+
+let visible = collect_visible_handles(&request.messages);
+if let Some(note) = build_handle_directory_system_note(&visible) {
+    println!("would inject system note:\n{note}");
+}
+
+let n = prepare_request_with_store(&mut request, store.as_ref()).await?;
+println!("resolved {n} handles before dispatch");
+```
+
+---
+
+### Magic-number detection
+
+Lightweight content sniffing backed by `infer`. Gated by the default-on `content-detect` Cargo feature -- disabling the feature drops the `infer` dependency entirely (the functions remain but return `(ContentKind::Other, None)`).
+
+```rust
+pub fn detect_from_bytes(bytes: &[u8]) -> (ContentKind, Option<String>);
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn detect_from_path(path: &std::path::Path) -> (ContentKind, Option<String>);
+
+pub fn detect(
+    bytes: Option<&[u8]>,
+    mime_hint: Option<&str>,
+    filename: Option<&str>,
+) -> (ContentKind, Option<String>);
+```
+
+| Function | Description |
+|----------|-------------|
+| `detect_from_bytes` | Sniff the leading bytes and return the inferred [`ContentKind`](#contentkind) plus the matching MIME string if any. |
+| `detect_from_path` | Native-only. Reads the head of the file, then falls back to the extension when bytes are inconclusive. |
+| `detect` | Combined entry point: prefers byte sniffing when `bytes` is `Some`, then `mime_hint`, then `filename` extension. Returns `(ContentKind::Other, None)` when nothing matches. |
+
+```rust
+use blazen_llm::content::{detect, detect_from_bytes};
+
+let (kind, mime) = detect_from_bytes(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]);
+assert_eq!(mime.as_deref(), Some("image/png"));
+
+let (kind2, mime2) = detect(None, Some("application/pdf"), Some("report.pdf"));
+```
+
+---
+
+### `CompletionRequest::resolve_handles_with`
+
+The lower-level half of [`prepare_request_with_store`](#visibility-helpers). Walks every message in the request, finds every [`ImageSource::Handle`](#imagesource), and replaces it with the concrete [`MediaSource`](#imagesource) returned by `store.resolve`. Does **not** inject a system note -- prefer `prepare_request_with_store` from the agent loop unless you specifically want to skip the note.
+
+```rust
+impl CompletionRequest {
+    pub async fn resolve_handles_with(
+        &mut self,
+        store: &dyn ContentStore,
+    ) -> Result<usize, BlazenError>;
+}
+```
+
+Returns the number of `Handle` variants that were rewritten. Errors propagate from `store.resolve`.
+
+```rust
+let resolved = request.resolve_handles_with(store.as_ref()).await?;
+println!("rewrote {resolved} handles in place");
+```
 
 ---
 

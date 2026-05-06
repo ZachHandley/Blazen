@@ -17,6 +17,7 @@
 
 - **Event-driven architecture** -- Type-safe events connect workflow steps with zero boilerplate via derive macros (Rust) or subclassing (Python) or plain objects (TypeScript)
 - **15+ LLM providers** -- OpenAI, Anthropic, Gemini, Azure, OpenRouter, Groq, Together AI, Mistral, DeepSeek, Fireworks, Perplexity, xAI, Cohere, AWS Bedrock, and fal.ai -- with streaming, tool calling, structured output, and multimodal support
+- **Content handles for tools** -- Tools accept multimodal inputs (image, audio, video, document, 3D, CAD) via typed content handles backed by a pluggable `ContentStore` (in-memory, local-file, OpenAI Files, Anthropic Files, Gemini Files, fal.ai storage, or your own). Tool *results* now carry multimodal payloads on every provider, not just Anthropic
 - **Multi-workflow pipelines** -- Orchestrate sequential and parallel stages with pause/resume and per-workflow streaming
 - **Branching and fan-out** -- Conditional branching, parallel fan-out, and real-time streaming within workflows
 - **Native Python and TypeScript bindings** -- Python via PyO3/maturin, Node.js/TypeScript via napi-rs. Not wrappers around HTTP -- actual compiled Rust running in-process
@@ -264,6 +265,73 @@ console.log(response.model);        // model name used
 console.log(response.usage);        // { promptTokens, completionTokens, totalTokens }
 console.log(response.finishReason);
 ```
+
+## Multimodal Tool I/O
+
+Tools can declare typed multimodal *inputs* via the `image_input`, `audio_input`, `file_input`, `three_d_input`, `cad_input`, and `video_input` schema helpers, and return multimodal *results* by emitting an `LlmPayload::Parts` value mixing text, images, audio, video, documents, 3D meshes, and CAD geometry. Result payloads round-trip through every provider, not just Anthropic.
+
+Inputs flow through a pluggable `ContentStore`. You register a blob, URL, or remote-file reference with the store and receive a stable handle id; the model sees that id in the tool's JSON schema and emits it back in the tool call. Blazen's runner resolves the handle against the store and substitutes the typed content into the tool arguments before the user-supplied handler executes -- handlers never deal with raw blob plumbing.
+
+### Rust
+
+```rust
+use blazen_llm::content::{InMemoryContentStore, ContentStore, ContentBody, ContentHint, ContentKind};
+use blazen_llm::content::tool_input::image_input;
+use blazen_llm::types::{ToolDefinition, CompletionRequest, ChatMessage};
+use std::sync::Arc;
+
+let store: Arc<dyn ContentStore> = Arc::new(InMemoryContentStore::new());
+
+let handle = store
+    .put(
+        ContentBody::Url("https://example.com/cat.png".into()),
+        ContentHint::default()
+            .with_kind(ContentKind::Image)
+            .with_mime_type("image/png"),
+    )
+    .await?;
+
+// Declare a tool that accepts a content handle as its `photo` argument.
+let tool = ToolDefinition {
+    name: "describe_image".into(),
+    description: "Describe what's in the photo".into(),
+    parameters: image_input("photo", "The image to describe"),
+};
+
+// The model emits {"photo": "<handle-id>"} as a tool call;
+// Blazen's runner substitutes the resolved image content before
+// the tool handler runs.
+```
+
+### Python
+
+```python
+from blazen import ContentStore, ContentKind, image_input
+
+store = ContentStore.in_memory()
+handle = await store.put(b"...png bytes...", kind=ContentKind.Image, mime_type="image/png")
+
+# Tool declaration uses image_input() to advertise a content-ref input:
+schema = image_input("photo", "The image to describe")
+# -> {"type": "object", "properties": {"photo": {"type": "string", ..., "x-blazen-content-ref": {"kind": "image"}}}, "required": ["photo"]}
+```
+
+### TypeScript
+
+```typescript
+import { ContentStore, imageInput } from "blazen";
+
+const store = ContentStore.inMemory();
+const handle = await store.put(Buffer.from(pngBytes), {
+  kind: "image",
+  mimeType: "image/png",
+});
+
+// Tool input schema:
+const schema = imageInput("photo", "The image to describe");
+```
+
+See `docs/guides/tool-multimodal/` for the cross-cutting guide and `docs/guides/{rust,python,node,wasm}/multimodal/` for per-language details.
 
 ## Streaming
 

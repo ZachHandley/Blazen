@@ -1,0 +1,419 @@
+---
+title: "Multimodal Content"
+description: "Pass images, audio, video, files, 3D models, and CAD files through Blazen in the browser, edge workers, and embedded runtimes via @blazen/sdk"
+language: "wasm"
+section: "guides"
+order: 6
+---
+
+This guide covers the multimodal content subsystem in `@blazen/sdk` -- the WebAssembly build of Blazen that runs in browsers, Cloudflare Workers, Deno, Vercel Edge, Fastly Compute, and any other host with a WASM runtime. The same `ContentStore`, `ContentHandle`, `ImageSource`, and `*Input` schema helpers ship in this package as in the Node binding, with one big difference: there is no filesystem.
+
+If you have not initialized the SDK yet, start with the [WASM Quickstart](/docs/guides/wasm/quickstart) and call `init()` once before constructing a `ContentStore`. See the [WASM API reference](/docs/api/wasm) for the full export list.
+
+## Why content handles?
+
+Models do not stream raw bytes around. They want a URL the provider can fetch, a provider-side file id, or a base64 blob inlined into the request. Each provider expects a different envelope. Each one has different size limits.
+
+A `ContentHandle` is Blazen's neutral pointer to a piece of content. You hand bytes (or a URL) to a `ContentStore`, you get back a handle, and you put the handle wherever you would have put a URL. At wire time the resolver picks the best concrete representation for the provider it is talking to -- a hosted URL when one is available, a provider file id when the store is a provider-files store, otherwise base64.
+
+Tools take handles too. The `imageInput`, `audioInput`, `videoInput`, `fileInput`, `threeDInput`, and `cadInput` helpers emit JSON Schema fragments tagged with `x-blazen-content-ref`, and Blazen substitutes the resolved typed content before your handler runs. The model never sees the tag -- providers just see a `string` parameter -- but your handler receives the full handle metadata.
+
+## What's different in the browser?
+
+The WASM `ContentStore` exposes a deliberately smaller surface than the native Rust crate or the Node binding:
+
+- **No `localFile()` factory.** Browsers do not have a synchronous filesystem. If you need to load a file the user picked, read it with the `File` / `Blob` Web APIs and `put()` the resulting `Uint8Array` into the in-memory store, or upload it to a provider-files store.
+- **No `metadata()` method.** The four data methods are `put`, `resolve`, `fetchBytes`, and `delete` -- plus `free()` and `[Symbol.dispose]` for explicit cleanup. There is no separate metadata accessor; the `ContentHandle` returned from `put()` already carries `kind`, `mime_type`, `byte_size`, and `display_name`.
+- **In-memory bytes live in WASM linear memory.** Putting a 100 MB video into `ContentStore.inMemory()` consumes 100 MB of WASM heap. Use a provider-files store (or your own URL) for anything large.
+- **Binary I/O is `Uint8Array`.** `put()` accepts a `Uint8Array` for byte uploads or a `string` for URL inputs. `fetchBytes()` returns a `Uint8Array`.
+- **Provider stores work fine.** `openaiFiles`, `anthropicFiles`, `geminiFiles`, and `falStorage` all use the platform `fetch`, so they run unchanged in any WASM host that exposes `fetch` -- Cloudflare Workers, Deno, browsers, Vercel Edge, etc.
+- **Custom backends work two ways.** Either `ContentStore.custom({ put, resolve, fetchBytes, ... })` for a callback-based factory, or `class MyStore extends ContentStore` for a real subclass. Both routes are wired through the same Rust adapter -- see [Custom backends](#custom-backends) below.
+- **Always call `init()` first.** The static factories (`ContentStore.inMemory()` and friends) require the WASM module to be instantiated.
+
+## `ContentKind`
+
+Every handle carries a `ContentKind` -- a string union tag the resolver and tool-input validator use to route content to the right place.
+
+| Value | Typical use |
+|---|---|
+| `"image"` | PNG, JPEG, WebP, GIF, etc. |
+| `"audio"` | MP3, WAV, FLAC, OGG, transcription input |
+| `"video"` | MP4, WebM, MOV |
+| `"document"` | PDF, DOCX, plain text |
+| `"three_d_model"` | GLB, GLTF, OBJ, FBX |
+| `"cad"` | STEP, IGES, STL, native CAD formats |
+| `"archive"` | ZIP, TAR, 7z |
+| `"font"` | TTF, OTF, WOFF |
+| `"code"` | Source files |
+| `"data"` | JSON, CSV, Parquet |
+| `"other"` | Anything else |
+
+Pass the wire form (e.g. `"three_d_model"`, not `"3d"`) when supplying a `kindHint` to `put()`. Omit it to let the store auto-detect from the bytes or MIME hint.
+
+## `ContentStore`
+
+Every `ContentStore` is constructed via a static factory. The constructor itself is private; you cannot `new ContentStore()`.
+
+```typescript
+import init, { ContentStore } from "@blazen/sdk";
+import type { ContentHandle } from "@blazen/sdk";
+
+await init();
+
+const store = ContentStore.inMemory();
+
+// Upload bytes. The handle carries the metadata back.
+const bytes: Uint8Array = await fetch("/sample.png").then((r) => r.arrayBuffer()).then((b) => new Uint8Array(b));
+
+const handle: ContentHandle = await store.put(
+  bytes,
+  "image",          // kindHint -- omit to auto-detect
+  "image/png",      // mimeType hint
+  "sample.png",     // displayName
+);
+
+console.log(handle.id, handle.kind, handle.mime_type, handle.byte_size, handle.display_name);
+```
+
+The handle fields are tsify-generated and preserve Rust snake_case: `id`, `kind`, `mime_type?`, `byte_size?`, `display_name?`.
+
+You can also `put()` a public URL as a string -- the in-memory store records it by reference instead of copying bytes:
+
+```typescript
+const remote = await store.put(
+  "https://example.com/photo.jpg",
+  "image",
+  "image/jpeg",
+  "photo.jpg",
+);
+```
+
+Resolve a handle to a wire-renderable source, fetch its bytes back, or delete it:
+
+```typescript
+// Resolve to the concrete shape providers see (URL, base64, provider-file ref, etc.).
+const source = await store.resolve(handle);
+console.log(source); // { type: "url", url: "..." } or { type: "base64", data: "..." }
+
+// Pull bytes back. Reference-only entries (URLs in the in-memory store) reject.
+const roundTrip: Uint8Array = await store.fetchBytes(handle);
+
+// Drop it. Idempotent on stores that track lifetime; a no-op elsewhere.
+await store.delete(handle);
+```
+
+Free the WASM-side handle when you are done. Either pattern works:
+
+```typescript
+// Explicit
+store.free();
+
+// Or use `using` (TypeScript 5.2+ / runtimes with Symbol.dispose).
+{
+  using s = ContentStore.inMemory();
+  const h = await s.put(bytes, "image");
+  // ... use s ...
+} // s.free() runs automatically here
+```
+
+## Built-in stores
+
+| Factory | Backed by | API key | Notes |
+|---|---|---|---|
+| `ContentStore.inMemory()` | WASM linear memory | -- | Bytes copied into WASM heap; URLs recorded by reference |
+| `ContentStore.openaiFiles(apiKey)` | OpenAI Files API | `OPENAI_API_KEY` | `fetch`-based; runs in any WASM host with `fetch` |
+| `ContentStore.anthropicFiles(apiKey)` | Anthropic Files API | `ANTHROPIC_API_KEY` | Sent as `x-api-key` header |
+| `ContentStore.geminiFiles(apiKey)` | Google AI / Gemini Files | `GEMINI_API_KEY` | |
+| `ContentStore.falStorage(apiKey)` | fal.ai Storage | `FAL_KEY` | Returns hosted URLs; ideal for video / image-gen pipelines |
+
+There is intentionally no `localFile()` factory in the WASM SDK -- the browser has no synchronous filesystem. If you need to ingest a user-picked file, read it with the `File` API:
+
+```typescript
+const file = (document.querySelector("input[type=file]") as HTMLInputElement).files![0];
+const bytes = new Uint8Array(await file.arrayBuffer());
+const handle = await store.put(bytes, undefined, file.type, file.name);
+```
+
+## `ImageSource` / handle on the wire
+
+`resolve()` returns a `MediaSource` -- a discriminated union (aliased as `ImageSource`) that covers every shape a provider might want:
+
+```typescript
+import type { ImageSource } from "@blazen/sdk";
+
+type ImageSource =
+  | { type: "url"; url: string }
+  | { type: "base64"; data: string }
+  | { type: "file"; path: string }
+  | { type: "provider_file"; provider: ProviderId; id: string }
+  | { type: "handle"; handle: ContentHandle };
+```
+
+Note that `{ type: "file"; path: string }` is preserved for shape compatibility with the native Rust crate -- it is meaningful for local-only providers (whisper.cpp, diffusers) and is not produced by browser-side stores.
+
+When a handle is serialized into a request, Blazen prefers representations in this order:
+
+1. **URL** -- already-hosted content, no extra round-trip for the provider.
+2. **Provider file** -- when the store is the same provider's files API (e.g. an `openaiFiles` handle going into an OpenAI completion).
+3. **Base64** -- last-resort inline encoding for raw byte stores.
+
+You normally do not pick the variant yourself; pass the handle and let the resolver choose. The `{ type: "handle"; ... }` variant exists so handles can travel through messages before being collapsed.
+
+## Tool inputs
+
+Tool registrations in the WASM SDK use the same `{ name, description, parameters, handler }` object shape documented in the [WASM Agent guide](/docs/guides/wasm/agent), and tools are passed directly to `runAgent` (or `runAgentWithCallback`). The `imageInput`, `audioInput`, `videoInput`, `fileInput`, `threeDInput`, and `cadInput` helpers build the `parameters` schema for you:
+
+```typescript
+import init, { CompletionModel, ChatMessage, runAgent, ContentStore, imageInput } from "@blazen/sdk";
+
+await init();
+
+const model = CompletionModel.openai();
+const store = ContentStore.inMemory();
+
+const photoBytes = new Uint8Array(await (await fetch("/photo.jpg")).arrayBuffer());
+const handle = await store.put(photoBytes, "image", "image/jpeg", "photo.jpg");
+
+const tools = [
+  {
+    name: "describePhoto",
+    description: "Describe what is in the supplied photo.",
+    parameters: imageInput("photo", "The photo to analyze"),
+    handler: async (args: { photo: any }) => {
+      // `args.photo` has been resolved by Blazen from a handle id string into
+      // a typed content object: { kind, handleId, mimeType, byteSize, displayName, source }.
+      console.log("resolved", args.photo.kind, args.photo.mimeType);
+      return { description: `Saw a ${args.photo.kind} (${args.photo.byteSize ?? "?"} bytes)` };
+    },
+  },
+];
+
+const result = await runAgent(
+  model,
+  [ChatMessage.user(`Describe the photo with id ${handle.id}.`)],
+  tools,
+  { maxIterations: 3 },
+);
+
+console.log(result.content);
+```
+
+Each `*Input` helper returns a JSON Schema fragment of the form:
+
+```typescript
+{
+  type: "object",
+  properties: {
+    [name]: {
+      type: "string",
+      description,
+      "x-blazen-content-ref": { kind: "image" }
+    }
+  },
+  required: [name]
+}
+```
+
+The `x-blazen-content-ref` extension is invisible to providers (they ignore unknown JSON Schema keys), but Blazen's resolver intercepts the property, looks the handle up in the active `ContentStore`, and replaces the bare id string with the typed content payload before your handler executes. If the handle's `kind` does not match the helper (e.g. an audio handle into `imageInput`), the call is rejected before the handler runs.
+
+## Tool results with multimodal
+
+Tool handlers can return multimodal payloads back to the model by setting `llmOverride` on a `ToolOutput` literal with a `kind: "parts"` `LlmPayload` (or, for Anthropic, native multimodal parts). Cross-provider serialization of that payload is handled by Blazen -- non-Anthropic providers receive the override as a follow-up user message. See the cross-cutting [Multimodal Tool Results](/docs/guides/tool-multimodal) guide for the full pattern.
+
+## Cloudflare Worker example
+
+A Worker is just a fetch handler, but the same `init()` + `ContentStore` flow applies. Provider-files stores work unmodified because they only need `fetch`. Use the in-memory store for ephemeral blobs received in the request, and an OpenAI files store for anything you want pinned for reuse across iterations.
+
+```typescript
+import init, {
+  CompletionModel,
+  ChatMessage,
+  ContentStore,
+  runAgent,
+  imageInput,
+} from "@blazen/sdk";
+
+let ready: Promise<void> | null = null;
+
+export default {
+  async fetch(request: Request, env: { OPENAI_API_KEY: string }): Promise<Response> {
+    ready ??= Promise.resolve(init());
+    await ready;
+
+    // Two stores: ephemeral in-memory for this request, persistent OpenAI Files
+    // for anything we want re-used across the agent loop.
+    using ephemeral = ContentStore.inMemory();
+    using persistent = ContentStore.openaiFiles(env.OPENAI_API_KEY);
+
+    const upload = new Uint8Array(await request.arrayBuffer());
+    const handle = await persistent.put(upload, "image", request.headers.get("content-type") ?? undefined);
+
+    const model = CompletionModel.openai();
+    const tools = [
+      {
+        name: "describe",
+        description: "Describe the uploaded image.",
+        parameters: imageInput("photo", "The photo the user just uploaded"),
+        handler: async (args: { photo: any }) => ({
+          summary: `${args.photo.kind} (${args.photo.mimeType ?? "unknown"})`,
+        }),
+      },
+    ];
+
+    const result = await runAgent(
+      model,
+      [ChatMessage.user(`Describe the photo with id ${handle.id}.`)],
+      tools,
+      { maxIterations: 3 },
+    );
+
+    return new Response(result.content ?? "", { headers: { "content-type": "text/plain" } });
+  },
+};
+```
+
+For wrangler config, deployment, and the rest of the Workers story, see the [Edge Deployment](/docs/guides/wasm/deployment) guide. The `using` declarations require Workers runtime with `Symbol.dispose` support; otherwise call `ephemeral.free()` and `persistent.free()` explicitly in a `finally` block.
+
+## Custom backends
+
+If none of the built-in factories fit -- you want IndexedDB, OPFS, a private S3 bucket, an internal CDN, an in-memory cache with custom eviction, etc. -- you can plug your own `ContentStore` implementation in two equivalent ways. Both end up wrapped behind the same Rust adapter, so the agent loop, tool resolver, and provider serializers see identical behavior either way.
+
+The required surface is `put`, `resolve`, and `fetchBytes`. `fetchStream` and `delete` are optional -- if you omit `fetchStream` Blazen falls back to `fetchBytes` (same shape as the Rust trait's default impl), and if you omit `delete` it becomes a no-op.
+
+### Path A -- callback factory
+
+`ContentStore.custom({ ... })` mirrors the Rust `CustomContentStore::builder` and the equivalent factories on the Node and Python bindings. Hand it an options object with async callbacks:
+
+```typescript
+import { ContentStore } from "@blazen/sdk";
+import type { ContentHandle } from "@blazen/sdk";
+
+const store = ContentStore.custom({
+  // body is { type: "bytes"; data: number[] } | { type: "url"; url: string }
+  //       | { type: "provider_file"; provider: string; id: string }.
+  // (No `local_path` variant in WASM -- the browser has no filesystem.)
+  // hint is { kind?, mime_type?, display_name? } -- all optional.
+  put: async (body, hint) => {
+    // ...persist to your backend...
+    return {
+      id: "blazen_xxx",
+      kind: "image",
+      mime_type: "image/png",
+    } satisfies ContentHandle;
+  },
+  resolve: async (handle) => ({ type: "url", url: "https://example.com/blob.png" }),
+  fetchBytes: async (handle) => new Uint8Array([0xDE, 0xAD]),
+  // Optional:
+  fetchStream: async (handle) => new Uint8Array([0xBE, 0xEF]),
+  delete: async (handle) => { /* no-op */ },
+});
+```
+
+The callbacks may be plain `async` functions or any function that returns a `Promise`. `put` receives the `body` and `hint` already serialized to plain JS objects (snake_case Rust shape via `serde_wasm_bindgen`). `resolve` must return a `MediaSource`-shaped object (`{ type: "url", url }` / `{ type: "base64", data }` / `{ type: "provider_file", provider, id }`). `fetchBytes` and `fetchStream` must resolve with a `Uint8Array` (or a plain `number[]`).
+
+### Path B -- subclass
+
+`@blazen/sdk` exposes `ContentStore` as a real `wasm-bindgen` class, and JS subclasses dispatch back through the same adapter as the callback path. Call `super()` from your constructor to mark the instance as a subclass; subclasses MUST override `put`, `resolve`, and `fetchBytes`. `fetchStream` and `delete` remain optional.
+
+```typescript
+import { ContentStore } from "@blazen/sdk";
+import type { ContentHandle, ImageSource } from "@blazen/sdk";
+
+class IndexedDBContentStore extends ContentStore {
+  constructor(private dbName = "blazen-content") {
+    super();
+  }
+
+  async put(body, hint): Promise<ContentHandle> {
+    // ...persist to IndexedDB / OPFS / fetch+rehost...
+    return { id: "...", kind: "image", mime_type: hint?.mime_type };
+  }
+
+  async resolve(handle): Promise<ImageSource> {
+    return { type: "url", url: "..." };
+  }
+
+  async fetchBytes(handle): Promise<Uint8Array> {
+    return new Uint8Array([/* ... */]);
+  }
+
+  // Optional:
+  async fetchStream(handle): Promise<Uint8Array> {
+    return new Uint8Array([/* ... */]);
+  }
+
+  async delete(handle): Promise<void> {
+    /* no-op */
+  }
+}
+
+const store = new IndexedDBContentStore();
+```
+
+Forgetting to override one of the three required methods raises a clear runtime error the first time the base-class default is hit (`ContentStore subclass must override 'put()' (called the base-class default)`), so missing overrides fail fast rather than silently looping back into the base class.
+
+## Streaming large content
+
+The WASM binding streams chunk-by-chunk in both directions using the platform-native `ReadableStream<Uint8Array>`. `fetchStream` callbacks can return a `ReadableStream`, and a streaming `put` body arrives as `body.stream`, a `ReadableStream<Uint8Array>` you read with `getReader()`.
+
+**Downloading.** Call `fetchStream(handle)` on any `ContentStore` wrapper:
+
+```typescript
+const rs = await store.fetchStream(handle);
+const reader = rs.getReader();
+while (true) {
+  const { value, done } = await reader.read();
+  if (done) break;
+  process(value); // Uint8Array
+}
+```
+
+When you implement a custom store via `ContentStore.custom({ fetchStream })` or override `fetchStream` on a subclass, you have two options:
+
+1. Return a `Uint8Array` / `number[]` for a single buffered chunk -- still supported.
+2. Return a `ReadableStream<Uint8Array>` for chunk-by-chunk delivery. The browser's `fetch` already gives you one for free:
+
+   ```typescript
+   class CdnContentStore extends ContentStore {
+     async fetchStream(handle: ContentHandle) {
+       const response = await fetch(`https://cdn.example/${handle.id}`);
+       return response.body; // ReadableStream<Uint8Array>
+     }
+   }
+   ```
+
+**Uploading.** When upstream Rust code hands your custom store a `ContentBody::Stream`, your `put(body, hint)` callback receives a body shaped `{ type: "stream", stream: ReadableStream<Uint8Array>, sizeHint: number | null }`. Read `body.stream` chunk-by-chunk:
+
+```typescript
+class CdnContentStore extends ContentStore {
+  async put(body, hint) {
+    if (body.type === "stream") {
+      const reader = body.stream.getReader();
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        this.uploader.append(value);
+      }
+      return this.uploader.finish();
+    }
+    // bytes / url / provider_file paths handled below...
+  }
+}
+```
+
+For round-tripping bytes when streaming isn't needed, `fetchBytes` still materializes the full payload as a `Uint8Array`:
+
+```typescript
+const handle = await store.put(
+  new Uint8Array([/* ... */]),
+  "image",
+  "image/png",
+);
+const bytes = await store.fetchBytes(handle);
+```
+
+## See also
+
+- [Multimodal Tool Results](/docs/guides/tool-multimodal) -- cross-cutting tool-result multimodal patterns.
+- [WASM Agent](/docs/guides/wasm/agent) -- tool registration, handler shapes, and `runAgent` options.
+- [WASM API Reference](/docs/api/wasm) -- complete export list, including `ContentStore`, `ContentHandle`, `ImageSource`, and the `*Input` helpers.

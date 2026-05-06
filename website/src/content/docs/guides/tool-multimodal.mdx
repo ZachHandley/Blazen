@@ -1,0 +1,393 @@
+---
+title: "Multimodal Tools: Inputs and Results"
+description: "Pass images / audio / video / files into tools as content handles, and return multimodal payloads from tools across every LLM provider"
+section: "guides"
+order: 29
+---
+
+Tools in Blazen are no longer text-only at either end. On the **input** side, a tool can declare an image / audio / video / document / 3D / CAD parameter, and the model fills it in by emitting a content-handle id as a JSON string -- the framework substitutes the resolved typed content before your handler runs. On the **output** side, a tool can return text + image / audio / video / file blocks, and Blazen serializes them to the right wire shape for whichever provider is on the other end -- Anthropic, OpenAI Chat, OpenAI Responses, Azure, Gemini, fal.ai, or any OpenAI-compatible backend.
+
+This guide is the cross-cutting reference for both halves. The per-language guides in `/guides/rust/multimodal/`, `/guides/python/multimodal/`, `/guides/node/multimodal/`, and `/guides/wasm/multimodal/` cover the binding-specific surface. This page covers the framework-level model -- what the wire actually looks like, how the resolver works, and how the same tool definition behaves identically across every provider.
+
+## The two halves of the problem
+
+Tools have always had two boundaries that broke when bytes were involved.
+
+**Tool inputs are JSON.** A model emits a tool call as JSON. There is no mechanism for it to attach a 5 MB PNG, or even a URL it has not seen before. The only thing the model can put in a tool argument is a string. Blazen's solution is the **content-handle** indirection: bytes are registered with a `ContentStore` once, the store hands back a `ContentHandle` whose `id` is a short opaque string, and the model passes that id as the argument. The framework -- given a store -- substitutes the resolved typed content before the tool's handler executes. The tool sees a fully-materialized image / audio / file, never a bare id.
+
+**Tool results were silently text-only on most providers.** Until recently, only Anthropic's `tool_result.content` natively carried multimodal blocks; every other provider's serializer stripped non-text parts or wrapped them in non-standard envelopes that the model would not interpret. That has been fixed: every provider now serializes a tool result with non-text parts as the right combination of a primary tool-result message plus a follow-up multimodal user message (or, on the Responses API and Gemini, the API-native equivalent). A tool that returns an annotated image is now visible to the model on every backend, with the same Blazen-level API.
+
+## Tool inputs: the read path
+
+The lifecycle for a multimodal tool argument has six steps. The contract between them is fixed -- the only thing that changes per binding is the surface syntax.
+
+1. **Register content with a store.** Call `store.put(bytes, ...)` with optional `kind`, `mime_type`, `display_name`, and `byte_size` hints. You receive a `ContentHandle { id, kind, mime_type, byte_size, display_name }`. The `id` is the only thing that needs to travel through the conversation.
+2. **Make the model aware of the handle.** A short system note enumerates every handle currently in scope, with its kind, mime, and size. The model reads this and learns it can pass these ids to tools. The note is built by `build_handle_directory_system_note` in Rust and inserted automatically by the agent runner when a content store is wired in.
+3. **The tool declares a content-typed parameter.** Use one of `image_input`, `audio_input`, `video_input`, `file_input`, `three_d_input`, or `cad_input` to produce a JSON Schema fragment for the parameter. These are sugar over `content_ref_required_object` / `content_ref_property`, which take an arbitrary `ContentKind`.
+4. **The model emits a string handle id.** A tool call argument value looks like `{"photo": "blazen_a1b2c3d4..."}`. To the provider this is just a JSON string -- there is no special wire format involved.
+5. **The framework resolves the handle.** Before the handler runs, `resolve_tool_arguments` walks the arguments JSON against the schema, finds every property tagged `x-blazen-content-ref`, looks the handle up in the store, and rewrites the value into a typed object: `{ kind, handle_id, mime_type, byte_size, display_name, source }`. The `source` field is the resolved `MediaSource` (URL, base64 inline, or a provider-specific file id) and is the same shape returned by `ContentStore::resolve`.
+6. **The handler runs with materialized content.** Read the typed fields directly. If you need raw bytes (for image processing, hashing, etc.), call `store.fetch_bytes(handle)` or `store.fetchBytes(handle)` to pull them back out of whichever backend the store is using.
+
+The model never sees the raw bytes, the resolver never goes back to the model, and the tool never has to worry about which provider is on the other end. Each layer only knows what it needs to.
+
+## The `x-blazen-content-ref` schema tag
+
+The schema fragment produced by `image_input("photo", "the photo to analyze")` looks like this on the wire:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "photo": {
+      "type": "string",
+      "description": "the photo to analyze",
+      "x-blazen-content-ref": { "kind": "image" }
+    }
+  },
+  "required": ["photo"]
+}
+```
+
+This is a standard JSON Schema object. Every provider that accepts JSON Schema for tool parameters will accept it -- the `x-blazen-content-ref` extension key is invisible to providers that do not know about it (JSON Schema is open to vendor extensions by design). Blazen's resolver reads it on the way back in to identify which properties hold handle ids and what kind to enforce. If the resolved handle's `kind` does not match the expected kind, the resolver returns a `KindMismatch` error and the tool is not invoked.
+
+For tools that need both a content reference and additional non-multimodal parameters in the same schema, drop down to `content_ref_required_object("photo", ContentKind::Image, "...", extra_props)` (Rust) and merge in your other properties. The resolver walks nested objects, so the tag also works inside compound shapes.
+
+## Tool results: the write path
+
+A tool returns a `ToolOutput` carrying two things: `data`, the typed value the calling code sees, and an optional `llm_override`, an `LlmPayload` that controls what the model sees on the next turn. The `LlmPayload` enum has four variants; the one this guide is about is `Parts`, which carries a `Vec<ContentPart>` of text + image / audio / video / file blocks.
+
+Returning `Parts` works the same way regardless of which provider backs the agent. Blazen's per-provider serializers translate the parts into the wire shape the destination API expects.
+
+| Provider | Wire shape for `LlmPayload::Parts` |
+|---|---|
+| Anthropic | Native multimodal `tool_result.content` -- text, image, and document blocks pass through unchanged. |
+| OpenAI Chat | `role: "tool"` message carrying the text portion, immediately followed by a `role: "user"` message containing `image_url` / `input_audio` / file content blocks for the non-text parts. |
+| OpenAI Responses | `function_call_output` item carrying the text, immediately followed by separate `input_image` / `input_file` items in the input array. |
+| Azure OpenAI | Same as OpenAI Chat -- the wire is API-compatible. |
+| Gemini | `functionResponse` carrying `{"result": <text>}`, followed by a `Content { role: "user", parts: [...] }` carrying `inlineData` / `fileData` parts. |
+| OpenAI-compat (Groq, DeepSeek, Together, Fireworks, Perplexity, xAI, OpenRouter, Cohere, Mistral, Bedrock-Mantle) | Same as OpenAI Chat. |
+| fal.ai | Same as OpenAI Chat. |
+
+The follow-up multimodal user message is the same pattern that has always worked for sending a multimodal user turn -- Blazen is just emitting it on the tool's behalf so the model receives the bytes the tool returned. Models that do not accept multimodal user content (text-only chat models on a given provider) will reject the follow-up; that is the same failure mode as sending a multimodal user message to a text-only model directly.
+
+If you need an entirely provider-specific wire shape -- say you want to return Anthropic's experimental search-result content type that no other provider models -- use `LlmPayload::ProviderRaw { provider, value }` instead. The named provider receives `value` verbatim in the tool-result body; every other provider falls back to the default conversion from `ToolOutput::data`.
+
+## Putting it together: a complete example
+
+The example below declares an `analyze_photo` tool. It takes an image as input via a content handle, runs some processing (here, a stub that draws a rectangle), and returns both a typed JSON description for the caller and a multimodal payload with the annotated overlay for the model.
+
+#### Rust
+
+```rust
+use blazen_llm::content::{
+    tool_input::image_input,
+    ContentHandle, ContentKind, ContentStore,
+};
+use blazen_llm::types::{
+    ContentPart, ImageContent, ImageSource, LlmPayload, ToolOutput,
+};
+use base64::Engine;
+use serde_json::{json, Value};
+use std::sync::Arc;
+
+async fn analyze_photo(
+    args: Value,
+    store: Arc<dyn ContentStore>,
+) -> anyhow::Result<ToolOutput<Value>> {
+    // The resolver has already rewritten args["photo"] from a handle-id
+    // string into the typed object: { kind, handle_id, mime_type, ... }.
+    let handle_id = args["photo"]["handle_id"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("missing handle_id"))?;
+    let mime = args["photo"]["mime_type"]
+        .as_str()
+        .unwrap_or("image/png")
+        .to_string();
+
+    // Reconstruct a handle from the id + expected kind, then pull bytes.
+    let handle = ContentHandle::new(handle_id, ContentKind::Image);
+    let bytes = store.fetch_bytes(&handle).await?;
+
+    // ... run analysis, produce annotated image bytes ...
+    let annotated_bytes: Vec<u8> = annotate(&bytes);
+    let annotated_b64 =
+        base64::engine::general_purpose::STANDARD.encode(&annotated_bytes);
+
+    // Caller-visible structured data.
+    let data = json!({
+        "width": 1024,
+        "height": 768,
+        "objects_detected": ["dog", "frisbee"],
+    });
+
+    // Model-visible payload: text + the annotated overlay.
+    let parts = vec![
+        ContentPart::Text {
+            text: "Detected 2 objects. Annotated overlay below:".into(),
+        },
+        ContentPart::Image(ImageContent {
+            source: ImageSource::Base64 { data: annotated_b64 },
+            media_type: Some(mime),
+        }),
+    ];
+
+    Ok(ToolOutput::with_override(data, LlmPayload::Parts { parts }))
+}
+
+// Schema for the tool, declaring `photo` as an image input.
+fn analyze_photo_schema() -> Value {
+    image_input("photo", "the photo to analyze for objects")
+}
+```
+
+#### Python
+
+```python
+from blazen import (
+    ContentHandle, ContentKind, ContentStore,
+    LlmPayload, ToolOutput, image_input,
+)
+import base64
+
+async def analyze_photo(args: dict, store: ContentStore) -> ToolOutput:
+    # The resolver has already rewritten args["photo"] from a handle-id
+    # string into a typed dict: { kind, handle_id, mime_type, ... }.
+    handle_id = args["photo"]["handle_id"]
+
+    # Reconstruct a handle from the id + expected kind, then pull bytes.
+    handle = ContentHandle(handle_id, ContentKind.Image)
+    raw = await store.fetch_bytes(handle)
+
+    # ... run analysis, produce annotated image bytes ...
+    annotated: bytes = annotate(raw)
+    annotated_b64 = base64.b64encode(annotated).decode("ascii")
+
+    data = {
+        "width": 1024,
+        "height": 768,
+        "objects_detected": ["dog", "frisbee"],
+    }
+
+    # The Python binding currently exposes only the text / json /
+    # provider_raw LlmPayload factories — full multimodal `Parts`
+    # construction is Rust-only today. From Python, return a text summary
+    # for the model and the structured data for callers; if you need to
+    # send the annotated image back to the model, store it via
+    # `await store.put(annotated, kind=ContentKind.Image, ...)` and pass
+    # the resulting handle id in the text body.
+    return ToolOutput(
+        data=data,
+        llm_override=LlmPayload.text(
+            "Detected 2 objects (dog, frisbee). Annotated overlay was "
+            "generated and stored — fetch via the returned handle."
+        ),
+    )
+
+# Schema for the tool, declaring `photo` as an image input.
+analyze_photo_schema = image_input("photo", "the photo to analyze for objects")
+```
+
+#### Node
+
+```typescript
+import { ContentStore, imageInput } from "blazen";
+import type {
+  ContentHandle,
+  JsContentPart,
+  JsImageContent,
+  LlmPayload,
+  ToolOutput,
+} from "blazen";
+
+async function analyzePhoto(
+  args: { photo: { handle_id: string; mime_type?: string } },
+  store: ContentStore,
+): Promise<ToolOutput> {
+  // The resolver has already rewritten args.photo from a handle-id string
+  // into a typed object: { kind, handle_id, mime_type, ... }.
+  // (Rust resolver emits snake_case keys; they pass through napi as-is.)
+  const handleId = args.photo.handle_id;
+  const mime = args.photo.mime_type ?? "image/png";
+
+  // Reconstruct a handle from the id + expected kind, then pull bytes.
+  const handle: ContentHandle = { id: handleId, kind: "image" };
+  const raw: Buffer = await store.fetchBytes(handle);
+
+  // ... run analysis, produce annotated image bytes ...
+  const annotated = annotate(raw);
+  const annotatedB64 = annotated.toString("base64");
+
+  const data = {
+    width: 1024,
+    height: 768,
+    objectsDetected: ["dog", "frisbee"],
+  };
+
+  const annotatedImage: JsImageContent = {
+    source: { sourceType: "base64", data: annotatedB64 },
+    mediaType: mime,
+  };
+
+  const parts: JsContentPart[] = [
+    { partType: "text", text: "Detected 2 objects. Annotated overlay below:" },
+    { partType: "image", image: annotatedImage },
+  ];
+
+  const llmOverride: LlmPayload = { kind: "parts", parts };
+  return { data, llmOverride };
+}
+
+// Schema for the tool, declaring `photo` as an image input.
+const analyzePhotoSchema = imageInput("photo", "the photo to analyze for objects");
+```
+
+The same tool, the same schema, the same handler shape. Whether the agent is talking to Anthropic, OpenAI Responses, Gemini, or Groq, the `parts` get serialized into the wire shape that provider understands.
+
+## Choosing a `ContentStore`
+
+The store is the lifecycle manager for content. Pick by where you want bytes to live and which provider's native files API you want to take advantage of.
+
+| Use case | Recommended store |
+|---|---|
+| Quick scripts, tests, ephemeral content | `InMemoryContentStore` (`ContentStore.in_memory()` / `ContentStore.inMemory()`) |
+| Persistence across restarts | `LocalFileContentStore` (`ContentStore.local_file(path)` / `ContentStore.localFile(root)`) -- native targets only, not WASM |
+| Anthropic-heavy workload, large PDFs | `AnthropicFilesStore` -- uploads to Anthropic's Files API so PDFs and large images are referenced by file id rather than re-sent inline every turn |
+| OpenAI-heavy workload | `OpenAiFilesStore` -- same idea against OpenAI's Files API |
+| Gemini-heavy workload | `GeminiFilesStore` -- against Gemini's Files API |
+| fal.ai compute / hosted media | `FalStorageStore` -- against fal's object storage |
+| S3 / R2 / your own backend | All four environments now expose user-defined stores: Rust uses `CustomContentStore::builder(...)`, Python uses `ContentStore.custom(...)` or `class S3ContentStore(ContentStore): ...`, Node uses `ContentStore.custom({...})` or `class S3ContentStore extends ContentStore { ... }`, WASM uses the same shape from `@blazen/sdk`. |
+
+All stores implement the same contract: `put`, `resolve`, `fetch_bytes`, `metadata`, `delete`. The choice determines where bytes physically live and what shape `resolve` returns -- in-memory hands back base64, the Anthropic / OpenAI / Gemini / fal stores hand back a provider file id, local-file hands back a path or base64 depending on the provider being targeted.
+
+A note on WASM: the WASM SDK exposes the same factory names (`ContentStore.inMemory()`, `openaiFiles(...)`, `anthropicFiles(...)`, `geminiFiles(...)`, `falStorage(...)`) but does **not** include `localFile` (no filesystem in the browser) and the `metadata` method is not exposed (use `resolve` for the same metadata fields). The `put` signature is positional rather than options-based: `put(body, kindHint?, mimeType?, displayName?)`.
+
+## Cross-provider portability
+
+What happens when content originally registered against one provider's files API is sent to a request that goes to a different provider? For example, you uploaded a PDF via `OpenAiFilesStore` for an OpenAI run, and a follow-up step sends the same conversation -- with the same handle in scope -- to Anthropic.
+
+The framework looks at the handle's resolved `MediaSource`. If it is a `ProviderFile` for a provider other than the destination, it needs to **rehost**: download the bytes from the originating store, then either re-upload them via the destination's API or inline them as base64 if the file is small enough to fit. Both halves require a `ContentStore` to be wired into the request path -- the rehost call goes through `fetch_bytes` on the originating store and `put` on the destination store. Without a store wired in, the framework cannot reach the bytes; the part is dropped with a warning and the request proceeds as if it had never been there.
+
+The practical implication: if you mix providers in a single agent or workflow, wire a content store in. Use one of the provider-specific stores for the provider you talk to most often, and the framework will handle rehosting for the rest.
+
+## Pre-resolving handles before the wire call
+
+Inside the agent runner, two things need to happen before a `CompletionRequest` goes out: every `ImageSource::Handle` in the message history needs to be resolved against the store (so the wire payload carries actual base64 / URL / file-id values), and the model needs a system note describing every handle in scope (so it knows which ids it can pass as tool arguments). Both pieces are wrapped into a single helper:
+
+```rust
+use blazen_llm::content::visibility::prepare_request_with_store;
+
+let resolved = prepare_request_with_store(&mut request, store.as_ref()).await?;
+println!("resolved {resolved} handle(s)");
+```
+
+`prepare_request_with_store` snapshots the visible handles via `collect_visible_handles`, calls `request.resolve_handles_with(store)`, and prepends a system message built by `build_handle_directory_system_note`. Use the individual functions if you only need one half -- for example, `resolve_handles_with` alone if you do not want a directory system note (because you embed handle ids elsewhere in your prompt template).
+
+In the Python and Node bindings, the agent runner calls the equivalent code automatically when an agent has a content store wired in -- you do not need to invoke it by hand. Drop down to the Rust helpers when you are running a `CompletionRequest` directly without going through the agent runner, or when you want to inspect the resolved request before dispatch.
+
+## Streaming large content
+
+For large blobs -- multi-hundred-megabyte videos, hour-long audio captures, big PDFs -- buffering the entire payload into a `Vec<u8>` before handing it back to the caller wastes memory and stalls the first byte. Blazen now models streaming as a first-class `ContentBody` variant alongside the existing `Bytes` variant:
+
+```rust
+pub enum ContentBody {
+    Bytes(Vec<u8>),
+    Stream(Pin<Box<dyn Stream<Item = std::io::Result<Bytes>> + Send>>),
+}
+```
+
+The companion trait method on `ContentStore` is `fetch_stream`, which returns a `ContentBody`. The default implementation falls back to `fetch_bytes` and wraps the result in a single-chunk stream, so existing stores keep working without changes; backends that can do better override `fetch_stream` directly.
+
+### Per-binding state today
+
+**Rust** has full streaming on both halves -- `put` accepts a `ContentBody::Stream` and `fetch_stream` can return one. Native built-in stores that override `fetch_stream` for true chunk-by-chunk delivery:
+
+- `LocalFileContentStore` -- streams from disk via `tokio_util::io::ReaderStream`.
+- `OpenAiFilesStore` -- streams from the OpenAI Files API.
+- `AnthropicFilesStore` -- streams from the Anthropic Files API.
+- `FalStorageStore` -- streams from fal's object storage via `HttpClient::send_streaming`.
+
+`InMemoryContentStore` and `GeminiFilesStore` still use the buffered default (the in-memory case has nothing to stream from; the Gemini case is a follow-up).
+
+**Python**, **Node**, and **WASM** bindings now stream end-to-end across the FFI boundary. The host-language shapes are:
+
+- **Python** -- `fetch_stream` may return either `bytes` (legacy) or an `AsyncIterator[bytes]`; a streaming `put` body arrives as `body["stream"]`, an `AsyncByteIter` you iterate with `async for`.
+- **Node** -- `fetchStream` may return `Buffer` / `Uint8Array` / `number[]` / base64 `string` (legacy) or an `AsyncIterable<Uint8Array>`; a streaming `put` body arrives as `body.stream`, an `AsyncIterable<Uint8Array>`.
+- **WASM** -- `fetchStream` may return `Uint8Array` / `number[]` (legacy) or a `ReadableStream<Uint8Array>`; a streaming `put` body arrives as `body.stream`, a `ReadableStream<Uint8Array>` you read with `getReader()`.
+
+Each binding also exposes `fetch_stream(handle)` / `fetchStream(handle)` on the `ContentStore` wrapper itself, so host code can iterate chunks directly off any built-in or custom store without round-tripping through `fetch_bytes`.
+
+### Cross-binding example
+
+Override `fetch_stream` on a custom store. The same pattern works in every environment; only the surface syntax changes.
+
+#### Rust
+
+```rust
+use blazen_llm::content::{
+    ContentBody, ContentHandle, ContentStore, CustomContentStore,
+};
+use bytes::Bytes;
+use futures::stream;
+
+let store = CustomContentStore::builder("s3")
+    .with_fetch_stream(|handle: ContentHandle| async move {
+        // Open a streaming GET against S3 / R2 / your backend.
+        let chunks = my_s3_client.get_streaming(&handle.id).await?;
+        // Return a ContentBody::Stream so the caller can pull byte-by-byte.
+        Ok(ContentBody::Stream(Box::pin(chunks)))
+    })
+    .build();
+```
+
+#### Python
+
+```python
+from blazen import ContentStore, ContentHandle
+
+class S3ContentStore(ContentStore):
+    async def fetch_stream(self, handle: ContentHandle) -> bytes:
+        # Today the binding drains the underlying Rust stream into bytes
+        # before calling this method, and wraps the bytes you return in a
+        # single-chunk Rust stream. The override point is in place; true
+        # chunked async-iterator bridging is a follow-up.
+        return await self._s3.get_object_bytes(handle.id)
+```
+
+#### Node
+
+```typescript
+import { ContentStore } from "blazen";
+import type { ContentHandle } from "blazen";
+
+class S3ContentStore extends ContentStore {
+  async fetchStream(handle: ContentHandle): Promise<Buffer> {
+    // Same caveat as Python -- Buffer in, single-chunk Rust stream out.
+    return await this.s3.getObjectBuffer(handle.id);
+  }
+}
+```
+
+#### WASM
+
+```typescript
+import { ContentStore } from "@blazen/sdk";
+import type { ContentHandle } from "@blazen/sdk";
+
+const store = ContentStore.custom({
+  async fetchStream(handle: ContentHandle): Promise<Uint8Array> {
+    // Same caveat -- Uint8Array in, single-chunk Rust stream out.
+    const res = await fetch(`/objects/${handle.id}`);
+    return new Uint8Array(await res.arrayBuffer());
+  },
+});
+```
+
+When you only need bytes, keep calling `fetch_bytes` -- it now delegates to `fetch_stream` and concatenates, so both APIs stay in sync regardless of which one the store overrides.
+
+## See also
+
+- [Multimodal Content (Rust)](/guides/rust/multimodal/) -- the full Rust API for `ContentStore`, `ContentHandle`, and the typed input helpers
+- [Multimodal Content (Python)](/guides/python/multimodal/) -- the same surface in Python; multimodal tool *results* are Rust-only today, but content handles, stores, and tool *inputs* work the same
+- [Multimodal Content (Node)](/guides/node/multimodal/) -- the napi-rs binding's `ContentStore`, `imageInput`, and friends
+- [Multimodal Content (WASM)](/guides/wasm/multimodal/) -- the browser SDK with its narrower store set
+- [Custom Providers](/guides/custom-providers/) -- if you are wrapping your own model backend, this is where the `LlmPayload::Parts` -> wire-format translation lives

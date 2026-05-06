@@ -655,7 +655,9 @@ mod resolve_handles_tests {
         let store = InMemoryContentStore::new();
         let handle = store
             .put(
-                ContentBody::Url("https://example.com/cat.png".into()),
+                ContentBody::Url {
+                    url: "https://example.com/cat.png".into(),
+                },
                 ContentHint::default().with_kind(ContentKind::Image),
             )
             .await
@@ -704,7 +706,9 @@ mod resolve_handles_tests {
         let store = InMemoryContentStore::new();
         let handle = store
             .put(
-                ContentBody::Bytes(vec![1u8, 2, 3]),
+                ContentBody::Bytes {
+                    data: vec![1u8, 2, 3],
+                },
                 ContentHint::default().with_kind(ContentKind::Image),
             )
             .await

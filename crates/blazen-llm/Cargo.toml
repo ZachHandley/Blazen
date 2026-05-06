@@ -37,7 +37,9 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio = { version = "1", default-features = false, features = ["sync", "macros"] }
+tokio-util = { workspace = true, features = ["io"] }
 futures-util.workspace = true
+futures-core.workspace = true
 tracing.workspace = true
 bytes.workspace = true
 chrono.workspace = true
@@ -61,7 +63,7 @@ blazen-audio-piper = { workspace = true, optional = true }
 
 # Timer/runtime features only on native targets (mio doesn't support any wasm32 target)
 [target.'cfg(not(any(target_os = "wasi", target_arch = "wasm32")))'.dependencies]
-tokio = { version = "1", default-features = false, features = ["rt", "time"] }
+tokio = { version = "1", default-features = false, features = ["rt", "time", "fs", "io-util"] }
 
 # Browser WASM only (not WASIp2 -- WASIp2 has no JS runtime)
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dependencies]
@@ -80,6 +82,9 @@ web-sys = { version = "=0.3.95", features = [
 ] }
 uuid = { workspace = true, features = ["js"] }
 getrandom = { version = "0.2", features = ["js"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

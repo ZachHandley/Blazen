@@ -905,11 +905,19 @@ export type JsCompletionModel = CompletionModel
  * Pluggable registry for multimodal content. Wraps
  * [`Arc<dyn blazen_llm::content::ContentStore>`].
  *
- * Construct via the static factories (e.g. `ContentStore.inMemory()`).
- * Stores are cheap to clone — internally an `Arc` — so passing the same
- * instance across multiple agents / requests is fine.
+ * Construct via the static factories (e.g. `ContentStore.inMemory()`,
+ * `ContentStore.custom({ put, resolve, fetchBytes })`) or by extending
+ * `ContentStore` and overriding the async methods. Stores are cheap to
+ * clone — internally an `Arc` — so passing the same instance across
+ * multiple agents / requests is fine.
  */
 export declare class ContentStore {
+  /**
+   * Base-class constructor. Call from your subclass via `super()`.
+   * On its own, the base class is not useful — the default method
+   * implementations raise.
+   */
+  constructor()
   /** Build a default ephemeral in-memory store. */
   static inMemory(): ContentStore
   /**
@@ -925,6 +933,34 @@ export declare class ContentStore {
   static geminiFiles(apiKey: string, baseUrl?: string | undefined | null): ContentStore
   /** Build a store backed by fal.ai's storage API. */
   static falStorage(apiKey: string, baseUrl?: string | undefined | null): ContentStore
+  /**
+   * Build a store backed by user-supplied async callbacks.
+   *
+   * Mirrors the Rust [`CustomContentStore::builder`] API. The
+   * `options` object must provide at least `put`, `resolve`, and
+   * `fetchBytes`; `fetchStream` and `delete` are optional. All
+   * callbacks must be `async` (or return a `Promise`).
+   *
+   * Argument shapes seen by JS:
+   *
+   * - `put(body, hint)`: `body` is a JSON-tagged
+   *   [`ContentBody`] (`{type: "bytes", data: number[]}`,
+   *   `{type: "url", url: string}`, `{type: "local_path", path: string}`,
+   *   or `{type: "provider_file", provider: string, id: string}`).
+   *   `hint` is a [`ContentHint`] dict (all fields optional). Must
+   *   resolve with a [`ContentHandle`]-shaped object
+   *   `{id, kind, mimeType?, byteSize?, displayName?}`.
+   * - `resolve(handle)`: `handle` is a [`ContentHandle`] dict. Must
+   *   resolve with a serialized [`MediaSource`] object
+   *   (e.g. `{type: "url", url: "..."}`).
+   * - `fetchBytes(handle)`: must resolve with a `Buffer`,
+   *   `Uint8Array`, or `number[]` of bytes.
+   * - `fetchStream(handle)` (optional): may resolve with either bytes
+   *   (`Buffer` / `Uint8Array` / `number[]` / base64 string) or an
+   *   `AsyncIterable<Uint8Array>` for chunk-by-chunk streaming.
+   * - `delete(handle)` (optional): must resolve with `undefined`.
+   */
+  static custom(options: CustomContentStoreOptions): ContentStore
   /**
    * Persist content and return a freshly-issued handle.
    *
@@ -946,6 +982,22 @@ export declare class ContentStore {
    * reason over the handle and let `resolve` produce the wire form.
    */
   fetchBytes(handle: JsContentHandle): Promise<Buffer>
+  /**
+   * Stream raw bytes for a handle chunk-by-chunk.
+   *
+   * Returns a `Promise<AsyncIterable<Uint8Array>>`. Each `next()` call on
+   * the iterator pulls one chunk from the underlying [`ByteStream`]; the
+   * iterator is automatically `done` once the stream completes. Errors
+   * surfaced mid-stream reject the corresponding `next()` promise.
+   *
+   * Useful for large payloads where holding the entire body in a
+   * [`Buffer`] would be wasteful — pipe directly into a file, an HTTP
+   * response, or another transform without buffering.
+   *
+   * Built-in stores that lack a native streaming path fall back to a
+   * single-chunk iterator over [`Self::fetch_bytes`].
+   */
+  fetchStream(handle: JsContentHandle): Promise<AsyncIterable<Uint8Array>>
   /** Cheap metadata lookup without materializing the bytes. */
   metadata(handle: JsContentHandle): Promise<JsContentMetadata>
   /**
@@ -5471,6 +5523,45 @@ export declare function computeVideoCost(modelId: string, seconds: number): numb
  */
 export declare function countMessageTokens(messages: Array<ChatMessage>, contextSize?: number | undefined | null): number
 
+/**
+ * Plain object passed to [`JsContentStore::custom`].
+ *
+ * Each property is the JS-side implementation of one of the trait's
+ * methods. `put`, `resolve`, and `fetchBytes` are required; `fetchStream`
+ * and `delete` are optional.
+ *
+ * All callbacks must be `async` (or return a `Promise`) and accept the
+ * JSON shapes defined by [`ContentBody`] / [`ContentHint`] /
+ * [`ContentHandle`] on the input side; outputs are deserialized into the
+ * matching Rust types. See [`JsHostContentStore`] for the per-method
+ * payload shapes.
+ *
+ * `name` is a short identifier used in error / tracing messages; defaults
+ * to `"custom"`.
+ */
+export interface CustomContentStoreOptions {
+  /** Required: persist content, return a handle. */
+  put: (body: ContentBody, hint: ContentHint) => Promise<ContentHandle>
+  /** Required: turn a handle into a wire-renderable [`MediaSource`]. */
+  resolve: (handle: ContentHandle) => Promise<MediaSource>
+  /**
+   * Required: fetch raw bytes for a handle (`Buffer` | `Uint8Array` |
+   * `number[]`).
+   */
+  fetchBytes: (handle: ContentHandle) => Promise<Buffer | Uint8Array | number[] | string>
+  /**
+   * Optional: stream raw bytes; absent falls back to `fetchBytes`. May
+   * resolve with bytes (`Buffer` / `Uint8Array` / `number[]` / base64
+   * string) or an `AsyncIterable<Uint8Array>` for true chunk-by-chunk
+   * streaming.
+   */
+  fetchStream?: (handle: ContentHandle) => Promise<Buffer | Uint8Array | number[] | string | AsyncIterable<Uint8Array>>
+  /** Optional: cleanup hook; absent is a no-op. */
+  delete?: (handle: ContentHandle) => Promise<void>
+  /** Optional human-readable identifier for logs (default: `"custom"`). */
+  name?: string
+}
+
 /** Optional configuration for a [`JsCustomProvider`]. */
 export interface CustomProviderOptions {
   /**
@@ -8160,6 +8251,31 @@ export type ImageSource = JsImageSource
 export type ContentHandle = JsContentHandle
 export type ContentMetadata = JsContentMetadata
 export type ContentKind = JsContentKind
+
+// --- post-build: ContentBody / ContentHint helper types ---
+/**
+ * JSON-tagged body passed to a custom store's `put` callback.
+ *
+ * Mirrors `blazen_llm::content::ContentBody`. The `stream` variant
+ * carries a live `AsyncIterable<Uint8Array>` so chunks flow lazily
+ * from Rust into JS without staging the whole payload in memory.
+ */
+export type ContentBody =
+  | { type: 'bytes'; data: Buffer | Uint8Array | number[] }
+  | { type: 'url'; url: string }
+  | { type: 'local_path'; path: string }
+  | { type: 'provider_file'; provider: string; id: string }
+  | { type: 'stream'; stream: AsyncIterable<Uint8Array>; sizeHint: number | null }
+/**
+ * Optional hints passed alongside a `ContentBody` into `put`.
+ * Mirrors `blazen_llm::content::ContentHint` (every field optional).
+ */
+export interface ContentHint {
+  mimeType?: string | null
+  kind?: ContentKind | null
+  displayName?: string | null
+  byteSize?: number | null
+}
 
 // --- post-build: typed error classes ---
 export class BlazenError extends Error {}

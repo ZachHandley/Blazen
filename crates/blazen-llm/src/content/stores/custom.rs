@@ -30,6 +30,13 @@ type FetchFn =
     Arc<dyn Fn(ContentHandle) -> BoxFuture<'static, Result<Vec<u8>, BlazenError>> + Send + Sync>;
 type DeleteFn =
     Arc<dyn Fn(ContentHandle) -> BoxFuture<'static, Result<(), BlazenError>> + Send + Sync>;
+pub type FetchStreamFn = Arc<
+    dyn Fn(
+            ContentHandle,
+        ) -> BoxFuture<'static, Result<crate::content::store::ByteStream, BlazenError>>
+        + Send
+        + Sync,
+>;
 
 /// User-defined content store backed by callbacks.
 ///
@@ -40,6 +47,7 @@ pub struct CustomContentStore {
     put: PutFn,
     resolve: ResolveFn,
     fetch_bytes: FetchFn,
+    fetch_stream: Option<FetchStreamFn>,
     delete: Option<DeleteFn>,
 }
 
@@ -61,6 +69,7 @@ impl CustomContentStore {
             put: None,
             resolve: None,
             fetch_bytes: None,
+            fetch_stream: None,
             delete: None,
         }
     }
@@ -84,6 +93,21 @@ impl ContentStore for CustomContentStore {
         (self.fetch_bytes)(handle.clone()).await
     }
 
+    async fn fetch_stream(
+        &self,
+        handle: &ContentHandle,
+    ) -> Result<crate::content::store::ByteStream, BlazenError> {
+        if let Some(f) = &self.fetch_stream {
+            f(handle.clone()).await
+        } else {
+            // Fall back to default-impl behavior: buffer fetch_bytes.
+            let bytes = self.fetch_bytes(handle).await?;
+            Ok(Box::pin(futures_util::stream::once(async move {
+                Ok(bytes::Bytes::from(bytes))
+            })))
+        }
+    }
+
     async fn delete(&self, handle: &ContentHandle) -> Result<(), BlazenError> {
         if let Some(delete) = &self.delete {
             (delete)(handle.clone()).await
@@ -100,6 +124,7 @@ pub struct CustomContentStoreBuilder {
     put: Option<PutFn>,
     resolve: Option<ResolveFn>,
     fetch_bytes: Option<FetchFn>,
+    fetch_stream: Option<FetchStreamFn>,
     delete: Option<DeleteFn>,
 }
 
@@ -149,6 +174,22 @@ impl CustomContentStoreBuilder {
         self
     }
 
+    /// Set the `fetch_stream` callback. Optional — when absent, the trait's
+    /// default impl buffers `fetch_bytes` into a single chunk.
+    pub fn fetch_stream<F>(mut self, f: F) -> Self
+    where
+        F: Fn(
+                ContentHandle,
+            )
+                -> BoxFuture<'static, Result<crate::content::store::ByteStream, BlazenError>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.fetch_stream = Some(Arc::new(f));
+        self
+    }
+
     /// Finalize the builder.
     ///
     /// # Errors
@@ -167,6 +208,7 @@ impl CustomContentStoreBuilder {
             fetch_bytes: self.fetch_bytes.ok_or_else(|| {
                 BlazenError::request("CustomContentStore::builder: missing `fetch_bytes` callback")
             })?,
+            fetch_stream: self.fetch_stream,
             delete: self.delete,
         })
     }
@@ -207,7 +249,10 @@ mod tests {
             .unwrap();
 
         let handle = store
-            .put(ContentBody::Bytes(vec![0u8]), ContentHint::default())
+            .put(
+                ContentBody::Bytes { data: vec![0u8] },
+                ContentHint::default(),
+            )
             .await
             .unwrap();
         assert_eq!(handle.id, "custom_xyz");
@@ -228,5 +273,77 @@ mod tests {
             .fetch_bytes(|_h| async { Ok(vec![]) }.boxed())
             .build();
         assert!(res.is_err());
+    }
+
+    #[tokio::test]
+    async fn custom_store_streaming_fetch_callback() {
+        use bytes::Bytes;
+        use futures_util::TryStreamExt;
+        use futures_util::stream;
+        let store = CustomContentStore::builder("test")
+            .put(|_body, _hint| {
+                Box::pin(async {
+                    Ok(crate::content::handle::ContentHandle::new(
+                        "h_test",
+                        crate::content::kind::ContentKind::Other,
+                    ))
+                })
+            })
+            .resolve(|_h| {
+                Box::pin(async { Ok(crate::types::MediaSource::Url { url: "x".into() }) })
+            })
+            .fetch_bytes(|_h| Box::pin(async { Ok(b"buffered".to_vec()) }))
+            .fetch_stream(|_h| {
+                Box::pin(async {
+                    let chunks = vec![
+                        Ok(Bytes::from_static(b"chunk1 ")),
+                        Ok(Bytes::from_static(b"chunk2")),
+                    ];
+                    Ok(Box::pin(stream::iter(chunks)) as crate::content::store::ByteStream)
+                })
+            })
+            .build()
+            .unwrap();
+        let handle = crate::content::handle::ContentHandle::new(
+            "h_test",
+            crate::content::kind::ContentKind::Other,
+        );
+        let mut s = store.fetch_stream(&handle).await.unwrap();
+        let mut got = Vec::new();
+        while let Some(chunk) = s.try_next().await.unwrap() {
+            got.extend_from_slice(&chunk);
+        }
+        assert_eq!(got, b"chunk1 chunk2");
+    }
+
+    #[tokio::test]
+    async fn custom_store_streaming_fetch_falls_back_to_bytes() {
+        use futures_util::TryStreamExt;
+        let store = CustomContentStore::builder("test")
+            .put(|_body, _hint| {
+                Box::pin(async {
+                    Ok(crate::content::handle::ContentHandle::new(
+                        "h_test",
+                        crate::content::kind::ContentKind::Other,
+                    ))
+                })
+            })
+            .resolve(|_h| {
+                Box::pin(async { Ok(crate::types::MediaSource::Url { url: "x".into() }) })
+            })
+            .fetch_bytes(|_h| Box::pin(async { Ok(b"all bytes".to_vec()) }))
+            // No .fetch_stream — should fall back to fetch_bytes.
+            .build()
+            .unwrap();
+        let handle = crate::content::handle::ContentHandle::new(
+            "h_test",
+            crate::content::kind::ContentKind::Other,
+        );
+        let mut s = store.fetch_stream(&handle).await.unwrap();
+        let mut got = Vec::new();
+        while let Some(chunk) = s.try_next().await.unwrap() {
+            got.extend_from_slice(&chunk);
+        }
+        assert_eq!(got, b"all bytes");
     }
 }

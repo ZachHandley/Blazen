@@ -28,7 +28,7 @@ use serde::Deserialize;
 use crate::content::detect::detect;
 use crate::content::handle::ContentHandle;
 use crate::content::kind::ContentKind;
-use crate::content::store::{ContentBody, ContentHint, ContentStore};
+use crate::content::store::{ByteStream, ContentBody, ContentHint, ContentStore};
 use crate::error::BlazenError;
 use crate::http::{HttpClient, HttpRequest};
 use crate::types::{MediaSource, ProviderId};
@@ -227,10 +227,10 @@ impl ContentStore for OpenAiFilesStore {
         hint: ContentHint,
     ) -> Result<ContentHandle, BlazenError> {
         match body {
-            ContentBody::Bytes(bytes) => self.put_bytes_inner(bytes, hint).await,
+            ContentBody::Bytes { data: bytes } => self.put_bytes_inner(bytes, hint).await,
 
             #[cfg(not(target_arch = "wasm32"))]
-            ContentBody::LocalPath(path) => {
+            ContentBody::LocalPath { path } => {
                 let bytes = tokio::fs::read(&path).await.map_err(|e| {
                     BlazenError::request(format!(
                         "OpenAiFilesStore: failed to read '{}': {e}",
@@ -246,12 +246,12 @@ impl ContentStore for OpenAiFilesStore {
             }
 
             #[cfg(target_arch = "wasm32")]
-            ContentBody::LocalPath(_) => Err(BlazenError::unsupported(
+            ContentBody::LocalPath { .. } => Err(BlazenError::unsupported(
                 "OpenAiFilesStore: LocalPath ContentBody not supported on wasm32; \
                  read the file manually and pass ContentBody::Bytes",
             )),
 
-            ContentBody::Url(_) => Err(BlazenError::unsupported(
+            ContentBody::Url { .. } => Err(BlazenError::unsupported(
                 "OpenAiFilesStore: URL ContentBody not supported; \
                  fetch first or use InMemoryContentStore",
             )),
@@ -265,6 +265,22 @@ impl ContentStore for OpenAiFilesStore {
                 "OpenAiFilesStore: ProviderFile from '{provider:?}' is not supported by this store \
                  (only ProviderId::OpenAi is accepted)"
             ))),
+
+            ContentBody::Stream { stream, size_hint } => {
+                use futures_util::StreamExt;
+                let mut buf: Vec<u8> =
+                    Vec::with_capacity(usize::try_from(size_hint.unwrap_or(0)).unwrap_or(0));
+                let mut s = stream;
+                while let Some(chunk) = s.next().await {
+                    buf.extend_from_slice(&chunk?);
+                }
+                // TODO(blazen): true streaming multipart upload. For now we
+                // drain the stream into a single buffer and route it through
+                // the existing bytes-upload path, since the OpenAI Files API
+                // multipart helper takes a `&[u8]` body. Provider-file
+                // uploads are usually small enough that this is acceptable.
+                self.put_bytes_inner(buf, hint).await
+            }
         }
     }
 
@@ -283,6 +299,34 @@ impl ContentStore for OpenAiFilesStore {
             return Err(map_files_error(&url, &response));
         }
         Ok(response.body)
+    }
+
+    async fn fetch_stream(&self, handle: &ContentHandle) -> Result<ByteStream, BlazenError> {
+        use futures_util::StreamExt;
+
+        let url = format!("{}/files/{}/content", self.base(), handle.id);
+        let request = HttpRequest::get(&url).bearer_auth(&self.api_key);
+        let (status, headers, byte_stream) = self.client.send_streaming(request).await?;
+        if !(200..300).contains(&status) {
+            // We don't drain the stream body to extract a richer error here;
+            // status + headers is enough for the auth / rate-limit / generic
+            // mapping. This mirrors how the streaming providers handle
+            // pre-stream errors.
+            return Err(match status {
+                401 => BlazenError::auth("OpenAiFilesStore: authentication failed"),
+                429 => BlazenError::RateLimit {
+                    retry_after_ms: parse_retry_after(&headers),
+                },
+                _ => crate::providers::provider_http_error_parts(
+                    "openai", &url, status, &headers, "",
+                ),
+            });
+        }
+        // Adapt the HttpClient's `Box<dyn Error>`-typed byte stream into a
+        // `BlazenError`-typed `ContentStore` byte stream.
+        let mapped =
+            byte_stream.map(|chunk| chunk.map_err(|e| BlazenError::request(e.to_string())));
+        Ok(Box::pin(mapped))
     }
 
     async fn delete(&self, handle: &ContentHandle) -> Result<(), BlazenError> {
@@ -512,7 +556,9 @@ mod tests {
 
         let handle = store
             .put(
-                ContentBody::Bytes(b"payload".to_vec()),
+                ContentBody::Bytes {
+                    data: b"payload".to_vec(),
+                },
                 ContentHint::default()
                     .with_kind(ContentKind::Document)
                     .with_display_name("hello.txt")
@@ -626,7 +672,9 @@ mod tests {
 
         let err = store
             .put(
-                ContentBody::Url("https://example.com/x.png".into()),
+                ContentBody::Url {
+                    url: "https://example.com/x.png".into(),
+                },
                 ContentHint::default(),
             )
             .await
@@ -690,7 +738,12 @@ mod tests {
         let store = OpenAiFilesStore::new_with_client("sk-bad", client as Arc<dyn HttpClient>);
 
         let err = store
-            .put(ContentBody::Bytes(vec![1, 2, 3]), ContentHint::default())
+            .put(
+                ContentBody::Bytes {
+                    data: vec![1, 2, 3],
+                },
+                ContentHint::default(),
+            )
             .await
             .expect_err("expected auth error");
         assert!(matches!(err, BlazenError::Auth { .. }), "got {err:?}");
@@ -704,7 +757,12 @@ mod tests {
             .with_purpose("assistants");
 
         store
-            .put(ContentBody::Bytes(vec![1, 2, 3]), ContentHint::default())
+            .put(
+                ContentBody::Bytes {
+                    data: vec![1, 2, 3],
+                },
+                ContentHint::default(),
+            )
             .await
             .unwrap();
 
@@ -740,5 +798,49 @@ mod tests {
         assert_eq!(escape_quotes("a\"b"), "a\\\"b");
         assert_eq!(escape_quotes("a\\b"), "a\\\\b");
         assert_eq!(escape_quotes("plain.txt"), "plain.txt");
+    }
+
+    #[tokio::test]
+    async fn stream_put_drains_to_bytes_path() {
+        use bytes::Bytes;
+        use futures_util::stream;
+
+        let client = Arc::new(MockClient::new(vec![ok_files_response(
+            "file_streamed",
+            11,
+            "stream.bin",
+        )]));
+        let store =
+            OpenAiFilesStore::new_with_client("sk-test", client.clone() as Arc<dyn HttpClient>);
+
+        let chunks: Vec<Result<Bytes, BlazenError>> = vec![
+            Ok(Bytes::from_static(b"hello ")),
+            Ok(Bytes::from_static(b"world")),
+        ];
+        let body = ContentBody::Stream {
+            stream: Box::pin(stream::iter(chunks)),
+            size_hint: Some(11),
+        };
+
+        let handle = store
+            .put(body, ContentHint::default().with_kind(ContentKind::Other))
+            .await
+            .expect("put should succeed");
+
+        assert_eq!(handle.id, "file_streamed");
+        assert_eq!(handle.kind, ContentKind::Other);
+
+        // Confirm the drained stream was forwarded into the multipart body
+        // exactly once, via the same upload path used by `ContentBody::Bytes`.
+        let req = client.last();
+        assert_eq!(req.method, HttpMethod::Post);
+        assert_eq!(req.url, "https://api.openai.com/v1/files");
+        let body_bytes = req.body.as_ref().expect("missing body");
+        let body_str = String::from_utf8_lossy(body_bytes);
+        assert!(
+            body_str.contains("hello world"),
+            "drained stream payload missing from multipart body: {body_str}"
+        );
+        assert!(body_str.contains("name=\"file\""));
     }
 }

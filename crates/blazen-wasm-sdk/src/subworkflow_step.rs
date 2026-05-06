@@ -108,16 +108,9 @@ impl WasmSubWorkflowStep {
 impl WasmSubWorkflowStep {
     /// Materialize a [`SubWorkflowStep`] for handing to a `WorkflowBuilder`.
     pub(crate) fn to_core(&self) -> SubWorkflowStep {
-        let accepts: Vec<&'static str> = self
-            .accepts
-            .iter()
-            .map(|s| intern_event_type(s))
-            .collect();
-        let emits: Vec<&'static str> = self
-            .emits
-            .iter()
-            .map(|s| intern_event_type(s))
-            .collect();
+        let accepts: Vec<&'static str> =
+            self.accepts.iter().map(|s| intern_event_type(s)).collect();
+        let emits: Vec<&'static str> = self.emits.iter().map(|s| intern_event_type(s)).collect();
         let mut step = SubWorkflowStep::with_json_mappers(
             self.name.clone(),
             accepts,
@@ -240,16 +233,9 @@ impl WasmParallelSubWorkflowsStep {
 impl WasmParallelSubWorkflowsStep {
     /// Materialize a [`ParallelSubWorkflowsStep`] for handing to a builder.
     pub(crate) fn to_core(&self) -> ParallelSubWorkflowsStep {
-        let accepts: Vec<&'static str> = self
-            .accepts
-            .iter()
-            .map(|s| intern_event_type(s))
-            .collect();
-        let emits: Vec<&'static str> = self
-            .emits
-            .iter()
-            .map(|s| intern_event_type(s))
-            .collect();
+        let accepts: Vec<&'static str> =
+            self.accepts.iter().map(|s| intern_event_type(s)).collect();
+        let emits: Vec<&'static str> = self.emits.iter().map(|s| intern_event_type(s)).collect();
         let branches: Vec<SubWorkflowStep> = self
             .branches
             .iter()

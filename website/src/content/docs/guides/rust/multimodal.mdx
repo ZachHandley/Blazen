@@ -1,0 +1,380 @@
+---
+title: "Multimodal Content"
+description: "Pass images, audio, video, files, 3D models, and CAD files through Blazen — and let tools accept them via content handles"
+language: "rust"
+section: "guides"
+order: 7
+---
+
+This guide covers Blazen's multimodal layer in Rust: typed **content handles**, the pluggable **`ContentStore`** trait, the built-in stores for OpenAI / Anthropic / Gemini / fal, and the JSON Schema helpers that let tools accept media as first-class arguments.
+
+## Why content handles?
+
+Models emit JSON, not bytes. Each provider also has its own file API -- OpenAI's `/v1/files`, Anthropic's Files beta, Gemini's File API, fal's storage endpoint -- each returning its own URI shape. A `ContentHandle` is the single source of truth: a typed reference to a blob (with `kind`, `mime_type`, optional `byte_size`, and `display_name`) that a `ContentStore` resolves into whichever wire form the destination provider expects. You hold one handle and the store routes it.
+
+## `ContentKind`
+
+`ContentKind` is the taxonomy Blazen uses to classify content. It is `#[non_exhaustive]` and serializes as snake_case.
+
+| Variant | Wire tag | Description |
+|---|---|---|
+| `Image` | `image` | Photos, diagrams, screenshots, PNG/JPEG/WebP |
+| `Audio` | `audio` | Speech, music, MP3/WAV/FLAC/OGG |
+| `Video` | `video` | MP4/WebM/MOV clips |
+| `Document` | `document` | PDFs, plain text, Markdown, office docs |
+| `ThreeDModel` | `three_d_model` | glTF/GLB/OBJ/STL meshes |
+| `Cad` | `cad` | STEP, IGES, native CAD formats |
+| `Archive` | `archive` | ZIP/TAR/7z bundles |
+| `Font` | `font` | TTF/OTF/WOFF |
+| `Code` | `code` | Source files |
+| `Data` | `data` | JSON/CSV/Parquet payloads |
+| `Other` | `other` | Anything that does not fit above |
+
+Convert from MIME or file extension, or sniff from raw bytes:
+
+```rust
+use blazen_llm::content::{ContentKind, detect_from_bytes};
+
+let from_mime = ContentKind::from_mime("image/png");
+assert_eq!(from_mime, ContentKind::Image);
+
+let from_ext = ContentKind::from_extension("glb");
+assert_eq!(from_ext, ContentKind::ThreeDModel);
+
+let bytes = std::fs::read("photo.jpg")?;
+let (kind, mime) = detect_from_bytes(&bytes);
+println!("kind={} mime={:?}", kind.as_str(), mime);
+```
+
+For path-based detection on native targets, `detect_from_path` combines extension and magic-number sniffing. The fully general `detect(bytes, mime_hint, filename)` lets you pass any subset of signals.
+
+## `ContentStore`
+
+`ContentStore` is an async trait with five operations:
+
+- `put(body, hint)` -- ingest raw bytes, a URL, a local path, or an existing provider file ID; return a `ContentHandle`.
+- `resolve(handle)` -- produce an `ImageSource` (= `MediaSource`) the model providers can consume on the wire.
+- `fetch_bytes(handle)` -- pull the underlying bytes back out (used by tools that need to read content directly).
+- `metadata(handle)` -- size / MIME / display name (default impl reuses what is already on the handle).
+- `delete(handle)` -- best-effort cleanup (default no-op).
+
+`DynContentStore` is just `Arc<dyn ContentStore>` for shared ownership across handlers.
+
+```rust
+use blazen_llm::content::{
+    ContentBody, ContentHint, ContentKind, ContentStore, InMemoryContentStore,
+};
+
+let store = InMemoryContentStore::new();
+
+let handle = store
+    .put(
+        ContentBody::Url("https://example.com/diagram.png".into()),
+        ContentHint::default()
+            .with_mime_type("image/png")
+            .with_kind(ContentKind::Image)
+            .with_display_name("architecture.png"),
+    )
+    .await?;
+
+let source = store.resolve(&handle).await?; // -> ImageSource::Url { .. }
+let bytes = store.fetch_bytes(&handle).await?; // downloads and caches
+```
+
+## Built-in stores
+
+| Store | Use case | `resolve` returns |
+|---|---|---|
+| `InMemoryContentStore` | Tests, ephemeral content, dev loops | `ImageSource::Base64` (or `Url` if put as a URL) |
+| `LocalFileContentStore` | Disk-backed cache rooted at a directory (native only) -- accepts `ContentBody::Stream` for chunked `put`, overrides `fetch_stream` via `tokio_util::io::ReaderStream` | `ImageSource::File` |
+| `OpenAiFilesStore` | Upload to OpenAI's Files API; reuse file IDs across requests -- overrides `fetch_stream` via the `HttpClient` trait's `send_streaming` method | `ImageSource::ProviderFile { provider: openai, .. }` |
+| `AnthropicFilesStore` | Upload to Anthropic's Files API (beta header managed for you) -- overrides `fetch_stream` via `HttpClient::send_streaming` | `ImageSource::ProviderFile { provider: anthropic, .. }` |
+| `GeminiFilesStore` | Upload to Google's File API (resumable) -- uses the buffered default `fetch_stream` because Gemini Files exposes no content-download endpoint | `ImageSource::ProviderFile { provider: google, .. }` |
+| `FalStorageStore` | Stage media for fal.ai compute jobs -- overrides `fetch_stream` via `HttpClient::send_streaming` | `ImageSource::Url` (signed fal CDN URL) |
+| `CustomContentStore` | Bring-your-own (S3, R2, GCS, internal CDN) -- builder exposes `.put`, `.resolve`, `.fetch_bytes`, `.fetch_stream`, `.delete` callbacks | Whatever your `resolve` closure returns |
+
+Provider-file stores share the same shape -- construct with an API key, then `put` bytes plus a hint:
+
+```rust
+use blazen_llm::content::{
+    AnthropicFilesStore, ContentBody, ContentHint, ContentKind, ContentStore,
+};
+
+let store = AnthropicFilesStore::new(std::env::var("ANTHROPIC_API_KEY")?);
+let bytes = std::fs::read("report.pdf")?;
+let handle = store
+    .put(
+        ContentBody::Bytes(bytes),
+        ContentHint::default()
+            .with_mime_type("application/pdf")
+            .with_kind(ContentKind::Document)
+            .with_display_name("Q4-report.pdf"),
+    )
+    .await?;
+```
+
+```rust
+use blazen_llm::content::{
+    ContentBody, ContentHint, ContentKind, ContentStore, OpenAiFilesStore,
+};
+
+let store = OpenAiFilesStore::new(std::env::var("OPENAI_API_KEY")?)
+    .with_purpose("user_data");
+let bytes = std::fs::read("chart.png")?;
+let handle = store
+    .put(
+        ContentBody::Bytes(bytes),
+        ContentHint::default()
+            .with_mime_type("image/png")
+            .with_kind(ContentKind::Image),
+    )
+    .await?;
+```
+
+```rust
+use blazen_llm::content::{
+    ContentBody, ContentHint, ContentKind, ContentStore, GeminiFilesStore,
+};
+
+let store = GeminiFilesStore::new(std::env::var("GOOGLE_API_KEY")?);
+let bytes = std::fs::read("clip.mp4")?;
+let handle = store
+    .put(
+        ContentBody::Bytes(bytes),
+        ContentHint::default()
+            .with_mime_type("video/mp4")
+            .with_kind(ContentKind::Video),
+    )
+    .await?;
+```
+
+```rust
+use blazen_llm::content::{
+    ContentBody, ContentHint, ContentKind, ContentStore, FalStorageStore,
+};
+
+let store = FalStorageStore::new(std::env::var("FAL_KEY")?);
+let bytes = std::fs::read("voice.wav")?;
+let handle = store
+    .put(
+        ContentBody::Bytes(bytes),
+        ContentHint::default()
+            .with_mime_type("audio/wav")
+            .with_kind(ContentKind::Audio),
+    )
+    .await?;
+```
+
+## `CustomContentStore`
+
+Wire your own backend (S3, GCS, R2, an internal CDN) with closures. Each callback returns a boxed future that yields `Result<_, BlazenError>`. The builder exposes one setter per `ContentStore` method so you can pick exactly which paths you want to override.
+
+```rust
+use blazen_llm::content::{
+    ContentBody, ContentHandle, ContentHint, ContentStore,
+    CustomContentStore,
+};
+use blazen_llm::types::MediaSource;
+use bytes::Bytes;
+use futures_util::stream;
+use std::sync::Arc;
+
+let store: Arc<dyn ContentStore> = Arc::new(
+    CustomContentStore::builder("my_s3_store")
+        .put(|body, hint| Box::pin(async move {
+            // upload `body` (bytes / URL / local path / stream / provider file)
+            // to your backend, return a fresh ContentHandle.
+            todo!()
+        }))
+        .resolve(|handle| Box::pin(async move {
+            // map handle.id back to a wire-renderable MediaSource:
+            // - MediaSource::Url for hosted URLs
+            // - MediaSource::Base64 for inline content
+            // - MediaSource::ProviderFile for native provider file ids
+            todo!()
+        }))
+        .fetch_bytes(|handle| Box::pin(async move {
+            // fetch the raw bytes (used by tools that need to read content directly).
+            todo!()
+        }))
+        .fetch_stream(|handle| Box::pin(async move {
+            // OPTIONAL: stream the bytes back chunk-by-chunk for large content.
+            // When omitted, the trait's default impl buffers fetch_bytes into one chunk.
+            let chunks: Vec<Result<Bytes, _>> = vec![Ok(Bytes::from_static(b"hello"))];
+            Ok(Box::pin(stream::iter(chunks)) as blazen_llm::content::ByteStream)
+        }))
+        .delete(|handle| Box::pin(async move { Ok(()) }))
+        .build()
+        .unwrap(),
+);
+```
+
+`build()` validates that `put`, `resolve`, and `fetch_bytes` are all wired; `fetch_stream` and `delete` are optional. When `fetch_stream` is omitted, the trait default buffers `fetch_bytes` into a single-chunk stream so existing callers keep working unchanged.
+
+## `ImageSource` / `MediaSource` variants
+
+`MediaSource` is a type alias for `ImageSource` -- the same enum represents every modality on the wire. It is `#[non_exhaustive]` and serde-tagged with `type` (snake_case).
+
+| Variant | Purpose |
+|---|---|
+| `Url { url }` | Public or signed HTTPS URL the provider fetches directly |
+| `Base64 { data }` | Inline base64 payload, used when the provider supports raw bytes |
+| `File { path }` | Native local file path; readers turn this into bytes or upload to a provider |
+| `ProviderFile { provider, id }` | Reference to a previously-uploaded provider file (OpenAI / Anthropic / Gemini / fal) |
+| `Handle { handle }` | Unresolved `ContentHandle` -- replaced by one of the above when `resolve_handles_with` runs |
+
+`ImageSource::file(path)` is a convenience for the `File` variant.
+
+## Tool inputs
+
+Most tools want to declare "I take an image" without hand-rolling JSON Schema. The helpers in `content::tool_input` produce ready-made schemas with the `x-blazen-content-ref` extension tag baked in. Providers ignore the extension, but Blazen's resolver picks it up.
+
+```rust
+use blazen_llm::content::tool_input::image_input;
+use blazen_llm::types::ToolDefinition;
+
+let analyze_photo = ToolDefinition {
+    name: "analyze_photo".into(),
+    description: "Analyze the visual contents of a photo".into(),
+    parameters: image_input("photo", "the photo to analyze"),
+    ..Default::default()
+};
+```
+
+Pick the helper that matches the modality:
+
+| Helper | Required arg name | Required arg kind |
+|---|---|---|
+| `image_input(name, desc)` | the supplied name | `Image` |
+| `audio_input(name, desc)` | the supplied name | `Audio` |
+| `video_input(name, desc)` | the supplied name | `Video` |
+| `file_input(name, desc)` | the supplied name | `Document` |
+| `three_d_input(name, desc)` | the supplied name | `ThreeDModel` |
+| `cad_input(name, desc)` | the supplied name | `Cad` |
+
+For tools that take media plus other parameters, build a richer schema with `content_ref_required_object` (full object) or splice in `content_ref_property` next to your other properties.
+
+When the model calls the tool, it passes a handle ID as a plain string. Before your handler runs, call `resolve_tool_arguments` to swap that string for a typed object containing `{kind, handle_id, mime_type, byte_size, display_name, source}`:
+
+```rust
+use blazen_llm::content::tool_input::resolve_tool_arguments;
+use blazen_llm::content::InMemoryContentStore;
+
+let store = InMemoryContentStore::new();
+let mut args: serde_json::Value = serde_json::from_str(r#"{ "photo": "handle_abc123" }"#)?;
+let schema = serde_json::json!({
+    "type": "object",
+    "properties": {
+        "photo": { "type": "string", "x-blazen-content-ref": { "kind": "image" } }
+    }
+});
+let resolved_count = resolve_tool_arguments(&mut args, &schema, &store).await?;
+println!("resolved {resolved_count} handles");
+```
+
+The Blazen agent runner does this automatically when a `ContentStore` is wired into the agent, so most callers never invoke `resolve_tool_arguments` directly. Reach for it when running tools outside an agent loop.
+
+## Tool results with multimodal
+
+Tools can return `LlmPayload::Parts { parts: Vec<ContentPart> }` -- a list mixing text, images, and other content. This now serializes correctly across **every** provider: Anthropic native carries the parts inside the tool result, while OpenAI Chat / Responses / Azure / fal / openai-compat / Gemini emit a follow-up multimodal user message immediately after the tool call so the model sees the visual output. See [Tool Multimodal](/guides/tool-multimodal/) for the full pattern.
+
+## Resolving handles before the wire call
+
+If your `CompletionRequest` contains messages with `ImageSource::Handle { .. }` content, call `resolve_handles_with` before sending it to a provider that does not understand handles natively:
+
+```rust
+use blazen_llm::content::InMemoryContentStore;
+use blazen_llm::types::CompletionRequest;
+
+let store = InMemoryContentStore::new();
+let mut request = CompletionRequest::new("gpt-4o");
+// ... attach messages with ImageSource::Handle entries ...
+let replaced = request.resolve_handles_with(&store).await?;
+println!("replaced {replaced} handle(s) with concrete sources");
+```
+
+For full conversations -- where you also want the model to know which handles exist by name and kind -- `prepare_request_with_store` does both jobs at once: it resolves every handle and prepends a system note describing them (built from `build_handle_directory_system_note`):
+
+```rust
+use blazen_llm::content::visibility::prepare_request_with_store;
+use blazen_llm::content::InMemoryContentStore;
+use blazen_llm::types::CompletionRequest;
+
+let store = InMemoryContentStore::new();
+let mut request = CompletionRequest::new("claude-sonnet-4-5");
+// ... append user messages that reference handles ...
+let resolved = prepare_request_with_store(&mut request, &store).await?;
+println!("{resolved} handles resolved and announced to the model");
+```
+
+If you only want the directory note (without resolving), call `collect_visible_handles(&messages)` and feed the result to `build_handle_directory_system_note` yourself.
+
+## Cargo features
+
+The `content-detect` feature is on by default and pulls in the `infer` crate for magic-number sniffing inside `detect_from_bytes` / `detect_from_path`. If you only deal with bytes that already carry a MIME type, disable it for a smaller dependency tree:
+
+```toml
+[dependencies]
+blazen-llm = { version = "*", default-features = false }
+```
+
+## Streaming large content
+
+Multi-gigabyte uploads and downloads should not require buffering the whole payload in memory. Blazen exposes streaming on both ends: `ContentBody::Stream` for `put`, and `ContentStore::fetch_stream` for the read path.
+
+The wire type is a single alias:
+
+```rust
+pub type ByteStream = Pin<Box<dyn Stream<Item = Result<Bytes, BlazenError>> + Send>>;
+```
+
+`ContentBody::Stream { stream: ByteStream, size_hint: Option<u64> }` is the new variant on the input side. `size_hint` lets stores choose between simple and resumable upload paths when the total length is known up front (e.g. from a `Content-Length` header).
+
+`ContentStore::fetch_stream(&handle) -> Result<ByteStream, BlazenError>` is the new trait method on the output side. The default impl calls `fetch_bytes` and wraps the result in `stream::once`, so every existing store keeps compiling without changes. Stores backed by HTTP or disk override it for true incremental streaming:
+
+- `LocalFileContentStore` -- uses `tokio_util::io::ReaderStream` over the on-disk file.
+- `OpenAiFilesStore`, `AnthropicFilesStore`, `FalStorageStore` -- use the `HttpClient` trait's `send_streaming` method to forward the response body chunk-by-chunk without buffering.
+- `InMemoryContentStore` and `GeminiFilesStore` -- use the buffered default. The in-memory store already holds the full bytes; Gemini Files exposes no content-download endpoint, so streaming wouldn't gain anything.
+
+Streaming `put` example:
+
+```rust
+use blazen_llm::content::{ContentBody, ContentHint, LocalFileContentStore};
+use bytes::Bytes;
+use futures_util::stream;
+
+let store = LocalFileContentStore::new("/var/cache/blazen")?;
+let chunks = vec![
+    Ok(Bytes::from_static(b"hello ")),
+    Ok(Bytes::from_static(b"streaming world")),
+];
+let body = ContentBody::Stream {
+    stream: Box::pin(stream::iter(chunks)),
+    size_hint: Some(21),
+};
+let handle = store
+    .put(body, ContentHint::default())
+    .await?;
+```
+
+Streaming `fetch` example:
+
+```rust
+use futures_util::TryStreamExt;
+
+let mut stream = store.fetch_stream(&handle).await?;
+while let Some(chunk) = stream.try_next().await? {
+    // process chunk: bytes::Bytes
+}
+```
+
+Two caveats on the `Stream` variant:
+
+- It is **not** `Clone`. Streams are single-shot by nature; the manual `Clone` impl on `ContentBody` panics with `unreachable!` on the `Stream` arm. Pass streaming bodies by value.
+- It is **not** `Serialize` / `Deserialize` (the variant is `#[serde(skip)]`). It cannot round-trip through JSON, so the Python and Node bindings drain the stream into bytes when crossing the FFI boundary -- callers that need true end-to-end streaming should stay on the Rust API.
+
+## See also
+
+- [Tool Multimodal](/guides/tool-multimodal/) -- returning images and other media from tools across every provider
+- [Custom Providers](/guides/custom-providers/) -- plug your own completion model into the same content pipeline
+- [API Reference](/api/rust/) -- full rustdoc for `blazen_llm::content` and `blazen_llm::types`
