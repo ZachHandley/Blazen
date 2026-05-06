@@ -171,7 +171,8 @@ pub enum FalLlmEndpoint {
     /// `openrouter/router/openai/v1/responses` — `OpenAI` Responses API.
     OpenAiResponses,
     /// `openrouter/router/openai/v1/embeddings` — `OpenAI` embeddings (consumed
-    /// by `FalEmbeddingModel`, not `CompletionModel`).
+    /// by `FalEmbeddingModel` via fal's queue API at `https://queue.fal.run/...`,
+    /// not by `CompletionModel`'s sync executor).
     OpenAiEmbeddings,
     /// `openrouter/router` (or `openrouter/router/enterprise`) — fal's own
     /// `OpenRouter` wrapper that takes `prompt`+`system_prompt` strings.
@@ -396,6 +397,303 @@ pub enum FalExecutionMode {
 }
 
 // ---------------------------------------------------------------------------
+// Queue executor — shared HTTP-execution surface for fal's queue API
+// ---------------------------------------------------------------------------
+
+/// Shared HTTP-execution surface for fal.ai's queue API. Held by both
+/// [`FalProvider`] and [`FalEmbeddingModel`] so they reuse the same
+/// submit/poll/result helpers without duplicating polling logic.
+///
+/// All queue methods need exactly `(client, api_key, base_queue_url)` —
+/// nothing endpoint- or model-specific — so this is the natural seam.
+pub(crate) struct FalQueueExecutor {
+    client: Arc<dyn HttpClient>,
+    api_key: String,
+    base_queue_url: String,
+}
+
+impl Clone for FalQueueExecutor {
+    fn clone(&self) -> Self {
+        Self {
+            client: Arc::clone(&self.client),
+            api_key: self.api_key.clone(),
+            base_queue_url: self.base_queue_url.clone(),
+        }
+    }
+}
+
+impl FalQueueExecutor {
+    pub(crate) fn new(
+        client: Arc<dyn HttpClient>,
+        api_key: String,
+        base_queue_url: String,
+    ) -> Self {
+        Self {
+            client,
+            api_key,
+            base_queue_url,
+        }
+    }
+
+    /// Apply fal.ai authentication (`Authorization: Key <key>`) to an [`HttpRequest`].
+    fn apply_auth(&self, request: HttpRequest) -> HttpRequest {
+        request.header("Authorization", format!("Key {}", self.api_key))
+    }
+
+    /// Submit a request to the fal.ai queue and return the queue response.
+    async fn queue_submit(
+        &self,
+        model: &str,
+        body: &serde_json::Value,
+        webhook: Option<&str>,
+    ) -> Result<FalQueueSubmitResponse, BlazenError> {
+        let mut submit_url = format!("{}/{model}", self.base_queue_url);
+        if let Some(wh) = webhook {
+            submit_url = format!("{submit_url}?fal_webhook={wh}");
+        }
+
+        let request = self.apply_auth(HttpRequest::post(&submit_url).json_body(body)?);
+        let response = self.client.send(request).await?;
+
+        if !response.is_success() {
+            return Err(match response.status {
+                401 => BlazenError::auth("authentication failed"),
+                429 => BlazenError::RateLimit {
+                    retry_after_ms: parse_retry_after(&response.headers),
+                },
+                _ => provider_http_error("fal", &submit_url, &response),
+            });
+        }
+
+        response
+            .json::<FalQueueSubmitResponse>()
+            .map_err(|e| BlazenError::Serialization(e.to_string()))
+    }
+
+    /// Poll the fal.ai queue status endpoint.
+    async fn queue_poll_status(
+        &self,
+        model: &str,
+        request_id: &str,
+    ) -> Result<FalStatusResponse, BlazenError> {
+        let status_url = format!(
+            "{}/{model}/requests/{request_id}/status",
+            self.base_queue_url
+        );
+
+        let request = self.apply_auth(HttpRequest::get(&status_url));
+        let response = self.client.send(request).await?;
+
+        if !response.is_success() {
+            return Err(match response.status {
+                401 => BlazenError::auth("authentication failed"),
+                429 => BlazenError::RateLimit {
+                    retry_after_ms: parse_retry_after(&response.headers),
+                },
+                _ => provider_http_error("fal", &status_url, &response),
+            });
+        }
+
+        response
+            .json::<FalStatusResponse>()
+            .map_err(|e| BlazenError::Serialization(e.to_string()))
+    }
+
+    /// Fetch the result of a completed queue job.
+    async fn queue_get_result(
+        &self,
+        model: &str,
+        request_id: &str,
+    ) -> Result<serde_json::Value, BlazenError> {
+        let result_url = format!("{}/{model}/requests/{request_id}", self.base_queue_url);
+
+        let request = self.apply_auth(HttpRequest::get(&result_url));
+        let response = self.client.send(request).await?;
+
+        if !response.is_success() {
+            return Err(match response.status {
+                401 => BlazenError::auth("authentication failed"),
+                429 => BlazenError::RateLimit {
+                    retry_after_ms: parse_retry_after(&response.headers),
+                },
+                _ => provider_http_error("fal", &result_url, &response),
+            });
+        }
+
+        response
+            .json()
+            .map_err(|e| BlazenError::Serialization(e.to_string()))
+    }
+
+    /// Poll until a queue job completes and return the result JSON plus timing.
+    ///
+    /// This is the shared polling logic used by both [`ComputeProvider::result`]
+    /// and [`CompletionModel::complete`] (queue mode).
+    ///
+    /// When `status_url` and `response_url` are provided (from the queue submit
+    /// response), they are used directly instead of constructing URLs from the
+    /// model and request ID. This avoids 405 errors with multi-segment model
+    /// IDs where manual URL construction produces incorrect paths.
+    async fn poll_until_complete(
+        &self,
+        model: &str,
+        request_id: &str,
+        poll_interval: Duration,
+        status_url: Option<&str>,
+        response_url: Option<&str>,
+        max_iterations: u32,
+    ) -> Result<(serde_json::Value, serde_json::Value, RequestTiming), BlazenError> {
+        let start = Instant::now();
+        let mut in_progress_at: Option<Instant> = None;
+        let mut last_status: String = String::new();
+
+        for _ in 0..max_iterations {
+            crate::sleep::sleep(poll_interval).await;
+
+            let status_body = if let Some(url) = status_url {
+                self.get_json_from_url(url).await?
+            } else {
+                self.queue_poll_status(model, request_id).await?
+            };
+
+            last_status.clone_from(&status_body.status);
+            #[allow(clippy::cast_possible_truncation)]
+            let elapsed_ms = start.elapsed().as_millis() as u64;
+            tracing::debug!(
+                model = %model,
+                request_id = %request_id,
+                status = %status_body.status,
+                elapsed_ms,
+                "fal poll"
+            );
+
+            match status_body.status.as_str() {
+                "COMPLETED" => {
+                    if let Some(ref error) = status_body.error {
+                        return Err(BlazenError::Compute(ComputeErrorKind::JobFailed {
+                            message: error.clone(),
+                            error_type: None,
+                            retryable: false,
+                        }));
+                    }
+
+                    let inference_time =
+                        status_body.metrics.as_ref().and_then(|m| m.inference_time);
+                    let timing = build_timing(start, in_progress_at, inference_time);
+
+                    let status_json =
+                        serde_json::to_value(&status_body).unwrap_or(serde_json::Value::Null);
+
+                    let result = if let Some(url) = response_url {
+                        self.get_json_value_from_url(url).await?
+                    } else {
+                        self.queue_get_result(model, request_id).await?
+                    };
+
+                    return Ok((result, status_json, timing));
+                }
+                "IN_PROGRESS" => {
+                    if in_progress_at.is_none() {
+                        in_progress_at = Some(Instant::now());
+                    }
+                }
+                "IN_QUEUE" => {}
+                other => {
+                    tracing::warn!(
+                        model = %model,
+                        request_id = %request_id,
+                        status = %other,
+                        "fal returned unexpected status"
+                    );
+                }
+            }
+        }
+
+        let elapsed_ms = millis_u64(start.elapsed());
+        let last_status_display = if last_status.is_empty() {
+            "<none received>"
+        } else {
+            last_status.as_str()
+        };
+        Err(BlazenError::provider(
+            "fal",
+            format!(
+                "poll timeout after {max_iterations} iterations ({elapsed_ms}ms), last seen status: {last_status_display}, model: {model}, request_id: {request_id}"
+            ),
+        ))
+    }
+
+    /// GET a URL and deserialize the response as [`FalStatusResponse`].
+    async fn get_json_from_url(&self, url: &str) -> Result<FalStatusResponse, BlazenError> {
+        let request = self.apply_auth(HttpRequest::get(url));
+        let response = self.client.send(request).await?;
+
+        if !response.is_success() {
+            return Err(match response.status {
+                401 => BlazenError::auth("authentication failed"),
+                429 => BlazenError::RateLimit {
+                    retry_after_ms: parse_retry_after(&response.headers),
+                },
+                _ => provider_http_error("fal", url, &response),
+            });
+        }
+
+        response
+            .json::<FalStatusResponse>()
+            .map_err(|e| BlazenError::Serialization(e.to_string()))
+    }
+
+    /// GET a URL and deserialize the response as a generic JSON value.
+    async fn get_json_value_from_url(&self, url: &str) -> Result<serde_json::Value, BlazenError> {
+        let request = self.apply_auth(HttpRequest::get(url));
+        let response = self.client.send(request).await?;
+
+        if !response.is_success() {
+            return Err(match response.status {
+                401 => BlazenError::auth("authentication failed"),
+                429 => BlazenError::RateLimit {
+                    retry_after_ms: parse_retry_after(&response.headers),
+                },
+                _ => provider_http_error("fal", url, &response),
+            });
+        }
+
+        response
+            .json()
+            .map_err(|e| BlazenError::Serialization(e.to_string()))
+    }
+
+    /// Submit a request and poll until it completes; return the result JSON.
+    ///
+    /// Convenience that composes [`Self::queue_submit`] + [`Self::poll_until_complete`]
+    /// for callers that don't need to interact with the in-flight job (no
+    /// `JobHandle`, no webhook). This is what `FalEmbeddingModel::embed` and
+    /// `execute_queue_llm` use; capabilities that need a `JobHandle`
+    /// (`ComputeProvider::run`) call `queue_submit` + `poll_until_complete`
+    /// directly.
+    async fn submit_and_poll(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+        poll_interval: Duration,
+        max_iterations: u32,
+    ) -> Result<(serde_json::Value, RequestTiming), BlazenError> {
+        let submit = self.queue_submit(path, body, None).await?;
+        let (result, _status, timing) = self
+            .poll_until_complete(
+                path,
+                &submit.request_id,
+                poll_interval,
+                submit.status_url.as_deref(),
+                submit.response_url.as_deref(),
+                max_iterations,
+            )
+            .await?;
+        Ok((result, timing))
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Provider
 // ---------------------------------------------------------------------------
 
@@ -439,9 +737,8 @@ pub enum FalExecutionMode {
 ///     .with_llm_endpoint(FalLlmEndpoint::AnyLlm { enterprise: false });
 /// ```
 pub struct FalProvider {
-    client: Arc<dyn HttpClient>,
+    queue: FalQueueExecutor,
     retry_config: Option<Arc<RetryConfig>>,
-    api_key: String,
     /// LLM endpoint family. Default: [`FalLlmEndpoint::OpenAiChat`].
     llm_endpoint: FalLlmEndpoint,
     /// Default model id when `CompletionRequest::model` is `None`.
@@ -450,7 +747,6 @@ pub struct FalProvider {
     /// contains matching content. Default: `true`.
     auto_route_modality: bool,
     execution_mode: FalExecutionMode,
-    base_queue_url: String,
     base_sync_url: String,
 }
 
@@ -468,14 +764,12 @@ impl std::fmt::Debug for FalProvider {
 impl Clone for FalProvider {
     fn clone(&self) -> Self {
         Self {
-            client: Arc::clone(&self.client),
+            queue: self.queue.clone(),
             retry_config: self.retry_config.clone(),
-            api_key: self.api_key.clone(),
             llm_endpoint: self.llm_endpoint.clone(),
             llm_model: self.llm_model.clone(),
             auto_route_modality: self.auto_route_modality,
             execution_mode: self.execution_mode.clone(),
-            base_queue_url: self.base_queue_url.clone(),
             base_sync_url: self.base_sync_url.clone(),
         }
     }
@@ -700,14 +994,16 @@ impl FalProvider {
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
-            client: crate::default_http_client(),
+            queue: FalQueueExecutor::new(
+                crate::default_http_client(),
+                api_key.into(),
+                FAL_QUEUE_URL.to_owned(),
+            ),
             retry_config: None,
-            api_key: api_key.into(),
             llm_endpoint: FalLlmEndpoint::default(),
             llm_model: "anthropic/claude-sonnet-4.5".to_owned(),
             auto_route_modality: true,
             execution_mode: FalLlmEndpoint::default().natural_execution_mode(),
-            base_queue_url: FAL_QUEUE_URL.to_owned(),
             base_sync_url: FAL_SYNC_URL.to_owned(),
         }
     }
@@ -716,14 +1012,12 @@ impl FalProvider {
     #[must_use]
     pub fn new_with_client(api_key: impl Into<String>, client: Arc<dyn HttpClient>) -> Self {
         Self {
-            client,
+            queue: FalQueueExecutor::new(client, api_key.into(), FAL_QUEUE_URL.to_owned()),
             retry_config: None,
-            api_key: api_key.into(),
             llm_endpoint: FalLlmEndpoint::default(),
             llm_model: "anthropic/claude-sonnet-4.5".to_owned(),
             auto_route_modality: true,
             execution_mode: FalLlmEndpoint::default().natural_execution_mode(),
-            base_queue_url: FAL_QUEUE_URL.to_owned(),
             base_sync_url: FAL_SYNC_URL.to_owned(),
         }
     }
@@ -782,13 +1076,16 @@ impl FalProvider {
     /// 1536 dimensions.
     #[must_use]
     pub fn embedding_model(&self) -> FalEmbeddingModel {
+        let poll_interval = match &self.execution_mode {
+            FalExecutionMode::Queue { poll_interval } => *poll_interval,
+            _ => DEFAULT_POLL_INTERVAL,
+        };
         FalEmbeddingModel {
-            client: Arc::clone(&self.client),
+            queue: self.queue.clone(),
             retry_config: self.retry_config.clone(),
-            api_key: self.api_key.clone(),
             model: "openai/text-embedding-3-small".to_owned(),
             dimensions: 1536,
-            base_sync_url: self.base_sync_url.clone(),
+            poll_interval,
         }
     }
 
@@ -886,7 +1183,7 @@ impl FalProvider {
     /// Override the base queue URL (default: `https://queue.fal.run`).
     #[must_use]
     pub fn with_base_url(mut self, url: impl Into<String>) -> Self {
-        self.base_queue_url = url.into();
+        self.queue.base_queue_url = url.into();
         self
     }
 
@@ -915,7 +1212,7 @@ impl FalProvider {
     /// Use a custom HTTP client backend.
     #[must_use]
     pub fn with_http_client(mut self, client: Arc<dyn HttpClient>) -> Self {
-        self.client = client;
+        self.queue.client = client;
         self
     }
 
@@ -927,7 +1224,7 @@ impl FalProvider {
     /// config, and timeouts as this provider.
     #[must_use]
     pub fn http_client(&self) -> Arc<dyn HttpClient> {
-        Arc::clone(&self.client)
+        Arc::clone(&self.queue.client)
     }
 
     /// Set the provider-level default retry configuration.
@@ -935,15 +1232,6 @@ impl FalProvider {
     pub fn with_retry_config(mut self, config: RetryConfig) -> Self {
         self.retry_config = Some(Arc::new(config));
         self
-    }
-
-    // -----------------------------------------------------------------------
-    // Auth helper
-    // -----------------------------------------------------------------------
-
-    /// Apply fal.ai authentication (`Authorization: Key <key>`) to an [`HttpRequest`].
-    fn apply_auth(&self, request: HttpRequest) -> HttpRequest {
-        request.header("Authorization", format!("Key {}", self.api_key))
     }
 
     // -----------------------------------------------------------------------
@@ -1288,8 +1576,10 @@ impl FalProvider {
     ) -> Result<serde_json::Value, BlazenError> {
         let url = format!("{}/{}", self.base_sync_url, path);
 
-        let request = self.apply_auth(HttpRequest::post(&url).json_body(body)?);
-        let response = self.client.send(request).await?;
+        let request = self
+            .queue
+            .apply_auth(HttpRequest::post(&url).json_body(body)?);
+        let response = self.queue.client.send(request).await?;
 
         if !response.is_success() {
             return Err(match response.status {
@@ -1317,10 +1607,15 @@ impl FalProvider {
         body: &serde_json::Value,
         webhook_url: &str,
     ) -> Result<serde_json::Value, BlazenError> {
-        let submit_url = format!("{}/{}?fal_webhook={webhook_url}", self.base_queue_url, path);
+        let submit_url = format!(
+            "{}/{}?fal_webhook={webhook_url}",
+            self.queue.base_queue_url, path
+        );
 
-        let request = self.apply_auth(HttpRequest::post(&submit_url).json_body(body)?);
-        let response = self.client.send(request).await?;
+        let request = self
+            .queue
+            .apply_auth(HttpRequest::post(&submit_url).json_body(body)?);
+        let response = self.queue.client.send(request).await?;
 
         if !response.is_success() {
             return Err(match response.status {
@@ -1339,238 +1634,6 @@ impl FalProvider {
             .map_err(|e| BlazenError::invalid_response(e.to_string()))
     }
 
-    // -----------------------------------------------------------------------
-    // Shared queue polling logic
-    // -----------------------------------------------------------------------
-
-    /// Submit a request to the fal.ai queue and return the queue response.
-    async fn queue_submit(
-        &self,
-        model: &str,
-        body: &serde_json::Value,
-        webhook: Option<&str>,
-    ) -> Result<FalQueueSubmitResponse, BlazenError> {
-        let mut submit_url = format!("{}/{model}", self.base_queue_url);
-        if let Some(wh) = webhook {
-            submit_url = format!("{submit_url}?fal_webhook={wh}");
-        }
-
-        let request = self.apply_auth(HttpRequest::post(&submit_url).json_body(body)?);
-        let response = self.client.send(request).await?;
-
-        if !response.is_success() {
-            return Err(match response.status {
-                401 => BlazenError::auth("authentication failed"),
-                429 => BlazenError::RateLimit {
-                    retry_after_ms: parse_retry_after(&response.headers),
-                },
-                _ => provider_http_error("fal", &submit_url, &response),
-            });
-        }
-
-        response
-            .json::<FalQueueSubmitResponse>()
-            .map_err(|e| BlazenError::Serialization(e.to_string()))
-    }
-
-    /// Poll the fal.ai queue status endpoint.
-    async fn queue_poll_status(
-        &self,
-        model: &str,
-        request_id: &str,
-    ) -> Result<FalStatusResponse, BlazenError> {
-        let status_url = format!(
-            "{}/{model}/requests/{request_id}/status",
-            self.base_queue_url
-        );
-
-        let request = self.apply_auth(HttpRequest::get(&status_url));
-        let response = self.client.send(request).await?;
-
-        if !response.is_success() {
-            return Err(match response.status {
-                401 => BlazenError::auth("authentication failed"),
-                429 => BlazenError::RateLimit {
-                    retry_after_ms: parse_retry_after(&response.headers),
-                },
-                _ => provider_http_error("fal", &status_url, &response),
-            });
-        }
-
-        response
-            .json::<FalStatusResponse>()
-            .map_err(|e| BlazenError::Serialization(e.to_string()))
-    }
-
-    /// Fetch the result of a completed queue job.
-    async fn queue_get_result(
-        &self,
-        model: &str,
-        request_id: &str,
-    ) -> Result<serde_json::Value, BlazenError> {
-        let result_url = format!("{}/{model}/requests/{request_id}", self.base_queue_url);
-
-        let request = self.apply_auth(HttpRequest::get(&result_url));
-        let response = self.client.send(request).await?;
-
-        if !response.is_success() {
-            return Err(match response.status {
-                401 => BlazenError::auth("authentication failed"),
-                429 => BlazenError::RateLimit {
-                    retry_after_ms: parse_retry_after(&response.headers),
-                },
-                _ => provider_http_error("fal", &result_url, &response),
-            });
-        }
-
-        response
-            .json()
-            .map_err(|e| BlazenError::Serialization(e.to_string()))
-    }
-
-    /// Poll until a queue job completes and return the result JSON plus timing.
-    ///
-    /// This is the shared polling logic used by both [`ComputeProvider::result`]
-    /// and [`CompletionModel::complete`] (queue mode).
-    ///
-    /// When `status_url` and `response_url` are provided (from the queue submit
-    /// response), they are used directly instead of constructing URLs from the
-    /// model and request ID. This avoids 405 errors with multi-segment model
-    /// IDs where manual URL construction produces incorrect paths.
-    async fn poll_until_complete(
-        &self,
-        model: &str,
-        request_id: &str,
-        poll_interval: Duration,
-        status_url: Option<&str>,
-        response_url: Option<&str>,
-        max_iterations: u32,
-    ) -> Result<(serde_json::Value, serde_json::Value, RequestTiming), BlazenError> {
-        let start = Instant::now();
-        let mut in_progress_at: Option<Instant> = None;
-        let mut last_status: String = String::new();
-
-        for _ in 0..max_iterations {
-            crate::sleep::sleep(poll_interval).await;
-
-            let status_body = if let Some(url) = status_url {
-                self.get_json_from_url(url).await?
-            } else {
-                self.queue_poll_status(model, request_id).await?
-            };
-
-            last_status.clone_from(&status_body.status);
-            #[allow(clippy::cast_possible_truncation)]
-            let elapsed_ms = start.elapsed().as_millis() as u64;
-            tracing::debug!(
-                model = %model,
-                request_id = %request_id,
-                status = %status_body.status,
-                elapsed_ms,
-                "fal poll"
-            );
-
-            match status_body.status.as_str() {
-                "COMPLETED" => {
-                    // Check for error in COMPLETED status.
-                    if let Some(ref error) = status_body.error {
-                        return Err(BlazenError::Compute(ComputeErrorKind::JobFailed {
-                            message: error.clone(),
-                            error_type: None,
-                            retryable: false,
-                        }));
-                    }
-
-                    // Build timing from metrics.
-                    let inference_time =
-                        status_body.metrics.as_ref().and_then(|m| m.inference_time);
-                    let timing = build_timing(start, in_progress_at, inference_time);
-
-                    // Serialize status for metadata before moving on.
-                    let status_json =
-                        serde_json::to_value(&status_body).unwrap_or(serde_json::Value::Null);
-
-                    // Fetch the result using the server-provided URL if available.
-                    let result = if let Some(url) = response_url {
-                        self.get_json_value_from_url(url).await?
-                    } else {
-                        self.queue_get_result(model, request_id).await?
-                    };
-
-                    return Ok((result, status_json, timing));
-                }
-                "IN_PROGRESS" => {
-                    if in_progress_at.is_none() {
-                        in_progress_at = Some(Instant::now());
-                    }
-                }
-                // IN_QUEUE -- expected transient state, keep polling.
-                "IN_QUEUE" => {}
-                other => {
-                    tracing::warn!(
-                        model = %model,
-                        request_id = %request_id,
-                        status = %other,
-                        "fal returned unexpected status"
-                    );
-                }
-            }
-        }
-
-        let elapsed_ms = millis_u64(start.elapsed());
-        let last_status_display = if last_status.is_empty() {
-            "<none received>"
-        } else {
-            last_status.as_str()
-        };
-        Err(BlazenError::provider(
-            "fal",
-            format!(
-                "poll timeout after {max_iterations} iterations ({elapsed_ms}ms), last seen status: {last_status_display}, model: {model}, request_id: {request_id}"
-            ),
-        ))
-    }
-
-    /// GET a URL and deserialize the response as [`FalStatusResponse`].
-    async fn get_json_from_url(&self, url: &str) -> Result<FalStatusResponse, BlazenError> {
-        let request = self.apply_auth(HttpRequest::get(url));
-        let response = self.client.send(request).await?;
-
-        if !response.is_success() {
-            return Err(match response.status {
-                401 => BlazenError::auth("authentication failed"),
-                429 => BlazenError::RateLimit {
-                    retry_after_ms: parse_retry_after(&response.headers),
-                },
-                _ => provider_http_error("fal", url, &response),
-            });
-        }
-
-        response
-            .json::<FalStatusResponse>()
-            .map_err(|e| BlazenError::Serialization(e.to_string()))
-    }
-
-    /// GET a URL and deserialize the response as a generic JSON value.
-    async fn get_json_value_from_url(&self, url: &str) -> Result<serde_json::Value, BlazenError> {
-        let request = self.apply_auth(HttpRequest::get(url));
-        let response = self.client.send(request).await?;
-
-        if !response.is_success() {
-            return Err(match response.status {
-                401 => BlazenError::auth("authentication failed"),
-                429 => BlazenError::RateLimit {
-                    retry_after_ms: parse_retry_after(&response.headers),
-                },
-                _ => provider_http_error("fal", url, &response),
-            });
-        }
-
-        response
-            .json()
-            .map_err(|e| BlazenError::Serialization(e.to_string()))
-    }
-
     /// Execute via queue: submit, poll, return result. Used by `CompletionModel`.
     async fn execute_queue_llm(
         &self,
@@ -1578,25 +1641,9 @@ impl FalProvider {
         body: &serde_json::Value,
         poll_interval: Duration,
     ) -> Result<(serde_json::Value, RequestTiming), BlazenError> {
-        let model = path;
-
-        let submit_response = self.queue_submit(model, body, None).await?;
-
-        let request_id = &submit_response.request_id;
-        debug!(request_id = %request_id, "fal.ai LLM job submitted to queue");
-
-        let (result, _status, timing) = self
-            .poll_until_complete(
-                model,
-                request_id,
-                poll_interval,
-                submit_response.status_url.as_deref(),
-                submit_response.response_url.as_deref(),
-                MAX_LLM_POLL_ITERATIONS,
-            )
-            .await?;
-
-        Ok((result, timing))
+        self.queue
+            .submit_and_poll(path, body, poll_interval, MAX_LLM_POLL_ITERATIONS)
+            .await
     }
 
     /// Submit a compute request and poll until completion, using a
@@ -1618,6 +1665,7 @@ impl FalProvider {
         };
 
         let submit_response = self
+            .queue
             .queue_submit(&request.model, &request.input, request.webhook.as_deref())
             .await?;
 
@@ -1635,6 +1683,7 @@ impl FalProvider {
         };
 
         let (output, status_json, timing) = self
+            .queue
             .poll_until_complete(
                 &job.model,
                 &job.id,
@@ -1669,8 +1718,10 @@ impl FalProvider {
         let mut body = self.build_openai_chat_body(&request);
         body["stream"] = serde_json::Value::Bool(true);
         let url = format!("{}/{}", self.base_sync_url, ep.path());
-        let http_request = self.apply_auth(HttpRequest::post(&url).json_body(&body)?);
-        let (status, headers, byte_stream) = self.client.send_streaming(http_request).await?;
+        let http_request = self
+            .queue
+            .apply_auth(HttpRequest::post(&url).json_body(&body)?);
+        let (status, headers, byte_stream) = self.queue.client.send_streaming(http_request).await?;
         if !(200..300).contains(&status) {
             return Err(match status {
                 401 => BlazenError::auth("authentication failed"),
@@ -1694,8 +1745,10 @@ impl FalProvider {
     {
         let body = self.build_body(&request, ep);
         let url = format!("{}/{}/stream", self.base_sync_url, ep.path());
-        let http_request = self.apply_auth(HttpRequest::post(&url).json_body(&body)?);
-        let (status, headers, byte_stream) = self.client.send_streaming(http_request).await?;
+        let http_request = self
+            .queue
+            .apply_auth(HttpRequest::post(&url).json_body(&body)?);
+        let (status, headers, byte_stream) = self.queue.client.send_streaming(http_request).await?;
         if !(200..300).contains(&status) {
             return Err(match status {
                 401 => BlazenError::auth("authentication failed"),
@@ -2435,6 +2488,7 @@ impl ComputeProvider for FalProvider {
 
     async fn submit(&self, request: ComputeRequest) -> Result<JobHandle, BlazenError> {
         let submit_response = self
+            .queue
             .queue_submit(&request.model, &request.input, request.webhook.as_deref())
             .await?;
 
@@ -2453,7 +2507,7 @@ impl ComputeProvider for FalProvider {
     }
 
     async fn status(&self, job: &JobHandle) -> Result<JobStatus, BlazenError> {
-        let status_body = self.queue_poll_status(&job.model, &job.id).await?;
+        let status_body = self.queue.queue_poll_status(&job.model, &job.id).await?;
 
         match status_body.status.as_str() {
             "IN_QUEUE" => Ok(JobStatus::Queued),
@@ -2482,6 +2536,7 @@ impl ComputeProvider for FalProvider {
         // External callers use submit() -> result() without access to the
         // server-provided URLs, so we fall back to manual URL construction.
         let (output, status_json, timing) = self
+            .queue
             .poll_until_complete(
                 &job.model,
                 &job.id,
@@ -2520,11 +2575,11 @@ impl ComputeProvider for FalProvider {
     async fn cancel(&self, job: &JobHandle) -> Result<(), BlazenError> {
         let cancel_url = format!(
             "{}/{}/requests/{}/cancel",
-            self.base_queue_url, job.model, job.id
+            self.queue.base_queue_url, job.model, job.id
         );
 
-        let request = self.apply_auth(HttpRequest::put(&cancel_url));
-        let response = self.client.send(request).await?;
+        let request = self.queue.apply_auth(HttpRequest::put(&cancel_url));
+        let response = self.queue.client.send(request).await?;
 
         let status = response.status;
         if (200..300).contains(&status) || status == 202 {
@@ -3369,16 +3424,23 @@ impl BackgroundRemoval for FalProvider {
 
 /// fal.ai embedding model that targets `openrouter/router/openai/v1/embeddings`.
 ///
+/// Calls fal's queue API at `https://queue.fal.run/openrouter/router/openai/v1/embeddings`
+/// (submit + poll + fetch result). This matches fal's documented invocation
+/// pattern (`fal.subscribe(...)` / `fal.queue.submit(...)`); the same path on
+/// the sync gateway (`https://fal.run/...`) is reserved for chat completions
+/// where `OpenRouter`'s sync passthrough is wired up. Embeddings on the sync
+/// gateway forward through a stale `OpenAI` BYOK chain and 401 — only the queue
+/// path uses fal's own credit pool.
+///
 /// Constructed via [`FalEmbeddingModel::new`] or via the convenience method
 /// [`FalProvider::embedding_model`] which inherits the parent provider's
 /// HTTP client and API key.
 pub struct FalEmbeddingModel {
-    client: Arc<dyn HttpClient>,
+    queue: FalQueueExecutor,
     retry_config: Option<Arc<RetryConfig>>,
-    api_key: String,
     model: String,
     dimensions: usize,
-    base_sync_url: String,
+    poll_interval: Duration,
 }
 
 impl std::fmt::Debug for FalEmbeddingModel {
@@ -3393,12 +3455,11 @@ impl std::fmt::Debug for FalEmbeddingModel {
 impl Clone for FalEmbeddingModel {
     fn clone(&self) -> Self {
         Self {
-            client: Arc::clone(&self.client),
+            queue: self.queue.clone(),
             retry_config: self.retry_config.clone(),
-            api_key: self.api_key.clone(),
             model: self.model.clone(),
             dimensions: self.dimensions,
-            base_sync_url: self.base_sync_url.clone(),
+            poll_interval: self.poll_interval,
         }
     }
 }
@@ -3413,12 +3474,15 @@ impl FalEmbeddingModel {
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
-            client: crate::default_http_client(),
+            queue: FalQueueExecutor::new(
+                crate::default_http_client(),
+                api_key.into(),
+                FAL_QUEUE_URL.to_owned(),
+            ),
             retry_config: None,
-            api_key: api_key.into(),
             model: "openai/text-embedding-3-small".to_owned(),
             dimensions: 1536,
-            base_sync_url: FAL_SYNC_URL.to_owned(),
+            poll_interval: DEFAULT_POLL_INTERVAL,
         }
     }
 
@@ -3439,7 +3503,7 @@ impl FalEmbeddingModel {
     /// Use a custom HTTP client backend.
     #[must_use]
     pub fn with_http_client(mut self, client: Arc<dyn HttpClient>) -> Self {
-        self.client = client;
+        self.queue.client = client;
         self
     }
 
@@ -3450,7 +3514,7 @@ impl FalEmbeddingModel {
     /// as this embedding model.
     #[must_use]
     pub fn http_client(&self) -> Arc<dyn HttpClient> {
-        Arc::clone(&self.client)
+        Arc::clone(&self.queue.client)
     }
 
     /// Set the provider-level default retry configuration.
@@ -3480,29 +3544,17 @@ impl crate::traits::EmbeddingModel for FalEmbeddingModel {
     }
 
     async fn embed(&self, texts: &[String]) -> Result<EmbeddingResponse, BlazenError> {
-        let url = format!(
-            "{}/openrouter/router/openai/v1/embeddings",
-            self.base_sync_url
-        );
+        let path = "openrouter/router/openai/v1/embeddings";
         let body = serde_json::json!({
             "model": &self.model,
             "input": texts,
         });
-        let request = HttpRequest::post(&url)
-            .header("Authorization", format!("Key {}", self.api_key))
-            .json_body(&body)?;
-        let response = self.client.send(request).await?;
-        if !response.is_success() {
-            return Err(match response.status {
-                401 => BlazenError::auth("authentication failed"),
-                429 => BlazenError::RateLimit {
-                    retry_after_ms: parse_retry_after(&response.headers),
-                },
-                _ => provider_http_error("fal", &url, &response),
-            });
-        }
-        let raw: serde_json::Value = serde_json::from_slice(&response.body)
-            .map_err(|e| BlazenError::Serialization(format!("fal embeddings parse: {e}")))?;
+
+        let (raw, _timing) = self
+            .queue
+            .submit_and_poll(path, &body, self.poll_interval, MAX_LLM_POLL_ITERATIONS)
+            .await?;
+
         let data = raw["data"].as_array().ok_or_else(|| {
             BlazenError::Serialization("fal embeddings: missing 'data' field".into())
         })?;
@@ -3552,7 +3604,7 @@ impl crate::traits::ProviderInfo for FalProvider {
     }
 
     fn base_url(&self) -> &str {
-        &self.base_queue_url
+        &self.queue.base_queue_url
     }
 
     fn capabilities(&self) -> crate::traits::ProviderCapabilities {
@@ -3649,7 +3701,7 @@ mod tests {
     #[test]
     fn with_base_url_override() {
         let provider = FalProvider::new("fal-test").with_base_url("https://example.com/q");
-        assert_eq!(provider.base_queue_url, "https://example.com/q");
+        assert_eq!(provider.queue.base_queue_url, "https://example.com/q");
     }
 
     #[test]
@@ -4649,8 +4701,116 @@ mod tests {
     fn test_fal_provider_embedding_model_shares_api_key() {
         let provider = FalProvider::new("my-test-key");
         let em = provider.embedding_model();
-        assert_eq!(em.api_key, "my-test-key");
+        assert_eq!(em.queue.api_key, "my-test-key");
         assert_eq!(em.model, "openai/text-embedding-3-small");
+        assert_eq!(em.queue.base_queue_url, FAL_QUEUE_URL);
+    }
+
+    #[tokio::test]
+    async fn test_fal_embedding_uses_queue_api() {
+        use crate::http::{HttpMethod, HttpResponse};
+        use async_trait::async_trait;
+        use std::sync::Mutex;
+
+        // Mock client that walks fal's queue protocol: submit -> status -> result.
+        // Each call returns the next canned response in order and records the URL
+        // hit so we can assert the request shape.
+        #[derive(Debug)]
+        struct QueueMockClient {
+            requests: Arc<Mutex<Vec<HttpRequest>>>,
+            responses: Arc<Mutex<Vec<HttpResponse>>>,
+        }
+
+        #[async_trait]
+        impl HttpClient for QueueMockClient {
+            async fn send(&self, request: HttpRequest) -> Result<HttpResponse, BlazenError> {
+                self.requests.lock().unwrap().push(request);
+                Ok(self.responses.lock().unwrap().remove(0))
+            }
+            async fn send_streaming(
+                &self,
+                _request: HttpRequest,
+            ) -> Result<(u16, Vec<(String, String)>, crate::http::ByteStream), BlazenError>
+            {
+                unimplemented!("not needed for this test")
+            }
+        }
+
+        fn json_response(status: u16, body: &serde_json::Value) -> HttpResponse {
+            HttpResponse {
+                status,
+                headers: vec![("content-type".to_owned(), "application/json".to_owned())],
+                body: serde_json::to_vec(body).unwrap(),
+            }
+        }
+
+        let submit_body = serde_json::json!({
+            "request_id": "req-abc",
+            "status_url": "https://queue.fal.run/_status/req-abc",
+            "response_url": "https://queue.fal.run/_result/req-abc",
+        });
+        let status_in_progress = serde_json::json!({"status": "IN_PROGRESS"});
+        let status_completed = serde_json::json!({"status": "COMPLETED"});
+        let result_body = serde_json::json!({
+            "object": "list",
+            "data": [
+                {"object": "embedding", "embedding": [0.1, 0.2, 0.3], "index": 0},
+                {"object": "embedding", "embedding": [0.4, 0.5, 0.6], "index": 1},
+            ],
+            "model": "openai/text-embedding-3-small",
+            "usage": {"prompt_tokens": 10, "total_tokens": 10},
+        });
+
+        let client = Arc::new(QueueMockClient {
+            requests: Arc::new(Mutex::new(Vec::new())),
+            responses: Arc::new(Mutex::new(vec![
+                json_response(200, &submit_body),
+                json_response(200, &status_in_progress),
+                json_response(200, &status_completed),
+                json_response(200, &result_body),
+            ])),
+        });
+        let captured_requests = Arc::clone(&client.requests);
+
+        let mut em = FalEmbeddingModel::new("test-key").with_http_client(client);
+        em.poll_interval = Duration::from_millis(1);
+
+        let response = em
+            .embed(&["hello".to_owned(), "world".to_owned()])
+            .await
+            .expect("embed should succeed");
+
+        assert_eq!(response.embeddings.len(), 2);
+        assert_eq!(response.embeddings[0], vec![0.1_f32, 0.2, 0.3]);
+        assert_eq!(response.embeddings[1], vec![0.4_f32, 0.5, 0.6]);
+
+        let requests = captured_requests.lock().unwrap();
+        assert_eq!(requests.len(), 4, "expected submit + 2 status + result");
+
+        // Submit hits the queue host with OpenAI-native body and Key auth.
+        assert_eq!(requests[0].method, HttpMethod::Post);
+        assert_eq!(
+            requests[0].url,
+            "https://queue.fal.run/openrouter/router/openai/v1/embeddings"
+        );
+        assert!(
+            requests[0]
+                .headers
+                .iter()
+                .any(|(k, v)| k == "Authorization" && v == "Key test-key")
+        );
+        let submitted_body: serde_json::Value =
+            serde_json::from_slice(requests[0].body.as_ref().unwrap()).unwrap();
+        assert_eq!(submitted_body["model"], "openai/text-embedding-3-small");
+        assert_eq!(submitted_body["input"][0], "hello");
+        assert_eq!(submitted_body["input"][1], "world");
+
+        // Polls and result fetch use the server-provided URLs verbatim.
+        assert_eq!(requests[1].method, HttpMethod::Get);
+        assert_eq!(requests[1].url, "https://queue.fal.run/_status/req-abc");
+        assert_eq!(requests[2].url, "https://queue.fal.run/_status/req-abc");
+        assert_eq!(requests[3].method, HttpMethod::Get);
+        assert_eq!(requests[3].url, "https://queue.fal.run/_result/req-abc");
     }
 
     #[test]
