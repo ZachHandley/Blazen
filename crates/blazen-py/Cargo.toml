@@ -66,7 +66,7 @@ piper = ["blazen-llm/piper"]
 tiktoken = ["blazen-llm/tiktoken"]
 # Pure-Rust ONNX embedding backend (musl/WASM-friendly alternative to fastembed).
 tract = ["dep:blazen-embed-tract"]
-local-all = ["embed", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "piper"]
+local-all = ["embed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "piper", "tiktoken", "distributed", "otlp", "prometheus", "langfuse"]
 # Telemetry exporters
 otlp = ["blazen-telemetry/otlp"]
 prometheus = ["blazen-telemetry/prometheus"]

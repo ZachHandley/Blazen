@@ -3061,6 +3061,48 @@ export declare class ParallelSubWorkflowsStep {
 }
 export type JsParallelSubWorkflowsStep = ParallelSubWorkflowsStep
 
+/**
+ * Abstract base class for custom peer-client transports.
+ *
+ * Mirrors [`blazen_core::distributed::PeerClient`]. Subclass and
+ * override `invokeSubWorkflow`, `derefSessionRef`, and
+ * `releaseSessionRef` to plug a JS-side transport into Blazen's
+ * distributed-execution surface. The canonical gRPC implementation
+ * lives in `BlazenPeerClient`
+ * ([`crate::peer::JsBlazenPeerClient`]); this base exists for callers
+ * who want to swap in a different transport (HTTP, NATS, an in-process
+ * mock for tests, etc.) without touching the Rust core.
+ *
+ * ```javascript
+ * class MyTransport extends PeerClient {
+ *   async invokeSubWorkflow(request) { /* ... *\/ }
+ *   async derefSessionRef(refUuid) { /* ... *\/ }
+ *   async releaseSessionRef(refUuid) { /* ... *\/ }
+ * }
+ * ```
+ */
+export declare class PeerClient {
+  /** Create a new peer-client base instance. */
+  constructor()
+  /**
+   * Invoke a sub-workflow on the remote peer. Subclasses **must**
+   * override this method.
+   */
+  invokeSubWorkflow(request: JsRemoteWorkflowRequest): Promise<JsRemoteWorkflowResponse>
+  /**
+   * Dereference a remote session ref by UUID. Returns the raw
+   * payload bytes. Subclasses **must** override this method.
+   */
+  derefSessionRef(refUuid: string): Promise<Buffer>
+  /**
+   * Release (drop) a remote session ref on the origin node.
+   * Returns `true` when the ref was found and dropped, `false` when
+   * it was already gone. Subclasses **must** override this method.
+   */
+  releaseSessionRef(refUuid: string): Promise<boolean>
+}
+export type JsPeerClient = PeerClient
+
 /** A Perplexity chat completion provider. */
 export declare class PerplexityProvider {
   /** Create a new Perplexity provider. */
@@ -4102,6 +4144,35 @@ export declare class ThreeDProvider {
   generate3d(request: any): Promise<any>
 }
 export type JsThreeDProvider = ThreeDProvider
+
+/**
+ * Exact BPE token counter backed by `tiktoken-rs`.
+ *
+ * Mirrors the per-message overhead rules documented by `OpenAI` for GPT-3.5,
+ * GPT-4, GPT-4.1, and o-series models. Unknown model names return an error.
+ *
+ * ```javascript
+ * const counter = TiktokenCounter.forModel("gpt-4o");
+ * const n = counter.countTokens("Hello, world!");
+ * ```
+ */
+export declare class TiktokenCounter {
+  /**
+   * Create a counter tuned for the given model name.
+   *
+   * Throws if the model is unknown to `tiktoken-rs`.
+   */
+  static forModel(model: string): TiktokenCounter
+  /** Count tokens in a raw text string. */
+  countTokens(text: string): number
+  /** Count tokens for an array of chat messages, including per-message overhead. */
+  countMessageTokens(messages: Array<ChatMessage>): number
+  /** The model's context window size in tokens. */
+  contextSize(): number
+  /** Tokens remaining after the given prompt, saturating at zero. */
+  remainingTokens(messages: Array<ChatMessage>): number
+}
+export type JsTiktokenCounter = TiktokenCounter
 
 /** A Together AI chat completion provider. */
 export declare class TogetherProvider {
@@ -5812,6 +5883,32 @@ export declare function imageInput(name: string, description: string): any
 export declare function initLangfuse(config: LangfuseConfig): void
 
 /**
+ * Initialize the OTLP trace exporter and install the global tracing
+ * subscriber.
+ *
+ * Calling this more than once in a single process will fail because the
+ * global subscriber can only be installed once.
+ */
+export declare function initOtlp(config: OtlpConfig): void
+
+/**
+ * Initialize the Prometheus metrics exporter and start its HTTP listener
+ * on `0.0.0.0:{port}`.
+ *
+ * After calling this, every workflow / step / LLM span emitted via the
+ * `tracing` infrastructure feeds into counters and histograms exposed at
+ * `http://0.0.0.0:{port}/metrics` for Prometheus to scrape.
+ *
+ * ```javascript
+ * initPrometheus(9100);
+ * ```
+ *
+ * Calling this more than once in a single process will fail because the
+ * global recorder can only be installed once.
+ */
+export declare function initPrometheus(port: number): void
+
+/**
  * A request for human input emitted by a workflow step.
  *
  * Mirrors [`blazen_events::InputRequestEvent`]. Workflows publish this
@@ -6805,6 +6902,52 @@ export interface JsReleaseResponse {
   released: boolean
 }
 
+/**
+ * Transport-agnostic request for invoking a sub-workflow on a remote
+ * peer.
+ *
+ * Mirrors [`blazen_core::distributed::RemoteWorkflowRequest`]. Concrete
+ * transports (gRPC, HTTP, NATS, etc.) serialize this into whatever
+ * wire format they require.
+ */
+export interface JsRemoteWorkflowRequest {
+  /** Symbolic name of the workflow to invoke on the remote peer. */
+  workflowName: string
+  /** Ordered list of step IDs to execute as part of this sub-workflow. */
+  stepIds: Array<string>
+  /** Initial input value passed to the workflow's first step. */
+  input: any
+  /**
+   * Optional timeout in seconds. `None` means "use the server's
+   * default deadline".
+   */
+  timeoutSecs?: number
+}
+
+/**
+ * Transport-agnostic response from a remote sub-workflow invocation.
+ *
+ * Mirrors [`blazen_core::distributed::RemoteWorkflowResponse`].
+ */
+export interface JsRemoteWorkflowResponse {
+  /**
+   * Optional terminal result. `None` when the workflow exited
+   * without producing one.
+   */
+  result?: any
+  /**
+   * Descriptors for any session refs the sub-workflow registered
+   * that the parent should be able to dereference remotely. Keyed
+   * by the registry UUID rendered as a string.
+   */
+  remoteRefs: Record<string, any>
+  /**
+   * Error message if the sub-workflow failed. When `Some`, callers
+   * should ignore `result`.
+   */
+  error?: string
+}
+
 export interface JsRequestTiming {
   queueMs?: number
   executionMs?: number
@@ -7436,6 +7579,35 @@ export declare function newRetryStack(): RetryStack
  * point for emitter shims that only know a subset of the fields.
  */
 export declare function newUsageEvent(provider: string, model: string, runId: string): UsageEvent
+
+/**
+ * Configuration for the OTLP exporter.
+ *
+ * ```javascript
+ * initOtlp({
+ *   endpoint: "http://localhost:4317",
+ *   serviceName: "my-service",
+ *   serviceVersion: "1.0.0",
+ *   headers: { "x-api-key": "secret" },
+ * });
+ * ```
+ */
+export interface OtlpConfig {
+  /** The OTLP endpoint URL (e.g. `"http://localhost:4317"`). */
+  endpoint: string
+  /** The service name reported to the backend. */
+  serviceName: string
+  /**
+   * Service version reported to the backend (recorded for forward
+   * compatibility; not yet forwarded by the underlying exporter).
+   */
+  serviceVersion?: string
+  /**
+   * Additional headers to attach to OTLP requests (recorded for forward
+   * compatibility; not yet forwarded by the underlying exporter).
+   */
+  headers?: Record<string, string>
+}
 
 /**
  * Why a workflow was paused.

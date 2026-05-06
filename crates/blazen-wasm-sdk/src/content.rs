@@ -352,12 +352,14 @@ fn body_to_js_value(body: ContentBody) -> Result<JsValue, BlazenError> {
             })?;
             let obj = Object::new();
             let set = |key: &str, value: &JsValue| -> Result<(), BlazenError> {
-                Reflect::set(&obj, &JsValue::from_str(key), value).map(|_| ()).map_err(|e| {
-                    BlazenError::provider(
-                        "custom",
-                        format!("failed to set `{key}` on ContentBody object: {e:?}"),
-                    )
-                })
+                Reflect::set(&obj, &JsValue::from_str(key), value)
+                    .map(|_| ())
+                    .map_err(|e| {
+                        BlazenError::provider(
+                            "custom",
+                            format!("failed to set `{key}` on ContentBody object: {e:?}"),
+                        )
+                    })
             };
             set("type", &JsValue::from_str("stream"))?;
             set("stream", rs.as_ref())?;

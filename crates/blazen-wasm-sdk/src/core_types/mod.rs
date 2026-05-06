@@ -8,12 +8,14 @@
 //! typed handles, perform binding-free serialisation (`MessagePack` and
 //! JSON), and inspect snapshot / registry / state-value internals directly.
 
+pub mod distributed;
 pub mod session_ref;
 pub mod snapshot;
 pub mod step;
 pub mod value;
 pub mod workflow_result;
 
+pub use distributed::{WasmPeerClient, WasmRemoteWorkflowRequest, WasmRemoteWorkflowResponse};
 pub use session_ref::{
     WasmRefLifetime, WasmRegistryKey, WasmRemoteRefDescriptor, WasmSessionRefRegistry,
 };

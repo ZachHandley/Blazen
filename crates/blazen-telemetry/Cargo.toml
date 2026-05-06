@@ -87,7 +87,11 @@ otlp-http = [
     "dep:web-sys",
 ]
 prometheus = ["dep:metrics", "dep:metrics-exporter-prometheus"]
-langfuse = ["dep:reqwest"]
+# `wasm-bindgen-futures` is pulled in on wasm32 so the dispatcher background
+# task can be spawned via `spawn_local` (tokio's runtime is not available on
+# wasm32). The dep is target-conditional via [target.'cfg(...)'.dependencies]
+# so it has zero footprint on native builds.
+langfuse = ["dep:reqwest", "dep:wasm-bindgen-futures"]
 all = ["spans", "history", "otlp", "otlp-http", "prometheus", "langfuse"]
 
 [lints]

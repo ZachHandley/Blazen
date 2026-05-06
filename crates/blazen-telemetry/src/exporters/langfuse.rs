@@ -14,10 +14,12 @@
 //! | `pipeline.stage`        | **Span**         | `span-create`            |
 
 use std::collections::HashMap;
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+#[cfg(not(target_arch = "wasm32"))]
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 use tracing::Subscriber;
@@ -243,17 +245,40 @@ fn spawn_dispatcher(
 
 #[cfg(target_arch = "wasm32")]
 fn spawn_dispatcher(
-    _client: reqwest::Client,
-    _host: String,
-    _public_key: String,
-    _secret_key: String,
-    _batch_size: usize,
+    client: reqwest::Client,
+    host: String,
+    public_key: String,
+    secret_key: String,
+    batch_size: usize,
     _flush_interval_ms: u64,
-    _rx: mpsc::UnboundedReceiver<Envelope>,
+    mut rx: mpsc::UnboundedReceiver<Envelope>,
 ) -> Result<(), TelemetryError> {
-    // No background dispatcher on wasm32; events accumulate in the channel and
-    // are dropped when the receiver is dropped. Native targets are the primary
-    // surface for Langfuse export.
+    // wasm32 has no `tokio::time::interval` (no time driver) and no
+    // multi-threaded runtime, so the dispatcher cannot do periodic flushing.
+    // Instead it batches strictly by `batch_size` and on channel close.
+    // Per-event flushing remains an option for callers who want tight latency:
+    // construct the config with `with_batch_size(1)`.
+    //
+    // `spawn_local` accepts `!Send` futures, which lets us hold the
+    // wasm32 `reqwest::Client` (whose response futures are `!Send`) across
+    // `.await` points. The mpsc channel itself is `Send + Sync`, so the
+    // `LangfuseLayer` (holding the sender) remains `Send + Sync` for the
+    // `tracing_subscriber::Layer` trait bound.
+    wasm_bindgen_futures::spawn_local(async move {
+        let mut buffer: Vec<Envelope> = Vec::with_capacity(batch_size);
+        while let Some(env) = rx.recv().await {
+            buffer.push(env);
+            if buffer.len() >= batch_size {
+                let drained = std::mem::take(&mut buffer);
+                send_batch(&client, &host, &public_key, &secret_key, drained).await;
+            }
+        }
+        // Channel closed: flush whatever's left.
+        if !buffer.is_empty() {
+            let drained = std::mem::take(&mut buffer);
+            send_batch(&client, &host, &public_key, &secret_key, drained).await;
+        }
+    });
     Ok(())
 }
 

@@ -255,6 +255,7 @@ __all__ = [
     "TemplateRole",
     "ThreeDProvider",
     "ThreeDRequest",
+    "TiktokenCounter",
     "TimeoutError",
     "TogetherProvider",
     "TokenCounter",
@@ -9572,6 +9573,22 @@ class ThreeDRequest:
     def model(self) -> typing.Optional[builtins.str]: ...
     def __new__(cls, *, prompt: builtins.str = '', image_url: typing.Optional[builtins.str] = None, format: typing.Optional[builtins.str] = None, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> ThreeDRequest: ...
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class TiktokenCounter(TokenCounter):
+    r"""
+    Exact BPE token counter backed by ``tiktoken-rs`` (feature: ``tiktoken``).
+    """
+    def __new__(cls, *, model: builtins.str) -> tuple[TiktokenCounter, TokenCounter]:
+        r"""
+        Build a counter for a specific model identifier.
+        
+        Raises ``ValueError`` if ``tiktoken-rs`` does not recognise the model.
+        """
+    def count_tokens(self, text: builtins.str) -> builtins.int: ...
+    def count_message_tokens(self, messages: typing.Sequence[ChatMessage]) -> builtins.int: ...
+    def context_size(self) -> builtins.int: ...
+    def remaining_tokens(self, messages: typing.Sequence[ChatMessage]) -> builtins.int: ...
 
 @typing.final
 class TogetherProvider:

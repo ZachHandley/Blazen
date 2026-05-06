@@ -1,8 +1,25 @@
 //! Token counting utilities for WASM.
 //!
-//! Exposes the heuristic [`EstimateCounter`] from `blazen-llm` as standalone
-//! JavaScript functions. The tiktoken-based counter is **not** available in
-//! WASM (it relies on native data files that don't compile to `wasm32`).
+//! Three routes for token counting in the browser, in order of increasing
+//! exactness vs bundle cost:
+//!
+//! 1. **`estimateTokens` / `countMessageTokens` free functions** -- always
+//!    on, ~0 KB cost. Heuristic-only (`~3.5 chars/token`); good enough for
+//!    rough budget math.
+//! 2. **[`WasmTokenCounter`] (`TokenCounter`)** -- always on, ~0 KB Rust
+//!    cost. Wraps a JS callback, so the caller plugs in any tokeniser they
+//!    like (`tiktoken-wasm`, `gpt-tokenizer`, an HTTP-backed tokeniser,
+//!    etc.). Choose this when you want exact counts but want full control
+//!    over which tokeniser ships in your bundle.
+//! 3. **[`WasmTiktokenCounter`] (`TiktokenCounter`)** -- gated behind the
+//!    `tiktoken` Cargo feature; intended for the separate
+//!    `@blazen-dev/sdk-tiktoken` npm package. `tiktoken-rs` is pure Rust and
+//!    compiles to `wasm32` fine, but its embedded BPE tables add ~8 MB to
+//!    the bundle. The default `@blazen-dev/sdk` build leaves it out;
+//!    `@blazen-dev/sdk-tiktoken` is the same crate built with
+//!    `wasm-pack build --features tiktoken` so server-side / Electron /
+//!    bundle-tolerant browser consumers get the bundled BPE counter without
+//!    paying the bundle cost in the default package.
 //!
 //! ```js
 //! import { estimateTokens, countMessageTokens } from '@blazen/sdk';
@@ -228,5 +245,103 @@ impl TokenCounter for JsTokenCounter {
 
     fn context_size(&self) -> usize {
         self.context_size
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WasmTiktokenCounter (feature-gated)
+// ---------------------------------------------------------------------------
+
+/// Exact BPE token counter backed by `tiktoken-rs`.
+///
+/// Available only when the wasm-sdk is built with `--features tiktoken`
+/// (see this crate's `Cargo.toml`). Mirrors the per-message overhead rules
+/// documented by OpenAI for GPT-3.5, GPT-4, GPT-4.1, and o-series models.
+/// Unknown model names throw a `JsError`.
+///
+/// ```js
+/// import { TiktokenCounter } from '@blazen-dev/sdk-tiktoken';
+///
+/// const counter = TiktokenCounter.forModel('gpt-4o');
+/// const n = counter.countTokens('Hello, world!');
+/// ```
+#[cfg(feature = "tiktoken")]
+#[wasm_bindgen(js_name = "TiktokenCounter")]
+pub struct WasmTiktokenCounter {
+    inner: Arc<blazen_llm::tokens::TiktokenCounter>,
+}
+
+#[cfg(feature = "tiktoken")]
+// SAFETY: WASM is single-threaded.
+unsafe impl Send for WasmTiktokenCounter {}
+#[cfg(feature = "tiktoken")]
+unsafe impl Sync for WasmTiktokenCounter {}
+
+#[cfg(feature = "tiktoken")]
+#[wasm_bindgen(js_class = "TiktokenCounter")]
+impl WasmTiktokenCounter {
+    /// Create a counter tuned for the given model name.
+    ///
+    /// # Errors
+    ///
+    /// Throws if the model is not recognised by `tiktoken-rs`.
+    #[wasm_bindgen(js_name = "forModel")]
+    pub fn for_model(model: &str) -> Result<WasmTiktokenCounter, JsError> {
+        let counter = blazen_llm::tokens::TiktokenCounter::for_model(model)
+            .map_err(|e| JsError::new(&format!("TiktokenCounter.forModel: {e}")))?;
+        Ok(Self {
+            inner: Arc::new(counter),
+        })
+    }
+
+    /// Count tokens in a single string.
+    #[wasm_bindgen(js_name = "countTokens")]
+    #[must_use]
+    pub fn count_tokens(&self, text: &str) -> u32 {
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            self.inner.count_tokens(text) as u32
+        }
+    }
+
+    /// Count tokens for an array of chat messages, including per-message
+    /// overhead matching the OpenAI tokenisation rules.
+    ///
+    /// # Errors
+    ///
+    /// Throws if the message array fails to deserialise.
+    #[wasm_bindgen(js_name = "countMessageTokens")]
+    pub fn count_message_tokens(&self, messages: JsValue) -> Result<u32, JsError> {
+        let msgs: Vec<ChatMessage> = serde_wasm_bindgen::from_value(messages)
+            .map_err(|e| JsError::new(&format!("Failed to parse messages: {e}")))?;
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            Ok(self.inner.count_message_tokens(&msgs) as u32)
+        }
+    }
+
+    /// The model's context window size in tokens.
+    #[wasm_bindgen(getter, js_name = "contextSize")]
+    #[must_use]
+    pub fn context_size(&self) -> u32 {
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            self.inner.context_size() as u32
+        }
+    }
+
+    /// Tokens remaining after the given prompt array, saturating at zero.
+    ///
+    /// # Errors
+    ///
+    /// Throws if the message array fails to deserialise.
+    #[wasm_bindgen(js_name = "remainingTokens")]
+    pub fn remaining_tokens(&self, messages: JsValue) -> Result<u32, JsError> {
+        let msgs: Vec<ChatMessage> = serde_wasm_bindgen::from_value(messages)
+            .map_err(|e| JsError::new(&format!("Failed to parse messages: {e}")))?;
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            Ok(self.inner.remaining_tokens(&msgs) as u32)
+        }
     }
 }

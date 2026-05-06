@@ -27,8 +27,8 @@
 
 use blazen_wasm_sdk::content::WasmContentStore;
 use js_sys::{Function, Object, Promise, Reflect, Uint8Array};
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
+use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 use web_sys::{ReadableStream, ReadableStreamDefaultReader};
@@ -121,11 +121,9 @@ async fn fetch_stream_custom_returns_buffered_bytes() {
     // Callback returns a single `Uint8Array` rather than a ReadableStream.
     // The bridge must wrap this as a single-chunk ByteStream and surface
     // it back as a one-chunk ReadableStream on the JS side.
-    let opts = build_options_with_fetch_stream(
-        "return new Uint8Array([1, 2, 3, 4, 5]);",
-    );
-    let store = WasmContentStore::custom(opts.unchecked_into())
-        .expect("custom store should construct");
+    let opts = build_options_with_fetch_stream("return new Uint8Array([1, 2, 3, 4, 5]);");
+    let store =
+        WasmContentStore::custom(opts.unchecked_into()).expect("custom store should construct");
 
     let handle = make_handle("h-1", "data");
     let promise: Promise = store.fetch_stream(handle.unchecked_into()).unchecked_into();
@@ -168,8 +166,8 @@ async fn fetch_stream_custom_returns_readable_stream_three_chunks() {
         });
     "#;
     let opts = build_options_with_fetch_stream(body);
-    let store = WasmContentStore::custom(opts.unchecked_into())
-        .expect("custom store should construct");
+    let store =
+        WasmContentStore::custom(opts.unchecked_into()).expect("custom store should construct");
 
     let handle = make_handle("h-stream", "data");
     let promise: Promise = store.fetch_stream(handle.unchecked_into()).unchecked_into();
@@ -251,8 +249,8 @@ async fn fetch_stream_propagates_underlying_stream_error() {
         });
     "#;
     let opts = build_options_with_fetch_stream(body);
-    let store = WasmContentStore::custom(opts.unchecked_into())
-        .expect("custom store should construct");
+    let store =
+        WasmContentStore::custom(opts.unchecked_into()).expect("custom store should construct");
 
     let handle = make_handle("h-err", "data");
     let promise: Promise = store.fetch_stream(handle.unchecked_into()).unchecked_into();

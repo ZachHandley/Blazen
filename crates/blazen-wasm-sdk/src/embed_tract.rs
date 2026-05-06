@@ -69,6 +69,46 @@ impl<F: std::future::Future> std::future::Future for SendFuture<F> {
 }
 
 // ---------------------------------------------------------------------------
+// WasmTractResponse
+// ---------------------------------------------------------------------------
+
+/// Result returned by [`WasmTractEmbedModel::embed`].
+///
+/// Mirrors the native `TractResponse` (see `blazen-embed-tract`): an array of
+/// embedding vectors (one per input text) plus the model identifier that
+/// produced them. Exposed as a wasm-bindgen handle so the wasm-sdk maintains
+/// surface parity with the Python and Node bindings.
+#[wasm_bindgen(js_name = "TractResponse")]
+pub struct WasmTractResponse {
+    embeddings: Vec<Vec<f32>>,
+    model: String,
+}
+
+#[wasm_bindgen(js_class = "TractResponse")]
+impl WasmTractResponse {
+    /// Embedding vectors as a `Float32Array[]`, one entry per input text.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn embeddings(&self) -> js_sys::Array {
+        let outer = js_sys::Array::new_with_length(self.embeddings.len() as u32);
+        for (i, embedding) in self.embeddings.iter().enumerate() {
+            let inner = js_sys::Float32Array::new_with_length(embedding.len() as u32);
+            inner.copy_from(embedding);
+            outer.set(i as u32, inner.into());
+        }
+        outer
+    }
+
+    /// Identifier of the model that produced these embeddings (typically the
+    /// Hugging Face repo id).
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn model(&self) -> String {
+        self.model.clone()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // WasmTractOptions
 // ---------------------------------------------------------------------------
 
@@ -280,9 +320,11 @@ impl WasmTractEmbedModel {
         }
     }
 
-    /// Embed one or more texts, returning a nested array of float vectors.
+    /// Embed one or more texts.
     ///
-    /// Returns a `Promise<Float32Array[]>`.
+    /// Returns a `Promise<TractResponse>` with the embedding vectors plus the
+    /// model id that produced them — matching the native Python and Node
+    /// `TractEmbedModel.embed()` return shape.
     #[wasm_bindgen]
     pub fn embed(&self, texts: Vec<String>) -> js_sys::Promise {
         let model = Arc::clone(&self.inner);
@@ -291,15 +333,11 @@ impl WasmTractEmbedModel {
             let response = SendFuture(async { model.embed(&texts).await })
                 .await
                 .map_err(|e| JsValue::from_str(&e.to_string()))?;
-
-            let outer = js_sys::Array::new_with_length(response.embeddings.len() as u32);
-            for (i, embedding) in response.embeddings.iter().enumerate() {
-                let inner = js_sys::Float32Array::new_with_length(embedding.len() as u32);
-                inner.copy_from(embedding);
-                outer.set(i as u32, inner.into());
-            }
-
-            Ok(outer.into())
+            let wrapper = WasmTractResponse {
+                embeddings: response.embeddings,
+                model: response.model,
+            };
+            Ok(JsValue::from(wrapper))
         })
     }
 }

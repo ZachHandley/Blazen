@@ -215,27 +215,10 @@ WHITELIST: frozenset[str] = frozenset(
         "SNAPSHOT_VERSION",
         "RefLifetime",
         "RegistryKey",
-        # --- Feature-gated / build-flag-conditional bindings ---
-        # These ARE bound in PyO3/napi-rs but only when the matching Cargo
-        # feature is on (`distributed`, `tract`, `tiktoken`, `otlp`,
-        # `prometheus`). The .pyi/.d.ts shipped on a build without the feature
-        # legitimately omits them, so the audit shouldn't flag them as gaps.
-        "PeerClient",
-        "RemoteWorkflowRequest",
-        "RemoteWorkflowResponse",
-        "TractEmbedModel",
-        "TractOptions",
-        "TractResponse",
-        "TiktokenCounter",
-        "OtlpConfig",
-        "init_otlp",
-        "init_prometheus",
-        # langfuse exporter -- the `langfuse` feature does not exist upstream
-        # in blazen-telemetry yet, so these names appear in the Rust public
-        # surface but cannot be wired into bindings until the feature lands.
-        "LangfuseConfig",
+        # `LangfuseLayer` is the `tracing-subscriber` Layer surfaced via
+        # `init_langfuse` -- internal, mirrors how `MetricsLayer` is internal
+        # to `init_prometheus`. The Config + init_* functions ARE exposed.
         "LangfuseLayer",
-        "init_langfuse",
         # Internal telemetry error type -- never exposed standalone; errors
         # propagate as plain strings via the `init_*` functions.
         "TelemetryError",
@@ -381,12 +364,15 @@ WASM_SKIP: frozenset[str] = frozenset(
         "DiffusionScheduler",
         "DiffusionError",
         # --- Peer/RPC (tonic + h2 + TLS -- never wasm32) ---
+        # `PeerClient` ABC + `RemoteWorkflowRequest`/`RemoteWorkflowResponse`
+        # data envelopes ARE bound on wasm32 via a JS-callback adapter
+        # (see crates/blazen-wasm-sdk/src/core_types/distributed.rs); only
+        # the tonic-backed concrete transport (`BlazenPeerServer`,
+        # `BlazenPeerClient`, the gRPC envelope structs, and TLS helpers)
+        # remain native-only.
         "BlazenPeerServer",
         "BlazenPeerClient",
         "PeerError",
-        "PeerClient",
-        "RemoteWorkflowRequest",
-        "RemoteWorkflowResponse",
         "SubWorkflowRequest",
         "SubWorkflowResponse",
         "DerefRequest",
@@ -420,15 +406,25 @@ WASM_SKIP: frozenset[str] = frozenset(
         "ModelCache",
         "CacheError",
         "ProgressCallback",
-        # --- Telemetry exporters (tonic / metrics-process / native) ---
-        # OtlpConfig + init_otlp ARE bound on wasm32 via tracing-opentelemetry
-        # over the OTLP HTTP exporter; only the langfuse exporter and the
-        # prometheus pull collector remain native-only.
-        "LangfuseConfig",
+        # --- Telemetry exporters (native-only remainder) ---
+        # OtlpConfig + init_otlp are bound on wasm32 via the OTLP HTTP
+        # exporter; LangfuseConfig + init_langfuse are bound on wasm32 via
+        # web_sys::fetch (see crates/blazen-wasm-sdk/src/telemetry/langfuse.rs).
+        # Only Layer handles + the Prometheus pull collector remain native-only:
+        # `*Layer` are tracing-subscriber Layer types surfaced via init_*
+        # globals; the Prometheus collector binds a TCP listener that wasm32
+        # can't open.
         "LangfuseLayer",
-        "init_langfuse",
         "MetricsLayer",
         "init_prometheus",
+        # --- Bundled tiktoken (opt-in via wasm-sdk `tiktoken` feature) ---
+        # `TiktokenCounter` is exposed on wasm32 ONLY when blazen-wasm-sdk is
+        # built with `--features tiktoken` (intended for the separate
+        # `@blazen-dev/sdk-tiktoken` npm package). The default `@blazen-dev/sdk`
+        # bundle leaves it out because the embedded BPE tables add ~8 MB. The
+        # always-on `TokenCounter` JS-callback class is the bundle-friendly
+        # escape hatch.
+        "TiktokenCounter",
         # --- `EmbedModel`/`EmbedResponse`/`EmbedOptions`/`EmbedError` are
         # struct re-exports from `blazen-embed` aliasing FastEmbed/Tract.
         # The runtime trait `EmbeddingModel` IS bound (as `EmbeddingModel`);
@@ -595,23 +591,7 @@ WHITELIST_REASONS: dict[str, str] = {
     "SNAPSHOT_VERSION": "Rust-side static",
     "RefLifetime": "Rust-side lifetime helper",
     "RegistryKey": "Rust-side registry key type",
-    # Feature-gated bindings -- present in py/node when the matching Cargo
-    # feature is enabled, absent from the .pyi/.d.ts when it isn't.
-    "PeerClient": "feature-gated; activate `distributed` to expose",
-    "RemoteWorkflowRequest": "feature-gated; activate `distributed` to expose",
-    "RemoteWorkflowResponse": "feature-gated; activate `distributed` to expose",
-    "TractEmbedModel": "feature-gated; activate `tract` to expose",
-    "TractOptions": "feature-gated; activate `tract` to expose",
-    "TractResponse": "feature-gated; activate `tract` to expose",
-    "TiktokenCounter": "feature-gated; activate `tiktoken` to expose",
-    "OtlpConfig": "feature-gated; activate `otlp` to expose (telemetry exporter)",
-    "init_otlp": "feature-gated; activate `otlp` to expose (telemetry exporter)",
-    "init_prometheus": (
-        "feature-gated; activate `prometheus` to expose (telemetry exporter)"
-    ),
-    "LangfuseConfig": "langfuse not in upstream blazen-telemetry",
-    "LangfuseLayer": "langfuse not in upstream blazen-telemetry",
-    "init_langfuse": "langfuse not in upstream blazen-telemetry",
+    "LangfuseLayer": "tracing-subscriber Layer -- internal, surfaced via init_langfuse",
     "TelemetryError": "internal error type; not exposed by any binding",
     "init_otlp_http": (
         "internal-only HTTP variant; wasm-sdk's `initOtlp` calls it; native uses gRPC variant"
