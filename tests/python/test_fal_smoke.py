@@ -217,7 +217,12 @@ async def test_fal_streaming_yields_multiple_chunks():
     assert len(chunks) > 1, f"expected multiple chunks, got {len(chunks)}"
 
 
-@skip_without_key
+@pytest.mark.skip(
+    reason="fal does not host a native text embedder; the only documented "
+    "embedding endpoint (`openrouter/router/openai/v1/embeddings`) is a BYOK "
+    "OpenAI passthrough that requires a valid OpenAI key configured at "
+    "fal/openrouter. Local-model coverage lives in test_model_manager_smoke.py."
+)
 @pytest.mark.asyncio
 @pytest.mark.timeout(300)
 async def test_fal_embeddings():

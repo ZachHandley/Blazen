@@ -220,7 +220,7 @@ jobs:
 
       - name: Run Python unit tests (parallel)
         if: steps.check.outputs.completed != 'true'
-        run: uv run pytest -v -n auto --timeout=30 tests/python/test_workflow.py tests/python/test_session_refs.py tests/python/test_e2e.py
+        run: uv run pytest -v -n auto --timeout=30 tests/python/test_workflow.py tests/python/test_session_refs.py tests/python/test_e2e.py tests/python/test_model_manager_smoke.py
 
       - name: Run Python API smoke tests (sequential, real HTTP)
         if: steps.check.outputs.completed != 'true'

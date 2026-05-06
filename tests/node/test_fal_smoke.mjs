@@ -194,7 +194,11 @@ TStream("fal.ai streaming + embeddings + utilities · streaming yields multiple 
   t.truthy(chunks.length > 0, `expected at least one streamed chunk, got ${chunks.length}`);
 });
 
-TStream("fal.ai streaming + embeddings + utilities · FalProvider.embeddingModel().embed produces vectors", async (t) => {
+// Skipped: fal does not host a native text embedder; the only documented
+// embedding endpoint (`openrouter/router/openai/v1/embeddings`) is a BYOK
+// OpenAI passthrough requiring a valid OpenAI key configured at fal/openrouter.
+// Local-model coverage lives in tests/python/test_model_manager_smoke.py.
+test.skip("fal.ai streaming + embeddings + utilities · FalProvider.embeddingModel().embed produces vectors", async (t) => {
   const provider = FalProvider.create({ apiKey: FAL_API_KEY });
   const embedder = provider.embeddingModel();
   const vectors = await embedder.embed(["hi", "hello"]);
