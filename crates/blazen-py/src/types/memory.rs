@@ -15,7 +15,7 @@ use blazen_memory::types::{MemoryEntry, MemoryResult, StoredEntry};
 use blazen_memory::{
     InMemoryBackend, JsonlBackend, Memory, MemoryError, MemoryStore, RetryMemoryBackend,
 };
-use blazen_memory_valkey::ValkeyBackend;
+use blazen_memory_valkey::{UpstashBackend, ValkeyBackend};
 
 /// Local alias for the memory-crate result type.
 type MemResult<T> = std::result::Result<T, MemoryError>;
@@ -50,6 +50,9 @@ fn extract_backend(obj: &Bound<'_, PyAny>) -> PyResult<Arc<dyn MemoryBackend>> {
     if let Ok(b) = obj.extract::<PyRef<'_, PyValkeyBackend>>() {
         return Ok(b.inner.clone());
     }
+    if let Ok(b) = obj.extract::<PyRef<'_, PyUpstashBackend>>() {
+        return Ok(b.inner.clone());
+    }
     if let Ok(b) = obj.extract::<PyRef<'_, PyRetryMemoryBackend>>() {
         return Ok(b.inner.clone());
     }
@@ -58,7 +61,7 @@ fn extract_backend(obj: &Bound<'_, PyAny>) -> PyResult<Arc<dyn MemoryBackend>> {
         return Ok(Arc::new(PyHostMemoryBackend::new(obj.clone().unbind())));
     }
     Err(PyTypeError::new_err(
-        "expected InMemoryBackend, JsonlBackend, ValkeyBackend, RetryMemoryBackend, or MemoryBackend subclass",
+        "expected InMemoryBackend, JsonlBackend, ValkeyBackend, UpstashBackend, RetryMemoryBackend, or MemoryBackend subclass",
     ))
 }
 
@@ -567,6 +570,54 @@ impl PyValkeyBackend {
 
     fn __repr__(&self) -> &'static str {
         "ValkeyBackend(...)"
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PyUpstashBackend
+// ---------------------------------------------------------------------------
+
+/// Upstash REST-backed memory backend (HTTPS over `Arc<dyn HttpClient>`).
+///
+/// Wasi-compatible alternative to ``ValkeyBackend`` for hosts that cannot
+/// open raw TCP connections (Cloudflare Workers, Deno, etc.). On native
+/// targets this still works — it just uses HTTPS instead of raw TCP.
+///
+/// Example:
+///     >>> backend = UpstashBackend("https://us1-merry-cat-32242.upstash.io", "AYAg...")
+#[gen_stub_pyclass]
+#[pyclass(name = "UpstashBackend", from_py_object)]
+#[derive(Clone)]
+pub struct PyUpstashBackend {
+    pub(crate) inner: Arc<UpstashBackend>,
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyUpstashBackend {
+    /// Create a new Upstash backend.
+    ///
+    /// Args:
+    ///     rest_url: The Upstash REST endpoint, e.g.
+    ///         "https://us1-merry-cat-32242.upstash.io".
+    ///     rest_token: The Upstash REST token (sent as a Bearer token).
+    ///     prefix: Optional key prefix for namespacing
+    ///         (default: "blazen:memory:").
+    #[new]
+    #[pyo3(signature = (rest_url, rest_token, prefix=None))]
+    fn new(rest_url: String, rest_token: String, prefix: Option<String>) -> Self {
+        let http = default_http_client();
+        let mut backend = UpstashBackend::new(rest_url, rest_token, http);
+        if let Some(p) = prefix {
+            backend = backend.with_prefix(p);
+        }
+        Self {
+            inner: Arc::new(backend),
+        }
+    }
+
+    fn __repr__(&self) -> &'static str {
+        "UpstashBackend(...)"
     }
 }
 
@@ -1234,4 +1285,16 @@ fn truncate_text(text: &str, max_len: usize) -> String {
     } else {
         format!("{}...", &text[..max_len])
     }
+}
+
+/// Resolve the platform-appropriate default HTTP client. Mirrors the
+/// `default_http_client` helper in `blazen-node`'s `peer_http` module.
+#[cfg(target_os = "wasi")]
+fn default_http_client() -> Arc<dyn blazen_llm::http::HttpClient> {
+    blazen_llm::http_napi_wasi::LazyHttpClient::new().into_arc()
+}
+
+#[cfg(not(target_os = "wasi"))]
+fn default_http_client() -> Arc<dyn blazen_llm::http::HttpClient> {
+    blazen_llm::ReqwestHttpClient::new().into_arc()
 }

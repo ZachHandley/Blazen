@@ -91,7 +91,7 @@ openssl-sys = { version = "0.9", features = ["vendored"] }
 
 [target.'cfg(not(target_os = "wasi"))'.dependencies]
 blazen-llm = { workspace = true, features = ["reqwest"] }
-blazen-memory-valkey = { workspace = true, features = ["redis-tcp"] }
+blazen-memory-valkey = { workspace = true, features = ["redis-tcp", "upstash"] }
 blazen-peer = { workspace = true, features = ["server", "client", "http-transport"] }
 blazen-persist = { workspace = true, features = ["redb", "valkey"] }
 tokio = { workspace = true }

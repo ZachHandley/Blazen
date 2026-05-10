@@ -197,6 +197,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Peer (distributed sub-workflow gRPC layer)
     m.add_class::<peer::PyBlazenPeerServer>()?;
     m.add_class::<peer::PyBlazenPeerClient>()?;
+    m.add_class::<peer::PyHttpPeerClient>()?;
     m.add_class::<peer::PySubWorkflowRequest>()?;
     m.add_class::<peer::PySubWorkflowResponse>()?;
     m.add_class::<peer::PyDerefRequest>()?;
@@ -551,6 +552,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::PyInMemoryBackend>()?;
     m.add_class::<types::PyJsonlBackend>()?;
     m.add_class::<types::PyValkeyBackend>()?;
+    m.add_class::<types::PyUpstashBackend>()?;
     m.add_class::<types::PyRetryMemoryBackend>()?;
     m.add_class::<types::PyMemoryResult>()?;
     m.add_class::<types::PyStoredEntry>()?;

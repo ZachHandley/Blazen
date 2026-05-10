@@ -234,6 +234,17 @@ WHITELIST: frozenset[str] = frozenset(
         "WasmTractEmbedModel",
         "WasmTractError",
         "WasmTractResponse",
+        # Wasi-internal infra -- only compiled under `cfg(target_os = "wasi")`
+        # in `blazen-embed-tract::wasi_provider` and `blazen-model-cache::wasi`.
+        # Bindings (py / node / wasm-sdk) shouldn't expose them; the standard
+        # `TractEmbedModel` / `ModelCache` umbrellas already cover the user-
+        # facing API. `WasiHttpFetch` is a Rust-only trait that callers can't
+        # implement across the FFI boundary.
+        "WasiHttpFetch",
+        "WasiModelCache",
+        "WasiTractEmbedModel",
+        "WasiTractError",
+        "WasiTractResponse",
         # Module-level constants attached via PyModule::add() / napi env
         # exports. The auditor's regex looks for `class X:` / `export
         # declare class X` and doesn't see module attribute literals.
@@ -605,6 +616,21 @@ WHITELIST_REASONS: dict[str, str] = {
     ),
     "WasmTractResponse": (
         "wasm32-internal -- response shape exposed via TractResponse on wasm-sdk"
+    ),
+    "WasiHttpFetch": (
+        "wasi-internal trait used by WasiModelCache; not bindable across FFI"
+    ),
+    "WasiModelCache": (
+        "wasi-internal in-memory cache; user-facing API is the standard ModelCache"
+    ),
+    "WasiTractEmbedModel": (
+        "wasi-internal -- accessed via the standard TractEmbedModel umbrella"
+    ),
+    "WasiTractError": (
+        "wasi-internal -- errors surface via TractError"
+    ),
+    "WasiTractResponse": (
+        "wasi-internal -- response shape exposed via TractResponse"
     ),
     # Module-level constants and napi-aliased enums.
     "ENVELOPE_VERSION": "module-level constant, not a class",

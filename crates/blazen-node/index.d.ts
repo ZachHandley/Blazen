@@ -2460,6 +2460,10 @@ export declare class Memory {
   static localJsonl(backend: JsonlBackend): Memory
   /** Create a memory store in local-only mode with a `ValkeyBackend`. */
   static localValkey(backend: ValkeyBackend): Memory
+  /** Create a memory store with an embedding model and an `UpstashBackend`. */
+  static withUpstash(embedder: EmbeddingModel, backend: UpstashBackend): Memory
+  /** Create a memory store in local-only mode with an `UpstashBackend`. */
+  static localUpstash(backend: UpstashBackend): Memory
 }
 export type JsMemory = Memory
 
@@ -3683,8 +3687,10 @@ export declare class RetryMemoryBackend {
   static wrapJsonl(backend: JsonlBackend, config?: JsRetryConfig | undefined | null): RetryMemoryBackend
   /** Wrap a `ValkeyBackend` with retry-on-transient-error behaviour. */
   static wrapValkey(backend: ValkeyBackend, config?: JsRetryConfig | undefined | null): RetryMemoryBackend
+  /** Wrap an `UpstashBackend` with retry-on-transient-error behaviour. */
+  static wrapUpstash(backend: UpstashBackend, config?: JsRetryConfig | undefined | null): RetryMemoryBackend
   /**
-   * Generic factory accepting any of the three concrete backends. Useful
+   * Generic factory accepting any of the four concrete backends. Useful
    * when the caller doesn't statically know which backend is in hand.
    */
   static wrap(backend: AnyBackend, config?: JsRetryConfig | undefined | null): RetryMemoryBackend
@@ -4566,6 +4572,37 @@ export declare class TypedTool {
   exitTool(exit: boolean): TypedTool
 }
 export type JsTypedTool = TypedTool
+
+/**
+ * An Upstash Redis REST-backed backend for the memory store.
+ *
+ * Wasi-compatible alternative to [`JsValkeyBackend`] for Cloudflare Workers,
+ * Deno, and other wasi hosts that cannot use raw TCP. Talks to Upstash's
+ * REST API over the host-registered HTTP client (set via
+ * `setDefaultHttpClient`).
+ *
+ * ```javascript
+ * const backend = UpstashBackend.create("https://us1-merry-cat-32242.upstash.io", "AYAg...");
+ * const memory = Memory.withUpstash(embedder, backend);
+ * ```
+ */
+export declare class UpstashBackend {
+  /**
+   * Create an Upstash REST backend.
+   *
+   * `restUrl` is the Upstash REST endpoint (e.g.
+   * `https://us1-merry-cat-32242.upstash.io`). `restToken` is the REST
+   * token, sent as a `Bearer` token on every request. The HTTP client is
+   * resolved via `setDefaultHttpClient` — call that before issuing any
+   * memory operations.
+   *
+   * `prefix` overrides the default key prefix (`blazen:memory:`). Pass
+   * `null`/`undefined` for the default. Useful when running multiple
+   * logical stores against the same Upstash database.
+   */
+  static create(restUrl: string, restToken: string, prefix?: string | undefined | null): UpstashBackend
+}
+export type JsUpstashBackend = UpstashBackend
 
 /**
  * A sink for emitted [`JsUsageEvent`]s.

@@ -101,6 +101,7 @@ __all__ = [
     "HttpClient",
     "HttpClientConfig",
     "HttpClientHandle",
+    "HttpPeerClient",
     "ImageContent",
     "ImageModel",
     "ImageProvider",
@@ -274,6 +275,7 @@ __all__ = [
     "TypedTool",
     "UnsupportedError",
     "UpscaleRequest",
+    "UpstashBackend",
     "UsageEmitter",
     "UsageEvent",
     "UsageRecordingCompletionModel",
@@ -4436,6 +4438,86 @@ class HttpClientHandle:
     This class cannot be constructed directly from Python — instances are
     produced by the `http_client()` accessor on each provider class.
     """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class HttpPeerClient:
+    r"""
+    HTTP/JSON peer client. Mirrors
+    [`crate::peer::client::PyBlazenPeerClient`]'s method surface but speaks
+    pure HTTP/JSON to a peer (or peer-shim) at `base_url`.
+    
+    Construct with `HttpPeerClient.new_http(base_url, node_id)`. All RPC
+    methods are async and return Python coroutines.
+    """
+    @staticmethod
+    def new_http(base_url: builtins.str, node_id: builtins.str) -> HttpPeerClient:
+        r"""
+        Build a new HTTP/JSON peer client.
+        
+        Args:
+            base_url: Peer HTTP root, e.g. ``"https://peer.example.com"``.
+                A trailing slash is tolerated and trimmed before each
+                request.
+            node_id: Identifier of *this* client used for trace logs.
+                Sent to the peer as the ``X-Blazen-Peer-Node-Id`` header.
+        
+        Returns:
+            A configured `HttpPeerClient`. No network I/O happens until
+            the first RPC call.
+        """
+    async def invoke_sub_workflow(self, request: SubWorkflowRequest) -> SubWorkflowResponse:
+        r"""
+        Invoke a sub-workflow on the connected peer.
+        
+        Args:
+            request: A `SubWorkflowRequest`.
+        
+        Returns:
+            A `SubWorkflowResponse`.
+        
+        Raises:
+            PeerError: If the request cannot be encoded, the HTTP call
+                fails, the peer returns a non-2xx status, or the
+                response cannot be decoded.
+        """
+    async def deref_session_ref(self, request: DerefRequest) -> DerefResponse:
+        r"""
+        Dereference a remote session ref by its UUID. Returns a typed
+        `DerefResponse` carrying the raw bytes returned by the origin
+        node.
+        
+        Args:
+            request: A `DerefRequest` carrying the registry-entry UUID.
+        
+        Returns:
+            A `DerefResponse` whose `payload` is the raw bytes of the
+            underlying serialized value.
+        
+        Raises:
+            PeerError: On JSON encode/decode errors, transport errors,
+                or a non-2xx response (including the remote-side
+                ``NOT_FOUND`` analogue).
+        """
+    async def release_session_ref(self, request: ReleaseRequest) -> ReleaseResponse:
+        r"""
+        Release (drop) a remote session ref. Returns a typed
+        `ReleaseResponse` carrying whether the ref was found and
+        released on the origin node.
+        
+        Args:
+            request: A `ReleaseRequest` carrying the registry-entry
+                UUID to drop on the origin node.
+        
+        Returns:
+            A `ReleaseResponse` whose `released` is ``True`` if the
+            ref was found and dropped, ``False`` if it was already
+            gone.
+        
+        Raises:
+            PeerError: On JSON encode/decode errors, transport errors,
+                or a non-2xx response.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -10230,6 +10312,31 @@ class UpscaleRequest:
     @property
     def model(self) -> typing.Optional[builtins.str]: ...
     def __new__(cls, *, image_url: builtins.str, scale: builtins.float, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> UpscaleRequest: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class UpstashBackend:
+    r"""
+    Upstash REST-backed memory backend (HTTPS over `Arc<dyn HttpClient>`).
+    
+    Wasi-compatible alternative to ``ValkeyBackend`` for hosts that cannot
+    open raw TCP connections (Cloudflare Workers, Deno, etc.). On native
+    targets this still works — it just uses HTTPS instead of raw TCP.
+    
+    Example:
+        >>> backend = UpstashBackend("https://us1-merry-cat-32242.upstash.io", "AYAg...")
+    """
+    def __new__(cls, rest_url: builtins.str, rest_token: builtins.str, prefix: typing.Optional[builtins.str] = None) -> UpstashBackend:
+        r"""
+        Create a new Upstash backend.
+        
+        Args:
+            rest_url: The Upstash REST endpoint, e.g.
+                "https://us1-merry-cat-32242.upstash.io".
+            rest_token: The Upstash REST token (sent as a Bearer token).
+            prefix: Optional key prefix for namespacing
+                (default: "blazen:memory:").
+        """
     def __repr__(self) -> builtins.str: ...
 
 class UsageEmitter:

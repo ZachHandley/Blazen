@@ -20,7 +20,6 @@ use blazen_memory::search::{
 };
 use blazen_memory::store::{MemoryBackend, MemoryStore};
 use blazen_memory::types::StoredEntry;
-#[cfg(target_os = "wasi")]
 use blazen_memory_valkey::UpstashBackend;
 #[cfg(not(target_os = "wasi"))]
 use blazen_memory_valkey::ValkeyBackend;
@@ -41,7 +40,6 @@ enum BackendKind {
     Jsonl(Arc<JsonlBackend>),
     #[cfg(not(target_os = "wasi"))]
     Valkey(Arc<ValkeyBackend>),
-    #[cfg(target_os = "wasi")]
     Upstash(Arc<UpstashBackend>),
 }
 
@@ -54,7 +52,6 @@ impl MemoryBackend for BackendKind {
             Self::Jsonl(b) => b.put(entry).await,
             #[cfg(not(target_os = "wasi"))]
             Self::Valkey(b) => b.put(entry).await,
-            #[cfg(target_os = "wasi")]
             Self::Upstash(b) => b.put(entry).await,
         }
     }
@@ -66,7 +63,6 @@ impl MemoryBackend for BackendKind {
             Self::Jsonl(b) => b.get(id).await,
             #[cfg(not(target_os = "wasi"))]
             Self::Valkey(b) => b.get(id).await,
-            #[cfg(target_os = "wasi")]
             Self::Upstash(b) => b.get(id).await,
         }
     }
@@ -78,7 +74,6 @@ impl MemoryBackend for BackendKind {
             Self::Jsonl(b) => b.delete(id).await,
             #[cfg(not(target_os = "wasi"))]
             Self::Valkey(b) => b.delete(id).await,
-            #[cfg(target_os = "wasi")]
             Self::Upstash(b) => b.delete(id).await,
         }
     }
@@ -90,7 +85,6 @@ impl MemoryBackend for BackendKind {
             Self::Jsonl(b) => b.list().await,
             #[cfg(not(target_os = "wasi"))]
             Self::Valkey(b) => b.list().await,
-            #[cfg(target_os = "wasi")]
             Self::Upstash(b) => b.list().await,
         }
     }
@@ -102,7 +96,6 @@ impl MemoryBackend for BackendKind {
             Self::Jsonl(b) => b.len().await,
             #[cfg(not(target_os = "wasi"))]
             Self::Valkey(b) => b.len().await,
-            #[cfg(target_os = "wasi")]
             Self::Upstash(b) => b.len().await,
         }
     }
@@ -118,7 +111,6 @@ impl MemoryBackend for BackendKind {
             Self::Jsonl(b) => b.search_by_bands(bands, limit).await,
             #[cfg(not(target_os = "wasi"))]
             Self::Valkey(b) => b.search_by_bands(bands, limit).await,
-            #[cfg(target_os = "wasi")]
             Self::Upstash(b) => b.search_by_bands(bands, limit).await,
         }
     }
@@ -428,13 +420,11 @@ impl JsValkeyBackend {
 /// const backend = UpstashBackend.create("https://us1-merry-cat-32242.upstash.io", "AYAg...");
 /// const memory = Memory.withUpstash(embedder, backend);
 /// ```
-#[cfg(target_os = "wasi")]
 #[napi(js_name = "UpstashBackend")]
 pub struct JsUpstashBackend {
     inner: Arc<UpstashBackend>,
 }
 
-#[cfg(target_os = "wasi")]
 #[napi]
 #[allow(clippy::must_use_candidate, clippy::needless_pass_by_value)]
 impl JsUpstashBackend {
@@ -451,7 +441,7 @@ impl JsUpstashBackend {
     /// logical stores against the same Upstash database.
     #[napi(factory)]
     pub fn create(rest_url: String, rest_token: String, prefix: Option<String>) -> Self {
-        let http = blazen_llm::http_napi_wasi::LazyHttpClient::new().into_arc();
+        let http = default_http_client();
         let mut backend = UpstashBackend::new(rest_url, rest_token, http);
         if let Some(p) = prefix {
             backend = backend.with_prefix(p);
@@ -460,6 +450,21 @@ impl JsUpstashBackend {
             inner: Arc::new(backend),
         }
     }
+}
+
+/// Resolve the platform-appropriate default HTTP client. Mirrors
+/// `blazen_llm::default_http_client` (which is `pub(crate)`): on wasi we
+/// build a [`blazen_llm::http_napi_wasi::LazyHttpClient`] (which defers to
+/// `setDefaultHttpClient`), on native we build a stock
+/// [`blazen_llm::ReqwestHttpClient`].
+#[cfg(target_os = "wasi")]
+fn default_http_client() -> Arc<dyn blazen_llm::http::HttpClient> {
+    blazen_llm::http_napi_wasi::LazyHttpClient::new().into_arc()
+}
+
+#[cfg(not(target_os = "wasi"))]
+fn default_http_client() -> Arc<dyn blazen_llm::http::HttpClient> {
+    blazen_llm::ReqwestHttpClient::new().into_arc()
 }
 
 // ---------------------------------------------------------------------------
@@ -476,8 +481,10 @@ use napi::Either;
 /// substitutes `JsUpstashBackend` for the native `JsJsonlBackend` /
 /// `JsValkeyBackend` pair (which both depend on local FS / raw TCP).
 #[cfg(not(target_os = "wasi"))]
-type AnyBackend<'a> =
-    Either<&'a JsInMemoryBackend, Either<&'a JsJsonlBackend, &'a JsValkeyBackend>>;
+type AnyBackend<'a> = Either<
+    &'a JsInMemoryBackend,
+    Either<&'a JsJsonlBackend, Either<&'a JsValkeyBackend, &'a JsUpstashBackend>>,
+>;
 
 #[cfg(target_os = "wasi")]
 type AnyBackend<'a> = Either<&'a JsInMemoryBackend, &'a JsUpstashBackend>;
@@ -549,14 +556,26 @@ impl JsRetryMemoryBackend {
         }
     }
 
-    /// Generic factory accepting any of the three concrete backends. Useful
+    /// Wrap an `UpstashBackend` with retry-on-transient-error behaviour.
+    #[napi(factory, js_name = "wrapUpstash")]
+    pub fn wrap_upstash(backend: &JsUpstashBackend, config: Option<JsRetryConfig>) -> Self {
+        let cfg = config.map(Into::into).unwrap_or_default();
+        let wrapped =
+            RetryMemoryBackend::new(Arc::clone(&backend.inner) as Arc<dyn MemoryBackend>, cfg);
+        Self {
+            inner: wrapped.into_arc(),
+        }
+    }
+
+    /// Generic factory accepting any of the four concrete backends. Useful
     /// when the caller doesn't statically know which backend is in hand.
     #[napi(factory, js_name = "wrap")]
     pub fn wrap(backend: AnyBackend<'_>, config: Option<JsRetryConfig>) -> Self {
         match backend {
             Either::A(b) => Self::wrap_in_memory(b, config),
             Either::B(Either::A(b)) => Self::wrap_jsonl(b, config),
-            Either::B(Either::B(b)) => Self::wrap_valkey(b, config),
+            Either::B(Either::B(Either::A(b))) => Self::wrap_valkey(b, config),
+            Either::B(Either::B(Either::B(b))) => Self::wrap_upstash(b, config),
         }
     }
 }
@@ -856,7 +875,6 @@ impl JsMemory {
     }
 }
 
-#[cfg(target_os = "wasi")]
 #[napi]
 #[allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 impl JsMemory {

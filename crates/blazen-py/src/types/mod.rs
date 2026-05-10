@@ -50,9 +50,9 @@ pub use media::{
 };
 pub use memory::{
     PyInMemoryBackend, PyJsonlBackend, PyMemory, PyMemoryBackend, PyMemoryResult, PyMemoryStore,
-    PyRetryMemoryBackend, PyStoredEntry, PyValkeyBackend, compute_elid_similarity,
-    compute_embedding_simhash_similarity, compute_text_simhash_similarity, simhash_from_hex,
-    simhash_to_hex,
+    PyRetryMemoryBackend, PyStoredEntry, PyUpstashBackend, PyValkeyBackend,
+    compute_elid_similarity, compute_embedding_simhash_similarity, compute_text_simhash_similarity,
+    simhash_from_hex, simhash_to_hex,
 };
 pub use memory_entry::PyMemoryEntry;
 pub use message::{PyChatMessage, PyContentPart, PyRole};

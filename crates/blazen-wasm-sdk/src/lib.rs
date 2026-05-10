@@ -46,6 +46,7 @@ pub mod memory_types;
 pub mod middleware;
 pub mod model_abcs;
 pub mod model_registry;
+pub mod peer_http;
 pub mod pipeline;
 pub mod pricing;
 pub mod providers;
@@ -54,6 +55,7 @@ pub mod subworkflow_step;
 pub mod telemetry;
 pub mod tokens;
 pub mod types;
+pub mod upstash;
 pub mod workflow;
 pub mod workflow_events;
 

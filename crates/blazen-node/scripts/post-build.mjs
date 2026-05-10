@@ -173,9 +173,27 @@ ${sentinel}
     // emits classes with PascalCase names; we leave those callable as-is
     // so \`new ClassName(...)\` keeps working but their methods are
     // already patched above.
-    const isLikelyClass =
+    //
+    // Detect "class-ness" via either prototype methods OR own static
+    // properties beyond the built-in function metadata fields. Without the
+    // static-property check, a class whose only public surface is a static
+    // factory (e.g. \`UpstashBackend.create\`) would slip through and get
+    // replaced with a \`wrap()\`-returned function that loses the static
+    // method.
+    const FUNCTION_BUILTIN_PROPS = new Set([
+      'length',
+      'name',
+      'arguments',
+      'caller',
+      'prototype',
+    ])
+    const ownStaticPropNames = Object.getOwnPropertyNames(orig).filter(
+      (p) => !FUNCTION_BUILTIN_PROPS.has(p),
+    )
+    const hasPrototypeMethods =
       orig.prototype &&
       Object.getOwnPropertyNames(orig.prototype).some((p) => p !== 'constructor')
+    const isLikelyClass = hasPrototypeMethods || ownStaticPropNames.length > 0
     if (!isLikelyClass) {
       module.exports[key] = wrap(orig)
     }

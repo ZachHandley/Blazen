@@ -26,9 +26,9 @@ blazen-events.workspace = true
 blazen-llm = { workspace = true, features = ["reqwest", "pyo3-serde"] }
 blazen-manager.workspace = true
 blazen-memory.workspace = true
-blazen-memory-valkey.workspace = true
+blazen-memory-valkey = { workspace = true, features = ["redis-tcp", "upstash"] }
 blazen-model-cache.workspace = true
-blazen-peer = { workspace = true, features = ["server", "client"] }
+blazen-peer = { workspace = true, features = ["server", "client", "http-transport"] }
 blazen-persist = { workspace = true, features = ["redb", "valkey"] }
 blazen-pipeline.workspace = true
 blazen-prompts.workspace = true
