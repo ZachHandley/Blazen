@@ -91,6 +91,7 @@ jobs:
             aarch64-unknown-linux-musl
             aarch64-apple-darwin
             x86_64-pc-windows-msvc
+            wasm32-wasi
           )
 
           fetch_or_die() {
@@ -334,6 +335,19 @@ jobs:
         working-directory: crates/blazen-node
         run: ls -la npm/ || true
 
+      - name: List napi npm subpackages to be published
+        if: steps.check.outputs.completed != 'true'
+        working-directory: crates/blazen-node
+        shell: bash
+        run: |
+          echo "=== napi/ subpackages ==="
+          ls -la npm/ || true
+          echo "=== Per-target package.jsons ==="
+          for d in npm/*/; do
+            echo "--- $d ---"
+            cat "$d/package.json" 2>/dev/null | head -30
+          done
+
       - name: Publish subpackages and main package to npm
         if: steps.check.outputs.completed != 'true'
         working-directory: crates/blazen-node
@@ -371,6 +385,63 @@ jobs:
           mode: mark
           version: ${{ needs.version.outputs.version }}
           step: publish-node
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+  publish-workers-alias:
+    name: Publish @blazen-dev/wasi alias
+    needs: [version, publish-node]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ needs.version.outputs.version }}
+          step: publish-workers-alias
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Setup Node
+        if: steps.check.outputs.completed != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Stamp version
+        if: steps.check.outputs.completed != 'true'
+        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
+
+      - name: Publish @blazen-dev/wasi
+        if: steps.check.outputs.completed != 'true'
+        working-directory: crates/blazen-workers-alias
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.version.outputs.version }}"
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_ACCESS_TOKEN }}" > .npmrc
+          if npm view "@blazen-dev/wasi@${VERSION}" version >/dev/null 2>&1; then
+            echo "@blazen-dev/wasi@${VERSION} already on npm; skipping publish"
+          else
+            npm publish --access public --no-git-checks
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ needs.version.outputs.version }}
+          step: publish-workers-alias
           base-url: https://forge.blackleafdigital.com
           owner: BlackLeafDigital
           auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
@@ -430,7 +501,7 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [version, publish-rust, publish-python, publish-node, publish-wasm]
+    needs: [version, publish-rust, publish-python, publish-node, publish-workers-alias, publish-wasm]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -489,9 +560,26 @@ jobs:
           pnpm add blazen
           \`\`\`
 
-          **WebAssembly:**
+          **Browser (WebAssembly SDK):**
           \`\`\`bash
-          npm install @blazen/sdk
+          npm install @blazen-dev/wasm
+          \`\`\`
+
+          **Cloudflare Workers / Deno (wasi):**
+          \`\`\`bash
+          pnpm add blazen   # auto-resolves the wasi sidecar
+          # or pin explicitly:
+          pnpm add @blazen-dev/wasi
+          \`\`\`
+          Workers users must register an HttpClient at module load:
+          \`\`\`javascript
+          import { HttpClient, setDefaultHttpClient } from 'blazen';
+          const client = HttpClient.fromCallback(async (req) => {
+            const res = await fetch(req.url, { method: req.method, headers: req.headers, body: req.body });
+            const body = new Uint8Array(await res.arrayBuffer());
+            return { status: res.status, headers: [...res.headers.entries()], body };
+          });
+          setDefaultHttpClient(client);
           \`\`\`
           NOTES_EOF
 
@@ -614,7 +702,7 @@ jobs:
   cleanup-artifacts:
     name: Cleanup Build Artifacts
     runs-on: ubuntu-latest
-    needs: [version, publish-rust, publish-python, publish-node, publish-wasm, create-release, mirror-github]
+    needs: [version, publish-rust, publish-python, publish-node, publish-workers-alias, publish-wasm, create-release, mirror-github]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -653,6 +741,7 @@ jobs:
             napi-aarch64-unknown-linux-musl.tar.gz
             napi-aarch64-apple-darwin.tar.gz
             napi-x86_64-pc-windows-msvc.tar.gz
+            napi-wasm32-wasi.tar.gz
             wasm.tar.gz
           )
 

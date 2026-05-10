@@ -14,13 +14,10 @@ crate-type = ["cdylib"]
 [dependencies]
 blazen-core.workspace = true
 blazen-events.workspace = true
-blazen-llm = { workspace = true, features = ["reqwest"] }
+blazen-llm.workspace = true
 blazen-manager.workspace = true
 blazen-memory.workspace = true
-blazen-memory-valkey.workspace = true
 blazen-model-cache.workspace = true
-blazen-peer = { workspace = true, features = ["server", "client"] }
-blazen-persist = { workspace = true, features = ["redb", "valkey"] }
 blazen-embed-tract = { workspace = true, optional = true }
 blazen-pipeline.workspace = true
 blazen-prompts.workspace = true
@@ -29,7 +26,6 @@ chrono.workspace = true
 elid = { version = "0.4.3", default-features = false, features = ["embeddings"] }
 napi.workspace = true
 napi-derive.workspace = true
-tokio.workspace = true
 tokio-stream.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -57,11 +53,27 @@ candle-llm = ["blazen-llm/candle-llm"]
 diffusion = ["blazen-llm/diffusion"]
 whispercpp = ["blazen-llm/whispercpp"]
 piper = ["blazen-llm/piper"]
+# Wasi feature alias for Cloudflare Workers / Deno / Node-fallback (wasm32-
+# wasip1* via napi-rs wasi runtime). Pulls everything the wasi target
+# supports: tiktoken token counting, distributed peer (HTTP/JSON client),
+# OTLP-HTTP + Langfuse exporters via the host-registered HttpClient.
+# Excludes `tract` (blazen-embed-tract still pulls reqwest's wasm-bindgen
+# path on wasm32, which requires a browser host that napi-rs's wasi runtime
+# doesn't provide), `prometheus` (no listener on wasi), and all native C/C++
+# inference backends (llama.cpp, ort-sys, candle, piper, whisper).
+# Note: `embed` is intentionally excluded — `blazen-embed`'s facade
+# unconditionally pulls in `blazen-embed-fastembed` (and ort-sys C++ runtime)
+# on non-musl targets.
+wasi = ["tiktoken", "distributed-http", "otlp-http", "langfuse"]
 local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "piper", "tiktoken", "distributed", "otlp", "prometheus", "langfuse"]
 # Distributed peer-to-peer execution (cross-node sub-workflow invocation).
+# Native: gRPC client+server via tonic.
 distributed = ["blazen-core/distributed", "blazen-peer/server", "blazen-peer/client"]
+# Wasi: HTTP/JSON client via host-registered HttpClient (no tonic).
+distributed-http = ["blazen-core/distributed", "blazen-peer/http-transport"]
 # Telemetry exporters
 otlp = ["blazen-telemetry/otlp"]
+otlp-http = ["blazen-telemetry/otlp-http"]
 prometheus = ["blazen-telemetry/prometheus"]
 langfuse = ["blazen-telemetry/langfuse"]
 
@@ -76,6 +88,18 @@ workspace = true
 
 [target.'cfg(unix)'.dependencies]
 openssl-sys = { version = "0.9", features = ["vendored"] }
+
+[target.'cfg(not(target_os = "wasi"))'.dependencies]
+blazen-llm = { workspace = true, features = ["reqwest"] }
+blazen-memory-valkey = { workspace = true, features = ["redis-tcp"] }
+blazen-peer = { workspace = true, features = ["server", "client", "http-transport"] }
+blazen-persist = { workspace = true, features = ["redb", "valkey"] }
+tokio = { workspace = true }
+
+[target.'cfg(target_os = "wasi")'.dependencies]
+blazen-memory-valkey = { version = "0.0.0-dev", path = "../blazen-memory-valkey", registry = "forgejo", default-features = false, features = ["upstash"] }
+blazen-peer = { version = "0.0.0-dev", path = "../blazen-peer", registry = "forgejo", default-features = false, features = ["http-transport"] }
+tokio = { version = "1", default-features = false, features = ["sync", "macros", "io-util", "rt", "time"] }
 
 [target.'cfg(not(target_env = "musl"))'.dependencies]
 blazen-embed-fastembed = { workspace = true, optional = true }

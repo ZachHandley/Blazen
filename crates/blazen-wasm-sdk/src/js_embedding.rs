@@ -6,7 +6,7 @@
 //! Rust WASM code.
 //!
 //! ```js
-//! import { EmbeddingModel } from '@blazen/sdk';
+//! import { EmbeddingModel } from '@blazen-dev/wasm';
 //! import { pipeline } from '@xenova/transformers';
 //!
 //! const pipe = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');

@@ -25,6 +25,14 @@ hf-hub = { workspace = true, features = ["tokio"] }
 tokio = { version = "1", default-features = false, features = ["fs", "rt", "rt-multi-thread", "macros", "time"] }
 dirs = { workspace = true }
 
+[target.'cfg(all(target_arch = "wasm32", target_os = "wasi"))'.dependencies]
+# Wasi: no filesystem, no hf-hub. Model bytes are fetched via a local
+# `WasiHttpFetch` trait (callers adapt their `blazen_llm::HttpClient` into
+# it -- we don't depend on `blazen-llm` directly because that crate
+# transitively depends back on `blazen-model-cache` through
+# `blazen-audio-piper`, creating a Cargo path cycle).
+async-trait = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 futures-util = { workspace = true }

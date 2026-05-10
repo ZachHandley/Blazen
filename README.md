@@ -7,7 +7,7 @@
   <a href="https://crates.io/crates/blazen"><img alt="crates.io" src="https://img.shields.io/crates/v/blazen.svg?style=flat-square&logo=rust&label=crates.io" /></a>
   <a href="https://pypi.org/project/blazen/"><img alt="PyPI" src="https://img.shields.io/pypi/v/blazen.svg?style=flat-square&logo=python&label=PyPI" /></a>
   <a href="https://www.npmjs.com/package/blazen"><img alt="npm" src="https://img.shields.io/npm/v/blazen.svg?style=flat-square&logo=npm&label=npm" /></a>
-  <a href="https://www.npmjs.com/package/@blazen/sdk"><img alt="npm wasm" src="https://img.shields.io/npm/v/@blazen/sdk.svg?style=flat-square&logo=webassembly&label=wasm" /></a>
+  <a href="https://www.npmjs.com/package/@blazen-dev/wasm"><img alt="npm wasm" src="https://img.shields.io/npm/v/@blazen-dev/wasm.svg?style=flat-square&logo=webassembly&label=wasm" /></a>
   <a href="https://github.com/ZachHandley/Blazen/blob/main/LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square" /></a>
 </p>
 
@@ -21,7 +21,7 @@
 - **Multi-workflow pipelines** -- Orchestrate sequential and parallel stages with pause/resume and per-workflow streaming
 - **Branching and fan-out** -- Conditional branching, parallel fan-out, and real-time streaming within workflows
 - **Native Python and TypeScript bindings** -- Python via PyO3/maturin, Node.js/TypeScript via napi-rs. Not wrappers around HTTP -- actual compiled Rust running in-process
-- **WebAssembly SDK** -- Run Blazen in the browser, edge workers, Deno, and embedded runtimes via `@blazen/sdk`. Same Rust core compiled to WASM
+- **WebAssembly SDK** -- Run Blazen in the browser, edge workers, Deno, and embedded runtimes via `@blazen-dev/wasm`. Same Rust core compiled to WASM
 - **Prompt management** -- Versioned prompt templates with `{{variable}}` interpolation, YAML/JSON registries, and multimodal attachments
 - **Persistence** -- Embedded persistence via redb, or bring-your-own via callbacks. Pause a workflow, serialize state to JSON, resume later
 - **Identity-preserving live state** -- Pass DB connections, Pydantic models, and other live objects through events and the new `ctx.state` / `ctx.session` namespaces. `StopEvent(result=obj)` round-trips non-JSON Python values with `is`-identity preserved -- the engine no longer silently stringifies unpicklable results
@@ -47,14 +47,29 @@ pip install blazen   # also works
 **Node.js / TypeScript:**
 
 ```bash
+# Umbrella package — auto-resolves the right artifact for your target.
+# On Node it loads the native `.node` addon. On Deno (and other wasi
+# hosts that polyfill node:wasi) it falls back to the wasi sidecar.
+# Cloudflare Workers cannot load the wasi sidecar today (workerd's
+# nodejs_compat doesn't polyfill node:wasi or expose MessageChannel —
+# see the "Cloudflare Workers" section below); Workers users should
+# install `@blazen-dev/wasm` instead.
 pnpm add blazen
 ```
 
-**WebAssembly** (browser, edge, Deno, Cloudflare Workers):
+**WebAssembly — browser-style WASM SDK** (`wasm32-unknown-unknown`, wasm-pack output, no host imports beyond `fetch`):
 
 ```bash
-npm install @blazen/sdk
+npm install @blazen-dev/wasm
 ```
+
+**WebAssembly — wasi sidecar** (`wasm32-wasip1`; explicit pin re-exporting `@blazen-dev/blazen-wasm32-wasi`):
+
+```bash
+npm install @blazen-dev/wasi
+```
+
+Most users want `blazen` (Node + auto-wasi resolution) or `@blazen-dev/wasm` (browser, Deno, ESM-only hosts). Pin `@blazen-dev/wasi` directly only if you need the wasi binary without the Node umbrella's resolution logic.
 
 ## Quick Start
 
@@ -149,12 +164,12 @@ console.log(result.data); // { greeting: "Hello, Zach!" }
 
 ### Cloudflare Workers
 
-Blazen runs the full workflow engine inside Cloudflare Workers via `@blazen/sdk`. Multi-step LLM workflows, agents, and pipelines all execute on workerd -- Cloudflare's production runtime -- with no special configuration beyond `wasm-pack build --target web --release` and passing the compiled `WebAssembly.Module` to `initSync` at module load.
+Blazen runs the full workflow engine inside Cloudflare Workers via `@blazen-dev/wasm`. Multi-step LLM workflows, agents, and pipelines all execute on workerd -- Cloudflare's production runtime -- with no special configuration beyond `wasm-pack build --target web --release` and passing the compiled `WebAssembly.Module` to `initSync` at module load.
 
 ```typescript
-import { initSync, Workflow } from "@blazen/sdk";
+import { initSync, Workflow } from "@blazen-dev/wasm";
 // Wrangler resolves `*.wasm` imports as `WebAssembly.Module` instances.
-import wasmModule from "@blazen/sdk/blazen_wasm_sdk_bg.wasm";
+import wasmModule from "@blazen-dev/wasm/blazen_wasm_sdk_bg.wasm";
 
 initSync({ module: wasmModule as WebAssembly.Module });
 
@@ -180,11 +195,71 @@ export default {
 
 A complete runnable setup -- `wrangler.toml`, `vitest` integration test exercising the worker against a real `workerd` instance, and the `wasm-pack` build wiring -- lives in [`examples/cloudflare-worker/`](examples/cloudflare-worker/). CI builds and tests it on every push, so the Workers target is a supported deployment surface, not aspirational.
 
+**Wasi sidecar on Workers (partial — sync APIs only, async still blocked upstream):** With compat date `2026-04-01` and `nodejs_compat` enabled, the wasi sidecar (`@blazen-dev/blazen-wasm32-wasi`, what `blazen` falls back to on non-Node hosts) loads cleanly on workerd and every sync API works — `new Workflow`, `addStep`, `HttpClient.fromCallback`, `setDefaultHttpClient`, `UpstashBackend.create`, `HttpPeerClient.newHttp`. We shipped a JS-microtask async dispatcher (`crates/blazen-node/src/wasi_async.rs` registers a custom spawner via `blazen_core::runtime::register_spawner`; the host wires `globalThis.__blazenDrainAsyncQueue = blazen.__blazenDrainAsyncQueue` after import so the scheduler can call back into Rust) and migrated every direct `tokio::spawn` call site onto it. **The dispatcher is verifiably installed**, but `Workflow.run()` / `Workflow.runWithHandler()` / `Pipeline.start()` still panic with `unreachable` from the same upstream wasm offsets — most likely tokio's time wheel (`tokio::time::sleep`/`timeout` is still re-exported from tokio in the wasi `runtime` impl) or napi-rs's `tokio_rt` glue around `#[napi] async fn`. `Workflow.runStreaming()` fails differently with an `Illegal invocation` on a TSfn → `ReadableByteStreamController.enqueue` callback. For full async workflow execution today, use `@blazen-dev/wasm`. The reproduction harness — `examples/cloudflare-worker-wasi/run-tests.mjs` — runs 13 probes (8 pass, 4 fail, 1 skip) and prints a pass/fail table.
+
 Note: Cloudflare Workers cap CPU time per request (10ms on the free plan, up to 30s on paid plans). Long-running multi-call LLM flows should either fit within those limits, be split across requests using Blazen's pause/resume snapshots, or run on the WASIp2 component (`blazen-wasm`) for ZLayer edge deployment without the per-request cap.
+
+#### Three install paths for non-native hosts
+
+Blazen ships three npm artifacts so every JavaScript runtime has a first-class entry point:
+
+| Package | Target | Use it when |
+|---------|--------|-------------|
+| `blazen` | Node-native + wasi auto-resolution | You want one install command that works on Node and on Deno (where `node:wasi` is implemented). On Node it loads the native `.node` addon; elsewhere it falls back to the wasi sidecar. **Does not currently work on Cloudflare Workers** — see "Cloudflare Workers" above; use `@blazen-dev/wasm` there. |
+| `@blazen-dev/wasm` | Browser-style `wasm32-unknown-unknown` (wasm-pack output) | You're targeting a browser, **Cloudflare Workers**, Deno, or any host that talks to the SDK via `fetch` and `WebAssembly.Module`. Smallest surface, no wasi imports. |
+| `@blazen-dev/wasi` | `wasm32-wasip1` sidecar (re-exports `@blazen-dev/blazen-wasm32-wasi`) | You want the wasi binary directly, without going through the `blazen` umbrella's resolution logic. Useful for Deno, StackBlitz/WebContainers, and Node fallback installs where prebuilt native binaries aren't available. |
+
+#### wasi runtime requirement: register an `HttpClient`
+
+The wasi build has no built-in HTTP stack — it cannot link `reqwest`'s wasm32 path because that pulls `wasm-bindgen`, which is incompatible with wasi. So **before any cloud LLM, OTLP exporter, Langfuse exporter, or peer-HTTP call**, the host must register a callback-backed `HttpClient` that proxies requests through the runtime's native `fetch` (or equivalent). Once registered, every Blazen subsystem that needs HTTP routes through it transparently.
+
+```javascript
+import { HttpClient, setDefaultHttpClient } from 'blazen';
+
+const client = HttpClient.fromCallback(async (req) => {
+  const res = await fetch(req.url, {
+    method: req.method,
+    headers: Object.fromEntries(req.headers),
+    body: req.body,
+  });
+  return {
+    status: res.status,
+    headers: [...res.headers.entries()],
+    body: new Uint8Array(await res.arrayBuffer()),
+  };
+});
+setDefaultHttpClient(client);
+```
+
+Forgetting this step is the most common wasi-host failure mode: cloud-LLM constructors will succeed lazily, but the first `complete()` call returns an `HttpClientNotRegisteredError`.
+
+#### What works on wasi (and what doesn't)
+
+Available on wasi:
+
+- Workflow engine, pipelines, agents, prompts — full feature parity with the native build.
+- Cloud LLM providers (OpenAI, Anthropic, Gemini, Azure, OpenRouter, Groq, Together, Mistral, DeepSeek, Fireworks, Perplexity, xAI, Cohere, Bedrock, fal.ai) — all route HTTP through the registered `HttpClient`.
+- Tiktoken token counting (`TiktokenCounter`).
+- In-memory and Upstash Redis memory backends — `Memory.localUpstash(restUrl, restToken)` for a one-shot setup, or `Memory.withUpstash(embedder, backend)` for a custom embedder. The Upstash Redis REST API is HTTP-only, so it works wherever `setDefaultHttpClient` is wired up.
+- Distributed peer (HTTP/JSON client only) — `HttpPeerClient.newHttp(baseUrl, nodeId)` for talking to a remote peer cluster from a Worker.
+- OTLP-HTTP and Langfuse telemetry exporters — both route through the registered `HttpClient`. The OTLP gRPC exporter (`tonic`-based) is native-only.
+- Custom memory backends via the `JsMemoryBackend` subclass — works on every target including wasi.
+
+Not available on wasi:
+
+- Local ONNX embeddings (`tract`) — pulled `wasm-bindgen` transitively via `reqwest`'s wasm32 path; deferred until upstream provides a pure-tokio HTTP path. Use `@blazen-dev/wasm` for in-browser tract embeddings, or call a remote embedding model through `setDefaultHttpClient`.
+- Persistent file-backed checkpoint store — Workers and most wasi hosts have no filesystem. Use the in-memory checkpoint store, or persist snapshots out-of-band via the JSON snapshot API.
+- Local C/C++ inference — `llama.cpp`, `whisper.cpp`, `piper`, `candle`, `fastembed`/`ort`. None compile to wasi.
+- Native FS model cache — the wasi cache is in-memory only. Models redownload per worker instance unless you front them with a CDN/KV cache yourself.
+- Prometheus exporter — there's no listening socket on Workers. Expose metrics via your own route handler, or use the OTLP-HTTP exporter and push to a collector instead.
+
+#### Working example
+
+A complete `wrangler` + `vitest` + `wasm-pack` setup using `@blazen-dev/wasm` lives in [`examples/cloudflare-worker/`](examples/cloudflare-worker/) and is exercised by CI on every push. A parallel example pinning `@blazen-dev/wasi` directly (rather than the browser-style SDK) may be added once the umbrella `blazen` package's wasi auto-resolution stabilizes across wrangler versions.
 
 ### WASM SDK feature parity
 
-`@blazen/sdk` is no longer the "lite" sibling. It now matches the Node binding for every workflow, pipeline, and handler primitive that makes sense in a browser or Worker:
+`@blazen-dev/wasm` is no longer the "lite" sibling. It now matches the Node binding for every workflow, pipeline, and handler primitive that makes sense in a browser or Worker:
 
 - **Pipelines** -- `input_mapper`, `condition`, `onPersist`, and `onPersistJson` callbacks for sequential and parallel stages
 - **Workflows** -- `setSessionPausePolicy`, `runStreaming(input, onEvent)`, `runWithHandler(input)`, and `resumeWithSerializableRefs(snapshot, refs)`
@@ -192,7 +267,7 @@ Note: Cloudflare Workers cap CPU time per request (10ms on the free plan, up to 
 - **Context** -- session-ref serialization round-trips opaque host values across pause/resume the same way the Node and Python bindings do
 - **In-browser embeddings** -- `TractEmbedModel.create(modelUrl, tokenizerUrl)` loads an ONNX embedding model and a HuggingFace tokenizer from URLs and runs inference on the CPU via `tract`, so RAG and semantic-memory flows work in the browser with no server round-trip
 
-If a workflow runs against the Node binding, the same code path runs under `@blazen/sdk` -- the only differences are the runtime-specific wiring (Node `fs` vs. browser `fetch`).
+If a workflow runs against the Node binding, the same code path runs under `@blazen-dev/wasm` -- the only differences are the runtime-specific wiring (Node `fs` vs. browser `fetch`).
 
 ## LLM Integration
 
@@ -406,7 +481,7 @@ const result = await handler.result();
 | `blazen-telemetry` | Observability: OpenTelemetry spans, Prometheus metrics, Langfuse, and LLM call history |
 | `blazen-py` | Python bindings via PyO3/maturin (published to PyPI as `blazen`) |
 | `blazen-node` | Node.js/TypeScript bindings via napi-rs (published to npm as `blazen`) |
-| [`blazen-wasm-sdk`](crates/blazen-wasm-sdk/) | TypeScript/JS client SDK via WebAssembly (published to npm as `@blazen/sdk`) |
+| [`blazen-wasm-sdk`](crates/blazen-wasm-sdk/) | TypeScript/JS client SDK via WebAssembly (published to npm as `@blazen-dev/wasm`) |
 | [`blazen-wasm`](crates/blazen-wasm/) | WASIp2 WASM component for ZLayer edge deployment |
 | `blazen-cli` | CLI tool for scaffolding projects (`blazen init`) |
 

@@ -134,7 +134,7 @@ pub struct HistoryEvent {
 /// Append-only history of events for a single workflow run.
 ///
 /// ```js
-/// import { WorkflowHistory } from '@blazen/sdk';
+/// import { WorkflowHistory } from '@blazen-dev/wasm';
 ///
 /// const history = new WorkflowHistory(crypto.randomUUID(), 'my-workflow');
 /// history.pushEventKind('WorkflowResumed');

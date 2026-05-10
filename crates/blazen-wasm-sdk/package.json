@@ -1,5 +1,5 @@
 {
-  "name": "@blazen/sdk",
+  "name": "@blazen-dev/wasm",
   "version": "0.0.0-dev",
   "description": "Blazen AI SDK for TypeScript/JavaScript (WebAssembly)",
   "main": "blazen_wasm_sdk.js",

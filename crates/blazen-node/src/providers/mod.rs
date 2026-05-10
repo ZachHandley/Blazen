@@ -43,7 +43,7 @@ pub mod llamacpp;
 pub mod mistralrs;
 #[cfg(feature = "piper")]
 pub mod piper;
-#[cfg(feature = "tract")]
+#[cfg(all(feature = "tract", not(target_os = "wasi")))]
 pub mod tract;
 #[cfg(feature = "whispercpp")]
 pub mod whispercpp;
@@ -107,7 +107,7 @@ pub use mistralrs::{
 };
 #[cfg(feature = "piper")]
 pub use piper::{JsPiperOptions, JsPiperProvider};
-#[cfg(feature = "tract")]
+#[cfg(all(feature = "tract", not(target_os = "wasi")))]
 pub use tract::{JsTractEmbedModel, JsTractOptions, JsTractResponse};
 #[cfg(feature = "whispercpp")]
 pub use whispercpp::JsWhisperCppProvider;

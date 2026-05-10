@@ -12,7 +12,7 @@ On-device LLM chat using the Blazen WASM SDK with [WebLLM](https://webllm.mlc.ai
 ## Prerequisites
 
 ```bash
-npm install @blazen/sdk @mlc-ai/web-llm
+npm install @blazen-dev/wasm @mlc-ai/web-llm
 ```
 
 ## Browser requirements

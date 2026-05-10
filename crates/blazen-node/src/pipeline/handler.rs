@@ -7,6 +7,8 @@ use napi_derive::napi;
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 
+use blazen_core::runtime;
+
 use crate::error::pipeline_error_to_napi;
 use crate::pipeline::progress::JsProgressSnapshot;
 use crate::pipeline::snapshot::{JsPipelineResult, JsPipelineSnapshot};
@@ -135,7 +137,7 @@ impl JsPipelineHandler {
         let mut stream = handler.stream_events();
         let on_event = Arc::new(on_event);
 
-        tokio::spawn(async move {
+        runtime::spawn(async move {
             while let Some(event) = stream.next().await {
                 let js_inner = any_event_to_js_value(&*event.event);
                 let js_payload = serde_json::json!({

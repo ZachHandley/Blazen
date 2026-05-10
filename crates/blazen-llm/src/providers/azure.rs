@@ -97,7 +97,8 @@ impl AzureOpenAiProvider {
     /// - `deployment_name`: The model deployment name.
     #[cfg(any(
         all(target_arch = "wasm32", not(target_os = "wasi")),
-        feature = "reqwest"
+        feature = "reqwest",
+        target_os = "wasi"
     ))]
     #[must_use]
     pub fn new(
@@ -140,7 +141,8 @@ impl AzureOpenAiProvider {
     /// `resource_name` + `deployment_name`.
     #[cfg(any(
         all(target_arch = "wasm32", not(target_os = "wasi")),
-        feature = "reqwest"
+        feature = "reqwest",
+        target_os = "wasi"
     ))]
     /// # Errors
     ///

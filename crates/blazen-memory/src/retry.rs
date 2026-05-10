@@ -24,10 +24,14 @@ use crate::error::{MemoryError, Result};
 use crate::store::MemoryBackend;
 use crate::types::StoredEntry;
 
-/// Sleep for `delay`. Native uses `tokio::time::sleep`; wasm32 routes through
-/// `gloo_timers::future::TimeoutFuture` because tokio's time driver does not
-/// exist on `wasm32-unknown-unknown` (calling `tokio::time::sleep` there panics
-/// at runtime even though it compiles via workspace feature unification).
+/// Sleep for `delay`.
+///
+/// - **Native / `WASIp2`**: `tokio::time::sleep`. `WASIp2` ships a working
+///   tokio time driver (see `blazen-node`'s `cfg(target_os = "wasi")` block)
+///   so the native path applies unchanged.
+/// - **Browser wasm32 (`wasm32-unknown-unknown`)**: `tokio::time::sleep`
+///   panics at runtime (no tokio time driver), so we route through
+///   `gloo_timers::future::TimeoutFuture`.
 ///
 /// `gloo_timers::future::TimeoutFuture` is `!Send` (it wraps a JS Promise via
 /// `wasm_bindgen_futures`), so we wrap it in a [`SendTimeoutFuture`] newtype
@@ -35,11 +39,14 @@ use crate::types::StoredEntry;
 /// thread). The `MemoryBackend` trait requires `Send` on its returned futures,
 /// and without this wrapper the entire trait impl would become `!Send`.
 async fn sleep_ms(delay: Duration) {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        all(target_arch = "wasm32", target_os = "wasi")
+    ))]
     {
         tokio::time::sleep(delay).await;
     }
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
     {
         // gloo-timers takes u32 millis; saturating cast is safe because retry
         // delays are bounded by `RetryConfig::max_delay_ms` (well under
@@ -54,16 +61,16 @@ async fn sleep_ms(delay: Duration) {
 /// because of the embedded `Rc<RefCell<...>>`. On `wasm32-unknown-unknown`
 /// there is exactly one OS thread, so no other thread can ever observe the
 /// wrapped state — the `Send` impl is vacuously safe.
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
 struct SendTimeoutFuture(gloo_timers::future::TimeoutFuture);
 
 // SAFETY: wasm32 is single-threaded; no other thread can observe the
 // wrapped JS Promise state.
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
 #[allow(unsafe_code)]
 unsafe impl Send for SendTimeoutFuture {}
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
 impl std::future::Future for SendTimeoutFuture {
     type Output = ();
 

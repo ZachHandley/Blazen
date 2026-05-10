@@ -27,13 +27,24 @@ uuid = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", default-features = false, features = ["fs", "io-util"] }
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+# Browser-WASM only (not WASIp2 -- WASIp2 has no JS runtime). Every dep
+# in this block transitively pulls wasm-bindgen, which cannot be satisfied
+# in the wasi build (no JS shim host), so they all live behind the
+# browser-only cfg.
+[target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dependencies]
 uuid = { workspace = true, features = ["js"] }
 getrandom = { version = "0.2", features = ["js"] }
-# `RetryMemoryBackend` needs to await between retry attempts; on wasm32
-# `tokio::time::sleep` panics at runtime (no tokio time driver), so we
-# fall back to `setTimeout` via gloo-timers' Promise-based wrapper.
+# `RetryMemoryBackend` needs to await between retry attempts; on
+# `wasm32-unknown-unknown` `tokio::time::sleep` panics at runtime (no tokio
+# time driver), so we fall back to `setTimeout` via gloo-timers' Promise-
+# based wrapper. WASIp2 has a working tokio time driver and uses
+# `tokio::time::sleep` directly (see the wasi block below).
 gloo-timers = { version = "0.3", features = ["futures"] }
+
+# WASIp2 has a working tokio time driver, so the retry backoff sleep can
+# delegate to `tokio::time::sleep` instead of the gloo-timers shim.
+[target.'cfg(all(target_arch = "wasm32", target_os = "wasi"))'.dependencies]
+tokio = { version = "1", default-features = false, features = ["time"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }

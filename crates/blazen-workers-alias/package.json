@@ -1,0 +1,38 @@
+{
+  "name": "@blazen-dev/wasi",
+  "version": "0.0.0-dev",
+  "description": "Blazen wasi build of the Node binding — thin re-export of @blazen-dev/blazen-wasm32-wasi for explicit installs in Cloudflare Workers / Deno / any WASI host. The umbrella `blazen` package auto-resolves the wasi sidecar without this alias; install this only if you want an explicit pin.",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "main": "index.cjs",
+  "module": "index.mjs",
+  "types": "index.d.ts",
+  "files": [
+    "index.cjs",
+    "index.mjs",
+    "index.d.ts"
+  ],
+  "dependencies": {
+    "@blazen-dev/blazen-wasm32-wasi": "0.0.0-dev"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://forge.blackleafdigital.com/BlackLeafDigital/Blazen"
+  },
+  "keywords": [
+    "blazen",
+    "wasi",
+    "wasm",
+    "cloudflare-workers",
+    "deno",
+    "ai",
+    "llm",
+    "workflow"
+  ],
+  "engines": {
+    "node": ">= 18"
+  }
+}

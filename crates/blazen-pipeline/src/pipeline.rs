@@ -9,11 +9,12 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use blazen_core::SessionRefRegistry;
+use blazen_core::runtime;
+use blazen_core::runtime::{JoinHandle, JoinSet};
 use blazen_events::{AnyEvent, ProgressEvent, ProgressKind, StopEvent};
 use blazen_llm::retry::RetryConfig;
 use chrono::Utc;
 use tokio::sync::{broadcast, mpsc, oneshot};
-use tokio::task::{JoinHandle, JoinSet};
 use tokio_stream::StreamExt;
 use uuid::Uuid;
 
@@ -167,7 +168,7 @@ where
             total_stages,
         );
 
-        tokio::spawn(execute_pipeline(
+        runtime::spawn(execute_pipeline(
             self.name,
             self.stages,
             input,
@@ -349,7 +350,7 @@ async fn execute_pipeline<S>(
     );
 
     let outcome = match total_timeout {
-        Some(d) => match tokio::time::timeout(d, run_fut).await {
+        Some(d) => match runtime::timeout(d, run_fut).await {
             Ok(inner) => inner,
             Err(_) => RunOutcome::Failed(PipelineError::Timeout {
                 elapsed_ms: u64::try_from(d.as_millis()).unwrap_or(u64::MAX),
@@ -745,12 +746,23 @@ where
 
     // Forward events in a separate task while awaiting the result.
     // Returns the per-stage usage / cost totals it observed.
-    let forward_handle: JoinHandle<(blazen_llm::types::TokenUsage, f64)> = tokio::spawn({
+    let forward_handle: JoinHandle<(blazen_llm::types::TokenUsage, f64)> = runtime::spawn({
         let stage_name = stage_name.clone();
         async move {
             let mut usage = blazen_llm::types::TokenUsage::default();
             let mut cost: f64 = 0.0;
             while let Some(event) = wf_stream.next().await {
+                // Break on the workflow's stream-end sentinel. Without
+                // this, the loop relies on the broadcast Sender count
+                // dropping to zero — which happens reliably on native
+                // (WorkflowHandler::result drops its sender after the
+                // event loop joins) but NOT on wasi/Workers, where
+                // step-handler `JsContext` clones can outlive the event
+                // loop until JS GC reclaims them. Mirrors the
+                // `Workflow::run_streaming` forwarder in `blazen-node`.
+                if event.event_type_id() == "blazen::StreamEnd" {
+                    break;
+                }
                 if let Some(ue) = event.as_any().downcast_ref::<blazen_events::UsageEvent>() {
                     usage.add(&blazen_llm::types::TokenUsage {
                         prompt_tokens: ue.prompt_tokens,
@@ -780,7 +792,7 @@ where
     // Await the workflow result, optionally with a timeout.
     #[allow(clippy::single_match_else)]
     let wf_result = if let Some(timeout_dur) = timeout {
-        match tokio::time::timeout(timeout_dur, handler.result()).await {
+        match runtime::timeout(timeout_dur, handler.result()).await {
             Ok(r) => r,
             Err(_) => {
                 forward_handle.abort();
@@ -895,7 +907,7 @@ where
         let fwd_stage = stage_name;
         let fwd_branch = branch_name.clone();
         let fwd_tx = stream_tx.clone();
-        let fh: JoinHandle<(blazen_llm::types::TokenUsage, f64)> = tokio::spawn(async move {
+        let fh: JoinHandle<(blazen_llm::types::TokenUsage, f64)> = runtime::spawn(async move {
             let mut usage = blazen_llm::types::TokenUsage::default();
             let mut cost: f64 = 0.0;
             while let Some(event) = wf_stream.next().await {
@@ -927,7 +939,7 @@ where
 
         set.spawn(async move {
             let result = if let Some(t) = timeout {
-                match tokio::time::timeout(t, handler.result()).await {
+                match runtime::timeout(t, handler.result()).await {
                     Ok(r) => r,
                     Err(_) => Err(blazen_core::WorkflowError::Timeout { elapsed: t }),
                 }
@@ -1039,7 +1051,7 @@ where
         let fwd_stage = stage_name;
         let fwd_branch = branch_name.clone();
         let fwd_tx = stream_tx.clone();
-        let fh: JoinHandle<(blazen_llm::types::TokenUsage, f64)> = tokio::spawn(async move {
+        let fh: JoinHandle<(blazen_llm::types::TokenUsage, f64)> = runtime::spawn(async move {
             let mut usage = blazen_llm::types::TokenUsage::default();
             let mut cost: f64 = 0.0;
             while let Some(event) = wf_stream.next().await {
@@ -1071,7 +1083,7 @@ where
 
         set.spawn(async move {
             let result = if let Some(t) = timeout {
-                match tokio::time::timeout(t, handler.result()).await {
+                match runtime::timeout(t, handler.result()).await {
                     Ok(r) => r,
                     Err(_) => Err(blazen_core::WorkflowError::Timeout { elapsed: t }),
                 }
@@ -1117,7 +1129,7 @@ where
     let mut stage_usage = blazen_llm::types::TokenUsage::default();
     let mut stage_cost: f64 = 0.0;
     for fh in forward_handles {
-        let (u, c) = match tokio::time::timeout(Duration::from_millis(50), fh).await {
+        let (u, c) = match runtime::timeout(Duration::from_millis(50), fh).await {
             Ok(joined) => joined.unwrap_or_default(),
             Err(_) => (blazen_llm::types::TokenUsage::default(), 0.0),
         };

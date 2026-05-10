@@ -115,7 +115,8 @@ impl OpenAiCompatProvider {
     /// Create a provider from a fully-specified configuration.
     #[cfg(any(
         all(target_arch = "wasm32", not(target_os = "wasi")),
-        feature = "reqwest"
+        feature = "reqwest",
+        target_os = "wasi"
     ))]
     #[must_use]
     pub fn new(config: OpenAiCompatConfig) -> Self {
@@ -886,7 +887,8 @@ impl OpenAiCompatEmbeddingModel {
     /// Create an embedding model from a fully-specified configuration.
     #[cfg(any(
         all(target_arch = "wasm32", not(target_os = "wasi")),
-        feature = "reqwest"
+        feature = "reqwest",
+        target_os = "wasi"
     ))]
     #[must_use]
     pub fn new(config: OpenAiCompatConfig, model: impl Into<String>, dimensions: usize) -> Self {
@@ -942,7 +944,8 @@ const EMBEDDING_DEFAULTS: &[(&str, &str, &str, usize)] = &[
 
 #[cfg(any(
     all(target_arch = "wasm32", not(target_os = "wasi")),
-    feature = "reqwest"
+    feature = "reqwest",
+    target_os = "wasi"
 ))]
 impl OpenAiCompatEmbeddingModel {
     /// Construct an embedding model for a known provider from

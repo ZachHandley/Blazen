@@ -150,7 +150,7 @@ export type HttpStreamHandler = (
 /// A JavaScript-backed [`HttpClient`] implementation.
 ///
 /// ```js
-/// import { HttpClient } from '@blazen/sdk';
+/// import { HttpClient } from '@blazen-dev/wasm';
 ///
 /// const client = new HttpClient(async (req) => {
 ///   const res = await fetch(req.url, {

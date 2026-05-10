@@ -70,6 +70,10 @@ pub fn pipeline_error_to_napi(err: blazen_pipeline::PipelineError) -> napi::Erro
 /// The error class name is included as a prefix so JS consumers can
 /// distinguish transport, encoding, TLS, envelope-version, workflow,
 /// and unknown-step failures from the message text.
+///
+/// Available on every target — `PeerError`'s variants are wasi-compatible
+/// (no tonic / rustls types in the public surface), so the wasi
+/// HTTP/JSON peer client can route errors through the same mapper.
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn peer_error_to_napi(err: blazen_peer::PeerError) -> napi::Error {
@@ -157,6 +161,7 @@ pub fn llm_error_to_napi(err: blazen_llm::BlazenError) -> napi::Error {
 }
 
 /// Convert a [`blazen_persist::PersistError`] to a [`napi::Error`].
+#[cfg(not(target_os = "wasi"))]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn persist_error_to_napi(err: blazen_persist::PersistError) -> napi::Error {

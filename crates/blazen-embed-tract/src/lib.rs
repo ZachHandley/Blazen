@@ -19,13 +19,19 @@ pub mod options;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod provider;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
 pub mod wasm_provider;
+
+#[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
+pub mod wasi_provider;
 
 pub use options::TractOptions;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use provider::{TractEmbedModel, TractError, TractResponse};
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
 pub use wasm_provider::{WasmTractEmbedModel, WasmTractError, WasmTractResponse};
+
+#[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
+pub use wasi_provider::{WasiTractEmbedModel, WasiTractError, WasiTractResponse};

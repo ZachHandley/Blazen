@@ -30,8 +30,13 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 // Native `opentelemetry_http::HttpClient` wrapper around `reqwest::Client`.
 // Mirrors the impl shipped behind `opentelemetry-http/reqwest`, but we own it
 // here so we don't need to enable that feature (which would also compile on
-// wasm32 and trip the `!Send` future error).
-#[cfg(all(feature = "otlp-http", not(target_arch = "wasm32")))]
+// wasm32 and trip the `!Send` future error). Excluded on wasi (no socket
+// access; the wasi build uses `WasiFetchHttpClient` instead).
+#[cfg(all(
+    feature = "otlp-http",
+    not(target_arch = "wasm32"),
+    not(target_os = "wasi")
+))]
 mod native_reqwest_client {
     use bytes::Bytes;
     use http::{Request, Response};
@@ -112,10 +117,15 @@ pub fn init_otlp_http(config: OtlpConfig) -> Result<(), Box<dyn std::error::Erro
     //    wasm32 client is `!Send`, which violates the trait's `Send + Sync`
     //    bound and breaks compilation for `wasm32-unknown-unknown`.
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
     let builder = SpanExporter::builder()
         .with_http()
         .with_http_client(crate::exporters::wasm_otlp_client::WasmFetchHttpClient::new());
+
+    #[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
+    let builder = SpanExporter::builder()
+        .with_http()
+        .with_http_client(crate::exporters::wasi_otlp_client::WasiFetchHttpClient::new());
 
     #[cfg(not(target_arch = "wasm32"))]
     let builder = SpanExporter::builder().with_http().with_http_client(

@@ -81,7 +81,8 @@ impl OpenAiProvider {
     /// `OpenAI` endpoint.
     #[cfg(any(
         all(target_arch = "wasm32", not(target_os = "wasi")),
-        feature = "reqwest"
+        feature = "reqwest",
+        target_os = "wasi"
     ))]
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {
@@ -614,7 +615,8 @@ impl OpenAiEmbeddingModel {
     /// Defaults to `text-embedding-3-small` with 1536 dimensions.
     #[cfg(any(
         all(target_arch = "wasm32", not(target_os = "wasi")),
-        feature = "reqwest"
+        feature = "reqwest",
+        target_os = "wasi"
     ))]
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {
@@ -683,7 +685,8 @@ impl OpenAiEmbeddingModel {
 
 #[cfg(any(
     all(target_arch = "wasm32", not(target_os = "wasi")),
-    feature = "reqwest"
+    feature = "reqwest",
+    target_os = "wasi"
 ))]
 impl OpenAiEmbeddingModel {
     /// Construct from typed [`ProviderOptions`](crate::types::provider_options::ProviderOptions).

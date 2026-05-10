@@ -1,19 +1,19 @@
-# @blazen/sdk
+# @blazen-dev/wasm
 
 TypeScript/JavaScript SDK for Blazen via WebAssembly. Run the actual Blazen workflow engine — the same `blazen_core` Rust code that powers the native Python and Node bindings — directly in browsers, Node.js, Deno, and Cloudflare Workers. No native dependencies.
 
 ## Installation
 
 ```bash
-npm install blazen-wasm-sdk
-# pnpm add blazen-wasm-sdk
-# yarn add blazen-wasm-sdk
+npm install @blazen-dev/wasm
+# pnpm add @blazen-dev/wasm
+# yarn add @blazen-dev/wasm
 ```
 
 ## Quick start
 
 ```typescript
-import { Workflow } from "blazen-wasm-sdk";
+import { Workflow } from "@blazen-dev/wasm";
 
 const wf = new Workflow("greeter");
 
@@ -38,9 +38,9 @@ The `StartEvent` is the engine's built-in entry point and is interned as `"blaze
 A working end-to-end example lives at [`../../examples/cloudflare-worker/`](../../examples/cloudflare-worker/). The minimum:
 
 ```typescript
-import { initSync, Workflow } from "blazen-wasm-sdk";
+import { initSync, Workflow } from "@blazen-dev/wasm";
 // @ts-expect-error - wasm import has no TS types
-import wasmModule from "blazen-wasm-sdk/blazen_wasm_sdk_bg.wasm";
+import wasmModule from "@blazen-dev/wasm/blazen_wasm_sdk_bg.wasm";
 
 initSync({ module: wasmModule as WebAssembly.Module });
 
@@ -242,7 +242,7 @@ import {
   Stage,
   Workflow,
   JoinStrategy,
-} from "blazen-wasm-sdk";
+} from "@blazen-dev/wasm";
 
 const ingest = new Workflow("ingest");
 ingest.addStep("go", ["blazen::StartEvent"], (ev) => ({
@@ -323,7 +323,7 @@ import {
   Memory,
   MemoryResult,
   TractEmbedModel,
-} from "blazen-wasm-sdk";
+} from "@blazen-dev/wasm";
 
 // Provider-agnostic embedders.
 const cloudEmbedder = EmbeddingModel.openai();
@@ -379,7 +379,7 @@ const synthetic = new MemoryResult("manual-1", "manual entry", 0.42, null);
 `ModelManager` wraps the real `blazen_manager::ModelManager` (LRU-backed VRAM accounting). The JS API is unchanged from the previous WASM stub, so existing code keeps working:
 
 ```typescript
-import { ModelManager } from "blazen-wasm-sdk";
+import { ModelManager } from "@blazen-dev/wasm";
 
 const manager = new ModelManager(8); // 8 GB budget
 await manager.register("llama-3-8b", null, 6 * 1024 ** 3, {
@@ -400,7 +400,7 @@ Reads such as `availableBytes` / `usedBytes` are now `Promise<number>` because t
 OTLP traces are exported over HTTP/protobuf via `WasmFetchHttpClient`, which sidesteps the wasm-incompat `tonic`/grpc stack. The exporter is gated behind the `otlp-http` Cargo feature; build the SDK with `wasm-pack build --features otlp-http` to enable it.
 
 ```typescript
-import { OtlpConfig, initOtlp } from "blazen-wasm-sdk";
+import { OtlpConfig, initOtlp } from "@blazen-dev/wasm";
 
 initOtlp(new OtlpConfig(
   "https://otel-collector.example.com/v1/traces",

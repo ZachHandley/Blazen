@@ -120,7 +120,7 @@
 
   <!--
     This example uses ES module imports. Serve it with a local dev server
-    (e.g. `npx serve`) and ensure @blazen/sdk and @mlc-ai/web-llm are
+    (e.g. `npx serve`) and ensure @blazen-dev/wasm and @mlc-ai/web-llm are
     available via an import map or a bundler.
 
     For a zero-build-step setup, uncomment the importmap below.
@@ -129,7 +129,7 @@
   <script type="importmap">
   {
     "imports": {
-      "@blazen/sdk": "https://cdn.jsdelivr.net/npm/@blazen/sdk/blazen_wasm_sdk.js",
+      "@blazen-dev/wasm": "https://cdn.jsdelivr.net/npm/@blazen-dev/wasm/blazen_wasm_sdk.js",
       "@mlc-ai/web-llm": "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm/lib/index.min.js"
     }
   }
@@ -137,7 +137,7 @@
   -->
 
   <script type="module">
-    import init, { CompletionModel, ChatMessage } from '@blazen/sdk';
+    import init, { CompletionModel, ChatMessage } from '@blazen-dev/wasm';
     import * as webllm from '@mlc-ai/web-llm';
 
     // ----- Configuration -----

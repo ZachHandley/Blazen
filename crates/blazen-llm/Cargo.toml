@@ -65,12 +65,14 @@ blazen-audio-piper = { workspace = true, optional = true }
 [target.'cfg(not(any(target_os = "wasi", target_arch = "wasm32")))'.dependencies]
 tokio = { version = "1", default-features = false, features = ["rt", "time", "fs", "io-util"] }
 
-# Browser WASM only (not WASIp2 -- WASIp2 has no JS runtime)
+# Browser WASM only (not WASIp2 -- WASIp2 has no JS runtime).
+# `web-sys`, `uuid["js"]`, and `getrandom["js"]` all transitively pull
+# `wasm-bindgen`, which the wasi build cannot satisfy (no JS shim host),
+# so they live in the browser-only block.
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dependencies]
 wasm-bindgen = "=0.2.118"
 wasm-bindgen-futures = "=0.4.68"
 js-sys = "=0.3.95"
-web-time = "1"
 web-sys = { version = "=0.3.95", features = [
     "Request",
     "RequestInit",
@@ -82,6 +84,13 @@ web-sys = { version = "=0.3.95", features = [
 ] }
 uuid = { workspace = true, features = ["js"] }
 getrandom = { version = "0.2", features = ["js"] }
+
+# Cross-wasm32 deps (browser + wasi). web-time transparently re-exports
+# std::time on native/wasi and uses Performance.now() in the browser; the
+# source unconditionally imports `web_time::Instant` under cfg(wasm32) so
+# both wasm flavors must pull the dep. web-time does NOT pull wasm-bindgen.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-time = "1"
 
 [dev-dependencies]
 tempfile = { workspace = true }

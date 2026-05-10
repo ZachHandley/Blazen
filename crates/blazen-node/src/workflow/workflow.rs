@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use blazen_core::SessionRefDeserializerFn;
+use blazen_core::runtime;
 use blazen_core::session_ref::{
     SERIALIZED_SESSION_REFS_META_KEY, SessionPausePolicy as CoreSessionPausePolicy,
 };
@@ -23,6 +24,7 @@ use super::event::{any_event_to_js_value, js_value_to_any_event};
 use super::handler::JsWorkflowHandler;
 use super::session_ref_serializable::{DESERIALIZER_FN, intern_type_tag};
 use crate::error::workflow_error_to_napi;
+#[cfg(not(target_os = "wasi"))]
 use crate::persist::JsCheckpointStore;
 
 // ---------------------------------------------------------------------------
@@ -527,7 +529,7 @@ impl JsWorkflow {
         // 2. `call_async` returns a future that is not Send-safe.
         let on_event = Arc::new(on_event);
         let on_event_clone = Arc::clone(&on_event);
-        let stream_handle = tokio::spawn(async move {
+        let stream_handle = runtime::spawn(async move {
             while let Some(event) = stream.next().await {
                 // Stop on the stream-end sentinel (same as Python bindings).
                 if event.event_type_id() == "blazen::StreamEnd" {
@@ -1048,28 +1050,6 @@ impl JsWorkflowBuilder {
         Ok(self)
     }
 
-    /// Attach a checkpoint store to the workflow.
-    ///
-    /// Mirrors [`blazen_core::WorkflowBuilder::checkpoint_store`]. The
-    /// underlying call is gated on the `persist` feature of
-    /// `blazen-core`, which is **not** currently enabled in the Node
-    /// binding's compilation. The flag is recorded on the builder for
-    /// forward compatibility but does not yet flow into the core
-    /// engine — pass a [`JsCheckpointStore`] (typically a concrete
-    /// subclass like `RedbCheckpointStore` or `ValkeyCheckpointStore`)
-    /// so the JS API is stable; the binding will start forwarding the
-    /// store once the `blazen-core/persist` feature is enabled in
-    /// `crates/blazen-node/Cargo.toml`.
-    #[napi(js_name = "checkpointStore")]
-    pub fn checkpoint_store(&self, _store: &JsCheckpointStore) -> Result<&Self> {
-        let mut guard = self.inner.lock().expect("poisoned");
-        let state = guard
-            .as_mut()
-            .ok_or_else(JsWorkflowBuilder::consumed_error)?;
-        state.checkpoint_store_set = true;
-        Ok(self)
-    }
-
     /// Enable or disable automatic checkpointing after each step
     /// completes. Same forward-compatibility caveat as
     /// [`Self::with_history`] — the flag is recorded but does not yet
@@ -1112,6 +1092,38 @@ impl JsWorkflowBuilder {
             session_pause_policy: state.session_pause_policy,
             auto_publish_events: state.auto_publish_events,
         })
+    }
+}
+
+#[cfg(not(target_os = "wasi"))]
+#[napi]
+#[allow(
+    clippy::must_use_candidate,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::needless_pass_by_value
+)]
+impl JsWorkflowBuilder {
+    /// Attach a checkpoint store to the workflow.
+    ///
+    /// Mirrors [`blazen_core::WorkflowBuilder::checkpoint_store`]. The
+    /// underlying call is gated on the `persist` feature of
+    /// `blazen-core`, which is **not** currently enabled in the Node
+    /// binding's compilation. The flag is recorded on the builder for
+    /// forward compatibility but does not yet flow into the core
+    /// engine — pass a [`JsCheckpointStore`] (typically a concrete
+    /// subclass like `RedbCheckpointStore` or `ValkeyCheckpointStore`)
+    /// so the JS API is stable; the binding will start forwarding the
+    /// store once the `blazen-core/persist` feature is enabled in
+    /// `crates/blazen-node/Cargo.toml`.
+    #[napi(js_name = "checkpointStore")]
+    pub fn checkpoint_store(&self, _store: &JsCheckpointStore) -> Result<&Self> {
+        let mut guard = self.inner.lock().expect("poisoned");
+        let state = guard
+            .as_mut()
+            .ok_or_else(JsWorkflowBuilder::consumed_error)?;
+        state.checkpoint_store_set = true;
+        Ok(self)
     }
 }
 

@@ -61,6 +61,11 @@
 //! workflows can disable `server`, and a worker node that only ever
 //! receives invocations can disable `client`.
 
+// The generated tonic/prost types and the gRPC server / client that consume
+// them are unavailable on wasm32-wasi* (tonic does not compile there). The
+// pure-HTTP `http_client` module under the `http-transport` feature is the
+// wasm-friendly alternative.
+#[cfg(not(any(target_os = "wasi", target_arch = "wasm32")))]
 #[allow(clippy::all, clippy::pedantic)]
 pub mod pb {
     //! Generated tonic/prost types for the `blazen.peer.v1` service.
@@ -77,13 +82,24 @@ pub mod pb {
 pub mod auth;
 pub mod error;
 pub mod protocol;
+
+#[cfg(not(any(target_os = "wasi", target_arch = "wasm32")))]
 pub mod tls;
 
-#[cfg(feature = "server")]
+#[cfg(all(
+    feature = "server",
+    not(any(target_os = "wasi", target_arch = "wasm32"))
+))]
 pub mod server;
 
-#[cfg(feature = "client")]
+#[cfg(all(
+    feature = "client",
+    not(any(target_os = "wasi", target_arch = "wasm32"))
+))]
 pub mod client;
+
+#[cfg(feature = "http-transport")]
+pub mod http_client;
 
 pub use error::PeerError;
 pub use protocol::{
@@ -91,8 +107,17 @@ pub use protocol::{
     RemoteRefDescriptor, SubWorkflowRequest, SubWorkflowResponse,
 };
 
-#[cfg(feature = "server")]
+#[cfg(all(
+    feature = "server",
+    not(any(target_os = "wasi", target_arch = "wasm32"))
+))]
 pub use server::BlazenPeerServer;
 
-#[cfg(feature = "client")]
+#[cfg(all(
+    feature = "client",
+    not(any(target_os = "wasi", target_arch = "wasm32"))
+))]
 pub use client::BlazenPeerClient;
+
+#[cfg(feature = "http-transport")]
+pub use http_client::HttpPeerClient;

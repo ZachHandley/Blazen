@@ -13,6 +13,8 @@ use napi_derive::napi;
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 
+use blazen_core::runtime;
+
 use super::event::any_event_to_js_value;
 use super::events_typed::JsInputResponseEvent;
 use super::workflow::JsWorkflowResult;
@@ -253,7 +255,7 @@ impl JsWorkflowHandler {
 
         // Spawn a forwarding task. The stream will end when the workflow
         // completes or is paused (signaled by the StreamEnd sentinel).
-        tokio::spawn(async move {
+        runtime::spawn(async move {
             while let Some(event) = stream.next().await {
                 // Stop on the stream-end sentinel (same as Python bindings).
                 if event.event_type_id() == "blazen::StreamEnd" {

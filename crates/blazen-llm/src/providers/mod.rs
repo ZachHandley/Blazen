@@ -237,7 +237,8 @@ macro_rules! impl_simple_from_options {
     ($provider:ty, $name:expr) => {
         #[cfg(any(
             all(target_arch = "wasm32", not(target_os = "wasi")),
-            feature = "reqwest"
+            feature = "reqwest",
+            target_os = "wasi"
         ))]
         impl $provider {
             /// Construct from typed [`ProviderOptions`](crate::types::provider_options::ProviderOptions).
@@ -264,7 +265,8 @@ macro_rules! impl_simple_from_options {
     ($provider:ty, $name:expr, no_base_url) => {
         #[cfg(any(
             all(target_arch = "wasm32", not(target_os = "wasi")),
-            feature = "reqwest"
+            feature = "reqwest",
+            target_os = "wasi"
         ))]
         impl $provider {
             /// Construct from typed [`ProviderOptions`](crate::types::provider_options::ProviderOptions).

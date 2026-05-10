@@ -13,7 +13,8 @@
       "aarch64-unknown-linux-gnu",
       "aarch64-unknown-linux-musl",
       "aarch64-apple-darwin",
-      "x86_64-pc-windows-msvc"
+      "x86_64-pc-windows-msvc",
+      "wasm32-wasi"
     ]
   },
   "publishConfig": {
@@ -39,8 +40,12 @@
     "error-classes.js"
   ],
   "devDependencies": {
-    "@napi-rs/cli": "^3.0.0",
     "@biomejs/biome": "^2",
+    "@emnapi/core": "^1.10.0",
+    "@emnapi/runtime": "^1.10.0",
+    "@napi-rs/cli": "^3.0.0",
+    "@napi-rs/wasm-runtime": "^1.1.4",
+    "@tybys/wasm-util": "^0.10.2",
     "ava": "^6.4.1"
   },
   "engines": {

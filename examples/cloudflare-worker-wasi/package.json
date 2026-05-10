@@ -1,0 +1,26 @@
+{
+  "name": "blazen-workers-wasi-smoke",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Workers smoke test for the Blazen wasi sidecar (napi-rs wasm32-wasip1-threads)",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "e2e": "./dev-e2e.sh",
+    "e2e:no-build": "./dev-e2e.sh --no-build",
+    "postinstall": "patch-package"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250101.0",
+    "patch-package": "^8.0.1",
+    "typescript": "^5.6.0",
+    "wrangler": "^4.75.0"
+  },
+  "dependencies": {
+    "@emnapi/core": "^1.10.0",
+    "@emnapi/runtime": "^1.10.0",
+    "@napi-rs/wasm-runtime": "^1.1.4",
+    "@tybys/wasm-util": "*"
+  }
+}

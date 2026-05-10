@@ -318,7 +318,8 @@ impl GeminiProvider {
     /// Create a new Gemini provider with the given API key.
     #[cfg(any(
         all(target_arch = "wasm32", not(target_os = "wasi")),
-        feature = "reqwest"
+        feature = "reqwest",
+        target_os = "wasi"
     ))]
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {

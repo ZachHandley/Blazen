@@ -12,7 +12,7 @@
 //! ## Quick start (TypeScript)
 //!
 //! ```typescript
-//! import init, { CompletionModel, ChatMessage } from '@blazen/sdk';
+//! import init, { CompletionModel, ChatMessage } from '@blazen-dev/wasm';
 //!
 //! await init(); // load WASM module
 //!

@@ -10,6 +10,7 @@ use napi_derive::napi;
 
 use blazen_memory::Memory;
 use blazen_memory::backends::inmemory::InMemoryBackend;
+#[cfg(not(target_os = "wasi"))]
 use blazen_memory::backends::jsonl::JsonlBackend;
 use blazen_memory::search::{
     compute_elid_similarity as core_compute_elid_similarity,
@@ -19,6 +20,9 @@ use blazen_memory::search::{
 };
 use blazen_memory::store::{MemoryBackend, MemoryStore};
 use blazen_memory::types::StoredEntry;
+#[cfg(target_os = "wasi")]
+use blazen_memory_valkey::UpstashBackend;
+#[cfg(not(target_os = "wasi"))]
 use blazen_memory_valkey::ValkeyBackend;
 
 use super::embedding::JsEmbeddingModel;
@@ -33,8 +37,12 @@ use crate::error::{memory_error_to_napi, to_napi_error};
 /// trait objects.
 enum BackendKind {
     InMemory(Arc<InMemoryBackend>),
+    #[cfg(not(target_os = "wasi"))]
     Jsonl(Arc<JsonlBackend>),
+    #[cfg(not(target_os = "wasi"))]
     Valkey(Arc<ValkeyBackend>),
+    #[cfg(target_os = "wasi")]
+    Upstash(Arc<UpstashBackend>),
 }
 
 #[async_trait]
@@ -42,40 +50,60 @@ impl MemoryBackend for BackendKind {
     async fn put(&self, entry: StoredEntry) -> blazen_memory::error::Result<()> {
         match self {
             Self::InMemory(b) => b.put(entry).await,
+            #[cfg(not(target_os = "wasi"))]
             Self::Jsonl(b) => b.put(entry).await,
+            #[cfg(not(target_os = "wasi"))]
             Self::Valkey(b) => b.put(entry).await,
+            #[cfg(target_os = "wasi")]
+            Self::Upstash(b) => b.put(entry).await,
         }
     }
 
     async fn get(&self, id: &str) -> blazen_memory::error::Result<Option<StoredEntry>> {
         match self {
             Self::InMemory(b) => b.get(id).await,
+            #[cfg(not(target_os = "wasi"))]
             Self::Jsonl(b) => b.get(id).await,
+            #[cfg(not(target_os = "wasi"))]
             Self::Valkey(b) => b.get(id).await,
+            #[cfg(target_os = "wasi")]
+            Self::Upstash(b) => b.get(id).await,
         }
     }
 
     async fn delete(&self, id: &str) -> blazen_memory::error::Result<bool> {
         match self {
             Self::InMemory(b) => b.delete(id).await,
+            #[cfg(not(target_os = "wasi"))]
             Self::Jsonl(b) => b.delete(id).await,
+            #[cfg(not(target_os = "wasi"))]
             Self::Valkey(b) => b.delete(id).await,
+            #[cfg(target_os = "wasi")]
+            Self::Upstash(b) => b.delete(id).await,
         }
     }
 
     async fn list(&self) -> blazen_memory::error::Result<Vec<StoredEntry>> {
         match self {
             Self::InMemory(b) => b.list().await,
+            #[cfg(not(target_os = "wasi"))]
             Self::Jsonl(b) => b.list().await,
+            #[cfg(not(target_os = "wasi"))]
             Self::Valkey(b) => b.list().await,
+            #[cfg(target_os = "wasi")]
+            Self::Upstash(b) => b.list().await,
         }
     }
 
     async fn len(&self) -> blazen_memory::error::Result<usize> {
         match self {
             Self::InMemory(b) => b.len().await,
+            #[cfg(not(target_os = "wasi"))]
             Self::Jsonl(b) => b.len().await,
+            #[cfg(not(target_os = "wasi"))]
             Self::Valkey(b) => b.len().await,
+            #[cfg(target_os = "wasi")]
+            Self::Upstash(b) => b.len().await,
         }
     }
 
@@ -86,8 +114,12 @@ impl MemoryBackend for BackendKind {
     ) -> blazen_memory::error::Result<Vec<StoredEntry>> {
         match self {
             Self::InMemory(b) => b.search_by_bands(bands, limit).await,
+            #[cfg(not(target_os = "wasi"))]
             Self::Jsonl(b) => b.search_by_bands(bands, limit).await,
+            #[cfg(not(target_os = "wasi"))]
             Self::Valkey(b) => b.search_by_bands(bands, limit).await,
+            #[cfg(target_os = "wasi")]
+            Self::Upstash(b) => b.search_by_bands(bands, limit).await,
         }
     }
 }
@@ -326,11 +358,13 @@ impl JsInMemoryBackend {
 /// const backend = await JsonlBackend.create("./memory.jsonl");
 /// const memory = new Memory(embedder, backend);
 /// ```
+#[cfg(not(target_os = "wasi"))]
 #[napi(js_name = "JsonlBackend")]
 pub struct JsJsonlBackend {
     inner: Arc<JsonlBackend>,
 }
 
+#[cfg(not(target_os = "wasi"))]
 #[napi]
 #[allow(clippy::missing_errors_doc)]
 impl JsJsonlBackend {
@@ -357,11 +391,13 @@ impl JsJsonlBackend {
 /// const backend = ValkeyBackend.create("redis://localhost:6379");
 /// const memory = new Memory(embedder, backend);
 /// ```
+#[cfg(not(target_os = "wasi"))]
 #[napi(js_name = "ValkeyBackend")]
 pub struct JsValkeyBackend {
     inner: Arc<ValkeyBackend>,
 }
 
+#[cfg(not(target_os = "wasi"))]
 #[napi]
 #[allow(clippy::missing_errors_doc, clippy::needless_pass_by_value)]
 impl JsValkeyBackend {
@@ -378,6 +414,55 @@ impl JsValkeyBackend {
 }
 
 // ---------------------------------------------------------------------------
+// JsUpstashBackend
+// ---------------------------------------------------------------------------
+
+/// An Upstash Redis REST-backed backend for the memory store.
+///
+/// Wasi-compatible alternative to [`JsValkeyBackend`] for Cloudflare Workers,
+/// Deno, and other wasi hosts that cannot use raw TCP. Talks to Upstash's
+/// REST API over the host-registered HTTP client (set via
+/// `setDefaultHttpClient`).
+///
+/// ```javascript
+/// const backend = UpstashBackend.create("https://us1-merry-cat-32242.upstash.io", "AYAg...");
+/// const memory = Memory.withUpstash(embedder, backend);
+/// ```
+#[cfg(target_os = "wasi")]
+#[napi(js_name = "UpstashBackend")]
+pub struct JsUpstashBackend {
+    inner: Arc<UpstashBackend>,
+}
+
+#[cfg(target_os = "wasi")]
+#[napi]
+#[allow(clippy::must_use_candidate, clippy::needless_pass_by_value)]
+impl JsUpstashBackend {
+    /// Create an Upstash REST backend.
+    ///
+    /// `restUrl` is the Upstash REST endpoint (e.g.
+    /// `https://us1-merry-cat-32242.upstash.io`). `restToken` is the REST
+    /// token, sent as a `Bearer` token on every request. The HTTP client is
+    /// resolved via `setDefaultHttpClient` — call that before issuing any
+    /// memory operations.
+    ///
+    /// `prefix` overrides the default key prefix (`blazen:memory:`). Pass
+    /// `null`/`undefined` for the default. Useful when running multiple
+    /// logical stores against the same Upstash database.
+    #[napi(factory)]
+    pub fn create(rest_url: String, rest_token: String, prefix: Option<String>) -> Self {
+        let http = blazen_llm::http_napi_wasi::LazyHttpClient::new().into_arc();
+        let mut backend = UpstashBackend::new(rest_url, rest_token, http);
+        if let Some(p) = prefix {
+            backend = backend.with_prefix(p);
+        }
+        Self {
+            inner: Arc::new(backend),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // JsRetryMemoryBackend
 // ---------------------------------------------------------------------------
 
@@ -387,9 +472,15 @@ use napi::Either;
 
 /// Type alias for the napi-rs union accepted by `RetryMemoryBackend.wrap*`
 /// constructors. napi-rs cannot accept trait objects across the FFI, so we
-/// enumerate the concrete backend classes the binding ships.
+/// enumerate the concrete backend classes the binding ships. The wasi fork
+/// substitutes `JsUpstashBackend` for the native `JsJsonlBackend` /
+/// `JsValkeyBackend` pair (which both depend on local FS / raw TCP).
+#[cfg(not(target_os = "wasi"))]
 type AnyBackend<'a> =
     Either<&'a JsInMemoryBackend, Either<&'a JsJsonlBackend, &'a JsValkeyBackend>>;
+
+#[cfg(target_os = "wasi")]
+type AnyBackend<'a> = Either<&'a JsInMemoryBackend, &'a JsUpstashBackend>;
 
 /// A `MemoryBackend` decorator that retries transient errors with
 /// exponential backoff.
@@ -426,7 +517,16 @@ impl JsRetryMemoryBackend {
             inner: wrapped.into_arc(),
         }
     }
+}
 
+#[cfg(not(target_os = "wasi"))]
+#[napi]
+#[allow(
+    clippy::must_use_candidate,
+    clippy::missing_errors_doc,
+    clippy::needless_pass_by_value
+)]
+impl JsRetryMemoryBackend {
     /// Wrap a `JsonlBackend` with retry-on-transient-error behaviour.
     #[napi(factory, js_name = "wrapJsonl")]
     pub fn wrap_jsonl(backend: &JsJsonlBackend, config: Option<JsRetryConfig>) -> Self {
@@ -457,6 +557,36 @@ impl JsRetryMemoryBackend {
             Either::A(b) => Self::wrap_in_memory(b, config),
             Either::B(Either::A(b)) => Self::wrap_jsonl(b, config),
             Either::B(Either::B(b)) => Self::wrap_valkey(b, config),
+        }
+    }
+}
+
+#[cfg(target_os = "wasi")]
+#[napi]
+#[allow(
+    clippy::must_use_candidate,
+    clippy::missing_errors_doc,
+    clippy::needless_pass_by_value
+)]
+impl JsRetryMemoryBackend {
+    /// Wrap an `UpstashBackend` with retry-on-transient-error behaviour.
+    #[napi(factory, js_name = "wrapUpstash")]
+    pub fn wrap_upstash(backend: &JsUpstashBackend, config: Option<JsRetryConfig>) -> Self {
+        let cfg = config.map(Into::into).unwrap_or_default();
+        let wrapped =
+            RetryMemoryBackend::new(Arc::clone(&backend.inner) as Arc<dyn MemoryBackend>, cfg);
+        Self {
+            inner: wrapped.into_arc(),
+        }
+    }
+
+    /// Generic factory accepting either of the wasi-compatible backends.
+    /// Useful when the caller doesn't statically know which backend is in hand.
+    #[napi(factory, js_name = "wrap")]
+    pub fn wrap(backend: AnyBackend<'_>, config: Option<JsRetryConfig>) -> Self {
+        match backend {
+            Either::A(b) => Self::wrap_in_memory(b, config),
+            Either::B(b) => Self::wrap_upstash(b, config),
         }
     }
 }
@@ -532,50 +662,12 @@ impl JsMemory {
         Ok(Self { inner })
     }
 
-    /// Create a memory store with an embedding model and a `JsonlBackend`.
-    #[napi(factory)]
-    pub fn with_jsonl(embedder: &JsEmbeddingModel, backend: &JsJsonlBackend) -> Result<Self> {
-        let arc = embedder.inner_arc().ok_or_else(|| {
-            napi::Error::from_reason(
-                "Memory requires a concrete EmbeddingModel, not a subclassed instance without a provider",
-            )
-        })?;
-        let inner = Memory::new(arc, BackendKind::Jsonl(Arc::clone(&backend.inner)));
-        Ok(Self { inner })
-    }
-
-    /// Create a memory store with an embedding model and a `ValkeyBackend`.
-    #[napi(factory)]
-    pub fn with_valkey(embedder: &JsEmbeddingModel, backend: &JsValkeyBackend) -> Result<Self> {
-        let arc = embedder.inner_arc().ok_or_else(|| {
-            napi::Error::from_reason(
-                "Memory requires a concrete EmbeddingModel, not a subclassed instance without a provider",
-            )
-        })?;
-        let inner = Memory::new(arc, BackendKind::Valkey(Arc::clone(&backend.inner)));
-        Ok(Self { inner })
-    }
-
     /// Create a memory store in local-only mode (no embedding model) with an `InMemoryBackend`.
     ///
     /// Only `searchLocal()` is available; `search()` will throw.
     #[napi(factory)]
     pub fn local(backend: &JsInMemoryBackend) -> Self {
         let inner = Memory::local(BackendKind::InMemory(Arc::clone(&backend.inner)));
-        Self { inner }
-    }
-
-    /// Create a memory store in local-only mode with a `JsonlBackend`.
-    #[napi(factory)]
-    pub fn local_jsonl(backend: &JsJsonlBackend) -> Self {
-        let inner = Memory::local(BackendKind::Jsonl(Arc::clone(&backend.inner)));
-        Self { inner }
-    }
-
-    /// Create a memory store in local-only mode with a `ValkeyBackend`.
-    #[napi(factory)]
-    pub fn local_valkey(backend: &JsValkeyBackend) -> Self {
-        let inner = Memory::local(BackendKind::Valkey(Arc::clone(&backend.inner)));
         Self { inner }
     }
 
@@ -718,6 +810,73 @@ impl JsMemory {
         let len = self.inner.len().await.map_err(to_napi_error)?;
         #[allow(clippy::cast_possible_truncation)]
         Ok(len as u32)
+    }
+}
+
+#[cfg(not(target_os = "wasi"))]
+#[napi]
+#[allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
+impl JsMemory {
+    /// Create a memory store with an embedding model and a `JsonlBackend`.
+    #[napi(factory)]
+    pub fn with_jsonl(embedder: &JsEmbeddingModel, backend: &JsJsonlBackend) -> Result<Self> {
+        let arc = embedder.inner_arc().ok_or_else(|| {
+            napi::Error::from_reason(
+                "Memory requires a concrete EmbeddingModel, not a subclassed instance without a provider",
+            )
+        })?;
+        let inner = Memory::new(arc, BackendKind::Jsonl(Arc::clone(&backend.inner)));
+        Ok(Self { inner })
+    }
+
+    /// Create a memory store with an embedding model and a `ValkeyBackend`.
+    #[napi(factory)]
+    pub fn with_valkey(embedder: &JsEmbeddingModel, backend: &JsValkeyBackend) -> Result<Self> {
+        let arc = embedder.inner_arc().ok_or_else(|| {
+            napi::Error::from_reason(
+                "Memory requires a concrete EmbeddingModel, not a subclassed instance without a provider",
+            )
+        })?;
+        let inner = Memory::new(arc, BackendKind::Valkey(Arc::clone(&backend.inner)));
+        Ok(Self { inner })
+    }
+
+    /// Create a memory store in local-only mode with a `JsonlBackend`.
+    #[napi(factory)]
+    pub fn local_jsonl(backend: &JsJsonlBackend) -> Self {
+        let inner = Memory::local(BackendKind::Jsonl(Arc::clone(&backend.inner)));
+        Self { inner }
+    }
+
+    /// Create a memory store in local-only mode with a `ValkeyBackend`.
+    #[napi(factory)]
+    pub fn local_valkey(backend: &JsValkeyBackend) -> Self {
+        let inner = Memory::local(BackendKind::Valkey(Arc::clone(&backend.inner)));
+        Self { inner }
+    }
+}
+
+#[cfg(target_os = "wasi")]
+#[napi]
+#[allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
+impl JsMemory {
+    /// Create a memory store with an embedding model and an `UpstashBackend`.
+    #[napi(factory, js_name = "withUpstash")]
+    pub fn with_upstash(embedder: &JsEmbeddingModel, backend: &JsUpstashBackend) -> Result<Self> {
+        let arc = embedder.inner_arc().ok_or_else(|| {
+            napi::Error::from_reason(
+                "Memory requires a concrete EmbeddingModel, not a subclassed instance without a provider",
+            )
+        })?;
+        let inner = Memory::new(arc, BackendKind::Upstash(Arc::clone(&backend.inner)));
+        Ok(Self { inner })
+    }
+
+    /// Create a memory store in local-only mode with an `UpstashBackend`.
+    #[napi(factory, js_name = "localUpstash")]
+    pub fn local_upstash(backend: &JsUpstashBackend) -> Self {
+        let inner = Memory::local(BackendKind::Upstash(Arc::clone(&backend.inner)));
+        Self { inner }
     }
 }
 

@@ -6,7 +6,7 @@
 //! compile to `wasm32`.
 //!
 //! ```js
-//! import { OtlpConfig, initOtlp } from '@blazen/sdk';
+//! import { OtlpConfig, initOtlp } from '@blazen-dev/wasm';
 //!
 //! const cfg = new OtlpConfig(
 //!   'https://otel-collector.example.com/v1/traces',

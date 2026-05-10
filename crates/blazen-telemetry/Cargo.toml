@@ -18,7 +18,7 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 tokio = { version = "1", default-features = false, features = ["sync", "macros"] }
 
-# For TracingCompletionModel
+# For TracingCompletionModel + wasi OTLP/Langfuse `Arc<dyn HttpClient>` plumbing.
 blazen-llm = { workspace = true, optional = true }
 blazen-events = { workspace = true }
 async-trait = { workspace = true }
@@ -37,14 +37,24 @@ bytes = { workspace = true, optional = true }
 metrics = { version = "0.24", optional = true, package = "metrics" }
 metrics-exporter-prometheus = { version = "0.18", features = ["http-listener"], optional = true }
 
-# Reqwest is shared between langfuse (native-only) and the native otlp-http
-# transport client. On wasm32 we ship a `web_sys::fetch`-backed HttpClient
-# instead, so reqwest is not pulled into wasm builds via this crate.
+# Base64 used by the wasi langfuse dispatcher to build the `Authorization:
+# Basic ...` header by hand (reqwest's `basic_auth` helper is unavailable on
+# wasi). Optional + only pulled in by the `langfuse` feature.
+base64 = { workspace = true, optional = true }
+
+# Reqwest is the HTTP client for native langfuse and the native otlp-http
+# transport. On non-wasi wasm32 we ship a `web_sys::fetch`-backed HttpClient
+# instead; on wasi we ship a `blazen_llm::http::HttpClient`-backed one.
+# `reqwest` is kept as an unconditional optional dep so the `dep:reqwest`
+# feature activator works on every target — source-level `cfg(not(target_os
+# = "wasi"))` gates ensure it's never actually used on wasi.
 reqwest = { workspace = true, optional = true }
 
-# wasm32-only: web-sys + wasm-bindgen primitives for the fetch-backed
-# `HttpClient` implementation used by the OTLP HTTP exporter.
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+# Browser-only (`wasm32-unknown-unknown`): web-sys + wasm-bindgen primitives
+# for the fetch-backed `HttpClient` used by the OTLP HTTP exporter, and
+# `spawn_local` for the langfuse dispatcher. Excluded on wasi (no DOM /
+# wasm-bindgen ABI on wasi).
+[target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dependencies]
 wasm-bindgen = { version = "=0.2.118", optional = true }
 wasm-bindgen-futures = { version = "=0.4.68", optional = true }
 js-sys = { version = "=0.3.95", optional = true }
@@ -59,6 +69,12 @@ web-sys = { version = "=0.3.95", optional = true, features = [
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", default-features = false, features = ["rt", "rt-multi-thread", "time"] }
 
+# Wasi (`wasm32-wasip1*`): the napi-rs wasi runtime ships a tokio runtime, so
+# the langfuse dispatcher uses `tokio::spawn`. We need the `rt` feature for
+# `tokio::runtime::Handle::try_current` + `Handle::spawn`.
+[target.'cfg(target_os = "wasi")'.dependencies]
+tokio = { version = "1", default-features = false, features = ["rt"] }
+
 [features]
 default = ["spans"]
 spans = ["dep:blazen-llm"]
@@ -68,7 +84,9 @@ otlp = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-otlp", 
 # (or `reqwest-client`). On wasm32 those reqwest-backed `HttpClient`s are `!Send`,
 # which violates the trait's `Send + Sync` bound. Instead this crate provides its
 # own `HttpClient` impls: `ReqwestHttpClient` on native (thin wrapper around
-# `reqwest::Client`) and `WasmFetchHttpClient` on wasm32 (`web_sys::fetch`-backed).
+# `reqwest::Client`), `WasmFetchHttpClient` on browser wasm32 (`web_sys::fetch`-
+# backed), and `WasiFetchHttpClient` on wasi (`Arc<dyn blazen_llm::HttpClient>`-
+# backed via the napi-rs `setDefaultHttpClient` host hook).
 otlp-http = [
     "dep:opentelemetry",
     "dep:opentelemetry_sdk",
@@ -85,13 +103,21 @@ otlp-http = [
     "dep:wasm-bindgen-futures",
     "dep:js-sys",
     "dep:web-sys",
+    "dep:blazen-llm",
 ]
 prometheus = ["dep:metrics", "dep:metrics-exporter-prometheus"]
-# `wasm-bindgen-futures` is pulled in on wasm32 so the dispatcher background
-# task can be spawned via `spawn_local` (tokio's runtime is not available on
-# wasm32). The dep is target-conditional via [target.'cfg(...)'.dependencies]
-# so it has zero footprint on native builds.
-langfuse = ["dep:reqwest", "dep:wasm-bindgen-futures"]
+# `wasm-bindgen-futures` is pulled in on browser wasm32 so the dispatcher
+# background task can be spawned via `spawn_local` (no tokio time driver
+# there). On wasi we use `tokio::spawn` instead. `blazen-llm` is pulled in
+# unconditionally so the wasi dispatcher can route requests through
+# `Arc<dyn blazen_llm::HttpClient>` (host-registered fetch client). `base64`
+# is used by the wasi dispatcher for manual Basic-auth header construction.
+langfuse = [
+    "dep:reqwest",
+    "dep:wasm-bindgen-futures",
+    "dep:blazen-llm",
+    "dep:base64",
+]
 all = ["spans", "history", "otlp", "otlp-http", "prometheus", "langfuse"]
 
 [lints]

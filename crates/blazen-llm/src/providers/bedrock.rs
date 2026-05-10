@@ -64,7 +64,8 @@ impl BedrockProvider {
     /// Uses the default HTTP client backend (reqwest on native, fetch on WASM).
     #[cfg(any(
         all(target_arch = "wasm32", not(target_os = "wasi")),
-        feature = "reqwest"
+        feature = "reqwest",
+        target_os = "wasi"
     ))]
     #[must_use]
     pub fn new(api_key: impl Into<String>, region: impl Into<String>) -> Self {
@@ -152,7 +153,8 @@ impl BedrockProvider {
     /// `region`.
     #[cfg(any(
         all(target_arch = "wasm32", not(target_os = "wasi")),
-        feature = "reqwest"
+        feature = "reqwest",
+        target_os = "wasi"
     ))]
     /// # Errors
     ///

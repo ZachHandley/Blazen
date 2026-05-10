@@ -13,9 +13,15 @@
 //! pre-bundled assets, or a manually populated cache directory).
 
 use std::path::{Path, PathBuf};
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::LazyLock;
+
+#[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
+pub mod wasi;
+#[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
+pub use wasi::{WasiHttpFetch, WasiModelCache};
 
 /// Per-destination-path mutexes that serialize concurrent [`ModelCache::download`]
 /// calls for the same file. Different files download in parallel; same-file
@@ -171,6 +177,7 @@ impl ModelCache {
     }
 
     /// Compute the expected cache path for a repo/file pair.
+    #[cfg(not(target_arch = "wasm32"))]
     fn cached_path(&self, repo_id: &str, filename: &str) -> PathBuf {
         self.cache_dir.join(repo_id).join(filename)
     }
@@ -313,9 +320,9 @@ impl ModelCache {
     }
 }
 
-// -- wasm32 stubs -------------------------------------------------------------
+// -- wasm32 stubs (browser only; wasi gets a real in-memory cache via `wasi::WasiModelCache`)
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
 impl ModelCache {
     /// Stub that returns [`CacheError::Unsupported`] on wasm32.
     ///

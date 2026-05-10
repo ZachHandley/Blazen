@@ -64,7 +64,7 @@ export interface MemoryEntry {
 /// - **Local mode** (`Memory.local()`): text `SimHash` only via `searchLocal()`
 ///
 /// ```js
-/// import { Memory, EmbeddingModel } from '@blazen/sdk';
+/// import { Memory, EmbeddingModel } from '@blazen-dev/wasm';
 ///
 /// const embedder = EmbeddingModel.openai();
 /// const memory = new Memory(embedder);
@@ -210,7 +210,7 @@ impl WasmMemory {
     /// the WASM linear memory.
     ///
     /// ```js
-    /// import { Memory, InMemoryBackend, EmbeddingModel } from '@blazen/sdk';
+    /// import { Memory, InMemoryBackend, EmbeddingModel } from '@blazen-dev/wasm';
     ///
     /// const embedder = EmbeddingModel.openai();
     /// const backend = new InMemoryBackend();
@@ -897,7 +897,7 @@ export interface MemoryStoreImpl {
 /// going through the `MemoryBackend` layer.
 ///
 /// ```js
-/// import { MemoryStore } from '@blazen/sdk';
+/// import { MemoryStore } from '@blazen-dev/wasm';
 ///
 /// const store = new MemoryStore({
 ///     async add(entries) { return entries.map(e => e.id || crypto.randomUUID()); },
@@ -1300,7 +1300,7 @@ impl blazen_memory::store::MemoryStore for JsMemoryStore {
 /// [`Memory`](WasmMemory) without going through the JS-backed bridge.
 ///
 /// ```js
-/// import { Memory, InMemoryBackend, EmbeddingModel } from '@blazen/sdk';
+/// import { Memory, InMemoryBackend, EmbeddingModel } from '@blazen-dev/wasm';
 ///
 /// const embedder = EmbeddingModel.openai();
 /// const backend = new InMemoryBackend();
@@ -1571,7 +1571,7 @@ impl From<WasmMemoryResult> for blazen_memory::MemoryResult {
 /// wrap factory is named accordingly.
 ///
 /// ```js
-/// import { InMemoryBackend, RetryMemoryBackend } from '@blazen/sdk';
+/// import { InMemoryBackend, RetryMemoryBackend } from '@blazen-dev/wasm';
 ///
 /// const inner = new InMemoryBackend();
 /// const retried = RetryMemoryBackend.wrapInMemory(inner, { maxRetries: 5 });

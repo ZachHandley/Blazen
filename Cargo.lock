@@ -593,6 +593,7 @@ dependencies = [
  "blazen-telemetry",
  "chrono",
  "dashmap",
+ "futures-executor",
  "futures-util",
  "js-sys",
  "rmp-serde",
@@ -653,6 +654,7 @@ dependencies = [
  "getrandom 0.2.17",
  "js-sys",
  "ndarray 0.16.1",
+ "reqwest 0.13.2",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -828,8 +830,10 @@ name = "blazen-memory-valkey"
 version = "0.0.0-dev"
 dependencies = [
  "async-trait",
+ "blazen-llm",
  "blazen-memory",
  "redis",
+ "serde",
  "serde_json",
  "tokio",
  "tracing",
@@ -840,6 +844,7 @@ dependencies = [
 name = "blazen-model-cache"
 version = "0.0.0-dev"
 dependencies = [
+ "async-trait",
  "dashmap",
  "dirs",
  "futures-util",
@@ -898,6 +903,7 @@ dependencies = [
  "async-trait",
  "blazen-core",
  "blazen-events",
+ "blazen-llm",
  "postcard",
  "prost 0.14.3",
  "rustls",
@@ -1011,6 +1017,7 @@ name = "blazen-telemetry"
 version = "0.0.0-dev"
 dependencies = [
  "async-trait",
+ "base64 0.22.1",
  "blazen-events",
  "blazen-llm",
  "bytes",
@@ -4721,8 +4728,6 @@ dependencies = [
 [[package]]
 name = "napi"
 version = "3.8.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e55037284865448ecf329baa86a4d05401f647ebde99f5747b640d32c2c5226"
 dependencies = [
  "bitflags 2.11.0",
  "ctor",

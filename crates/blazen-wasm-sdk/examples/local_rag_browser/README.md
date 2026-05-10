@@ -12,7 +12,7 @@ In-browser Retrieval-Augmented Generation (RAG) using the Blazen WASM SDK with [
 ## Prerequisites
 
 ```bash
-npm install @blazen/sdk @huggingface/transformers
+npm install @blazen-dev/wasm @huggingface/transformers
 ```
 
 ## Running
@@ -27,7 +27,7 @@ Then open `http://localhost:3000` (or whichever port is shown).
 
 ### With a bundler
 
-If you use Vite, webpack, or another bundler, copy this `index.html` into your project and the `@blazen/sdk` and `@huggingface/transformers` imports will resolve from `node_modules` automatically.
+If you use Vite, webpack, or another bundler, copy this `index.html` into your project and the `@blazen-dev/wasm` and `@huggingface/transformers` imports will resolve from `node_modules` automatically.
 
 ### With import maps (no build step)
 

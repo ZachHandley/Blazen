@@ -75,6 +75,8 @@ pub use http_reqwest::ReqwestHttpClient;
 mod http_fetch;
 #[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
 pub use http_fetch::FetchHttpClient;
+#[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
+pub mod http_napi_wasi;
 
 /// Returns the platform-appropriate default HTTP client.
 #[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
@@ -86,6 +88,17 @@ pub(crate) fn default_http_client() -> std::sync::Arc<dyn http::HttpClient> {
 #[cfg(all(not(target_arch = "wasm32"), feature = "reqwest"))]
 pub(crate) fn default_http_client() -> std::sync::Arc<dyn http::HttpClient> {
     ReqwestHttpClient::new().into_arc()
+}
+
+/// Returns the platform-appropriate default HTTP client.
+///
+/// On wasi, this is a [`http_napi_wasi::LazyHttpClient`] proxy that forwards
+/// to whatever client the host registered via
+/// [`http_napi_wasi::register_default`] (typically the napi
+/// `setDefaultHttpClient` binding wrapping `globalThis.fetch`).
+#[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
+pub(crate) fn default_http_client() -> std::sync::Arc<dyn http::HttpClient> {
+    http_napi_wasi::LazyHttpClient::new().into_arc()
 }
 
 pub mod media;

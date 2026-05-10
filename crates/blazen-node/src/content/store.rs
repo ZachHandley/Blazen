@@ -389,15 +389,6 @@ impl JsContentStore {
         Self::from_arc(Arc::new(InMemoryContentStore::new()))
     }
 
-    /// Build a filesystem-backed store rooted at `root`. The directory is
-    /// created if it doesn't yet exist.
-    #[napi(factory, js_name = "localFile")]
-    pub fn local_file(root: String) -> Result<Self> {
-        let store = blazen_llm::content::LocalFileContentStore::new(PathBuf::from(root))
-            .map_err(llm_error_to_napi)?;
-        Ok(Self::from_arc(Arc::new(store)))
-    }
-
     /// Build a store backed by the `OpenAI` Files API.
     #[napi(factory, js_name = "openaiFiles")]
     #[must_use]
@@ -675,6 +666,20 @@ impl JsContentStore {
             .await
             .map_err(llm_error_to_napi)?;
         Ok(())
+    }
+}
+
+#[cfg(not(target_os = "wasi"))]
+#[napi]
+#[allow(clippy::missing_errors_doc, clippy::needless_pass_by_value)]
+impl JsContentStore {
+    /// Build a filesystem-backed store rooted at `root`. The directory is
+    /// created if it doesn't yet exist.
+    #[napi(factory, js_name = "localFile")]
+    pub fn local_file(root: String) -> Result<Self> {
+        let store = blazen_llm::content::LocalFileContentStore::new(PathBuf::from(root))
+            .map_err(llm_error_to_napi)?;
+        Ok(Self::from_arc(Arc::new(store)))
     }
 }
 

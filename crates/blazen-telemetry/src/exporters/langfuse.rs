@@ -14,12 +14,12 @@
 //! | `pipeline.stage`        | **Span**         | `span-create`            |
 
 use std::collections::HashMap;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "wasi")))]
 use std::sync::Arc;
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "wasi")))]
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 use tracing::Subscriber;
@@ -30,8 +30,10 @@ use tracing_subscriber::layer::Context;
 use tracing_subscriber::registry::LookupSpan;
 use uuid::Uuid;
 
+#[cfg(not(target_os = "wasi"))]
 use crate::error::TelemetryError;
 
+#[cfg(not(target_os = "wasi"))]
 const DEFAULT_HOST: &str = "https://cloud.langfuse.com";
 const DEFAULT_BATCH_SIZE: usize = 100;
 const DEFAULT_FLUSH_INTERVAL_MS: u64 = 5000;
@@ -178,13 +180,17 @@ impl Visit for FieldVisitor<'_> {
 
 /// One ingestion event (already shaped per Langfuse v1.2 wire format) heading
 /// to the dispatcher task.
-type Envelope = serde_json::Value;
+///
+/// `pub(super)` so the wasi sibling dispatcher
+/// (`super::wasi_langfuse_client`) can build a typed channel against the
+/// same envelope shape.
+pub(super) type Envelope = serde_json::Value;
 
 // ---------------------------------------------------------------------------
 // Dispatcher
 // ---------------------------------------------------------------------------
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "wasi")))]
 fn spawn_dispatcher(
     client: reqwest::Client,
     host: String,
@@ -243,7 +249,7 @@ fn spawn_dispatcher(
     Ok(())
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
 fn spawn_dispatcher(
     client: reqwest::Client,
     host: String,
@@ -282,6 +288,7 @@ fn spawn_dispatcher(
     Ok(())
 }
 
+#[cfg(not(target_os = "wasi"))]
 async fn send_batch(
     client: &reqwest::Client,
     host: &str,
@@ -335,8 +342,18 @@ async fn send_batch(
 /// Constructed via [`init_langfuse`].
 #[derive(Debug)]
 pub struct LangfuseLayer {
-    tx: mpsc::UnboundedSender<Envelope>,
-    batch_size: usize,
+    pub(super) tx: mpsc::UnboundedSender<Envelope>,
+    pub(super) batch_size: usize,
+}
+
+impl LangfuseLayer {
+    /// Construct from a sender + batch size. Visible to sibling modules so the
+    /// wasi dispatcher (`super::wasi_langfuse_client`) can wire its own
+    /// channel into the same layer type.
+    #[cfg(target_os = "wasi")]
+    pub(super) fn from_parts(tx: mpsc::UnboundedSender<Envelope>, batch_size: usize) -> Self {
+        Self { tx, batch_size }
+    }
 }
 
 impl<S> Layer<S> for LangfuseLayer
@@ -678,6 +695,7 @@ fn collect_metadata(
 /// # Ok(())
 /// # }
 /// ```
+#[cfg(not(target_os = "wasi"))]
 pub fn init_langfuse(config: LangfuseConfig) -> Result<LangfuseLayer, TelemetryError> {
     let client = reqwest::Client::builder()
         .build()
@@ -707,11 +725,18 @@ pub fn init_langfuse(config: LangfuseConfig) -> Result<LangfuseLayer, TelemetryE
     Ok(LangfuseLayer { tx, batch_size })
 }
 
+/// Re-export of the wasi-specific `init_langfuse`. On wasi we can't use
+/// `reqwest`, so the implementation lives in
+/// [`super::wasi_langfuse_client`] and routes batches through
+/// `Arc<dyn blazen_llm::http::HttpClient>`.
+#[cfg(target_os = "wasi")]
+pub use super::wasi_langfuse_client::init_langfuse;
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "wasi")))]
 mod tests {
     use super::{
         DEFAULT_BATCH_SIZE, DEFAULT_FLUSH_INTERVAL_MS, DEFAULT_HOST, LangfuseConfig, init_langfuse,

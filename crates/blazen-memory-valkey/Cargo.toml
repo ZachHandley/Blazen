@@ -8,12 +8,23 @@ repository.workspace = true
 rust-version.workspace = true
 description = "Valkey/Redis backend for blazen-memory"
 
+[features]
+default = ["redis-tcp"]
+# Native TCP backend using the `redis` crate (does not compile on wasi).
+# Pulls in tokio with its full runtime — required by `redis::aio::MultiplexedConnection`.
+redis-tcp = ["dep:redis", "dep:tokio"]
+# Wasi-compatible REST backend using Upstash Redis over `Arc<dyn HttpClient>`.
+# Does not depend on tokio: all I/O goes through the abstract `HttpClient` trait.
+upstash = ["dep:blazen-llm"]
+
 [dependencies]
 blazen-memory.workspace = true
-redis = { workspace = true }
+redis = { workspace = true, optional = true }
+blazen-llm = { workspace = true, optional = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 async-trait = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, optional = true }
 tracing = { workspace = true }
 
 [dev-dependencies]

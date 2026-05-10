@@ -30,7 +30,7 @@ pub mod distributed;
 pub mod error;
 pub(crate) mod event_loop;
 pub mod handler;
-pub(crate) mod runtime;
+pub mod runtime;
 pub mod session_ref;
 pub mod snapshot;
 pub mod step;

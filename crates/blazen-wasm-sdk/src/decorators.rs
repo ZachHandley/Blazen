@@ -574,7 +574,7 @@ impl UsageEmitter for JsUsageEmitter {
 /// (etc.) when you want to share one emitter across multiple decorators.
 ///
 /// ```js
-/// import { UsageEmitter, UsageRecordingCompletionModel, CompletionModel } from '@blazen/sdk';
+/// import { UsageEmitter, UsageRecordingCompletionModel, CompletionModel } from '@blazen-dev/wasm';
 ///
 /// const emitter = new UsageEmitter((event) => console.log('usage', event));
 /// // pass through the JS-callback constructor today; an Emitter-aware

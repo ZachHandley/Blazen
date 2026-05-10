@@ -62,10 +62,14 @@ pub use http_client_config::{
     JsHttpClientConfig, default_http_client_config, unlimited_http_client_config,
 };
 pub use media::{Generated3DModel, GeneratedAudio, GeneratedImage, GeneratedVideo, MediaOutput};
+#[cfg(target_os = "wasi")]
+pub use memory::JsUpstashBackend;
 pub use memory::{
-    JsAddEntry, JsInMemoryBackend, JsJsonlBackend, JsMemory, JsMemoryBackend, JsMemoryEntry,
-    JsMemoryResult, JsRetryMemoryBackend, JsValkeyBackend,
+    JsAddEntry, JsInMemoryBackend, JsMemory, JsMemoryBackend, JsMemoryEntry, JsMemoryResult,
+    JsRetryMemoryBackend,
 };
+#[cfg(not(target_os = "wasi"))]
+pub use memory::{JsJsonlBackend, JsValkeyBackend};
 pub use message::{
     ChatMessageOptions, JsChatMessage, JsContentPart, JsImageContent, JsImageSource, JsRole,
 };

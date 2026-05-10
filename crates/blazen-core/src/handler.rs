@@ -290,12 +290,25 @@ impl WorkflowHandler {
         }
         #[cfg(target_arch = "wasm32")]
         {
-            // Drop the handles without awaiting them — wasm32 has no
-            // tokio runtime to keep alive, the spawn_local'd tasks are
-            // GC'd with the WebAssembly instance, and the broadcast
-            // sender drops here implicitly via `Drop for self`.
+            // Drop the event-loop handle without awaiting; on wasm32 there's
+            // no tokio runtime to keep alive and `spawn_local`'d / our
+            // microtask-driven tasks complete on their own once their last
+            // ready signal lands.
             self.event_loop_handle.take();
-            self.usage_accumulator_handle.take();
+
+            // Explicitly abort the accumulator. On native we let the
+            // broadcast close naturally (every `Sender` clone drops once
+            // the event loop's `Context` releases), but on wasi/Workers a
+            // step handler's `JsContext` clone can outlive the event loop
+            // until JS GC reclaims it — which may be never within the
+            // request lifetime. Without this abort, the accumulator's
+            // `recv().await` stays Pending forever, leaving a permanently-
+            // queued task that re-schedules a microtask drain on every
+            // tick and trips workerd's "code had hung" detector on the
+            // next request handled by the same isolate.
+            if let Some(handle) = self.usage_accumulator_handle.take() {
+                handle.abort();
+            }
         }
 
         let totals = self.usage_totals.lock().await.clone();

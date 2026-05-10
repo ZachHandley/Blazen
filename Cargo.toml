@@ -32,6 +32,7 @@ members = [
 exclude = [
     "crates/blazen-wasm",
     "crates/blazen-wasm-sdk",
+    "crates/blazen-workers-alias",
 ]
 
 [workspace.package]
@@ -189,3 +190,10 @@ dead_code = "warn"
 [workspace.lints.clippy]
 all = "warn"
 pedantic = "warn"
+
+[patch.crates-io]
+# Vendored napi 3.8.6 with a wasi-friendly executor hook (set_async_executor)
+# that lets blazen-node's wasi_async dispatcher bypass napi-rs's hardcoded
+# std::thread::spawn(|| block_on(...)) — which traps on Cloudflare workerd.
+# See crates/napi-patched/ for the full diff against upstream 3.8.6.
+napi = { path = "crates/napi-patched" }

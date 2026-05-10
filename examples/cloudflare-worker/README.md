@@ -1,7 +1,8 @@
 # Blazen Cloudflare Workers Smoke Test
 
 End-to-end proof that the real Blazen workflow engine runs inside a Cloudflare
-Worker via the `blazen-wasm-sdk` WebAssembly build.
+Worker via the `@blazen-dev/wasm` WebAssembly build (Rust crate
+`blazen-wasm-sdk`, published to npm under the `@blazen-dev/wasm` name).
 
 The worker imports `runSmokeWorkflow()` from the SDK and invokes it from a
 `fetch` handler. The function drives the actual Blazen workflow engine to
@@ -26,6 +27,25 @@ completion and returns the `StopEvent` payload as JSON.
    cd examples/cloudflare-worker
    pnpm install   # or: npm install
    ```
+
+## Alternative install paths
+
+This example imports the WASM SDK from a local path (`../../crates/blazen-wasm-sdk/pkg/`)
+so the worker exercises the bits that just came out of `wasm-pack build`. That is
+deliberate: it gives end-to-end proof that the freshly-compiled artefacts work in
+`workerd` before they ever reach npm.
+
+For production deployments you do not need a local build at all. Two published
+packages cover the same ground:
+
+- **`npm install @blazen-dev/wasm`** — the same code this example imports
+  locally, published. Drop-in: change the local-path import to
+  `from "@blazen-dev/wasm"` and the rest of the worker is identical.
+- **`npm install blazen`** — the full Node API surface. On Cloudflare Workers
+  and Deno it transparently uses the `@blazen-dev/wasi` sidecar, so the same
+  code that runs on a Node server runs on the edge with no rewrites. Pick this
+  if you want API parity with your Node code; pick `@blazen-dev/wasm` if bundle
+  size matters more than API breadth.
 
 ## Run locally
 

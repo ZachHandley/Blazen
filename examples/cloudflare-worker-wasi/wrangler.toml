@@ -1,0 +1,17 @@
+name = "blazen-workers-wasi-smoke"
+main = "src/worker.ts"
+# 2026-04-01 picks up:
+#   - nodejs_compat_v2 (auto since 2024-09-23 with nodejs_compat)
+#   - expose_global_message_channel (default 2025-08-15)
+#   - enable_nodejs_wasi_module (default 2025-12-04 with nodejs_compat)
+compatibility_date = "2026-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+# We import the wasm module by-path so wrangler's CompiledWasm rule turns it
+# into a `WebAssembly.Module` accessible at runtime; the napi-rs wasi shim
+# then receives it via `getCompiledWasm()` instead of trying to fetch the
+# .wasm at runtime (Workers has no FS / module-resolution-from-disk).
+[[rules]]
+type = "CompiledWasm"
+globs = ["**/*.wasm"]
+fallthrough = true

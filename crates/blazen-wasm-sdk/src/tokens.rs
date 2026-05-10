@@ -22,7 +22,7 @@
 //!    paying the bundle cost in the default package.
 //!
 //! ```js
-//! import { estimateTokens, countMessageTokens } from '@blazen/sdk';
+//! import { estimateTokens, countMessageTokens } from '@blazen-dev/wasm';
 //!
 //! const count = estimateTokens('Hello, world!');
 //! console.log(count); // 4
@@ -108,7 +108,7 @@ export type CountTokensHandler = (text: string) => number;
 /// arrays even when the underlying tokeniser only handles raw text.
 ///
 /// ```js
-/// import { TokenCounter } from '@blazen/sdk';
+/// import { TokenCounter } from '@blazen-dev/wasm';
 /// import { encode } from 'gpt-tokenizer';
 ///
 /// const counter = new TokenCounter((text) => encode(text).length, 128000);

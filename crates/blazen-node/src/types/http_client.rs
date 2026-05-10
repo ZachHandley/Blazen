@@ -261,3 +261,32 @@ impl HttpClient for JsHttpClientAdapter {
         ))
     }
 }
+
+// ---------------------------------------------------------------------------
+// wasi-only: register a JS-supplied HttpClient as the process-wide default
+// ---------------------------------------------------------------------------
+
+/// Register the given HttpClient as the process-wide default for blazen-llm's
+/// outbound HTTP. On wasi (Cloudflare Workers / Deno), this is required before
+/// constructing cloud LLM providers, OTLP/Langfuse exporters, or distributed
+/// peer clients — the wasi build has no built-in HTTP backend (no
+/// `reqwest`-tokio, no `web_sys::fetch`), so the host must supply one via
+/// `HttpClient.fromCallback(async (req) => /* fetch */)`.
+///
+/// The first call wins (OnceLock semantics); subsequent calls are no-ops.
+/// Throws if the JsHttpClient was created via subclassing (no callback bound)
+/// — use `HttpClient.fromCallback(...)` instead.
+#[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
+#[napi(js_name = "setDefaultHttpClient")]
+pub fn js_set_default_http_client(client: &JsHttpClient) -> napi::Result<()> {
+    let dyn_client = client.as_dyn_http_client().ok_or_else(|| {
+        napi::Error::from_reason(
+            "setDefaultHttpClient: JsHttpClient has no send-handler bound. \
+             Use HttpClient.fromCallback(async (req) => /* fetch */) to \
+             create a callback-backed instance, then pass it here.",
+        )
+    })?;
+    // Returning Err means "already registered" — silently ignore (first writer wins).
+    let _ = blazen_llm::http_napi_wasi::register_default(dyn_client);
+    Ok(())
+}

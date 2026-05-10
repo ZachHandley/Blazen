@@ -73,7 +73,8 @@ impl FalStorageStore {
     /// WASM (which uses the `fetch` backend).
     #[cfg(any(
         all(target_arch = "wasm32", not(target_os = "wasi")),
-        feature = "reqwest"
+        feature = "reqwest",
+        target_os = "wasi"
     ))]
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {

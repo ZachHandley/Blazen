@@ -205,6 +205,7 @@ dependencies = [
  "blazen-macros",
  "chrono",
  "dashmap",
+ "futures-executor",
  "futures-util",
  "js-sys",
  "rmp-serde",
@@ -229,6 +230,7 @@ dependencies = [
  "getrandom 0.2.17",
  "js-sys",
  "ndarray",
+ "reqwest 0.13.3",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -325,6 +327,7 @@ dependencies = [
 name = "blazen-model-cache"
 version = "0.0.0-dev"
 dependencies = [
+ "async-trait",
  "dashmap",
  "dirs",
  "hf-hub",
@@ -369,7 +372,9 @@ name = "blazen-telemetry"
 version = "0.0.0-dev"
 dependencies = [
  "async-trait",
+ "base64 0.22.1",
  "blazen-events",
+ "blazen-llm",
  "bytes",
  "chrono",
  "futures-util",

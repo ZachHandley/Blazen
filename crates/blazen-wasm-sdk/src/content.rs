@@ -15,7 +15,7 @@
 //! ## Example
 //!
 //! ```js
-//! import init, { ContentStore, imageInput } from '@blazen/sdk';
+//! import init, { ContentStore, imageInput } from '@blazen-dev/wasm';
 //!
 //! await init();
 //!

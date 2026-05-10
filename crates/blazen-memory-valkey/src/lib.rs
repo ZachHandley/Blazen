@@ -27,27 +27,48 @@
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! # Features
+//!
+//! - `redis-tcp` (default): native TCP [`ValkeyBackend`] using the `redis`
+//!   crate. Does not compile on `wasm32-wasip1*` targets.
+//! - `upstash`: wasi-compatible [`UpstashBackend`] that talks to Upstash's
+//!   Redis REST API via [`blazen_llm::http::HttpClient`].
 
+#[cfg(feature = "redis-tcp")]
 use async_trait::async_trait;
+#[cfg(feature = "redis-tcp")]
 use redis::AsyncCommands;
+#[cfg(feature = "redis-tcp")]
 use tracing::instrument;
 
+#[cfg(feature = "redis-tcp")]
 use blazen_memory::error::{MemoryError, Result};
+#[cfg(feature = "redis-tcp")]
 use blazen_memory::store::MemoryBackend;
+#[cfg(feature = "redis-tcp")]
 use blazen_memory::types::StoredEntry;
 
+#[cfg(feature = "upstash")]
+pub mod upstash;
+#[cfg(feature = "upstash")]
+pub use upstash::UpstashBackend;
+
 /// Default key prefix used for namespacing in Valkey/Redis.
+#[cfg(feature = "redis-tcp")]
 const DEFAULT_PREFIX: &str = "blazen:memory:";
 
 /// A [`MemoryBackend`] implementation backed by Valkey (or any Redis-compatible server).
 ///
 /// Uses [`redis::aio::MultiplexedConnection`] for async I/O and pipelines
 /// multi-key operations for efficiency.
+#[cfg(feature = "redis-tcp")]
 pub struct ValkeyBackend {
     client: redis::Client,
     prefix: String,
 }
 
+#[cfg(feature = "redis-tcp")]
 impl ValkeyBackend {
     /// Create a new `ValkeyBackend` connected to the given Redis/Valkey URL.
     ///
@@ -99,6 +120,7 @@ impl ValkeyBackend {
     }
 }
 
+#[cfg(feature = "redis-tcp")]
 #[async_trait]
 impl MemoryBackend for ValkeyBackend {
     #[instrument(skip(self, entry), fields(id = %entry.id))]
@@ -265,7 +287,7 @@ impl MemoryBackend for ValkeyBackend {
 // Tests -- gated behind #[ignore] since they require a running Valkey/Redis
 // ---------------------------------------------------------------------------
 
-#[cfg(test)]
+#[cfg(all(test, feature = "redis-tcp"))]
 mod tests {
     use super::*;
 

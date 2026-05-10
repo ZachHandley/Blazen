@@ -1,0 +1,65 @@
+diff --git a/node_modules/@emnapi/runtime/dist/emnapi.cjs.js b/node_modules/@emnapi/runtime/dist/emnapi.cjs.js
+index 562d315..2f3dd9c 100644
+--- a/node_modules/@emnapi/runtime/dist/emnapi.cjs.js
++++ b/node_modules/@emnapi/runtime/dist/emnapi.cjs.js
+@@ -127,7 +127,7 @@ const _MessageChannel = typeof MessageChannel === 'function'
+         return undefined;
+     })();
+ const _setImmediate = typeof setImmediate === 'function'
+-    ? setImmediate
++    ? function (callback) { return globalThis.setImmediate(callback); }
+     : function (callback) {
+         if (typeof callback !== 'function') {
+             throw new TypeError('The "callback" argument must be of type function');
+diff --git a/node_modules/@emnapi/runtime/dist/emnapi.esm-bundler.js b/node_modules/@emnapi/runtime/dist/emnapi.esm-bundler.js
+index f9c7b4b..8a1fda6 100644
+--- a/node_modules/@emnapi/runtime/dist/emnapi.esm-bundler.js
++++ b/node_modules/@emnapi/runtime/dist/emnapi.esm-bundler.js
+@@ -135,7 +135,7 @@ var _MessageChannel = typeof MessageChannel === 'function'
+         return undefined;
+     })();
+ var _setImmediate = typeof setImmediate === 'function'
+-    ? setImmediate
++    ? function (callback) { return globalThis.setImmediate(callback); }
+     : function (callback) {
+         if (typeof callback !== 'function') {
+             throw new TypeError('The "callback" argument must be of type function');
+diff --git a/node_modules/@emnapi/runtime/dist/emnapi.iife.js b/node_modules/@emnapi/runtime/dist/emnapi.iife.js
+index 5240303..76d939f 100644
+--- a/node_modules/@emnapi/runtime/dist/emnapi.iife.js
++++ b/node_modules/@emnapi/runtime/dist/emnapi.iife.js
+@@ -171,7 +171,7 @@ var emnapi = (function (exports) {
+             return undefined;
+         })();
+     var _setImmediate = typeof setImmediate === 'function'
+-        ? setImmediate
++        ? function (callback) { return globalThis.setImmediate(callback); }
+         : function (callback) {
+             if (typeof callback !== 'function') {
+                 throw new TypeError('The "callback" argument must be of type function');
+diff --git a/node_modules/@emnapi/runtime/dist/emnapi.js b/node_modules/@emnapi/runtime/dist/emnapi.js
+index 3d68b9a..e7981ec 100644
+--- a/node_modules/@emnapi/runtime/dist/emnapi.js
++++ b/node_modules/@emnapi/runtime/dist/emnapi.js
+@@ -174,7 +174,7 @@
+             return undefined;
+         })();
+     var _setImmediate = typeof setImmediate === 'function'
+-        ? setImmediate
++        ? function (callback) { return globalThis.setImmediate(callback); }
+         : function (callback) {
+             if (typeof callback !== 'function') {
+                 throw new TypeError('The "callback" argument must be of type function');
+diff --git a/node_modules/@emnapi/runtime/dist/emnapi.mjs b/node_modules/@emnapi/runtime/dist/emnapi.mjs
+index 5a2774c..970c925 100644
+--- a/node_modules/@emnapi/runtime/dist/emnapi.mjs
++++ b/node_modules/@emnapi/runtime/dist/emnapi.mjs
+@@ -127,7 +127,7 @@ const _MessageChannel = typeof MessageChannel === 'function'
+         return undefined;
+     })();
+ const _setImmediate = typeof setImmediate === 'function'
+-    ? setImmediate
++    ? function (callback) { return globalThis.setImmediate(callback); }
+     : function (callback) {
+         if (typeof callback !== 'function') {
+             throw new TypeError('The "callback" argument must be of type function');

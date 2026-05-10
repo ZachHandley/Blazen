@@ -632,6 +632,11 @@ jobs:
             deployment-target: "14.0"
           - target: x86_64-pc-windows-msvc
             runs-on: windows-latest
+          - target: wasm32-wasi
+            rustc-target: wasm32-wasip1-threads
+            runs-on: ubuntu-latest
+            container: forge.blackleafdigital.com/blackleafdigital/blazen-ci-base:x86_64-unknown-linux-gnu
+            container-kind: manylinux
     runs-on: ${{ matrix.runs-on }}
     container:
       image: ${{ matrix.container }}
@@ -875,7 +880,10 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
         with:
-          targets: ${{ matrix.target }}
+          # rustc-target overrides matrix.target for the rustup toolchain triple
+          # (e.g. wasm32-wasi -> wasm32-wasip1-threads). Native triples leave
+          # rustc-target unset, falling back to matrix.target.
+          targets: ${{ matrix.rustc-target || matrix.target }}
           sccache: true
           sccache-s3-bucket: ${{ secrets.S3_BUCKET }}
           sccache-s3-endpoint: https://${{ secrets.S3_ENDPOINT }}
@@ -969,7 +977,28 @@ jobs:
           # Non-alpine non-Windows entries (manylinux gnu/musl on x86_64, aarch64
           # gnu manylinux) still use napi-rs/cli because napi's --target injection
           # is what they want (real cross or same-triple-as-host with dynamic glibc).
-          if [[ "${{ matrix.container-kind }}" == "alpine" ]]; then
+          if [[ "${{ matrix.target }}" == "wasm32-wasi" ]]; then
+            # wasm32-wasip1-threads target: napi-rs emits a JS shim
+            # (blazen.wasi*.cjs / blazen.wasi-browser.js) plus the actual
+            # wasm binary (blazen.wasm32-wasi.wasm). The `wasi` feature alias
+            # in crates/blazen-node/Cargo.toml selects the wasi-safe feature
+            # set (tiktoken, distributed-http, otlp-http, langfuse). `tract` is
+            # intentionally excluded because blazen-embed-tract still drags
+            # `wasm-bindgen` via reqwest's wasm32 path; see Cargo.toml.
+            #
+            # EMNAPI_LINK_DIR points at the emnapi sysroot inside pnpm's
+            # virtual store so napi-rs can link against the wasi runtime
+            # bundled with `emnapi` (already pulled in by `pnpm install`
+            # above).
+            export EMNAPI_LINK_DIR="$(pwd)/node_modules/.pnpm/emnapi@1.9.0/node_modules/emnapi/lib/wasm32-wasip1-threads"
+            pnpm --filter blazen exec napi build \
+              --release \
+              --platform \
+              --target wasm32-wasip1-threads \
+              --no-default-features \
+              --features wasi \
+              --js index.js
+          elif [[ "${{ matrix.container-kind }}" == "alpine" ]]; then
             export RUSTFLAGS="-C target-feature=-crt-static"
             (cd crates/blazen-node && cargo build --release --features local-all)
             cp "${CARGO_TARGET_DIR:-target}/release/libblazen_node.so" \
@@ -1013,9 +1042,16 @@ jobs:
           TARGET="${{ matrix.target }}"
           cd crates/blazen-node
           shopt -s nullglob
-          NODE_FILES=(blazen.*.node)
+          if [[ "${TARGET}" == "wasm32-wasi" ]]; then
+            # napi-rs v3 wasi outputs: blazen.wasi.cjs / blazen.wasi-browser.js
+            # JS shims plus the blazen.wasm32-wasi.wasm binary. Globs cover all
+            # variants emitted by current napi-cli without pinning exact names.
+            NODE_FILES=(blazen.wasi*.cjs blazen.wasi*.js blazen.wasm32-wasi.wasm)
+          else
+            NODE_FILES=(blazen.*.node)
+          fi
           if [ ${#NODE_FILES[@]} -eq 0 ]; then
-            echo "::error::No napi .node binaries found in crates/blazen-node/ — build did not produce output"
+            echo "::error::No napi binaries found in crates/blazen-node/ — build did not produce output"
             exit 1
           fi
           tar -czf "../../napi-${TARGET}.tar.gz" "${NODE_FILES[@]}"
@@ -1118,6 +1154,10 @@ jobs:
         run: |
           cd crates/blazen-wasm-sdk
           wasm-pack build --target bundler --release
+
+      - name: Rename pkg to @blazen-dev/wasm
+        if: steps.check.outputs.completed != 'true'
+        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }} --rename-wasm-pkg
 
       - name: Upload wasm pkg to Forgejo generic package
         if: steps.check.outputs.completed != 'true'

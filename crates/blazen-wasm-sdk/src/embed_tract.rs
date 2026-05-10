@@ -19,7 +19,7 @@
 //!   transformers.js variants.
 //!
 //! ```js
-//! import init, { TractEmbedModel, TractOptions } from '@blazen/sdk';
+//! import init, { TractEmbedModel, TractOptions } from '@blazen-dev/wasm';
 //! await init();
 //!
 //! const opts = new TractOptions();
