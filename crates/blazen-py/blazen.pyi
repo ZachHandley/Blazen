@@ -759,7 +759,7 @@ class AzureOpenAiProvider:
             options: [`AzureOptions`] with required ``resource_name`` and
                 ``deployment_name`` plus optional ``api_version``.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
     def with_retry_config(self, config: RetryConfig) -> AzureOpenAiProvider:
         r"""
@@ -994,7 +994,7 @@ class BedrockProvider:
         Args:
             options: [`BedrockOptions`] with required ``region``.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
     def with_retry_config(self, config: RetryConfig) -> BedrockProvider:
         r"""
@@ -1891,7 +1891,7 @@ class CohereProvider:
         r"""
         Create a new Cohere provider.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
     def embedding_model(self) -> EmbeddingModel:
         r"""
@@ -2454,7 +2454,7 @@ class CompletionStream:
     ```
     """
     def __aiter__(self) -> CompletionStream: ...
-    async def __anext__(self) -> CompletionResponse:
+    async def __anext__(self) -> CompletionResponse: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -3087,7 +3087,7 @@ class DeepSeekProvider:
         r"""
         Create a new DeepSeek provider.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
     def with_retry_config(self, config: RetryConfig) -> DeepSeekProvider:
         r"""
@@ -4125,7 +4125,7 @@ class FireworksProvider:
         r"""
         Create a new Fireworks AI provider.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
     def embedding_model(self) -> EmbeddingModel:
         r"""
@@ -4164,7 +4164,7 @@ class GeminiProvider:
         Args:
             options: Optional [`ProviderOptions`] with api_key, base_url, model.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
     def with_retry_config(self, config: RetryConfig) -> GeminiProvider:
         r"""
@@ -4189,7 +4189,7 @@ class GroqProvider:
         r"""
         Create a new Groq provider.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
     def with_retry_config(self, config: RetryConfig) -> GroqProvider:
         r"""
@@ -4656,7 +4656,7 @@ class InferenceChunkStream:
     the underlying engine stream is exhausted.
     """
     def __aiter__(self) -> InferenceChunkStream: ...
-    async def __anext__(self) -> InferenceChunk:
+    async def __anext__(self) -> InferenceChunk: ...
 
 @typing.final
 class InferenceImage:
@@ -5089,7 +5089,7 @@ class LlamaCppInferenceChunkStream:
     once the underlying engine stream is exhausted.
     """
     def __aiter__(self) -> LlamaCppInferenceChunkStream: ...
-    async def __anext__(self) -> LlamaCppInferenceChunk:
+    async def __anext__(self) -> LlamaCppInferenceChunk: ...
 
 @typing.final
 class LlamaCppInferenceResult:
@@ -5913,7 +5913,7 @@ class MistralProvider:
         r"""
         Create a new Mistral provider.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
     def with_retry_config(self, config: RetryConfig) -> MistralProvider:
         r"""
@@ -6550,7 +6550,7 @@ class OpenAiCompatProvider:
         Args:
             config: A fully-specified [`OpenAiCompatConfig`].
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
     def embedding_model(self, *, model: builtins.str, dimensions: builtins.int) -> EmbeddingModel:
         r"""
@@ -6669,7 +6669,7 @@ class OpenRouterProvider:
         r"""
         Create a new OpenRouter provider.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
     def with_retry_config(self, config: RetryConfig) -> OpenRouterProvider:
         r"""
@@ -6863,7 +6863,7 @@ class PerplexityProvider:
         r"""
         Create a new Perplexity provider.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
     def with_retry_config(self, config: RetryConfig) -> PerplexityProvider:
         r"""
@@ -9603,7 +9603,7 @@ class TogetherProvider:
         r"""
         Create a new Together AI provider.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
     def embedding_model(self) -> EmbeddingModel:
         r"""
@@ -11449,7 +11449,7 @@ class XaiProvider:
         r"""
         Create a new xAI provider.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
     def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
     def with_retry_config(self, config: RetryConfig) -> XaiProvider:
         r"""
@@ -11473,7 +11473,7 @@ class _EventStream:
     event from the event loop, or when the underlying broadcast channel closes.
     """
     def __aiter__(self) -> _EventStream: ...
-    async def __anext__(self) -> Event:
+    async def __anext__(self) -> Event: ...
 
 @typing.final
 class _PipelineEventStream:
@@ -11481,7 +11481,7 @@ class _PipelineEventStream:
     Async iterator over streamed pipeline events.
     """
     def __aiter__(self) -> _PipelineEventStream: ...
-    async def __anext__(self) -> PipelineEvent:
+    async def __anext__(self) -> PipelineEvent: ...
 
 @typing.final
 class _SessionRegistryHandle:
@@ -11566,7 +11566,7 @@ class AuthMethod(enum.Enum):
 
 @typing.final
 class CacheStrategy(enum.Enum):
-    None = ...
+    Off = ...
     ContentHash = ...
     AnthropicEphemeral = ...
     Auto = ...

@@ -281,7 +281,7 @@ jobs:
 
       - name: Setup pnpm
         if: steps.check.outputs.completed != 'true'
-        run: corepack enable && corepack prepare pnpm@latest --activate
+        run: corepack enable && corepack prepare pnpm@10 --activate
 
       - name: Build Node bindings
         if: steps.check.outputs.completed != 'true'
@@ -368,7 +368,7 @@ jobs:
 
       - name: Setup pnpm
         if: steps.check.outputs.completed != 'true'
-        run: corepack enable && corepack prepare pnpm@latest --activate
+        run: corepack enable && corepack prepare pnpm@10 --activate
 
       - name: Install wasm-pack
         if: steps.check.outputs.completed != 'true'
@@ -491,7 +491,7 @@ jobs:
 
       - name: Setup pnpm
         if: steps.check.outputs.completed != 'true'
-        run: corepack enable && corepack prepare pnpm@latest --activate
+        run: corepack enable && corepack prepare pnpm@10 --activate
 
       - name: Install cloudflare-worker example deps
         if: steps.check.outputs.completed != 'true'
@@ -573,7 +573,7 @@ jobs:
 
       - name: Setup pnpm
         if: steps.check.outputs.completed != 'true'
-        run: corepack enable && corepack prepare pnpm@latest --activate
+        run: corepack enable && corepack prepare pnpm@10 --activate
 
       - name: Build Node bindings
         if: steps.check.outputs.completed != 'true'

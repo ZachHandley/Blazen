@@ -1,6 +1,7 @@
 {
   "name": "blazen-monorepo",
   "private": true,
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
     "build:node": "pnpm --filter blazen run build",
     "build:website": "pnpm --filter blazen-website run build",

@@ -14,6 +14,10 @@ use blazen_llm::retry::RetryConfig;
 #[pyclass(name = "CacheStrategy", eq, eq_int, from_py_object)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PyCacheStrategy {
+    // `None` is a Python keyword, so the Python-facing name is `Off`.
+    // The Rust-side variant keeps its original name to stay aligned with
+    // the upstream `blazen_llm::cache::CacheStrategy::None` it maps to.
+    #[pyo3(name = "Off")]
     None,
     ContentHash,
     AnthropicEphemeral,

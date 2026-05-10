@@ -57,7 +57,85 @@ fn main() {
     let processed = rewrite_coroutine_to_async(&content);
     let processed = inject_exception_stubs(&processed);
     let processed = inject_module_aliases(&processed);
-    fs::write(&pyi_path, processed).expect("failed to write blazen.pyi");
+    fs::write(&pyi_path, &processed).expect("failed to write blazen.pyi");
+
+    assert_no_bodyless_defs(&processed);
+}
+
+/// Fail loudly if any `def` / `async def` in the generated stub is missing a body.
+///
+/// pyo3-stub-gen emits one of three valid forms for a method declaration:
+///   1. `def foo(...) -> T: ...`                     (inline body)
+///   2. `def foo(...) -> T:` + indented docstring    (docstring acts as body)
+///   3. `def foo(...) -> T:` + indented statement(s) (real body)
+///
+/// Our post-processor must preserve the body. A regression in
+/// [`try_rewrite_line`] previously dropped form-1's `...`, producing a bodyless
+/// `async def` that mypy rejected as a syntax error. This check converts that
+/// silent failure into a build-time panic so it never ships again.
+#[cfg(not(feature = "extension-module"))]
+fn assert_no_bodyless_defs(content: &str) {
+    let lines: Vec<&str> = content.lines().collect();
+    let mut errors: Vec<String> = Vec::new();
+
+    for (idx, line) in lines.iter().enumerate() {
+        let trimmed = line.trim_start();
+        let is_def = trimmed.starts_with("def ") || trimmed.starts_with("async def ");
+        if !is_def {
+            continue;
+        }
+        // Inline body — already valid.
+        if line.trim_end().ends_with(": ...") {
+            continue;
+        }
+        // Must end with a colon to be a function header at all.
+        if !line.trim_end().ends_with(':') {
+            continue;
+        }
+
+        let def_indent = line.len() - trimmed.len();
+        // Walk forward to the next non-blank, non-comment line.
+        let mut next_meaningful: Option<&str> = None;
+        for follow in &lines[idx + 1..] {
+            let f_trim = follow.trim_start();
+            if f_trim.is_empty() || f_trim.starts_with('#') {
+                continue;
+            }
+            next_meaningful = Some(*follow);
+            break;
+        }
+        let Some(next) = next_meaningful else {
+            errors.push(format!(
+                "line {}: bodyless def at EOF: {}",
+                idx + 1,
+                line.trim_end()
+            ));
+            continue;
+        };
+        let next_trimmed = next.trim_start();
+        let next_indent = next.len() - next_trimmed.len();
+        if next_indent > def_indent {
+            // Properly indented body or docstring — valid.
+            continue;
+        }
+        errors.push(format!(
+            "line {}: bodyless def followed by sibling `{}` (no `...`, no docstring, no indented body):\n  {}",
+            idx + 1,
+            next_trimmed.split_whitespace().next().unwrap_or(""),
+            line.trim_end()
+        ));
+    }
+
+    if !errors.is_empty() {
+        eprintln!("blazen.pyi has {} bodyless def(s):", errors.len());
+        for err in &errors {
+            eprintln!("  {err}");
+        }
+        panic!(
+            "Generated blazen.pyi contains bodyless function declarations — this is a Python \
+             syntax error. Fix the stub generator (likely `try_rewrite_line` in stub_gen.rs)."
+        );
+    }
 }
 
 /// Inject module-level type aliases that mirror Rust `pub type` aliases.
@@ -342,10 +420,15 @@ fn try_rewrite_line(line: &str) -> Option<String> {
     }
 
     // Extract the inner type (everything between the last comma+space and the trailing "]:")
+    // and preserve whatever tail follows the "]:" (typically "" when a docstring follows
+    // on the next line, or " ..." when pyo3-stub-gen emitted an inline body marker).
+    // Dropping that tail produces a bodyless `async def`, which is a Python syntax error
+    // unless a docstring happens to follow.
     let inner_start = arrow + 5 + prefix.len();
     let rest = &line[inner_start..];
     let end = rest.rfind("]:")?;
     let inner_type = &rest[..end];
+    let trailing = &rest[end + 2..];
 
     // Reconstruct: replace "def " with "async def " and use the inner type
     let indent = &line[..line.len() - trimmed.len()];
@@ -353,5 +436,7 @@ fn try_rewrite_line(line: &str) -> Option<String> {
     let paren_end = sig.find(") -> ")?;
     let method_sig = &sig[..paren_end + 1]; // "method_name(...)"
 
-    Some(format!("{indent}async def {method_sig} -> {inner_type}:"))
+    Some(format!(
+        "{indent}async def {method_sig} -> {inner_type}:{trailing}"
+    ))
 }

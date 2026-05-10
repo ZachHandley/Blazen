@@ -278,7 +278,7 @@ jobs:
 
       - name: Setup pnpm
         if: steps.check.outputs.completed != 'true'
-        run: corepack enable && corepack prepare pnpm@latest --activate
+        run: corepack enable && corepack prepare pnpm@10 --activate
 
       - name: Stamp version
         if: steps.check.outputs.completed != 'true'
