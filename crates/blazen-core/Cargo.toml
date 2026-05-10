@@ -64,8 +64,8 @@ futures-executor = { version = "0.3", default-features = false, features = ["std
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
-blazen-events.workspace = true
-blazen-macros.workspace = true
+blazen-events = { workspace = true }
+blazen-macros = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true
 tokio-stream.workspace = true
