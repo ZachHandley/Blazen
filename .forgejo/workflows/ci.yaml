@@ -277,7 +277,7 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Setup pnpm
         if: steps.check.outputs.completed != 'true'
@@ -364,7 +364,7 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Setup pnpm
         if: steps.check.outputs.completed != 'true'
@@ -487,7 +487,7 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Setup pnpm
         if: steps.check.outputs.completed != 'true'
@@ -569,7 +569,7 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Setup pnpm
         if: steps.check.outputs.completed != 'true'
