@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/blazen.svg)](https://www.npmjs.com/package/blazen)
 [![Node >= 18](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org/)
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://opensource.org/licenses/AGPL-3.0)
+[![License: MPL-2.0](https://img.shields.io/badge/License-MPL--2.0-blue.svg)](https://www.mozilla.org/en-US/MPL/2.0/)
 
 Event-driven AI workflow engine for Node.js and TypeScript, powered by a Rust core via napi-rs. Define workflows as a graph of async steps connected by typed events. Built-in LLM integration, streaming, pause/resume, and fan-out.
 
@@ -866,4 +866,4 @@ import type {
 
 ## License
 
-[AGPL-3.0](https://opensource.org/licenses/AGPL-3.0)
+[MPL-2.0](https://www.mozilla.org/en-US/MPL/2.0/)

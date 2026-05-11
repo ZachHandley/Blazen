@@ -4,7 +4,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/blazen)](https://pypi.org/project/blazen/)
 [![Python](https://img.shields.io/pypi/pyversions/blazen)](https://pypi.org/project/blazen/)
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](https://github.com/ZachHandley/Blazen/blob/main/LICENSE)
+[![License: MPL-2.0](https://img.shields.io/badge/license-MPL--2.0-blue)](https://github.com/ZachHandley/Blazen/blob/main/LICENSE)
 
 Blazen lets you build multi-step AI workflows as composable, event-driven graphs. Define steps with a decorator, wire them together with typed events, and run everything on a native Rust engine with async Python bindings.
 
@@ -622,6 +622,6 @@ Source: [github.com/ZachHandley/Blazen](https://github.com/ZachHandley/Blazen)
 
 ## License
 
-AGPL-3.0 -- see [LICENSE](https://github.com/ZachHandley/Blazen/blob/main/LICENSE) for details.
+MPL-2.0 -- see [LICENSE](https://github.com/ZachHandley/Blazen/blob/main/LICENSE) for details.
 
 Author: Zach Handley

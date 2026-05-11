@@ -25,7 +25,7 @@
     "workflow",
     "agent"
   ],
-  "license": "AGPL-3.0-or-later",
+  "license": "MPL-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/ZachHandley/Blazen"

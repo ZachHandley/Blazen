@@ -3,7 +3,7 @@ name = "blazen-workspace"
 version = "0.0.0-dev"
 description = "Blazen workspace"
 requires-python = ">=3.10"
-license = "AGPL-3.0-or-later"
+license = "MPL-2.0"
 authors = [{ name = "Zach Handley", email = "zachhandley@gmail.com" }]
 dependencies = ["blazen"]
 

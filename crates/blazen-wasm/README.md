@@ -57,4 +57,4 @@ Full documentation at [blazen.dev/docs/getting-started/introduction](https://bla
 
 ## License
 
-AGPL-3.0-or-later
+MPL-2.0

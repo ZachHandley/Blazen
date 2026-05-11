@@ -2,7 +2,7 @@
 name = "blazen-wasm"
 version = "0.0.0-dev"
 edition = "2024"
-license = "AGPL-3.0-or-later"
+license = "MPL-2.0"
 authors = ["Zach Handley <zachhandley@gmail.com>"]
 description = "Blazen WASM component for ZLayer deployment"
 rust-version = "1.91"

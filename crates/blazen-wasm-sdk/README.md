@@ -438,4 +438,4 @@ See [blazen.dev/docs](https://blazen.dev/docs/) or the source under `crates/blaz
 
 ## License
 
-AGPL-3.0-or-later
+MPL-2.0

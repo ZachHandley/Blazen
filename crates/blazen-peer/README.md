@@ -171,4 +171,4 @@ For distributed workflows, `UntilParentFinish` is the typical choice for values 
 
 ## License
 
-AGPL-3.0 -- see [LICENSE](https://github.com/ZachHandley/Blazen/blob/main/LICENSE) for details.
+MPL-2.0 -- see [LICENSE](https://github.com/ZachHandley/Blazen/blob/main/LICENSE) for details.

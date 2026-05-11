@@ -8,7 +8,7 @@
   <a href="https://pypi.org/project/blazen/"><img alt="PyPI" src="https://img.shields.io/pypi/v/blazen.svg?style=flat-square&logo=python&label=PyPI" /></a>
   <a href="https://www.npmjs.com/package/blazen"><img alt="npm" src="https://img.shields.io/npm/v/blazen.svg?style=flat-square&logo=npm&label=npm" /></a>
   <a href="https://www.npmjs.com/package/@blazen-dev/wasm"><img alt="npm wasm" src="https://img.shields.io/npm/v/@blazen-dev/wasm.svg?style=flat-square&logo=webassembly&label=wasm" /></a>
-  <a href="https://github.com/ZachHandley/Blazen/blob/main/LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square" /></a>
+  <a href="https://github.com/ZachHandley/Blazen/blob/main/LICENSE"><img alt="License: MPL-2.0" src="https://img.shields.io/badge/license-MPL--2.0-blue?style=flat-square" /></a>
 </p>
 
 ---
@@ -556,7 +556,7 @@ Full documentation, guides, and API reference are available at **[blazen.dev/doc
 
 ## License
 
-This project is licensed under the [GNU Affero General Public License v3.0](https://www.gnu.org/licenses/agpl-3.0.en.html) (AGPL-3.0).
+This project is licensed under the [Mozilla Public License 2.0](https://www.mozilla.org/en-US/MPL/2.0/) (MPL-2.0).
 
 ## Author
 
