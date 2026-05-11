@@ -318,7 +318,32 @@ jobs:
             mkdir -p "$SUB"
             cp "$F" "$SUB/"
           done
-          ls -la crates/blazen-node/artifacts/
+
+          # Stage wasi shim + wasm binary. The wasm32-wasi target produces three
+          # files (blazen.wasi.cjs, blazen.wasi-browser.js, blazen.wasm32-wasi.wasm)
+          # that all belong to the @blazen-dev/blazen-wasm32-wasi subpackage.
+          # Without these, `napi artifacts` finds nothing for the wasi target,
+          # `napi prepublish` skips it, and V8-isolate consumers (Cloudflare
+          # Workers / Deno) have no working sidecar to fall back to.
+          # `napi artifacts` walks artifacts/ recursively and routes by filename
+          # pattern, so any subdir works as long as all three live together.
+          # Explicit file list (not glob) so a missing file fails loud instead
+          # of silently re-introducing the original bug.
+          WASI_FILES=(
+            dist/napi/blazen.wasi.cjs
+            dist/napi/blazen.wasi-browser.js
+            dist/napi/blazen.wasm32-wasi.wasm
+          )
+          WASI_SUB="crates/blazen-node/artifacts/wasm32-wasi"
+          mkdir -p "$WASI_SUB"
+          for F in "${WASI_FILES[@]}"; do
+            if [ ! -f "$F" ]; then
+              echo "::error::Missing wasi artifact: $F (build-artifacts.yaml's wasm32-wasi leg did not run, or its upload step changed)"
+              exit 1
+            fi
+            cp "$F" "$WASI_SUB/"
+          done
+          ls -laR crates/blazen-node/artifacts/
 
       - name: Create npm subpackage dirs
         if: steps.check.outputs.completed != 'true'
