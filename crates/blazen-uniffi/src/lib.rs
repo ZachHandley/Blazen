@@ -28,9 +28,11 @@ uniffi::include_scaffolding!("blazen");
 
 pub mod errors;
 pub mod runtime;
+pub mod workflow;
 
 pub use errors::{BlazenError, BlazenResult};
 pub use runtime::init;
+pub use workflow::{Event, StepHandler, StepOutput, Workflow, WorkflowBuilder, WorkflowResult};
 
 /// Returns the `blazen-uniffi` crate version baked in at compile time.
 ///

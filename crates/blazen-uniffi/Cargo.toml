@@ -33,6 +33,7 @@ blazen-telemetry = { workspace = true, features = ["history", "spans"] }
 bytes.workspace = true
 chrono.workspace = true
 futures-util.workspace = true
+parking_lot = "0.12"
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
