@@ -28,26 +28,45 @@ uniffi::include_scaffolding!("blazen");
 
 pub mod agent;
 pub mod batch;
+pub mod compute;
 pub mod errors;
 pub mod llm;
+#[cfg(feature = "distributed")]
+pub mod peer;
+pub mod persist;
 pub mod pipeline;
 pub mod providers;
 pub mod runtime;
 pub mod streaming;
+pub mod telemetry;
 pub mod workflow;
 
 pub use agent::{Agent, AgentResult, ToolHandler};
 pub use batch::{BatchItem, BatchResult, complete_batch, complete_batch_blocking};
+pub use compute::{ImageGenModel, ImageGenResult, SttModel, SttResult, TtsModel, TtsResult};
 pub use errors::{BlazenError, BlazenResult};
 pub use llm::{
     ChatMessage, CompletionModel, CompletionRequest, CompletionResponse, EmbeddingModel,
     EmbeddingResponse, Media, TokenUsage, Tool, ToolCall,
+};
+#[cfg(feature = "distributed")]
+pub use peer::{PeerClient, PeerServer};
+pub use persist::{
+    CheckpointStore, PersistedEvent, WorkflowCheckpoint, new_redb_checkpoint_store,
+    new_valkey_checkpoint_store,
 };
 pub use pipeline::{Pipeline, PipelineBuilder};
 pub use runtime::init;
 pub use streaming::{
     CompletionStreamSink, StreamChunk, complete_streaming, complete_streaming_blocking,
 };
+#[cfg(feature = "langfuse")]
+pub use telemetry::init_langfuse;
+#[cfg(feature = "otlp")]
+pub use telemetry::init_otlp;
+#[cfg(feature = "prometheus")]
+pub use telemetry::init_prometheus;
+pub use telemetry::{WorkflowHistoryEntry, parse_workflow_history, shutdown_telemetry};
 pub use workflow::{Event, StepHandler, StepOutput, Workflow, WorkflowBuilder, WorkflowResult};
 
 /// Returns the `blazen-uniffi` crate version baked in at compile time.
