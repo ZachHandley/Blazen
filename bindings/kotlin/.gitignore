@@ -1,0 +1,10 @@
+.gradle/
+build/
+.kotlin/
+out/
+*.iml
+.idea/
+.DS_Store
+
+# Per-arch native libs ignored by the workspace-level .gitignore — see
+# scripts/build-uniffi-lib.sh and CI for distribution.
