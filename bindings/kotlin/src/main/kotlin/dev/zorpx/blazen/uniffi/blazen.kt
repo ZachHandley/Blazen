@@ -9410,11 +9410,8 @@ sealed class BlazenException: kotlin.Exception() {
      */
     class Auth(
         
-        val `message`: kotlin.String
-        ) : BlazenException() {
-        override val message
-            get() = "message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+        ) : BlazenException()
     
     /**
      * Rate limit exceeded. `retry_after_ms` is set when the provider returned a
@@ -9422,81 +9419,60 @@ sealed class BlazenException: kotlin.Exception() {
      */
     class RateLimit(
         
-        val `message`: kotlin.String, 
+        override val `message`: kotlin.String, 
         
         val `retryAfterMs`: kotlin.ULong?
-        ) : BlazenException() {
-        override val message
-            get() = "message=${ `message` }, retryAfterMs=${ `retryAfterMs` }"
-    }
+        ) : BlazenException()
     
     /**
      * Operation timed out before the provider responded.
      */
     class Timeout(
         
-        val `message`: kotlin.String, 
+        override val `message`: kotlin.String, 
         
         val `elapsedMs`: kotlin.ULong
-        ) : BlazenException() {
-        override val message
-            get() = "message=${ `message` }, elapsedMs=${ `elapsedMs` }"
-    }
+        ) : BlazenException()
     
     /**
      * Input validation failed (bad schema, missing required field, etc.).
      */
     class Validation(
         
-        val `message`: kotlin.String
-        ) : BlazenException() {
-        override val message
-            get() = "message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+        ) : BlazenException()
     
     /**
      * Content policy violation (provider refused due to safety filters).
      */
     class ContentPolicy(
         
-        val `message`: kotlin.String
-        ) : BlazenException() {
-        override val message
-            get() = "message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+        ) : BlazenException()
     
     /**
      * Operation unsupported on this platform / build / provider.
      */
     class Unsupported(
         
-        val `message`: kotlin.String
-        ) : BlazenException() {
-        override val message
-            get() = "message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+        ) : BlazenException()
     
     /**
      * Compute error (CPU/GPU/accelerator failure, OOM, etc.).
      */
     class Compute(
         
-        val `message`: kotlin.String
-        ) : BlazenException() {
-        override val message
-            get() = "message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+        ) : BlazenException()
     
     /**
      * Media-handling error (decode, encode, transcoding).
      */
     class Media(
         
-        val `message`: kotlin.String
-        ) : BlazenException() {
-        override val message
-            get() = "message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+        ) : BlazenException()
     
     /**
      * Provider / backend error. `kind` identifies the specific backend and failure
@@ -9508,7 +9484,7 @@ sealed class BlazenException: kotlin.Exception() {
         
         val `kind`: kotlin.String, 
         
-        val `message`: kotlin.String, 
+        override val `message`: kotlin.String, 
         
         val `provider`: kotlin.String?, 
         
@@ -9521,32 +9497,23 @@ sealed class BlazenException: kotlin.Exception() {
         val `detail`: kotlin.String?, 
         
         val `retryAfterMs`: kotlin.ULong?
-        ) : BlazenException() {
-        override val message
-            get() = "kind=${ `kind` }, message=${ `message` }, provider=${ `provider` }, status=${ `status` }, endpoint=${ `endpoint` }, requestId=${ `requestId` }, detail=${ `detail` }, retryAfterMs=${ `retryAfterMs` }"
-    }
+        ) : BlazenException()
     
     /**
      * Workflow execution error (step panic, deadlock, missing context, etc.).
      */
     class Workflow(
         
-        val `message`: kotlin.String
-        ) : BlazenException() {
-        override val message
-            get() = "message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+        ) : BlazenException()
     
     /**
      * Tool / function-call error during LLM agent execution.
      */
     class Tool(
         
-        val `message`: kotlin.String
-        ) : BlazenException() {
-        override val message
-            get() = "message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+        ) : BlazenException()
     
     /**
      * Distributed peer-to-peer error. `kind` is one of: `"Encode"`, `"Transport"`,
@@ -9556,22 +9523,16 @@ sealed class BlazenException: kotlin.Exception() {
         
         val `kind`: kotlin.String, 
         
-        val `message`: kotlin.String
-        ) : BlazenException() {
-        override val message
-            get() = "kind=${ `kind` }, message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+        ) : BlazenException()
     
     /**
      * Persistence layer error (redb / valkey checkpoint store).
      */
     class Persist(
         
-        val `message`: kotlin.String
-        ) : BlazenException() {
-        override val message
-            get() = "message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+        ) : BlazenException()
     
     /**
      * Prompt template error. `kind`: `"MissingVariable"`, `"NotFound"`, `"VersionNotFound"`,
@@ -9581,11 +9542,8 @@ sealed class BlazenException: kotlin.Exception() {
         
         val `kind`: kotlin.String, 
         
-        val `message`: kotlin.String
-        ) : BlazenException() {
-        override val message
-            get() = "kind=${ `kind` }, message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+        ) : BlazenException()
     
     /**
      * Memory subsystem error. `kind`: `"NoEmbedder"`, `"Elid"`, `"Embedding"`,
@@ -9595,11 +9553,8 @@ sealed class BlazenException: kotlin.Exception() {
         
         val `kind`: kotlin.String, 
         
-        val `message`: kotlin.String
-        ) : BlazenException() {
-        override val message
-            get() = "kind=${ `kind` }, message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+        ) : BlazenException()
     
     /**
      * Model-cache / download error. `kind`: `"Download"`, `"CacheDir"`, `"Io"`.
@@ -9608,11 +9563,8 @@ sealed class BlazenException: kotlin.Exception() {
         
         val `kind`: kotlin.String, 
         
-        val `message`: kotlin.String
-        ) : BlazenException() {
-        override val message
-            get() = "kind=${ `kind` }, message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+        ) : BlazenException()
     
     /**
      * Operation was cancelled (e.g. via a foreign-language `context.Context`
@@ -9631,11 +9583,8 @@ sealed class BlazenException: kotlin.Exception() {
      */
     class Internal(
         
-        val `message`: kotlin.String
-        ) : BlazenException() {
-        override val message
-            get() = "message=${ `message` }"
-    }
+        override val `message`: kotlin.String
+        ) : BlazenException()
     
 
     

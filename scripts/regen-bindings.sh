@@ -160,6 +160,36 @@ regen_kotlin() {
         --language kotlin \
         --config "$CFG" \
         --out-dir bindings/kotlin/src/main/kotlin
+    # Patch a known uniffi-bindgen-kotlin codegen bug: each variant of the
+    # sealed `BlazenException` class declares the constructor parameter as
+    # plain `val message: kotlin.String` AND an override body
+    # `override val message get() = "..."` — Kotlin rejects this as a
+    # name collision ("Conflicting declarations" + "Overload resolution
+    # ambiguity"). The fix is to promote the constructor parameter to
+    # `override val message: kotlin.String` and drop the override body.
+    # `Cancelled` has no constructor params and is left alone.
+    local kt_file=bindings/kotlin/src/main/kotlin/dev/zorpx/blazen/uniffi/blazen.kt
+    if [[ -f "$kt_file" ]]; then
+        BLAZEN_KT_FILE="$kt_file" python3 - <<'PY'
+import os
+import re
+from pathlib import Path
+p = Path(os.environ["BLAZEN_KT_FILE"])
+src = p.read_text()
+pattern = re.compile(
+    r'(class \w+\([^)]*?)(\n\s+)val `message`: kotlin\.String'
+    r'([^)]*?\) : BlazenException\(\)) \{\s*'
+    r'override val message\s*\n\s*get\(\) = "[^"]*"\s*\n\s*\}',
+    re.MULTILINE,
+)
+def fixup(m):
+    return f"{m.group(1)}{m.group(2)}override val `message`: kotlin.String{m.group(3)}"
+new_src, n = pattern.subn(fixup, src)
+if n:
+    p.write_text(new_src)
+    print(f"  ↳ patched BlazenException variant message collisions ({n} sites)")
+PY
+    fi
     echo "  ✓ Kotlin bindings → bindings/kotlin/src/main/kotlin/dev/zorpx/blazen/uniffi/"
 }
 
