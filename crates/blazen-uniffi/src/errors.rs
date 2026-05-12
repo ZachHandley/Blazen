@@ -27,7 +27,6 @@ use thiserror::Error;
 /// (matching the corresponding Node/Python error's `.message`). Variants with
 /// sub-types carry a `kind` string discriminator (e.g. `Provider.kind = "LlamaCppModelLoad"`).
 #[derive(Debug, Error, uniffi::Error)]
-#[uniffi(flat_error)]
 pub enum BlazenError {
     /// Authentication / credentials failure (missing API key, invalid token, etc.).
     #[error("auth: {message}")]
