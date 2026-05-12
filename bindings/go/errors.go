@@ -16,8 +16,6 @@ import (
 //	}
 type Error interface {
 	error
-	// blazenError is unexported to keep this interface closed — only the
-	// concrete error structs defined in this package may implement Error.
 	blazenError()
 }
 
@@ -31,7 +29,8 @@ func (e *AuthError) Error() string { return "auth: " + e.Message }
 func (e *AuthError) blazenError()  {}
 
 // RateLimitError represents a rate-limit response from a provider.
-// RetryAfterMs is set when the provider returned a Retry-After hint.
+// RetryAfterMs is set when the provider returned a Retry-After hint;
+// zero means no hint was provided.
 type RateLimitError struct {
 	Message      string
 	RetryAfterMs uint64
@@ -135,8 +134,7 @@ func (e *ToolError) Error() string { return "tool: " + e.Message }
 func (e *ToolError) blazenError()  {}
 
 // PeerError represents a distributed peer-to-peer failure. Kind is one of
-// "Encode", "Transport", "EnvelopeVersion", "Workflow", "Tls",
-// "UnknownStep".
+// "Encode", "Transport", "EnvelopeVersion", "Workflow", "Tls", "UnknownStep".
 type PeerError struct {
 	Kind    string
 	Message string
@@ -213,6 +211,10 @@ func (e *InternalError) blazenError()  {}
 // wrapErr converts an error returned by the uniffi-generated bindings into
 // the corresponding concrete Go error type defined in this package.
 //
+// The generated Go enum represents BlazenError as a struct holding an inner
+// error (one of BlazenErrorAuth, BlazenErrorRateLimit, etc.). We unwrap it
+// with errors.As and translate to the typed package errors above.
+//
 // Non-Blazen errors (including nil) pass through unchanged.
 func wrapErr(err error) error {
 	if err == nil {
@@ -222,28 +224,33 @@ func wrapErr(err error) error {
 	if !errors.As(err, &be) {
 		return err
 	}
-	switch v := be.Variant.(type) {
-	case uniffiblazen.BlazenErrorAuth:
+	inner := errors.Unwrap(*be)
+	if inner == nil {
+		return &InternalError{Message: be.Error()}
+	}
+
+	switch v := inner.(type) {
+	case *uniffiblazen.BlazenErrorAuth:
 		return &AuthError{Message: v.Message}
-	case uniffiblazen.BlazenErrorRateLimit:
+	case *uniffiblazen.BlazenErrorRateLimit:
 		var ra uint64
 		if v.RetryAfterMs != nil {
 			ra = *v.RetryAfterMs
 		}
 		return &RateLimitError{Message: v.Message, RetryAfterMs: ra}
-	case uniffiblazen.BlazenErrorTimeout:
+	case *uniffiblazen.BlazenErrorTimeout:
 		return &TimeoutError{Message: v.Message, ElapsedMs: v.ElapsedMs}
-	case uniffiblazen.BlazenErrorValidation:
+	case *uniffiblazen.BlazenErrorValidation:
 		return &ValidationError{Message: v.Message}
-	case uniffiblazen.BlazenErrorContentPolicy:
+	case *uniffiblazen.BlazenErrorContentPolicy:
 		return &ContentPolicyError{Message: v.Message}
-	case uniffiblazen.BlazenErrorUnsupported:
+	case *uniffiblazen.BlazenErrorUnsupported:
 		return &UnsupportedError{Message: v.Message}
-	case uniffiblazen.BlazenErrorCompute:
+	case *uniffiblazen.BlazenErrorCompute:
 		return &ComputeError{Message: v.Message}
-	case uniffiblazen.BlazenErrorMedia:
+	case *uniffiblazen.BlazenErrorMedia:
 		return &MediaError{Message: v.Message}
-	case uniffiblazen.BlazenErrorProvider:
+	case *uniffiblazen.BlazenErrorProvider:
 		out := &ProviderError{Kind: v.Kind, Message: v.Message}
 		if v.Provider != nil {
 			out.Provider = *v.Provider
@@ -264,23 +271,23 @@ func wrapErr(err error) error {
 			out.RetryAfterMs = *v.RetryAfterMs
 		}
 		return out
-	case uniffiblazen.BlazenErrorWorkflow:
+	case *uniffiblazen.BlazenErrorWorkflow:
 		return &WorkflowError{Message: v.Message}
-	case uniffiblazen.BlazenErrorTool:
+	case *uniffiblazen.BlazenErrorTool:
 		return &ToolError{Message: v.Message}
-	case uniffiblazen.BlazenErrorPeer:
+	case *uniffiblazen.BlazenErrorPeer:
 		return &PeerError{Kind: v.Kind, Message: v.Message}
-	case uniffiblazen.BlazenErrorPersist:
+	case *uniffiblazen.BlazenErrorPersist:
 		return &PersistError{Message: v.Message}
-	case uniffiblazen.BlazenErrorPrompt:
+	case *uniffiblazen.BlazenErrorPrompt:
 		return &PromptError{Kind: v.Kind, Message: v.Message}
-	case uniffiblazen.BlazenErrorMemory:
+	case *uniffiblazen.BlazenErrorMemory:
 		return &MemoryError{Kind: v.Kind, Message: v.Message}
-	case uniffiblazen.BlazenErrorCache:
+	case *uniffiblazen.BlazenErrorCache:
 		return &CacheError{Kind: v.Kind, Message: v.Message}
-	case uniffiblazen.BlazenErrorCancelled:
+	case *uniffiblazen.BlazenErrorCancelled:
 		return &CancelledError{}
-	case uniffiblazen.BlazenErrorInternal:
+	case *uniffiblazen.BlazenErrorInternal:
 		return &InternalError{Message: v.Message}
 	default:
 		return &InternalError{Message: be.Error()}
@@ -291,7 +298,5 @@ func wrapErr(err error) error {
 // for use inside foreign-implemented trait method bodies that must surface
 // failures back into the Rust runtime.
 func unwrapToValidation(err error) *uniffiblazen.BlazenError {
-	return &uniffiblazen.BlazenError{
-		Variant: uniffiblazen.BlazenErrorValidation{Message: err.Error()},
-	}
+	return uniffiblazen.NewBlazenErrorValidation(err.Error())
 }
