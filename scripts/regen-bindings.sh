@@ -33,18 +33,44 @@ if [[ ${#TARGETS[@]} -eq 0 ]]; then
 fi
 
 # ---- ensure native lib is built (bindgens read metadata from it) -----------
-# UniFFI's library-mode bindgen reads scaffolding metadata directly from the
-# compiled cdylib, which avoids the UDL drift hazard.
-LIB_DIR="target/release"
-LIB_PATH="$LIB_DIR/libblazen_uniffi.so"
-if [[ "$(uname -s)" == "Darwin" ]]; then
-    LIB_PATH="$LIB_DIR/libblazen_uniffi.dylib"
+# UniFFI's library-mode bindgen reads scaffolding metadata (UNIFFI_META_*
+# symbols) directly from the compiled artefact. Empirically on this workspace,
+# all three release artefacts retain the full set of metadata symbols:
+#   target/release/libblazen_uniffi.so   (cdylib)    — 138 UNIFFI_META symbols
+#   target/release/libblazen_uniffi.a    (staticlib) — 138 UNIFFI_META symbols
+#   target/release/libblazen_uniffi.rlib (rlib)      — 138 UNIFFI_META symbols
+#
+# The metadata is what powers every #[uniffi::export] proc-macro; without
+# --library, bindgen falls back to UDL (which only declares `version()` here)
+# and silently emits a near-empty surface. Always pass --library.
+#
+# We prefer the per-build rlib in target/release/deps/ (matches upstream
+# uniffi-rs examples), but fall back to the top-level rlib or the staticlib,
+# all of which are equivalent for metadata purposes.
+DEPS_DIR="target/release/deps"
+LIB_PATH=$(ls -t "$DEPS_DIR"/libblazen_uniffi-*.rlib 2>/dev/null | head -1)
+if [[ -z "$LIB_PATH" || ! -f "$LIB_PATH" ]]; then
+    if [[ -f "target/release/libblazen_uniffi.rlib" ]]; then
+        LIB_PATH="target/release/libblazen_uniffi.rlib"
+    else
+        LIB_PATH="target/release/libblazen_uniffi.a"
+    fi
 fi
 
 if [[ ! -f "$LIB_PATH" ]]; then
     echo "Building blazen-uniffi (release) so bindgens can read scaffolding metadata..."
     cargo build -p blazen-uniffi --release
+    LIB_PATH=$(ls -t "$DEPS_DIR"/libblazen_uniffi-*.rlib 2>/dev/null | head -1)
+    if [[ -z "$LIB_PATH" || ! -f "$LIB_PATH" ]]; then
+        if [[ -f "target/release/libblazen_uniffi.rlib" ]]; then
+            LIB_PATH="target/release/libblazen_uniffi.rlib"
+        else
+            LIB_PATH="target/release/libblazen_uniffi.a"
+        fi
+    fi
 fi
+
+echo "Using artefact for metadata: $LIB_PATH"
 
 UDL="crates/blazen-uniffi/src/blazen.udl"
 CFG="crates/blazen-uniffi/uniffi.toml"
@@ -83,13 +109,17 @@ regen_kotlin() {
         echo "ERROR: uniffi-bindgen not installed."
         return 1
     fi
-    mkdir -p bindings/kotlin/src/commonMain/uniffi
+    # Output to src/main/kotlin so the generated file's package
+    # (`dev.zorpx.blazen.uniffi`, set in uniffi.toml) lands at the path
+    # `src/main/kotlin/dev/zorpx/blazen/uniffi/blazen.kt` that the hand-
+    # written wrappers in `src/main/kotlin/dev/zorpx/blazen/` import.
+    mkdir -p bindings/kotlin/src/main/kotlin
     uniffi-bindgen generate \
         --library "$LIB_PATH" \
         --language kotlin \
         --config "$CFG" \
-        --out-dir bindings/kotlin/src/commonMain/uniffi
-    echo "  ✓ Kotlin bindings → bindings/kotlin/src/commonMain/uniffi/"
+        --out-dir bindings/kotlin/src/main/kotlin
+    echo "  ✓ Kotlin bindings → bindings/kotlin/src/main/kotlin/dev/zorpx/blazen/uniffi/"
 }
 
 regen_ruby() {

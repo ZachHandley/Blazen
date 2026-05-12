@@ -20,7 +20,10 @@ ffi_module_name = "BlazenFFI"
 omit_argument_labels = false
 
 [bindings.kotlin]
-# uniffi-bindgen kotlin output. Consumed by bindings/kotlin/src/commonMain/uniffi/.
+# uniffi-bindgen kotlin output. Consumed by bindings/kotlin/src/main/kotlin/
+# (the kotlin("jvm") plugin's expected source set). The generator places
+# the file at the package_name path, so the final layout is
+# `bindings/kotlin/src/main/kotlin/dev/zorpx/blazen/uniffi/blazen.kt`.
 package_name = "dev.zorpx.blazen.uniffi"
 cdylib_name = "blazen_uniffi"
 
