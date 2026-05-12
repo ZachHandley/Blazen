@@ -1,0 +1,17 @@
+// UniFFI interface definition for blazen-uniffi.
+//
+// This is the source of truth for the Go/Swift/Kotlin/Ruby binding surface.
+// UniFFI proc-macros (`#[uniffi::export]`) handle most of the surface — this
+// UDL file exists primarily because uniffi_build::generate_scaffolding
+// requires one, and because some constructs (callback interfaces, errors with
+// foreign-implementable traits) are clearer in UDL than in proc-macro form.
+//
+// The actual exported types and functions are declared in the corresponding
+// Rust modules. Adding a new export means: (1) annotate the Rust code, then
+// (2) regenerate the four foreign-language bindings via
+// `scripts/regen-bindings.sh`.
+
+namespace blazen {
+    // Returns the blazen-uniffi crate version (cargo pkg version).
+    string version();
+};

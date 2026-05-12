@@ -1,0 +1,29 @@
+# UniFFI bindgen configuration. Consumed by uniffi-bindgen (Swift/Kotlin/Ruby)
+# and by NordSecurity's uniffi-bindgen-go.
+#
+# Per-language sections customise package paths, module names, and codegen
+# options for each foreign-language binding generator.
+
+[bindings.go]
+# NordSecurity/uniffi-bindgen-go config.
+# package_name is the Go package the generated bindings live in.
+# cdylib_name is the name of the shared/static library to link against
+# (matches [lib].name in Cargo.toml: "blazen_uniffi").
+package_name = "blazen"
+cdylib_name = "blazen_uniffi"
+
+[bindings.swift]
+# uniffi-bindgen swift output. Generates BlazenFFI.swift + module map.
+# Consumed by bindings/swift/Sources/UniFFIBlazen/.
+module_name = "BlazenFFI"
+ffi_module_name = "BlazenFFI"
+omit_argument_labels = false
+
+[bindings.kotlin]
+# uniffi-bindgen kotlin output. Consumed by bindings/kotlin/src/commonMain/uniffi/.
+package_name = "dev.zorpx.blazen.uniffi"
+cdylib_name = "blazen_uniffi"
+
+[bindings.ruby]
+# uniffi-bindgen ruby output. Consumed by bindings/ruby/lib/uniffi/blazen/.
+cdylib_name = "blazen_uniffi"

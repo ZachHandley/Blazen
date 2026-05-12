@@ -1,0 +1,95 @@
+[package]
+name = "blazen-uniffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "Multi-language bindings (Go, Swift, Kotlin, Ruby) for the Blazen workflow engine via Mozilla UniFFI"
+
+[lib]
+name = "blazen_uniffi"
+# cdylib  — dynamic linking for Kotlin JNI on linux/macos, Ruby native ext
+# staticlib — static linking for Go cgo, Swift XCFramework, Ruby fat-gem when desired
+# rlib    — lets us run cargo tests against the crate
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+async-trait.workspace = true
+blazen-core.workspace = true
+blazen-embed-tract = { workspace = true, optional = true }
+blazen-events.workspace = true
+blazen-llm = { workspace = true, features = ["reqwest"] }
+blazen-manager.workspace = true
+blazen-memory.workspace = true
+blazen-memory-valkey = { workspace = true, features = ["redis-tcp", "upstash"] }
+blazen-model-cache.workspace = true
+blazen-peer = { workspace = true, features = ["server", "client", "http-transport"] }
+blazen-persist = { workspace = true, features = ["redb", "valkey"] }
+blazen-pipeline.workspace = true
+blazen-prompts.workspace = true
+blazen-telemetry = { workspace = true, features = ["history", "spans"] }
+bytes.workspace = true
+chrono.workspace = true
+futures-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+uniffi.workspace = true
+uuid.workspace = true
+
+[build-dependencies]
+uniffi_build.workspace = true
+
+[features]
+# Match blazen-py's feature graph so all four UniFFI bindings (Go/Swift/Kotlin/Ruby)
+# get the same surface as the Python bindings. See crates/blazen-py/Cargo.toml.
+default = ["local-all"]
+
+# Local inference backends
+embed = ["blazen-llm/embed"]
+candle-embed = ["blazen-llm/candle-embed"]
+mistralrs = ["blazen-llm/mistralrs"]
+llamacpp = ["blazen-llm/llamacpp"]
+candle-llm = ["blazen-llm/candle-llm"]
+diffusion = ["blazen-llm/diffusion"]
+whispercpp = ["blazen-llm/whispercpp"]
+piper = ["blazen-llm/piper"]
+tiktoken = ["blazen-llm/tiktoken"]
+tract = ["dep:blazen-embed-tract"]
+
+local-all = [
+    "embed",
+    "tract",
+    "candle-embed",
+    "mistralrs",
+    "llamacpp",
+    "candle-llm",
+    "diffusion",
+    "whispercpp",
+    "piper",
+    "tiktoken",
+    "distributed",
+    "otlp",
+    "prometheus",
+    "langfuse",
+]
+
+# Telemetry exporters
+otlp = ["blazen-telemetry/otlp"]
+prometheus = ["blazen-telemetry/prometheus"]
+langfuse = ["blazen-telemetry/langfuse"]
+
+# Distributed peer types (RemoteWorkflowRequest/Response, PeerClient, PeerServer)
+distributed = ["blazen-core/distributed", "blazen-peer/server", "blazen-peer/client"]
+
+[lints]
+workspace = true
+
+[target.'cfg(unix)'.dependencies]
+openssl-sys = { version = "0.9", features = ["vendored"] }

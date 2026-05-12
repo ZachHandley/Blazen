@@ -13,6 +13,7 @@ members = [
     "crates/blazen",
     "crates/blazen-py",
     "crates/blazen-node",
+    "crates/blazen-uniffi",
     "crates/blazen-cli",
     "crates/blazen-telemetry",
     "crates/blazen-model-cache",
@@ -97,6 +98,13 @@ pyo3-async-runtimes = { version = "0.28", features = ["tokio-runtime"] }
 # Node.js bindings
 napi = { version = "3", features = ["async", "napi6", "serde-json", "tokio_rt"] }
 napi-derive = "3"
+
+# Multi-language bindings via Mozilla UniFFI (Go, Swift, Kotlin, Ruby).
+# Pinned to 0.31.0 because NordSecurity/uniffi-bindgen-go 0.7.1+v0.31.0
+# targets exactly that uniffi-rs version. Updating uniffi requires bumping
+# all four bindgen tools in lockstep.
+uniffi = { version = "0.31", features = ["tokio"] }
+uniffi_build = "0.31"
 
 # Proc macro deps
 syn = { version = "2", features = ["full", "extra-traits"] }
