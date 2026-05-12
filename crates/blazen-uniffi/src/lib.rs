@@ -26,12 +26,18 @@
 
 uniffi::include_scaffolding!("blazen");
 
+pub mod agent;
+pub mod batch;
 pub mod errors;
 pub mod llm;
 pub mod pipeline;
+pub mod providers;
 pub mod runtime;
+pub mod streaming;
 pub mod workflow;
 
+pub use agent::{Agent, AgentResult, ToolHandler};
+pub use batch::{BatchItem, BatchResult, complete_batch, complete_batch_blocking};
 pub use errors::{BlazenError, BlazenResult};
 pub use llm::{
     ChatMessage, CompletionModel, CompletionRequest, CompletionResponse, EmbeddingModel,
@@ -39,6 +45,9 @@ pub use llm::{
 };
 pub use pipeline::{Pipeline, PipelineBuilder};
 pub use runtime::init;
+pub use streaming::{
+    CompletionStreamSink, StreamChunk, complete_streaming, complete_streaming_blocking,
+};
 pub use workflow::{Event, StepHandler, StepOutput, Workflow, WorkflowBuilder, WorkflowResult};
 
 /// Returns the `blazen-uniffi` crate version baked in at compile time.
