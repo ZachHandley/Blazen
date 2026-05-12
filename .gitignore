@@ -17,3 +17,21 @@ node_modules/
 *.onnx
 *.safetensors
 .pytest_tmp
+
+# Prebuilt UniFFI native libs — these are built/refreshed by
+# scripts/build-uniffi-lib.sh and copied from target/release/. They are
+# 60MB+ each so we don't track them in git; CI rebuilds and Phase H
+# distributes them as release artefacts.
+bindings/go/internal/clib/**/libblazen_uniffi.*
+bindings/kotlin/src/main/resources/**/libblazen_uniffi.*
+bindings/ruby/ext/blazen/**/libblazen_uniffi.*
+bindings/swift/**/libblazen_uniffi.*
+
+# Per-binding build artefact dirs
+bindings/go/**/*.test
+bindings/kotlin/.gradle/
+bindings/kotlin/build/
+bindings/ruby/.rspec_status
+bindings/ruby/Gemfile.lock
+bindings/ruby/vendor/
+bindings/ruby/.bundle/
