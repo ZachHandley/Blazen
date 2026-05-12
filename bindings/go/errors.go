@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	uniffiblazen "github.com/zorpxinc/blazen-go/internal/uniffi/blazen"
+	uniffiblazen "github.com/zachhandley/Blazen/bindings/go/internal/uniffi/blazen"
 )
 
 // Error is the common interface implemented by every typed error returned

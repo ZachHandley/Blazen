@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	uniffiblazen "github.com/zorpxinc/blazen-go/internal/uniffi/blazen"
+	uniffiblazen "github.com/zachhandley/Blazen/bindings/go/internal/uniffi/blazen"
 )
 
 // StreamChunk is a single incremental delta from a streaming completion.

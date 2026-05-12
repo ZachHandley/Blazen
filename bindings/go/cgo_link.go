@@ -9,5 +9,5 @@ package blazen
 // rollout adds matching prebuilt archives for darwin_arm64, darwin_amd64,
 // linux_arm64, and windows_amd64 alongside their own build tags.
 
-// #cgo LDFLAGS: -L${SRCDIR}/internal/clib/linux_amd64 -lblazen_uniffi -ldl -lm -lpthread
+// #cgo LDFLAGS: -L${SRCDIR}/internal/clib/linux_amd64 -lblazen_uniffi -ldl -lm -lpthread -lstdc++
 import "C"

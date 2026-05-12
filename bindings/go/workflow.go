@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	uniffiblazen "github.com/zorpxinc/blazen-go/internal/uniffi/blazen"
+	uniffiblazen "github.com/zachhandley/Blazen/bindings/go/internal/uniffi/blazen"
 )
 
 // Event is a single message crossing the FFI boundary between the

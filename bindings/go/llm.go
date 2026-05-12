@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"sync"
 
-	uniffiblazen "github.com/zorpxinc/blazen-go/internal/uniffi/blazen"
+	uniffiblazen "github.com/zachhandley/Blazen/bindings/go/internal/uniffi/blazen"
 )
 
 // Media is a multimodal attachment carried alongside a [ChatMessage].

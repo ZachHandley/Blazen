@@ -1,7 +1,7 @@
 package blazen
 
 import (
-	uniffiblazen "github.com/zorpxinc/blazen-go/internal/uniffi/blazen"
+	uniffiblazen "github.com/zachhandley/Blazen/bindings/go/internal/uniffi/blazen"
 )
 
 // Init initializes the Blazen runtime.

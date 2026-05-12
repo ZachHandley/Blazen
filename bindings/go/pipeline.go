@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	uniffiblazen "github.com/zorpxinc/blazen-go/internal/uniffi/blazen"
+	uniffiblazen "github.com/zachhandley/Blazen/bindings/go/internal/uniffi/blazen"
 )
 
 // Pipeline is a validated, runnable composition of one or more workflows.
