@@ -27,10 +27,17 @@
 uniffi::include_scaffolding!("blazen");
 
 pub mod errors;
+pub mod llm;
+pub mod pipeline;
 pub mod runtime;
 pub mod workflow;
 
 pub use errors::{BlazenError, BlazenResult};
+pub use llm::{
+    ChatMessage, CompletionModel, CompletionRequest, CompletionResponse, EmbeddingModel,
+    EmbeddingResponse, Media, TokenUsage, Tool, ToolCall,
+};
+pub use pipeline::{Pipeline, PipelineBuilder};
 pub use runtime::init;
 pub use workflow::{Event, StepHandler, StepOutput, Workflow, WorkflowBuilder, WorkflowResult};
 
