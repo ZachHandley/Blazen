@@ -41,7 +41,7 @@ tokio.workspace = true
 tokio-stream.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-uniffi.workspace = true
+uniffi = { workspace = true, features = ["cli"] }
 uuid.workspace = true
 
 [build-dependencies]
