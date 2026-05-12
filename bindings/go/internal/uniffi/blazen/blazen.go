@@ -2348,7 +2348,7 @@ func (_self *CompletionStreamSinkImpl) OnDone(finishReason string, usage TokenUs
 // Receive a fatal error from the stream. Called exactly once when the
 // stream fails midway. After `on_error` fires, neither further
 // `on_chunk` nor `on_done` will be called.
-func (_self *CompletionStreamSinkImpl) OnError(err *BlazenError) error {
+func (_self *CompletionStreamSinkImpl) OnError(onErrorArg *BlazenError) error {
 	_pointer := _self.ffiObject.incrementPointer("CompletionStreamSink")
 	defer _self.ffiObject.decrementPointer()
 	_, err := uniffiRustCallAsync[*BlazenError](
@@ -2361,7 +2361,7 @@ func (_self *CompletionStreamSinkImpl) OnError(err *BlazenError) error {
 		// liftFn
 		func(_ struct{}) struct{} { return struct{}{} },
 		C.uniffi_blazen_uniffi_fn_method_completionstreamsink_on_error(
-			_pointer, FfiConverterBlazenErrorINSTANCE.Lower(err)),
+			_pointer, FfiConverterBlazenErrorINSTANCE.Lower(onErrorArg)),
 		// pollFn
 		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
 			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
@@ -6166,19 +6166,28 @@ var ErrBlazenErrorInternal = fmt.Errorf("BlazenErrorInternal")
 // Variant structs
 // Authentication / credentials failure (missing API key, invalid token, etc.).
 type BlazenErrorAuth struct {
-	message string
+	Message string
 }
 
 // Authentication / credentials failure (missing API key, invalid token, etc.).
-func NewBlazenErrorAuth() *BlazenError {
-	return &BlazenError{err: &BlazenErrorAuth{}}
+func NewBlazenErrorAuth(
+	message string,
+) *BlazenError {
+	return &BlazenError{err: &BlazenErrorAuth{
+		Message: message}}
 }
 
 func (e BlazenErrorAuth) destroy() {
+	FfiDestroyerString{}.Destroy(e.Message)
 }
 
 func (err BlazenErrorAuth) Error() string {
-	return fmt.Sprintf("Auth: %s", err.message)
+	return fmt.Sprint("Auth",
+		": ",
+
+		"Message=",
+		err.Message,
+	)
 }
 
 func (self BlazenErrorAuth) Is(target error) bool {
@@ -6188,20 +6197,36 @@ func (self BlazenErrorAuth) Is(target error) bool {
 // Rate limit exceeded. `retry_after_ms` is set when the provider returned a
 // Retry-After hint.
 type BlazenErrorRateLimit struct {
-	message string
+	Message      string
+	RetryAfterMs *uint64
 }
 
 // Rate limit exceeded. `retry_after_ms` is set when the provider returned a
 // Retry-After hint.
-func NewBlazenErrorRateLimit() *BlazenError {
-	return &BlazenError{err: &BlazenErrorRateLimit{}}
+func NewBlazenErrorRateLimit(
+	message string,
+	retryAfterMs *uint64,
+) *BlazenError {
+	return &BlazenError{err: &BlazenErrorRateLimit{
+		Message:      message,
+		RetryAfterMs: retryAfterMs}}
 }
 
 func (e BlazenErrorRateLimit) destroy() {
+	FfiDestroyerString{}.Destroy(e.Message)
+	FfiDestroyerOptionalUint64{}.Destroy(e.RetryAfterMs)
 }
 
 func (err BlazenErrorRateLimit) Error() string {
-	return fmt.Sprintf("RateLimit: %s", err.message)
+	return fmt.Sprint("RateLimit",
+		": ",
+
+		"Message=",
+		err.Message,
+		", ",
+		"RetryAfterMs=",
+		err.RetryAfterMs,
+	)
 }
 
 func (self BlazenErrorRateLimit) Is(target error) bool {
@@ -6210,19 +6235,35 @@ func (self BlazenErrorRateLimit) Is(target error) bool {
 
 // Operation timed out before the provider responded.
 type BlazenErrorTimeout struct {
-	message string
+	Message   string
+	ElapsedMs uint64
 }
 
 // Operation timed out before the provider responded.
-func NewBlazenErrorTimeout() *BlazenError {
-	return &BlazenError{err: &BlazenErrorTimeout{}}
+func NewBlazenErrorTimeout(
+	message string,
+	elapsedMs uint64,
+) *BlazenError {
+	return &BlazenError{err: &BlazenErrorTimeout{
+		Message:   message,
+		ElapsedMs: elapsedMs}}
 }
 
 func (e BlazenErrorTimeout) destroy() {
+	FfiDestroyerString{}.Destroy(e.Message)
+	FfiDestroyerUint64{}.Destroy(e.ElapsedMs)
 }
 
 func (err BlazenErrorTimeout) Error() string {
-	return fmt.Sprintf("Timeout: %s", err.message)
+	return fmt.Sprint("Timeout",
+		": ",
+
+		"Message=",
+		err.Message,
+		", ",
+		"ElapsedMs=",
+		err.ElapsedMs,
+	)
 }
 
 func (self BlazenErrorTimeout) Is(target error) bool {
@@ -6231,19 +6272,28 @@ func (self BlazenErrorTimeout) Is(target error) bool {
 
 // Input validation failed (bad schema, missing required field, etc.).
 type BlazenErrorValidation struct {
-	message string
+	Message string
 }
 
 // Input validation failed (bad schema, missing required field, etc.).
-func NewBlazenErrorValidation() *BlazenError {
-	return &BlazenError{err: &BlazenErrorValidation{}}
+func NewBlazenErrorValidation(
+	message string,
+) *BlazenError {
+	return &BlazenError{err: &BlazenErrorValidation{
+		Message: message}}
 }
 
 func (e BlazenErrorValidation) destroy() {
+	FfiDestroyerString{}.Destroy(e.Message)
 }
 
 func (err BlazenErrorValidation) Error() string {
-	return fmt.Sprintf("Validation: %s", err.message)
+	return fmt.Sprint("Validation",
+		": ",
+
+		"Message=",
+		err.Message,
+	)
 }
 
 func (self BlazenErrorValidation) Is(target error) bool {
@@ -6252,19 +6302,28 @@ func (self BlazenErrorValidation) Is(target error) bool {
 
 // Content policy violation (provider refused due to safety filters).
 type BlazenErrorContentPolicy struct {
-	message string
+	Message string
 }
 
 // Content policy violation (provider refused due to safety filters).
-func NewBlazenErrorContentPolicy() *BlazenError {
-	return &BlazenError{err: &BlazenErrorContentPolicy{}}
+func NewBlazenErrorContentPolicy(
+	message string,
+) *BlazenError {
+	return &BlazenError{err: &BlazenErrorContentPolicy{
+		Message: message}}
 }
 
 func (e BlazenErrorContentPolicy) destroy() {
+	FfiDestroyerString{}.Destroy(e.Message)
 }
 
 func (err BlazenErrorContentPolicy) Error() string {
-	return fmt.Sprintf("ContentPolicy: %s", err.message)
+	return fmt.Sprint("ContentPolicy",
+		": ",
+
+		"Message=",
+		err.Message,
+	)
 }
 
 func (self BlazenErrorContentPolicy) Is(target error) bool {
@@ -6273,19 +6332,28 @@ func (self BlazenErrorContentPolicy) Is(target error) bool {
 
 // Operation unsupported on this platform / build / provider.
 type BlazenErrorUnsupported struct {
-	message string
+	Message string
 }
 
 // Operation unsupported on this platform / build / provider.
-func NewBlazenErrorUnsupported() *BlazenError {
-	return &BlazenError{err: &BlazenErrorUnsupported{}}
+func NewBlazenErrorUnsupported(
+	message string,
+) *BlazenError {
+	return &BlazenError{err: &BlazenErrorUnsupported{
+		Message: message}}
 }
 
 func (e BlazenErrorUnsupported) destroy() {
+	FfiDestroyerString{}.Destroy(e.Message)
 }
 
 func (err BlazenErrorUnsupported) Error() string {
-	return fmt.Sprintf("Unsupported: %s", err.message)
+	return fmt.Sprint("Unsupported",
+		": ",
+
+		"Message=",
+		err.Message,
+	)
 }
 
 func (self BlazenErrorUnsupported) Is(target error) bool {
@@ -6294,19 +6362,28 @@ func (self BlazenErrorUnsupported) Is(target error) bool {
 
 // Compute error (CPU/GPU/accelerator failure, OOM, etc.).
 type BlazenErrorCompute struct {
-	message string
+	Message string
 }
 
 // Compute error (CPU/GPU/accelerator failure, OOM, etc.).
-func NewBlazenErrorCompute() *BlazenError {
-	return &BlazenError{err: &BlazenErrorCompute{}}
+func NewBlazenErrorCompute(
+	message string,
+) *BlazenError {
+	return &BlazenError{err: &BlazenErrorCompute{
+		Message: message}}
 }
 
 func (e BlazenErrorCompute) destroy() {
+	FfiDestroyerString{}.Destroy(e.Message)
 }
 
 func (err BlazenErrorCompute) Error() string {
-	return fmt.Sprintf("Compute: %s", err.message)
+	return fmt.Sprint("Compute",
+		": ",
+
+		"Message=",
+		err.Message,
+	)
 }
 
 func (self BlazenErrorCompute) Is(target error) bool {
@@ -6315,19 +6392,28 @@ func (self BlazenErrorCompute) Is(target error) bool {
 
 // Media-handling error (decode, encode, transcoding).
 type BlazenErrorMedia struct {
-	message string
+	Message string
 }
 
 // Media-handling error (decode, encode, transcoding).
-func NewBlazenErrorMedia() *BlazenError {
-	return &BlazenError{err: &BlazenErrorMedia{}}
+func NewBlazenErrorMedia(
+	message string,
+) *BlazenError {
+	return &BlazenError{err: &BlazenErrorMedia{
+		Message: message}}
 }
 
 func (e BlazenErrorMedia) destroy() {
+	FfiDestroyerString{}.Destroy(e.Message)
 }
 
 func (err BlazenErrorMedia) Error() string {
-	return fmt.Sprintf("Media: %s", err.message)
+	return fmt.Sprint("Media",
+		": ",
+
+		"Message=",
+		err.Message,
+	)
 }
 
 func (self BlazenErrorMedia) Is(target error) bool {
@@ -6339,22 +6425,80 @@ func (self BlazenErrorMedia) Is(target error) bool {
 // Examples of `kind`: `"LlamaCppModelLoad"`, `"DiffusionGeneration"`,
 // `"CandleEmbedInference"`, `"OpenAIHttp"`, `"AnthropicHttp"`.
 type BlazenErrorProvider struct {
-	message string
+	Kind         string
+	Message      string
+	Provider     *string
+	Status       *uint32
+	Endpoint     *string
+	RequestId    *string
+	Detail       *string
+	RetryAfterMs *uint64
 }
 
 // Provider / backend error. `kind` identifies the specific backend and failure
 // mode, mirroring the Node binding's `[ProviderError]` sentinel JSON shape.
 // Examples of `kind`: `"LlamaCppModelLoad"`, `"DiffusionGeneration"`,
 // `"CandleEmbedInference"`, `"OpenAIHttp"`, `"AnthropicHttp"`.
-func NewBlazenErrorProvider() *BlazenError {
-	return &BlazenError{err: &BlazenErrorProvider{}}
+func NewBlazenErrorProvider(
+	kind string,
+	message string,
+	provider *string,
+	status *uint32,
+	endpoint *string,
+	requestId *string,
+	detail *string,
+	retryAfterMs *uint64,
+) *BlazenError {
+	return &BlazenError{err: &BlazenErrorProvider{
+		Kind:         kind,
+		Message:      message,
+		Provider:     provider,
+		Status:       status,
+		Endpoint:     endpoint,
+		RequestId:    requestId,
+		Detail:       detail,
+		RetryAfterMs: retryAfterMs}}
 }
 
 func (e BlazenErrorProvider) destroy() {
+	FfiDestroyerString{}.Destroy(e.Kind)
+	FfiDestroyerString{}.Destroy(e.Message)
+	FfiDestroyerOptionalString{}.Destroy(e.Provider)
+	FfiDestroyerOptionalUint32{}.Destroy(e.Status)
+	FfiDestroyerOptionalString{}.Destroy(e.Endpoint)
+	FfiDestroyerOptionalString{}.Destroy(e.RequestId)
+	FfiDestroyerOptionalString{}.Destroy(e.Detail)
+	FfiDestroyerOptionalUint64{}.Destroy(e.RetryAfterMs)
 }
 
 func (err BlazenErrorProvider) Error() string {
-	return fmt.Sprintf("Provider: %s", err.message)
+	return fmt.Sprint("Provider",
+		": ",
+
+		"Kind=",
+		err.Kind,
+		", ",
+		"Message=",
+		err.Message,
+		", ",
+		"Provider=",
+		err.Provider,
+		", ",
+		"Status=",
+		err.Status,
+		", ",
+		"Endpoint=",
+		err.Endpoint,
+		", ",
+		"RequestId=",
+		err.RequestId,
+		", ",
+		"Detail=",
+		err.Detail,
+		", ",
+		"RetryAfterMs=",
+		err.RetryAfterMs,
+	)
 }
 
 func (self BlazenErrorProvider) Is(target error) bool {
@@ -6363,19 +6507,28 @@ func (self BlazenErrorProvider) Is(target error) bool {
 
 // Workflow execution error (step panic, deadlock, missing context, etc.).
 type BlazenErrorWorkflow struct {
-	message string
+	Message string
 }
 
 // Workflow execution error (step panic, deadlock, missing context, etc.).
-func NewBlazenErrorWorkflow() *BlazenError {
-	return &BlazenError{err: &BlazenErrorWorkflow{}}
+func NewBlazenErrorWorkflow(
+	message string,
+) *BlazenError {
+	return &BlazenError{err: &BlazenErrorWorkflow{
+		Message: message}}
 }
 
 func (e BlazenErrorWorkflow) destroy() {
+	FfiDestroyerString{}.Destroy(e.Message)
 }
 
 func (err BlazenErrorWorkflow) Error() string {
-	return fmt.Sprintf("Workflow: %s", err.message)
+	return fmt.Sprint("Workflow",
+		": ",
+
+		"Message=",
+		err.Message,
+	)
 }
 
 func (self BlazenErrorWorkflow) Is(target error) bool {
@@ -6384,19 +6537,28 @@ func (self BlazenErrorWorkflow) Is(target error) bool {
 
 // Tool / function-call error during LLM agent execution.
 type BlazenErrorTool struct {
-	message string
+	Message string
 }
 
 // Tool / function-call error during LLM agent execution.
-func NewBlazenErrorTool() *BlazenError {
-	return &BlazenError{err: &BlazenErrorTool{}}
+func NewBlazenErrorTool(
+	message string,
+) *BlazenError {
+	return &BlazenError{err: &BlazenErrorTool{
+		Message: message}}
 }
 
 func (e BlazenErrorTool) destroy() {
+	FfiDestroyerString{}.Destroy(e.Message)
 }
 
 func (err BlazenErrorTool) Error() string {
-	return fmt.Sprintf("Tool: %s", err.message)
+	return fmt.Sprint("Tool",
+		": ",
+
+		"Message=",
+		err.Message,
+	)
 }
 
 func (self BlazenErrorTool) Is(target error) bool {
@@ -6406,20 +6568,36 @@ func (self BlazenErrorTool) Is(target error) bool {
 // Distributed peer-to-peer error. `kind` is one of: `"Encode"`, `"Transport"`,
 // `"EnvelopeVersion"`, `"Workflow"`, `"Tls"`, `"UnknownStep"`.
 type BlazenErrorPeer struct {
-	message string
+	Kind    string
+	Message string
 }
 
 // Distributed peer-to-peer error. `kind` is one of: `"Encode"`, `"Transport"`,
 // `"EnvelopeVersion"`, `"Workflow"`, `"Tls"`, `"UnknownStep"`.
-func NewBlazenErrorPeer() *BlazenError {
-	return &BlazenError{err: &BlazenErrorPeer{}}
+func NewBlazenErrorPeer(
+	kind string,
+	message string,
+) *BlazenError {
+	return &BlazenError{err: &BlazenErrorPeer{
+		Kind:    kind,
+		Message: message}}
 }
 
 func (e BlazenErrorPeer) destroy() {
+	FfiDestroyerString{}.Destroy(e.Kind)
+	FfiDestroyerString{}.Destroy(e.Message)
 }
 
 func (err BlazenErrorPeer) Error() string {
-	return fmt.Sprintf("Peer: %s", err.message)
+	return fmt.Sprint("Peer",
+		": ",
+
+		"Kind=",
+		err.Kind,
+		", ",
+		"Message=",
+		err.Message,
+	)
 }
 
 func (self BlazenErrorPeer) Is(target error) bool {
@@ -6428,19 +6606,28 @@ func (self BlazenErrorPeer) Is(target error) bool {
 
 // Persistence layer error (redb / valkey checkpoint store).
 type BlazenErrorPersist struct {
-	message string
+	Message string
 }
 
 // Persistence layer error (redb / valkey checkpoint store).
-func NewBlazenErrorPersist() *BlazenError {
-	return &BlazenError{err: &BlazenErrorPersist{}}
+func NewBlazenErrorPersist(
+	message string,
+) *BlazenError {
+	return &BlazenError{err: &BlazenErrorPersist{
+		Message: message}}
 }
 
 func (e BlazenErrorPersist) destroy() {
+	FfiDestroyerString{}.Destroy(e.Message)
 }
 
 func (err BlazenErrorPersist) Error() string {
-	return fmt.Sprintf("Persist: %s", err.message)
+	return fmt.Sprint("Persist",
+		": ",
+
+		"Message=",
+		err.Message,
+	)
 }
 
 func (self BlazenErrorPersist) Is(target error) bool {
@@ -6450,20 +6637,36 @@ func (self BlazenErrorPersist) Is(target error) bool {
 // Prompt template error. `kind`: `"MissingVariable"`, `"NotFound"`, `"VersionNotFound"`,
 // `"Io"`, `"Yaml"`, `"Json"`, `"Validation"`.
 type BlazenErrorPrompt struct {
-	message string
+	Kind    string
+	Message string
 }
 
 // Prompt template error. `kind`: `"MissingVariable"`, `"NotFound"`, `"VersionNotFound"`,
 // `"Io"`, `"Yaml"`, `"Json"`, `"Validation"`.
-func NewBlazenErrorPrompt() *BlazenError {
-	return &BlazenError{err: &BlazenErrorPrompt{}}
+func NewBlazenErrorPrompt(
+	kind string,
+	message string,
+) *BlazenError {
+	return &BlazenError{err: &BlazenErrorPrompt{
+		Kind:    kind,
+		Message: message}}
 }
 
 func (e BlazenErrorPrompt) destroy() {
+	FfiDestroyerString{}.Destroy(e.Kind)
+	FfiDestroyerString{}.Destroy(e.Message)
 }
 
 func (err BlazenErrorPrompt) Error() string {
-	return fmt.Sprintf("Prompt: %s", err.message)
+	return fmt.Sprint("Prompt",
+		": ",
+
+		"Kind=",
+		err.Kind,
+		", ",
+		"Message=",
+		err.Message,
+	)
 }
 
 func (self BlazenErrorPrompt) Is(target error) bool {
@@ -6473,20 +6676,36 @@ func (self BlazenErrorPrompt) Is(target error) bool {
 // Memory subsystem error. `kind`: `"NoEmbedder"`, `"Elid"`, `"Embedding"`,
 // `"NotFound"`, `"Serialization"`, `"Io"`, `"Backend"`.
 type BlazenErrorMemory struct {
-	message string
+	Kind    string
+	Message string
 }
 
 // Memory subsystem error. `kind`: `"NoEmbedder"`, `"Elid"`, `"Embedding"`,
 // `"NotFound"`, `"Serialization"`, `"Io"`, `"Backend"`.
-func NewBlazenErrorMemory() *BlazenError {
-	return &BlazenError{err: &BlazenErrorMemory{}}
+func NewBlazenErrorMemory(
+	kind string,
+	message string,
+) *BlazenError {
+	return &BlazenError{err: &BlazenErrorMemory{
+		Kind:    kind,
+		Message: message}}
 }
 
 func (e BlazenErrorMemory) destroy() {
+	FfiDestroyerString{}.Destroy(e.Kind)
+	FfiDestroyerString{}.Destroy(e.Message)
 }
 
 func (err BlazenErrorMemory) Error() string {
-	return fmt.Sprintf("Memory: %s", err.message)
+	return fmt.Sprint("Memory",
+		": ",
+
+		"Kind=",
+		err.Kind,
+		", ",
+		"Message=",
+		err.Message,
+	)
 }
 
 func (self BlazenErrorMemory) Is(target error) bool {
@@ -6495,19 +6714,35 @@ func (self BlazenErrorMemory) Is(target error) bool {
 
 // Model-cache / download error. `kind`: `"Download"`, `"CacheDir"`, `"Io"`.
 type BlazenErrorCache struct {
-	message string
+	Kind    string
+	Message string
 }
 
 // Model-cache / download error. `kind`: `"Download"`, `"CacheDir"`, `"Io"`.
-func NewBlazenErrorCache() *BlazenError {
-	return &BlazenError{err: &BlazenErrorCache{}}
+func NewBlazenErrorCache(
+	kind string,
+	message string,
+) *BlazenError {
+	return &BlazenError{err: &BlazenErrorCache{
+		Kind:    kind,
+		Message: message}}
 }
 
 func (e BlazenErrorCache) destroy() {
+	FfiDestroyerString{}.Destroy(e.Kind)
+	FfiDestroyerString{}.Destroy(e.Message)
 }
 
 func (err BlazenErrorCache) Error() string {
-	return fmt.Sprintf("Cache: %s", err.message)
+	return fmt.Sprint("Cache",
+		": ",
+
+		"Kind=",
+		err.Kind,
+		", ",
+		"Message=",
+		err.Message,
+	)
 }
 
 func (self BlazenErrorCache) Is(target error) bool {
@@ -6518,7 +6753,6 @@ func (self BlazenErrorCache) Is(target error) bool {
 // or `Task.cancel()` request). Mapped to `context.Canceled` /
 // `Task.CancellationError` / `Kotlin CancellationException` on the foreign side.
 type BlazenErrorCancelled struct {
-	message string
 }
 
 // Operation was cancelled (e.g. via a foreign-language `context.Context`
@@ -6532,7 +6766,7 @@ func (e BlazenErrorCancelled) destroy() {
 }
 
 func (err BlazenErrorCancelled) Error() string {
-	return fmt.Sprintf("Cancelled: %s", err.message)
+	return fmt.Sprint("Cancelled")
 }
 
 func (self BlazenErrorCancelled) Is(target error) bool {
@@ -6542,20 +6776,29 @@ func (self BlazenErrorCancelled) Is(target error) bool {
 // Fallback for errors that don't fit any other variant — should be rare;
 // new errors should usually get their own variant or a `kind` extension.
 type BlazenErrorInternal struct {
-	message string
+	Message string
 }
 
 // Fallback for errors that don't fit any other variant — should be rare;
 // new errors should usually get their own variant or a `kind` extension.
-func NewBlazenErrorInternal() *BlazenError {
-	return &BlazenError{err: &BlazenErrorInternal{}}
+func NewBlazenErrorInternal(
+	message string,
+) *BlazenError {
+	return &BlazenError{err: &BlazenErrorInternal{
+		Message: message}}
 }
 
 func (e BlazenErrorInternal) destroy() {
+	FfiDestroyerString{}.Destroy(e.Message)
 }
 
 func (err BlazenErrorInternal) Error() string {
-	return fmt.Sprintf("Internal: %s", err.message)
+	return fmt.Sprint("Internal",
+		": ",
+
+		"Message=",
+		err.Message,
+	)
 }
 
 func (self BlazenErrorInternal) Is(target error) bool {
@@ -6581,88 +6824,163 @@ func (c FfiConverterBlazenError) LowerExternal(value *BlazenError) ExternalCRust
 func (c FfiConverterBlazenError) Read(reader io.Reader) *BlazenError {
 	errorID := readUint32(reader)
 
-	message := FfiConverterStringINSTANCE.Read(reader)
 	switch errorID {
 	case 1:
-		return &BlazenError{&BlazenErrorAuth{message}}
+		return &BlazenError{&BlazenErrorAuth{
+			Message: FfiConverterStringINSTANCE.Read(reader),
+		}}
 	case 2:
-		return &BlazenError{&BlazenErrorRateLimit{message}}
+		return &BlazenError{&BlazenErrorRateLimit{
+			Message:      FfiConverterStringINSTANCE.Read(reader),
+			RetryAfterMs: FfiConverterOptionalUint64INSTANCE.Read(reader),
+		}}
 	case 3:
-		return &BlazenError{&BlazenErrorTimeout{message}}
+		return &BlazenError{&BlazenErrorTimeout{
+			Message:   FfiConverterStringINSTANCE.Read(reader),
+			ElapsedMs: FfiConverterUint64INSTANCE.Read(reader),
+		}}
 	case 4:
-		return &BlazenError{&BlazenErrorValidation{message}}
+		return &BlazenError{&BlazenErrorValidation{
+			Message: FfiConverterStringINSTANCE.Read(reader),
+		}}
 	case 5:
-		return &BlazenError{&BlazenErrorContentPolicy{message}}
+		return &BlazenError{&BlazenErrorContentPolicy{
+			Message: FfiConverterStringINSTANCE.Read(reader),
+		}}
 	case 6:
-		return &BlazenError{&BlazenErrorUnsupported{message}}
+		return &BlazenError{&BlazenErrorUnsupported{
+			Message: FfiConverterStringINSTANCE.Read(reader),
+		}}
 	case 7:
-		return &BlazenError{&BlazenErrorCompute{message}}
+		return &BlazenError{&BlazenErrorCompute{
+			Message: FfiConverterStringINSTANCE.Read(reader),
+		}}
 	case 8:
-		return &BlazenError{&BlazenErrorMedia{message}}
+		return &BlazenError{&BlazenErrorMedia{
+			Message: FfiConverterStringINSTANCE.Read(reader),
+		}}
 	case 9:
-		return &BlazenError{&BlazenErrorProvider{message}}
+		return &BlazenError{&BlazenErrorProvider{
+			Kind:         FfiConverterStringINSTANCE.Read(reader),
+			Message:      FfiConverterStringINSTANCE.Read(reader),
+			Provider:     FfiConverterOptionalStringINSTANCE.Read(reader),
+			Status:       FfiConverterOptionalUint32INSTANCE.Read(reader),
+			Endpoint:     FfiConverterOptionalStringINSTANCE.Read(reader),
+			RequestId:    FfiConverterOptionalStringINSTANCE.Read(reader),
+			Detail:       FfiConverterOptionalStringINSTANCE.Read(reader),
+			RetryAfterMs: FfiConverterOptionalUint64INSTANCE.Read(reader),
+		}}
 	case 10:
-		return &BlazenError{&BlazenErrorWorkflow{message}}
+		return &BlazenError{&BlazenErrorWorkflow{
+			Message: FfiConverterStringINSTANCE.Read(reader),
+		}}
 	case 11:
-		return &BlazenError{&BlazenErrorTool{message}}
+		return &BlazenError{&BlazenErrorTool{
+			Message: FfiConverterStringINSTANCE.Read(reader),
+		}}
 	case 12:
-		return &BlazenError{&BlazenErrorPeer{message}}
+		return &BlazenError{&BlazenErrorPeer{
+			Kind:    FfiConverterStringINSTANCE.Read(reader),
+			Message: FfiConverterStringINSTANCE.Read(reader),
+		}}
 	case 13:
-		return &BlazenError{&BlazenErrorPersist{message}}
+		return &BlazenError{&BlazenErrorPersist{
+			Message: FfiConverterStringINSTANCE.Read(reader),
+		}}
 	case 14:
-		return &BlazenError{&BlazenErrorPrompt{message}}
+		return &BlazenError{&BlazenErrorPrompt{
+			Kind:    FfiConverterStringINSTANCE.Read(reader),
+			Message: FfiConverterStringINSTANCE.Read(reader),
+		}}
 	case 15:
-		return &BlazenError{&BlazenErrorMemory{message}}
+		return &BlazenError{&BlazenErrorMemory{
+			Kind:    FfiConverterStringINSTANCE.Read(reader),
+			Message: FfiConverterStringINSTANCE.Read(reader),
+		}}
 	case 16:
-		return &BlazenError{&BlazenErrorCache{message}}
+		return &BlazenError{&BlazenErrorCache{
+			Kind:    FfiConverterStringINSTANCE.Read(reader),
+			Message: FfiConverterStringINSTANCE.Read(reader),
+		}}
 	case 17:
-		return &BlazenError{&BlazenErrorCancelled{message}}
+		return &BlazenError{&BlazenErrorCancelled{}}
 	case 18:
-		return &BlazenError{&BlazenErrorInternal{message}}
+		return &BlazenError{&BlazenErrorInternal{
+			Message: FfiConverterStringINSTANCE.Read(reader),
+		}}
 	default:
 		panic(fmt.Sprintf("Unknown error code %d in FfiConverterBlazenError.Read()", errorID))
 	}
-
 }
 
 func (c FfiConverterBlazenError) Write(writer io.Writer, value *BlazenError) {
 	switch variantValue := value.err.(type) {
 	case *BlazenErrorAuth:
 		writeInt32(writer, 1)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
 	case *BlazenErrorRateLimit:
 		writeInt32(writer, 2)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
+		FfiConverterOptionalUint64INSTANCE.Write(writer, variantValue.RetryAfterMs)
 	case *BlazenErrorTimeout:
 		writeInt32(writer, 3)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
+		FfiConverterUint64INSTANCE.Write(writer, variantValue.ElapsedMs)
 	case *BlazenErrorValidation:
 		writeInt32(writer, 4)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
 	case *BlazenErrorContentPolicy:
 		writeInt32(writer, 5)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
 	case *BlazenErrorUnsupported:
 		writeInt32(writer, 6)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
 	case *BlazenErrorCompute:
 		writeInt32(writer, 7)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
 	case *BlazenErrorMedia:
 		writeInt32(writer, 8)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
 	case *BlazenErrorProvider:
 		writeInt32(writer, 9)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Kind)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
+		FfiConverterOptionalStringINSTANCE.Write(writer, variantValue.Provider)
+		FfiConverterOptionalUint32INSTANCE.Write(writer, variantValue.Status)
+		FfiConverterOptionalStringINSTANCE.Write(writer, variantValue.Endpoint)
+		FfiConverterOptionalStringINSTANCE.Write(writer, variantValue.RequestId)
+		FfiConverterOptionalStringINSTANCE.Write(writer, variantValue.Detail)
+		FfiConverterOptionalUint64INSTANCE.Write(writer, variantValue.RetryAfterMs)
 	case *BlazenErrorWorkflow:
 		writeInt32(writer, 10)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
 	case *BlazenErrorTool:
 		writeInt32(writer, 11)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
 	case *BlazenErrorPeer:
 		writeInt32(writer, 12)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Kind)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
 	case *BlazenErrorPersist:
 		writeInt32(writer, 13)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
 	case *BlazenErrorPrompt:
 		writeInt32(writer, 14)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Kind)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
 	case *BlazenErrorMemory:
 		writeInt32(writer, 15)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Kind)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
 	case *BlazenErrorCache:
 		writeInt32(writer, 16)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Kind)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
 	case *BlazenErrorCancelled:
 		writeInt32(writer, 17)
 	case *BlazenErrorInternal:
 		writeInt32(writer, 18)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
 	default:
 		_ = variantValue
 		panic(fmt.Sprintf("invalid error value `%v` in FfiConverterBlazenError.Write", value))

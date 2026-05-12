@@ -1459,94 +1459,105 @@ class RustBufferStream
     variant = unpack_from 4, 'l>'
     
     if variant == 1
-      return BlazenError::Auth.new(
-        readString()
-      )
+        return BlazenError::Auth.new(
+            readString()
+        )
     end
     if variant == 2
-      return BlazenError::RateLimit.new(
-        readString()
-      )
+        return BlazenError::RateLimit.new(
+            readString(),
+            readOptionalu64()
+        )
     end
     if variant == 3
-      return BlazenError::Timeout.new(
-        readString()
-      )
+        return BlazenError::Timeout.new(
+            readString(),
+            readU64()
+        )
     end
     if variant == 4
-      return BlazenError::Validation.new(
-        readString()
-      )
+        return BlazenError::Validation.new(
+            readString()
+        )
     end
     if variant == 5
-      return BlazenError::ContentPolicy.new(
-        readString()
-      )
+        return BlazenError::ContentPolicy.new(
+            readString()
+        )
     end
     if variant == 6
-      return BlazenError::Unsupported.new(
-        readString()
-      )
+        return BlazenError::Unsupported.new(
+            readString()
+        )
     end
     if variant == 7
-      return BlazenError::Compute.new(
-        readString()
-      )
+        return BlazenError::Compute.new(
+            readString()
+        )
     end
     if variant == 8
-      return BlazenError::Media.new(
-        readString()
-      )
+        return BlazenError::Media.new(
+            readString()
+        )
     end
     if variant == 9
-      return BlazenError::Provider.new(
-        readString()
-      )
+        return BlazenError::Provider.new(
+            readString(),
+            readString(),
+            readOptionalstring(),
+            readOptionalu32(),
+            readOptionalstring(),
+            readOptionalstring(),
+            readOptionalstring(),
+            readOptionalu64()
+        )
     end
     if variant == 10
-      return BlazenError::Workflow.new(
-        readString()
-      )
+        return BlazenError::Workflow.new(
+            readString()
+        )
     end
     if variant == 11
-      return BlazenError::Tool.new(
-        readString()
-      )
+        return BlazenError::Tool.new(
+            readString()
+        )
     end
     if variant == 12
-      return BlazenError::Peer.new(
-        readString()
-      )
+        return BlazenError::Peer.new(
+            readString(),
+            readString()
+        )
     end
     if variant == 13
-      return BlazenError::Persist.new(
-        readString()
-      )
+        return BlazenError::Persist.new(
+            readString()
+        )
     end
     if variant == 14
-      return BlazenError::Prompt.new(
-        readString()
-      )
+        return BlazenError::Prompt.new(
+            readString(),
+            readString()
+        )
     end
     if variant == 15
-      return BlazenError::Memory.new(
-        readString()
-      )
+        return BlazenError::Memory.new(
+            readString(),
+            readString()
+        )
     end
     if variant == 16
-      return BlazenError::Cache.new(
-        readString()
-      )
+        return BlazenError::Cache.new(
+            readString(),
+            readString()
+        )
     end
     if variant == 17
-      return BlazenError::Cancelled.new(
-        readString()
-      )
+        return BlazenError::Cancelled.new
     end
     if variant == 18
-      return BlazenError::Internal.new(
-        readString()
-      )
+        return BlazenError::Internal.new(
+            readString()
+        )
     end
 
     raise InternalError, 'Unexpected variant tag for TypeBlazenError'
@@ -2555,25 +2566,250 @@ CALL_PANIC = 2
 
 
 
-class BlazenError
-    Auth = Class.new StandardError
-    RateLimit = Class.new StandardError
-    Timeout = Class.new StandardError
-    Validation = Class.new StandardError
-    ContentPolicy = Class.new StandardError
-    Unsupported = Class.new StandardError
-    Compute = Class.new StandardError
-    Media = Class.new StandardError
-    Provider = Class.new StandardError
-    Workflow = Class.new StandardError
-    Tool = Class.new StandardError
-    Peer = Class.new StandardError
-    Persist = Class.new StandardError
-    Prompt = Class.new StandardError
-    Memory = Class.new StandardError
-    Cache = Class.new StandardError
-    Cancelled = Class.new StandardError
-    Internal = Class.new StandardError
+module BlazenError
+  class Auth < StandardError
+    def initialize(message)
+        @message = message
+        super()
+      end
+
+    attr_reader :message
+    
+
+    def to_s
+     "#{self.class.name}(message=#{@message.inspect})"
+    end
+  end
+  class RateLimit < StandardError
+    def initialize(message, retry_after_ms)
+        @message = message
+        @retry_after_ms = retry_after_ms
+        super()
+      end
+
+    attr_reader :message, :retry_after_ms
+    
+
+    def to_s
+     "#{self.class.name}(message=#{@message.inspect}, retry_after_ms=#{@retry_after_ms.inspect})"
+    end
+  end
+  class Timeout < StandardError
+    def initialize(message, elapsed_ms)
+        @message = message
+        @elapsed_ms = elapsed_ms
+        super()
+      end
+
+    attr_reader :message, :elapsed_ms
+    
+
+    def to_s
+     "#{self.class.name}(message=#{@message.inspect}, elapsed_ms=#{@elapsed_ms.inspect})"
+    end
+  end
+  class Validation < StandardError
+    def initialize(message)
+        @message = message
+        super()
+      end
+
+    attr_reader :message
+    
+
+    def to_s
+     "#{self.class.name}(message=#{@message.inspect})"
+    end
+  end
+  class ContentPolicy < StandardError
+    def initialize(message)
+        @message = message
+        super()
+      end
+
+    attr_reader :message
+    
+
+    def to_s
+     "#{self.class.name}(message=#{@message.inspect})"
+    end
+  end
+  class Unsupported < StandardError
+    def initialize(message)
+        @message = message
+        super()
+      end
+
+    attr_reader :message
+    
+
+    def to_s
+     "#{self.class.name}(message=#{@message.inspect})"
+    end
+  end
+  class Compute < StandardError
+    def initialize(message)
+        @message = message
+        super()
+      end
+
+    attr_reader :message
+    
+
+    def to_s
+     "#{self.class.name}(message=#{@message.inspect})"
+    end
+  end
+  class Media < StandardError
+    def initialize(message)
+        @message = message
+        super()
+      end
+
+    attr_reader :message
+    
+
+    def to_s
+     "#{self.class.name}(message=#{@message.inspect})"
+    end
+  end
+  class Provider < StandardError
+    def initialize(kind, message, provider, status, endpoint, request_id, detail, retry_after_ms)
+        @kind = kind
+        @message = message
+        @provider = provider
+        @status = status
+        @endpoint = endpoint
+        @request_id = request_id
+        @detail = detail
+        @retry_after_ms = retry_after_ms
+        super()
+      end
+
+    attr_reader :kind, :message, :provider, :status, :endpoint, :request_id, :detail, :retry_after_ms
+    
+
+    def to_s
+     "#{self.class.name}(kind=#{@kind.inspect}, message=#{@message.inspect}, provider=#{@provider.inspect}, status=#{@status.inspect}, endpoint=#{@endpoint.inspect}, request_id=#{@request_id.inspect}, detail=#{@detail.inspect}, retry_after_ms=#{@retry_after_ms.inspect})"
+    end
+  end
+  class Workflow < StandardError
+    def initialize(message)
+        @message = message
+        super()
+      end
+
+    attr_reader :message
+    
+
+    def to_s
+     "#{self.class.name}(message=#{@message.inspect})"
+    end
+  end
+  class Tool < StandardError
+    def initialize(message)
+        @message = message
+        super()
+      end
+
+    attr_reader :message
+    
+
+    def to_s
+     "#{self.class.name}(message=#{@message.inspect})"
+    end
+  end
+  class Peer < StandardError
+    def initialize(kind, message)
+        @kind = kind
+        @message = message
+        super()
+      end
+
+    attr_reader :kind, :message
+    
+
+    def to_s
+     "#{self.class.name}(kind=#{@kind.inspect}, message=#{@message.inspect})"
+    end
+  end
+  class Persist < StandardError
+    def initialize(message)
+        @message = message
+        super()
+      end
+
+    attr_reader :message
+    
+
+    def to_s
+     "#{self.class.name}(message=#{@message.inspect})"
+    end
+  end
+  class Prompt < StandardError
+    def initialize(kind, message)
+        @kind = kind
+        @message = message
+        super()
+      end
+
+    attr_reader :kind, :message
+    
+
+    def to_s
+     "#{self.class.name}(kind=#{@kind.inspect}, message=#{@message.inspect})"
+    end
+  end
+  class Memory < StandardError
+    def initialize(kind, message)
+        @kind = kind
+        @message = message
+        super()
+      end
+
+    attr_reader :kind, :message
+    
+
+    def to_s
+     "#{self.class.name}(kind=#{@kind.inspect}, message=#{@message.inspect})"
+    end
+  end
+  class Cache < StandardError
+    def initialize(kind, message)
+        @kind = kind
+        @message = message
+        super()
+      end
+
+    attr_reader :kind, :message
+    
+
+    def to_s
+     "#{self.class.name}(kind=#{@kind.inspect}, message=#{@message.inspect})"
+    end
+  end
+  class Cancelled < StandardError
+    def initialize()
+        super()
+      end
+
+    def to_s
+     "#{self.class.name}()"
+    end
+  end
+  class Internal < StandardError
+    def initialize(message)
+        @message = message
+        super()
+      end
+
+    attr_reader :message
+    
+
+    def to_s
+     "#{self.class.name}(message=#{@message.inspect})"
+    end
+  end
 
 end
 

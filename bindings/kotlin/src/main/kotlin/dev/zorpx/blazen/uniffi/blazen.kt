@@ -9403,112 +9403,249 @@ public object FfiConverterTypeBatchItem : FfiConverterRustBuffer<BatchItem>{
  * (matching the corresponding Node/Python error's `.message`). Variants with
  * sub-types carry a `kind` string discriminator (e.g. `Provider.kind = "LlamaCppModelLoad"`).
  */
-sealed class BlazenException(message: String): kotlin.Exception(message) {
-        
+sealed class BlazenException: kotlin.Exception() {
+    
     /**
      * Authentication / credentials failure (missing API key, invalid token, etc.).
      */
-        class Auth(message: String) : BlazenException(message)
+    class Auth(
         
+        val `message`: kotlin.String
+        ) : BlazenException() {
+        override val message
+            get() = "message=${ `message` }"
+    }
+    
     /**
      * Rate limit exceeded. `retry_after_ms` is set when the provider returned a
      * Retry-After hint.
      */
-        class RateLimit(message: String) : BlazenException(message)
+    class RateLimit(
         
+        val `message`: kotlin.String, 
+        
+        val `retryAfterMs`: kotlin.ULong?
+        ) : BlazenException() {
+        override val message
+            get() = "message=${ `message` }, retryAfterMs=${ `retryAfterMs` }"
+    }
+    
     /**
      * Operation timed out before the provider responded.
      */
-        class Timeout(message: String) : BlazenException(message)
+    class Timeout(
         
+        val `message`: kotlin.String, 
+        
+        val `elapsedMs`: kotlin.ULong
+        ) : BlazenException() {
+        override val message
+            get() = "message=${ `message` }, elapsedMs=${ `elapsedMs` }"
+    }
+    
     /**
      * Input validation failed (bad schema, missing required field, etc.).
      */
-        class Validation(message: String) : BlazenException(message)
+    class Validation(
         
+        val `message`: kotlin.String
+        ) : BlazenException() {
+        override val message
+            get() = "message=${ `message` }"
+    }
+    
     /**
      * Content policy violation (provider refused due to safety filters).
      */
-        class ContentPolicy(message: String) : BlazenException(message)
+    class ContentPolicy(
         
+        val `message`: kotlin.String
+        ) : BlazenException() {
+        override val message
+            get() = "message=${ `message` }"
+    }
+    
     /**
      * Operation unsupported on this platform / build / provider.
      */
-        class Unsupported(message: String) : BlazenException(message)
+    class Unsupported(
         
+        val `message`: kotlin.String
+        ) : BlazenException() {
+        override val message
+            get() = "message=${ `message` }"
+    }
+    
     /**
      * Compute error (CPU/GPU/accelerator failure, OOM, etc.).
      */
-        class Compute(message: String) : BlazenException(message)
+    class Compute(
         
+        val `message`: kotlin.String
+        ) : BlazenException() {
+        override val message
+            get() = "message=${ `message` }"
+    }
+    
     /**
      * Media-handling error (decode, encode, transcoding).
      */
-        class Media(message: String) : BlazenException(message)
+    class Media(
         
+        val `message`: kotlin.String
+        ) : BlazenException() {
+        override val message
+            get() = "message=${ `message` }"
+    }
+    
     /**
      * Provider / backend error. `kind` identifies the specific backend and failure
      * mode, mirroring the Node binding's `[ProviderError]` sentinel JSON shape.
      * Examples of `kind`: `"LlamaCppModelLoad"`, `"DiffusionGeneration"`,
      * `"CandleEmbedInference"`, `"OpenAIHttp"`, `"AnthropicHttp"`.
      */
-        class Provider(message: String) : BlazenException(message)
+    class Provider(
         
+        val `kind`: kotlin.String, 
+        
+        val `message`: kotlin.String, 
+        
+        val `provider`: kotlin.String?, 
+        
+        val `status`: kotlin.UInt?, 
+        
+        val `endpoint`: kotlin.String?, 
+        
+        val `requestId`: kotlin.String?, 
+        
+        val `detail`: kotlin.String?, 
+        
+        val `retryAfterMs`: kotlin.ULong?
+        ) : BlazenException() {
+        override val message
+            get() = "kind=${ `kind` }, message=${ `message` }, provider=${ `provider` }, status=${ `status` }, endpoint=${ `endpoint` }, requestId=${ `requestId` }, detail=${ `detail` }, retryAfterMs=${ `retryAfterMs` }"
+    }
+    
     /**
      * Workflow execution error (step panic, deadlock, missing context, etc.).
      */
-        class Workflow(message: String) : BlazenException(message)
+    class Workflow(
         
+        val `message`: kotlin.String
+        ) : BlazenException() {
+        override val message
+            get() = "message=${ `message` }"
+    }
+    
     /**
      * Tool / function-call error during LLM agent execution.
      */
-        class Tool(message: String) : BlazenException(message)
+    class Tool(
         
+        val `message`: kotlin.String
+        ) : BlazenException() {
+        override val message
+            get() = "message=${ `message` }"
+    }
+    
     /**
      * Distributed peer-to-peer error. `kind` is one of: `"Encode"`, `"Transport"`,
      * `"EnvelopeVersion"`, `"Workflow"`, `"Tls"`, `"UnknownStep"`.
      */
-        class Peer(message: String) : BlazenException(message)
+    class Peer(
         
+        val `kind`: kotlin.String, 
+        
+        val `message`: kotlin.String
+        ) : BlazenException() {
+        override val message
+            get() = "kind=${ `kind` }, message=${ `message` }"
+    }
+    
     /**
      * Persistence layer error (redb / valkey checkpoint store).
      */
-        class Persist(message: String) : BlazenException(message)
+    class Persist(
         
+        val `message`: kotlin.String
+        ) : BlazenException() {
+        override val message
+            get() = "message=${ `message` }"
+    }
+    
     /**
      * Prompt template error. `kind`: `"MissingVariable"`, `"NotFound"`, `"VersionNotFound"`,
      * `"Io"`, `"Yaml"`, `"Json"`, `"Validation"`.
      */
-        class Prompt(message: String) : BlazenException(message)
+    class Prompt(
         
+        val `kind`: kotlin.String, 
+        
+        val `message`: kotlin.String
+        ) : BlazenException() {
+        override val message
+            get() = "kind=${ `kind` }, message=${ `message` }"
+    }
+    
     /**
      * Memory subsystem error. `kind`: `"NoEmbedder"`, `"Elid"`, `"Embedding"`,
      * `"NotFound"`, `"Serialization"`, `"Io"`, `"Backend"`.
      */
-        class Memory(message: String) : BlazenException(message)
+    class Memory(
         
+        val `kind`: kotlin.String, 
+        
+        val `message`: kotlin.String
+        ) : BlazenException() {
+        override val message
+            get() = "kind=${ `kind` }, message=${ `message` }"
+    }
+    
     /**
      * Model-cache / download error. `kind`: `"Download"`, `"CacheDir"`, `"Io"`.
      */
-        class Cache(message: String) : BlazenException(message)
+    class Cache(
         
+        val `kind`: kotlin.String, 
+        
+        val `message`: kotlin.String
+        ) : BlazenException() {
+        override val message
+            get() = "kind=${ `kind` }, message=${ `message` }"
+    }
+    
     /**
      * Operation was cancelled (e.g. via a foreign-language `context.Context`
      * or `Task.cancel()` request). Mapped to `context.Canceled` /
      * `Task.CancellationError` / `Kotlin CancellationException` on the foreign side.
      */
-        class Cancelled(message: String) : BlazenException(message)
-        
+    class Cancelled(
+        ) : BlazenException() {
+        override val message
+            get() = ""
+    }
+    
     /**
      * Fallback for errors that don't fit any other variant — should be rare;
      * new errors should usually get their own variant or a `kind` extension.
      */
-        class Internal(message: String) : BlazenException(message)
+    class Internal(
         
+        val `message`: kotlin.String
+        ) : BlazenException() {
+        override val message
+            get() = "message=${ `message` }"
+    }
+    
+
+    
+
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<BlazenException> {
         override fun lift(error_buf: RustBuffer.ByValue): BlazenException = FfiConverterTypeBlazenError.lift(error_buf)
     }
+
+    
 }
 
 /**
@@ -9517,98 +9654,277 @@ sealed class BlazenException(message: String): kotlin.Exception(message) {
 public object FfiConverterTypeBlazenError : FfiConverterRustBuffer<BlazenException> {
     override fun read(buf: ByteBuffer): BlazenException {
         
-            return when(buf.getInt()) {
-            1 -> BlazenException.Auth(FfiConverterString.read(buf))
-            2 -> BlazenException.RateLimit(FfiConverterString.read(buf))
-            3 -> BlazenException.Timeout(FfiConverterString.read(buf))
-            4 -> BlazenException.Validation(FfiConverterString.read(buf))
-            5 -> BlazenException.ContentPolicy(FfiConverterString.read(buf))
-            6 -> BlazenException.Unsupported(FfiConverterString.read(buf))
-            7 -> BlazenException.Compute(FfiConverterString.read(buf))
-            8 -> BlazenException.Media(FfiConverterString.read(buf))
-            9 -> BlazenException.Provider(FfiConverterString.read(buf))
-            10 -> BlazenException.Workflow(FfiConverterString.read(buf))
-            11 -> BlazenException.Tool(FfiConverterString.read(buf))
-            12 -> BlazenException.Peer(FfiConverterString.read(buf))
-            13 -> BlazenException.Persist(FfiConverterString.read(buf))
-            14 -> BlazenException.Prompt(FfiConverterString.read(buf))
-            15 -> BlazenException.Memory(FfiConverterString.read(buf))
-            16 -> BlazenException.Cache(FfiConverterString.read(buf))
-            17 -> BlazenException.Cancelled(FfiConverterString.read(buf))
-            18 -> BlazenException.Internal(FfiConverterString.read(buf))
+
+        return when(buf.getInt()) {
+            1 -> BlazenException.Auth(
+                FfiConverterString.read(buf),
+                )
+            2 -> BlazenException.RateLimit(
+                FfiConverterString.read(buf),
+                FfiConverterOptionalULong.read(buf),
+                )
+            3 -> BlazenException.Timeout(
+                FfiConverterString.read(buf),
+                FfiConverterULong.read(buf),
+                )
+            4 -> BlazenException.Validation(
+                FfiConverterString.read(buf),
+                )
+            5 -> BlazenException.ContentPolicy(
+                FfiConverterString.read(buf),
+                )
+            6 -> BlazenException.Unsupported(
+                FfiConverterString.read(buf),
+                )
+            7 -> BlazenException.Compute(
+                FfiConverterString.read(buf),
+                )
+            8 -> BlazenException.Media(
+                FfiConverterString.read(buf),
+                )
+            9 -> BlazenException.Provider(
+                FfiConverterString.read(buf),
+                FfiConverterString.read(buf),
+                FfiConverterOptionalString.read(buf),
+                FfiConverterOptionalUInt.read(buf),
+                FfiConverterOptionalString.read(buf),
+                FfiConverterOptionalString.read(buf),
+                FfiConverterOptionalString.read(buf),
+                FfiConverterOptionalULong.read(buf),
+                )
+            10 -> BlazenException.Workflow(
+                FfiConverterString.read(buf),
+                )
+            11 -> BlazenException.Tool(
+                FfiConverterString.read(buf),
+                )
+            12 -> BlazenException.Peer(
+                FfiConverterString.read(buf),
+                FfiConverterString.read(buf),
+                )
+            13 -> BlazenException.Persist(
+                FfiConverterString.read(buf),
+                )
+            14 -> BlazenException.Prompt(
+                FfiConverterString.read(buf),
+                FfiConverterString.read(buf),
+                )
+            15 -> BlazenException.Memory(
+                FfiConverterString.read(buf),
+                FfiConverterString.read(buf),
+                )
+            16 -> BlazenException.Cache(
+                FfiConverterString.read(buf),
+                FfiConverterString.read(buf),
+                )
+            17 -> BlazenException.Cancelled()
+            18 -> BlazenException.Internal(
+                FfiConverterString.read(buf),
+                )
             else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
         }
-        
     }
 
     override fun allocationSize(value: BlazenException): ULong {
-        return 4UL
+        return when(value) {
+            is BlazenException.Auth -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`message`)
+            )
+            is BlazenException.RateLimit -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterOptionalULong.allocationSize(value.`retryAfterMs`)
+            )
+            is BlazenException.Timeout -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterULong.allocationSize(value.`elapsedMs`)
+            )
+            is BlazenException.Validation -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`message`)
+            )
+            is BlazenException.ContentPolicy -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`message`)
+            )
+            is BlazenException.Unsupported -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`message`)
+            )
+            is BlazenException.Compute -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`message`)
+            )
+            is BlazenException.Media -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`message`)
+            )
+            is BlazenException.Provider -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`kind`)
+                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterOptionalString.allocationSize(value.`provider`)
+                + FfiConverterOptionalUInt.allocationSize(value.`status`)
+                + FfiConverterOptionalString.allocationSize(value.`endpoint`)
+                + FfiConverterOptionalString.allocationSize(value.`requestId`)
+                + FfiConverterOptionalString.allocationSize(value.`detail`)
+                + FfiConverterOptionalULong.allocationSize(value.`retryAfterMs`)
+            )
+            is BlazenException.Workflow -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`message`)
+            )
+            is BlazenException.Tool -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`message`)
+            )
+            is BlazenException.Peer -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`kind`)
+                + FfiConverterString.allocationSize(value.`message`)
+            )
+            is BlazenException.Persist -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`message`)
+            )
+            is BlazenException.Prompt -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`kind`)
+                + FfiConverterString.allocationSize(value.`message`)
+            )
+            is BlazenException.Memory -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`kind`)
+                + FfiConverterString.allocationSize(value.`message`)
+            )
+            is BlazenException.Cache -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`kind`)
+                + FfiConverterString.allocationSize(value.`message`)
+            )
+            is BlazenException.Cancelled -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+            )
+            is BlazenException.Internal -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`message`)
+            )
+        }
     }
 
     override fun write(value: BlazenException, buf: ByteBuffer) {
         when(value) {
             is BlazenException.Auth -> {
                 buf.putInt(1)
+                FfiConverterString.write(value.`message`, buf)
                 Unit
             }
             is BlazenException.RateLimit -> {
                 buf.putInt(2)
+                FfiConverterString.write(value.`message`, buf)
+                FfiConverterOptionalULong.write(value.`retryAfterMs`, buf)
                 Unit
             }
             is BlazenException.Timeout -> {
                 buf.putInt(3)
+                FfiConverterString.write(value.`message`, buf)
+                FfiConverterULong.write(value.`elapsedMs`, buf)
                 Unit
             }
             is BlazenException.Validation -> {
                 buf.putInt(4)
+                FfiConverterString.write(value.`message`, buf)
                 Unit
             }
             is BlazenException.ContentPolicy -> {
                 buf.putInt(5)
+                FfiConverterString.write(value.`message`, buf)
                 Unit
             }
             is BlazenException.Unsupported -> {
                 buf.putInt(6)
+                FfiConverterString.write(value.`message`, buf)
                 Unit
             }
             is BlazenException.Compute -> {
                 buf.putInt(7)
+                FfiConverterString.write(value.`message`, buf)
                 Unit
             }
             is BlazenException.Media -> {
                 buf.putInt(8)
+                FfiConverterString.write(value.`message`, buf)
                 Unit
             }
             is BlazenException.Provider -> {
                 buf.putInt(9)
+                FfiConverterString.write(value.`kind`, buf)
+                FfiConverterString.write(value.`message`, buf)
+                FfiConverterOptionalString.write(value.`provider`, buf)
+                FfiConverterOptionalUInt.write(value.`status`, buf)
+                FfiConverterOptionalString.write(value.`endpoint`, buf)
+                FfiConverterOptionalString.write(value.`requestId`, buf)
+                FfiConverterOptionalString.write(value.`detail`, buf)
+                FfiConverterOptionalULong.write(value.`retryAfterMs`, buf)
                 Unit
             }
             is BlazenException.Workflow -> {
                 buf.putInt(10)
+                FfiConverterString.write(value.`message`, buf)
                 Unit
             }
             is BlazenException.Tool -> {
                 buf.putInt(11)
+                FfiConverterString.write(value.`message`, buf)
                 Unit
             }
             is BlazenException.Peer -> {
                 buf.putInt(12)
+                FfiConverterString.write(value.`kind`, buf)
+                FfiConverterString.write(value.`message`, buf)
                 Unit
             }
             is BlazenException.Persist -> {
                 buf.putInt(13)
+                FfiConverterString.write(value.`message`, buf)
                 Unit
             }
             is BlazenException.Prompt -> {
                 buf.putInt(14)
+                FfiConverterString.write(value.`kind`, buf)
+                FfiConverterString.write(value.`message`, buf)
                 Unit
             }
             is BlazenException.Memory -> {
                 buf.putInt(15)
+                FfiConverterString.write(value.`kind`, buf)
+                FfiConverterString.write(value.`message`, buf)
                 Unit
             }
             is BlazenException.Cache -> {
                 buf.putInt(16)
+                FfiConverterString.write(value.`kind`, buf)
+                FfiConverterString.write(value.`message`, buf)
                 Unit
             }
             is BlazenException.Cancelled -> {
@@ -9617,6 +9933,7 @@ public object FfiConverterTypeBlazenError : FfiConverterRustBuffer<BlazenExcepti
             }
             is BlazenException.Internal -> {
                 buf.putInt(18)
+                FfiConverterString.write(value.`message`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }

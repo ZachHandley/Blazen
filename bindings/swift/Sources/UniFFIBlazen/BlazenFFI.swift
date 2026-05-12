@@ -6004,103 +6004,102 @@ public enum BlazenError: Swift.Error, Equatable, Hashable, Foundation.LocalizedE
     /**
      * Authentication / credentials failure (missing API key, invalid token, etc.).
      */
-    case Auth(message: String)
-    
+    case Auth(message: String
+    )
     /**
      * Rate limit exceeded. `retry_after_ms` is set when the provider returned a
      * Retry-After hint.
      */
-    case RateLimit(message: String)
-    
+    case RateLimit(message: String, retryAfterMs: UInt64?
+    )
     /**
      * Operation timed out before the provider responded.
      */
-    case Timeout(message: String)
-    
+    case Timeout(message: String, elapsedMs: UInt64
+    )
     /**
      * Input validation failed (bad schema, missing required field, etc.).
      */
-    case Validation(message: String)
-    
+    case Validation(message: String
+    )
     /**
      * Content policy violation (provider refused due to safety filters).
      */
-    case ContentPolicy(message: String)
-    
+    case ContentPolicy(message: String
+    )
     /**
      * Operation unsupported on this platform / build / provider.
      */
-    case Unsupported(message: String)
-    
+    case Unsupported(message: String
+    )
     /**
      * Compute error (CPU/GPU/accelerator failure, OOM, etc.).
      */
-    case Compute(message: String)
-    
+    case Compute(message: String
+    )
     /**
      * Media-handling error (decode, encode, transcoding).
      */
-    case Media(message: String)
-    
+    case Media(message: String
+    )
     /**
      * Provider / backend error. `kind` identifies the specific backend and failure
      * mode, mirroring the Node binding's `[ProviderError]` sentinel JSON shape.
      * Examples of `kind`: `"LlamaCppModelLoad"`, `"DiffusionGeneration"`,
      * `"CandleEmbedInference"`, `"OpenAIHttp"`, `"AnthropicHttp"`.
      */
-    case Provider(message: String)
-    
+    case Provider(kind: String, message: String, provider: String?, status: UInt32?, endpoint: String?, requestId: String?, detail: String?, retryAfterMs: UInt64?
+    )
     /**
      * Workflow execution error (step panic, deadlock, missing context, etc.).
      */
-    case Workflow(message: String)
-    
+    case Workflow(message: String
+    )
     /**
      * Tool / function-call error during LLM agent execution.
      */
-    case Tool(message: String)
-    
+    case Tool(message: String
+    )
     /**
      * Distributed peer-to-peer error. `kind` is one of: `"Encode"`, `"Transport"`,
      * `"EnvelopeVersion"`, `"Workflow"`, `"Tls"`, `"UnknownStep"`.
      */
-    case Peer(message: String)
-    
+    case Peer(kind: String, message: String
+    )
     /**
      * Persistence layer error (redb / valkey checkpoint store).
      */
-    case Persist(message: String)
-    
+    case Persist(message: String
+    )
     /**
      * Prompt template error. `kind`: `"MissingVariable"`, `"NotFound"`, `"VersionNotFound"`,
      * `"Io"`, `"Yaml"`, `"Json"`, `"Validation"`.
      */
-    case Prompt(message: String)
-    
+    case Prompt(kind: String, message: String
+    )
     /**
      * Memory subsystem error. `kind`: `"NoEmbedder"`, `"Elid"`, `"Embedding"`,
      * `"NotFound"`, `"Serialization"`, `"Io"`, `"Backend"`.
      */
-    case Memory(message: String)
-    
+    case Memory(kind: String, message: String
+    )
     /**
      * Model-cache / download error. `kind`: `"Download"`, `"CacheDir"`, `"Io"`.
      */
-    case Cache(message: String)
-    
+    case Cache(kind: String, message: String
+    )
     /**
      * Operation was cancelled (e.g. via a foreign-language `context.Context`
      * or `Task.cancel()` request). Mapped to `context.Canceled` /
      * `Task.CancellationError` / `Kotlin CancellationException` on the foreign side.
      */
-    case Cancelled(message: String)
-    
+    case Cancelled
     /**
      * Fallback for errors that don't fit any other variant — should be rare;
      * new errors should usually get their own variant or a `kind` extension.
      */
-    case Internal(message: String)
-    
+    case Internal(message: String
+    )
 
     
 
@@ -6132,78 +6131,71 @@ public struct FfiConverterTypeBlazenError: FfiConverterRustBuffer {
         
         case 1: return .Auth(
             message: try FfiConverterString.read(from: &buf)
-        )
-        
+            )
         case 2: return .RateLimit(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
+            message: try FfiConverterString.read(from: &buf), 
+            retryAfterMs: try FfiConverterOptionUInt64.read(from: &buf)
+            )
         case 3: return .Timeout(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
+            message: try FfiConverterString.read(from: &buf), 
+            elapsedMs: try FfiConverterUInt64.read(from: &buf)
+            )
         case 4: return .Validation(
             message: try FfiConverterString.read(from: &buf)
-        )
-        
+            )
         case 5: return .ContentPolicy(
             message: try FfiConverterString.read(from: &buf)
-        )
-        
+            )
         case 6: return .Unsupported(
             message: try FfiConverterString.read(from: &buf)
-        )
-        
+            )
         case 7: return .Compute(
             message: try FfiConverterString.read(from: &buf)
-        )
-        
+            )
         case 8: return .Media(
             message: try FfiConverterString.read(from: &buf)
-        )
-        
+            )
         case 9: return .Provider(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
+            kind: try FfiConverterString.read(from: &buf), 
+            message: try FfiConverterString.read(from: &buf), 
+            provider: try FfiConverterOptionString.read(from: &buf), 
+            status: try FfiConverterOptionUInt32.read(from: &buf), 
+            endpoint: try FfiConverterOptionString.read(from: &buf), 
+            requestId: try FfiConverterOptionString.read(from: &buf), 
+            detail: try FfiConverterOptionString.read(from: &buf), 
+            retryAfterMs: try FfiConverterOptionUInt64.read(from: &buf)
+            )
         case 10: return .Workflow(
             message: try FfiConverterString.read(from: &buf)
-        )
-        
+            )
         case 11: return .Tool(
             message: try FfiConverterString.read(from: &buf)
-        )
-        
+            )
         case 12: return .Peer(
+            kind: try FfiConverterString.read(from: &buf), 
             message: try FfiConverterString.read(from: &buf)
-        )
-        
+            )
         case 13: return .Persist(
             message: try FfiConverterString.read(from: &buf)
-        )
-        
+            )
         case 14: return .Prompt(
+            kind: try FfiConverterString.read(from: &buf), 
             message: try FfiConverterString.read(from: &buf)
-        )
-        
+            )
         case 15: return .Memory(
+            kind: try FfiConverterString.read(from: &buf), 
             message: try FfiConverterString.read(from: &buf)
-        )
-        
+            )
         case 16: return .Cache(
+            kind: try FfiConverterString.read(from: &buf), 
             message: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 17: return .Cancelled(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
+            )
+        case 17: return .Cancelled
         case 18: return .Internal(
             message: try FfiConverterString.read(from: &buf)
-        )
-        
+            )
 
-        default: throw UniffiInternalError.unexpectedEnumCase
+         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
@@ -6213,44 +6205,108 @@ public struct FfiConverterTypeBlazenError: FfiConverterRustBuffer {
         
 
         
-        case .Auth(_ /* message is ignored*/):
-            writeInt(&buf, Int32(1))
-        case .RateLimit(_ /* message is ignored*/):
-            writeInt(&buf, Int32(2))
-        case .Timeout(_ /* message is ignored*/):
-            writeInt(&buf, Int32(3))
-        case .Validation(_ /* message is ignored*/):
-            writeInt(&buf, Int32(4))
-        case .ContentPolicy(_ /* message is ignored*/):
-            writeInt(&buf, Int32(5))
-        case .Unsupported(_ /* message is ignored*/):
-            writeInt(&buf, Int32(6))
-        case .Compute(_ /* message is ignored*/):
-            writeInt(&buf, Int32(7))
-        case .Media(_ /* message is ignored*/):
-            writeInt(&buf, Int32(8))
-        case .Provider(_ /* message is ignored*/):
-            writeInt(&buf, Int32(9))
-        case .Workflow(_ /* message is ignored*/):
-            writeInt(&buf, Int32(10))
-        case .Tool(_ /* message is ignored*/):
-            writeInt(&buf, Int32(11))
-        case .Peer(_ /* message is ignored*/):
-            writeInt(&buf, Int32(12))
-        case .Persist(_ /* message is ignored*/):
-            writeInt(&buf, Int32(13))
-        case .Prompt(_ /* message is ignored*/):
-            writeInt(&buf, Int32(14))
-        case .Memory(_ /* message is ignored*/):
-            writeInt(&buf, Int32(15))
-        case .Cache(_ /* message is ignored*/):
-            writeInt(&buf, Int32(16))
-        case .Cancelled(_ /* message is ignored*/):
-            writeInt(&buf, Int32(17))
-        case .Internal(_ /* message is ignored*/):
-            writeInt(&buf, Int32(18))
-
         
+        case let .Auth(message):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .RateLimit(message,retryAfterMs):
+            writeInt(&buf, Int32(2))
+            FfiConverterString.write(message, into: &buf)
+            FfiConverterOptionUInt64.write(retryAfterMs, into: &buf)
+            
+        
+        case let .Timeout(message,elapsedMs):
+            writeInt(&buf, Int32(3))
+            FfiConverterString.write(message, into: &buf)
+            FfiConverterUInt64.write(elapsedMs, into: &buf)
+            
+        
+        case let .Validation(message):
+            writeInt(&buf, Int32(4))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .ContentPolicy(message):
+            writeInt(&buf, Int32(5))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .Unsupported(message):
+            writeInt(&buf, Int32(6))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .Compute(message):
+            writeInt(&buf, Int32(7))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .Media(message):
+            writeInt(&buf, Int32(8))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .Provider(kind,message,provider,status,endpoint,requestId,detail,retryAfterMs):
+            writeInt(&buf, Int32(9))
+            FfiConverterString.write(kind, into: &buf)
+            FfiConverterString.write(message, into: &buf)
+            FfiConverterOptionString.write(provider, into: &buf)
+            FfiConverterOptionUInt32.write(status, into: &buf)
+            FfiConverterOptionString.write(endpoint, into: &buf)
+            FfiConverterOptionString.write(requestId, into: &buf)
+            FfiConverterOptionString.write(detail, into: &buf)
+            FfiConverterOptionUInt64.write(retryAfterMs, into: &buf)
+            
+        
+        case let .Workflow(message):
+            writeInt(&buf, Int32(10))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .Tool(message):
+            writeInt(&buf, Int32(11))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .Peer(kind,message):
+            writeInt(&buf, Int32(12))
+            FfiConverterString.write(kind, into: &buf)
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .Persist(message):
+            writeInt(&buf, Int32(13))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .Prompt(kind,message):
+            writeInt(&buf, Int32(14))
+            FfiConverterString.write(kind, into: &buf)
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .Memory(kind,message):
+            writeInt(&buf, Int32(15))
+            FfiConverterString.write(kind, into: &buf)
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .Cache(kind,message):
+            writeInt(&buf, Int32(16))
+            FfiConverterString.write(kind, into: &buf)
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case .Cancelled:
+            writeInt(&buf, Int32(17))
+        
+        
+        case let .Internal(message):
+            writeInt(&buf, Int32(18))
+            FfiConverterString.write(message, into: &buf)
+            
         }
     }
 }

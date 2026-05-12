@@ -109,6 +109,33 @@ regen_go() {
         --library "$LIB_PATH" \
         --config "$CFG" \
         --out-dir bindings/go/internal/uniffi
+    # Patch a known uniffi-bindgen-go codegen bug: when a method takes a
+    # parameter named `err` (e.g. CompletionStreamSink.on_error(err)), the
+    # generated Go body declares `_, err := uniffiRustCallAsync(...)` which
+    # collides with the parameter and fails `go vet` ("no new variables on
+    # left side of :="). Rename the parameter so the local err declaration
+    # is the only `err` in scope.
+    if [[ -f bindings/go/internal/uniffi/blazen/blazen.go ]]; then
+        python3 - <<'PY'
+import re
+from pathlib import Path
+p = Path("bindings/go/internal/uniffi/blazen/blazen.go")
+src = p.read_text()
+pattern = re.compile(
+    r'func \(_self \*CompletionStreamSinkImpl\) OnError\(err \*BlazenError\) error \{[\s\S]*?'
+    r'FfiConverterBlazenErrorINSTANCE\.Lower\(err\)\)',
+)
+def fixup(match):
+    block = match.group(0)
+    block = block.replace("OnError(err *BlazenError)", "OnError(onErrorArg *BlazenError)", 1)
+    block = block.replace("FfiConverterBlazenErrorINSTANCE.Lower(err))", "FfiConverterBlazenErrorINSTANCE.Lower(onErrorArg))", 1)
+    return block
+new_src, n = pattern.subn(fixup, src, count=1)
+if n:
+    p.write_text(new_src)
+    print(f"  ↳ patched OnError parameter shadowing ({n} site)")
+PY
+    fi
     echo "  ✓ Go bindings → bindings/go/internal/uniffi/"
 }
 
