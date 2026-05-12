@@ -4,7 +4,7 @@
 # Drives:
 #   uniffi-bindgen-go    → bindings/go/internal/uniffi/blazen/
 #   uniffi-bindgen swift → bindings/swift/Sources/UniFFIBlazen/
-#   uniffi-bindgen kotlin → bindings/kotlin/src/commonMain/uniffi/
+#   uniffi-bindgen kotlin → bindings/kotlin/src/main/kotlin/dev/zorpx/blazen/uniffi/
 #   uniffi-bindgen ruby  → bindings/ruby/lib/uniffi/blazen/
 #
 # CI runs this followed by `git diff --exit-code` to catch unregenerated
@@ -25,6 +25,22 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 UNIFFI_VERSION="0.31"
+
+# Prefer the locally-built uniffi-bindgen CLI (target/release/uniffi-bindgen)
+# over a globally-installed one. The local CLI is built from blazen-uniffi's
+# bin/uniffi-bindgen.rs entrypoint, so its version is guaranteed to match the
+# runtime scaffolding embedded in the cdylib. A mismatched globally-installed
+# uniffi-bindgen would emit incompatible glue with cryptic link errors.
+if [[ -x "target/release/uniffi-bindgen" ]]; then
+    UNIFFI_BINDGEN="target/release/uniffi-bindgen"
+elif command -v uniffi-bindgen >/dev/null 2>&1; then
+    UNIFFI_BINDGEN="$(command -v uniffi-bindgen)"
+else
+    echo "ERROR: uniffi-bindgen not found. Build the local CLI first:"
+    echo "  cargo build -p blazen-uniffi --release --bin uniffi-bindgen"
+    exit 1
+fi
+echo "Using uniffi-bindgen: $UNIFFI_BINDGEN"
 
 # ---- pick targets -----------------------------------------------------------
 TARGETS=("$@")
@@ -48,25 +64,32 @@ fi
 # uniffi-rs examples), but fall back to the top-level rlib or the staticlib,
 # all of which are equivalent for metadata purposes.
 DEPS_DIR="target/release/deps"
-LIB_PATH=$(ls -t "$DEPS_DIR"/libblazen_uniffi-*.rlib 2>/dev/null | head -1)
+# Glob expansion under set -u/-e/pipefail: use a shell array so a missing
+# pattern doesn't trigger pipeline failures.
+LIB_PATH=""
+shopt -s nullglob
+deps_rlibs=("$DEPS_DIR"/libblazen_uniffi-*.rlib)
+shopt -u nullglob
+if (( ${#deps_rlibs[@]} > 0 )); then
+    LIB_PATH="${deps_rlibs[0]}"
+elif [[ -f "target/release/libblazen_uniffi.rlib" ]]; then
+    LIB_PATH="target/release/libblazen_uniffi.rlib"
+elif [[ -f "target/release/libblazen_uniffi.a" ]]; then
+    LIB_PATH="target/release/libblazen_uniffi.a"
+fi
+
 if [[ -z "$LIB_PATH" || ! -f "$LIB_PATH" ]]; then
-    if [[ -f "target/release/libblazen_uniffi.rlib" ]]; then
+    echo "Building blazen-uniffi (release) so bindgens can read scaffolding metadata..."
+    cargo build -p blazen-uniffi --release
+    shopt -s nullglob
+    deps_rlibs=("$DEPS_DIR"/libblazen_uniffi-*.rlib)
+    shopt -u nullglob
+    if (( ${#deps_rlibs[@]} > 0 )); then
+        LIB_PATH="${deps_rlibs[0]}"
+    elif [[ -f "target/release/libblazen_uniffi.rlib" ]]; then
         LIB_PATH="target/release/libblazen_uniffi.rlib"
     else
         LIB_PATH="target/release/libblazen_uniffi.a"
-    fi
-fi
-
-if [[ ! -f "$LIB_PATH" ]]; then
-    echo "Building blazen-uniffi (release) so bindgens can read scaffolding metadata..."
-    cargo build -p blazen-uniffi --release
-    LIB_PATH=$(ls -t "$DEPS_DIR"/libblazen_uniffi-*.rlib 2>/dev/null | head -1)
-    if [[ -z "$LIB_PATH" || ! -f "$LIB_PATH" ]]; then
-        if [[ -f "target/release/libblazen_uniffi.rlib" ]]; then
-            LIB_PATH="target/release/libblazen_uniffi.rlib"
-        else
-            LIB_PATH="target/release/libblazen_uniffi.a"
-        fi
     fi
 fi
 
@@ -90,13 +113,8 @@ regen_go() {
 }
 
 regen_swift() {
-    if ! command -v uniffi-bindgen >/dev/null 2>&1; then
-        echo "ERROR: uniffi-bindgen not installed."
-        echo "  Install with: cargo install uniffi_bindgen --version ^$UNIFFI_VERSION"
-        return 1
-    fi
     mkdir -p bindings/swift/Sources/UniFFIBlazen
-    uniffi-bindgen generate \
+    "$UNIFFI_BINDGEN" generate \
         --library "$LIB_PATH" \
         --language swift \
         --config "$CFG" \
@@ -105,16 +123,12 @@ regen_swift() {
 }
 
 regen_kotlin() {
-    if ! command -v uniffi-bindgen >/dev/null 2>&1; then
-        echo "ERROR: uniffi-bindgen not installed."
-        return 1
-    fi
     # Output to src/main/kotlin so the generated file's package
     # (`dev.zorpx.blazen.uniffi`, set in uniffi.toml) lands at the path
     # `src/main/kotlin/dev/zorpx/blazen/uniffi/blazen.kt` that the hand-
     # written wrappers in `src/main/kotlin/dev/zorpx/blazen/` import.
     mkdir -p bindings/kotlin/src/main/kotlin
-    uniffi-bindgen generate \
+    "$UNIFFI_BINDGEN" generate \
         --library "$LIB_PATH" \
         --language kotlin \
         --config "$CFG" \
@@ -123,12 +137,8 @@ regen_kotlin() {
 }
 
 regen_ruby() {
-    if ! command -v uniffi-bindgen >/dev/null 2>&1; then
-        echo "ERROR: uniffi-bindgen not installed."
-        return 1
-    fi
     mkdir -p bindings/ruby/lib/uniffi/blazen
-    uniffi-bindgen generate \
+    "$UNIFFI_BINDGEN" generate \
         --library "$LIB_PATH" \
         --language ruby \
         --config "$CFG" \
