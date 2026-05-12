@@ -1,0 +1,4 @@
+module BlazenFFI {
+    header "include/BlazenFFI.h"
+    export *
+}
