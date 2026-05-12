@@ -4,3 +4,9 @@ Packages/
 *.xcodeproj/
 .DS_Store
 internal/uniffi/
+
+# uniffi-bindgen swift co-emits BlazenFFI.h and BlazenFFI.modulemap alongside
+# BlazenFFI.swift. The C target lives at Sources/BlazenFFI/ (with its own
+# include/ + module.modulemap), so these duplicates should not be tracked.
+Sources/UniFFIBlazen/BlazenFFI.h
+Sources/UniFFIBlazen/BlazenFFI.modulemap
