@@ -1,0 +1,10 @@
+# Compiled binaries and caches
+*.test
+*.out
+*.exe
+.idea/
+.vscode/
+
+# Native libs are tracked under internal/clib/<GOOS>_<GOARCH>/ but built
+# artefacts here can be tracked. Ignore stray copies at the package root.
+/libblazen_uniffi.*
