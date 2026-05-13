@@ -37,7 +37,7 @@
 require "rbconfig"
 require "ffi"
 
-require "uniffi/blazen/blazen"
+require_relative "blazen/ffi"
 
 require_relative "blazen/version"
 require_relative "blazen/errors"
