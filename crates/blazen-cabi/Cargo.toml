@@ -1,0 +1,72 @@
+[package]
+name = "blazen-cabi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "Hand-rolled C ABI over blazen-uniffi for the Ruby gem (via cbindgen + FFI gem) and any other FFI host"
+
+[lib]
+name = "blazen_cabi"
+# cdylib  — loaded by Ruby's ffi gem (libblazen_cabi.{so,dylib,dll})
+# staticlib — optional static archive for embedders that want to vendor
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+async-trait.workspace = true
+blazen-uniffi = { path = "../blazen-uniffi", default-features = false }
+futures-util.workspace = true
+libc = "0.2"
+parking_lot = "0.12"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true }
+tracing.workspace = true
+
+[build-dependencies]
+cbindgen = "0.29"
+
+[features]
+# Mirror blazen-uniffi's feature graph one-to-one so the cabi surface tracks
+# whatever blazen-uniffi exposes under each flag.
+default = ["local-all"]
+
+embed = ["blazen-uniffi/embed"]
+candle-embed = ["blazen-uniffi/candle-embed"]
+mistralrs = ["blazen-uniffi/mistralrs"]
+llamacpp = ["blazen-uniffi/llamacpp"]
+candle-llm = ["blazen-uniffi/candle-llm"]
+diffusion = ["blazen-uniffi/diffusion"]
+whispercpp = ["blazen-uniffi/whispercpp"]
+piper = ["blazen-uniffi/piper"]
+tiktoken = ["blazen-uniffi/tiktoken"]
+tract = ["blazen-uniffi/tract"]
+
+local-all = [
+    "embed",
+    "tract",
+    "candle-embed",
+    "mistralrs",
+    "llamacpp",
+    "candle-llm",
+    "diffusion",
+    "whispercpp",
+    "piper",
+    "tiktoken",
+    "distributed",
+    "otlp",
+    "prometheus",
+    "langfuse",
+]
+
+otlp = ["blazen-uniffi/otlp"]
+prometheus = ["blazen-uniffi/prometheus"]
+langfuse = ["blazen-uniffi/langfuse"]
+
+distributed = ["blazen-uniffi/distributed"]
+
+[lints]
+workspace = true

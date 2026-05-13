@@ -14,6 +14,7 @@ members = [
     "crates/blazen-py",
     "crates/blazen-node",
     "crates/blazen-uniffi",
+    "crates/blazen-cabi",
     "crates/blazen-cli",
     "crates/blazen-telemetry",
     "crates/blazen-model-cache",

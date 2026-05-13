@@ -25,6 +25,7 @@ node_modules/
 bindings/go/internal/clib/**/libblazen_uniffi.*
 bindings/kotlin/src/main/resources/**/libblazen_uniffi.*
 bindings/ruby/ext/blazen/**/libblazen_uniffi.*
+bindings/ruby/ext/blazen/**/libblazen_cabi.*
 bindings/swift/**/libblazen_uniffi.*
 
 # Per-binding build artefact dirs
