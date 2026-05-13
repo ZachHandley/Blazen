@@ -134,6 +134,16 @@
 #define BLAZEN_STEP_OUTPUT_MULTIPLE 2
 
 /**
+ * Opaque wrapper around `blazen_uniffi::agent::Agent`.
+ *
+ * The inner `Arc` matches the `self: Arc<Self>` shape of the underlying
+ * async methods — each C entry point clones the ref so the spawned task
+ * can keep the agent alive for the duration of the run without the cabi
+ * handle being pinned to the foreign caller's call stack.
+ */
+typedef struct BlazenAgent BlazenAgent;
+
+/**
  * Opaque handle wrapping [`InnerAgentResult`].
  *
  * Produced by the cabi `Agent::run` wrapper (Phase R3). The wrapped value
@@ -159,6 +169,22 @@ typedef struct BlazenBatchResult BlazenBatchResult;
 typedef struct BlazenChatMessage BlazenChatMessage;
 
 /**
+ * Opaque handle wrapping an `Arc<blazen_uniffi::persist::CheckpointStore>`.
+ *
+ * Produced by the per-backend store factories (`new_redb_checkpoint_store`,
+ * `new_valkey_checkpoint_store`) wired in Phase R4. Free with
+ * [`blazen_checkpoint_store_free`].
+ */
+typedef struct BlazenCheckpointStore BlazenCheckpointStore;
+
+/**
+ * Opaque wrapper around [`blazen_uniffi::llm::CompletionModel`]. Construct
+ * via the per-provider factories in Phase R4 (e.g.
+ * `blazen_completion_model_openai`).
+ */
+typedef struct BlazenCompletionModel BlazenCompletionModel;
+
+/**
  * Opaque wrapper around [`blazen_uniffi::llm::CompletionRequest`].
  */
 typedef struct BlazenCompletionRequest BlazenCompletionRequest;
@@ -168,6 +194,12 @@ typedef struct BlazenCompletionRequest BlazenCompletionRequest;
  * by `complete` / `complete_blocking` in Phase R3; no public constructor.
  */
 typedef struct BlazenCompletionResponse BlazenCompletionResponse;
+
+/**
+ * Opaque wrapper around [`blazen_uniffi::llm::EmbeddingModel`]. Construct
+ * via the per-provider factories in Phase R4.
+ */
+typedef struct BlazenEmbeddingModel BlazenEmbeddingModel;
 
 /**
  * Opaque wrapper around [`blazen_uniffi::llm::EmbeddingResponse`]. Produced
@@ -205,6 +237,14 @@ typedef struct BlazenEvent BlazenEvent;
 typedef struct BlazenFuture BlazenFuture;
 
 /**
+ * Opaque handle wrapping an `Arc<blazen_uniffi::compute::ImageGenModel>`.
+ *
+ * Produced by the per-backend image-generation factory functions
+ * (Phase R4). Free with [`blazen_image_gen_model_free`].
+ */
+typedef struct BlazenImageGenModel BlazenImageGenModel;
+
+/**
  * Opaque handle wrapping [`InnerImageGenResult`].
  *
  * Produced by the cabi `ImageGenModel::generate` wrapper (Phase R3). Holds
@@ -220,6 +260,22 @@ typedef struct BlazenImageGenResult BlazenImageGenResult;
 typedef struct BlazenMedia BlazenMedia;
 
 /**
+ * Opaque wrapper around `blazen_uniffi::peer::PeerClient`.
+ *
+ * The inner `Arc` matches the `self: Arc<Self>` shape of the underlying
+ * async `run_remote_workflow` method.
+ */
+typedef struct BlazenPeerClient BlazenPeerClient;
+
+/**
+ * Opaque wrapper around `blazen_uniffi::peer::PeerServer`.
+ *
+ * The inner `Arc` matches the `self: Arc<Self>` shape of the underlying
+ * async `serve` method.
+ */
+typedef struct BlazenPeerServer BlazenPeerServer;
+
+/**
  * Opaque handle wrapping a `blazen_uniffi::persist::PersistedEvent`.
  *
  * Same wire shape as a workflow [`crate::workflow_records::BlazenEvent`] —
@@ -229,6 +285,23 @@ typedef struct BlazenMedia BlazenMedia;
  * `blazen_uniffi::persist::PersistedEvent::TryFrom<SerializedEvent>`).
  */
 typedef struct BlazenPersistedEvent BlazenPersistedEvent;
+
+/**
+ * Opaque wrapper around `blazen_uniffi::pipeline::Pipeline`. The inner `Arc`
+ * supports the `self: Arc<Self>` async methods on the inner type and lets
+ * `_blocking` / future-returning variants share a single live reference.
+ */
+typedef struct BlazenPipeline BlazenPipeline;
+
+/**
+ * Opaque wrapper around `blazen_uniffi::pipeline::PipelineBuilder`.
+ *
+ * The inner `Arc` matches the `self: Arc<Self>` shape of the underlying
+ * builder methods — those methods reach through an internal
+ * `Mutex<Option<_>>` to consume + replace the in-progress builder state, so
+ * cloning the `Arc` per cabi call is sound.
+ */
+typedef struct BlazenPipelineBuilder BlazenPipelineBuilder;
 
 /**
  * Opaque handle wrapping a `blazen_uniffi::workflow::StepOutput` enum.
@@ -247,6 +320,14 @@ typedef struct BlazenStepOutput BlazenStepOutput;
  * Opaque wrapper around [`blazen_uniffi::streaming::StreamChunk`].
  */
 typedef struct BlazenStreamChunk BlazenStreamChunk;
+
+/**
+ * Opaque handle wrapping an `Arc<blazen_uniffi::compute::SttModel>`.
+ *
+ * Produced by the per-backend STT factory functions (Phase R4). Free with
+ * [`blazen_stt_model_free`].
+ */
+typedef struct BlazenSttModel BlazenSttModel;
 
 /**
  * Opaque handle wrapping [`InnerSttResult`].
@@ -273,6 +354,14 @@ typedef struct BlazenTool BlazenTool;
 typedef struct BlazenToolCall BlazenToolCall;
 
 /**
+ * Opaque handle wrapping an `Arc<blazen_uniffi::compute::TtsModel>`.
+ *
+ * Produced by the per-backend TTS factory functions (Phase R4). Free with
+ * [`blazen_tts_model_free`].
+ */
+typedef struct BlazenTtsModel BlazenTtsModel;
+
+/**
  * Opaque handle wrapping [`InnerTtsResult`].
  *
  * Produced by the cabi `TtsModel::synthesize` wrapper (Phase R3). Holds a
@@ -280,6 +369,23 @@ typedef struct BlazenToolCall BlazenToolCall;
  * only), a MIME type string, and a duration in milliseconds.
  */
 typedef struct BlazenTtsResult BlazenTtsResult;
+
+/**
+ * Opaque wrapper around `blazen_uniffi::workflow::Workflow`. The inner `Arc`
+ * supports `self: Arc<Self>` async methods on the inner type.
+ */
+typedef struct BlazenWorkflow BlazenWorkflow;
+
+/**
+ * Opaque wrapper around `blazen_uniffi::workflow::WorkflowBuilder`.
+ *
+ * The inner `Arc` matches the `self: Arc<Self>` shape of the underlying
+ * builder methods — the methods reach through an internal `Mutex<Option<_>>`
+ * to consume + replace the in-progress core builder, so cloning the `Arc`
+ * here is sound and lets each C entry point hand a fresh ref into the
+ * inner method.
+ */
+typedef struct BlazenWorkflowBuilder BlazenWorkflowBuilder;
 
 /**
  * Opaque handle wrapping a `blazen_uniffi::persist::WorkflowCheckpoint`.
@@ -328,6 +434,80 @@ extern "C" {
  * The returned pointer is non-null and points to a NUL-terminated UTF-8 buffer.
  */
  char *blazen_version(void);
+
+/**
+ * Synchronously runs the agent loop with `user_input` as the initial user
+ * message. Blocks the calling thread on the cabi tokio runtime. Returns `0`
+ * on success (writing a caller-owned `*mut BlazenAgentResult` to
+ * `out_result`) or `-1` on failure (writing the inner error to `out_err`).
+ *
+ * # Safety
+ *
+ * `agent` must be a valid pointer to a `BlazenAgent` previously produced by
+ * the cabi surface. `user_input` must be a valid NUL-terminated UTF-8
+ * buffer that remains live for the duration of the call. `out_result` is
+ * null OR a valid destination for one `*mut BlazenAgentResult` write.
+ * `out_err` is null OR a valid destination for one `*mut BlazenError`
+ * write.
+ */
+
+int32_t blazen_agent_run_blocking(const BlazenAgent *agent,
+                                  const char *user_input,
+                                  BlazenAgentResult **out_result,
+                                  BlazenError **out_err);
+
+/**
+ * Runs the agent loop asynchronously, returning an opaque future handle
+ * immediately. The caller waits via `blazen_future_wait` / `blazen_future_fd`
+ * / `blazen_future_poll`, then takes the result via
+ * [`blazen_future_take_agent_result`].
+ *
+ * Returns null if `agent` or `user_input` is null, or if `user_input` is
+ * not valid UTF-8. Errors that surface during the async run are delivered
+ * through `blazen_future_take_agent_result`'s `err` out-param.
+ *
+ * # Safety
+ *
+ * `agent` must be a valid pointer to a `BlazenAgent` previously produced by
+ * the cabi surface. `user_input` must be a valid NUL-terminated UTF-8
+ * buffer that remains valid for the duration of this call (the buffer is
+ * copied before this function returns).
+ */
+ BlazenFuture *blazen_agent_run(const BlazenAgent *agent, const char *user_input);
+
+/**
+ * Frees a `BlazenAgent` handle previously produced by the cabi surface
+ * (Phase R5 constructor wrapper). No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `agent` must be null OR a pointer previously produced by the cabi
+ * surface as a `BlazenAgent`. Calling this twice on the same non-null
+ * pointer is a double-free.
+ */
+ void blazen_agent_free(BlazenAgent *agent);
+
+/**
+ * Pops the `AgentResult` out of a future produced by [`blazen_agent_run`].
+ * Returns `0` on success or `-1` on error.
+ *
+ * On success, `out` receives a caller-owned `*mut BlazenAgentResult` (free
+ * with [`crate::agent_records::blazen_agent_result_free`]). On error, `err`
+ * receives a caller-owned `*mut BlazenError` (free with
+ * [`crate::error::blazen_error_free`]).
+ *
+ * # Safety
+ *
+ * All three pointers must follow the cabi-future contract: `fut` is a live
+ * future produced by [`blazen_agent_run`], observed completed via
+ * `blazen_future_poll` / `_wait` / `_fd`. `out` and `err` are valid
+ * destinations for a single `*mut` write (typically stack `*mut BlazenX`
+ * locals — can be null to discard).
+ */
+
+int32_t blazen_future_take_agent_result(BlazenFuture *fut,
+                                        BlazenAgentResult **out,
+                                        BlazenError **err);
 
 /**
  * Returns the agent's final message as a heap-allocated C string. Caller
@@ -503,6 +683,216 @@ extern "C" {
  * surface. Double-free is undefined behavior.
  */
  void blazen_batch_result_free(BlazenBatchResult *handle);
+
+/**
+ * Synchronously synthesize speech for `text` and write the result into
+ * `out_result` on success, or a `BlazenError` into `out_err` on failure.
+ *
+ * Returns `0` on success, `-1` on failure (`out_err` may be inspected),
+ * `-2` on invalid input (null model / non-UTF-8 `text`).
+ *
+ * Pass `voice` / `language` as null to leave them unset.
+ *
+ * # Safety
+ *
+ * - `model` must be a valid pointer to a `BlazenTtsModel` produced by the
+ *   cabi surface.
+ * - `text` must be a valid NUL-terminated UTF-8 buffer.
+ * - `voice` / `language` must be null OR valid NUL-terminated UTF-8 buffers.
+ * - `out_result` / `out_err` must be null OR writable pointers to a
+ *   `*mut BlazenTtsResult` / `*mut BlazenError` slot respectively.
+ */
+
+int32_t blazen_tts_model_synthesize_blocking(const BlazenTtsModel *model,
+                                             const char *text,
+                                             const char *voice,
+                                             const char *language,
+                                             BlazenTtsResult **out_result,
+                                             BlazenError **out_err);
+
+/**
+ * Asynchronously synthesize speech for `text`. Returns a `*mut BlazenFuture`
+ * the caller polls / waits on; the typed result is popped with
+ * [`blazen_future_take_tts_result`].
+ *
+ * Returns null if `model` is null or `text` is null / non-UTF-8.
+ *
+ * # Safety
+ *
+ * Same string contracts as [`blazen_tts_model_synthesize_blocking`].
+ */
+
+BlazenFuture *blazen_tts_model_synthesize(const BlazenTtsModel *model,
+                                          const char *text,
+                                          const char *voice,
+                                          const char *language);
+
+/**
+ * Frees a `BlazenTtsModel` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by the cabi
+ * surface's TTS factory functions. Double-free is undefined behavior.
+ */
+ void blazen_tts_model_free(BlazenTtsModel *model);
+
+/**
+ * Synchronously transcribe audio at `audio_source` and write the result
+ * into `out_result` on success, or a `BlazenError` into `out_err` on
+ * failure.
+ *
+ * Returns `0` on success, `-1` on failure, `-2` on invalid input (null
+ * model / non-UTF-8 `audio_source`).
+ *
+ * Pass `language` as null to leave it unset.
+ *
+ * # Safety
+ *
+ * - `model` must be a valid pointer to a `BlazenSttModel` produced by the
+ *   cabi surface.
+ * - `audio_source` must be a valid NUL-terminated UTF-8 buffer.
+ * - `language` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `out_result` / `out_err` must be null OR writable pointers to the
+ *   appropriate slot.
+ */
+
+int32_t blazen_stt_model_transcribe_blocking(const BlazenSttModel *model,
+                                             const char *audio_source,
+                                             const char *language,
+                                             BlazenSttResult **out_result,
+                                             BlazenError **out_err);
+
+/**
+ * Asynchronously transcribe audio at `audio_source`. Returns a future
+ * handle whose typed result is popped with
+ * [`blazen_future_take_stt_result`].
+ *
+ * Returns null if `model` is null or `audio_source` is null / non-UTF-8.
+ *
+ * # Safety
+ *
+ * Same string contracts as [`blazen_stt_model_transcribe_blocking`].
+ */
+
+BlazenFuture *blazen_stt_model_transcribe(const BlazenSttModel *model,
+                                          const char *audio_source,
+                                          const char *language);
+
+/**
+ * Frees a `BlazenSttModel` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by the cabi
+ * surface's STT factory functions. Double-free is undefined behavior.
+ */
+ void blazen_stt_model_free(BlazenSttModel *model);
+
+/**
+ * Synchronously generate one or more images for `prompt` and write the
+ * result into `out_result` on success, or a `BlazenError` into `out_err`
+ * on failure.
+ *
+ * Returns `0` on success, `-1` on failure, `-2` on invalid input (null
+ * model / non-UTF-8 `prompt` or `negative_prompt`).
+ *
+ * `width` / `height` / `num_images`: pass `-1` (or any negative value) to
+ * leave unset. `model_override`: null leaves it unset (the per-model
+ * default endpoint configured at construction time is used).
+ *
+ * # Safety
+ *
+ * - `model` must be a valid pointer to a `BlazenImageGenModel` produced
+ *   by the cabi surface.
+ * - `prompt` / `negative_prompt` must be valid NUL-terminated UTF-8
+ *   buffers (non-null).
+ * - `model_override` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `out_result` / `out_err` must be null OR writable pointers to the
+ *   appropriate slot.
+ */
+
+int32_t blazen_image_gen_model_generate_blocking(const BlazenImageGenModel *model,
+                                                 const char *prompt,
+                                                 const char *negative_prompt,
+                                                 int32_t width,
+                                                 int32_t height,
+                                                 int32_t num_images,
+                                                 const char *model_override,
+                                                 BlazenImageGenResult **out_result,
+                                                 BlazenError **out_err);
+
+/**
+ * Asynchronously generate one or more images for `prompt`. Returns a
+ * future handle whose typed result is popped with
+ * [`blazen_future_take_image_gen_result`].
+ *
+ * Returns null if `model` is null or `prompt` is null / non-UTF-8.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_image_gen_model_generate_blocking`].
+ */
+
+BlazenFuture *blazen_image_gen_model_generate(const BlazenImageGenModel *model,
+                                              const char *prompt,
+                                              const char *negative_prompt,
+                                              int32_t width,
+                                              int32_t height,
+                                              int32_t num_images,
+                                              const char *model_override);
+
+/**
+ * Frees a `BlazenImageGenModel` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by the cabi
+ * surface's image-generation factory functions. Double-free is undefined
+ * behavior.
+ */
+ void blazen_image_gen_model_free(BlazenImageGenModel *model);
+
+/**
+ * Pops a typed `TtsResult` out of `fut`. On success returns `0` and writes
+ * a caller-owned `*mut BlazenTtsResult` into `out`; on failure returns
+ * `-1` and writes a caller-owned `*mut BlazenError` into `err`.
+ *
+ * `out` / `err` may be null when the caller wants to discard the value.
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by
+ * [`blazen_tts_model_synthesize`], not yet freed, and not concurrently
+ * freed from another thread. `out` / `err` must be null OR writable
+ * pointers to the appropriate slot.
+ */
+ int32_t blazen_future_take_tts_result(BlazenFuture *fut, BlazenTtsResult **out, BlazenError **err);
+
+/**
+ * Pops a typed `SttResult` out of `fut`. Mirrors
+ * [`blazen_future_take_tts_result`] semantics.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_future_take_tts_result`], with `fut`
+ * produced by [`blazen_stt_model_transcribe`].
+ */
+ int32_t blazen_future_take_stt_result(BlazenFuture *fut, BlazenSttResult **out, BlazenError **err);
+
+/**
+ * Pops a typed `ImageGenResult` out of `fut`. Mirrors
+ * [`blazen_future_take_tts_result`] semantics.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_future_take_tts_result`], with `fut`
+ * produced by [`blazen_image_gen_model_generate`].
+ */
+
+int32_t blazen_future_take_image_gen_result(BlazenFuture *fut,
+                                            BlazenImageGenResult **out,
+                                            BlazenError **err);
 
 /**
  * Returns the synthesized audio as a heap-allocated C string of
@@ -881,6 +1271,201 @@ extern "C" {
  * drained before the process dies.
  */
  int32_t blazen_shutdown(void);
+
+/**
+ * Returns the model's identifier (e.g. `"gpt-4o"`) as a caller-owned C
+ * string. Returns null on a null handle. Caller frees with
+ * `blazen_string_free`.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenCompletionModel` produced by the
+ * cabi surface (and not yet freed).
+ */
+ char *blazen_completion_model_model_id(const BlazenCompletionModel *model);
+
+/**
+ * Synchronously runs a chat completion on the cabi tokio runtime.
+ *
+ * On success returns `0` and writes a fresh `BlazenCompletionResponse*` into
+ * `*out_response`. On failure returns `-1` and writes a fresh `BlazenError*`
+ * into `*out_err`. Either out-parameter may be null to discard that side of
+ * the result (typically only meaningful on the error path during a smoke
+ * test).
+ *
+ * **The `request` pointer is consumed.** Internally we `Box::from_raw` it
+ * and move its inner record out. Calling
+ * [`blazen_completion_request_free`](crate::llm_records::blazen_completion_request_free)
+ * on the same pointer afterwards is a double-free.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenCompletionModel`. `request` must be
+ * null OR a live `BlazenCompletionRequest` produced by the cabi surface;
+ * ownership transfers to this function. `out_response` and `out_err` must
+ * each be null OR point to a writable slot of the matching pointer type.
+ */
+
+int32_t blazen_completion_model_complete_blocking(const BlazenCompletionModel *model,
+                                                  BlazenCompletionRequest *request,
+                                                  BlazenCompletionResponse **out_response,
+                                                  BlazenError **out_err);
+
+/**
+ * Spawns a chat completion onto the cabi tokio runtime and returns an
+ * opaque future handle. The caller observes completion via the future's
+ * fd / `blazen_future_poll` / `blazen_future_wait`, then calls
+ * [`blazen_future_take_completion_response`] to pop the result. Free the
+ * future with `blazen_future_free`.
+ *
+ * Returns null if either `model` or `request` is null (in which case the
+ * `request`, if non-null, is still consumed and freed to avoid a leak).
+ *
+ * **The `request` pointer is consumed.** See
+ * [`blazen_completion_model_complete_blocking`] for details.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenCompletionModel`. `request` must be
+ * null OR a live `BlazenCompletionRequest`; ownership transfers to this
+ * function regardless of whether the call returns null.
+ */
+
+BlazenFuture *blazen_completion_model_complete(const BlazenCompletionModel *model,
+                                               BlazenCompletionRequest *request);
+
+/**
+ * Frees a `BlazenCompletionModel` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by a provider
+ * factory in the cabi surface. Double-free is undefined behavior.
+ */
+ void blazen_completion_model_free(BlazenCompletionModel *model);
+
+/**
+ * Returns the embedding model's identifier as a caller-owned C string.
+ * Returns null on a null handle.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenEmbeddingModel`.
+ */
+ char *blazen_embedding_model_model_id(const BlazenEmbeddingModel *model);
+
+/**
+ * Returns the embedding vector dimensionality. Returns `0` on a null handle
+ * (which is otherwise an invalid input — callers should null-check before
+ * calling).
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenEmbeddingModel`.
+ */
+ uint32_t blazen_embedding_model_dimensions(const BlazenEmbeddingModel *model);
+
+/**
+ * Synchronously embeds one or more input strings on the cabi tokio runtime.
+ *
+ * On success returns `0` and writes a fresh `BlazenEmbeddingResponse*` into
+ * `*out_response`. On failure returns `-1` and writes a fresh `BlazenError*`
+ * into `*out_err`.
+ *
+ * The `inputs` array is BORROWED — the cabi copies each string before the
+ * blocking call returns. The caller retains ownership of the array and its
+ * strings.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenEmbeddingModel`. When
+ * `inputs_count > 0`, `inputs` must point to an array of exactly
+ * `inputs_count` valid `*const c_char` entries, each a NUL-terminated UTF-8
+ * buffer valid for the duration of this call. `out_response` and `out_err`
+ * must each be null OR point to a writable slot of the matching pointer
+ * type.
+ */
+
+int32_t blazen_embedding_model_embed_blocking(const BlazenEmbeddingModel *model,
+                                              const char *const *inputs,
+                                              uintptr_t inputs_count,
+                                              BlazenEmbeddingResponse **out_response,
+                                              BlazenError **out_err);
+
+/**
+ * Spawns an embed task onto the cabi tokio runtime and returns an opaque
+ * future handle. Pop the result with
+ * [`blazen_future_take_embedding_response`].
+ *
+ * Returns null if `model` is null, if `inputs` is null and `inputs_count >
+ * 0`, or if any indexed string is null / non-UTF-8. The `inputs` array is
+ * copied out before the future is spawned, so the caller only has to keep
+ * the array alive for the duration of this cabi call.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenEmbeddingModel`. When
+ * `inputs_count > 0`, `inputs` must point to an array of exactly
+ * `inputs_count` valid `*const c_char` entries, each a NUL-terminated UTF-8
+ * buffer valid for the duration of this call.
+ */
+
+BlazenFuture *blazen_embedding_model_embed(const BlazenEmbeddingModel *model,
+                                           const char *const *inputs,
+                                           uintptr_t inputs_count);
+
+/**
+ * Frees a `BlazenEmbeddingModel` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by a provider
+ * factory in the cabi surface. Double-free is undefined behavior.
+ */
+ void blazen_embedding_model_free(BlazenEmbeddingModel *model);
+
+/**
+ * Pops the [`BlazenCompletionResponse`] out of a future produced by
+ * [`blazen_completion_model_complete`].
+ *
+ * Returns `0` on success (writes the response into `*out` when non-null) or
+ * `-1` on failure (writes a fresh `BlazenError*` into `*err` when non-null).
+ * Both out-parameters may be null to discard the corresponding side.
+ *
+ * Calling this against a future produced by any other cabi entry point
+ * (e.g. `blazen_embedding_model_embed`) yields a `BlazenError::Internal`
+ * with a `type mismatch` message — see `BlazenFuture::take_typed`.
+ *
+ * # Safety
+ *
+ * `fut` must be null OR a pointer previously produced by
+ * [`blazen_completion_model_complete`] (and not yet freed, not concurrently
+ * freed from another thread). `out` and `err` must each be null OR point to
+ * a writable slot of the matching pointer type.
+ */
+
+int32_t blazen_future_take_completion_response(BlazenFuture *fut,
+                                               BlazenCompletionResponse **out,
+                                               BlazenError **err);
+
+/**
+ * Pops the [`BlazenEmbeddingResponse`] out of a future produced by
+ * [`blazen_embedding_model_embed`].
+ *
+ * Returns `0` on success (writes the response into `*out` when non-null) or
+ * `-1` on failure (writes a fresh `BlazenError*` into `*err` when non-null).
+ *
+ * # Safety
+ *
+ * `fut` must be null OR a pointer previously produced by
+ * [`blazen_embedding_model_embed`] (and not yet freed). `out` and `err`
+ * must each be null OR point to a writable slot of the matching pointer
+ * type.
+ */
+
+int32_t blazen_future_take_embedding_response(BlazenFuture *fut,
+                                              BlazenEmbeddingResponse **out,
+                                              BlazenError **err);
 
 /**
  * Constructs a new `Media` handle from the three required string fields.
@@ -1540,6 +2125,497 @@ uintptr_t blazen_embedding_response_embedding_to_buffer(const BlazenEmbeddingRes
  void blazen_embedding_response_free(BlazenEmbeddingResponse *handle);
 
 /**
+ * Construct a new peer server with the given UTF-8 `node_id`. Returns null
+ * on a null pointer or non-UTF-8 input.
+ *
+ * `node_id` is the stable identifier this server stamps onto every
+ * `RemoteRefDescriptor` it returns. Typical values are the hostname or a
+ * UUID picked at process startup.
+ *
+ * # Ownership
+ *
+ * Returned pointer is caller-owned. Free with [`blazen_peer_server_free`].
+ *
+ * # Safety
+ *
+ * `node_id` must be null OR a valid NUL-terminated UTF-8 buffer that
+ * remains live for the duration of the call.
+ */
+ BlazenPeerServer *blazen_peer_server_new(const char *node_id);
+
+/**
+ * Synchronously binds the gRPC server to `listen_address` and serves until
+ * the listener errors or the call is interrupted. Blocks the calling thread
+ * on the cabi tokio runtime. Returns `0` on success / `-1` on failure
+ * (writing the inner error to `out_err`).
+ *
+ * `listen_address` must parse as a `std::net::SocketAddr` (for example
+ * `"0.0.0.0:50051"` or `"127.0.0.1:7443"`). The underlying server is
+ * consumed by `serve`; calling this twice on the same `BlazenPeerServer`
+ * returns a `Validation` error.
+ *
+ * # Safety
+ *
+ * `server` must be a valid pointer to a `BlazenPeerServer` previously
+ * produced by the cabi surface. `listen_address` must be a valid
+ * NUL-terminated UTF-8 buffer. `out_err` is null OR a valid destination for
+ * one `*mut BlazenError` write.
+ */
+
+int32_t blazen_peer_server_serve_blocking(const BlazenPeerServer *server,
+                                          const char *listen_address,
+                                          BlazenError **out_err);
+
+/**
+ * Spawns the peer server onto the cabi tokio runtime and returns an opaque
+ * future handle immediately. The caller waits via `blazen_future_wait` /
+ * `blazen_future_fd` / `blazen_future_poll`, then takes the (unit) result
+ * via `blazen_future_take_unit` (defined in `persist.rs`).
+ *
+ * Returns null if `server` or `listen_address` is null, or if
+ * `listen_address` is not valid UTF-8.
+ *
+ * # Safety
+ *
+ * `server` must be a valid pointer to a `BlazenPeerServer` previously
+ * produced by the cabi surface. `listen_address` must be a valid
+ * NUL-terminated UTF-8 buffer that remains valid for the duration of this
+ * call (the buffer is copied before this function returns).
+ */
+ BlazenFuture *blazen_peer_server_serve(const BlazenPeerServer *server, const char *listen_address);
+
+/**
+ * Frees a `BlazenPeerServer` handle previously produced by the cabi
+ * surface. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `server` must be null OR a pointer previously produced by
+ * [`blazen_peer_server_new`]. Calling this twice on the same non-null
+ * pointer is a double-free.
+ */
+ void blazen_peer_server_free(BlazenPeerServer *server);
+
+/**
+ * Opens a connection to the peer at `address`, blocking the calling thread
+ * on the cabi tokio runtime for the TCP / HTTP/2 handshake. Returns `0` on
+ * success (writing a caller-owned `*mut BlazenPeerClient` to `out_client`)
+ * or `-1` on failure (writing the inner error to `out_err`).
+ *
+ * `address` must be a valid gRPC endpoint URI such as
+ * `"http://node-a.local:7443"`. `client_node_id` identifies this end of
+ * the connection in trace logs on both sides and is typically the local
+ * hostname or a process-startup UUID.
+ *
+ * # Safety
+ *
+ * `address` and `client_node_id` must be valid NUL-terminated UTF-8 buffers
+ * that remain live for the duration of the call. `out_client` is null OR a
+ * valid destination for one `*mut BlazenPeerClient` write. `out_err` is
+ * null OR a valid destination for one `*mut BlazenError` write.
+ */
+
+int32_t blazen_peer_client_connect(const char *address,
+                                   const char *client_node_id,
+                                   BlazenPeerClient **out_client,
+                                   BlazenError **out_err);
+
+/**
+ * Returns the client's `node_id` (the value passed as `client_node_id` to
+ * [`blazen_peer_client_connect`]) as a heap-allocated NUL-terminated UTF-8
+ * C string. Returns null if `client` is null.
+ *
+ * # Ownership
+ *
+ * Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `client` must be null OR a valid pointer to a `BlazenPeerClient`
+ * previously produced by the cabi surface.
+ */
+ char *blazen_peer_client_node_id(const BlazenPeerClient *client);
+
+/**
+ * Synchronously invokes a workflow on the connected peer and waits for its
+ * terminal result. Blocks the calling thread on the cabi tokio runtime.
+ * Returns `0` on success (writing a caller-owned `*mut BlazenWorkflowResult`
+ * to `out_result`) or `-1` on failure (writing the inner error to
+ * `out_err`).
+ *
+ * - `workflow_name` is the symbolic name the remote peer's step registry
+ *   knows the workflow as.
+ * - `step_ids` is an array of `step_ids_count` NUL-terminated UTF-8 C
+ *   strings, each identifying a step to execute. Pass null + `0` for an
+ *   empty list.
+ * - `input_json` is the JSON-encoded payload fed into the workflow's entry
+ *   step.
+ * - `timeout_secs` bounds the remote workflow's wall-clock execution.
+ *   Pass `-1` to defer to the server's default deadline; any non-negative
+ *   value is converted to `u64` seconds.
+ *
+ * # Safety
+ *
+ * `client` must be a valid pointer to a `BlazenPeerClient`. `workflow_name`
+ * and `input_json` must be valid NUL-terminated UTF-8 buffers. `step_ids`
+ * must satisfy the `(ptrs, count)` contract documented on
+ * [`ptr_array_to_strings`]. `out_result` is null OR a valid destination for
+ * one `*mut BlazenWorkflowResult` write. `out_err` is null OR a valid
+ * destination for one `*mut BlazenError` write.
+ */
+
+int32_t blazen_peer_client_run_remote_workflow_blocking(const BlazenPeerClient *client,
+                                                        const char *workflow_name,
+                                                        const char *const *step_ids,
+                                                        uintptr_t step_ids_count,
+                                                        const char *input_json,
+                                                        int64_t timeout_secs,
+                                                        BlazenWorkflowResult **out_result,
+                                                        BlazenError **out_err);
+
+/**
+ * Invokes a workflow on the connected peer asynchronously, returning an
+ * opaque future handle immediately. The caller waits via
+ * `blazen_future_wait` / `blazen_future_fd` / `blazen_future_poll`, then
+ * takes the result via `blazen_future_take_workflow_result` (defined in
+ * `workflow.rs`).
+ *
+ * Returns null if any input pointer is null (other than `step_ids` when
+ * `step_ids_count == 0`) or if any string argument is not valid UTF-8.
+ * Errors that surface during the async run are delivered through
+ * `blazen_future_take_workflow_result`'s `err` out-param.
+ *
+ * Argument semantics match
+ * [`blazen_peer_client_run_remote_workflow_blocking`] — `timeout_secs < 0`
+ * maps to `None` (server default), `>= 0` maps to `Some(u64)` seconds.
+ *
+ * # Safety
+ *
+ * `client` must be a valid pointer to a `BlazenPeerClient`. `workflow_name`
+ * and `input_json` must be valid NUL-terminated UTF-8 buffers that remain
+ * valid for the duration of this call (their contents are copied before
+ * this function returns). `step_ids` must satisfy the `(ptrs, count)`
+ * contract documented on [`ptr_array_to_strings`], with every per-entry
+ * buffer remaining valid for the duration of this call.
+ */
+
+BlazenFuture *blazen_peer_client_run_remote_workflow(const BlazenPeerClient *client,
+                                                     const char *workflow_name,
+                                                     const char *const *step_ids,
+                                                     uintptr_t step_ids_count,
+                                                     const char *input_json,
+                                                     int64_t timeout_secs);
+
+/**
+ * Frees a `BlazenPeerClient` handle previously produced by the cabi
+ * surface. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `client` must be null OR a pointer previously produced by
+ * [`blazen_peer_client_connect`]. Calling this twice on the same non-null
+ * pointer is a double-free.
+ */
+ void blazen_peer_client_free(BlazenPeerClient *client);
+
+/**
+ * Synchronously persist `checkpoint`. The `checkpoint` pointer is
+ * **consumed** by this call — callers must NOT separately free it.
+ *
+ * Returns `0` on success, `-1` on failure (writes into `out_err`), `-2`
+ * on invalid input (null `store` or null `checkpoint`).
+ *
+ * # Safety
+ *
+ * - `store` must be a valid pointer to a `BlazenCheckpointStore` produced
+ *   by the cabi surface.
+ * - `checkpoint` must be a pointer previously produced by
+ *   [`crate::persist_records::blazen_workflow_checkpoint_new`] (or any
+ *   cabi function producing a `BlazenWorkflowCheckpoint`) and not yet
+ *   freed.
+ * - `out_err` must be null OR a writable pointer to a `*mut BlazenError`
+ *   slot.
+ */
+
+int32_t blazen_checkpoint_store_save_blocking(const BlazenCheckpointStore *store,
+                                              BlazenWorkflowCheckpoint *checkpoint,
+                                              BlazenError **out_err);
+
+/**
+ * Asynchronously persist `checkpoint`. The `checkpoint` pointer is
+ * **consumed** by this call — callers must NOT separately free it.
+ *
+ * Returns a future handle whose result is popped with
+ * [`blazen_future_take_unit`]. Returns null if either input is null
+ * (in which case the consumed `checkpoint` is dropped to avoid a leak).
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_checkpoint_store_save_blocking`].
+ */
+
+BlazenFuture *blazen_checkpoint_store_save(const BlazenCheckpointStore *store,
+                                           BlazenWorkflowCheckpoint *checkpoint);
+
+/**
+ * Synchronously load a checkpoint by `run_id`.
+ *
+ * On success, writes `1` into `out_found` and a freshly-allocated
+ * `*mut BlazenWorkflowCheckpoint` into `out_checkpoint` (when `Some`), or
+ * `0` into `out_found` (when `None`). Returns `0` on success, `-1` on
+ * failure, `-2` on invalid input (null `store` / null `run_id` /
+ * non-UTF-8 `run_id`).
+ *
+ * # Safety
+ *
+ * - `store` must be a valid pointer to a `BlazenCheckpointStore`.
+ * - `run_id` must be a valid NUL-terminated UTF-8 buffer.
+ * - `out_checkpoint` / `out_found` / `out_err` must be null OR writable
+ *   pointers to the appropriate slot.
+ */
+
+int32_t blazen_checkpoint_store_load_blocking(const BlazenCheckpointStore *store,
+                                              const char *run_id,
+                                              BlazenWorkflowCheckpoint **out_checkpoint,
+                                              int32_t *out_found,
+                                              BlazenError **out_err);
+
+/**
+ * Asynchronously load a checkpoint by `run_id`. Returns a future handle
+ * whose result is popped with
+ * [`blazen_future_take_workflow_checkpoint_option`].
+ *
+ * Returns null on invalid input.
+ *
+ * # Safety
+ *
+ * Same string contracts as [`blazen_checkpoint_store_load_blocking`].
+ */
+ BlazenFuture *blazen_checkpoint_store_load(const BlazenCheckpointStore *store, const char *run_id);
+
+/**
+ * Synchronously delete the checkpoint for `run_id`. The underlying
+ * backends treat delete-of-missing as a no-op, so the call succeeds even
+ * when no checkpoint exists for the id.
+ *
+ * Returns `0` on success, `-1` on failure, `-2` on invalid input.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_checkpoint_store_load_blocking`].
+ */
+
+int32_t blazen_checkpoint_store_delete_blocking(const BlazenCheckpointStore *store,
+                                                const char *run_id,
+                                                BlazenError **out_err);
+
+/**
+ * Asynchronously delete the checkpoint for `run_id`. Returns a future
+ * handle whose result is popped with [`blazen_future_take_unit`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_checkpoint_store_delete_blocking`].
+ */
+
+BlazenFuture *blazen_checkpoint_store_delete(const BlazenCheckpointStore *store,
+                                             const char *run_id);
+
+/**
+ * Synchronously list every stored checkpoint, ordered by timestamp
+ * descending.
+ *
+ * On success writes a heap-allocated array of
+ * `*mut BlazenWorkflowCheckpoint` into `*out_array` plus its length into
+ * `*out_count`. Free the array with
+ * [`blazen_workflow_checkpoint_array_free`].
+ *
+ * Returns `0` on success, `-1` on failure, `-2` on invalid input.
+ *
+ * # Safety
+ *
+ * `store` must be a valid pointer to a `BlazenCheckpointStore`.
+ * `out_array` / `out_count` / `out_err` must be null OR writable pointers
+ * to the appropriate slot.
+ */
+
+int32_t blazen_checkpoint_store_list_blocking(const BlazenCheckpointStore *store,
+                                              BlazenWorkflowCheckpoint ***out_array,
+                                              uintptr_t *out_count,
+                                              BlazenError **out_err);
+
+/**
+ * Asynchronously list every stored checkpoint. Returns a future whose
+ * result is popped with [`blazen_future_take_workflow_checkpoint_list`].
+ *
+ * # Safety
+ *
+ * `store` must be a valid pointer to a `BlazenCheckpointStore`.
+ */
+ BlazenFuture *blazen_checkpoint_store_list(const BlazenCheckpointStore *store);
+
+/**
+ * Synchronously list every stored run id, ordered by timestamp
+ * descending.
+ *
+ * On success writes a heap-allocated array of `*mut c_char` into
+ * `*out_array` plus its length into `*out_count`. Free the array with
+ * [`blazen_string_array_free`].
+ *
+ * Returns `0` on success, `-1` on failure, `-2` on invalid input.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_checkpoint_store_list_blocking`].
+ */
+
+int32_t blazen_checkpoint_store_list_run_ids_blocking(const BlazenCheckpointStore *store,
+                                                      char ***out_array,
+                                                      uintptr_t *out_count,
+                                                      BlazenError **out_err);
+
+/**
+ * Asynchronously list every stored run id. Returns a future whose result
+ * is popped with [`blazen_future_take_string_list`].
+ *
+ * # Safety
+ *
+ * `store` must be a valid pointer to a `BlazenCheckpointStore`.
+ */
+ BlazenFuture *blazen_checkpoint_store_list_run_ids(const BlazenCheckpointStore *store);
+
+/**
+ * Frees a `BlazenCheckpointStore` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `store` must be null OR a pointer previously produced by the cabi
+ * surface's checkpoint-store factory functions. Double-free is undefined
+ * behavior.
+ */
+ void blazen_checkpoint_store_free(BlazenCheckpointStore *store);
+
+/**
+ * Frees an array of `*mut BlazenWorkflowCheckpoint` previously produced
+ * by [`blazen_checkpoint_store_list_blocking`] or
+ * [`blazen_future_take_workflow_checkpoint_list`].
+ *
+ * Releases each element handle AND the backing slice in one call. No-op
+ * on a null `arr` (regardless of `count`).
+ *
+ * # Safety
+ *
+ * `arr` must be null OR a pointer previously produced by the cabi
+ * surface's checkpoint-list entry points, with `count` matching its
+ * length. Double-free is undefined behavior; modifying or freeing
+ * individual element pointers before this call is also undefined.
+ */
+ void blazen_workflow_checkpoint_array_free(BlazenWorkflowCheckpoint **arr, uintptr_t count);
+
+/**
+ * Frees an array of `*mut c_char` previously produced by
+ * [`blazen_checkpoint_store_list_run_ids_blocking`] or
+ * [`blazen_future_take_string_list`].
+ *
+ * Releases each element string AND the backing slice in one call. No-op
+ * on a null `arr` (regardless of `count`).
+ *
+ * # Safety
+ *
+ * `arr` must be null OR a pointer previously produced by the cabi
+ * surface's string-list entry points, with `count` matching its length.
+ * Double-free is undefined behavior; modifying or freeing individual
+ * element pointers before this call is also undefined.
+ */
+ void blazen_string_array_free(char **arr, uintptr_t count);
+
+/**
+ * Pops a `()` result out of `fut` — used for `save` and `delete`. On
+ * success returns `0`; on failure returns `-1` and writes a caller-owned
+ * `*mut BlazenError` into `err`.
+ *
+ * `err` may be null when the caller wants to discard the error.
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by a cabi async wrapper
+ * whose underlying future returns `Result<(), BlazenError>`, not yet
+ * freed. `err` must be null OR a writable pointer to a `*mut BlazenError`
+ * slot.
+ */
+ int32_t blazen_future_take_unit(BlazenFuture *fut, BlazenError **err);
+
+/**
+ * Pops an `Option<WorkflowCheckpoint>` result out of `fut`. Mirrors the
+ * blocking `load` semantics:
+ *
+ * - On success Some: returns `0`, writes a fresh handle into `out`, and
+ *   writes `1` into `out_found`.
+ * - On success None: returns `0` and writes `0` into `out_found`.
+ * - On failure: returns `-1` and writes a `*mut BlazenError` into `err`.
+ *
+ * `out` / `out_found` / `err` may individually be null to discard.
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by
+ * [`blazen_checkpoint_store_load`], not yet freed. `out` / `out_found` /
+ * `err` must be null OR writable pointers to the appropriate slot.
+ */
+
+int32_t blazen_future_take_workflow_checkpoint_option(BlazenFuture *fut,
+                                                      BlazenWorkflowCheckpoint **out,
+                                                      int32_t *out_found,
+                                                      BlazenError **err);
+
+/**
+ * Pops a `Vec<WorkflowCheckpoint>` result out of `fut`. Mirrors the
+ * blocking `list` semantics — on success returns `0` and writes a
+ * heap-allocated array of `*mut BlazenWorkflowCheckpoint` into
+ * `*out_array` with its length in `*out_count`. Free with
+ * [`blazen_workflow_checkpoint_array_free`].
+ *
+ * `out_array` / `out_count` / `err` may individually be null to discard.
+ * When `out_array` is null the array is freed immediately to avoid a
+ * leak.
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by
+ * [`blazen_checkpoint_store_list`], not yet freed. `out_array` /
+ * `out_count` / `err` must be null OR writable pointers to the
+ * appropriate slot.
+ */
+
+int32_t blazen_future_take_workflow_checkpoint_list(BlazenFuture *fut,
+                                                    BlazenWorkflowCheckpoint ***out_array,
+                                                    uintptr_t *out_count,
+                                                    BlazenError **err);
+
+/**
+ * Pops a `Vec<String>` result out of `fut`. Mirrors the blocking
+ * `list_run_ids` semantics — on success returns `0` and writes a
+ * heap-allocated array of `*mut c_char` into `*out_array` with its
+ * length in `*out_count`. Free with [`blazen_string_array_free`].
+ *
+ * `out_array` / `out_count` / `err` may individually be null to discard.
+ * When `out_array` is null the array is freed immediately to avoid a
+ * leak.
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by
+ * [`blazen_checkpoint_store_list_run_ids`], not yet freed. `out_array` /
+ * `out_count` / `err` must be null OR writable pointers to the
+ * appropriate slot.
+ */
+
+int32_t blazen_future_take_string_list(BlazenFuture *fut,
+                                       char ***out_array,
+                                       uintptr_t *out_count,
+                                       BlazenError **err);
+
+/**
  * Constructs a new persisted event with the given `event_type` (e.g.
  * `"blazen::StartEvent"`) and JSON-encoded `data_json` payload. Returns
  * null if either pointer is null or contains non-UTF-8 bytes.
@@ -1768,6 +2844,243 @@ BlazenPersistedEvent *blazen_workflow_checkpoint_pending_events_get(const Blazen
  void blazen_workflow_checkpoint_free(BlazenWorkflowCheckpoint *checkpoint);
 
 /**
+ * Construct a new pipeline builder with the given UTF-8 `name`. Returns
+ * null on a null pointer or non-UTF-8 input.
+ *
+ * # Ownership
+ *
+ * Returned pointer is caller-owned. Free with
+ * [`blazen_pipeline_builder_free`] unless it has been consumed by
+ * [`blazen_pipeline_builder_build`].
+ *
+ * # Safety
+ *
+ * `name` must be null OR a valid NUL-terminated UTF-8 buffer that remains
+ * live for the duration of the call.
+ */
+ BlazenPipelineBuilder *blazen_pipeline_builder_new(const char *name);
+
+/**
+ * Appends a sequential workflow stage with an auto-generated stage name.
+ * Consumes ownership of `workflow` — the caller MUST NOT separately free
+ * it after this call returns (regardless of return value; the workflow is
+ * reclaimed even on the error path).
+ *
+ * Returns `0` on success or `-1` on failure (writing the inner error to
+ * `out_err`).
+ *
+ * # Safety
+ *
+ * `builder` must be a valid pointer to a `BlazenPipelineBuilder`.
+ * `workflow` must be a non-null pointer previously produced by
+ * [`crate::workflow::blazen_workflow_builder_build`] (and not yet freed).
+ * `out_err` is null OR a valid destination for one `*mut BlazenError` write.
+ */
+
+int32_t blazen_pipeline_builder_add_workflow(BlazenPipelineBuilder *builder,
+                                             BlazenWorkflow *workflow,
+                                             BlazenError **out_err);
+
+/**
+ * Appends a sequential workflow stage with an explicit `name`. Consumes
+ * ownership of `workflow`. Returns `0` on success or `-1` on failure.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_pipeline_builder_add_workflow`], plus `name` must be a
+ * valid NUL-terminated UTF-8 buffer.
+ */
+
+int32_t blazen_pipeline_builder_stage(BlazenPipelineBuilder *builder,
+                                      const char *name,
+                                      BlazenWorkflow *workflow,
+                                      BlazenError **out_err);
+
+/**
+ * Appends a parallel stage running multiple workflows concurrently.
+ *
+ * - `name`: name for the parallel stage as a whole.
+ * - `branch_names` + `branch_count`: array of NUL-terminated UTF-8 branch
+ *   names. The array itself is borrowed (not consumed); the strings it
+ *   points at must remain valid for the duration of this call.
+ * - `workflows` + `workflow_count`: array of `*mut BlazenWorkflow` pointers
+ *   to be **consumed** by this call. Every workflow is reclaimed regardless
+ *   of return value to avoid leaking caller-allocated input on the failure
+ *   path. The `workflows` array storage itself is owned by the caller.
+ * - `wait_all`: if true, every branch must complete; otherwise the stage
+ *   finishes as soon as the first branch produces a result.
+ *
+ * `branch_count` and `workflow_count` must match; a mismatch yields a
+ * `Validation` error (after consuming every workflow in `workflows`).
+ *
+ * Returns `0` on success or `-1` on failure (writing the inner error to
+ * `out_err`).
+ *
+ * # Safety
+ *
+ * `builder` is a valid pointer to a `BlazenPipelineBuilder`. `name` is a
+ * valid NUL-terminated UTF-8 buffer. `branch_names` is a valid pointer to
+ * `branch_count` contiguous NUL-terminated UTF-8 string pointers (each
+ * individually live for the duration of the call). `workflows` is a valid
+ * pointer to `workflow_count` contiguous `*mut BlazenWorkflow` values, each
+ * of which was previously produced by the cabi surface and has not yet been
+ * freed. `out_err` is null OR a valid destination for one `*mut BlazenError`
+ * write.
+ */
+
+int32_t blazen_pipeline_builder_parallel(BlazenPipelineBuilder *builder,
+                                         const char *name,
+                                         const char *const *branch_names,
+                                         uintptr_t branch_count,
+                                         BlazenWorkflow **workflows,
+                                         uintptr_t workflow_count,
+                                         bool wait_all,
+                                         BlazenError **out_err);
+
+/**
+ * Sets the per-stage timeout in milliseconds. Returns `0` on success or
+ * `-1` on failure.
+ *
+ * # Safety
+ *
+ * `builder` must be a valid pointer to a `BlazenPipelineBuilder`. `out_err`
+ * is null OR a valid destination for one `*mut BlazenError` write.
+ */
+
+int32_t blazen_pipeline_builder_timeout_per_stage_ms(BlazenPipelineBuilder *builder,
+                                                     uint64_t millis,
+                                                     BlazenError **out_err);
+
+/**
+ * Sets the total pipeline wall-clock timeout in milliseconds. Returns `0`
+ * on success or `-1` on failure.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_pipeline_builder_timeout_per_stage_ms`].
+ */
+
+int32_t blazen_pipeline_builder_total_timeout_ms(BlazenPipelineBuilder *builder,
+                                                 uint64_t millis,
+                                                 BlazenError **out_err);
+
+/**
+ * Validates the pipeline definition and produces a runnable `Pipeline`,
+ * writing the caller-owned `*mut BlazenPipeline` into `out_pipeline` on
+ * success. Returns `0` on success or `-1` on failure.
+ *
+ * On the success path the `BlazenPipelineBuilder` handle remains live but
+ * its internal state slot is now empty; subsequent calls on the same handle
+ * will fail with `Validation`. The handle itself must still be released
+ * with [`blazen_pipeline_builder_free`].
+ *
+ * # Safety
+ *
+ * `builder` must be a valid pointer to a `BlazenPipelineBuilder`.
+ * `out_pipeline` is null OR a valid destination for one `*mut BlazenPipeline`
+ * write. `out_err` is null OR a valid destination for one `*mut BlazenError`
+ * write.
+ */
+
+int32_t blazen_pipeline_builder_build(BlazenPipelineBuilder *builder,
+                                      BlazenPipeline **out_pipeline,
+                                      BlazenError **out_err);
+
+/**
+ * Frees a `BlazenPipelineBuilder` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `builder` must be null OR a pointer previously produced by
+ * [`blazen_pipeline_builder_new`]. Calling this twice on the same non-null
+ * pointer is a double-free.
+ */
+ void blazen_pipeline_builder_free(BlazenPipelineBuilder *builder);
+
+/**
+ * Synchronously runs the pipeline with the given JSON `input_json` payload.
+ * Blocks the calling thread on the cabi tokio runtime. Returns `0` on
+ * success (writing a caller-owned `*mut BlazenWorkflowResult` to
+ * `out_result`) or `-1` on failure (writing the inner error to `out_err`).
+ *
+ * Pipelines produce the same result type as workflows — a `WorkflowResult`
+ * whose terminal event is a synthetic `StopEvent` carrying the final stage's
+ * output and whose `total_*_tokens` / `total_cost_usd` are summed across
+ * every stage.
+ *
+ * # Safety
+ *
+ * `pipe` must be a valid pointer to a `BlazenPipeline`. `input_json` must be
+ * a valid NUL-terminated UTF-8 buffer. `out_result` is null OR a valid
+ * destination for one `*mut BlazenWorkflowResult` write. `out_err` is null
+ * OR a valid destination for one `*mut BlazenError` write.
+ */
+
+int32_t blazen_pipeline_run_blocking(const BlazenPipeline *pipe,
+                                     const char *input_json,
+                                     BlazenWorkflowResult **out_result,
+                                     BlazenError **out_err);
+
+/**
+ * Runs the pipeline asynchronously, returning an opaque future handle
+ * immediately. Caller drives it with `blazen_future_wait` / `_fd` / `_poll`
+ * and then takes the result via
+ * [`crate::workflow::blazen_future_take_workflow_result`] (pipelines and
+ * workflows produce the same result type).
+ *
+ * Returns null if `pipe` or `input_json` is null, or if `input_json` is not
+ * valid UTF-8.
+ *
+ * # Safety
+ *
+ * `pipe` must be a valid pointer to a `BlazenPipeline`. `input_json` must be
+ * a valid NUL-terminated UTF-8 buffer that remains valid for the duration of
+ * this call (the buffer is copied before this function returns).
+ */
+ BlazenFuture *blazen_pipeline_run(const BlazenPipeline *pipe, const char *input_json);
+
+/**
+ * Returns the number of stages in this pipeline. Returns `0` if `pipe` is
+ * null.
+ *
+ * Used together with [`blazen_pipeline_stage_names_get`] to iterate stage
+ * names.
+ *
+ * # Safety
+ *
+ * `pipe` must be null OR a valid pointer to a `BlazenPipeline` previously
+ * produced by the cabi surface.
+ */
+ uintptr_t blazen_pipeline_stage_names_count(const BlazenPipeline *pipe);
+
+/**
+ * Returns the stage name at position `idx` as a heap-allocated NUL-terminated
+ * UTF-8 C string. Returns null if `pipe` is null or `idx` is out of bounds.
+ *
+ * # Ownership
+ *
+ * Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `pipe` must be null OR a valid pointer to a `BlazenPipeline` previously
+ * produced by the cabi surface.
+ */
+ char *blazen_pipeline_stage_names_get(const BlazenPipeline *pipe, uintptr_t idx);
+
+/**
+ * Frees a `BlazenPipeline` handle previously produced by the cabi surface.
+ * No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `pipe` must be null OR a pointer previously produced by
+ * [`blazen_pipeline_builder_build`]. Calling this twice on the same non-null
+ * pointer is a double-free.
+ */
+ void blazen_pipeline_free(BlazenPipeline *pipe);
+
+/**
  * Constructs a new `StreamChunk` with the given `content_delta` and
  * `is_final` flag. `tool_calls` is initialised empty.
  *
@@ -1980,6 +3293,190 @@ BlazenPersistedEvent *blazen_workflow_checkpoint_pending_events_get(const Blazen
  * same non-null pointer is a double-free.
  */
  void blazen_workflow_history_entry_free(BlazenWorkflowHistoryEntry *entry);
+
+/**
+ * Construct a new builder with the given UTF-8 `name`. Returns null on a
+ * null pointer or non-UTF-8 input.
+ *
+ * # Ownership
+ *
+ * Returned pointer is caller-owned. Free with
+ * [`blazen_workflow_builder_free`] unless it has been consumed by
+ * [`blazen_workflow_builder_build`].
+ *
+ * # Safety
+ *
+ * `name` must be null OR a valid NUL-terminated UTF-8 buffer that remains
+ * live for the duration of the call.
+ */
+ BlazenWorkflowBuilder *blazen_workflow_builder_new(const char *name);
+
+/**
+ * Sets the per-step timeout in milliseconds. Returns `0` on success or `-1`
+ * on failure (writing the inner error to `out_err`).
+ *
+ * # Safety
+ *
+ * `builder` must be a valid pointer to a `BlazenWorkflowBuilder` previously
+ * produced by [`blazen_workflow_builder_new`] (and not yet freed). `out_err`
+ * is null OR a valid destination for one `*mut BlazenError` write.
+ */
+
+int32_t blazen_workflow_builder_step_timeout_ms(BlazenWorkflowBuilder *builder,
+                                                uint64_t millis,
+                                                BlazenError **out_err);
+
+/**
+ * Sets the workflow-wide timeout in milliseconds. Returns `0` on success or
+ * `-1` on failure (writing the inner error to `out_err`).
+ *
+ * # Safety
+ *
+ * Same as [`blazen_workflow_builder_step_timeout_ms`].
+ */
+
+int32_t blazen_workflow_builder_timeout_ms(BlazenWorkflowBuilder *builder,
+                                           uint64_t millis,
+                                           BlazenError **out_err);
+
+/**
+ * Consumes the in-progress builder and produces a runnable `Workflow`,
+ * writing the caller-owned `*mut BlazenWorkflow` into `out_workflow` on
+ * success. Returns `0` on success or `-1` on failure.
+ *
+ * On the success path the `BlazenWorkflowBuilder` handle remains live but
+ * its internal builder slot is now empty; subsequent calls on the same
+ * handle will fail with a `Validation` error. The handle itself must still
+ * be released with [`blazen_workflow_builder_free`].
+ *
+ * # Safety
+ *
+ * `builder` must be a valid pointer to a `BlazenWorkflowBuilder` previously
+ * produced by [`blazen_workflow_builder_new`] (and not yet freed).
+ * `out_workflow` is null OR a valid destination for one `*mut BlazenWorkflow`
+ * write. `out_err` is null OR a valid destination for one `*mut BlazenError`
+ * write.
+ */
+
+int32_t blazen_workflow_builder_build(BlazenWorkflowBuilder *builder,
+                                      BlazenWorkflow **out_workflow,
+                                      BlazenError **out_err);
+
+/**
+ * Frees a `BlazenWorkflowBuilder` handle previously produced by the cabi
+ * surface. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `builder` must be null OR a pointer previously produced by
+ * [`blazen_workflow_builder_new`]. Calling this twice on the same non-null
+ * pointer is a double-free.
+ */
+ void blazen_workflow_builder_free(BlazenWorkflowBuilder *builder);
+
+/**
+ * Synchronously runs the workflow with the given JSON `input_json` payload.
+ * Blocks the calling thread on the cabi tokio runtime. Returns `0` on
+ * success (writing a caller-owned `*mut BlazenWorkflowResult` to
+ * `out_result`) or `-1` on failure (writing the inner error to `out_err`).
+ *
+ * # Safety
+ *
+ * `wf` must be a valid pointer to a `BlazenWorkflow`. `input_json` must be a
+ * valid NUL-terminated UTF-8 buffer. `out_result` is null OR a valid
+ * destination for one `*mut BlazenWorkflowResult` write. `out_err` is null
+ * OR a valid destination for one `*mut BlazenError` write.
+ */
+
+int32_t blazen_workflow_run_blocking(const BlazenWorkflow *wf,
+                                     const char *input_json,
+                                     BlazenWorkflowResult **out_result,
+                                     BlazenError **out_err);
+
+/**
+ * Runs the workflow asynchronously, returning an opaque future handle
+ * immediately. The caller waits via `blazen_future_wait` / `blazen_future_fd`
+ * / `blazen_future_poll`, then takes the result via
+ * [`blazen_future_take_workflow_result`].
+ *
+ * Returns null if `wf` or `input_json` is null, or if `input_json` is not
+ * valid UTF-8. Errors that surface during the async run are delivered
+ * through `blazen_future_take_workflow_result`'s `err` out-param.
+ *
+ * # Safety
+ *
+ * `wf` must be a valid pointer to a `BlazenWorkflow`. `input_json` must be a
+ * valid NUL-terminated UTF-8 buffer that remains valid for the duration of
+ * this call (the buffer is copied before this function returns).
+ */
+ BlazenFuture *blazen_workflow_run(const BlazenWorkflow *wf, const char *input_json);
+
+/**
+ * Returns the number of registered steps in this workflow. Returns `0` if
+ * `wf` is null.
+ *
+ * Used together with [`blazen_workflow_step_names_get`] to iterate step
+ * names without round-tripping a heap-allocated array across the FFI.
+ *
+ * # Safety
+ *
+ * `wf` must be null OR a valid pointer to a `BlazenWorkflow` previously
+ * produced by the cabi surface.
+ */
+ uintptr_t blazen_workflow_step_names_count(const BlazenWorkflow *wf);
+
+/**
+ * Returns the step name at position `idx` as a heap-allocated NUL-terminated
+ * UTF-8 C string. Returns null if `wf` is null or `idx` is out of bounds.
+ *
+ * # Ownership
+ *
+ * Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `wf` must be null OR a valid pointer to a `BlazenWorkflow` previously
+ * produced by the cabi surface.
+ */
+ char *blazen_workflow_step_names_get(const BlazenWorkflow *wf, uintptr_t idx);
+
+/**
+ * Frees a `BlazenWorkflow` handle previously produced by the cabi surface.
+ * No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `wf` must be null OR a pointer previously produced by
+ * [`blazen_workflow_builder_build`] (or any other cabi function documenting
+ * `BlazenWorkflow` ownership-transfer-to-caller semantics). Calling this
+ * twice on the same non-null pointer is a double-free.
+ */
+ void blazen_workflow_free(BlazenWorkflow *wf);
+
+/**
+ * Pops the `WorkflowResult` out of a future produced by any of the
+ * workflow-result-returning cabi async wrappers (`blazen_workflow_run`,
+ * `blazen_pipeline_run`, and — once R5 lands — `blazen_peer_client_run_remote_workflow`).
+ * Returns `0` on success or `-1` on error.
+ *
+ * On success, `out` receives a caller-owned `*mut BlazenWorkflowResult` (free
+ * with [`crate::workflow_records::blazen_workflow_result_free`]). On error,
+ * `err` receives a caller-owned `*mut BlazenError` (free with
+ * [`crate::error::blazen_error_free`]).
+ *
+ * # Safety
+ *
+ * All three pointers must follow the cabi-future contract: `fut` is a live
+ * future produced by `blazen_workflow_run` / `blazen_pipeline_run` /
+ * `blazen_peer_client_run_remote_workflow`, observed completed via
+ * `blazen_future_poll` / `_wait` / `_fd`. `out` and `err` are valid
+ * destinations for a single `*mut` write (typically stack `*mut BlazenX`
+ * locals — can be null to discard).
+ */
+
+int32_t blazen_future_take_workflow_result(BlazenFuture *fut,
+                                           BlazenWorkflowResult **out,
+                                           BlazenError **err);
 
 /**
  * Constructs a new event with the given `event_type` (e.g. `"StartEvent"`)
