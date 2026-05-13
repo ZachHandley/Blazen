@@ -13,6 +13,117 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+/**
+ * Variant tag for the `Auth` error category.
+ */
+#define BLAZEN_ERROR_KIND_AUTH 1
+
+/**
+ * Variant tag for the `RateLimit` error category.
+ */
+#define BLAZEN_ERROR_KIND_RATE_LIMIT 2
+
+/**
+ * Variant tag for the `Timeout` error category.
+ */
+#define BLAZEN_ERROR_KIND_TIMEOUT 3
+
+/**
+ * Variant tag for the `Validation` error category.
+ */
+#define BLAZEN_ERROR_KIND_VALIDATION 4
+
+/**
+ * Variant tag for the `ContentPolicy` error category.
+ */
+#define BLAZEN_ERROR_KIND_CONTENT_POLICY 5
+
+/**
+ * Variant tag for the `Unsupported` error category.
+ */
+#define BLAZEN_ERROR_KIND_UNSUPPORTED 6
+
+/**
+ * Variant tag for the `Compute` error category.
+ */
+#define BLAZEN_ERROR_KIND_COMPUTE 7
+
+/**
+ * Variant tag for the `Media` error category.
+ */
+#define BLAZEN_ERROR_KIND_MEDIA 8
+
+/**
+ * Variant tag for the `Provider` error category.
+ */
+#define BLAZEN_ERROR_KIND_PROVIDER 9
+
+/**
+ * Variant tag for the `Workflow` error category.
+ */
+#define BLAZEN_ERROR_KIND_WORKFLOW 10
+
+/**
+ * Variant tag for the `Tool` error category.
+ */
+#define BLAZEN_ERROR_KIND_TOOL 11
+
+/**
+ * Variant tag for the `Peer` error category.
+ */
+#define BLAZEN_ERROR_KIND_PEER 12
+
+/**
+ * Variant tag for the `Persist` error category.
+ */
+#define BLAZEN_ERROR_KIND_PERSIST 13
+
+/**
+ * Variant tag for the `Prompt` error category.
+ */
+#define BLAZEN_ERROR_KIND_PROMPT 14
+
+/**
+ * Variant tag for the `Memory` error category.
+ */
+#define BLAZEN_ERROR_KIND_MEMORY 15
+
+/**
+ * Variant tag for the `Cache` error category.
+ */
+#define BLAZEN_ERROR_KIND_CACHE 16
+
+/**
+ * Variant tag for the `Cancelled` error category.
+ */
+#define BLAZEN_ERROR_KIND_CANCELLED 17
+
+/**
+ * Variant tag for the `Internal` (catch-all) error category.
+ */
+#define BLAZEN_ERROR_KIND_INTERNAL 18
+
+/**
+ * Opaque error handle owned by the caller. Produced by any fallible cabi
+ * function via an out-parameter `*mut *mut BlazenError`. Released with
+ * [`blazen_error_free`].
+ *
+ * Deliberately not `#[repr(C)]` so cbindgen emits the C side as a
+ * forward-declared `typedef struct BlazenError BlazenError;` opaque type —
+ * FFI hosts never inspect the layout directly, they go through the
+ * accessor functions below.
+ */
+typedef struct BlazenError BlazenError;
+
+/**
+ * Opaque async-result handle. cbindgen renders the C side as a
+ * forward-declared `typedef struct BlazenFuture BlazenFuture;` — FFI hosts
+ * never inspect the layout directly.
+ *
+ * Deliberately not `#[repr(C)]`.
+ */
+typedef struct BlazenFuture BlazenFuture;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -22,7 +133,7 @@ extern "C" {
  *
  * # Ownership
  *
- * Caller must free with [`blazen_string_free`].
+ * Caller must free with [`string::blazen_string_free`].
  *
  * # Safety
  *
@@ -31,13 +142,266 @@ extern "C" {
  char *blazen_version(void);
 
 /**
+ * Returns the variant tag for `err` — one of the `BLAZEN_ERROR_KIND_*`
+ * constants. Returns `0` if `err` is null (which is otherwise an invalid
+ * state — successful calls never produce an error handle).
+ *
+ * # Safety
+ *
+ * `err` must be null OR a valid pointer to a `BlazenError` previously
+ * produced by a `blazen_*` function that documents `*mut *mut BlazenError`
+ * out-parameter semantics. The pointer must remain valid for the duration
+ * of this call (i.e. not freed concurrently from another thread).
+ */
+ uint32_t blazen_error_kind(const BlazenError *err);
+
+/**
+ * Returns the variant's primary message as a heap-allocated NUL-terminated
+ * UTF-8 C string. The caller owns the returned pointer and must free it
+ * with `blazen_string_free`. Returns null if `err` is null.
+ *
+ * For the `Cancelled` variant — which has no `message` field — the returned
+ * string is its `Display` rendering (`"cancelled"`).
+ *
+ * # Safety
+ *
+ * `err` must be null OR a valid pointer to a `BlazenError` produced by the
+ * cabi surface. The returned string buffer is independent of `err`'s
+ * lifetime; freeing `err` does not invalidate the message.
+ */
+ char *blazen_error_message(const BlazenError *err);
+
+/**
+ * Returns the `retry_after_ms` hint in milliseconds for the `RateLimit` and
+ * `Provider` variants. Returns `-1` if `err` is null, the variant doesn't
+ * carry this field, or the field is unset on a variant that does.
+ *
+ * # Safety
+ *
+ * `err` must be null OR a valid pointer to a `BlazenError` produced by the
+ * cabi surface.
+ */
+ int64_t blazen_error_retry_after_ms(const BlazenError *err);
+
+/**
+ * Returns `elapsed_ms` for the `Timeout` variant. Returns `0` if `err` is
+ * null or the variant doesn't carry this field.
+ *
+ * # Safety
+ *
+ * `err` must be null OR a valid pointer to a `BlazenError` produced by the
+ * cabi surface.
+ */
+ uint64_t blazen_error_elapsed_ms(const BlazenError *err);
+
+/**
+ * Returns the HTTP status code carried by the `Provider` variant. Returns
+ * `-1` if `err` is null, the variant doesn't carry a status, or the status
+ * field is unset.
+ *
+ * # Safety
+ *
+ * `err` must be null OR a valid pointer to a `BlazenError` produced by the
+ * cabi surface.
+ */
+ int32_t blazen_error_status(const BlazenError *err);
+
+/**
+ * Returns the `provider` slug (e.g. `"openai"`, `"anthropic"`) for the
+ * `Provider` variant as a heap-allocated C string. Returns null if `err`
+ * is null, the variant doesn't carry a provider, or the field is unset.
+ * Caller frees with `blazen_string_free`.
+ *
+ * # Safety
+ *
+ * `err` must be null OR a valid pointer to a `BlazenError` produced by the
+ * cabi surface.
+ */
+ char *blazen_error_provider(const BlazenError *err);
+
+/**
+ * Returns the `endpoint` URL for the `Provider` variant as a heap-allocated
+ * C string. Returns null if `err` is null, the variant doesn't carry an
+ * endpoint, or the field is unset. Caller frees with `blazen_string_free`.
+ *
+ * # Safety
+ *
+ * `err` must be null OR a valid pointer to a `BlazenError` produced by the
+ * cabi surface.
+ */
+ char *blazen_error_endpoint(const BlazenError *err);
+
+/**
+ * Returns the `request_id` for the `Provider` variant as a heap-allocated
+ * C string. Returns null if `err` is null, the variant doesn't carry a
+ * request id, or the field is unset. Caller frees with `blazen_string_free`.
+ *
+ * # Safety
+ *
+ * `err` must be null OR a valid pointer to a `BlazenError` produced by the
+ * cabi surface.
+ */
+ char *blazen_error_request_id(const BlazenError *err);
+
+/**
+ * Returns the `detail` payload for the `Provider` variant as a heap-allocated
+ * C string. Returns null if `err` is null, the variant doesn't carry a
+ * detail, or the field is unset. Caller frees with `blazen_string_free`.
+ *
+ * # Safety
+ *
+ * `err` must be null OR a valid pointer to a `BlazenError` produced by the
+ * cabi surface.
+ */
+ char *blazen_error_detail(const BlazenError *err);
+
+/**
+ * Returns the sub-kind discriminator (the inner sub-enum's `Display`
+ * rendering) for the variants that carry one: `Provider`, `Peer`,
+ * `Prompt`, `Memory`, and `Cache`. Returns null for all other variants
+ * (and for null `err`). Caller frees with `blazen_string_free`.
+ *
+ * The strings come straight from the `kind` field stored on the inner
+ * `BlazenError` variant — they're stable identifiers like `"Http"`,
+ * `"Transport"`, `"MissingVariable"`, `"NoEmbedder"`, `"Download"`,
+ * matching the documented values in `blazen_uniffi::errors::BlazenError`.
+ *
+ * # Safety
+ *
+ * `err` must be null OR a valid pointer to a `BlazenError` produced by the
+ * cabi surface.
+ */
+ char *blazen_error_subkind(const BlazenError *err);
+
+/**
+ * Frees an error handle previously produced by the cabi surface. No-op on
+ * a null pointer.
+ *
+ * # Safety
+ *
+ * `err` must be null OR a pointer previously produced by a `blazen_*`
+ * function that documents `*mut *mut BlazenError` out-parameter
+ * semantics. Calling this twice on the same non-null pointer is a
+ * double-free; reading any of the accessors on `err` after this call is
+ * a use-after-free.
+ */
+ void blazen_error_free(BlazenError *err);
+
+/**
+ * Returns a read-only file descriptor that becomes readable once the future
+ * completes. On unix this is the raw pipe fd produced by `pipe(2)`. On
+ * windows it is the raw HANDLE for the pipe's read end, cast to `i64`;
+ * windows FFI hosts that can't wait on raw HANDLEs should fall back to
+ * [`blazen_future_wait`] instead.
+ *
+ * Use the returned fd with `poll(2)` / `select(2)` / `IO.wait_readable`
+ * (Ruby) / `epoll`. Do NOT read from the fd directly — call the appropriate
+ * `blazen_future_take_*` after the fd indicates readiness. The fd is owned
+ * by the future; closing it manually (via `close(2)` / `CloseHandle`) is
+ * undefined behavior.
+ *
+ * Returns `-1` if `fut` is null or the host platform doesn't expose the pipe
+ * as either a unix fd or a windows HANDLE.
+ *
+ * # Safety
+ *
+ * `fut` must be null OR a valid pointer to a `BlazenFuture` produced by the
+ * cabi surface (and not yet freed).
+ */
+ int64_t blazen_future_fd(const BlazenFuture *fut);
+
+/**
+ * Non-blocking readiness check. Returns:
+ * - `1` if the future has completed and the result is available to take
+ *   (whether the result is `Ok` or `Err`)
+ * - `0` if the future is still pending
+ * - `-1` if `fut` is null
+ *
+ * Does not consume the result — safe to call repeatedly. After this returns
+ * `1`, call the matching typed `blazen_future_take_*` to pop the result.
+ *
+ * # Safety
+ *
+ * `fut` must be null OR a valid pointer to a `BlazenFuture` produced by the
+ * cabi surface (and not yet freed).
+ */
+ int32_t blazen_future_poll(const BlazenFuture *fut);
+
+/**
+ * Blocks the calling thread until the future completes. Returns `0` on
+ * success, `-1` if `fut` is null. The typed result remains available for a
+ * subsequent `blazen_future_take_*`.
+ *
+ * Internally drains the one completion byte from the pipe's read end. If
+ * the byte has already been drained by a previous `blazen_future_wait`, the
+ * second call sees EOF and still returns `0` (the future is definitionally
+ * complete at that point — the writer has already been dropped).
+ *
+ * Roughly equivalent to `IO.for_fd(blazen_future_fd(fut)).read(1)` from
+ * Ruby, but without round-tripping through the Ruby IO layer.
+ *
+ * # Safety
+ *
+ * `fut` must be null OR a valid pointer to a `BlazenFuture` produced by the
+ * cabi surface (and not yet freed).
+ */
+ int32_t blazen_future_wait(BlazenFuture *fut);
+
+/**
+ * Frees the future handle. If the typed result was never consumed by a
+ * `blazen_future_take_*`, the boxed value (or the unread `BlazenError`) is
+ * dropped here. No-op on a null pointer.
+ *
+ * Closing the internal pipe fds happens automatically when the contained
+ * `PipeReader` and `PipeWriter` drop — callers must NOT separately close
+ * the fd returned by [`blazen_future_fd`].
+ *
+ * # Safety
+ *
+ * `fut` must be null OR a pointer previously produced by the cabi async
+ * surface (and not yet freed). Calling this twice on the same non-null
+ * pointer is a double-free; calling it while the spawned task hasn't yet
+ * signalled completion is undefined behavior on the C side (the spawned
+ * task is still holding a non-aliased reference to the handle's state).
+ */
+ void blazen_future_free(BlazenFuture *fut);
+
+/**
+ * Initialises the blazen-cabi runtime: builds the cabi tokio runtime if it
+ * hasn't been built yet, and delegates to `blazen_uniffi::init` to warm the
+ * UniFFI-managed runtime + install a default tracing subscriber when none
+ * is already set globally.
+ *
+ * Idempotent — safe to call multiple times from any thread. Returns `0`
+ * on success. No failure modes today, but the return slot is reserved so
+ * future fallible initialisation can surface a non-zero status without an
+ * ABI break.
+ */
+ int32_t blazen_init(void);
+
+/**
+ * Flushes telemetry exporters and shuts down background tasks owned by the
+ * blazen telemetry stack. Idempotent — safe to call multiple times and from
+ * any thread. Returns `0` on success.
+ *
+ * This does NOT tear down the tokio runtime — runtimes are leaked at
+ * process exit on purpose (matching the rest of the workspace). FFI hosts
+ * only need to call this to ensure traces / metrics / langfuse spans get
+ * drained before the process dies.
+ */
+ int32_t blazen_shutdown(void);
+
+/**
  * Frees a heap-allocated C string produced by any `blazen_*` function that
  * returns `*mut c_char`. Passing a null pointer is a no-op.
  *
  * # Safety
  *
  * `ptr` must have been produced by a `blazen_*` function that documents
- * caller-owned-string semantics. Double-free is undefined behavior.
+ * caller-owned-string semantics (i.e. went through [`alloc_cstring`] or
+ * `CString::into_raw`). Double-free is undefined behavior. Calling this
+ * on a pointer borrowed from a different allocator (e.g. `malloc`) is
+ * undefined behavior.
  */
  void blazen_string_free(char *ptr);
 

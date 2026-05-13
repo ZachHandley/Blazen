@@ -10,13 +10,19 @@
 
 #![allow(unsafe_code)] // entire crate is an unsafe FFI surface; safety contracts documented per-fn
 
+pub mod error;
+pub mod future;
+pub mod init;
+pub mod runtime;
+pub mod string;
+
 use std::ffi::{CString, c_char};
 
 /// Returns the blazen-cabi crate version as a heap-allocated UTF-8 C string.
 ///
 /// # Ownership
 ///
-/// Caller must free with [`blazen_string_free`].
+/// Caller must free with [`string::blazen_string_free`].
 ///
 /// # Safety
 ///
@@ -29,20 +35,4 @@ pub extern "C" fn blazen_version() -> *mut c_char {
         Ok(c) => c.into_raw(),
         Err(_) => std::ptr::null_mut(),
     }
-}
-
-/// Frees a heap-allocated C string produced by any `blazen_*` function that
-/// returns `*mut c_char`. Passing a null pointer is a no-op.
-///
-/// # Safety
-///
-/// `ptr` must have been produced by a `blazen_*` function that documents
-/// caller-owned-string semantics. Double-free is undefined behavior.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_string_free(ptr: *mut c_char) {
-    if ptr.is_null() {
-        return;
-    }
-    // SAFETY: `ptr` was produced by `CString::into_raw` per the contract above.
-    drop(unsafe { CString::from_raw(ptr) });
 }
