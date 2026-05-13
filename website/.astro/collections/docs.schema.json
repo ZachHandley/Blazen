@@ -17,7 +17,8 @@
         "wasm",
         "go",
         "swift",
-        "kotlin"
+        "kotlin",
+        "ruby"
       ]
     },
     "section": {
