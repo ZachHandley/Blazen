@@ -81,7 +81,7 @@ final class BlazenSwiftTests: XCTestCase {
     func testBlazenErrorMessageAccessor() {
         let err = BlazenError.Validation(message: "bad input")
         XCTAssertEqual(err.message, "bad input")
-        XCTAssertEqual(BlazenError.Cancelled(message: "cancelled").message, "cancelled")
+        XCTAssertEqual(BlazenError.Cancelled.message, "cancelled")
     }
 }
 

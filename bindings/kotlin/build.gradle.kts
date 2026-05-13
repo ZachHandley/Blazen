@@ -1,8 +1,11 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    kotlin("jvm") version "2.1.20"
-    kotlin("plugin.serialization") version "2.1.20"
+    // 2.3.21 removes the legacy `java-api-jars`/`java-runtime-jars` Usage
+    // attribute values that emitted Gradle 10-fatal deprecation warnings
+    // from KotlinJvmPlugin under Gradle 9.5+.
+    kotlin("jvm") version "2.3.21"
+    kotlin("plugin.serialization") version "2.3.21"
     `java-library`
 }
 

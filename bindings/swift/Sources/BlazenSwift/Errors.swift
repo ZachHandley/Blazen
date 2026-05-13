@@ -35,7 +35,7 @@ public func wrap(_ error: Error) -> BlazenError {
         return blazen
     }
     if error is CancellationError {
-        return .Cancelled(message: "cancelled")
+        return .Cancelled
     }
     return .Internal(message: String(describing: error))
 }
@@ -49,13 +49,29 @@ public extension BlazenError {
     /// `localizedDescription` but typed as `String` (not `String?`).
     var message: String {
         switch self {
-        case let .Auth(message), let .RateLimit(message), let .Timeout(message),
-             let .Validation(message), let .ContentPolicy(message), let .Unsupported(message),
-             let .Compute(message), let .Media(message), let .Provider(message),
-             let .Workflow(message), let .Tool(message), let .Peer(message),
-             let .Persist(message), let .Prompt(message), let .Memory(message),
-             let .Cache(message), let .Cancelled(message), let .Internal(message):
+        // Bare `message: String` variants.
+        case let .Auth(message), let .Validation(message),
+             let .ContentPolicy(message), let .Unsupported(message),
+             let .Compute(message), let .Media(message),
+             let .Workflow(message), let .Tool(message),
+             let .Persist(message), let .Internal(message):
             return message
+        // `(message, retryAfterMs)` and `(message, elapsedMs)`.
+        case let .RateLimit(message, _), let .Timeout(message, _):
+            return message
+        // `(kind, message)` variants. Callers that need the kind should
+        // pattern-match the variant directly.
+        case let .Peer(_, message),
+             let .Prompt(_, message),
+             let .Memory(_, message),
+             let .Cache(_, message):
+            return message
+        // Provider carries `(kind, message, provider, status, endpoint,
+        // requestId, detail, retryAfterMs)`.
+        case let .Provider(_, message, _, _, _, _, _, _):
+            return message
+        case .Cancelled:
+            return "cancelled"
         }
     }
 }
