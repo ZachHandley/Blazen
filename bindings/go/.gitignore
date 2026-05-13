@@ -5,6 +5,9 @@
 .idea/
 .vscode/
 
+# Stray example binaries that `go build ./examples/...` deposits at this dir.
+/hello_workflow
+
 # Native libs are tracked under internal/clib/<GOOS>_<GOARCH>/ but built
 # artefacts here can be tracked. Ignore stray copies at the package root.
 /libblazen_uniffi.*
