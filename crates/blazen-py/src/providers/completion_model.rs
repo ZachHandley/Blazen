@@ -451,6 +451,86 @@ impl PyCompletionModel {
         })
     }
 
+    /// Build a `CompletionModel` for an Ollama server.
+    ///
+    /// Equivalent to constructing an OpenAI-compatible provider with
+    /// `base_url = format!("http://{host}:{port}/v1")` and no API key.
+    ///
+    /// Args:
+    ///     host: Hostname or IP (e.g. `"localhost"`, `"192.168.1.50"`).
+    ///     port: TCP port (Ollama default is 11434).
+    ///     model: Model identifier loaded on the server (e.g. `"llama3.1"`).
+    #[staticmethod]
+    #[pyo3(signature = (host, port, model))]
+    fn ollama(host: &str, port: u16, model: String) -> Self {
+        let provider = blazen_llm::CustomProvider::ollama(host, port, model);
+        Self {
+            inner: Some(Arc::new(provider)),
+            local_model: None,
+            config: None,
+        }
+    }
+
+    /// Build a `CompletionModel` for an LM Studio server.
+    ///
+    /// Args:
+    ///     host: Hostname or IP.
+    ///     port: TCP port (LM Studio default is 1234).
+    ///     model: Model identifier loaded on the server.
+    #[staticmethod]
+    #[pyo3(signature = (host, port, model))]
+    fn lm_studio(host: &str, port: u16, model: String) -> Self {
+        let provider = blazen_llm::CustomProvider::lm_studio(host, port, model);
+        Self {
+            inner: Some(Arc::new(provider)),
+            local_model: None,
+            config: None,
+        }
+    }
+
+    /// Build a `CompletionModel` from an arbitrary OpenAI-compatible config.
+    ///
+    /// Use this for OpenAI-compatible servers that aren't pre-configured by
+    /// the `ollama` / `lm_studio` helpers (vLLM, llama.cpp's server, TGI, or
+    /// hosted OpenAI-compat services).
+    #[staticmethod]
+    #[pyo3(signature = (provider_id, config))]
+    fn openai_compat(
+        provider_id: String,
+        config: PyRef<'_, crate::providers::openai_compat::PyOpenAiCompatConfig>,
+    ) -> Self {
+        let provider = blazen_llm::CustomProvider::openai_compat(provider_id, config.inner.clone());
+        Self {
+            inner: Some(Arc::new(provider)),
+            local_model: None,
+            config: None,
+        }
+    }
+
+    /// Build a `CompletionModel` backed by a Python host object that implements
+    /// `complete` (and optionally `stream`).
+    ///
+    /// Use this for fully-custom protocols where the framework can't help with
+    /// the wire format. The host object's `complete(request)` async method will
+    /// be invoked with a serialized `CompletionRequest`.
+    ///
+    /// Args:
+    ///     host_object: A Python class instance with async `complete` method.
+    ///     provider_id: Optional short identifier for logging.
+    #[staticmethod]
+    #[pyo3(signature = (host_object, provider_id=None))]
+    fn custom(host_object: Py<PyAny>, provider_id: Option<String>) -> Self {
+        let id = provider_id.unwrap_or_else(|| "custom".to_owned());
+        let dispatch: std::sync::Arc<dyn blazen_llm::HostDispatch> =
+            std::sync::Arc::new(crate::providers::custom::PyHostDispatch::new(host_object));
+        let provider = blazen_llm::CustomProvider::with_dispatch(id, dispatch);
+        Self {
+            inner: Some(Arc::new(provider)),
+            local_model: None,
+            config: None,
+        }
+    }
+
     /// Create a fal.ai provider.
     ///
     /// Args:

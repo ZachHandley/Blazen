@@ -474,6 +474,12 @@ module Blazen
                     :int32
     attach_function :blazen_completion_model_new_openai_compat,
                     [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer], :int32
+    attach_function :blazen_completion_model_new_ollama,
+                    [:pointer, :uint16, :pointer, :pointer, :pointer], :int32
+    attach_function :blazen_completion_model_new_lm_studio,
+                    [:pointer, :uint16, :pointer, :pointer, :pointer], :int32
+    attach_function :blazen_completion_model_new_custom_with_openai_protocol,
+                    [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer], :int32
     attach_function :blazen_completion_model_new_mistralrs,
                     [:pointer, :pointer, :pointer, :int32, :bool, :pointer, :pointer],
                     :int32

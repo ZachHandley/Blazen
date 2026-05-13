@@ -901,6 +901,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_func_new_cohere_completion_model(): Short
 
+    external fun uniffi_blazen_uniffi_checksum_func_new_custom_completion_model_with_openai_protocol(): Short
+
     external fun uniffi_blazen_uniffi_checksum_func_new_deepseek_completion_model(): Short
 
     external fun uniffi_blazen_uniffi_checksum_func_new_fal_completion_model(): Short
@@ -917,9 +919,13 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_func_new_llamacpp_completion_model(): Short
 
+    external fun uniffi_blazen_uniffi_checksum_func_new_lm_studio_completion_model(): Short
+
     external fun uniffi_blazen_uniffi_checksum_func_new_mistral_completion_model(): Short
 
     external fun uniffi_blazen_uniffi_checksum_func_new_mistralrs_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_ollama_completion_model(): Short
 
     external fun uniffi_blazen_uniffi_checksum_func_new_openai_compat_completion_model(): Short
 
@@ -1694,6 +1700,14 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
+    external fun uniffi_blazen_uniffi_fn_func_new_custom_completion_model_with_openai_protocol(
+        `providerId`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `apiKey`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
     external fun uniffi_blazen_uniffi_fn_func_new_deepseek_completion_model(
         `apiKey`: RustBuffer.ByValue,
         `model`: RustBuffer.ByValue,
@@ -1755,6 +1769,13 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
+    external fun uniffi_blazen_uniffi_fn_func_new_lm_studio_completion_model(
+        `host`: RustBuffer.ByValue,
+        `port`: Short,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
     external fun uniffi_blazen_uniffi_fn_func_new_mistral_completion_model(
         `apiKey`: RustBuffer.ByValue,
         `model`: RustBuffer.ByValue,
@@ -1768,6 +1789,13 @@ internal object UniffiLib {
         `quantization`: RustBuffer.ByValue,
         `contextLength`: RustBuffer.ByValue,
         `vision`: Byte,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_ollama_completion_model(
+        `host`: RustBuffer.ByValue,
+        `port`: Short,
+        `model`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
@@ -2133,6 +2161,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_func_new_cohere_completion_model() != 22601.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_custom_completion_model_with_openai_protocol() != 35048.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_blazen_uniffi_checksum_func_new_deepseek_completion_model() != 51214.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -2157,10 +2188,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_func_new_llamacpp_completion_model() != 2285.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_lm_studio_completion_model() != 33263.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_blazen_uniffi_checksum_func_new_mistral_completion_model() != 22583.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_func_new_mistralrs_completion_model() != 26159.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_ollama_completion_model() != 55850.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_func_new_openai_compat_completion_model() != 63435.toShort()) {
@@ -2722,6 +2759,26 @@ private class JavaLangRefCleanable(
     val cleanable: java.lang.ref.Cleaner.Cleanable,
 ) : UniffiCleaner.Cleanable {
     override fun clean() = cleanable.clean()
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterUShort : FfiConverter<UShort, Short> {
+    override fun lift(value: Short): UShort = value.toUShort()
+
+    override fun read(buf: ByteBuffer): UShort = lift(buf.getShort())
+
+    override fun lower(value: UShort): Short = value.toShort()
+
+    override fun allocationSize(value: UShort) = 2UL
+
+    override fun write(
+        value: UShort,
+        buf: ByteBuffer,
+    ) {
+        buf.putShort(value.toShort())
+    }
 }
 
 /**
@@ -11659,6 +11716,36 @@ fun `newCohereCompletionModel`(
     )
 
 /**
+ * Construct a [`CompletionModel`] that speaks the `OpenAI` chat-completions
+ * protocol against an arbitrary base URL.
+ *
+ * This is the same wire format as
+ * [`new_openai_compat_completion_model`], but wrapped in a
+ * [`blazen_llm::CustomProvider`] for consistent ergonomics with the
+ * `new_ollama_completion_model` / `new_lm_studio_completion_model`
+ * factories. `api_key` is optional: passing `None` (or an empty `Some`)
+ * omits the `Authorization` header entirely.
+ */
+@Throws(BlazenException::class)
+fun `newCustomCompletionModelWithOpenaiProtocol`(
+    `providerId`: kotlin.String,
+    `baseUrl`: kotlin.String,
+    `model`: kotlin.String,
+    `apiKey`: kotlin.String?,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_custom_completion_model_with_openai_protocol(
+                FfiConverterString.lower(`providerId`),
+                FfiConverterString.lower(`baseUrl`),
+                FfiConverterString.lower(`model`),
+                FfiConverterOptionalString.lower(`apiKey`),
+                _status,
+            )
+        },
+    )
+
+/**
  * Build a `DeepSeek` chat-completion model.
  */
 @Throws(BlazenException::class)
@@ -11849,6 +11936,30 @@ fun `newLlamacppCompletionModel`(
     )
 
 /**
+ * Construct a [`CompletionModel`] for an LM Studio server.
+ *
+ * Convenience wrapper around [`blazen_llm::CustomProvider::lm_studio`] —
+ * targets LM Studio's local `OpenAI`-compatible endpoint on
+ * `http://{host}:{port}/v1`.
+ */
+@Throws(BlazenException::class)
+fun `newLmStudioCompletionModel`(
+    `host`: kotlin.String,
+    `port`: kotlin.UShort,
+    `model`: kotlin.String,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_lm_studio_completion_model(
+                FfiConverterString.lower(`host`),
+                FfiConverterUShort.lower(`port`),
+                FfiConverterString.lower(`model`),
+                _status,
+            )
+        },
+    )
+
+/**
  * Build a Mistral chat-completion model.
  */
 @Throws(BlazenException::class)
@@ -11893,6 +12004,31 @@ fun `newMistralrsCompletionModel`(
                 FfiConverterOptionalString.lower(`quantization`),
                 FfiConverterOptionalUInt.lower(`contextLength`),
                 FfiConverterBoolean.lower(`vision`),
+                _status,
+            )
+        },
+    )
+
+/**
+ * Construct a [`CompletionModel`] for an Ollama server.
+ *
+ * Convenience for [`new_custom_completion_model_with_openai_protocol`] with
+ * `base_url = format!("http://{host}:{port}/v1")` and no API key. Delegates
+ * to [`blazen_llm::CustomProvider::ollama`], which knows how to speak
+ * Ollama's flavour of the `OpenAI` chat-completions protocol.
+ */
+@Throws(BlazenException::class)
+fun `newOllamaCompletionModel`(
+    `host`: kotlin.String,
+    `port`: kotlin.UShort,
+    `model`: kotlin.String,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_ollama_completion_model(
+                FfiConverterString.lower(`host`),
+                FfiConverterUShort.lower(`port`),
+                FfiConverterString.lower(`model`),
                 _status,
             )
         },

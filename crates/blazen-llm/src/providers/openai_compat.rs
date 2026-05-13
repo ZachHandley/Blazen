@@ -136,6 +136,36 @@ impl OpenAiCompatProvider {
             retry_config: None,
         }
     }
+
+    /// Construct an `OpenAiCompatProvider` from a config, validating required fields.
+    ///
+    /// Uses the default HTTP client backend. This is a convenience for binding
+    /// callers that want a single fallible constructor signature.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BlazenError::Validation`] when `config.base_url` or
+    /// `config.default_model` is empty.
+    #[cfg(any(
+        all(target_arch = "wasm32", not(target_os = "wasi")),
+        feature = "reqwest",
+        target_os = "wasi"
+    ))]
+    pub fn from_config(config: OpenAiCompatConfig) -> Result<Self, BlazenError> {
+        if config.base_url.trim().is_empty() {
+            return Err(BlazenError::Validation {
+                field: Some("base_url".into()),
+                message: "OpenAiCompatProvider requires a non-empty base_url".into(),
+            });
+        }
+        if config.default_model.trim().is_empty() {
+            return Err(BlazenError::Validation {
+                field: Some("default_model".into()),
+                message: "OpenAiCompatProvider requires a non-empty default_model".into(),
+            });
+        }
+        Ok(Self::new(config))
+    }
 }
 
 impl OpenAiCompatProvider {

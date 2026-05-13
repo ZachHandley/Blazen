@@ -20,6 +20,7 @@ pub mod openai;
 pub mod openai_compat;
 pub mod openrouter;
 pub mod perplexity;
+pub(crate) mod subclass;
 pub mod together;
 pub mod transcription;
 pub mod typed_tool;

@@ -754,6 +754,59 @@ export declare class CompletionModel {
   static cohere(options?: JsProviderOptions | undefined | null): CompletionModel
   /** Create an AWS Bedrock completion model. */
   static bedrock(options: JsBedrockOptions): CompletionModel
+  /**
+   * Create a local Ollama completion model.
+   *
+   * Talks to a running Ollama server (defaults to `http://host:port/v1`).
+   * No API key is required.
+   *
+   * ```javascript
+   * const model = CompletionModel.ollama("localhost", 11434, "llama3.1:8b");
+   * ```
+   */
+  static ollama(host: string, port: number, model: string): CompletionModel
+  /**
+   * Create a local LM Studio completion model.
+   *
+   * Talks to a running LM Studio server's OpenAI-compatible endpoint.
+   *
+   * ```javascript
+   * const model = CompletionModel.lmStudio("localhost", 1234, "my-model");
+   * ```
+   */
+  static lmStudio(host: string, port: number, model: string): CompletionModel
+  /**
+   * Create a generic OpenAI-compatible completion model.
+   *
+   * Drives any OpenAI-compatible chat-completions endpoint with the
+   * supplied [`JsOpenAiCompatConfig`].
+   *
+   * ```javascript
+   * const model = CompletionModel.openaiCompat("my-host", {
+   *   providerName: "my-host",
+   *   baseUrl: "https://api.example.com/v1",
+   *   apiKey: "sk-...",
+   *   defaultModel: "my-model",
+   * });
+   * ```
+   */
+  static openaiCompat(providerId: string, config: JsOpenAiCompatConfig): CompletionModel
+  /**
+   * Create a fully user-defined completion model backed by a JavaScript
+   * host object.
+   *
+   * `hostObject` must expose Blazen capability methods (e.g.
+   * `complete`, `stream`) following the `NodeHostDispatch` mapping. The
+   * optional `providerId` is used for logging; defaults to `"custom"`.
+   *
+   * ```javascript
+   * class MyProvider {
+   *   async complete(request) { /* ... *\/ }
+   * }
+   * const model = CompletionModel.custom(new MyProvider(), "my-provider");
+   * ```
+   */
+  static custom(hostObject: object, providerId?: string | undefined | null): CompletionModel
   /** Get the model ID. */
   get modelId(): string
   /**

@@ -113,7 +113,7 @@ pub mod typed_tool;
 pub mod types;
 pub mod usage_recording;
 
-pub use providers::custom::{CustomProvider, HostDispatch};
+pub use providers::custom::{ApiProtocol, CustomProvider, HostDispatch};
 
 // Re-export primary types at crate root for ergonomic imports.
 pub use agent::{

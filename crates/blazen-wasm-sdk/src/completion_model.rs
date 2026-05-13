@@ -809,6 +809,84 @@ impl WasmCompletionModel {
 }
 
 // ---------------------------------------------------------------------------
+// CustomProvider factory functions (Ollama / LM Studio / OpenAI-compatible)
+// ---------------------------------------------------------------------------
+
+/// Construct a `CompletionModel` for an Ollama server.
+///
+/// `host` and `port` identify the Ollama HTTP endpoint (e.g. `"localhost"`,
+/// `11434`). `model` is the default model id used when a request does not
+/// override it.
+///
+/// ```js
+/// const model = createOllamaProvider('localhost', 11434, 'llama3.1');
+/// const res = await model.complete([ChatMessage.user('Hello!')]);
+/// ```
+#[wasm_bindgen(js_name = "createOllamaProvider")]
+pub fn create_ollama_provider(
+    host: &str,
+    port: u16,
+    model: &str,
+) -> Result<WasmCompletionModel, JsValue> {
+    let provider = blazen_llm::CustomProvider::ollama(host, port, model);
+    Ok(WasmCompletionModel::from_arc(Arc::new(provider)))
+}
+
+/// Construct a `CompletionModel` for an LM Studio server.
+///
+/// `host` and `port` identify the LM Studio HTTP endpoint (LM Studio's
+/// default port is `1234`). `model` is the default model id used when a
+/// request does not override it.
+///
+/// ```js
+/// const model = createLmStudioProvider('localhost', 1234, 'qwen2.5-7b-instruct');
+/// ```
+#[wasm_bindgen(js_name = "createLmStudioProvider")]
+pub fn create_lm_studio_provider(
+    host: &str,
+    port: u16,
+    model: &str,
+) -> Result<WasmCompletionModel, JsValue> {
+    let provider = blazen_llm::CustomProvider::lm_studio(host, port, model);
+    Ok(WasmCompletionModel::from_arc(Arc::new(provider)))
+}
+
+/// Construct a `CompletionModel` for an arbitrary OpenAI-compatible server.
+///
+/// - `provider_id` is the logical name used for logging and routing.
+/// - `base_url` is the full base URL of the chat-completions endpoint root
+///   (e.g. `"https://api.example.com/v1"`).
+/// - `model` is the default model id used when a request does not override it.
+/// - `api_key` is optional; pass `undefined` for servers that do not require
+///   authentication. When provided, it is sent as a `Bearer` token.
+///
+/// ```js
+/// const model = createOpenAiCompatProvider(
+///   'my-server', 'https://api.example.com/v1', 'gpt-4o-mini', process.env.MY_KEY,
+/// );
+/// ```
+#[wasm_bindgen(js_name = "createOpenAiCompatProvider")]
+pub fn create_openai_compat_provider(
+    provider_id: &str,
+    base_url: &str,
+    model: &str,
+    api_key: Option<String>,
+) -> Result<WasmCompletionModel, JsValue> {
+    let cfg = OpenAiCompatConfig {
+        provider_name: provider_id.to_owned(),
+        base_url: base_url.to_owned(),
+        api_key: api_key.unwrap_or_default(),
+        default_model: model.to_owned(),
+        auth_method: AuthMethod::Bearer,
+        extra_headers: Vec::new(),
+        query_params: Vec::new(),
+        supports_model_listing: true,
+    };
+    let provider = blazen_llm::CustomProvider::openai_compat(provider_id, cfg);
+    Ok(WasmCompletionModel::from_arc(Arc::new(provider)))
+}
+
+// ---------------------------------------------------------------------------
 // Model override wrapper
 // ---------------------------------------------------------------------------
 

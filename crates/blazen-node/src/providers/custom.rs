@@ -161,7 +161,7 @@ impl NodeHostDispatch {
     ///
     /// Missing methods are simply omitted from the table; they are
     /// reported as [`BlazenError::Unsupported`] on access.
-    fn from_host_object(host_object: &Object<'_>) -> Result<Self> {
+    pub(crate) fn from_host_object(host_object: &Object<'_>) -> Result<Self> {
         let mut methods: HashMap<&'static str, Arc<HostMethodTsfn>> = HashMap::new();
 
         for &(rust_name, js_name) in CAPABILITY_METHODS {
@@ -327,7 +327,7 @@ pub struct CustomProviderOptions {
 /// ```
 #[napi(js_name = "CustomProvider")]
 pub struct JsCustomProvider {
-    inner: Arc<CustomProvider<NodeHostDispatch>>,
+    inner: Arc<CustomProvider>,
 }
 
 #[napi]
@@ -361,10 +361,11 @@ impl JsCustomProvider {
             .and_then(|o| o.provider_id)
             .unwrap_or_else(|| "custom".to_owned());
 
-        let dispatch = NodeHostDispatch::from_host_object(&host_object)?;
+        let dispatch: Arc<dyn HostDispatch> =
+            Arc::new(NodeHostDispatch::from_host_object(&host_object)?);
 
         Ok(Self {
-            inner: Arc::new(CustomProvider::new(provider_id, dispatch)),
+            inner: Arc::new(CustomProvider::with_dispatch(provider_id, dispatch)),
         })
     }
 

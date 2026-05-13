@@ -381,6 +381,73 @@ module Blazen
       _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
     end
 
+    # CompletionModel for an Ollama server.
+    #
+    # Convenience wrapper around {openai_compat}: builds
+    # +base_url = "http://#{host}:#{port}/v1"+ with no API key.
+    #
+    # @param host [String] e.g. +"localhost"+, +"192.168.1.50"+
+    # @param port [Integer] TCP port (Ollama default 11434)
+    # @param model [String] e.g. +"llama3.1"+
+    # @return [Blazen::Llm::CompletionModel]
+    def ollama(host:, port: 11_434, model:)
+      out_model = ::FFI::MemoryPointer.new(:pointer)
+      out_err   = ::FFI::MemoryPointer.new(:pointer)
+      Blazen::FFI.with_cstring(host) do |h|
+        Blazen::FFI.with_cstring(model) do |m|
+          Blazen::FFI.blazen_completion_model_new_ollama(
+            h, port.to_i, m, out_model, out_err
+          )
+        end
+      end
+      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+    end
+
+    # CompletionModel for an LM Studio server.
+    #
+    # @param host [String]
+    # @param port [Integer] LM Studio default 1234
+    # @param model [String]
+    # @return [Blazen::Llm::CompletionModel]
+    def lm_studio(host:, port: 1234, model:)
+      out_model = ::FFI::MemoryPointer.new(:pointer)
+      out_err   = ::FFI::MemoryPointer.new(:pointer)
+      Blazen::FFI.with_cstring(host) do |h|
+        Blazen::FFI.with_cstring(model) do |m|
+          Blazen::FFI.blazen_completion_model_new_lm_studio(
+            h, port.to_i, m, out_model, out_err
+          )
+        end
+      end
+      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+    end
+
+    # Universal CompletionModel speaking the OpenAI chat-completions protocol
+    # against an arbitrary base URL. Pass +api_key: nil+ for unauthenticated
+    # local servers.
+    #
+    # @param provider_id [String]
+    # @param base_url [String]
+    # @param model [String]
+    # @param api_key [String, nil]
+    # @return [Blazen::Llm::CompletionModel]
+    def custom_with_openai_protocol(provider_id:, base_url:, model:, api_key: nil)
+      out_model = ::FFI::MemoryPointer.new(:pointer)
+      out_err   = ::FFI::MemoryPointer.new(:pointer)
+      Blazen::FFI.with_cstring(provider_id) do |p|
+        Blazen::FFI.with_cstring(base_url) do |b|
+          Blazen::FFI.with_cstring(model) do |m|
+            Blazen::FFI.with_cstring(api_key) do |k|
+              Blazen::FFI.blazen_completion_model_new_custom_with_openai_protocol(
+                p, b, m, k, out_model, out_err
+              )
+            end
+          end
+        end
+      end
+      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+    end
+
     # ------------------- Completion: local -------------------
 
     # Local mistral.rs completion model.

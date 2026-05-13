@@ -824,6 +824,160 @@ pub unsafe extern "C" fn blazen_completion_model_new_openai_compat(
     }
 }
 
+/// Constructs a `CompletionModel` for an Ollama server.
+///
+/// Convenience wrapper around the OpenAI-compatible factory with
+/// `base_url = format!("http://{host}:{port}/v1")` and no API key.
+///
+/// On success returns `0` and writes a caller-owned `*mut BlazenCompletionModel`
+/// into `*out_model`. On error returns `-1` and writes a `*mut BlazenError`
+/// into `*out_err`. Either out-parameter may be null to discard.
+///
+/// # Safety
+///
+/// `host` and `model` must each be a valid NUL-terminated UTF-8 buffer.
+/// `out_model` / `out_err` must each be null OR a valid destination for one
+/// pointer write.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_completion_model_new_ollama(
+    host: *const c_char,
+    port: u16,
+    model: *const c_char,
+    out_model: *mut *mut BlazenCompletionModel,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let Some(host) = (unsafe { cstr_to_str(host) }) else {
+        // SAFETY: caller upholds the out-param contract on `out_err`.
+        return unsafe { write_internal_error(out_err, "host must not be null") };
+    };
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let Some(model) = (unsafe { cstr_to_str(model) }) else {
+        // SAFETY: caller upholds the out-param contract on `out_err`.
+        return unsafe { write_internal_error(out_err, "model must not be null") };
+    };
+    match blazen_uniffi::providers::new_ollama_completion_model(
+        host.to_owned(),
+        port,
+        model.to_owned(),
+    ) {
+        Ok(arc) => {
+            if !out_model.is_null() {
+                // SAFETY: caller upholds the out-param contract on `out_model`.
+                unsafe {
+                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                }
+            }
+            0
+        }
+        // SAFETY: caller upholds the out-param contract on `out_err`.
+        Err(e) => unsafe { write_error(out_err, e) },
+    }
+}
+
+/// Constructs a `CompletionModel` for an LM Studio server.
+///
+/// See [`blazen_completion_model_new_ollama`] for argument and ownership
+/// conventions — identical shape.
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_completion_model_new_ollama`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_completion_model_new_lm_studio(
+    host: *const c_char,
+    port: u16,
+    model: *const c_char,
+    out_model: *mut *mut BlazenCompletionModel,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let Some(host) = (unsafe { cstr_to_str(host) }) else {
+        // SAFETY: caller upholds the out-param contract on `out_err`.
+        return unsafe { write_internal_error(out_err, "host must not be null") };
+    };
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let Some(model) = (unsafe { cstr_to_str(model) }) else {
+        // SAFETY: caller upholds the out-param contract on `out_err`.
+        return unsafe { write_internal_error(out_err, "model must not be null") };
+    };
+    match blazen_uniffi::providers::new_lm_studio_completion_model(
+        host.to_owned(),
+        port,
+        model.to_owned(),
+    ) {
+        Ok(arc) => {
+            if !out_model.is_null() {
+                // SAFETY: caller upholds the out-param contract on `out_model`.
+                unsafe {
+                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                }
+            }
+            0
+        }
+        // SAFETY: caller upholds the out-param contract on `out_err`.
+        Err(e) => unsafe { write_error(out_err, e) },
+    }
+}
+
+/// Constructs a `CompletionModel` wrapping an arbitrary OpenAI-compatible
+/// server via the universal `CustomProvider`.
+///
+/// Pass `api_key = null` if the server does not require authentication
+/// (typical for local LLM servers).
+///
+/// # Safety
+///
+/// `provider_id`, `base_url`, and `model` must each be a valid
+/// NUL-terminated UTF-8 buffer. `api_key` must be null OR a valid
+/// NUL-terminated UTF-8 buffer. `out_model` / `out_err` must each be null
+/// OR a valid destination for one pointer write.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_completion_model_new_custom_with_openai_protocol(
+    provider_id: *const c_char,
+    base_url: *const c_char,
+    model: *const c_char,
+    api_key: *const c_char,
+    out_model: *mut *mut BlazenCompletionModel,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let Some(provider_id) = (unsafe { cstr_to_str(provider_id) }) else {
+        // SAFETY: caller upholds the out-param contract on `out_err`.
+        return unsafe { write_internal_error(out_err, "provider_id must not be null") };
+    };
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let Some(base_url) = (unsafe { cstr_to_str(base_url) }) else {
+        // SAFETY: caller upholds the out-param contract on `out_err`.
+        return unsafe { write_internal_error(out_err, "base_url must not be null") };
+    };
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let Some(model) = (unsafe { cstr_to_str(model) }) else {
+        // SAFETY: caller upholds the out-param contract on `out_err`.
+        return unsafe { write_internal_error(out_err, "model must not be null") };
+    };
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let api_key = unsafe { cstr_to_opt_string(api_key) };
+    match blazen_uniffi::providers::new_custom_completion_model_with_openai_protocol(
+        provider_id.to_owned(),
+        base_url.to_owned(),
+        model.to_owned(),
+        api_key,
+    ) {
+        Ok(arc) => {
+            if !out_model.is_null() {
+                // SAFETY: caller upholds the out-param contract on `out_model`.
+                unsafe {
+                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                }
+            }
+            0
+        }
+        // SAFETY: caller upholds the out-param contract on `out_err`.
+        Err(e) => unsafe { write_error(out_err, e) },
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Local completion factories — feature-gated
 // ---------------------------------------------------------------------------

@@ -2083,6 +2083,52 @@ class CompletionModel:
                 and optional ``model``.
         """
     @staticmethod
+    def ollama(host: builtins.str, port: builtins.int, model: builtins.str) -> CompletionModel:
+        r"""
+        Build a `CompletionModel` for an Ollama server.
+        
+        Equivalent to constructing an OpenAI-compatible provider with
+        `base_url = format!("http://{host}:{port}/v1")` and no API key.
+        
+        Args:
+            host: Hostname or IP (e.g. `"localhost"`, `"192.168.1.50"`).
+            port: TCP port (Ollama default is 11434).
+            model: Model identifier loaded on the server (e.g. `"llama3.1"`).
+        """
+    @staticmethod
+    def lm_studio(host: builtins.str, port: builtins.int, model: builtins.str) -> CompletionModel:
+        r"""
+        Build a `CompletionModel` for an LM Studio server.
+        
+        Args:
+            host: Hostname or IP.
+            port: TCP port (LM Studio default is 1234).
+            model: Model identifier loaded on the server.
+        """
+    @staticmethod
+    def openai_compat(provider_id: builtins.str, config: OpenAiCompatConfig) -> CompletionModel:
+        r"""
+        Build a `CompletionModel` from an arbitrary OpenAI-compatible config.
+        
+        Use this for OpenAI-compatible servers that aren't pre-configured by
+        the `ollama` / `lm_studio` helpers (vLLM, llama.cpp's server, TGI, or
+        hosted OpenAI-compat services).
+        """
+    @staticmethod
+    def custom(host_object: typing.Any, provider_id: typing.Optional[builtins.str] = None) -> CompletionModel:
+        r"""
+        Build a `CompletionModel` backed by a Python host object that implements
+        `complete` (and optionally `stream`).
+        
+        Use this for fully-custom protocols where the framework can't help with
+        the wire format. The host object's `complete(request)` async method will
+        be invoked with a serialized `CompletionRequest`.
+        
+        Args:
+            host_object: A Python class instance with async `complete` method.
+            provider_id: Optional short identifier for logging.
+        """
+    @staticmethod
     def fal(*, options: typing.Optional[FalOptions] = None) -> CompletionModel:
         r"""
         Create a fal.ai provider.

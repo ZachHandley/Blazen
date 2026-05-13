@@ -265,7 +265,7 @@ impl HostDispatch for PyHostDispatch {
 #[gen_stub_pyclass]
 #[pyclass(name = "CustomProvider", from_py_object)]
 pub struct PyCustomProvider {
-    inner: Arc<CustomProvider<PyHostDispatch>>,
+    inner: Arc<CustomProvider>,
     /// Cached host object reference, kept so [`Self::with_retry_config`]
     /// can rebuild a fresh [`CustomProvider`] (which is not [`Clone`]).
     host: Py<PyAny>,
@@ -301,9 +301,9 @@ impl PyCustomProvider {
     fn new(host_object: Py<PyAny>, provider_id: Option<String>) -> Self {
         let id = provider_id.unwrap_or_else(|| "custom".to_owned());
         let host_clone = Python::attach(|py| host_object.clone_ref(py));
-        let dispatch = PyHostDispatch::new(host_object);
+        let dispatch: Arc<dyn HostDispatch> = Arc::new(PyHostDispatch::new(host_object));
         Self {
-            inner: Arc::new(CustomProvider::new(id.clone(), dispatch)),
+            inner: Arc::new(CustomProvider::with_dispatch(id.clone(), dispatch)),
             host: host_clone,
             provider_id_str: id,
         }
@@ -586,8 +586,8 @@ impl PyCustomProvider {
     pub fn with_retry_config(&self, config: PyRetryConfig) -> Self {
         let host_for_dispatch = Python::attach(|py| self.host.clone_ref(py));
         let host_for_self = Python::attach(|py| self.host.clone_ref(py));
-        let dispatch = PyHostDispatch::new(host_for_dispatch);
-        let inner = CustomProvider::new(self.provider_id_str.clone(), dispatch)
+        let dispatch: Arc<dyn HostDispatch> = Arc::new(PyHostDispatch::new(host_for_dispatch));
+        let inner = CustomProvider::with_dispatch(self.provider_id_str.clone(), dispatch)
             .with_retry_config(config.inner);
         Self {
             inner: Arc::new(inner),

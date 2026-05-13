@@ -3817,6 +3817,68 @@ int32_t blazen_completion_model_new_openai_compat(const char *provider_name,
                                                   BlazenError **out_err);
 
 /**
+ * Constructs a `CompletionModel` for an Ollama server.
+ *
+ * Convenience wrapper around the OpenAI-compatible factory with
+ * `base_url = format!("http://{host}:{port}/v1")` and no API key.
+ *
+ * On success returns `0` and writes a caller-owned `*mut BlazenCompletionModel`
+ * into `*out_model`. On error returns `-1` and writes a `*mut BlazenError`
+ * into `*out_err`. Either out-parameter may be null to discard.
+ *
+ * # Safety
+ *
+ * `host` and `model` must each be a valid NUL-terminated UTF-8 buffer.
+ * `out_model` / `out_err` must each be null OR a valid destination for one
+ * pointer write.
+ */
+
+int32_t blazen_completion_model_new_ollama(const char *host,
+                                           uint16_t port,
+                                           const char *model,
+                                           BlazenCompletionModel **out_model,
+                                           BlazenError **out_err);
+
+/**
+ * Constructs a `CompletionModel` for an LM Studio server.
+ *
+ * See [`blazen_completion_model_new_ollama`] for argument and ownership
+ * conventions — identical shape.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_completion_model_new_ollama`].
+ */
+
+int32_t blazen_completion_model_new_lm_studio(const char *host,
+                                              uint16_t port,
+                                              const char *model,
+                                              BlazenCompletionModel **out_model,
+                                              BlazenError **out_err);
+
+/**
+ * Constructs a `CompletionModel` wrapping an arbitrary OpenAI-compatible
+ * server via the universal `CustomProvider`.
+ *
+ * Pass `api_key = null` if the server does not require authentication
+ * (typical for local LLM servers).
+ *
+ * # Safety
+ *
+ * `provider_id`, `base_url`, and `model` must each be a valid
+ * NUL-terminated UTF-8 buffer. `api_key` must be null OR a valid
+ * NUL-terminated UTF-8 buffer. `out_model` / `out_err` must each be null
+ * OR a valid destination for one pointer write.
+ */
+
+int32_t blazen_completion_model_new_custom_with_openai_protocol(const char *provider_id,
+                                                                const char *base_url,
+                                                                const char *model,
+                                                                const char *api_key,
+                                                                BlazenCompletionModel **out_model,
+                                                                BlazenError **out_err);
+
+/**
  * Constructs a local mistral.rs chat-completion model.
  *
  * `model_id` is the `HuggingFace` repo id (e.g.

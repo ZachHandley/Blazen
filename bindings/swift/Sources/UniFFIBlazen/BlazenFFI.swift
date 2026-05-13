@@ -425,6 +425,22 @@ private let UNIFFI_CALLBACK_UNEXPECTED_ERROR: Int32 = 2
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterUInt16: FfiConverterPrimitive {
+    typealias FfiType = UInt16
+    typealias SwiftType = UInt16
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt16 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
     typealias FfiType = UInt32
     typealias SwiftType = UInt32
@@ -7381,6 +7397,27 @@ public func newCohereCompletionModel(apiKey: String, model: String?, baseUrl: St
 })
 }
 /**
+ * Construct a [`CompletionModel`] that speaks the `OpenAI` chat-completions
+ * protocol against an arbitrary base URL.
+ *
+ * This is the same wire format as
+ * [`new_openai_compat_completion_model`], but wrapped in a
+ * [`blazen_llm::CustomProvider`] for consistent ergonomics with the
+ * `new_ollama_completion_model` / `new_lm_studio_completion_model`
+ * factories. `api_key` is optional: passing `None` (or an empty `Some`)
+ * omits the `Authorization` header entirely.
+ */
+public func newCustomCompletionModelWithOpenaiProtocol(providerId: String, baseUrl: String, model: String, apiKey: String?)throws  -> CompletionModel  {
+    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_custom_completion_model_with_openai_protocol(
+        FfiConverterString.lower(providerId),
+        FfiConverterString.lower(baseUrl),
+        FfiConverterString.lower(model),
+        FfiConverterOptionString.lower(apiKey),$0
+    )
+})
+}
+/**
  * Build a `DeepSeek` chat-completion model.
  */
 public func newDeepseekCompletionModel(apiKey: String, model: String?, baseUrl: String?)throws  -> CompletionModel  {
@@ -7502,6 +7539,22 @@ public func newLlamacppCompletionModel(modelPath: String, device: String?, quant
 })
 }
 /**
+ * Construct a [`CompletionModel`] for an LM Studio server.
+ *
+ * Convenience wrapper around [`blazen_llm::CustomProvider::lm_studio`] —
+ * targets LM Studio's local `OpenAI`-compatible endpoint on
+ * `http://{host}:{port}/v1`.
+ */
+public func newLmStudioCompletionModel(host: String, port: UInt16, model: String)throws  -> CompletionModel  {
+    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_lm_studio_completion_model(
+        FfiConverterString.lower(host),
+        FfiConverterUInt16.lower(port),
+        FfiConverterString.lower(model),$0
+    )
+})
+}
+/**
  * Build a Mistral chat-completion model.
  */
 public func newMistralCompletionModel(apiKey: String, model: String?, baseUrl: String?)throws  -> CompletionModel  {
@@ -7530,6 +7583,23 @@ public func newMistralrsCompletionModel(modelId: String, device: String?, quanti
         FfiConverterOptionString.lower(quantization),
         FfiConverterOptionUInt32.lower(contextLength),
         FfiConverterBool.lower(vision),$0
+    )
+})
+}
+/**
+ * Construct a [`CompletionModel`] for an Ollama server.
+ *
+ * Convenience for [`new_custom_completion_model_with_openai_protocol`] with
+ * `base_url = format!("http://{host}:{port}/v1")` and no API key. Delegates
+ * to [`blazen_llm::CustomProvider::ollama`], which knows how to speak
+ * Ollama's flavour of the `OpenAI` chat-completions protocol.
+ */
+public func newOllamaCompletionModel(host: String, port: UInt16, model: String)throws  -> CompletionModel  {
+    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_ollama_completion_model(
+        FfiConverterString.lower(host),
+        FfiConverterUInt16.lower(port),
+        FfiConverterString.lower(model),$0
     )
 })
 }
@@ -7910,6 +7980,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_func_new_cohere_completion_model() != 22601) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_func_new_custom_completion_model_with_openai_protocol() != 35048) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_func_new_deepseek_completion_model() != 51214) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -7934,10 +8007,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_func_new_llamacpp_completion_model() != 2285) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_func_new_lm_studio_completion_model() != 33263) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_func_new_mistral_completion_model() != 22583) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_func_new_mistralrs_completion_model() != 26159) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_func_new_ollama_completion_model() != 55850) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_func_new_openai_compat_completion_model() != 63435) {

@@ -12,8 +12,10 @@ use napi_derive::napi;
 use tokio_stream::StreamExt;
 
 use blazen_llm::CompletionModel;
+use blazen_llm::HostDispatch;
 use blazen_llm::cache::{CacheConfig, CachedCompletionModel};
 use blazen_llm::fallback::FallbackModel;
+use blazen_llm::providers::openai_compat::OpenAiCompatConfig;
 use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
 use blazen_llm::types::provider_options::ProviderOptions;
 use blazen_llm::types::{ChatMessage, CompletionRequest, ToolDefinition};
@@ -22,6 +24,8 @@ use crate::error::{blazen_error_to_napi, llm_error_to_napi};
 use crate::generated::{
     JsAzureOptions, JsBedrockOptions, JsCacheConfig, JsFalOptions, JsProviderOptions, JsRetryConfig,
 };
+use crate::providers::custom::NodeHostDispatch;
+use crate::providers::openai_compat::JsOpenAiCompatConfig;
 use crate::types::{
     JsChatMessage, JsCompletionOptions, JsCompletionResponse, JsStreamChunk, build_response,
     build_stream_chunk,
@@ -434,6 +438,91 @@ impl JsCompletionModel {
                 blazen_llm::providers::bedrock::BedrockProvider::from_options(options.into())
                     .map_err(blazen_error_to_napi)?,
             )),
+            local_model: None,
+            config: None,
+        })
+    }
+
+    /// Create a local Ollama completion model.
+    ///
+    /// Talks to a running Ollama server (defaults to `http://host:port/v1`).
+    /// No API key is required.
+    ///
+    /// ```javascript
+    /// const model = CompletionModel.ollama("localhost", 11434, "llama3.1:8b");
+    /// ```
+    #[napi(factory)]
+    pub fn ollama(host: String, port: u16, model: String) -> Result<Self> {
+        let provider = blazen_llm::CustomProvider::ollama(host, port, model);
+        Ok(Self {
+            inner: Some(Arc::new(provider)),
+            local_model: None,
+            config: None,
+        })
+    }
+
+    /// Create a local LM Studio completion model.
+    ///
+    /// Talks to a running LM Studio server's OpenAI-compatible endpoint.
+    ///
+    /// ```javascript
+    /// const model = CompletionModel.lmStudio("localhost", 1234, "my-model");
+    /// ```
+    #[napi(factory, js_name = "lmStudio")]
+    pub fn lm_studio(host: String, port: u16, model: String) -> Result<Self> {
+        let provider = blazen_llm::CustomProvider::lm_studio(host, port, model);
+        Ok(Self {
+            inner: Some(Arc::new(provider)),
+            local_model: None,
+            config: None,
+        })
+    }
+
+    /// Create a generic OpenAI-compatible completion model.
+    ///
+    /// Drives any OpenAI-compatible chat-completions endpoint with the
+    /// supplied [`JsOpenAiCompatConfig`].
+    ///
+    /// ```javascript
+    /// const model = CompletionModel.openaiCompat("my-host", {
+    ///   providerName: "my-host",
+    ///   baseUrl: "https://api.example.com/v1",
+    ///   apiKey: "sk-...",
+    ///   defaultModel: "my-model",
+    /// });
+    /// ```
+    #[napi(factory, js_name = "openaiCompat")]
+    pub fn openai_compat(provider_id: String, config: JsOpenAiCompatConfig) -> Result<Self> {
+        let cfg: OpenAiCompatConfig = config.into();
+        let provider = blazen_llm::CustomProvider::openai_compat(provider_id, cfg);
+        Ok(Self {
+            inner: Some(Arc::new(provider)),
+            local_model: None,
+            config: None,
+        })
+    }
+
+    /// Create a fully user-defined completion model backed by a JavaScript
+    /// host object.
+    ///
+    /// `hostObject` must expose Blazen capability methods (e.g.
+    /// `complete`, `stream`) following the `NodeHostDispatch` mapping. The
+    /// optional `providerId` is used for logging; defaults to `"custom"`.
+    ///
+    /// ```javascript
+    /// class MyProvider {
+    ///   async complete(request) { /* ... */ }
+    /// }
+    /// const model = CompletionModel.custom(new MyProvider(), "my-provider");
+    /// ```
+    #[napi(factory)]
+    pub fn custom(host_object: Object<'_>, provider_id: Option<String>) -> Result<Self> {
+        let id = provider_id.unwrap_or_else(|| "custom".to_owned());
+        let dispatch: Arc<dyn HostDispatch> =
+            Arc::new(NodeHostDispatch::from_host_object(&host_object)?);
+        let provider = blazen_llm::CustomProvider::with_dispatch(id, dispatch);
+        Ok(Self {
+            inner: Some(Arc::new(provider)),
             local_model: None,
             config: None,
         })
@@ -860,4 +949,36 @@ impl JsCompletionModel {
             config: None,
         })
     }
+}
+
+// ---------------------------------------------------------------------------
+// arc_from_js_model — bridge for run_agent and friends
+// ---------------------------------------------------------------------------
+
+/// Extract an `Arc<dyn CompletionModel>` from a [`JsCompletionModel`].
+///
+/// - If the model carries a Rust-side `inner` (built via one of the
+///   factory constructors), the inner `Arc` is cloned and returned.
+/// - Otherwise the model was constructed as a JavaScript subclass via
+///   `new CompletionModel(config)` / `super(config)` — the
+///   subclass-as-CompletionModel path is not wired through to the Rust
+///   side here because the JavaScript instance handle is not retained on
+///   `JsCompletionModel`. Callers should use the
+///   [`JsCompletionModel::custom`] factory which accepts a host object
+///   directly.
+///
+/// The `JsSubclassCompletionModel` type exists in
+/// [`crate::providers::subclass`] for future wiring once `runAgent` is
+/// updated to accept an `Object` parameter, but is unreachable from this
+/// function today.
+pub(crate) fn arc_from_js_model(
+    model: &JsCompletionModel,
+) -> napi::Result<Arc<dyn CompletionModel>> {
+    if let Some(inner) = &model.inner {
+        return Ok(Arc::clone(inner));
+    }
+    Err(napi::Error::from_reason(
+        "CompletionModel subclass support in Node is not yet implemented. \
+         Use CompletionModel.custom(hostObject) factory instead.",
+    ))
 }

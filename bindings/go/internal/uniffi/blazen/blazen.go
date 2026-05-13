@@ -531,6 +531,15 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_func_new_custom_completion_model_with_openai_protocol()
+		})
+		if checksum != 35048 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_func_new_custom_completion_model_with_openai_protocol: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_func_new_deepseek_completion_model()
 		})
 		if checksum != 51214 {
@@ -603,6 +612,15 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_func_new_lm_studio_completion_model()
+		})
+		if checksum != 33263 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_func_new_lm_studio_completion_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_func_new_mistral_completion_model()
 		})
 		if checksum != 22583 {
@@ -617,6 +635,15 @@ func uniffiCheckChecksums() {
 		if checksum != 26159 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_func_new_mistralrs_completion_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_func_new_ollama_completion_model()
+		})
+		if checksum != 55850 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_func_new_ollama_completion_model: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -1268,6 +1295,30 @@ func uniffiCheckChecksums() {
 		}
 	}
 }
+
+type FfiConverterUint16 struct{}
+
+var FfiConverterUint16INSTANCE = FfiConverterUint16{}
+
+func (FfiConverterUint16) Lower(value uint16) C.uint16_t {
+	return C.uint16_t(value)
+}
+
+func (FfiConverterUint16) Write(writer io.Writer, value uint16) {
+	writeUint16(writer, value)
+}
+
+func (FfiConverterUint16) Lift(value C.uint16_t) uint16 {
+	return uint16(value)
+}
+
+func (FfiConverterUint16) Read(reader io.Reader) uint16 {
+	return readUint16(reader)
+}
+
+type FfiDestroyerUint16 struct{}
+
+func (FfiDestroyerUint16) Destroy(_ uint16) {}
 
 type FfiConverterUint32 struct{}
 
@@ -8464,6 +8515,27 @@ func NewCohereCompletionModel(apiKey string, model *string, baseUrl *string) (*C
 	}
 }
 
+// Construct a [`CompletionModel`] that speaks the `OpenAI` chat-completions
+// protocol against an arbitrary base URL.
+//
+// This is the same wire format as
+// [`new_openai_compat_completion_model`], but wrapped in a
+// [`blazen_llm::CustomProvider`] for consistent ergonomics with the
+// `new_ollama_completion_model` / `new_lm_studio_completion_model`
+// factories. `api_key` is optional: passing `None` (or an empty `Some`)
+// omits the `Authorization` header entirely.
+func NewCustomCompletionModelWithOpenaiProtocol(providerId string, baseUrl string, model string, apiKey *string) (*CompletionModel, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_func_new_custom_completion_model_with_openai_protocol(FfiConverterStringINSTANCE.Lower(providerId), FfiConverterStringINSTANCE.Lower(baseUrl), FfiConverterStringINSTANCE.Lower(model), FfiConverterOptionalStringINSTANCE.Lower(apiKey), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *CompletionModel
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterCompletionModelINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
 // Build a `DeepSeek` chat-completion model.
 func NewDeepseekCompletionModel(apiKey string, model *string, baseUrl *string) (*CompletionModel, error) {
 	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
@@ -8588,6 +8660,23 @@ func NewLlamacppCompletionModel(modelPath string, device *string, quantization *
 	}
 }
 
+// Construct a [`CompletionModel`] for an LM Studio server.
+//
+// Convenience wrapper around [`blazen_llm::CustomProvider::lm_studio`] —
+// targets LM Studio's local `OpenAI`-compatible endpoint on
+// `http://{host}:{port}/v1`.
+func NewLmStudioCompletionModel(host string, port uint16, model string) (*CompletionModel, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_func_new_lm_studio_completion_model(FfiConverterStringINSTANCE.Lower(host), FfiConverterUint16INSTANCE.Lower(port), FfiConverterStringINSTANCE.Lower(model), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *CompletionModel
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterCompletionModelINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
 // Build a Mistral chat-completion model.
 func NewMistralCompletionModel(apiKey string, model *string, baseUrl *string) (*CompletionModel, error) {
 	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
@@ -8611,6 +8700,24 @@ func NewMistralCompletionModel(apiKey string, model *string, baseUrl *string) (*
 func NewMistralrsCompletionModel(modelId string, device *string, quantization *string, contextLength *uint32, vision bool) (*CompletionModel, error) {
 	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
 		return C.uniffi_blazen_uniffi_fn_func_new_mistralrs_completion_model(FfiConverterStringINSTANCE.Lower(modelId), FfiConverterOptionalStringINSTANCE.Lower(device), FfiConverterOptionalStringINSTANCE.Lower(quantization), FfiConverterOptionalUint32INSTANCE.Lower(contextLength), FfiConverterBoolINSTANCE.Lower(vision), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *CompletionModel
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterCompletionModelINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Construct a [`CompletionModel`] for an Ollama server.
+//
+// Convenience for [`new_custom_completion_model_with_openai_protocol`] with
+// `base_url = format!("http://{host}:{port}/v1")` and no API key. Delegates
+// to [`blazen_llm::CustomProvider::ollama`], which knows how to speak
+// Ollama's flavour of the `OpenAI` chat-completions protocol.
+func NewOllamaCompletionModel(host string, port uint16, model string) (*CompletionModel, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_func_new_ollama_completion_model(FfiConverterStringINSTANCE.Lower(host), FfiConverterUint16INSTANCE.Lower(port), FfiConverterStringINSTANCE.Lower(model), _uniffiStatus)
 	})
 	if _uniffiErr != nil {
 		var _uniffiDefaultValue *CompletionModel

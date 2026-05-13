@@ -386,11 +386,7 @@ pub async fn run_agent(
         config = config.with_tool_concurrency(tc as usize);
     }
 
-    let inner = model.inner.as_ref().ok_or_else(|| {
-        napi::Error::from_reason(
-            "runAgent() is not supported on subclassed CompletionModel instances",
-        )
-    })?;
+    let inner = crate::providers::completion_model::arc_from_js_model(model)?;
     let result = rust_run_agent(inner.as_ref(), rust_messages, config)
         .await
         .map_err(llm_error_to_napi)?;
