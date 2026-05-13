@@ -320,6 +320,217 @@ jobs:
           owner: BlackLeafDigital
           auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
+  test-go:
+    name: Test Go binding
+    runs-on: ubuntu-latest
+    needs: [detect, lint]
+    if: needs.detect.outputs.web_only != 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ github.sha }}
+          step: ci-test-go
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          sccache: true
+          sccache-s3-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-s3-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-s3-region: ${{ secrets.S3_REGION }}
+          sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/blazen-go
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Build blazen-uniffi (release)
+        if: steps.check.outputs.completed != 'true'
+        run: cargo build -p blazen-uniffi --release
+
+      - name: Stage static lib for cgo
+        if: steps.check.outputs.completed != 'true'
+        # bindings/go/cgo_link.go expects libblazen_uniffi.a under
+        # internal/clib/linux_amd64/ on Linux x86_64. Stage the freshly-built
+        # archive there so `go build` finds it at cgo link time.
+        run: |
+          mkdir -p bindings/go/internal/clib/linux_amd64
+          cp target/release/libblazen_uniffi.a bindings/go/internal/clib/linux_amd64/
+
+      - name: Set up Go
+        if: steps.check.outputs.completed != 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: go vet / build / test
+        if: steps.check.outputs.completed != 'true'
+        working-directory: bindings/go
+        run: |
+          go vet ./...
+          go build ./...
+          go test ./...
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ github.sha }}
+          step: ci-test-go
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+  test-swift:
+    name: Test Swift binding
+    runs-on: ubuntu-latest
+    # swiftlang/swift:5.10-jammy ships a Linux Swift toolchain. macOS-only
+    # XCFramework builds live in build-artifacts.yaml on a macos-latest
+    # runner; the Linux container here exercises the SwiftPM build + tests
+    # against the host-built libblazen_uniffi.so.
+    container: swiftlang/swift:5.10-jammy
+    needs: [detect, lint]
+    if: needs.detect.outputs.web_only != 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ github.sha }}
+          step: ci-test-swift
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          sccache: true
+          sccache-s3-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-s3-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-s3-region: ${{ secrets.S3_REGION }}
+          sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/blazen-swift
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Build blazen-uniffi (release)
+        if: steps.check.outputs.completed != 'true'
+        # Package.swift's UniFFIBlazen target uses -L../../target/release on
+        # Linux so a host build of libblazen_uniffi.so is enough for swift
+        # build + swift test in this container.
+        run: cargo build -p blazen-uniffi --release
+
+      - name: swift build / swift test
+        if: steps.check.outputs.completed != 'true'
+        working-directory: bindings/swift
+        run: |
+          # Ensure the dynamic loader can locate libblazen_uniffi.so at test
+          # runtime — SwiftPM emits -L for the linker but doesn't add an
+          # rpath, so the runtime lookup needs LD_LIBRARY_PATH.
+          export LD_LIBRARY_PATH="${GITHUB_WORKSPACE}/target/release:${LD_LIBRARY_PATH:-}"
+          swift build
+          swift test
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ github.sha }}
+          step: ci-test-swift
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+  test-kotlin:
+    name: Test Kotlin binding
+    runs-on: ubuntu-latest
+    needs: [detect, lint]
+    if: needs.detect.outputs.web_only != 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ github.sha }}
+          step: ci-test-kotlin
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          sccache: true
+          sccache-s3-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-s3-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-s3-region: ${{ secrets.S3_REGION }}
+          sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/blazen-kotlin
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Build blazen-uniffi (release)
+        if: steps.check.outputs.completed != 'true'
+        run: cargo build -p blazen-uniffi --release
+
+      - name: Stage shared lib for JNA
+        if: steps.check.outputs.completed != 'true'
+        # JNA looks for libraries on the resources path under a platform tag.
+        # On Linux x86_64 that's linux-x86-64; the file must be named
+        # libblazen_uniffi.so (unix prefix + .so suffix).
+        run: |
+          mkdir -p bindings/kotlin/src/main/resources/linux-x86-64
+          cp target/release/libblazen_uniffi.so bindings/kotlin/src/main/resources/linux-x86-64/
+
+      - name: Set up Java
+        if: steps.check.outputs.completed != 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Gradle
+        if: steps.check.outputs.completed != 'true'
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: gradle build + test
+        if: steps.check.outputs.completed != 'true'
+        working-directory: bindings/kotlin
+        run: gradle build test --no-daemon
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ github.sha }}
+          step: ci-test-kotlin
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
   audit-bindings:
     name: Audit Binding Parity
     runs-on: ubuntu-latest
@@ -405,6 +616,34 @@ jobs:
       - name: Run binding-parity audit
         if: steps.check.outputs.completed != 'true'
         run: uv run --no-project python3 tools/audit_bindings.py
+
+      - name: Install uniffi-bindgen-go (for regen drift check)
+        if: steps.check.outputs.completed != 'true'
+        # uniffi-bindgen-go is pinned to uniffi-rs 0.31 to match the in-tree
+        # blazen-uniffi runtime. A mismatch produces incompatible scaffolding
+        # with cryptic link errors.
+        run: cargo install uniffi-bindgen-go --tag v0.31.0+v0.31.0 --git https://github.com/NordSecurity/uniffi-bindgen-go
+
+      - name: Build local uniffi-bindgen CLI + native lib
+        if: steps.check.outputs.completed != 'true'
+        # The script prefers target/release/uniffi-bindgen (built from
+        # blazen-uniffi's bin/uniffi-bindgen.rs) so the generator version is
+        # guaranteed to match the runtime scaffolding in the cdylib. The
+        # second build produces the rlib that the bindgens read for metadata.
+        run: |
+          cargo build -p blazen-uniffi --release --bin uniffi-bindgen
+          cargo build -p blazen-uniffi --release
+
+      - name: Regenerate Go/Swift/Kotlin/Ruby bindings + drift check
+        if: steps.check.outputs.completed != 'true'
+        # Catches drift in the four UniFFI-driven bindings the same way the
+        # earlier steps catch drift in blazen.pyi / index.d.ts / wasm pkg.
+        run: |
+          ./scripts/regen-bindings.sh
+          git diff --exit-code bindings/ || {
+            echo "::error::bindings/ is stale; regenerate via './scripts/regen-bindings.sh' and commit the result."
+            exit 1
+          }
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
@@ -617,7 +856,7 @@ jobs:
   auto-tag:
     name: Auto Tag
     runs-on: ubuntu-latest
-    needs: [detect, test, test-python, test-node, test-wasm, test-smoke-compute, audit-bindings]
+    needs: [detect, test, test-python, test-node, test-wasm, test-smoke-compute, test-go, test-swift, test-kotlin, audit-bindings]
     if: needs.detect.outputs.web_only != 'true' && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')
     steps:
       - name: Checkout

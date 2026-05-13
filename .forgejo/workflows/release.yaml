@@ -8,6 +8,16 @@ on:
         required: false
         type: string
         default: ''
+  push:
+    # Subdirectory-tagged binding releases. Go modules use `bindings/go/vX.Y.Z`
+    # as the canonical tag form (Go's module proxy resolves this tag when
+    # users `go get github.com/.../bindings/go@vX.Y.Z`). Swift releases use
+    # the same subdirectory pattern for parity. Tag pushes here only run
+    # the binding-specific release-go / release-swift jobs; the full
+    # crate/wheel/npm publish flow continues to fire from workflow_dispatch.
+    tags:
+      - 'bindings/go/v*'
+      - 'bindings/swift/v*'
 
 concurrency:
   group: release-${{ github.ref }}
@@ -21,6 +31,10 @@ jobs:
   version:
     name: Resolve Version
     runs-on: ubuntu-latest
+    # workflow_dispatch only — binding tag pushes (bindings/go/v*,
+    # bindings/swift/v*) flow into release-go / release-swift below and
+    # must NOT trigger the main Rust/Python/Node publish pipeline.
+    if: github.event_name == 'workflow_dispatch'
     outputs:
       version: ${{ steps.pick.outputs.version }}
     steps:
@@ -523,10 +537,259 @@ jobs:
           owner: BlackLeafDigital
           auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
+  release-go:
+    name: Release Go binding
+    runs-on: ubuntu-latest
+    # Fires only on a `bindings/go/v*` tag push. Go modules ship source, so
+    # no compiled artefact needs to be uploaded — the publish mechanism is
+    # the tag itself, which Go's module proxy resolves on first
+    # `go get github.com/zachhandley/Blazen/bindings/go@vX.Y.Z`. We still
+    # cut a Forgejo release with auto-generated notes so users can find
+    # the version-to-commit mapping in the UI.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/bindings/go/v')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve binding version from tag
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF#refs/tags/}"
+          # TAG is e.g. bindings/go/v0.5.1
+          VERSION="${TAG#bindings/go/}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Resolved Go binding tag: ${TAG} (version=${VERSION})"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Sanity-check go mod download
+        shell: bash
+        # Verifies the tag is publicly resolvable as a Go module by the
+        # proxy. The proxy fetches the tag's tree synchronously on first
+        # request, so this both validates correctness and primes the cache.
+        # GOPROXY=direct skips the public proxy on Forgejo's outbound
+        # network (which may be restricted) and fetches via VCS directly.
+        env:
+          GOPROXY: direct
+          GOFLAGS: -mod=mod
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.tag.outputs.version }}"
+          MODULE="github.com/zachhandley/Blazen/bindings/go"
+          SCRATCH="${GITHUB_WORKSPACE}/target/scratch/go-modtest"
+          mkdir -p "${SCRATCH}"
+          (
+            cd "${SCRATCH}"
+            go mod init modtest
+            go mod download "${MODULE}@${VERSION}" || {
+              echo "::warning::go mod download ${MODULE}@${VERSION} failed; the tag may need a few minutes to propagate. Continuing — release notes will still be cut."
+            }
+          )
+          rm -rf "${SCRATCH}"
+
+      - name: Install git-cliff
+        run: |
+          GC_VERSION="2.7.0"
+          curl -fsSL "https://github.com/orhun/git-cliff/releases/download/v${GC_VERSION}/git-cliff-${GC_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar xz
+          sudo mv "git-cliff-${GC_VERSION}/git-cliff" /usr/local/bin/
+
+      - name: Generate release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.tag }}"
+          # Diff from previous bindings/go tag if one exists; else fall back
+          # to the full history. --include-path scopes commits to the Go
+          # binding subtree so the notes don't list unrelated workspace work.
+          PREV_TAG=$(git tag --list 'bindings/go/v*' --sort=-v:refname | sed -n '2p' || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            git-cliff "${PREV_TAG}..HEAD" --tag "${TAG}" --include-path 'bindings/go/**' -o GO_RELEASE_NOTES.md || \
+              git-cliff "${PREV_TAG}..HEAD" --tag "${TAG}" -o GO_RELEASE_NOTES.md
+          else
+            git-cliff --tag "${TAG}" --include-path 'bindings/go/**' -o GO_RELEASE_NOTES.md || \
+              git-cliff --tag "${TAG}" -o GO_RELEASE_NOTES.md
+          fi
+
+          cat > GO_NOTES_FINAL.md << NOTES_EOF
+          $(cat GO_RELEASE_NOTES.md)
+
+          ## Installation
+
+          \`\`\`bash
+          go get github.com/zachhandley/Blazen/bindings/go@${{ steps.tag.outputs.version }}
+          \`\`\`
+
+          Go modules ship as source; there is no compiled artefact attached to
+          this release. The native \`libblazen_uniffi\` library is staged under
+          \`bindings/go/internal/clib/<GOOS>_<GOARCH>/\` and is built by
+          consumers via \`scripts/build-uniffi-lib.sh\` (see binding README).
+          NOTES_EOF
+
+      - name: Create Forgejo release for Go tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.tag }}"
+          BODY=$(jq -Rs . < GO_NOTES_FINAL.md)
+          curl --fail -sS -X POST \
+            -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/releases" \
+            -d "{
+              \"tag_name\": \"${TAG}\",
+              \"name\": \"Blazen Go binding ${TAG}\",
+              \"body\": ${BODY},
+              \"draft\": false,
+              \"prerelease\": false
+            }" || {
+              echo "::warning::Release POST failed; release may already exist at this tag (idempotent)."
+            }
+
+  release-swift:
+    name: Release Swift binding
+    runs-on: ubuntu-latest
+    # Fires only on a `bindings/swift/v*` tag push. The XCFramework is built
+    # by build-artifacts.yaml's build-swift-xcframework job on macOS and
+    # uploaded to the Forgejo generic blazen-build package. We download it
+    # here and attach to the release as an asset. If the XCFramework is
+    # missing (no macOS runner available at build time) the release is
+    # still cut, with a warning in the notes and no binary asset.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/bindings/swift/v')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve binding version from tag
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#bindings/swift/}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Download XCFramework from Forgejo generic package
+        id: xcf
+        shell: bash
+        # The XCFramework lives under the BlazenFFI-xcframework artefact
+        # produced by build-artifacts.yaml#build-swift-xcframework. Look it
+        # up by the binding version (which the build pipeline used as the
+        # generic-package version). If the runner that produced it never
+        # ran (no macOS available) the fetch returns non-200 and we
+        # continue without an asset.
+        run: |
+          set +e
+          VERSION="${{ steps.tag.outputs.version }}"
+          AUTH="zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}"
+          URL="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/BlazenFFI.xcframework.zip"
+          CODE=$(curl --silent --output BlazenFFI.xcframework.zip --write-out '%{http_code}' -u "$AUTH" "$URL")
+          if [ "$CODE" = "200" ]; then
+            echo "have_xcf=true" >> "$GITHUB_OUTPUT"
+            ls -lh BlazenFFI.xcframework.zip
+          else
+            echo "have_xcf=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::XCFramework not available for v${VERSION} (HTTP ${CODE}). Release will be cut without a binary asset."
+            rm -f BlazenFFI.xcframework.zip
+          fi
+
+      - name: Install git-cliff
+        run: |
+          GC_VERSION="2.7.0"
+          curl -fsSL "https://github.com/orhun/git-cliff/releases/download/v${GC_VERSION}/git-cliff-${GC_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar xz
+          sudo mv "git-cliff-${GC_VERSION}/git-cliff" /usr/local/bin/
+
+      - name: Generate release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.tag }}"
+          PREV_TAG=$(git tag --list 'bindings/swift/v*' --sort=-v:refname | sed -n '2p' || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            git-cliff "${PREV_TAG}..HEAD" --tag "${TAG}" --include-path 'bindings/swift/**' -o SWIFT_RELEASE_NOTES.md || \
+              git-cliff "${PREV_TAG}..HEAD" --tag "${TAG}" -o SWIFT_RELEASE_NOTES.md
+          else
+            git-cliff --tag "${TAG}" --include-path 'bindings/swift/**' -o SWIFT_RELEASE_NOTES.md || \
+              git-cliff --tag "${TAG}" -o SWIFT_RELEASE_NOTES.md
+          fi
+
+          cat > SWIFT_NOTES_FINAL.md << NOTES_EOF
+          $(cat SWIFT_RELEASE_NOTES.md)
+
+          ## Installation
+
+          \`\`\`swift
+          // Package.swift dependency
+          .package(url: "https://github.com/zachhandley/Blazen", from: "${{ steps.tag.outputs.version }}")
+          \`\`\`
+
+          The \`BlazenFFI.xcframework.zip\` asset (when present) bundles the
+          UniFFI static library as a universal macOS XCFramework. SwiftPM
+          consumers resolve \`BlazenSwift\` directly from the repo subtree
+          at \`bindings/swift/\`.
+          NOTES_EOF
+
+      - name: Create Forgejo release for Swift tag
+        id: rel
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.tag }}"
+          BODY=$(jq -Rs . < SWIFT_NOTES_FINAL.md)
+          RESP=$(curl -sS -w '\n%{http_code}' -X POST \
+            -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/releases" \
+            -d "{
+              \"tag_name\": \"${TAG}\",
+              \"name\": \"Blazen Swift binding ${TAG}\",
+              \"body\": ${BODY},
+              \"draft\": false,
+              \"prerelease\": false
+            }")
+          CODE=$(printf '%s' "$RESP" | tail -n1)
+          BODY_JSON=$(printf '%s' "$RESP" | sed '$d')
+          if [ "$CODE" = "201" ] || [ "$CODE" = "200" ]; then
+            RELEASE_ID=$(printf '%s' "$BODY_JSON" | jq -r '.id')
+          else
+            # Idempotent: if the release already exists, look it up by tag.
+            echo "::warning::Release POST returned ${CODE}; fetching existing release by tag"
+            RELEASE_ID=$(curl --fail -sS \
+              -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+              "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/releases/tags/${TAG}" \
+              | jq -r '.id')
+          fi
+          echo "release_id=${RELEASE_ID}" >> "$GITHUB_OUTPUT"
+
+      - name: Attach XCFramework to release
+        if: steps.xcf.outputs.have_xcf == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          RELEASE_ID="${{ steps.rel.outputs.release_id }}"
+          curl --fail -sS -X POST \
+            -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+            -H "Content-Type: application/octet-stream" \
+            -F "attachment=@BlazenFFI.xcframework.zip" \
+            "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/releases/${RELEASE_ID}/assets?name=BlazenFFI.xcframework.zip"
+
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
     needs: [version, publish-rust, publish-python, publish-node, publish-workers-alias, publish-wasm]
+    # workflow_dispatch only — binding tag pushes flow through release-go /
+    # release-swift, which cut their own subtree-scoped releases.
+    if: github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
