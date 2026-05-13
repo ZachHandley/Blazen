@@ -71,6 +71,31 @@ npm install @blazen-dev/wasi
 
 Most users want `blazen` (Node + auto-wasi resolution) or `@blazen-dev/wasm` (browser, Deno, ESM-only hosts). Pin `@blazen-dev/wasi` directly only if you need the wasi binary without the Node umbrella's resolution logic.
 
+**Go** (requires Go 1.22+, with cgo enabled):
+
+```bash
+go get github.com/zachhandley/Blazen/bindings/go@latest
+```
+
+Ships a prebuilt static `libblazen_uniffi.a` under `internal/clib/<GOOS>_<GOARCH>/`. Linux amd64 and arm64 are shipped today; Windows and macOS land via CI release builds.
+
+**Swift** (Linux 5.10+, macOS 13+):
+
+```swift
+// Package.swift dependencies
+.package(url: "https://github.com/zachhandley/Blazen", from: "0.1.0")
+// or pin via the bindings/swift/v* tag.
+```
+
+**Kotlin / JVM** (Java 17+):
+
+```kotlin
+// build.gradle.kts — Maven Central publishing pending; currently consume via git
+implementation("dev.zorpx.blazen:blazen-kotlin:0.1.0")
+```
+
+**Ruby** — in active development; will ship after the Go/Swift/Kotlin trio stabilises.
+
 ## Quick Start
 
 ### Rust

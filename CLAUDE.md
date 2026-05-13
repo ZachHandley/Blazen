@@ -1,6 +1,6 @@
 # Blazen
 
-Rust workspace with 14 crates (LLM orchestration framework) + Python (PyO3) and Node.js (napi-rs) bindings.
+Rust workspace with 14 crates (LLM orchestration framework) + Python (PyO3), Node.js (napi-rs), WASM (wasm-bindgen), and UniFFI bindings for Go, Swift, and Kotlin. Ruby UniFFI binding is in progress via a cbindgen-generated C ABI (see `bindings/ruby/`).
 
 ## Setup
 
@@ -44,9 +44,26 @@ wasm-pack build crates/blazen-wasm-sdk --target web --out-dir pkg --release
 
 CI's `audit-bindings` job runs all three regens and fails on drift, so committing stale typegens will block merges.
 
+After any change to `crates/blazen-uniffi/` (the Go/Swift/Kotlin/Ruby UniFFI surface), regenerate the foreign-language bindings:
+
+```bash
+# Rebuild the release rlib (carries metadata for library-mode bindgen)
+cargo build -p blazen-uniffi --release
+# Regenerate all four FFI files (Go via uniffi-bindgen-go, Swift/Kotlin/Ruby via local uniffi-bindgen)
+./scripts/regen-bindings.sh
+```
+
+The same `audit-bindings` job runs this script and fails on drift.
+
+To rebuild the prebuilt native libs that the Go/Kotlin/Ruby bindings link against (linux amd64/arm64 today; macOS and Windows handled by CI release runs):
+
+```bash
+./scripts/build-uniffi-lib.sh
+```
+
 ## Test
 
-The Rust workspace is only one of four test surfaces. ALL FOUR must pass before pushing:
+The Rust workspace is only one of seven test surfaces. ALL SEVEN must pass before pushing:
 
 ```bash
 # 1. Rust workspace (922+ tests in 14 crates)
@@ -73,6 +90,20 @@ pnpm exec ava --timeout 30s
 # Headless browser run; firefox or chrome must be installed.
 wasm-pack build crates/blazen-wasm-sdk --target web --out-dir pkg --release
 wasm-pack test crates/blazen-wasm-sdk --headless --firefox     # or --chrome
+
+# 5. Go binding (bindings/go) — requires cgo (gcc/clang) on host
+# Rebuild the static lib and copy into internal/clib/ before testing on a fresh
+# checkout. ./scripts/build-uniffi-lib.sh does both.
+./scripts/build-uniffi-lib.sh linux_amd64
+cd bindings/go && go vet ./... && go build ./... && go test ./...
+
+# 6. Swift binding (bindings/swift) — requires Swift 5.10+ (swiftlang/swift container on Linux)
+cd bindings/swift && swift build && swift test
+
+# 7. Kotlin binding (bindings/kotlin) — requires JDK 17+ and Gradle
+# Ensure the shared lib is at src/main/resources/<jna-platform>/ first.
+./scripts/build-uniffi-lib.sh linux_amd64
+cd bindings/kotlin && gradle test --no-daemon
 ```
 
 ALWAYS use `uv run --no-sync` (NOT plain `uv run`) for Python after `maturin develop` — plain `uv run` re-syncs the venv and replaces the freshly-built wheel with a stale cache, silently undoing your build.
