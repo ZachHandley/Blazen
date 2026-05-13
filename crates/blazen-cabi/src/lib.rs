@@ -29,10 +29,13 @@ pub mod persist_records;
 pub mod pipeline;
 pub mod providers;
 pub mod runtime;
+pub mod step_handler;
+pub mod stream_sink;
 pub mod streaming_records;
 pub mod string;
 pub mod telemetry;
 pub mod telemetry_records;
+pub mod tool_handler;
 pub mod workflow;
 pub mod workflow_records;
 

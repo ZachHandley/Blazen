@@ -418,6 +418,179 @@ typedef struct BlazenWorkflowHistoryEntry BlazenWorkflowHistoryEntry;
  */
 typedef struct BlazenWorkflowResult BlazenWorkflowResult;
 
+/**
+ * C-side vtable for a foreign `StepHandler` implementation.
+ *
+ * All three fields are required (no nullable function pointers). The vtable
+ * is consumed by [`blazen_workflow_builder_add_step`] which takes ownership
+ * of `user_data` — the foreign side must NOT free `user_data` after the
+ * add-step call returns; the cabi will invoke `drop_user_data` exactly once
+ * when the workflow drops the step handler.
+ *
+ * # Thread safety
+ *
+ * The foreign side guarantees that `user_data` and the function pointers are
+ * safe to invoke from any thread (the cabi may invoke `invoke` on a Tokio
+ * blocking-pool thread, which differs from the thread that created the
+ * vtable). In Ruby this works because the `ffi` gem reacquires the GVL
+ * automatically for declared `FFI::Callback` signatures; Dart's
+ * `NativeCallable.listener` marshals back to the isolate event loop;
+ * native hosts must opt into thread-safety in their own runtime model.
+ */
+typedef struct {
+    /**
+     * Opaque foreign-side context handed back to each function pointer.
+     * Owned by this vtable struct (released via `drop_user_data` on drop).
+     */
+    void *user_data;
+    /**
+     * Called exactly once when the wrapping `CStepHandler` drops.
+     * Implementations should reclaim and release `user_data`.
+     */
+    void (*drop_user_data)(void *user_data);
+    /**
+     * Synchronous invocation of the step.
+     *
+     * Arguments:
+     * - `user_data`: the vtable's `user_data` pointer (copied in for convenience)
+     * - `event`: caller-owned `*mut BlazenEvent` — the callback OWNS this and
+     *   must free it via `blazen_event_free` before returning, OR consume it
+     *   into a derivative structure
+     * - `out_output`: writable slot for the resulting `*mut BlazenStepOutput`
+     * - `out_err`: writable slot for the error on failure
+     *
+     * Returns: 0 on success (`out_output` set), -1 on failure (`out_err` set).
+     */
+    int32_t (*invoke)(void *user_data,
+                      BlazenEvent *event,
+                      BlazenStepOutput **out_output,
+                      BlazenError **out_err);
+} BlazenStepHandlerVTable;
+
+/**
+ * Function-pointer vtable a foreign caller fills out to implement
+ * [`CompletionStreamSink`] across the C ABI.
+ *
+ * All three callbacks plus `drop_user_data` are required (no nullable
+ * function pointers). The vtable is consumed by
+ * [`blazen_complete_streaming`] / [`blazen_complete_streaming_blocking`],
+ * which take ownership of `user_data` and the function pointers for the
+ * lifetime of the streaming call. `drop_user_data` runs exactly once when
+ * the wrapping [`CStreamSink`] drops (after the stream has terminated, or on
+ * an early-return failure path before the stream starts).
+ *
+ * ## Thread safety
+ *
+ * The streaming engine schedules callbacks on tokio worker threads which
+ * will generally differ from the thread that registered the sink. The
+ * foreign side guarantees that `user_data` and the function pointers are
+ * safe to invoke from any thread. In Ruby, the `ffi` gem's `FFI::Callback`
+ * reacquires the GVL automatically before invoking the user-provided block;
+ * in Dart, `NativeCallable.listener` marshals back to the isolate event
+ * loop; in native hosts the responsibility falls to the embedder.
+ *
+ * ## Callback contracts
+ *
+ * See the module-level docs for the per-callback ownership rules. In
+ * summary: every pointer passed *into* a callback is caller-owned and the
+ * callback must free it (or consume it into a derivative structure) before
+ * returning. Every pointer the callback writes *out* (`out_err`) becomes
+ * caller-owned and the cabi will free it after consuming.
+ */
+typedef struct {
+    /**
+     * Opaque foreign-side context handed back to each callback. Owned by
+     * this vtable struct; released via `drop_user_data` when the wrapper
+     * drops.
+     */
+    void *user_data;
+    /**
+     * Invoked exactly once when the wrapping `CStreamSink` drops.
+     * Implementations should reclaim and release `user_data`.
+     */
+    void (*drop_user_data)(void *user_data);
+    /**
+     * Receive a single chunk. `chunk` is caller-owned; the callback MUST
+     * free it via `blazen_stream_chunk_free` (or consume it into a
+     * derivative structure). Returns `0` on success or `-1` on failure
+     * (writing a fresh `*mut BlazenError` into `*out_err`). A `-1` aborts
+     * the stream.
+     */
+    int32_t (*on_chunk)(void *user_data, BlazenStreamChunk *chunk, BlazenError **out_err);
+    /**
+     * Receive the terminal completion signal. `finish_reason` is a
+     * caller-owned `*mut c_char` freed via `blazen_string_free`; `usage`
+     * is a caller-owned `*mut BlazenTokenUsage` freed via
+     * `blazen_token_usage_free`. Returns `0` on success or `-1` on
+     * failure (writing a fresh `*mut BlazenError` into `*out_err`).
+     */
+    int32_t (*on_done)(void *user_data,
+                       char *finish_reason,
+                       BlazenTokenUsage *usage,
+                       BlazenError **out_err);
+    /**
+     * Receive a fatal error from the stream. `err` is a caller-owned
+     * `*mut BlazenError` freed via `blazen_error_free`. Returns `0` on
+     * success or `-1` on failure (writing the callback's own error into
+     * `*out_err`). A `-1` from `on_error` is logged via the resulting
+     * `BlazenResult` but does NOT trigger a second `on_error` invocation.
+     */
+    int32_t (*on_error)(void *user_data, BlazenError *err, BlazenError **out_err);
+} BlazenCompletionStreamSinkVTable;
+
+/**
+ * Function-pointer vtable a foreign caller fills out to implement
+ * [`ToolHandler`] across the C ABI.
+ *
+ * `user_data` is opaque to Rust — it's whatever the foreign side wants to
+ * associate with the handler (a boxed Ruby block, a Dart isolate token, a
+ * Crystal proc, etc.). It is passed back unchanged to every `execute`
+ * invocation and to `drop_user_data` when the wrapper is dropped.
+ *
+ * ## `execute` contract
+ *
+ * - `tool_name` and `arguments_json` are caller-owned C strings that remain
+ *   valid for the duration of the call. The callback MUST NOT free them.
+ * - On success, the callback writes a heap-allocated NUL-terminated UTF-8
+ *   string into `*out_result_json`. The string must have been allocated in
+ *   a way that is compatible with [`crate::string::blazen_string_free`]
+ *   (i.e. `CString::into_raw` on the Rust side, or anything the foreign
+ *   side hands back through `blazen_string_alloc` if one exists). The
+ *   cabi surface frees the string with `blazen_string_free`.
+ * - On failure, the callback writes a caller-owned `*mut BlazenError` into
+ *   `*out_err`. The cabi surface frees it with `blazen_error_free`.
+ * - The return value is `0` on success and `-1` on failure. Any other
+ *   non-zero value is treated as a failure but logged as a protocol
+ *   violation in the synthesised `Internal` error message.
+ *
+ * ## `drop_user_data` contract
+ *
+ * Called exactly once when the [`CToolHandler`] wrapper is dropped — i.e.
+ * when the [`InnerAgent`] referencing this handler is dropped and the last
+ * reference goes away. The foreign side releases whatever resources back
+ * `user_data` here.
+ */
+typedef struct {
+    /**
+     * Opaque foreign-side pointer. Passed back to `execute` and
+     * `drop_user_data` unchanged.
+     */
+    void *user_data;
+    /**
+     * Invoked when the wrapper is dropped. The foreign side releases
+     * `user_data` here.
+     */
+    void (*drop_user_data)(void *user_data);
+    /**
+     * Executes the named tool. See the struct-level docs for the contract.
+     */
+    int32_t (*execute)(void *user_data,
+                       const char *tool_name,
+                       const char *arguments_json,
+                       char **out_result_json,
+                       BlazenError **out_err);
+} BlazenToolHandlerVTable;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -3836,6 +4009,114 @@ int32_t blazen_embedding_model_new_tract(const char *model_name,
                                          BlazenError **out_err);
 
 /**
+ * Registers a step on a workflow builder. The vtable is consumed (its
+ * `user_data` becomes owned by the workflow until the workflow drops).
+ *
+ * `name`, `accepts`, `emits` are NUL-terminated UTF-8 strings; `accepts` and
+ * `emits` are arrays of strings (or null, paired with a `_count` of `0`).
+ *
+ * Returns 0 on success, -1 on failure (writing the error to `out_err`).
+ *
+ * # Ownership transfer
+ *
+ * On EVERY return path — success or failure — the cabi takes responsibility
+ * for releasing `vtable.user_data`. Foreign callers MUST NOT call
+ * `drop_user_data` themselves after handing the vtable to this function. On
+ * failure paths that abort before constructing the [`CStepHandler`] wrapper,
+ * this function explicitly invokes `(vtable.drop_user_data)(vtable.user_data)`
+ * before returning, honouring the same ownership contract.
+ *
+ * # Safety
+ *
+ * `builder` must be a live `BlazenWorkflowBuilder` previously produced by
+ * the cabi surface (and not yet freed). `name` must be a valid
+ * NUL-terminated UTF-8 buffer. `accepts` and `emits` must each be either
+ * null (with the corresponding `_count` being 0) or arrays of `_count`
+ * valid NUL-terminated UTF-8 buffers. `vtable` must contain valid function
+ * pointers and the `user_data` pointer transfers ownership to the wrapper.
+ * `out_err` is null OR a valid destination for one `*mut BlazenError` write.
+ */
+
+int32_t blazen_workflow_builder_add_step(BlazenWorkflowBuilder *builder,
+                                         const char *name,
+                                         const char *const *accepts,
+                                         uintptr_t accepts_count,
+                                         const char *const *emits,
+                                         uintptr_t emits_count,
+                                         BlazenStepHandlerVTable vtable,
+                                         BlazenError **out_err);
+
+/**
+ * Synchronously drives a streaming chat completion, dispatching chunks to
+ * the supplied sink. Blocks the calling thread on the cabi tokio runtime.
+ *
+ * On success returns `0` (the sink's `on_done` has fired). On a stream-start
+ * failure returns `-1` and writes a fresh `*mut BlazenError` into `*out_err`;
+ * sink-side failures during the stream are delivered through `on_error`
+ * rather than this return path — see the upstream
+ * [`blazen_uniffi::streaming::complete_streaming`] for the full contract.
+ *
+ * ## Ownership transfer
+ *
+ * - `model` is BORROWED — the underlying `Arc<CompletionModel>` is cloned
+ *   into the streaming call. Caller retains its handle.
+ * - `request` is CONSUMED — internally we `Box::from_raw` it and move the
+ *   inner record out. Callers must NOT call `blazen_completion_request_free`
+ *   on the same pointer afterwards (double-free).
+ * - `sink` (the vtable) is CONSUMED — ownership of `user_data` transfers to
+ *   the wrapping `CStreamSink`, which releases it via `drop_user_data` on
+ *   drop. On every early-return failure path that aborts BEFORE constructing
+ *   `CStreamSink`, this function explicitly invokes
+ *   `(sink.drop_user_data)(sink.user_data)` to honour the same contract.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenCompletionModel` produced by the
+ * cabi surface. `request` must be null OR a live `BlazenCompletionRequest`
+ * produced by the cabi surface; ownership transfers to this function.
+ * `sink.user_data` and the four `sink` function pointers must satisfy the
+ * contracts documented on [`BlazenCompletionStreamSinkVTable`]. `out_err`
+ * must be null OR a writable slot for a single `*mut BlazenError` write.
+ */
+
+int32_t blazen_complete_streaming_blocking(const BlazenCompletionModel *model,
+                                           BlazenCompletionRequest *request,
+                                           BlazenCompletionStreamSinkVTable sink,
+                                           BlazenError **out_err);
+
+/**
+ * Asynchronously drives a streaming chat completion onto the cabi tokio
+ * runtime, returning an opaque future handle. The caller observes
+ * completion via the future's fd / [`crate::future::blazen_future_poll`] /
+ * [`crate::future::blazen_future_wait`], then calls
+ * [`crate::persist::blazen_future_take_unit`] to pop the result. Free the
+ * future with [`crate::future::blazen_future_free`].
+ *
+ * Returns null if `model` is null or `request` is null. On those error
+ * paths the `request` (if non-null) is still consumed and freed, and the
+ * `sink.drop_user_data` thunk is still invoked, so no resources leak.
+ *
+ * ## Ownership transfer
+ *
+ * Same as [`blazen_complete_streaming_blocking`]: `model` is BORROWED,
+ * `request` is CONSUMED, `sink` is CONSUMED. Every code path — success or
+ * early-return failure — guarantees `request` is dropped and
+ * `sink.drop_user_data` is invoked exactly once.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenCompletionModel`. `request` must be
+ * null OR a live `BlazenCompletionRequest`; ownership transfers to this
+ * function regardless of whether the call returns null. `sink` satisfies
+ * the [`BlazenCompletionStreamSinkVTable`] contract; its `user_data` is
+ * consumed.
+ */
+
+BlazenFuture *blazen_complete_streaming(const BlazenCompletionModel *model,
+                                        BlazenCompletionRequest *request,
+                                        BlazenCompletionStreamSinkVTable sink);
+
+/**
  * Constructs a new `StreamChunk` with the given `content_delta` and
  * `is_final` flag. `tool_calls` is initialised empty.
  *
@@ -4186,6 +4467,57 @@ int32_t blazen_parse_workflow_history(const char *history_json,
  * same non-null pointer is a double-free.
  */
  void blazen_workflow_history_entry_free(BlazenWorkflowHistoryEntry *entry);
+
+/**
+ * Constructs a [`BlazenAgent`] from a completion model, optional system
+ * prompt, tool list, tool-handler vtable, and max iterations.
+ *
+ * On success returns `0` and writes a fresh `*mut BlazenAgent` into
+ * `*out_agent`. On failure returns `-1` and writes a fresh `*mut BlazenError`
+ * into `*out_err`. Both out-params may be null to discard the corresponding
+ * side of the result.
+ *
+ * ## Ownership
+ *
+ * - `model` is BORROWED — the underlying `Arc<CompletionModel>` is cloned
+ *   into the agent. The caller retains its handle and is still responsible
+ *   for freeing it.
+ * - `system_prompt` is BORROWED for the duration of this call (it is copied
+ *   into the agent before the call returns). A null pointer means "no
+ *   system prompt".
+ * - `tools` is BORROWED at the array level, but each `*mut BlazenTool`
+ *   element is CONSUMED — the inner `Tool` record is moved into the agent's
+ *   tool vec. Callers must NOT free the individual tool handles afterwards
+ *   (the array itself remains caller-owned).
+ * - `tool_handler` is CONSUMED — ownership of `user_data` transfers to the
+ *   constructed [`CToolHandler`], which releases it via `drop_user_data`
+ *   when the wrapper drops. Early-return error paths still invoke
+ *   `drop_user_data` so the foreign side doesn't leak.
+ * - `out_agent` receives a caller-owned `*mut BlazenAgent`. Free with
+ *   [`crate::agent::blazen_agent_free`].
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenCompletionModel` produced by the
+ * cabi surface. `system_prompt` must be null OR a NUL-terminated UTF-8
+ * buffer valid for the duration of this call. When `tools_count > 0`,
+ * `tools` must point to an array of exactly `tools_count` valid
+ * `*mut BlazenTool` entries, each produced by the cabi surface; ownership
+ * of each element transfers to this function (the array itself stays
+ * caller-owned). `tool_handler.user_data` and the `execute` /
+ * `drop_user_data` thunks must satisfy the contracts documented on
+ * [`BlazenToolHandlerVTable`]. `out_agent` and `out_err` must each be null
+ * OR a writable slot for a single `*mut` write.
+ */
+
+int32_t blazen_agent_new(const BlazenCompletionModel *model,
+                         const char *system_prompt,
+                         BlazenTool *const *tools,
+                         uintptr_t tools_count,
+                         BlazenToolHandlerVTable tool_handler,
+                         uint32_t max_iterations,
+                         BlazenAgent **out_agent,
+                         BlazenError **out_err);
 
 /**
  * Construct a new builder with the given UTF-8 `name`. Returns null on a
