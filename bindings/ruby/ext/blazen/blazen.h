@@ -579,6 +579,96 @@ int32_t blazen_future_take_agent_result(BlazenFuture *fut,
  void blazen_agent_result_free(BlazenAgentResult *result);
 
 /**
+ * Synchronously run a batch of completions on the cabi tokio runtime.
+ *
+ * On success returns `0` and writes a fresh `BlazenBatchResult*` into
+ * `*out_result`. On failure returns `-1` and writes a fresh `BlazenError*`
+ * into `*out_err`. Both out-parameters may be null to discard the matching
+ * side of the result (typically only meaningful on the error path during a
+ * smoke test).
+ *
+ * `max_concurrency` is a hard cap on in-flight requests; `0` means unlimited
+ * (the upstream default — all dispatched in parallel).
+ *
+ * **Each `BlazenCompletionRequest*` element of `requests` is consumed.** See
+ * the module-level docs for the full ownership contract; calling
+ * [`crate::llm_records::blazen_completion_request_free`] on any element
+ * afterwards is a double-free.
+ *
+ * # Safety
+ *
+ * - `model` must be null OR a live `BlazenCompletionModel` produced by the
+ *   cabi surface.
+ * - When `requests_count > 0`, `requests` must point to an array of exactly
+ *   `requests_count` `BlazenCompletionRequest*` entries; each entry must be
+ *   a live `BlazenCompletionRequest` produced by the cabi surface, and
+ *   ownership of every entry transfers to this function. When
+ *   `requests_count == 0`, `requests` may be null.
+ * - `out_result` and `out_err` must each be null OR point to a writable slot
+ *   of the matching pointer type.
+ */
+
+int32_t blazen_complete_batch_blocking(const BlazenCompletionModel *model,
+                                       BlazenCompletionRequest *const *requests,
+                                       uintptr_t requests_count,
+                                       uint32_t max_concurrency,
+                                       BlazenBatchResult **out_result,
+                                       BlazenError **out_err);
+
+/**
+ * Spawn a batch of completions onto the cabi tokio runtime and return an
+ * opaque future handle. Observe completion via `blazen_future_poll` /
+ * `blazen_future_wait` / `blazen_future_fd`, then pop the typed result with
+ * [`blazen_future_take_batch_result`]. Free the future with
+ * `blazen_future_free`.
+ *
+ * Returns null if `model` is null, or if `requests` is null when
+ * `requests_count > 0`, or if any indexed `BlazenCompletionRequest*` element
+ * is null. On every null-return path, ownership of any
+ * `BlazenCompletionRequest*` elements that were already reclaimed is
+ * dropped (no leaks).
+ *
+ * **Each `BlazenCompletionRequest*` element of `requests` is consumed** on
+ * the success path AND on the validation-failure path (so the caller is
+ * always relieved of ownership of every successfully-passed element). See
+ * the module-level docs for the full contract.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_complete_batch_blocking`]: `model` must be null OR a live
+ * `BlazenCompletionModel`; the `requests` array elements transfer ownership.
+ */
+
+BlazenFuture *blazen_complete_batch(const BlazenCompletionModel *model,
+                                    BlazenCompletionRequest *const *requests,
+                                    uintptr_t requests_count,
+                                    uint32_t max_concurrency);
+
+/**
+ * Pops the [`BlazenBatchResult`] out of a future produced by
+ * [`blazen_complete_batch`].
+ *
+ * Returns `0` on success (writes the result into `*out` when non-null) or
+ * `-1` on failure (writes a fresh `BlazenError*` into `*err` when non-null).
+ * Both out-parameters may be null to discard the corresponding side.
+ *
+ * Calling this against a future produced by any other cabi entry point
+ * (e.g. `blazen_completion_model_complete`) yields a `BlazenError::Internal`
+ * with a `type mismatch` message — see `BlazenFuture::take_typed`.
+ *
+ * # Safety
+ *
+ * `fut` must be null OR a pointer previously produced by
+ * [`blazen_complete_batch`] (and not yet freed, not concurrently freed from
+ * another thread). `out` and `err` must each be null OR point to a writable
+ * slot of the matching pointer type.
+ */
+
+int32_t blazen_future_take_batch_result(BlazenFuture *fut,
+                                        BlazenBatchResult **out,
+                                        BlazenError **err);
+
+/**
  * Returns the variant tag for `handle` — one of [`BLAZEN_BATCH_ITEM_SUCCESS`]
  * or [`BLAZEN_BATCH_ITEM_FAILURE`]. Returns [`BLAZEN_BATCH_ITEM_FAILURE`] on
  * a null handle (treating a missing slot as a degenerate failure with no
@@ -893,6 +983,146 @@ BlazenFuture *blazen_image_gen_model_generate(const BlazenImageGenModel *model,
 int32_t blazen_future_take_image_gen_result(BlazenFuture *fut,
                                             BlazenImageGenResult **out,
                                             BlazenError **err);
+
+/**
+ * Build a fal.ai-backed TTS model.
+ *
+ * `api_key` must be a NUL-terminated UTF-8 buffer (empty is allowed — the
+ * upstream factory resolves `FAL_KEY` from the environment in that case).
+ * `model` may be null to leave the default fal TTS endpoint in place; pass a
+ * NUL-terminated UTF-8 buffer to override (e.g. `"fal-ai/dia-tts"`).
+ *
+ * On success returns `0` and writes a fresh `BlazenTtsModel*` into
+ * `*out_model`. On failure returns `-1` and writes a fresh `BlazenError*`
+ * into `*out_err`. Both out-parameters may be null to discard the matching
+ * side of the result.
+ *
+ * # Safety
+ *
+ * - `api_key` must be a valid NUL-terminated UTF-8 buffer (non-null).
+ * - `model` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `out_model` and `out_err` must each be null OR point to a writable slot
+ *   of the matching pointer type.
+ */
+
+int32_t blazen_tts_model_new_fal(const char *api_key,
+                                 const char *model,
+                                 BlazenTtsModel **out_model,
+                                 BlazenError **out_err);
+
+/**
+ * Build a fal.ai-backed STT model.
+ *
+ * Argument conventions mirror [`blazen_tts_model_new_fal`].
+ *
+ * # Safety
+ *
+ * Same string and out-pointer contracts as [`blazen_tts_model_new_fal`].
+ */
+
+int32_t blazen_stt_model_new_fal(const char *api_key,
+                                 const char *model,
+                                 BlazenSttModel **out_model,
+                                 BlazenError **out_err);
+
+/**
+ * Build a fal.ai-backed image-generation model.
+ *
+ * Argument conventions mirror [`blazen_tts_model_new_fal`]; pass `model` as
+ * the default fal image endpoint override (e.g. `"fal-ai/flux/dev"`).
+ *
+ * # Safety
+ *
+ * Same string and out-pointer contracts as [`blazen_tts_model_new_fal`].
+ */
+
+int32_t blazen_image_gen_model_new_fal(const char *api_key,
+                                       const char *model,
+                                       BlazenImageGenModel **out_model,
+                                       BlazenError **out_err);
+
+/**
+ * Build a local Piper text-to-speech model.
+ *
+ * `model_id` selects a Piper voice (e.g. `"en_US-amy-medium"`); pass null to
+ * leave it unset (the upstream factory falls back to its default). `speaker_id`
+ * and `sample_rate` follow the Option-as-`-1` encoding documented in
+ * [`opt_u32_from_i32`].
+ *
+ * Construction succeeds today but synthesise calls surface the upstream
+ * "engine not yet wired" error until the Piper Phase 9 work lands — see
+ * `blazen_uniffi::compute::new_piper_tts_model`.
+ *
+ * On success returns `0` and writes a fresh `BlazenTtsModel*` into
+ * `*out_model`. On failure returns `-1` and writes a fresh `BlazenError*`
+ * into `*out_err`.
+ *
+ * # Safety
+ *
+ * - `model_id` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `out_model` and `out_err` must each be null OR point to a writable slot
+ *   of the matching pointer type.
+ */
+
+int32_t blazen_tts_model_new_piper(const char *model_id,
+                                   int32_t speaker_id,
+                                   int32_t sample_rate,
+                                   BlazenTtsModel **out_model,
+                                   BlazenError **out_err);
+
+/**
+ * Build a local whisper.cpp speech-to-text model.
+ *
+ * `model` selects a whisper variant by name (`"tiny"`, `"base"`, `"small"`,
+ * `"medium"`, `"large-v3"`); pass null to default to `"small"` upstream.
+ * `device` follows `blazen_llm::Device::parse` (`"cpu"`, `"cuda"`,
+ * `"cuda:N"`, `"metal"`). `language` is an optional default ISO-639-1 hint
+ * (overridable per-call on [`crate::compute::blazen_stt_model_transcribe_blocking`]).
+ *
+ * # Safety
+ *
+ * - `model` / `device` / `language` must each be null OR a valid
+ *   NUL-terminated UTF-8 buffer.
+ * - `out_model` and `out_err` must each be null OR point to a writable slot
+ *   of the matching pointer type.
+ */
+
+int32_t blazen_stt_model_new_whisper(const char *model,
+                                     const char *device,
+                                     const char *language,
+                                     BlazenSttModel **out_model,
+                                     BlazenError **out_err);
+
+/**
+ * Build a local diffusion-rs image-generation model.
+ *
+ * `model_id` is a Hugging Face repo id (e.g. `"stabilityai/stable-diffusion-2-1"`);
+ * pass null to use the upstream default. `device` follows the same device
+ * string format as the LLM factories. `width` / `height` /
+ * `num_inference_steps` use the `-1`-as-`None` encoding (see
+ * [`opt_u32_from_i32`]); `guidance_scale` uses NaN-as-`None`
+ * (see [`opt_f32_from_f32`]).
+ *
+ * Construction succeeds today but generate calls surface the upstream
+ * "engine not yet wired" error until the Phase 5.3 work lands — see
+ * `blazen_uniffi::compute::new_diffusion_model`.
+ *
+ * # Safety
+ *
+ * - `model_id` / `device` must each be null OR a valid NUL-terminated UTF-8
+ *   buffer.
+ * - `out_model` and `out_err` must each be null OR point to a writable slot
+ *   of the matching pointer type.
+ */
+
+int32_t blazen_image_gen_model_new_diffusion(const char *model_id,
+                                             const char *device,
+                                             int32_t width,
+                                             int32_t height,
+                                             int32_t num_inference_steps,
+                                             float guidance_scale,
+                                             BlazenImageGenModel **out_model,
+                                             BlazenError **out_err);
 
 /**
  * Returns the synthesized audio as a heap-allocated C string of
@@ -2616,6 +2846,66 @@ int32_t blazen_future_take_string_list(BlazenFuture *fut,
                                        BlazenError **err);
 
 /**
+ * Build an embedded redb-backed checkpoint store rooted at `path`.
+ *
+ * The database file is created if it does not exist. Re-opening an
+ * existing file is safe and preserves prior checkpoints.
+ *
+ * Returns `0` on success and writes a fresh
+ * `*mut BlazenCheckpointStore` into `*out_store`. Returns `-1` on backend
+ * failure (writing the inner error to `*out_err`), or `-2` when `path` is
+ * null or not valid UTF-8 (also written to `*out_err` as an `Internal`
+ * variant).
+ *
+ * # Safety
+ *
+ * - `path` must be null OR a valid NUL-terminated UTF-8 buffer that
+ *   remains live for the duration of the call.
+ * - `out_store` must be null OR a writable pointer to a
+ *   `*mut BlazenCheckpointStore` slot. When null the freshly built store
+ *   is dropped immediately to avoid a leak (the call still reports the
+ *   success status).
+ * - `out_err` must be null OR a writable pointer to a `*mut BlazenError`
+ *   slot.
+ */
+
+int32_t blazen_checkpoint_store_new_redb(const char *path,
+                                         BlazenCheckpointStore **out_store,
+                                         BlazenError **out_err);
+
+/**
+ * Build a Redis/ValKey-backed checkpoint store connected to `url`.
+ *
+ * `url` is in the form `redis://host:port/db` (or `rediss://` for TLS).
+ * When `ttl_seconds >= 0` every saved checkpoint will auto-expire after
+ * that many seconds; pass `-1` for no TTL.
+ *
+ * The initial connection is established eagerly on the shared Tokio
+ * runtime (the underlying constructor is async); subsequent reconnections
+ * are handled automatically by the connection manager.
+ *
+ * Returns `0` on success and writes a fresh
+ * `*mut BlazenCheckpointStore` into `*out_store`. Returns `-1` on backend
+ * failure (writing the inner error to `*out_err`), or `-2` when `url` is
+ * null or not valid UTF-8.
+ *
+ * # Safety
+ *
+ * - `url` must be null OR a valid NUL-terminated UTF-8 buffer that
+ *   remains live for the duration of the call.
+ * - `out_store` must be null OR a writable pointer to a
+ *   `*mut BlazenCheckpointStore` slot. When null the freshly built store
+ *   is dropped immediately to avoid a leak.
+ * - `out_err` must be null OR a writable pointer to a `*mut BlazenError`
+ *   slot.
+ */
+
+int32_t blazen_checkpoint_store_new_valkey(const char *url,
+                                           int64_t ttl_seconds,
+                                           BlazenCheckpointStore **out_store,
+                                           BlazenError **out_err);
+
+/**
  * Constructs a new persisted event with the given `event_type` (e.g.
  * `"blazen::StartEvent"`) and JSON-encoded `data_json` payload. Returns
  * null if either pointer is null or contains non-UTF-8 bytes.
@@ -3081,6 +3371,471 @@ int32_t blazen_pipeline_run_blocking(const BlazenPipeline *pipe,
  void blazen_pipeline_free(BlazenPipeline *pipe);
 
 /**
+ * Constructs an `OpenAI` chat-completion model.
+ *
+ * `api_key` is required (NUL-terminated UTF-8). `model` and `base_url` are
+ * optional — pass null to use the upstream default.
+ *
+ * On success returns `0` and writes a caller-owned `*mut BlazenCompletionModel`
+ * into `*out_model`. On error returns `-1` and writes a `*mut BlazenError`
+ * into `*out_err`. Either out-parameter may be null to discard.
+ *
+ * # Safety
+ *
+ * `api_key` must be a valid NUL-terminated UTF-8 buffer. `model` and
+ * `base_url` must each be null OR a valid NUL-terminated UTF-8 buffer.
+ * `out_model` / `out_err` must each be null OR a valid destination for one
+ * pointer write.
+ */
+
+int32_t blazen_completion_model_new_openai(const char *api_key,
+                                           const char *model,
+                                           const char *base_url,
+                                           BlazenCompletionModel **out_model,
+                                           BlazenError **out_err);
+
+/**
+ * Constructs an Anthropic Messages-API chat-completion model.
+ *
+ * See [`blazen_completion_model_new_openai`] for the argument and ownership
+ * conventions — identical shape.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_completion_model_new_openai`].
+ */
+
+int32_t blazen_completion_model_new_anthropic(const char *api_key,
+                                              const char *model,
+                                              const char *base_url,
+                                              BlazenCompletionModel **out_model,
+                                              BlazenError **out_err);
+
+/**
+ * Constructs a Google Gemini chat-completion model.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_completion_model_new_openai`].
+ */
+
+int32_t blazen_completion_model_new_gemini(const char *api_key,
+                                           const char *model,
+                                           const char *base_url,
+                                           BlazenCompletionModel **out_model,
+                                           BlazenError **out_err);
+
+/**
+ * Constructs an `OpenRouter` chat-completion model.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_completion_model_new_openai`].
+ */
+
+int32_t blazen_completion_model_new_openrouter(const char *api_key,
+                                               const char *model,
+                                               const char *base_url,
+                                               BlazenCompletionModel **out_model,
+                                               BlazenError **out_err);
+
+/**
+ * Constructs a Groq chat-completion model.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_completion_model_new_openai`].
+ */
+
+int32_t blazen_completion_model_new_groq(const char *api_key,
+                                         const char *model,
+                                         const char *base_url,
+                                         BlazenCompletionModel **out_model,
+                                         BlazenError **out_err);
+
+/**
+ * Constructs a Together AI chat-completion model.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_completion_model_new_openai`].
+ */
+
+int32_t blazen_completion_model_new_together(const char *api_key,
+                                             const char *model,
+                                             const char *base_url,
+                                             BlazenCompletionModel **out_model,
+                                             BlazenError **out_err);
+
+/**
+ * Constructs a Mistral chat-completion model.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_completion_model_new_openai`].
+ */
+
+int32_t blazen_completion_model_new_mistral(const char *api_key,
+                                            const char *model,
+                                            const char *base_url,
+                                            BlazenCompletionModel **out_model,
+                                            BlazenError **out_err);
+
+/**
+ * Constructs a `DeepSeek` chat-completion model.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_completion_model_new_openai`].
+ */
+
+int32_t blazen_completion_model_new_deepseek(const char *api_key,
+                                             const char *model,
+                                             const char *base_url,
+                                             BlazenCompletionModel **out_model,
+                                             BlazenError **out_err);
+
+/**
+ * Constructs a Fireworks AI chat-completion model.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_completion_model_new_openai`].
+ */
+
+int32_t blazen_completion_model_new_fireworks(const char *api_key,
+                                              const char *model,
+                                              const char *base_url,
+                                              BlazenCompletionModel **out_model,
+                                              BlazenError **out_err);
+
+/**
+ * Constructs a Perplexity chat-completion model.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_completion_model_new_openai`].
+ */
+
+int32_t blazen_completion_model_new_perplexity(const char *api_key,
+                                               const char *model,
+                                               const char *base_url,
+                                               BlazenCompletionModel **out_model,
+                                               BlazenError **out_err);
+
+/**
+ * Constructs an xAI (Grok) chat-completion model.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_completion_model_new_openai`].
+ */
+
+int32_t blazen_completion_model_new_xai(const char *api_key,
+                                        const char *model,
+                                        const char *base_url,
+                                        BlazenCompletionModel **out_model,
+                                        BlazenError **out_err);
+
+/**
+ * Constructs a Cohere chat-completion model.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_completion_model_new_openai`].
+ */
+
+int32_t blazen_completion_model_new_cohere(const char *api_key,
+                                           const char *model,
+                                           const char *base_url,
+                                           BlazenCompletionModel **out_model,
+                                           BlazenError **out_err);
+
+/**
+ * Constructs an Azure `OpenAI` chat-completion model.
+ *
+ * Azure derives its endpoint from `resource_name` + `deployment_name` and its
+ * model id from `deployment_name`, so there's no `model` / `base_url` knob.
+ * `api_version` is optional — pass null to use the provider's pinned API
+ * version.
+ *
+ * # Safety
+ *
+ * `api_key`, `resource_name`, and `deployment_name` must each be a valid
+ * NUL-terminated UTF-8 buffer. `api_version` must be null OR a valid
+ * NUL-terminated UTF-8 buffer. `out_model` / `out_err` must each be null OR
+ * a valid destination for one pointer write.
+ */
+
+int32_t blazen_completion_model_new_azure(const char *api_key,
+                                          const char *resource_name,
+                                          const char *deployment_name,
+                                          const char *api_version,
+                                          BlazenCompletionModel **out_model,
+                                          BlazenError **out_err);
+
+/**
+ * Constructs an AWS Bedrock chat-completion model.
+ *
+ * `region` is the AWS region (e.g. `"us-east-1"`); `api_key` is the Bedrock
+ * API key (pass an empty string to resolve from `AWS_BEARER_TOKEN_BEDROCK`).
+ *
+ * # Safety
+ *
+ * `api_key` and `region` must each be a valid NUL-terminated UTF-8 buffer.
+ * `model` and `base_url` must each be null OR a valid NUL-terminated UTF-8
+ * buffer. `out_model` / `out_err` must each be null OR a valid destination
+ * for one pointer write.
+ */
+
+int32_t blazen_completion_model_new_bedrock(const char *api_key,
+                                            const char *region,
+                                            const char *model,
+                                            const char *base_url,
+                                            BlazenCompletionModel **out_model,
+                                            BlazenError **out_err);
+
+/**
+ * Constructs a fal.ai chat-completion model.
+ *
+ * `endpoint` selects the fal endpoint family — one of `"openai_chat"`
+ * (default when null), `"openai_responses"`, `"openai_embeddings"`,
+ * `"openrouter"`, `"any_llm"`. Unrecognised values fall back to
+ * `OpenAiChat`. `enterprise` promotes the endpoint to its enterprise
+ * variant; `auto_route_modality` toggles automatic routing to a
+ * vision/audio/video endpoint when the request carries media.
+ *
+ * # Safety
+ *
+ * `api_key` must be a valid NUL-terminated UTF-8 buffer. `model`,
+ * `endpoint`, and `base_url` must each be null OR a valid NUL-terminated
+ * UTF-8 buffer. `out_model` / `out_err` must each be null OR a valid
+ * destination for one pointer write.
+ */
+
+int32_t blazen_completion_model_new_fal(const char *api_key,
+                                        const char *model,
+                                        const char *endpoint,
+                                        bool enterprise,
+                                        bool auto_route_modality,
+                                        const char *base_url,
+                                        BlazenCompletionModel **out_model,
+                                        BlazenError **out_err);
+
+/**
+ * Constructs a generic OpenAI-compatible chat-completion model.
+ *
+ * Targets any service that speaks the official `OpenAI` Chat Completions wire
+ * format (vLLM, llama-server, LM Studio, local proxies, ...). All four
+ * string arguments are REQUIRED.
+ *
+ * # Safety
+ *
+ * `provider_name`, `base_url`, `api_key`, and `model` must each be a valid
+ * NUL-terminated UTF-8 buffer. `out_model` / `out_err` must each be null OR
+ * a valid destination for one pointer write.
+ */
+
+int32_t blazen_completion_model_new_openai_compat(const char *provider_name,
+                                                  const char *base_url,
+                                                  const char *api_key,
+                                                  const char *model,
+                                                  BlazenCompletionModel **out_model,
+                                                  BlazenError **out_err);
+
+/**
+ * Constructs a local mistral.rs chat-completion model.
+ *
+ * `model_id` is the `HuggingFace` repo id (e.g.
+ * `"mistralai/Mistral-7B-Instruct-v0.3"`) or a local GGUF path. `device` and
+ * `quantization` follow Blazen's parser format (`"cpu"`, `"cuda:0"`,
+ * `"metal"`, `"q4_k_m"`, ...). `context_length` of `-1` means "use the
+ * model's default"; non-negative values pass through. Set `vision = true`
+ * for multimodal models like `LLaVA` / Qwen2-VL.
+ *
+ * Feature-gated on `mistralrs`.
+ *
+ * # Safety
+ *
+ * `model_id` must be a valid NUL-terminated UTF-8 buffer. `device` and
+ * `quantization` must each be null OR a valid NUL-terminated UTF-8 buffer.
+ * `out_model` / `out_err` must each be null OR a valid destination for one
+ * pointer write.
+ */
+
+int32_t blazen_completion_model_new_mistralrs(const char *model_id,
+                                              const char *device,
+                                              const char *quantization,
+                                              int32_t context_length,
+                                              bool vision,
+                                              BlazenCompletionModel **out_model,
+                                              BlazenError **out_err);
+
+/**
+ * Constructs a local llama.cpp chat-completion model.
+ *
+ * `model_path` is either a local GGUF file path or a `HuggingFace` repo id;
+ * `n_gpu_layers` offloads the given number of layers to the GPU when the
+ * device supports it. Both `context_length` and `n_gpu_layers` use `-1` to
+ * mean "not set" (i.e. use the upstream default); non-negative values pass
+ * through as `Some(value as u32)`.
+ *
+ * Feature-gated on `llamacpp`.
+ *
+ * # Safety
+ *
+ * `model_path` must be a valid NUL-terminated UTF-8 buffer. `device` and
+ * `quantization` must each be null OR a valid NUL-terminated UTF-8 buffer.
+ * `out_model` / `out_err` must each be null OR a valid destination for one
+ * pointer write.
+ */
+
+int32_t blazen_completion_model_new_llamacpp(const char *model_path,
+                                             const char *device,
+                                             const char *quantization,
+                                             int32_t context_length,
+                                             int32_t n_gpu_layers,
+                                             BlazenCompletionModel **out_model,
+                                             BlazenError **out_err);
+
+/**
+ * Constructs a local candle chat-completion model.
+ *
+ * Wraps `CandleLlmProvider` through the `CandleLlmCompletionModel` trait
+ * bridge so it satisfies the same `CompletionModel` trait as remote
+ * providers. `context_length` of `-1` means "use the model's default".
+ *
+ * Feature-gated on `candle-llm`.
+ *
+ * # Safety
+ *
+ * `model_id` must be a valid NUL-terminated UTF-8 buffer. `device`,
+ * `quantization`, and `revision` must each be null OR a valid
+ * NUL-terminated UTF-8 buffer. `out_model` / `out_err` must each be null OR
+ * a valid destination for one pointer write.
+ */
+
+int32_t blazen_completion_model_new_candle(const char *model_id,
+                                           const char *device,
+                                           const char *quantization,
+                                           const char *revision,
+                                           int32_t context_length,
+                                           BlazenCompletionModel **out_model,
+                                           BlazenError **out_err);
+
+/**
+ * Constructs an `OpenAI` embedding model.
+ *
+ * Defaults to `text-embedding-3-small` (1536 dimensions) when `model` is
+ * null. `base_url` overrides the `OpenAI` base URL — pass null to use the
+ * default.
+ *
+ * # Safety
+ *
+ * `api_key` must be a valid NUL-terminated UTF-8 buffer. `model` and
+ * `base_url` must each be null OR a valid NUL-terminated UTF-8 buffer.
+ * `out_model` / `out_err` must each be null OR a valid destination for one
+ * pointer write.
+ */
+
+int32_t blazen_embedding_model_new_openai(const char *api_key,
+                                          const char *model,
+                                          const char *base_url,
+                                          BlazenEmbeddingModel **out_model,
+                                          BlazenError **out_err);
+
+/**
+ * Constructs a fal.ai embedding model.
+ *
+ * Routes through fal's OpenAI-compatible embeddings endpoint. `model`
+ * defaults to `"openai/text-embedding-3-small"` (1536 dims) when null;
+ * `dimensions` of `-1` keeps the model's default vector size, non-negative
+ * values override it to the supplied dimensionality (must match an
+ * upstream-supported size).
+ *
+ * # Safety
+ *
+ * `api_key` must be a valid NUL-terminated UTF-8 buffer. `model` must be
+ * null OR a valid NUL-terminated UTF-8 buffer. `out_model` / `out_err` must
+ * each be null OR a valid destination for one pointer write.
+ */
+
+int32_t blazen_embedding_model_new_fal(const char *api_key,
+                                       const char *model,
+                                       int32_t dimensions,
+                                       BlazenEmbeddingModel **out_model,
+                                       BlazenError **out_err);
+
+/**
+ * Constructs a local fastembed (ONNX Runtime) embedding model.
+ *
+ * `model_name` selects a variant from fastembed's catalog (case-insensitive
+ * debug spelling: `"BGESmallENV15"`, `"AllMiniLML6V2"`, ...); when null,
+ * defaults to `BGESmallENV15`. `max_batch_size` of `-1` keeps the upstream
+ * default. `show_download_progress` is always applied (`UniFFI`'s
+ * `Option<bool>` collapses to a plain bool here).
+ *
+ * Feature-gated on `embed`.
+ *
+ * # Safety
+ *
+ * `model_name` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * `out_model` / `out_err` must each be null OR a valid destination for one
+ * pointer write.
+ */
+
+int32_t blazen_embedding_model_new_fastembed(const char *model_name,
+                                             int32_t max_batch_size,
+                                             bool show_download_progress,
+                                             BlazenEmbeddingModel **out_model,
+                                             BlazenError **out_err);
+
+/**
+ * Constructs a local candle text-embedding model.
+ *
+ * Loads weights from `HuggingFace` and runs inference on-device. Defaults
+ * to `"sentence-transformers/all-MiniLM-L6-v2"` when `model_id` is null.
+ *
+ * Feature-gated on `candle-embed`.
+ *
+ * # Safety
+ *
+ * `model_id`, `device`, and `revision` must each be null OR a valid
+ * NUL-terminated UTF-8 buffer. `out_model` / `out_err` must each be null OR
+ * a valid destination for one pointer write.
+ */
+
+int32_t blazen_embedding_model_new_candle(const char *model_id,
+                                          const char *device,
+                                          const char *revision,
+                                          BlazenEmbeddingModel **out_model,
+                                          BlazenError **out_err);
+
+/**
+ * Constructs a local tract (pure-Rust ONNX) embedding model.
+ *
+ * Drop-in replacement for [`blazen_embedding_model_new_fastembed`] for
+ * targets where the prebuilt ONNX Runtime binaries can't link (musl-libc,
+ * some sandboxed environments). Loads the same fastembed model catalog via
+ * `tract_onnx`. `model_name` of null defaults to `BGESmallENV15`;
+ * `max_batch_size` of `-1` keeps the upstream default.
+ *
+ * Feature-gated on `tract`.
+ *
+ * # Safety
+ *
+ * `model_name` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * `out_model` / `out_err` must each be null OR a valid destination for one
+ * pointer write.
+ */
+
+int32_t blazen_embedding_model_new_tract(const char *model_name,
+                                         int32_t max_batch_size,
+                                         bool show_download_progress,
+                                         BlazenEmbeddingModel **out_model,
+                                         BlazenError **out_err);
+
+/**
  * Constructs a new `StreamChunk` with the given `content_delta` and
  * `is_final` flag. `tool_calls` is initialised empty.
  *
@@ -3167,6 +3922,144 @@ int32_t blazen_pipeline_run_blocking(const BlazenPipeline *pipe,
  * undefined behavior.
  */
  void blazen_string_free(char *ptr);
+
+/**
+ * Initialize the Langfuse LLM-observability exporter.
+ *
+ * Spawns a background tokio task that periodically flushes buffered LLM
+ * call traces, token usage, and latency data to the Langfuse ingestion
+ * API. Call once at process startup, before any traced work.
+ *
+ * Arguments:
+ *   - `public_key`: Langfuse public API key (HTTP Basic-auth username).
+ *   - `secret_key`: Langfuse secret API key (HTTP Basic-auth password).
+ *   - `host`: optional Langfuse host URL; null defaults to
+ *     `https://cloud.langfuse.com`.
+ *
+ * Returns `0` on success, `-1` on failure (writing the inner error to
+ * `*out_err`), or `-2` when `public_key` or `secret_key` is null / not
+ * valid UTF-8.
+ *
+ * # Safety
+ *
+ * - `public_key` and `secret_key` must be valid NUL-terminated UTF-8
+ *   buffers that remain live for the duration of the call.
+ * - `host` must be null OR a valid NUL-terminated UTF-8 buffer that
+ *   remains live for the duration of the call.
+ * - `out_err` must be null OR a writable pointer to a `*mut BlazenError`
+ *   slot.
+ */
+
+int32_t blazen_init_langfuse(const char *public_key,
+                             const char *secret_key,
+                             const char *host,
+                             BlazenError **out_err);
+
+/**
+ * Initialize the OpenTelemetry OTLP (gRPC) trace exporter.
+ *
+ * Installs an `opentelemetry-otlp` exporter as the global tracing
+ * subscriber.
+ *
+ * Arguments:
+ *   - `endpoint`: OTLP gRPC endpoint URL (e.g. `"http://localhost:4317"`).
+ *   - `service_name`: optional service name reported to the backend; null
+ *     defaults to `"blazen"`.
+ *
+ * Returns `0` on success, `-1` on failure (writing the inner error to
+ * `*out_err`), or `-2` when `endpoint` is null / not valid UTF-8.
+ *
+ * # Safety
+ *
+ * - `endpoint` must be a valid NUL-terminated UTF-8 buffer that remains
+ *   live for the duration of the call.
+ * - `service_name` must be null OR a valid NUL-terminated UTF-8 buffer
+ *   that remains live for the duration of the call.
+ * - `out_err` must be null OR a writable pointer to a `*mut BlazenError`
+ *   slot.
+ */
+ int32_t blazen_init_otlp(const char *endpoint, const char *service_name, BlazenError **out_err);
+
+/**
+ * Initialize the Prometheus metrics exporter and start its HTTP listener.
+ *
+ * Installs a global `metrics` recorder backed by Prometheus and starts an
+ * HTTP server serving the `/metrics` endpoint.
+ *
+ * `listen_address` accepts a `host:port` string (e.g. `"0.0.0.0:9100"`)
+ * or a bare port (e.g. `"9100"`). The upstream listener always binds
+ * `0.0.0.0`; only the port portion is honored.
+ *
+ * Returns `0` on success, `-1` on failure (writing the inner error to
+ * `*out_err`), or `-2` when `listen_address` is null / not valid UTF-8.
+ *
+ * # Safety
+ *
+ * - `listen_address` must be a valid NUL-terminated UTF-8 buffer that
+ *   remains live for the duration of the call.
+ * - `out_err` must be null OR a writable pointer to a `*mut BlazenError`
+ *   slot.
+ */
+ int32_t blazen_init_prometheus(const char *listen_address, BlazenError **out_err);
+
+/**
+ * Best-effort flush + shutdown of any initialised telemetry exporters.
+ *
+ * Safe to call even if no exporter was initialised. Currently a no-op on
+ * the upstream side — see `blazen_uniffi::telemetry::shutdown_telemetry`
+ * for context — but exposed so foreign callers can wire a single
+ * "shutdown" hook into their app lifecycle without conditional branching
+ * on features.
+ */
+ void blazen_shutdown_telemetry(void);
+
+/**
+ * Decode a JSON-serialised upstream `blazen_telemetry::WorkflowHistory`
+ * into a flat array of [`BlazenWorkflowHistoryEntry`] handles.
+ *
+ * The expected input is the exact format produced by
+ * `serde_json::to_string(&history)` on a `blazen_telemetry::WorkflowHistory`
+ * (i.e. an object with `run_id`, `workflow_name`, and `events`).
+ *
+ * On success returns `0`, writes the array base pointer into `*out_array`,
+ * and writes its length into `*out_count`. The array contains a heap
+ * pointer per event; release the whole thing with
+ * [`blazen_workflow_history_entry_array_free`].
+ *
+ * Returns `-1` on parse failure (writing the inner error to `*out_err`),
+ * or `-2` when `history_json` is null or not valid UTF-8.
+ *
+ * When `out_array` is null the freshly built array is freed immediately
+ * to avoid a leak — `*out_count` is still populated.
+ *
+ * # Safety
+ *
+ * - `history_json` must be a valid NUL-terminated UTF-8 buffer that
+ *   remains live for the duration of the call.
+ * - `out_array` / `out_count` / `out_err` must be null OR writable
+ *   pointers to the appropriate slot.
+ */
+
+int32_t blazen_parse_workflow_history(const char *history_json,
+                                      BlazenWorkflowHistoryEntry ***out_array,
+                                      uintptr_t *out_count,
+                                      BlazenError **out_err);
+
+/**
+ * Frees an array of `*mut BlazenWorkflowHistoryEntry` previously produced
+ * by [`blazen_parse_workflow_history`].
+ *
+ * Releases each entry handle AND the backing slice in one call. No-op on
+ * a null `arr` (regardless of `count`).
+ *
+ * # Safety
+ *
+ * `arr` must be null OR a pointer previously produced by
+ * [`blazen_parse_workflow_history`], with `count` matching its length.
+ * Double-free is undefined behavior; modifying or freeing individual
+ * element pointers before this call is also undefined.
+ */
+ void blazen_workflow_history_entry_array_free(BlazenWorkflowHistoryEntry **arr, uintptr_t count);
 
 /**
  * Returns the history entry's `workflow_id` (UUID string of the

@@ -12,8 +12,10 @@
 
 pub mod agent;
 pub mod agent_records;
+pub mod batch;
 pub mod batch_records;
 pub mod compute;
+pub mod compute_factories;
 pub mod compute_records;
 pub mod error;
 pub mod future;
@@ -22,11 +24,14 @@ pub mod llm;
 pub mod llm_records;
 pub mod peer;
 pub mod persist;
+pub mod persist_factories;
 pub mod persist_records;
 pub mod pipeline;
+pub mod providers;
 pub mod runtime;
 pub mod streaming_records;
 pub mod string;
+pub mod telemetry;
 pub mod telemetry_records;
 pub mod workflow;
 pub mod workflow_records;
