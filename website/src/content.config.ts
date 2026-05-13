@@ -7,7 +7,7 @@ const docs = defineCollection({
     title: z.string(),
     description: z.string(),
     language: z
-      .enum(["rust", "python", "node", "wasm", "go", "swift", "kotlin"])
+      .enum(["rust", "python", "node", "wasm", "go", "swift", "kotlin", "ruby"])
       .optional(),
     section: z.enum(["getting-started", "guides", "api", "examples"]),
     order: z.number(),

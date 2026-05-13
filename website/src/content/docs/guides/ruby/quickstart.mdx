@@ -1,0 +1,143 @@
+---
+title: "Quickstart"
+description: "Build your first Blazen workflow in Ruby"
+language: "ruby"
+section: "guides"
+order: 1
+---
+
+# Quickstart
+
+Get a Blazen workflow running in Ruby in under five minutes.
+
+## Installation
+
+The Ruby binding lives in the Blazen monorepo at `bindings/ruby/` and ships as a standard RubyGem that loads the prebuilt `libblazen_cabi.{so,dylib,dll}` via the `ffi` gem. Ruby 3.1+ is required.
+
+```ruby
+# Gemfile
+gem "blazen"
+```
+
+Or install directly:
+
+```bash
+gem install blazen
+```
+
+The gem bundles the prebuilt native library for the supported platforms (linux-x86_64, linux-aarch64, macos-arm64, macos-x86_64, windows-x86_64); `ffi` finds it at startup automatically.
+
+## Your first workflow
+
+Workflows are built with `Blazen.workflow(name) { |b| b.step(...) }`. Each step is a Ruby block that receives a `Blazen::Workflow::Event` and returns a `Blazen::Workflow::StepOutput`.
+
+```ruby
+require 'blazen'
+
+Blazen.init
+
+workflow = Blazen.workflow('echo') do |b|
+  b.step('echo', accepts: ['blazen::StartEvent'], emits: ['blazen::StopEvent']) do |evt|
+    payload = evt.data['data'] || {}
+    Blazen::Workflow::StepOutput.single(
+      Blazen::Workflow::Event.create(
+        event_type: 'blazen::StopEvent',
+        data: { result: payload },
+      ),
+    )
+  end
+end
+
+result = workflow.run_blocking({ hello: 'world' })
+puts result.event_data.inspect
+# => {"result"=>{"hello"=>"world"}}
+```
+
+Run it:
+
+```bash
+ruby hello.rb
+```
+
+## How it works
+
+**Events** are `Blazen::Workflow::Event` records with two fields: `event_type` (a free-form class name such as `"blazen::StartEvent"`) and `data_json` (the JSON-encoded payload). Two event types are special-cased by the engine:
+
+- `"blazen::StartEvent"` -- emitted when the workflow begins. The value you pass to `workflow.run(input)` (or `run_blocking`) is JSON-encoded and arrives wrapped as `{"data": <your-input>}`.
+- `"blazen::StopEvent"` -- returning an `Event` with this type ends the workflow. Attach your final output under the `"result"` key.
+
+**Steps** are registered on the builder with `b.step(name, accepts:, emits:) { |evt| ... }`:
+
+- `name` -- a unique identifier for the step.
+- `accepts:` -- event type strings that trigger this step.
+- `emits:` -- every event type the block may return; declared up front so the engine can validate routing.
+- block -- receives a `Blazen::Workflow::Event` and returns a `Blazen::Workflow::StepOutput` (`StepOutput.single(event)`, `StepOutput.multiple([event, ...])`, or `StepOutput.none`).
+
+**Result** -- `workflow.run` / `workflow.run_blocking` returns a `Blazen::Workflow::WorkflowResult` exposing `#event`, `#event_data` (decoded JSON), `#total_input_tokens`, `#total_output_tokens`, and `#total_cost_usd`.
+
+## Blocking vs async
+
+Every workflow instance exposes two run methods:
+
+- `workflow.run_blocking(input)` -- blocks the calling thread on the embedded Tokio runtime until the workflow completes. Use this for scripts and synchronous code.
+- `workflow.run(input)` -- composes with `Fiber.scheduler`. When the `async` gem (or any other fiber scheduler) is active, the calling fiber yields while the workflow is in flight. Falls back to blocking the calling thread otherwise.
+
+```ruby
+require 'async'
+
+Async do
+  result = workflow.run({ hello: 'world' }) # yields the fiber, doesn't block other fibers
+  puts result.event_data.inspect
+end
+```
+
+## A quick LLM completion
+
+The `Blazen::Providers` module exposes keyword-arg factories for every supported backend. Each factory returns a `Blazen::Llm::CompletionModel` (or `EmbeddingModel`, etc.).
+
+```ruby
+require 'blazen'
+
+Blazen.init
+
+model = Blazen::Providers.openai(
+  api_key: ENV.fetch('OPENAI_API_KEY'),
+  model: 'gpt-4o-mini',
+)
+
+request = Blazen::Llm.completion_request(
+  messages: [
+    Blazen::Llm.system('You are a helpful assistant.'),
+    Blazen::Llm.user('Write a haiku about Ruby blocks.'),
+  ],
+  max_tokens: 256,
+)
+
+response = model.complete_blocking(request)
+puts response.content
+puts "tokens in=#{response.usage.prompt_tokens} out=#{response.usage.completion_tokens}"
+```
+
+`Blazen::Llm.completion_request` consumes the messages array -- once you pass a `ChatMessage` in, do not reuse the same wrapper for a second request. Build a fresh one each time.
+
+## Lifecycle
+
+The binding has a small lifecycle surface:
+
+| Call | When |
+|---|---|
+| `Blazen.init` | Boots the embedded Tokio runtime and tracing subscriber. Idempotent; called lazily by every entry point. |
+| `Blazen.shutdown` | Flushes telemetry exporters. Safe to call once before process exit. |
+| Native handles (`Workflow::Instance`, `CompletionModel`, ...) | Auto-freed via `FFI::AutoPointer` finalizers when the Ruby wrapper is garbage-collected. |
+
+Every wrapper class installs an `FFI::AutoPointer` finalizer, so a forgotten handle does not leak native memory across a GC -- but pinning long-lived models in a constant or instance variable is preferred over relying on GC timing.
+
+## Next steps
+
+You now have a working workflow. From here you can:
+
+- Define custom routing events and fan out work across multiple steps -- see [Events](/guides/ruby/events/).
+- Pass data between steps and structure workflow-level state -- see [Context](/guides/ruby/context/).
+- Stream LLM responses with a single `Blazen::Streaming.complete` callback -- see [Streaming](/guides/ruby/streaming/).
+- Build workflows that pause for external input -- see [Human-in-the-Loop](/guides/ruby/human-in-the-loop/).
+- Attach images and audio to chat completions and use TTS/STT -- see [Multimodal](/guides/ruby/multimodal/).

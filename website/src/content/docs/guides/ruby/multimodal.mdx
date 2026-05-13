@@ -1,0 +1,212 @@
+---
+title: "Multimodal"
+description: "Attach images and audio to chat completions, and run TTS / STT / image-gen in Ruby"
+language: "ruby"
+section: "guides"
+order: 6
+---
+
+# Multimodal
+
+Blazen's Ruby binding accepts multimodal payloads (images, audio, video, documents) as `Blazen::Llm::Media` parts attached to a `Blazen::Llm::ChatMessage`. It also exposes text-to-speech (`Blazen::Compute::TtsModel`), speech-to-text (`Blazen::Compute::SttModel`), and image generation (`Blazen::Compute::ImageGenModel`) through the same provider factories you use for chat completions.
+
+## The `Media` part
+
+Every `ChatMessage` carries an optional `media_parts:` array. Each entry is a `Blazen::Llm::Media` wrapper that pairs the raw bytes (base64-encoded) with the MIME type and a kind discriminator:
+
+```ruby
+media = Blazen::Llm.media(
+  kind: 'image',
+  mime_type: 'image/png',
+  data_base64: Base64.strict_encode64(File.binread('photo.png')),
+)
+```
+
+`kind` is one of `"image"`, `"audio"`, `"video"`, `"document"`. The framework dispatches on `kind` and `mime_type` to pick the right wire encoding for the active provider.
+
+## Sending an image
+
+Build a `ChatMessage` with the `media_parts:` kwarg, then pass it through `Blazen::Llm.completion_request`. The `ChatMessage` constructor consumes the `Media` wrappers (it transfers their native pointers to the cabi), so you cannot reuse a `Media` instance across two messages -- build a fresh one each time.
+
+```ruby
+require 'blazen'
+require 'base64'
+
+Blazen.init
+
+image_b64 = Base64.strict_encode64(File.binread('photo.png'))
+media = Blazen::Llm.media(kind: 'image', mime_type: 'image/png', data_base64: image_b64)
+
+msg = Blazen::Llm.message(
+  role: 'user',
+  content: 'What is in this image? Describe it in one sentence.',
+  media_parts: [media],
+)
+
+req = Blazen::Llm.completion_request(messages: [msg])
+
+model = Blazen::Providers.openai(
+  api_key: ENV.fetch('OPENAI_API_KEY'),
+  model: 'gpt-4o-mini',
+)
+resp = model.complete_blocking(req)
+puts resp.content
+```
+
+The Rust side resolves `media_parts` against the active provider:
+
+- **OpenAI vision** -- the bytes are rewritten into an `image_url` data URL or an `input_image` part depending on the model.
+- **Anthropic vision** -- the bytes are rewritten into the `{type: "image", source: {type: "base64", ...}}` block.
+- **Gemini multimodal** -- the bytes are rewritten into an `inline_data` part with the matching MIME type.
+
+You write one `Blazen::Llm.media(...)` and Blazen handles the wire-format dance.
+
+## Audio and video
+
+Audio and video work identically -- the `kind:` field discriminates and Blazen routes to the appropriate provider surface:
+
+```ruby
+audio = Blazen::Llm.media(
+  kind: 'audio',
+  mime_type: 'audio/mpeg',
+  data_base64: Base64.strict_encode64(File.binread('clip.mp3')),
+)
+
+req = Blazen::Llm.completion_request(
+  messages: [
+    Blazen::Llm.message(
+      role: 'user',
+      content: 'Transcribe this clip.',
+      media_parts: [audio],
+    ),
+  ],
+)
+```
+
+Provider support varies -- Gemini and OpenAI Realtime accept audio and video, Anthropic accepts video frames but not raw audio at the message level, and most others are text-and-image only. A provider that does not support the requested `kind` returns a `Blazen::UnsupportedError`.
+
+## Multiple parts in one message
+
+A single message can carry as many media parts as the upstream provider allows:
+
+```ruby
+msg = Blazen::Llm.message(
+  role: 'user',
+  content: 'Compare these two photos.',
+  media_parts: [
+    Blazen::Llm.media(kind: 'image', mime_type: 'image/png', data_base64: img_a_b64),
+    Blazen::Llm.media(kind: 'image', mime_type: 'image/png', data_base64: img_b_b64),
+  ],
+)
+```
+
+Providers that lay out media inline (Anthropic, Gemini) preserve array order in the rendered prompt.
+
+## Text-to-speech
+
+`Blazen::Compute::TtsModel` runs synthesis through fal.ai's hosted models or a local Piper voice. Pass the model to `Blazen::Compute.synthesize` (a convenience wrapper around `model.synthesize_blocking`):
+
+```ruby
+tts_model = Blazen::Providers.fal_tts(
+  api_key: ENV.fetch('FAL_KEY'),
+  model: 'fal-ai/dia-tts',
+)
+
+result = Blazen::Compute.synthesize(
+  tts_model,
+  'Hello from Ruby! Welcome to Blazen.',
+  voice: 'speaker_0',
+  language: 'en',
+)
+
+File.binwrite('out.mp3', Base64.strict_decode64(result.audio_base64))
+puts "MIME: #{result.mime_type}, duration: #{result.duration_ms}ms"
+```
+
+`TtsResult#audio_base64` is the base64-encoded audio payload; `mime_type` is the upstream's reported MIME (e.g. `"audio/mpeg"`); `duration_ms` is the synthesized clip duration.
+
+For local Piper:
+
+```ruby
+piper = Blazen::Compute.piper_tts(model_id: 'en_US-amy-medium')
+result = piper.synthesize_blocking('Local speech synthesis works too.')
+```
+
+The Piper / Whisper / diffusion factories raise `Blazen::UnsupportedError` if the native library was built without the matching feature flag.
+
+## Speech-to-text
+
+`Blazen::Compute::SttModel` accepts an audio source (a file path, URL, or base64 string -- the interpretation depends on the backend) and returns a transcript:
+
+```ruby
+stt_model = Blazen::Providers.fal_stt(
+  api_key: ENV.fetch('FAL_KEY'),
+  model: 'fal-ai/wizper',
+)
+
+result = Blazen::Compute.transcribe(stt_model, 'https://example.com/clip.mp3', language: 'en')
+puts result.transcript
+puts "detected language: #{result.language}, duration: #{result.duration_ms}ms"
+```
+
+The async variant `model.transcribe(source, language: 'en')` returns when the cabi future resolves and composes with `Fiber.scheduler` when one is active.
+
+For local Whisper (requires the cabi to be built with the `whispercpp` feature):
+
+```ruby
+whisper = Blazen::Compute.whisper_stt(model: 'small', device: 'cpu', language: 'en')
+result = whisper.transcribe_blocking('/path/to/clip.wav')
+puts result.transcript
+```
+
+## Image generation
+
+`Blazen::Compute::ImageGenModel` generates images from prompts. The result is an `ImageGenResult` whose `#images` array carries `Blazen::Llm::Media` parts in the same shape as inputs (base64 bytes plus MIME type):
+
+```ruby
+gen_model = Blazen::Providers.fal_image_gen(
+  api_key: ENV.fetch('FAL_KEY'),
+  model: 'fal-ai/flux/dev',
+)
+
+result = Blazen::Compute.generate(
+  gen_model,
+  prompt: 'A teal hummingbird sipping nectar from a fuschia flower',
+  width: 1024,
+  height: 1024,
+  num_images: 1,
+)
+
+result.images.each_with_index do |img, i|
+  File.binwrite("out_#{i}.png", Base64.strict_decode64(img.data_base64))
+end
+```
+
+For local diffusion (requires the cabi to be built with the `diffusion` feature):
+
+```ruby
+diff = Blazen::Compute.diffusion(
+  model_id: 'stabilityai/stable-diffusion-2',
+  device: 'cpu',
+  width: 512, height: 512,
+  num_inference_steps: 20, guidance_scale: 7.5,
+)
+result = diff.generate_blocking(prompt: 'A pixel-art sunset')
+```
+
+## Errors
+
+Multimodal failures surface as the same `Blazen::Error` subclasses you see on text-only requests:
+
+- `Blazen::ValidationError` -- malformed payload (missing `mime_type`, invalid base64, etc.)
+- `Blazen::UnsupportedError` -- provider does not accept the requested `kind`, or the native build lacks the requested feature (Piper / Whisper / diffusion)
+- `Blazen::ProviderError` -- upstream API failure
+- `Blazen::RateLimitError` -- provider returned a rate-limit response
+
+Wrap calls in a `rescue Blazen::Error` clause if you want a single catch-all, or branch on the subclass for typed handling.
+
+## See also
+
+- [Streaming](/guides/ruby/streaming/) -- streaming chat completions with media parts attached.
+- [Quickstart](/guides/ruby/quickstart/) -- the basic completion request shape and provider factories.
+- [Events](/guides/ruby/events/) -- wrapping multimodal results into routing events inside a workflow.

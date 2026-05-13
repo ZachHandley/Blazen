@@ -1,0 +1,179 @@
+---
+title: "Human-in-the-Loop"
+description: "Build workflows that pause for external input in Ruby"
+language: "ruby"
+section: "guides"
+order: 5
+---
+
+# Human-in-the-Loop
+
+Many real workflows need to pause at a decision point and wait for an external signal -- a human approval, an email reply, a webhook from another service -- before continuing. This guide covers the patterns the Ruby binding supports today, plus the gaps to be aware of.
+
+## What's available
+
+The Ruby binding exposes the same workflow surface as the other UniFFI bindings: a builder, named steps, and event-driven routing. **The binding does not currently expose a dedicated `wait_for_input` / `pause` / `resume` API directly to Ruby code.** The cabi `Workflow` object only has `run` and `run_blocking`; pause / resume snapshots that exist on the Python binding are not surfaced through the C ABI yet.
+
+What this means in practice: you can pause a workflow by structuring it as a two-stage run, where the first stage gathers context and the second stage runs after your external system has produced the input. You cannot freeze a single `workflow.run` mid-flight, snapshot the state to a database, and resume from where it left off later.
+
+If you need true snapshot-based pause / resume from Ruby, [file an issue](https://github.com/ZachHandley/Blazen/issues) -- the underlying cabi surface needs new entry points (`blazen_workflow_pause`, `blazen_workflow_resume_from_snapshot`) before the Ruby wrapper can expose it.
+
+## Pattern: two-stage workflows
+
+Split the work into two workflows -- one that runs up to the human-input boundary and emits a structured "needs input" payload, and one that resumes once the input arrives. Persist anything you'll need between the two runs in your own datastore (Redis, Postgres, SQLite, etc.).
+
+```ruby
+require 'blazen'
+require 'securerandom'
+
+Blazen.init
+
+# Stage 1: prepare a draft and emit "needs approval".
+prepare = Blazen.workflow('prepare_email') do |b|
+  b.step('draft', accepts: ['blazen::StartEvent'], emits: ['blazen::StopEvent']) do |evt|
+    payload = evt.data['data']
+    draft = "Hi #{payload['recipient']}, your refund of $#{payload['amount']} is approved."
+    request_id = SecureRandom.uuid
+    Blazen::Workflow::StepOutput.single(
+      Blazen::Workflow::Event.create(
+        event_type: 'blazen::StopEvent',
+        data: {
+          result: {
+            request_id: request_id,
+            draft: draft,
+            recipient: payload['recipient'],
+            status: 'awaiting_approval',
+          },
+        },
+      ),
+    )
+  end
+end
+
+result = prepare.run_blocking({ recipient: 'alice@example.com', amount: 42.50 })
+draft = result.event_data['result']
+
+# Persist draft to your own store, keyed by request_id.
+# pending_approvals_table.put(draft['request_id'], draft)
+
+# ... later, after a human clicks "approve" in your UI ...
+approval = { request_id: draft['request_id'], approved_by: 'manager@example.com' }
+
+# Stage 2: send the email now that we have approval.
+send = Blazen.workflow('send_email') do |b|
+  b.step('dispatch', accepts: ['blazen::StartEvent'], emits: ['blazen::StopEvent']) do |evt|
+    payload = evt.data['data']
+    # mailer.deliver(to: payload['recipient'], body: payload['draft'])
+    Blazen::Workflow::StepOutput.single(
+      Blazen::Workflow::Event.create(
+        event_type: 'blazen::StopEvent',
+        data: {
+          result: {
+            request_id: payload['request_id'],
+            delivered: true,
+            approved_by: payload['approved_by'],
+          },
+        },
+      ),
+    )
+  end
+end
+
+send.run_blocking(draft.merge(approval))
+```
+
+This approach scales: each run is independent, each draft is keyed by an id in your store, and the human gate is whatever queue / inbox / UI lives between the two runs.
+
+## Pattern: single-run with a blocking queue
+
+If the input is going to arrive on the same process within a short window (say, a webhook handler that fires within seconds), you can run a single workflow whose middle step blocks on a `Queue` until the external signal arrives. Step blocks run on a Tokio worker thread via `spawn_blocking`, so blocking inside one is safe -- you will not stall the engine.
+
+```ruby
+require 'blazen'
+
+Blazen.init
+
+approvals = Queue.new
+
+workflow = Blazen.workflow('approve_and_send') do |b|
+  b.step('draft', accepts: ['blazen::StartEvent'], emits: ['NeedsApproval']) do |evt|
+    payload = evt.data['data']
+    draft = "Send refund of $#{payload['amount']} to #{payload['recipient']}"
+    Blazen::Workflow::StepOutput.single(
+      Blazen::Workflow::Event.create(
+        event_type: 'NeedsApproval',
+        data: { draft: draft, recipient: payload['recipient'] },
+      ),
+    )
+  end
+
+  b.step('wait_for_approval', accepts: ['NeedsApproval'], emits: ['Approved']) do |evt|
+    decision = approvals.pop # Blocks until someone pushes to the queue.
+    payload = evt.data
+    Blazen::Workflow::StepOutput.single(
+      Blazen::Workflow::Event.create(
+        event_type: 'Approved',
+        data: payload.merge(approved_by: decision[:approved_by]),
+      ),
+    )
+  end
+
+  b.step('send', accepts: ['Approved'], emits: ['blazen::StopEvent']) do |evt|
+    payload = evt.data
+    # mailer.deliver(to: payload['recipient'], body: payload['draft'])
+    Blazen::Workflow::StepOutput.single(
+      Blazen::Workflow::Event.create(
+        event_type: 'blazen::StopEvent',
+        data: {
+          result: {
+            sent_to: payload['recipient'],
+            approved_by: payload['approved_by'],
+          },
+        },
+      ),
+    )
+  end
+end
+
+# Drive the workflow on a background thread so we can push approvals into the queue.
+run_thread = Thread.new { workflow.run_blocking({ recipient: 'alice@example.com', amount: 42.50 }) }
+
+# Somewhere else (webhook, UI callback, ...):
+approvals << { approved_by: 'manager@example.com' }
+
+result = run_thread.value
+puts result.event_data.inspect
+```
+
+Two important notes:
+
+1. **The closure over `approvals` is shared in-process state.** This pattern only works when the approval signal arrives on the same Ruby process. For multi-process coordination, fall back to the two-stage pattern above with a database / Redis between runs.
+2. **Workflow timeouts apply.** Set `b.step_timeout_ms(...)` or `b.timeout_ms(...)` so a forgotten approval does not pin the worker thread forever. The engine tears the step down and raises `Blazen::TimeoutError` from `run_blocking`.
+
+## Pattern: side-effect step with no emission
+
+A step that records state for an out-of-band system to consume can return `StepOutput.none` (or simply return `nil` from the block) and let the workflow terminate at that point:
+
+```ruby
+b.step('hold_for_review', accepts: ['blazen::StartEvent'], emits: []) do |evt|
+  payload = evt.data['data']
+  # reviews_table.insert(payload.merge(status: 'pending'))
+  nil # Returning nil produces StepOutput.none.
+end
+```
+
+The workflow ends with no `StopEvent`, so `WorkflowResult#event_data` will reflect the last event the engine processed. Combine this with the two-stage pattern: stage 1 writes to a `reviews_table`, and stage 2 (`send` workflow) is triggered by whatever process reads from that table.
+
+## Limitations and follow-ups
+
+- No `wait_for_input` / `wait_for_event` primitive on the Ruby cabi surface today. Track follow-ups at [github.com/ZachHandley/Blazen/issues](https://github.com/ZachHandley/Blazen/issues).
+- No snapshot / resume across processes. The Python binding exposes this via `handler.pause()` / `Workflow.resume(snapshot)`; the cabi-backed bindings (Ruby, Go, Swift, Kotlin) do not yet have the matching entry points.
+- The block-form callback inside the workflow run *is* the Ruby step. If you need fiber-local state, use a `Queue` to marshal back to the calling fiber rather than touching fiber-locals from inside the block.
+
+For now the two-stage and queue patterns above cover almost every real human-in-the-loop case; the missing piece is true multi-process resume, which is on the roadmap.
+
+## See also
+
+- [Events](/guides/ruby/events/) -- routing custom events between steps (the building block for these patterns).
+- [Context](/guides/ruby/context/) -- how to thread state across step boundaries without a runtime context object.
+- [Streaming](/guides/ruby/streaming/) -- emit progress updates to a UI while a step is blocked waiting on input.

@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center">Blazen</h1>
-  <p align="center">Event-driven AI workflow engine with first-class LLM integration.<br/>Written in Rust. Native bindings for Python, TypeScript, and WebAssembly.</p>
+  <p align="center">Event-driven AI workflow engine with first-class LLM integration.<br/>Written in Rust. Native bindings for Python, TypeScript, WebAssembly, Go, Swift, Kotlin, and Ruby.</p>
 </p>
 
 <p align="center">
@@ -94,7 +94,29 @@ Ships a prebuilt static `libblazen_uniffi.a` under `internal/clib/<GOOS>_<GOARCH
 implementation("dev.zorpx.blazen:blazen-kotlin:0.1.0")
 ```
 
-**Ruby** — in active development; will ship after the Go/Swift/Kotlin trio stabilises.
+**Ruby** (requires Ruby 3.1+ with the `ffi` and `async` gems):
+
+```bash
+gem install blazen
+```
+
+```ruby
+require 'blazen'
+
+Blazen.init
+
+workflow = Blazen.workflow('hello') do |b|
+  b.step('echo', accepts: ['blazen::StartEvent'], emits: ['blazen::StopEvent']) do |evt|
+    Blazen::Workflow::StepOutput.single(
+      Blazen::Workflow::Event.create(event_type: 'blazen::StopEvent', data: { msg: 'hello' })
+    )
+  end
+end
+
+result = workflow.run_blocking({})
+```
+
+Ships a prebuilt `libblazen_cabi` shared library under `ext/blazen/` matching the host's `<os>_<arch>` triple (linux amd64/arm64 today; macOS and Windows via CI release builds). The Ruby binding goes through a hand-written cbindgen-generated C ABI (`crates/blazen-cabi`) and the `ffi` gem, with `Fiber.scheduler`-aware async so workflows compose with the `async` gem out of the box. Full `StepHandler`, `ToolHandler`, and `CompletionStreamSink` callback support.
 
 ## Quick Start
 

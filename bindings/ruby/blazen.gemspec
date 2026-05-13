@@ -38,6 +38,7 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency "ffi", "~> 1.16"
 
+  spec.add_development_dependency "async", "~> 2.0"
   spec.add_development_dependency "rake", "~> 13.0"
   spec.add_development_dependency "rspec", "~> 3.13"
 end

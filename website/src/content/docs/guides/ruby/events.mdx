@@ -1,0 +1,160 @@
+---
+title: "Events"
+description: "Create and route custom events in Ruby"
+language: "ruby"
+section: "guides"
+order: 2
+---
+
+# Events
+
+## The `Event` wrapper
+
+Events on the Ruby surface are `Blazen::Workflow::Event` instances wrapping the cabi `BlazenEvent` opaque pointer. Each event has two pieces of state:
+
+- `event_type` -- a free-form string (e.g. `"AnalyzeEvent"`, `"blazen::StartEvent"`)
+- a JSON payload, accessible as a raw string via `#data_json` or as a parsed Ruby `Hash` / `Array` / scalar via `#data`
+
+There is no Ruby-side event class hierarchy. The event type is the routing key, the payload is opaque JSON until your step block parses it.
+
+## Built-in events
+
+The engine special-cases two event type strings:
+
+- `"blazen::StartEvent"` -- the input event. The value you pass to `workflow.run(input)` is JSON-encoded and arrives wrapped as `{"data": <input>}`.
+- `"blazen::StopEvent"` -- terminates the workflow. The block must wrap its final output under a `"result"` key.
+
+```ruby
+# StartEvent payload shape (built by workflow.run):
+# {"data": {"message": "hello"}}
+
+# StopEvent payload shape (returned by the final step):
+# {"result": {"answer": 42}}
+```
+
+This wrapping is the authoritative wire format -- it matches the Rust `StartEvent { data: ... }` and `StopEvent { result: ... }` shapes and round-trips through every other Blazen binding.
+
+## Custom event types
+
+Any non-empty string that isn't `"blazen::StartEvent"` or `"blazen::StopEvent"` is a custom event. Pass a Ruby `Hash` (or any `JSON.dump`-able value) as the `data:` argument; the wrapper serialises it for you:
+
+```ruby
+ev = Blazen::Workflow::Event.create(
+  event_type: 'AnalyzeEvent',
+  data: { text: 'hello', score: 0.9 },
+)
+puts ev.event_type    # "AnalyzeEvent"
+puts ev.data.inspect  # {"text"=>"hello", "score"=>0.9}
+```
+
+The engine never inspects the payload of a custom event -- it just routes the event to every step whose `accepts:` list contains the matching `event_type`.
+
+## Routing
+
+Steps declare which event types they handle in `b.step(name, accepts:, emits:)`. `accepts` drives dispatch; `emits` is declared up front so the engine can validate routing before the workflow runs.
+
+```ruby
+workflow = Blazen.workflow('analyze') do |b|
+  b.step('ingest', accepts: ['blazen::StartEvent'], emits: ['AnalyzeEvent']) do |evt|
+    payload = evt.data['data'] || {}
+    Blazen::Workflow::StepOutput.single(
+      Blazen::Workflow::Event.create(
+        event_type: 'AnalyzeEvent',
+        data: { text: payload['text'].to_s },
+      ),
+    )
+  end
+
+  b.step('analyze', accepts: ['AnalyzeEvent'], emits: ['blazen::StopEvent']) do |evt|
+    text = evt.data['text']
+    Blazen::Workflow::StepOutput.single(
+      Blazen::Workflow::Event.create(
+        event_type: 'blazen::StopEvent',
+        data: { result: { length: text.length } },
+      ),
+    )
+  end
+end
+
+result = workflow.run_blocking({ text: 'hello world' })
+puts result.event_data.inspect
+# => {"result"=>{"length"=>11}}
+```
+
+A step that declares an `emits:` type it never actually emits is fine. A step that emits a type it did not declare is a routing error surfaced as a `Blazen::ValidationError`.
+
+## StepOutput variants
+
+A step block returns one of three `Blazen::Workflow::StepOutput` shapes:
+
+```ruby
+Blazen::Workflow::StepOutput.none                      # no event emitted
+Blazen::Workflow::StepOutput.single(event)             # exactly one event
+Blazen::Workflow::StepOutput.multiple([event_a, event_b])  # fan-out: many events
+```
+
+Returning `StepOutput.none` (or returning `nil` from the block, which the binding converts to `None` for you) terminates the chain at this step without emitting anything -- useful for side-effect steps that record state but do not advance the workflow on their own.
+
+## Fan-out example
+
+Use `StepOutput.multiple` to dispatch several events from a single step:
+
+```ruby
+workflow = Blazen.workflow('fan_out') do |b|
+  b.step('split', accepts: ['blazen::StartEvent'], emits: ['BranchA', 'BranchB']) do |_evt|
+    branch_a = Blazen::Workflow::Event.create(event_type: 'BranchA', data: { value: 'a' })
+    branch_b = Blazen::Workflow::Event.create(event_type: 'BranchB', data: { value: 'b' })
+    Blazen::Workflow::StepOutput.multiple([branch_a, branch_b])
+  end
+
+  b.step('handle_a', accepts: ['BranchA'], emits: ['blazen::StopEvent']) do |evt|
+    Blazen::Workflow::StepOutput.single(
+      Blazen::Workflow::Event.create(
+        event_type: 'blazen::StopEvent',
+        data: { result: { branch: 'a', value: evt.data['value'] } },
+      ),
+    )
+  end
+
+  b.step('handle_b', accepts: ['BranchB'], emits: ['blazen::StopEvent']) do |evt|
+    Blazen::Workflow::StepOutput.single(
+      Blazen::Workflow::Event.create(
+        event_type: 'blazen::StopEvent',
+        data: { result: { branch: 'b', value: evt.data['value'] } },
+      ),
+    )
+  end
+end
+```
+
+Each emitted event is dispatched independently to the step whose `accepts:` list matches its `event_type`. The first step to emit `blazen::StopEvent` wins -- a workflow run terminates as soon as any step returns a stop event.
+
+## Returning errors
+
+A block that raises a `StandardError` aborts the step. The wrapper logs the exception class, message, and backtrace to `STDERR` and returns `-1` to the cabi, which the Rust side turns into a `Blazen::InternalError("step handler returned -1")` that surfaces to the caller of `workflow.run`.
+
+Because we cannot construct a `BlazenError` from Ruby across the cabi boundary, the original exception's class and backtrace are not preserved past the FFI -- only the STDERR log. If you need typed error reporting back to the caller, encode the failure as a payload field on a custom event instead and have your downstream step branch on it:
+
+```ruby
+b.step('validate', accepts: ['blazen::StartEvent'], emits: ['Validated', 'Invalid']) do |evt|
+  payload = evt.data['data'] || {}
+  if payload['email'].to_s.include?('@')
+    Blazen::Workflow::StepOutput.single(
+      Blazen::Workflow::Event.create(event_type: 'Validated', data: payload),
+    )
+  else
+    Blazen::Workflow::StepOutput.single(
+      Blazen::Workflow::Event.create(
+        event_type: 'Invalid',
+        data: { reason: 'missing @ in email', original: payload },
+      ),
+    )
+  end
+end
+```
+
+## See also
+
+- [Quickstart](/guides/ruby/quickstart/) -- the minimum end-to-end workflow.
+- [Context](/guides/ruby/context/) -- how event data carries workflow-level state.
+- [Streaming](/guides/ruby/streaming/) -- streaming LLM completions inside a step.

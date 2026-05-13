@@ -1,6 +1,6 @@
 # Blazen
 
-Rust workspace with 14 crates (LLM orchestration framework) + Python (PyO3), Node.js (napi-rs), WASM (wasm-bindgen), and UniFFI bindings for Go, Swift, and Kotlin. Ruby UniFFI binding is in progress via a cbindgen-generated C ABI (see `bindings/ruby/`).
+Rust workspace with 14 crates (LLM orchestration framework) + Python (PyO3), Node.js (napi-rs), WASM (wasm-bindgen), and UniFFI bindings for Go, Swift, and Kotlin. The Ruby binding ships through a hand-written cbindgen-generated C ABI (`crates/blazen-cabi`) plus a `FFI::Library` wrapper in `bindings/ruby/lib/blazen/ffi.rb`, with full `StepHandler` / `ToolHandler` / `CompletionStreamSink` callback support and `Fiber.scheduler`-aware async (composes with the `async` gem).
 
 ## Setup
 
@@ -55,15 +55,25 @@ cargo build -p blazen-uniffi --release
 
 The same `audit-bindings` job runs this script and fails on drift.
 
+After any change to `crates/blazen-cabi/` (the C ABI surface for the Ruby binding), regenerate `bindings/ruby/ext/blazen/blazen.h` by running:
+
+```bash
+cargo build -p blazen-cabi --release
+```
+
+The `build.rs` invokes cbindgen automatically and writes the updated header. CI's `audit-bindings` job fails on drift, so commit the regenerated `blazen.h`.
+
 To rebuild the prebuilt native libs that the Go/Kotlin/Ruby bindings link against (linux amd64/arm64 today; macOS and Windows handled by CI release runs):
 
 ```bash
 ./scripts/build-uniffi-lib.sh
 ```
 
+This produces both `libblazen_uniffi` (Go/Swift/Kotlin) and `libblazen_cabi` (Ruby) and copies each into the appropriate per-binding resource directory.
+
 ## Test
 
-The Rust workspace is only one of seven test surfaces. ALL SEVEN must pass before pushing:
+The Rust workspace is only one of eight test surfaces. ALL EIGHT must pass before pushing:
 
 ```bash
 # 1. Rust workspace (922+ tests in 14 crates)
@@ -104,6 +114,13 @@ cd bindings/swift && swift build && swift test
 # Ensure the shared lib is at src/main/resources/<jna-platform>/ first.
 ./scripts/build-uniffi-lib.sh linux_amd64
 cd bindings/kotlin && gradle test --no-daemon
+
+# 8. Ruby binding (bindings/ruby) — uses rspec, requires Ruby 3.1+ and the
+# `ffi` + `async` gems. The Ruby gem links against `libblazen_cabi`, not the
+# UniFFI lib, so build the cabi shared lib before testing.
+./scripts/build-uniffi-lib.sh linux_amd64   # produces libblazen_cabi alongside libblazen_uniffi
+cd bindings/ruby && bundle install          # or: gem install rspec async ffi
+bundle exec rspec spec/                     # or: rspec spec/  if bundler is unavailable
 ```
 
 ALWAYS use `uv run --no-sync` (NOT plain `uv run`) for Python after `maturin develop` — plain `uv run` re-syncs the venv and replaces the freshly-built wheel with a stale cache, silently undoing your build.
