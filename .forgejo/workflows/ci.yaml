@@ -394,11 +394,10 @@ jobs:
   test-swift:
     name: Test Swift binding
     runs-on: ubuntu-latest
-    # swiftlang/swift:5.10-jammy ships a Linux Swift toolchain. macOS-only
-    # XCFramework builds live in build-artifacts.yaml on a macos-latest
-    # runner; the Linux container here exercises the SwiftPM build + tests
-    # against the host-built libblazen_uniffi.so.
-    container: swiftlang/swift:5.10-jammy
+    # Swift is installed on the host runner via the in-house setup-swift
+    # action (swiftly-backed). macOS-only XCFramework builds live in
+    # build-artifacts.yaml on a macos-latest runner; this job exercises the
+    # SwiftPM build + tests on Linux against the host-built libblazen_uniffi.so.
     needs: [detect, lint]
     if: needs.detect.outputs.web_only != 'true'
     steps:
@@ -429,11 +428,17 @@ jobs:
           sccache-key-prefix: sccache/blazen-swift
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
+      - name: Setup Swift
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-swift@main
+        with:
+          swift-version: '6.0'
+
       - name: Build blazen-uniffi (release)
         if: steps.check.outputs.completed != 'true'
         # Package.swift's UniFFIBlazen target uses -L../../target/release on
-        # Linux so a host build of libblazen_uniffi.so is enough for swift
-        # build + swift test in this container.
+        # Linux so a host build of libblazen_uniffi.so is enough for
+        # swift build + swift test once Swift is on PATH.
         run: cargo build -p blazen-uniffi --release
 
       - name: swift build / swift test
@@ -513,7 +518,9 @@ jobs:
 
       - name: Set up Gradle
         if: steps.check.outputs.completed != 'true'
-        uses: gradle/actions/setup-gradle@v3
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-gradle@main
+        with:
+          gradle-version: '8.10'
 
       - name: gradle build + test
         if: steps.check.outputs.completed != 'true'
@@ -580,10 +587,9 @@ jobs:
 
       - name: Set up Ruby
         if: steps.check.outputs.completed != 'true'
-        uses: ruby/setup-ruby@v1
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-ruby@main
         with:
           ruby-version: '3.2'
-          bundler-cache: false
 
       - name: Install bundler + gem deps
         if: steps.check.outputs.completed != 'true'

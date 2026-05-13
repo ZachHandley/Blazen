@@ -1,7 +1,16 @@
 import type { APIRoute, GetStaticPaths } from "astro";
 import { getCollection } from "astro:content";
 
-const LANGS = ["python", "node", "rust", "wasm"] as const;
+const LANGS = [
+  "python",
+  "node",
+  "rust",
+  "wasm",
+  "go",
+  "swift",
+  "kotlin",
+  "ruby",
+] as const;
 type Lang = (typeof LANGS)[number];
 
 const LANG_TITLES: Record<Lang, string> = {
@@ -9,6 +18,10 @@ const LANG_TITLES: Record<Lang, string> = {
   node: "Node",
   rust: "Rust",
   wasm: "WASM",
+  go: "Go",
+  swift: "Swift",
+  kotlin: "Kotlin",
+  ruby: "Ruby",
 };
 
 const SECTION_ORDER = [

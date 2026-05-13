@@ -36,6 +36,10 @@ export const GET: APIRoute = async ({ site }) => {
     `- [Node slice](${origin}/llms-node.txt) — Node-specific docs plus cross-cutting guides`,
     `- [Rust slice](${origin}/llms-rust.txt) — Rust-specific docs plus cross-cutting guides`,
     `- [WASM slice](${origin}/llms-wasm.txt) — WASM-specific docs plus cross-cutting guides`,
+    `- [Go slice](${origin}/llms-go.txt) — Go-specific docs plus cross-cutting guides`,
+    `- [Swift slice](${origin}/llms-swift.txt) — Swift-specific docs plus cross-cutting guides`,
+    `- [Kotlin slice](${origin}/llms-kotlin.txt) — Kotlin-specific docs plus cross-cutting guides`,
+    `- [Ruby slice](${origin}/llms-ruby.txt) — Ruby-specific docs plus cross-cutting guides`,
     "",
   ];
 
