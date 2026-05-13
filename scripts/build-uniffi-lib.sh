@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
-# Build the blazen-uniffi native libraries for one or more targets and
-# distribute the resulting archives/shared-libs into each binding's expected
-# layout (Go cgo, Kotlin JNA, Ruby ffi).
+# Build the blazen-uniffi *and* blazen-cabi native libraries for one or more
+# targets and distribute the resulting archives/shared-libs into each
+# binding's expected layout (Go cgo, Kotlin JNA, Ruby ffi).
+#
+# Two cdylibs, two consumer groups:
+#   * `libblazen_uniffi` — Mozilla-UniFFI cdylib + staticlib. Consumed by Go
+#     (static .a via cgo), Kotlin (.so/.dylib/.dll via JNA), and Swift
+#     (xcframework, macOS-only).
+#   * `libblazen_cabi`   — Hand-rolled cbindgen + C ABI cdylib over the same
+#     types. Consumed by Ruby (the `ffi` gem) and any other host that wants
+#     a pure C surface (e.g. future Dart/Flutter via dart:ffi).
 #
 # Strategy per target (in order):
 #   1. Native rustup target + locally-available linker (cargo build --target …)
@@ -18,8 +26,8 @@
 #       JNA platform tags: linux-x86-64, linux-aarch64, darwin-x86-64,
 #       darwin-aarch64, win32-x86-64, win32-aarch64.
 #
-#   Ruby (dynamic, ffi gem loads at runtime)
-#       bindings/ruby/ext/blazen/<GOOS>_<GOARCH>/{libblazen_uniffi.so|.dylib|blazen_uniffi.dll}
+#   Ruby (dynamic, ffi gem loads at runtime — links libblazen_cabi, NOT _uniffi)
+#       bindings/ruby/ext/blazen/<GOOS>_<GOARCH>/{libblazen_cabi.so|.dylib|blazen_cabi.dll}
 #
 #   Swift XCFramework — macOS only, deferred to the macOS Forgejo runner
 #   (see Phase 7 CI). Skipped locally with a warning.
@@ -201,28 +209,30 @@ ensure_cross() {
     cargo install cross --git https://github.com/cross-rs/cross --locked
 }
 
-# Run the target build for `name` using strategy `strat`.
-# Outputs the path to the produced cdylib + staticlib via the BUILT_CDYLIB /
-# BUILT_STATICLIB globals (bash has no return tuples).
+# Run the target build for `name` using strategy `strat`. Builds both
+# `blazen-uniffi` (Go/Kotlin/Swift) and `blazen-cabi` (Ruby).
+#
+# Outputs the paths to the produced artefacts via globals (bash has no tuples):
+#   BUILT_UNIFFI_CDYLIB     dynamic libblazen_uniffi (.so/.dylib/.dll)
+#   BUILT_UNIFFI_STATICLIB  static libblazen_uniffi  (.a/.lib)
+#   BUILT_CABI_CDYLIB       dynamic libblazen_cabi   (.so/.dylib/.dll)
+BUILT_UNIFFI_CDYLIB=""
+BUILT_UNIFFI_STATICLIB=""
+BUILT_CABI_CDYLIB=""
+# Backwards-compat aliases (older callers / fork-mirrored scripts may grep these).
 BUILT_CDYLIB=""
 BUILT_STATICLIB=""
-build_target() {
-    local name="$1"
-    local strat="$2"
+
+# Internal helper: run `cargo build -p <crate>` under the chosen strategy.
+_cargo_build_crate() {
+    local crate="$1"
+    local name="$2"
+    local strat="$3"
     local triple
     triple="$(triple_for "$name")"
-    BUILT_CDYLIB=""
-    BUILT_STATICLIB=""
-
-    echo
-    echo "============================================================"
-    echo "Building $name  (triple=$triple, strategy=$strat, profile=$PROFILE)"
-    echo "============================================================"
 
     case "$strat" in
         native)
-            # Linker overrides for the non-host linux target. Cargo picks these
-            # up via the standard CARGO_TARGET_*_LINKER env vars.
             local env_pairs=()
             if [[ "$name" == "linux_arm64" ]]; then
                 env_pairs=(
@@ -233,16 +243,14 @@ build_target() {
                 )
             fi
             env "${env_pairs[@]}" cargo build \
-                -p blazen-uniffi \
+                -p "$crate" \
                 --target "$triple" \
                 "${PROFILE_FLAG[@]}" \
                 "${FEATURE_FLAGS[@]}"
             ;;
         xwin)
-            # cargo-xwin shadows `cargo build` with clang-cl + lld-link and the
-            # MSVC SDK headers/libs it fetches into ~/.cache/cargo-xwin.
             cargo xwin build \
-                -p blazen-uniffi \
+                -p "$crate" \
                 --target "$triple" \
                 "${PROFILE_FLAG[@]}" \
                 "${FEATURE_FLAGS[@]}"
@@ -253,7 +261,7 @@ build_target() {
                 return 1
             }
             cross build \
-                -p blazen-uniffi \
+                -p "$crate" \
                 --target "$triple" \
                 "${PROFILE_FLAG[@]}" \
                 "${FEATURE_FLAGS[@]}"
@@ -263,6 +271,27 @@ build_target() {
             return 1
             ;;
     esac
+}
+
+build_target() {
+    local name="$1"
+    local strat="$2"
+    local triple
+    triple="$(triple_for "$name")"
+    BUILT_UNIFFI_CDYLIB=""
+    BUILT_UNIFFI_STATICLIB=""
+    BUILT_CABI_CDYLIB=""
+    BUILT_CDYLIB=""
+    BUILT_STATICLIB=""
+
+    echo
+    echo "============================================================"
+    echo "Building $name  (triple=$triple, strategy=$strat, profile=$PROFILE)"
+    echo "  crates: blazen-uniffi, blazen-cabi"
+    echo "============================================================"
+
+    _cargo_build_crate "blazen-uniffi" "$name" "$strat" || return 1
+    _cargo_build_crate "blazen-cabi"   "$name" "$strat" || return 1
 
     # Locate the produced artefacts. cargo writes to target/<triple>/<profile>/.
     local out_dir="target/$triple/$PROFILE"
@@ -271,39 +300,55 @@ build_target() {
     ext="$(ext_for "$name")"
     sext="$(static_ext_for "$name")"
 
-    BUILT_CDYLIB="$out_dir/${prefix}blazen_uniffi.${ext}"
-    BUILT_STATICLIB="$out_dir/${prefix}blazen_uniffi.${sext}"
+    BUILT_UNIFFI_CDYLIB="$out_dir/${prefix}blazen_uniffi.${ext}"
+    BUILT_UNIFFI_STATICLIB="$out_dir/${prefix}blazen_uniffi.${sext}"
+    BUILT_CABI_CDYLIB="$out_dir/${prefix}blazen_cabi.${ext}"
 
-    if [[ ! -f "$BUILT_CDYLIB" ]]; then
+    if [[ ! -f "$BUILT_UNIFFI_CDYLIB" ]]; then
         # Some windows toolchains emit `blazen_uniffi.dll` without the `lib`
         # prefix; some emit `libblazen_uniffi.dll`. Tolerate either.
         local alt="$out_dir/blazen_uniffi.${ext}"
         if [[ -f "$alt" ]]; then
-            BUILT_CDYLIB="$alt"
+            BUILT_UNIFFI_CDYLIB="$alt"
         fi
     fi
-    if [[ ! -f "$BUILT_STATICLIB" ]]; then
+    if [[ ! -f "$BUILT_UNIFFI_STATICLIB" ]]; then
         local alt2="$out_dir/blazen_uniffi.${sext}"
         if [[ -f "$alt2" ]]; then
-            BUILT_STATICLIB="$alt2"
+            BUILT_UNIFFI_STATICLIB="$alt2"
+        fi
+    fi
+    if [[ ! -f "$BUILT_CABI_CDYLIB" ]]; then
+        local alt3="$out_dir/blazen_cabi.${ext}"
+        if [[ -f "$alt3" ]]; then
+            BUILT_CABI_CDYLIB="$alt3"
         fi
     fi
 
-    if [[ ! -f "$BUILT_CDYLIB" ]]; then
-        echo "ERROR: expected cdylib not found: $BUILT_CDYLIB" >&2
+    if [[ ! -f "$BUILT_UNIFFI_CDYLIB" ]]; then
+        echo "ERROR: expected cdylib not found: $BUILT_UNIFFI_CDYLIB" >&2
         return 1
     fi
-    if [[ ! -f "$BUILT_STATICLIB" ]]; then
-        echo "ERROR: expected staticlib not found: $BUILT_STATICLIB" >&2
+    if [[ ! -f "$BUILT_UNIFFI_STATICLIB" ]]; then
+        echo "ERROR: expected staticlib not found: $BUILT_UNIFFI_STATICLIB" >&2
         return 1
     fi
+    if [[ ! -f "$BUILT_CABI_CDYLIB" ]]; then
+        echo "ERROR: expected cabi cdylib not found: $BUILT_CABI_CDYLIB" >&2
+        return 1
+    fi
+
+    BUILT_CDYLIB="$BUILT_UNIFFI_CDYLIB"
+    BUILT_STATICLIB="$BUILT_UNIFFI_STATICLIB"
 }
 
 # Distribute the freshly-built artefacts into the three binding layouts.
+# Go/Kotlin/Swift use libblazen_uniffi; Ruby uses libblazen_cabi.
 distribute() {
     local name="$1"
-    local cdylib="$BUILT_CDYLIB"
-    local staticlib="$BUILT_STATICLIB"
+    local uniffi_cdylib="$BUILT_UNIFFI_CDYLIB"
+    local uniffi_staticlib="$BUILT_UNIFFI_STATICLIB"
+    local cabi_cdylib="$BUILT_CABI_CDYLIB"
 
     local prefix ext sext jna go_subdir
     prefix="$(prefix_for "$name")"
@@ -312,7 +357,7 @@ distribute() {
     jna="$(jna_for "$name")"
     go_subdir="$name"
 
-    # ---- Go (static) ---------------------------------------------------------
+    # ---- Go (static, libblazen_uniffi) --------------------------------------
     # File name convention: keep the `lib` prefix for unix (.a) so cgo's
     # `-lblazen_uniffi` flag works. On windows-msvc we ship the .lib without
     # the `lib` prefix — cgo on windows uses MSVC-style `/LIBPATH:` and the
@@ -324,9 +369,9 @@ distribute() {
         windows_*) go_dest="$go_dir/blazen_uniffi.${sext}" ;;
         *)         go_dest="$go_dir/${prefix}blazen_uniffi.${sext}" ;;
     esac
-    install -m 0644 "$staticlib" "$go_dest"
+    install -m 0644 "$uniffi_staticlib" "$go_dest"
 
-    # ---- Kotlin (dynamic, JNA) ----------------------------------------------
+    # ---- Kotlin (dynamic, JNA, libblazen_uniffi) ----------------------------
     local kt_dir="bindings/kotlin/src/main/resources/$jna"
     mkdir -p "$kt_dir"
     local kt_dest
@@ -334,17 +379,19 @@ distribute() {
         windows_*) kt_dest="$kt_dir/blazen_uniffi.${ext}" ;;
         *)         kt_dest="$kt_dir/${prefix}blazen_uniffi.${ext}" ;;
     esac
-    install -m 0644 "$cdylib" "$kt_dest"
+    install -m 0644 "$uniffi_cdylib" "$kt_dest"
 
-    # ---- Ruby (dynamic) ------------------------------------------------------
+    # ---- Ruby (dynamic, libblazen_cabi) -------------------------------------
+    # The Ruby gem links against the hand-rolled cbindgen + C ABI cdylib, NOT
+    # the UniFFI cdylib. See bindings/ruby/lib/blazen/ffi.rb#ffi_lib_path.
     local rb_dir="bindings/ruby/ext/blazen/$go_subdir"
     mkdir -p "$rb_dir"
     local rb_dest
     case "$name" in
-        windows_*) rb_dest="$rb_dir/blazen_uniffi.${ext}" ;;
-        *)         rb_dest="$rb_dir/${prefix}blazen_uniffi.${ext}" ;;
+        windows_*) rb_dest="$rb_dir/blazen_cabi.${ext}" ;;
+        *)         rb_dest="$rb_dir/${prefix}blazen_cabi.${ext}" ;;
     esac
-    install -m 0755 "$cdylib" "$rb_dest"
+    install -m 0755 "$cabi_cdylib" "$rb_dest"
 
     echo "  → Go:     $go_dest    ($(du -h "$go_dest"  | cut -f1))"
     echo "  → Kotlin: $kt_dest   ($(du -h "$kt_dest"  | cut -f1))"

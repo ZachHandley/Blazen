@@ -1,0 +1,13 @@
+# Bundler local install dir (set via `bundle config set --local path vendor/bundle`)
+vendor/bundle/
+# Bundler runtime config (per-checkout, points at vendor/bundle)
+.bundle/
+
+# Gemfile.lock — blazen is a gem (library), not an app. Convention: gems don't
+# commit Gemfile.lock so consumers resolve against their own dep tree. The CI
+# `test-ruby` job runs `bundle install` fresh per build anyway.
+Gemfile.lock
+
+# Build outputs
+pkg/
+*.gem

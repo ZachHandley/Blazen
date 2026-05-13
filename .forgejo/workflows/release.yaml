@@ -783,10 +783,159 @@ jobs:
             -F "attachment=@BlazenFFI.xcframework.zip" \
             "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/releases/${RELEASE_ID}/assets?name=BlazenFFI.xcframework.zip"
 
+  release-ruby:
+    name: Release Ruby gem
+    runs-on: ubuntu-latest
+    needs: version
+    # Fires from workflow_dispatch only. Skipped if RUBYGEMS_API_KEY isn't set
+    # in repo secrets (a missing key shows up as an empty string after env
+    # interpolation, so the gate is on the env var, not `secrets.*` directly
+    # since Forgejo expressions can't `if:` on secrets).
+    if: github.event_name == 'workflow_dispatch'
+    env:
+      RUBYGEMS_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ needs.version.outputs.version }}
+          step: release-ruby
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Gate on RUBYGEMS_API_KEY presence
+        if: steps.check.outputs.completed != 'true'
+        id: gate
+        shell: bash
+        run: |
+          if [ -z "${RUBYGEMS_API_KEY}" ]; then
+            echo "::warning::RUBYGEMS_API_KEY not set; skipping Ruby gem publish."
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Ruby
+        if: steps.check.outputs.completed != 'true' && steps.gate.outputs.has_key == 'true'
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: false
+
+      - name: Stamp version
+        if: steps.check.outputs.completed != 'true' && steps.gate.outputs.has_key == 'true'
+        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
+
+      - name: Download libblazen_cabi binaries from Forgejo generic package
+        if: steps.check.outputs.completed != 'true' && steps.gate.outputs.has_key == 'true'
+        shell: bash
+        # Each ext/blazen/<arch>/ directory is what lib/blazen/ffi.rb's
+        # arch_subdir lookup expects. Maps the upload names from
+        # build-artifacts.yaml#build-cabi back to Ruby's arch dirs.
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.version.outputs.version }}"
+          BASE="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}"
+          AUTH="zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}"
+
+          # name|ruby_dir|filename
+          declare -a LIBS=(
+            "libblazen_cabi-linux-x86_64.so|linux_amd64|libblazen_cabi.so"
+            "libblazen_cabi-linux-aarch64.so|linux_arm64|libblazen_cabi.so"
+            "libblazen_cabi-darwin-x86_64.dylib|darwin_amd64|libblazen_cabi.dylib"
+            "libblazen_cabi-darwin-aarch64.dylib|darwin_arm64|libblazen_cabi.dylib"
+            "libblazen_cabi-windows-x86_64.dll|windows_amd64|blazen_cabi.dll"
+          )
+
+          STAGED=0
+          for LINE in "${LIBS[@]}"; do
+            IFS='|' read -r SRC ARCH DEST <<< "$LINE"
+            URL="${BASE}/${SRC}"
+            mkdir -p "bindings/ruby/ext/blazen/${ARCH}"
+            DEST_PATH="bindings/ruby/ext/blazen/${ARCH}/${DEST}"
+            CODE=$(curl --silent --output "${DEST_PATH}" --write-out '%{http_code}' \
+              -u "${AUTH}" "${URL}")
+            if [ "${CODE}" = "200" ]; then
+              echo "  ✓ ${SRC} → ${DEST_PATH}"
+              STAGED=$((STAGED + 1))
+            else
+              echo "::warning::${SRC} not available (HTTP ${CODE}); ${ARCH} will be missing from gem"
+              rm -f "${DEST_PATH}"
+              rmdir "bindings/ruby/ext/blazen/${ARCH}" 2>/dev/null || true
+            fi
+          done
+
+          if [ "${STAGED}" -eq 0 ]; then
+            echo "::error::No libblazen_cabi binaries staged; aborting"
+            exit 1
+          fi
+          echo "Staged ${STAGED} platform binary(ies)."
+
+      - name: Build gem
+        if: steps.check.outputs.completed != 'true' && steps.gate.outputs.has_key == 'true'
+        working-directory: bindings/ruby
+        run: |
+          gem install bundler --no-document
+          gem build blazen.gemspec
+          ls -lh ./*.gem
+
+      - name: Push to RubyGems
+        if: steps.check.outputs.completed != 'true' && steps.gate.outputs.has_key == 'true'
+        working-directory: bindings/ruby
+        shell: bash
+        # `gem push` reads ~/.gem/credentials, so write the API key there
+        # rather than passing it on argv (where it would land in process listings
+        # and CI logs). Tolerate "already pushed" so retries are idempotent —
+        # RubyGems hard-rejects re-pushes of the same version, the same way
+        # PyPI and crates.io do.
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.version.outputs.version }}"
+          mkdir -p "${HOME}/.gem"
+          printf -- ":rubygems_api_key: %s\n" "${RUBYGEMS_API_KEY}" > "${HOME}/.gem/credentials"
+          chmod 0600 "${HOME}/.gem/credentials"
+          GEM_FILE="blazen-${VERSION}.gem"
+          if [ ! -f "${GEM_FILE}" ]; then
+            echo "::error::Expected ${GEM_FILE} not produced by 'gem build'"
+            ls -lh ./*.gem
+            exit 1
+          fi
+          if gem push "${GEM_FILE}"; then
+            echo "Pushed ${GEM_FILE} to RubyGems."
+          else
+            CODE=$?
+            # gem push returns 1 for "already pushed" (the server emits HTTP 422
+            # "Repushing of gem versions is not allowed"). Tolerate that case
+            # for retry safety; otherwise re-raise.
+            if gem search -r --exact blazen | grep -qE "^blazen \(${VERSION}"; then
+              echo "::warning::blazen ${VERSION} already on RubyGems; skipping."
+            else
+              echo "::error::gem push failed (exit ${CODE}) and ${VERSION} is not on RubyGems."
+              exit "${CODE}"
+            fi
+          fi
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ needs.version.outputs.version }}
+          step: release-ruby
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [version, publish-rust, publish-python, publish-node, publish-workers-alias, publish-wasm]
+    needs: [version, publish-rust, publish-python, publish-node, publish-workers-alias, publish-wasm, release-ruby]
     # workflow_dispatch only — binding tag pushes flow through release-go /
     # release-swift, which cut their own subtree-scoped releases.
     if: github.event_name == 'workflow_dispatch'
@@ -1031,6 +1180,11 @@ jobs:
             napi-x86_64-pc-windows-msvc.tar.gz
             napi-wasm32-wasi.tar.gz
             wasm.tar.gz
+            libblazen_cabi-linux-x86_64.so
+            libblazen_cabi-linux-aarch64.so
+            libblazen_cabi-darwin-x86_64.dylib
+            libblazen_cabi-darwin-aarch64.dylib
+            libblazen_cabi-windows-x86_64.dll
           )
 
           for F in "${FILES[@]}"; do

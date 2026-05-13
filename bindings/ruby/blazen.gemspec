@@ -24,11 +24,23 @@ Gem::Specification.new do |spec|
   spec.metadata["source_code_uri"] = spec.homepage
   spec.metadata["bug_tracker_uri"] = "#{spec.homepage}/issues"
 
+  # The Ruby gem links against `libblazen_cabi` (the hand-rolled cbindgen +
+  # C ABI cdylib over the blazen-uniffi types), NOT `libblazen_uniffi` itself.
+  # See lib/blazen/ffi.rb#ffi_lib_path. We ship both flat ext/blazen/* libs (for
+  # single-arch installs) and per-arch ext/blazen/<arch>/* libs (for the
+  # multi-arch release that build-uniffi-lib.sh produces). The cbindgen header
+  # is also packaged so consumers building from source can regenerate FFI.
   spec.files = Dir[
     "lib/**/*.rb",
-    "ext/blazen/libblazen_uniffi.so",
-    "ext/blazen/libblazen_uniffi.dylib",
-    "ext/blazen/libblazen_uniffi.dll",
+    "ext/blazen/blazen.h",
+    "ext/blazen/libblazen_cabi.so",
+    "ext/blazen/libblazen_cabi.dylib",
+    "ext/blazen/libblazen_cabi.dll",
+    "ext/blazen/blazen_cabi.dll",
+    "ext/blazen/*/libblazen_cabi.so",
+    "ext/blazen/*/libblazen_cabi.dylib",
+    "ext/blazen/*/libblazen_cabi.dll",
+    "ext/blazen/*/blazen_cabi.dll",
     "blazen.gemspec",
     "README.md",
     "LICENSE",

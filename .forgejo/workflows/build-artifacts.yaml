@@ -1476,6 +1476,271 @@ jobs:
           owner: BlackLeafDigital
           auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
+  build-cabi:
+    name: Build blazen-cabi (${{ matrix.target }})
+    needs: version
+    # Builds libblazen_cabi.{so,dylib,dll} for the same target matrix as
+    # build-uniffi. Consumed by the Ruby gem (via release-ruby in
+    # release.yaml, which downloads these artefacts, stages them under
+    # bindings/ruby/ext/blazen/<arch>/, and runs `gem build`).
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runs-on: ubuntu-latest
+            container: forge.blackleafdigital.com/blackleafdigital/blazen-ci-base:x86_64-unknown-linux-gnu
+            container-kind: manylinux
+            artifact-os: linux
+            artifact-arch: x86_64
+            ruby-arch-dir: linux_amd64
+          - target: aarch64-unknown-linux-gnu
+            runs-on: arm64
+            container: forge.blackleafdigital.com/blackleafdigital/blazen-ci-base:aarch64-unknown-linux-gnu
+            container-kind: manylinux
+            artifact-os: linux
+            artifact-arch: aarch64
+            ruby-arch-dir: linux_arm64
+          - target: aarch64-apple-darwin
+            runs-on: macos-latest
+            deployment-target: "14.0"
+            artifact-os: darwin
+            artifact-arch: aarch64
+            ruby-arch-dir: darwin_arm64
+          - target: x86_64-apple-darwin
+            runs-on: macos-latest
+            deployment-target: "14.0"
+            artifact-os: darwin
+            artifact-arch: x86_64
+            ruby-arch-dir: darwin_amd64
+          - target: x86_64-pc-windows-msvc
+            runs-on: windows-latest
+            artifact-os: windows
+            artifact-arch: x86_64
+            ruby-arch-dir: windows_amd64
+    runs-on: ${{ matrix.runs-on }}
+    container:
+      image: ${{ matrix.container }}
+      credentials:
+        username: zachhandley
+        password: ${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: "0"
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
+    steps:
+      - name: Bootstrap Node.js for actions (manylinux)
+        if: matrix.container-kind == 'manylinux'
+        run: |
+          curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+          yum install -y nodejs
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ needs.version.outputs.version }}
+          step: build-cabi-${{ matrix.target }}
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Install system deps (manylinux)
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'manylinux'
+        run: yum install -y cmake openssl-devel ccache pkg-config curl perl-core perl-Time-Piece clang-devel
+
+      - name: Install protoc (manylinux)
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind == 'manylinux'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-system-deps@main
+        with:
+          packages: protobuf-compiler
+          cross-platform: 'true'
+
+      - name: Install system deps (macOS)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'macOS'
+        run: brew install cmake ccache
+
+      - name: Install Git Bash (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        uses: https://forge.blackleafdigital.com/Public/actions/install-git-bash@main
+
+      - name: Setup MSVC (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-msvc@main
+        with:
+          arch: x64
+          year: "2022"
+          toolset: "14.4"
+          install-if-missing: "true"
+
+      - name: Install libclang (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-libclang@main
+        with:
+          version: '17.0.6'
+
+      - name: Setup Ninja (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-ninja@main
+
+      - name: Force CMAKE_GENERATOR=Ninja (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        shell: bash
+        run: echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
+
+      - name: Isolate CARGO_TARGET_DIR per matrix entry (Linux containers)
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind != ''
+        shell: bash
+        run: |
+          TARGET_DIR="${GITHUB_WORKSPACE}/target-${{ github.job }}-${{ matrix.target }}"
+          mkdir -p "${TARGET_DIR}"
+          echo "CARGO_TARGET_DIR=${TARGET_DIR}" >> "$GITHUB_ENV"
+
+      - name: Isolate CARGO_HOME per job (Linux containers)
+        if: steps.check.outputs.completed != 'true' && matrix.container-kind != ''
+        shell: bash
+        run: |
+          CARGO_HOME_DIR="${GITHUB_WORKSPACE}/.cargo-home-${{ github.job }}-${{ matrix.target }}"
+          mkdir -p "${CARGO_HOME_DIR}"
+          echo "CARGO_HOME=${CARGO_HOME_DIR}" >> "$GITHUB_ENV"
+
+      - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          targets: ${{ matrix.target }}
+          sccache: true
+          sccache-s3-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-s3-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-s3-region: ${{ secrets.S3_REGION }}
+          sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/blazen-cabi-${{ matrix.target }}
+          ccache: true
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Build blazen-cabi (non-Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os != 'Windows'
+        shell: bash
+        # Same ccache/RUSTC_WRAPPER scrubbing as build-uniffi — openssl-src's
+        # .s asm breaks under any C-compiler cache wrapper, and cc-rs auto-
+        # injects RUSTC_WRAPPER as the cc wrapper when its stem is sccache.
+        run: |
+          PATH="$(echo ":${PATH}:" | sed -e 's#:/usr/lib/ccache:#:#g' -e 's#:/usr/lib64/ccache:#:#g' -e 's#^:##' -e 's#:$##')"
+          export PATH
+          unset CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER
+          unset RUSTC_WRAPPER
+
+          if [[ "${{ matrix.container-kind }}" == "manylinux" && "${{ matrix.target }}" == *"-linux-gnu" ]]; then
+            if [ -f /opt/rh/gcc-toolset-14/enable ]; then
+              set +u
+              source /opt/rh/gcc-toolset-14/enable
+              set -u
+            fi
+          fi
+
+          cargo build -p blazen-cabi --release --target ${{ matrix.target }}
+
+      - name: Build blazen-cabi (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Remove-Item Env:CMAKE_C_COMPILER_LAUNCHER   -ErrorAction SilentlyContinue
+          Remove-Item Env:CMAKE_CXX_COMPILER_LAUNCHER -ErrorAction SilentlyContinue
+          Get-ChildItem Env: | Where-Object Name -like 'CMAKE_*LAUNCHER*' |
+            ForEach-Object { Remove-Item "Env:$($_.Name)" -ErrorAction SilentlyContinue }
+          & cargo build -p blazen-cabi --release --target ${{ matrix.target }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Collect artefacts (non-Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT_DIR="${CARGO_TARGET_DIR:-target}/${{ matrix.target }}/release"
+          STAGE="${GITHUB_WORKSPACE}/cabi-stage"
+          mkdir -p "${STAGE}"
+          OS="${{ matrix.artifact-os }}"
+          ARCH="${{ matrix.artifact-arch }}"
+          # Only the dynamic lib — Ruby's ffi gem loads at runtime.
+          if [ "$OS" = "linux" ] && [ -f "${OUT_DIR}/libblazen_cabi.so" ]; then
+            cp "${OUT_DIR}/libblazen_cabi.so" "${STAGE}/libblazen_cabi-${OS}-${ARCH}.so"
+          fi
+          if [ "$OS" = "darwin" ] && [ -f "${OUT_DIR}/libblazen_cabi.dylib" ]; then
+            cp "${OUT_DIR}/libblazen_cabi.dylib" "${STAGE}/libblazen_cabi-${OS}-${ARCH}.dylib"
+          fi
+          echo "Staged:"
+          ls -lh "${STAGE}/"
+
+      - name: Collect artefacts (Windows)
+        if: steps.check.outputs.completed != 'true' && runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT_DIR="${CARGO_TARGET_DIR:-target}/${{ matrix.target }}/release"
+          STAGE="${GITHUB_WORKSPACE}/cabi-stage"
+          mkdir -p "${STAGE}"
+          ARCH="${{ matrix.artifact-arch }}"
+          # MSVC emits blazen_cabi.dll (no `lib` prefix).
+          if [ -f "${OUT_DIR}/blazen_cabi.dll" ]; then
+            cp "${OUT_DIR}/blazen_cabi.dll" "${STAGE}/libblazen_cabi-windows-${ARCH}.dll"
+          fi
+          ls -lh "${STAGE}/"
+
+      - name: Upload dynamic (.so / .dylib / .dll)
+        if: steps.check.outputs.completed != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: libblazen_cabi-${{ matrix.target }}-dynamic
+          path: |
+            cabi-stage/libblazen_cabi-*.so
+            cabi-stage/libblazen_cabi-*.dylib
+            cabi-stage/libblazen_cabi-*.dll
+          if-no-files-found: warn
+
+      - name: Upload artefacts to Forgejo generic package
+        if: steps.check.outputs.completed != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.version.outputs.version }}"
+          BASE="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}"
+          AUTH="zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}"
+          shopt -s nullglob
+          for F in cabi-stage/libblazen_cabi-*; do
+            NAME=$(basename "$F")
+            URL="${BASE}/${NAME}"
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+              -u "$AUTH" --upload-file "$F" "$URL")
+            case "$CODE" in
+              200|201) echo "Uploaded ${NAME} (HTTP $CODE)" ;;
+              409)
+                echo "::warning::${NAME} exists (HTTP 409); deleting and re-uploading"
+                curl --fail -s -X DELETE -u "$AUTH" "$URL"
+                curl --fail -s -X PUT -u "$AUTH" --upload-file "$F" "$URL"
+                ;;
+              *) echo "::error::Upload ${NAME} failed (HTTP $CODE)"; exit 1 ;;
+            esac
+          done
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ needs.version.outputs.version }}
+          step: build-cabi-${{ matrix.target }}
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
   build-swift-xcframework:
     name: Build Swift XCFramework
     needs: version
@@ -1613,7 +1878,7 @@ jobs:
     # macOS runner is unavailable, the XCFramework is missing but the rest
     # of the release still proceeds; release-swift gates on artefact
     # presence rather than this job's success.
-    needs: [version, build-wheels, build-sdist, build-napi, build-wasm, build-uniffi]
+    needs: [version, build-wheels, build-sdist, build-napi, build-wasm, build-uniffi, build-cabi]
     steps:
       - name: Dispatch release.yaml
         run: |

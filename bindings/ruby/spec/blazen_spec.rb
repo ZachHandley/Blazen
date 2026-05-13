@@ -324,7 +324,11 @@ RSpec.describe Blazen do
       elapsed = Time.now - started
 
       expect(results.length).to eq(3)
-      results.each { |r| expect(r.event_data).to have_key("from") }
+      # The engine wraps the StopEvent's data under a "result" key — the spec
+      # at line 213 establishes this shape. Each run's "from" comes from a
+      # distinct task id, so the dig'd values must form a 3-element set.
+      tasks_seen = results.map { |r| r.event_data.dig("result", "from") }.compact
+      expect(tasks_seen.sort).to eq([1, 2, 3])
       expect(elapsed).to be < 0.3
     end
   end

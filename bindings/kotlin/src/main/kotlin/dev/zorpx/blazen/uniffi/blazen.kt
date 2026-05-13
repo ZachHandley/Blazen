@@ -17,27 +17,27 @@ package dev.zorpx.blazen.uniffi
 // compile the Rust component. The easiest way to ensure this is to bundle the Kotlin
 // helpers directly inline like we're doing here.
 
-import com.sun.jna.Library
+import com.sun.jna.Callback
 import com.sun.jna.IntegerType
+import com.sun.jna.Library
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.Structure
-import com.sun.jna.Callback
 import com.sun.jna.ptr.*
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import java.nio.CharBuffer
-import java.nio.charset.CodingErrorAction
-import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.coroutines.resume
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.CharBuffer
+import java.nio.charset.CodingErrorAction
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.coroutines.resume
 
 // This is a helper for safely working with byte buffers returned from the Rust code.
 // A rust-owned buffer is represented by its capacity, its current length, and a
@@ -51,29 +51,41 @@ open class RustBuffer : Structure() {
     // Note: `capacity` and `len` are actually `ULong` values, but JVM only supports signed values.
     // When dealing with these fields, make sure to call `toULong()`.
     @JvmField var capacity: Long = 0
+
     @JvmField var len: Long = 0
+
     @JvmField var data: Pointer? = null
 
-    class ByValue: RustBuffer(), Structure.ByValue
-    class ByReference: RustBuffer(), Structure.ByReference
+    class ByValue :
+        RustBuffer(),
+        Structure.ByValue
 
-   internal fun setValue(other: RustBuffer) {
+    class ByReference :
+        RustBuffer(),
+        Structure.ByReference
+
+    internal fun setValue(other: RustBuffer) {
         capacity = other.capacity
         len = other.len
         data = other.data
     }
 
     companion object {
-        internal fun alloc(size: ULong = 0UL) = uniffiRustCall() { status ->
-            // Note: need to convert the size to a `Long` value to make this work with JVM.
-            UniffiLib.ffi_blazen_uniffi_rustbuffer_alloc(size.toLong(), status)
-        }.also {
-            if(it.data == null) {
-               throw RuntimeException("RustBuffer.alloc() returned null data pointer (size=${size})")
-           }
-        }
+        internal fun alloc(size: ULong = 0UL) =
+            uniffiRustCall { status ->
+                // Note: need to convert the size to a `Long` value to make this work with JVM.
+                UniffiLib.ffi_blazen_uniffi_rustbuffer_alloc(size.toLong(), status)
+            }.also {
+                if (it.data == null) {
+                    throw RuntimeException("RustBuffer.alloc() returned null data pointer (size=$size)")
+                }
+            }
 
-        internal fun create(capacity: ULong, len: ULong, data: Pointer?): RustBuffer.ByValue {
+        internal fun create(
+            capacity: ULong,
+            len: ULong,
+            data: Pointer?,
+        ): RustBuffer.ByValue {
             var buf = RustBuffer.ByValue()
             buf.capacity = capacity.toLong()
             buf.len = len.toLong()
@@ -81,9 +93,10 @@ open class RustBuffer : Structure() {
             return buf
         }
 
-        internal fun free(buf: RustBuffer.ByValue) = uniffiRustCall() { status ->
-            UniffiLib.ffi_blazen_uniffi_rustbuffer_free(buf, status)
-        }
+        internal fun free(buf: RustBuffer.ByValue) =
+            uniffiRustCall { status ->
+                UniffiLib.ffi_blazen_uniffi_rustbuffer_free(buf, status)
+            }
     }
 
     @Suppress("TooGenericExceptionThrown")
@@ -102,10 +115,14 @@ open class RustBuffer : Structure() {
 @Structure.FieldOrder("len", "data")
 internal open class ForeignBytes : Structure() {
     @JvmField var len: Int = 0
+
     @JvmField var data: Pointer? = null
 
-    class ByValue : ForeignBytes(), Structure.ByValue
+    class ByValue :
+        ForeignBytes(),
+        Structure.ByValue
 }
+
 /**
  * The FfiConverter interface handles converter types to and from the FFI
  *
@@ -135,7 +152,10 @@ public interface FfiConverter<KotlinType, FfiType> {
     fun allocationSize(value: KotlinType): ULong
 
     // Write a Kotlin type to a `ByteBuffer`
-    fun write(value: KotlinType, buf: ByteBuffer)
+    fun write(
+        value: KotlinType,
+        buf: ByteBuffer,
+    )
 
     // Lower a value into a `RustBuffer`
     //
@@ -146,9 +166,10 @@ public interface FfiConverter<KotlinType, FfiType> {
     fun lowerIntoRustBuffer(value: KotlinType): RustBuffer.ByValue {
         val rbuf = RustBuffer.alloc(allocationSize(value))
         try {
-            val bbuf = rbuf.data!!.getByteBuffer(0, rbuf.capacity).also {
-                it.order(ByteOrder.BIG_ENDIAN)
-            }
+            val bbuf =
+                rbuf.data!!.getByteBuffer(0, rbuf.capacity).also {
+                    it.order(ByteOrder.BIG_ENDIAN)
+                }
             write(value, bbuf)
             rbuf.writeField("len", bbuf.position().toLong())
             return rbuf
@@ -165,11 +186,11 @@ public interface FfiConverter<KotlinType, FfiType> {
     fun liftFromRustBuffer(rbuf: RustBuffer.ByValue): KotlinType {
         val byteBuf = rbuf.asByteBuffer()!!
         try {
-           val item = read(byteBuf)
-           if (byteBuf.hasRemaining()) {
-               throw RuntimeException("junk remaining in buffer after lifting, something is very wrong!!")
-           }
-           return item
+            val item = read(byteBuf)
+            if (byteBuf.hasRemaining()) {
+                throw RuntimeException("junk remaining in buffer after lifting, something is very wrong!!")
+            }
+            return item
         } finally {
             RustBuffer.free(rbuf)
         }
@@ -181,8 +202,9 @@ public interface FfiConverter<KotlinType, FfiType> {
  *
  * @suppress
  */
-public interface FfiConverterRustBuffer<KotlinType>: FfiConverter<KotlinType, RustBuffer.ByValue> {
+public interface FfiConverterRustBuffer<KotlinType> : FfiConverter<KotlinType, RustBuffer.ByValue> {
     override fun lift(value: RustBuffer.ByValue) = liftFromRustBuffer(value)
+
     override fun lower(value: KotlinType) = lowerIntoRustBuffer(value)
 }
 // A handful of classes and functions to support the generated data structures.
@@ -195,24 +217,24 @@ internal const val UNIFFI_CALL_UNEXPECTED_ERROR = 2.toByte()
 @Structure.FieldOrder("code", "error_buf")
 internal open class UniffiRustCallStatus : Structure() {
     @JvmField var code: Byte = 0
+
     @JvmField var error_buf: RustBuffer.ByValue = RustBuffer.ByValue()
 
-    class ByValue: UniffiRustCallStatus(), Structure.ByValue
+    class ByValue :
+        UniffiRustCallStatus(),
+        Structure.ByValue
 
-    fun isSuccess(): Boolean {
-        return code == UNIFFI_CALL_SUCCESS
-    }
+    fun isSuccess(): Boolean = code == UNIFFI_CALL_SUCCESS
 
-    fun isError(): Boolean {
-        return code == UNIFFI_CALL_ERROR
-    }
+    fun isError(): Boolean = code == UNIFFI_CALL_ERROR
 
-    fun isPanic(): Boolean {
-        return code == UNIFFI_CALL_UNEXPECTED_ERROR
-    }
+    fun isPanic(): Boolean = code == UNIFFI_CALL_UNEXPECTED_ERROR
 
     companion object {
-        fun create(code: Byte, errorBuf: RustBuffer.ByValue): UniffiRustCallStatus.ByValue {
+        fun create(
+            code: Byte,
+            errorBuf: RustBuffer.ByValue,
+        ): UniffiRustCallStatus.ByValue {
             val callStatus = UniffiRustCallStatus.ByValue()
             callStatus.code = code
             callStatus.error_buf = errorBuf
@@ -221,7 +243,9 @@ internal open class UniffiRustCallStatus : Structure() {
     }
 }
 
-class InternalException(message: String) : kotlin.Exception(message)
+class InternalException(
+    message: String,
+) : kotlin.Exception(message)
 
 /**
  * Each top-level error class has a companion object that can lift the error from the call status's rust buffer
@@ -229,7 +253,7 @@ class InternalException(message: String) : kotlin.Exception(message)
  * @suppress
  */
 interface UniffiRustCallStatusErrorHandler<E> {
-    fun lift(error_buf: RustBuffer.ByValue): E;
+    fun lift(error_buf: RustBuffer.ByValue): E
 }
 
 // Helpers for calling Rust
@@ -237,7 +261,10 @@ interface UniffiRustCallStatusErrorHandler<E> {
 // synchronize itself
 
 // Call a rust function that returns a Result<>.  Pass in the Error class companion that corresponds to the Err
-private inline fun <U, E: kotlin.Exception> uniffiRustCallWithError(errorHandler: UniffiRustCallStatusErrorHandler<E>, callback: (UniffiRustCallStatus) -> U): U {
+private inline fun <U, E : kotlin.Exception> uniffiRustCallWithError(
+    errorHandler: UniffiRustCallStatusErrorHandler<E>,
+    callback: (UniffiRustCallStatus) -> U,
+): U {
     var status = UniffiRustCallStatus()
     val return_value = callback(status)
     uniffiCheckCallStatus(errorHandler, status)
@@ -245,7 +272,10 @@ private inline fun <U, E: kotlin.Exception> uniffiRustCallWithError(errorHandler
 }
 
 // Check UniffiRustCallStatus and throw an error if the call wasn't successful
-private fun<E: kotlin.Exception> uniffiCheckCallStatus(errorHandler: UniffiRustCallStatusErrorHandler<E>, status: UniffiRustCallStatus) {
+private fun <E : kotlin.Exception> uniffiCheckCallStatus(
+    errorHandler: UniffiRustCallStatusErrorHandler<E>,
+    status: UniffiRustCallStatus,
+) {
     if (status.isSuccess()) {
         return
     } else if (status.isError()) {
@@ -269,7 +299,7 @@ private fun<E: kotlin.Exception> uniffiCheckCallStatus(errorHandler: UniffiRustC
  *
  * @suppress
  */
-object UniffiNullRustCallStatusErrorHandler: UniffiRustCallStatusErrorHandler<InternalException> {
+object UniffiNullRustCallStatusErrorHandler : UniffiRustCallStatusErrorHandler<InternalException> {
     override fun lift(error_buf: RustBuffer.ByValue): InternalException {
         RustBuffer.free(error_buf)
         return InternalException("Unexpected CALL_ERROR")
@@ -277,44 +307,54 @@ object UniffiNullRustCallStatusErrorHandler: UniffiRustCallStatusErrorHandler<In
 }
 
 // Call a rust function that returns a plain value
-private inline fun <U> uniffiRustCall(callback: (UniffiRustCallStatus) -> U): U {
-    return uniffiRustCallWithError(UniffiNullRustCallStatusErrorHandler, callback)
-}
+private inline fun <U> uniffiRustCall(callback: (UniffiRustCallStatus) -> U): U =
+    uniffiRustCallWithError(UniffiNullRustCallStatusErrorHandler, callback)
 
-internal inline fun<T> uniffiTraitInterfaceCall(
+internal inline fun <T> uniffiTraitInterfaceCall(
     callStatus: UniffiRustCallStatus,
     makeCall: () -> T,
     writeReturn: (T) -> Unit,
 ) {
     try {
         writeReturn(makeCall())
-    } catch(e: kotlin.Exception) {
-        val err = try { e.stackTraceToString() } catch(_: Throwable) { "" }
+    } catch (e: kotlin.Exception) {
+        val err =
+            try {
+                e.stackTraceToString()
+            } catch (_: Throwable) {
+                ""
+            }
         callStatus.code = UNIFFI_CALL_UNEXPECTED_ERROR
         callStatus.error_buf = FfiConverterString.lower(err)
     }
 }
 
-internal inline fun<T, reified E: Throwable> uniffiTraitInterfaceCallWithError(
+internal inline fun <T, reified E : Throwable> uniffiTraitInterfaceCallWithError(
     callStatus: UniffiRustCallStatus,
     makeCall: () -> T,
     writeReturn: (T) -> Unit,
-    lowerError: (E) -> RustBuffer.ByValue
+    lowerError: (E) -> RustBuffer.ByValue,
 ) {
     try {
         writeReturn(makeCall())
-    } catch(e: kotlin.Exception) {
+    } catch (e: kotlin.Exception) {
         if (e is E) {
             callStatus.code = UNIFFI_CALL_ERROR
             callStatus.error_buf = lowerError(e)
         } else {
-            val err = try { e.stackTraceToString() } catch(_: Throwable) { "" }
+            val err =
+                try {
+                    e.stackTraceToString()
+                } catch (_: Throwable) {
+                    ""
+                }
             callStatus.code = UNIFFI_CALL_UNEXPECTED_ERROR
             callStatus.error_buf = FfiConverterString.lower(err)
         }
     }
 }
-// Initial value and increment amount for handles. 
+
+// Initial value and increment amount for handles.
 // These ensure that Kotlin-generated handles always have the lowest bit set
 private const val UNIFFI_HANDLEMAP_INITIAL = 1.toLong()
 private const val UNIFFI_HANDLEMAP_DELTA = 2.toLong()
@@ -322,10 +362,13 @@ private const val UNIFFI_HANDLEMAP_DELTA = 2.toLong()
 // Map handles to objects
 //
 // This is used pass an opaque 64-bit handle representing a foreign object to the Rust code.
-internal class UniffiHandleMap<T: Any> {
+internal class UniffiHandleMap<T : Any> {
     private val map = ConcurrentHashMap<Long, T>()
-    // Start 
-    private val counter = java.util.concurrent.atomic.AtomicLong(UNIFFI_HANDLEMAP_INITIAL)
+
+    // Start
+    private val counter =
+        java.util.concurrent.atomic
+            .AtomicLong(UNIFFI_HANDLEMAP_INITIAL)
 
     val size: Int
         get() = map.size
@@ -344,14 +387,10 @@ internal class UniffiHandleMap<T: Any> {
     }
 
     // Get an object from the handle map
-    fun get(handle: Long): T {
-        return map.get(handle) ?: throw InternalException("UniffiHandleMap.get: Invalid handle")
-    }
+    fun get(handle: Long): T = map.get(handle) ?: throw InternalException("UniffiHandleMap.get: Invalid handle")
 
     // Remove an entry from the handlemap and get the Kotlin object back
-    fun remove(handle: Long): T {
-        return map.remove(handle) ?: throw InternalException("UniffiHandleMap: Invalid handle")
-    }
+    fun remove(handle: Long): T = map.remove(handle) ?: throw InternalException("UniffiHandleMap: Invalid handle")
 }
 
 // Contains loading, initialization code,
@@ -367,18 +406,24 @@ private fun findLibraryName(componentName: String): String {
 
 // Define FFI callback types
 internal interface UniffiRustFutureContinuationCallback : com.sun.jna.Callback {
-    fun callback(`data`: Long,`pollResult`: Byte,)
+    fun callback(
+        `data`: Long,
+        `pollResult`: Byte,
+    )
 }
+
 internal interface UniffiForeignFutureDroppedCallback : com.sun.jna.Callback {
-    fun callback(`handle`: Long,)
+    fun callback(`handle`: Long)
 }
+
 internal interface UniffiCallbackInterfaceFree : com.sun.jna.Callback {
-    fun callback(`handle`: Long,)
+    fun callback(`handle`: Long)
 }
+
 internal interface UniffiCallbackInterfaceClone : com.sun.jna.Callback {
-    fun callback(`handle`: Long,)
-    : Long
+    fun callback(`handle`: Long): Long
 }
+
 @Structure.FieldOrder("handle", "free")
 internal open class UniffiForeignFutureDroppedCallbackStruct(
     @JvmField internal var `handle`: Long = 0.toLong(),
@@ -387,14 +432,15 @@ internal open class UniffiForeignFutureDroppedCallbackStruct(
     class UniffiByValue(
         `handle`: Long = 0.toLong(),
         `free`: UniffiForeignFutureDroppedCallback? = null,
-    ): UniffiForeignFutureDroppedCallbackStruct(`handle`,`free`,), Structure.ByValue
+    ) : UniffiForeignFutureDroppedCallbackStruct(`handle`, `free`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureDroppedCallbackStruct) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureDroppedCallbackStruct) {
         `handle` = other.`handle`
         `free` = other.`free`
     }
-
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultU8(
     @JvmField internal var `returnValue`: Byte = 0.toByte(),
@@ -403,17 +449,22 @@ internal open class UniffiForeignFutureResultU8(
     class UniffiByValue(
         `returnValue`: Byte = 0.toByte(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultU8(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultU8(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultU8) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultU8) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteU8 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultU8.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultU8.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultI8(
     @JvmField internal var `returnValue`: Byte = 0.toByte(),
@@ -422,17 +473,22 @@ internal open class UniffiForeignFutureResultI8(
     class UniffiByValue(
         `returnValue`: Byte = 0.toByte(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultI8(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultI8(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultI8) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultI8) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteI8 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultI8.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultI8.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultU16(
     @JvmField internal var `returnValue`: Short = 0.toShort(),
@@ -441,17 +497,22 @@ internal open class UniffiForeignFutureResultU16(
     class UniffiByValue(
         `returnValue`: Short = 0.toShort(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultU16(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultU16(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultU16) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultU16) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteU16 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultU16.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultU16.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultI16(
     @JvmField internal var `returnValue`: Short = 0.toShort(),
@@ -460,17 +521,22 @@ internal open class UniffiForeignFutureResultI16(
     class UniffiByValue(
         `returnValue`: Short = 0.toShort(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultI16(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultI16(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultI16) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultI16) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteI16 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultI16.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultI16.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultU32(
     @JvmField internal var `returnValue`: Int = 0,
@@ -479,17 +545,22 @@ internal open class UniffiForeignFutureResultU32(
     class UniffiByValue(
         `returnValue`: Int = 0,
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultU32(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultU32(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultU32) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultU32) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteU32 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultU32.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultU32.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultI32(
     @JvmField internal var `returnValue`: Int = 0,
@@ -498,17 +569,22 @@ internal open class UniffiForeignFutureResultI32(
     class UniffiByValue(
         `returnValue`: Int = 0,
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultI32(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultI32(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultI32) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultI32) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteI32 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultI32.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultI32.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultU64(
     @JvmField internal var `returnValue`: Long = 0.toLong(),
@@ -517,17 +593,22 @@ internal open class UniffiForeignFutureResultU64(
     class UniffiByValue(
         `returnValue`: Long = 0.toLong(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultU64(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultU64(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultU64) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultU64) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteU64 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultU64.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultU64.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultI64(
     @JvmField internal var `returnValue`: Long = 0.toLong(),
@@ -536,17 +617,22 @@ internal open class UniffiForeignFutureResultI64(
     class UniffiByValue(
         `returnValue`: Long = 0.toLong(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultI64(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultI64(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultI64) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultI64) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteI64 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultI64.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultI64.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultF32(
     @JvmField internal var `returnValue`: Float = 0.0f,
@@ -555,17 +641,22 @@ internal open class UniffiForeignFutureResultF32(
     class UniffiByValue(
         `returnValue`: Float = 0.0f,
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultF32(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultF32(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultF32) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultF32) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteF32 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultF32.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultF32.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultF64(
     @JvmField internal var `returnValue`: Double = 0.0,
@@ -574,17 +665,22 @@ internal open class UniffiForeignFutureResultF64(
     class UniffiByValue(
         `returnValue`: Double = 0.0,
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultF64(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultF64(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultF64) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultF64) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteF64 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultF64.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultF64.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultRustBuffer(
     @JvmField internal var `returnValue`: RustBuffer.ByValue = RustBuffer.ByValue(),
@@ -593,48 +689,95 @@ internal open class UniffiForeignFutureResultRustBuffer(
     class UniffiByValue(
         `returnValue`: RustBuffer.ByValue = RustBuffer.ByValue(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultRustBuffer(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultRustBuffer(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultRustBuffer) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultRustBuffer) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteRustBuffer : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultRustBuffer.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultRustBuffer.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("callStatus")
 internal open class UniffiForeignFutureResultVoid(
     @JvmField internal var `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
 ) : Structure() {
     class UniffiByValue(
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultVoid(`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultVoid(`callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultVoid) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultVoid) {
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultVoid.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultVoid.UniffiByValue,
+    )
 }
+
 internal interface UniffiCallbackInterfaceToolHandlerMethod0 : com.sun.jna.Callback {
-    fun callback(`uniffiHandle`: Long,`toolName`: RustBuffer.ByValue,`argumentsJson`: RustBuffer.ByValue,`uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,`uniffiCallbackData`: Long,`uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,)
+    fun callback(
+        `uniffiHandle`: Long,
+        `toolName`: RustBuffer.ByValue,
+        `argumentsJson`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
 }
+
 internal interface UniffiCallbackInterfaceCompletionStreamSinkMethod0 : com.sun.jna.Callback {
-    fun callback(`uniffiHandle`: Long,`chunk`: RustBuffer.ByValue,`uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,`uniffiCallbackData`: Long,`uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,)
+    fun callback(
+        `uniffiHandle`: Long,
+        `chunk`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
 }
+
 internal interface UniffiCallbackInterfaceCompletionStreamSinkMethod1 : com.sun.jna.Callback {
-    fun callback(`uniffiHandle`: Long,`finishReason`: RustBuffer.ByValue,`usage`: RustBuffer.ByValue,`uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,`uniffiCallbackData`: Long,`uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,)
+    fun callback(
+        `uniffiHandle`: Long,
+        `finishReason`: RustBuffer.ByValue,
+        `usage`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
 }
+
 internal interface UniffiCallbackInterfaceCompletionStreamSinkMethod2 : com.sun.jna.Callback {
-    fun callback(`uniffiHandle`: Long,`err`: RustBuffer.ByValue,`uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,`uniffiCallbackData`: Long,`uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,)
+    fun callback(
+        `uniffiHandle`: Long,
+        `err`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
 }
+
 internal interface UniffiCallbackInterfaceStepHandlerMethod0 : com.sun.jna.Callback {
-    fun callback(`uniffiHandle`: Long,`event`: RustBuffer.ByValue,`uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,`uniffiCallbackData`: Long,`uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,)
+    fun callback(
+        `uniffiHandle`: Long,
+        `event`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
 }
+
 @Structure.FieldOrder("uniffiFree", "uniffiClone", "execute")
 internal open class UniffiVTableCallbackInterfaceToolHandler(
     @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
@@ -645,15 +788,16 @@ internal open class UniffiVTableCallbackInterfaceToolHandler(
         `uniffiFree`: UniffiCallbackInterfaceFree? = null,
         `uniffiClone`: UniffiCallbackInterfaceClone? = null,
         `execute`: UniffiCallbackInterfaceToolHandlerMethod0? = null,
-    ): UniffiVTableCallbackInterfaceToolHandler(`uniffiFree`,`uniffiClone`,`execute`,), Structure.ByValue
+    ) : UniffiVTableCallbackInterfaceToolHandler(`uniffiFree`, `uniffiClone`, `execute`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceToolHandler) {
+    internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceToolHandler) {
         `uniffiFree` = other.`uniffiFree`
         `uniffiClone` = other.`uniffiClone`
         `execute` = other.`execute`
     }
-
 }
+
 @Structure.FieldOrder("uniffiFree", "uniffiClone", "onChunk", "onDone", "onError")
 internal open class UniffiVTableCallbackInterfaceCompletionStreamSink(
     @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
@@ -668,17 +812,18 @@ internal open class UniffiVTableCallbackInterfaceCompletionStreamSink(
         `onChunk`: UniffiCallbackInterfaceCompletionStreamSinkMethod0? = null,
         `onDone`: UniffiCallbackInterfaceCompletionStreamSinkMethod1? = null,
         `onError`: UniffiCallbackInterfaceCompletionStreamSinkMethod2? = null,
-    ): UniffiVTableCallbackInterfaceCompletionStreamSink(`uniffiFree`,`uniffiClone`,`onChunk`,`onDone`,`onError`,), Structure.ByValue
+    ) : UniffiVTableCallbackInterfaceCompletionStreamSink(`uniffiFree`, `uniffiClone`, `onChunk`, `onDone`, `onError`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceCompletionStreamSink) {
+    internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceCompletionStreamSink) {
         `uniffiFree` = other.`uniffiFree`
         `uniffiClone` = other.`uniffiClone`
         `onChunk` = other.`onChunk`
         `onDone` = other.`onDone`
         `onError` = other.`onError`
     }
-
 }
+
 @Structure.FieldOrder("uniffiFree", "uniffiClone", "invoke")
 internal open class UniffiVTableCallbackInterfaceStepHandler(
     @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
@@ -689,14 +834,14 @@ internal open class UniffiVTableCallbackInterfaceStepHandler(
         `uniffiFree`: UniffiCallbackInterfaceFree? = null,
         `uniffiClone`: UniffiCallbackInterfaceClone? = null,
         `invoke`: UniffiCallbackInterfaceStepHandlerMethod0? = null,
-    ): UniffiVTableCallbackInterfaceStepHandler(`uniffiFree`,`uniffiClone`,`invoke`,), Structure.ByValue
+    ) : UniffiVTableCallbackInterfaceStepHandler(`uniffiFree`, `uniffiClone`, `invoke`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceStepHandler) {
+    internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceStepHandler) {
         `uniffiFree` = other.`uniffiFree`
         `uniffiClone` = other.`uniffiClone`
         `invoke` = other.`invoke`
     }
-
 }
 
 // A JNA Library to expose the extern-C FFI definitions.
@@ -721,599 +866,1208 @@ internal object IntegrityCheckingUniffiLib {
         uniffiCheckContractApiVersion(this)
         uniffiCheckApiChecksums(this)
     }
-    external fun uniffi_blazen_uniffi_checksum_func_version(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_complete_batch(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_complete_batch_blocking(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_diffusion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_fal_image_gen_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_fal_stt_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_fal_tts_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_piper_tts_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_whisper_stt_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_redb_checkpoint_store(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_valkey_checkpoint_store(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_anthropic_completion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_azure_completion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_bedrock_completion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_candle_completion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_candle_embedding_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_cohere_completion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_deepseek_completion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_fal_completion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_fal_embedding_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_fastembed_embedding_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_fireworks_completion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_gemini_completion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_groq_completion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_llamacpp_completion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_mistral_completion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_mistralrs_completion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_openai_compat_completion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_openai_completion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_openai_embedding_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_openrouter_completion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_perplexity_completion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_together_completion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_tract_embedding_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_new_xai_completion_model(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_init(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_complete_streaming(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_complete_streaming_blocking(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_init_langfuse(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_init_otlp(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_init_prometheus(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_parse_workflow_history(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_func_shutdown_telemetry(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_agent_run(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_agent_run_blocking(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_toolhandler_execute(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_imagegenmodel_generate(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_imagegenmodel_generate_blocking(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_sttmodel_transcribe(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_sttmodel_transcribe_blocking(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_ttsmodel_synthesize(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_ttsmodel_synthesize_blocking(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_completionmodel_complete(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_completionmodel_complete_blocking(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_completionmodel_model_id(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_embeddingmodel_dimensions(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_embeddingmodel_embed(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_embeddingmodel_embed_blocking(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_embeddingmodel_model_id(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_peerclient_node_id(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_peerclient_run_remote_workflow(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_peerclient_run_remote_workflow_blocking(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_peerserver_serve(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_peerserver_serve_blocking(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_delete(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_delete_blocking(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_list(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_list_blocking(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_list_run_ids(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_list_run_ids_blocking(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_load(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_load_blocking(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_save(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_save_blocking(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_pipeline_run(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_pipeline_run_blocking(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_pipeline_stage_names(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_pipelinebuilder_add_workflow(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_pipelinebuilder_build(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_pipelinebuilder_parallel(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_pipelinebuilder_stage(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_pipelinebuilder_timeout_per_stage_ms(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_pipelinebuilder_total_timeout_ms(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_completionstreamsink_on_chunk(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_completionstreamsink_on_done(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_completionstreamsink_on_error(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_stephandler_invoke(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_workflow_run(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_workflow_run_blocking(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_workflow_step_names(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_workflowbuilder_build(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_workflowbuilder_step(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_workflowbuilder_step_timeout_ms(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_method_workflowbuilder_timeout_ms(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_constructor_agent_new(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_constructor_peerclient_connect(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_constructor_peerserver_new(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_constructor_pipelinebuilder_new(
-    ): Short
-    external fun uniffi_blazen_uniffi_checksum_constructor_workflowbuilder_new(
-    ): Short
-    external fun ffi_blazen_uniffi_uniffi_contract_version(
-    ): Int
 
-        
+    external fun uniffi_blazen_uniffi_checksum_func_version(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_complete_batch(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_complete_batch_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_diffusion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_fal_image_gen_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_fal_stt_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_fal_tts_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_piper_tts_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_whisper_stt_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_redb_checkpoint_store(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_valkey_checkpoint_store(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_anthropic_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_azure_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_bedrock_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_candle_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_candle_embedding_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_cohere_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_deepseek_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_fal_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_fal_embedding_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_fastembed_embedding_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_fireworks_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_gemini_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_groq_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_llamacpp_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_mistral_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_mistralrs_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_openai_compat_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_openai_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_openai_embedding_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_openrouter_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_perplexity_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_together_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_tract_embedding_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_xai_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_init(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_complete_streaming(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_complete_streaming_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_init_langfuse(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_init_otlp(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_init_prometheus(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_parse_workflow_history(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_shutdown_telemetry(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_agent_run(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_agent_run_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_toolhandler_execute(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_imagegenmodel_generate(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_imagegenmodel_generate_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_sttmodel_transcribe(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_sttmodel_transcribe_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_ttsmodel_synthesize(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_ttsmodel_synthesize_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_completionmodel_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_completionmodel_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_completionmodel_model_id(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_embeddingmodel_dimensions(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_embeddingmodel_embed(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_embeddingmodel_embed_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_embeddingmodel_model_id(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_peerclient_node_id(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_peerclient_run_remote_workflow(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_peerclient_run_remote_workflow_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_peerserver_serve(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_peerserver_serve_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_delete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_delete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_list(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_list_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_list_run_ids(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_list_run_ids_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_load(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_load_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_save(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_save_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipeline_run(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipeline_run_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipeline_stage_names(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipelinebuilder_add_workflow(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipelinebuilder_build(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipelinebuilder_parallel(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipelinebuilder_stage(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipelinebuilder_timeout_per_stage_ms(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipelinebuilder_total_timeout_ms(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_completionstreamsink_on_chunk(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_completionstreamsink_on_done(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_completionstreamsink_on_error(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_stephandler_invoke(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_workflow_run(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_workflow_run_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_workflow_step_names(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_workflowbuilder_build(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_workflowbuilder_step(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_workflowbuilder_step_timeout_ms(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_workflowbuilder_timeout_ms(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_agent_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_peerclient_connect(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_peerserver_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_pipelinebuilder_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_workflowbuilder_new(): Short
+
+    external fun ffi_blazen_uniffi_uniffi_contract_version(): Int
 }
 
 internal object UniffiLib {
-    
     // The Cleaner for the whole library
     internal val CLEANER: UniffiCleaner by lazy {
         UniffiCleaner.create()
     }
-    
 
     init {
         Native.register(UniffiLib::class.java, findLibraryName(componentName = "blazen"))
         uniffiCallbackInterfaceCompletionStreamSink.register(this)
         uniffiCallbackInterfaceStepHandler.register(this)
         uniffiCallbackInterfaceToolHandler.register(this)
-        
     }
-    external fun uniffi_blazen_uniffi_fn_clone_agent(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_free_agent(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_constructor_agent_new(`model`: Long,`systemPrompt`: RustBuffer.ByValue,`tools`: RustBuffer.ByValue,`toolHandler`: Long,`maxIterations`: Int,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_method_agent_run(`ptr`: Long,`userInput`: RustBuffer.ByValue,
-): Long
-external fun uniffi_blazen_uniffi_fn_method_agent_run_blocking(`ptr`: Long,`userInput`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_clone_toolhandler(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_free_toolhandler(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_init_callback_vtable_toolhandler(`vtable`: UniffiVTableCallbackInterfaceToolHandler,
-): Unit
-external fun uniffi_blazen_uniffi_fn_method_toolhandler_execute(`ptr`: Long,`toolName`: RustBuffer.ByValue,`argumentsJson`: RustBuffer.ByValue,
-): Long
-external fun uniffi_blazen_uniffi_fn_clone_imagegenmodel(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_free_imagegenmodel(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_method_imagegenmodel_generate(`ptr`: Long,`prompt`: RustBuffer.ByValue,`negativePrompt`: RustBuffer.ByValue,`width`: RustBuffer.ByValue,`height`: RustBuffer.ByValue,`numImages`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,
-): Long
-external fun uniffi_blazen_uniffi_fn_method_imagegenmodel_generate_blocking(`ptr`: Long,`prompt`: RustBuffer.ByValue,`negativePrompt`: RustBuffer.ByValue,`width`: RustBuffer.ByValue,`height`: RustBuffer.ByValue,`numImages`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_clone_sttmodel(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_free_sttmodel(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_method_sttmodel_transcribe(`ptr`: Long,`audioSource`: RustBuffer.ByValue,`language`: RustBuffer.ByValue,
-): Long
-external fun uniffi_blazen_uniffi_fn_method_sttmodel_transcribe_blocking(`ptr`: Long,`audioSource`: RustBuffer.ByValue,`language`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_clone_ttsmodel(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_free_ttsmodel(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_method_ttsmodel_synthesize(`ptr`: Long,`text`: RustBuffer.ByValue,`voice`: RustBuffer.ByValue,`language`: RustBuffer.ByValue,
-): Long
-external fun uniffi_blazen_uniffi_fn_method_ttsmodel_synthesize_blocking(`ptr`: Long,`text`: RustBuffer.ByValue,`voice`: RustBuffer.ByValue,`language`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_clone_completionmodel(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_free_completionmodel(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_method_completionmodel_complete(`ptr`: Long,`request`: RustBuffer.ByValue,
-): Long
-external fun uniffi_blazen_uniffi_fn_method_completionmodel_complete_blocking(`ptr`: Long,`request`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_method_completionmodel_model_id(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_clone_embeddingmodel(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_free_embeddingmodel(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_method_embeddingmodel_dimensions(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Int
-external fun uniffi_blazen_uniffi_fn_method_embeddingmodel_embed(`ptr`: Long,`inputs`: RustBuffer.ByValue,
-): Long
-external fun uniffi_blazen_uniffi_fn_method_embeddingmodel_embed_blocking(`ptr`: Long,`inputs`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_method_embeddingmodel_model_id(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_clone_peerclient(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_free_peerclient(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_constructor_peerclient_connect(`address`: RustBuffer.ByValue,`clientNodeId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_method_peerclient_node_id(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_method_peerclient_run_remote_workflow(`ptr`: Long,`workflowName`: RustBuffer.ByValue,`stepIds`: RustBuffer.ByValue,`inputJson`: RustBuffer.ByValue,`timeoutSecs`: RustBuffer.ByValue,
-): Long
-external fun uniffi_blazen_uniffi_fn_method_peerclient_run_remote_workflow_blocking(`ptr`: Long,`workflowName`: RustBuffer.ByValue,`stepIds`: RustBuffer.ByValue,`inputJson`: RustBuffer.ByValue,`timeoutSecs`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_clone_peerserver(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_free_peerserver(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_constructor_peerserver_new(`nodeId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_method_peerserver_serve(`ptr`: Long,`listenAddress`: RustBuffer.ByValue,
-): Long
-external fun uniffi_blazen_uniffi_fn_method_peerserver_serve_blocking(`ptr`: Long,`listenAddress`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_clone_checkpointstore(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_free_checkpointstore(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_method_checkpointstore_delete(`ptr`: Long,`runId`: RustBuffer.ByValue,
-): Long
-external fun uniffi_blazen_uniffi_fn_method_checkpointstore_delete_blocking(`ptr`: Long,`runId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_method_checkpointstore_list(`ptr`: Long,
-): Long
-external fun uniffi_blazen_uniffi_fn_method_checkpointstore_list_blocking(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_method_checkpointstore_list_run_ids(`ptr`: Long,
-): Long
-external fun uniffi_blazen_uniffi_fn_method_checkpointstore_list_run_ids_blocking(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_method_checkpointstore_load(`ptr`: Long,`runId`: RustBuffer.ByValue,
-): Long
-external fun uniffi_blazen_uniffi_fn_method_checkpointstore_load_blocking(`ptr`: Long,`runId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_method_checkpointstore_save(`ptr`: Long,`checkpoint`: RustBuffer.ByValue,
-): Long
-external fun uniffi_blazen_uniffi_fn_method_checkpointstore_save_blocking(`ptr`: Long,`checkpoint`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_clone_pipeline(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_free_pipeline(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_method_pipeline_run(`ptr`: Long,`inputJson`: RustBuffer.ByValue,
-): Long
-external fun uniffi_blazen_uniffi_fn_method_pipeline_run_blocking(`ptr`: Long,`inputJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_method_pipeline_stage_names(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_clone_pipelinebuilder(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_free_pipelinebuilder(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_constructor_pipelinebuilder_new(`name`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_method_pipelinebuilder_add_workflow(`ptr`: Long,`workflow`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_method_pipelinebuilder_build(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_method_pipelinebuilder_parallel(`ptr`: Long,`name`: RustBuffer.ByValue,`branchNames`: RustBuffer.ByValue,`workflows`: RustBuffer.ByValue,`waitAll`: Byte,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_method_pipelinebuilder_stage(`ptr`: Long,`name`: RustBuffer.ByValue,`workflow`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_method_pipelinebuilder_timeout_per_stage_ms(`ptr`: Long,`millis`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_method_pipelinebuilder_total_timeout_ms(`ptr`: Long,`millis`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_clone_completionstreamsink(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_free_completionstreamsink(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_init_callback_vtable_completionstreamsink(`vtable`: UniffiVTableCallbackInterfaceCompletionStreamSink,
-): Unit
-external fun uniffi_blazen_uniffi_fn_method_completionstreamsink_on_chunk(`ptr`: Long,`chunk`: RustBuffer.ByValue,
-): Long
-external fun uniffi_blazen_uniffi_fn_method_completionstreamsink_on_done(`ptr`: Long,`finishReason`: RustBuffer.ByValue,`usage`: RustBuffer.ByValue,
-): Long
-external fun uniffi_blazen_uniffi_fn_method_completionstreamsink_on_error(`ptr`: Long,`err`: RustBuffer.ByValue,
-): Long
-external fun uniffi_blazen_uniffi_fn_clone_stephandler(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_free_stephandler(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_init_callback_vtable_stephandler(`vtable`: UniffiVTableCallbackInterfaceStepHandler,
-): Unit
-external fun uniffi_blazen_uniffi_fn_method_stephandler_invoke(`ptr`: Long,`event`: RustBuffer.ByValue,
-): Long
-external fun uniffi_blazen_uniffi_fn_clone_workflow(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_free_workflow(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_method_workflow_run(`ptr`: Long,`inputJson`: RustBuffer.ByValue,
-): Long
-external fun uniffi_blazen_uniffi_fn_method_workflow_run_blocking(`ptr`: Long,`inputJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_method_workflow_step_names(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_clone_workflowbuilder(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_free_workflowbuilder(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_constructor_workflowbuilder_new(`name`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_method_workflowbuilder_build(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_method_workflowbuilder_step(`ptr`: Long,`name`: RustBuffer.ByValue,`accepts`: RustBuffer.ByValue,`emits`: RustBuffer.ByValue,`handler`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_method_workflowbuilder_step_timeout_ms(`ptr`: Long,`millis`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_method_workflowbuilder_timeout_ms(`ptr`: Long,`millis`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_version(uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_func_complete_batch(`model`: Long,`requests`: RustBuffer.ByValue,`maxConcurrency`: Int,
-): Long
-external fun uniffi_blazen_uniffi_fn_func_complete_batch_blocking(`model`: Long,`requests`: RustBuffer.ByValue,`maxConcurrency`: Int,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_func_new_diffusion_model(`modelId`: RustBuffer.ByValue,`device`: RustBuffer.ByValue,`width`: RustBuffer.ByValue,`height`: RustBuffer.ByValue,`numInferenceSteps`: RustBuffer.ByValue,`guidanceScale`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_fal_image_gen_model(`apiKey`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_fal_stt_model(`apiKey`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_fal_tts_model(`apiKey`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_piper_tts_model(`modelId`: RustBuffer.ByValue,`speakerId`: RustBuffer.ByValue,`sampleRate`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_whisper_stt_model(`model`: RustBuffer.ByValue,`device`: RustBuffer.ByValue,`language`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_redb_checkpoint_store(`path`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_valkey_checkpoint_store(`url`: RustBuffer.ByValue,`ttlSeconds`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_anthropic_completion_model(`apiKey`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,`baseUrl`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_azure_completion_model(`apiKey`: RustBuffer.ByValue,`resourceName`: RustBuffer.ByValue,`deploymentName`: RustBuffer.ByValue,`apiVersion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_bedrock_completion_model(`apiKey`: RustBuffer.ByValue,`region`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,`baseUrl`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_candle_completion_model(`modelId`: RustBuffer.ByValue,`device`: RustBuffer.ByValue,`quantization`: RustBuffer.ByValue,`revision`: RustBuffer.ByValue,`contextLength`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_candle_embedding_model(`modelId`: RustBuffer.ByValue,`device`: RustBuffer.ByValue,`revision`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_cohere_completion_model(`apiKey`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,`baseUrl`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_deepseek_completion_model(`apiKey`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,`baseUrl`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_fal_completion_model(`apiKey`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,`baseUrl`: RustBuffer.ByValue,`endpoint`: RustBuffer.ByValue,`enterprise`: Byte,`autoRouteModality`: Byte,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_fal_embedding_model(`apiKey`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,`dimensions`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_fastembed_embedding_model(`modelName`: RustBuffer.ByValue,`maxBatchSize`: RustBuffer.ByValue,`showDownloadProgress`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_fireworks_completion_model(`apiKey`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,`baseUrl`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_gemini_completion_model(`apiKey`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,`baseUrl`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_groq_completion_model(`apiKey`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,`baseUrl`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_llamacpp_completion_model(`modelPath`: RustBuffer.ByValue,`device`: RustBuffer.ByValue,`quantization`: RustBuffer.ByValue,`contextLength`: RustBuffer.ByValue,`nGpuLayers`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_mistral_completion_model(`apiKey`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,`baseUrl`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_mistralrs_completion_model(`modelId`: RustBuffer.ByValue,`device`: RustBuffer.ByValue,`quantization`: RustBuffer.ByValue,`contextLength`: RustBuffer.ByValue,`vision`: Byte,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_openai_compat_completion_model(`providerName`: RustBuffer.ByValue,`baseUrl`: RustBuffer.ByValue,`apiKey`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_openai_completion_model(`apiKey`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,`baseUrl`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_openai_embedding_model(`apiKey`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,`baseUrl`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_openrouter_completion_model(`apiKey`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,`baseUrl`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_perplexity_completion_model(`apiKey`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,`baseUrl`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_together_completion_model(`apiKey`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,`baseUrl`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_tract_embedding_model(`modelName`: RustBuffer.ByValue,`maxBatchSize`: RustBuffer.ByValue,`showDownloadProgress`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_new_xai_completion_model(`apiKey`: RustBuffer.ByValue,`model`: RustBuffer.ByValue,`baseUrl`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_blazen_uniffi_fn_func_init(uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_func_complete_streaming(`model`: Long,`request`: RustBuffer.ByValue,`sink`: Long,
-): Long
-external fun uniffi_blazen_uniffi_fn_func_complete_streaming_blocking(`model`: Long,`request`: RustBuffer.ByValue,`sink`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_func_init_langfuse(`publicKey`: RustBuffer.ByValue,`secretKey`: RustBuffer.ByValue,`host`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_func_init_otlp(`endpoint`: RustBuffer.ByValue,`serviceName`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_func_init_prometheus(`listenAddress`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_blazen_uniffi_fn_func_parse_workflow_history(`historyJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_blazen_uniffi_fn_func_shutdown_telemetry(uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun ffi_blazen_uniffi_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun ffi_blazen_uniffi_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun ffi_blazen_uniffi_rustbuffer_free(`buf`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun ffi_blazen_uniffi_rustbuffer_reserve(`buf`: RustBuffer.ByValue,`additional`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun ffi_blazen_uniffi_rust_future_poll_u8(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_cancel_u8(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_free_u8(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_complete_u8(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Byte
-external fun ffi_blazen_uniffi_rust_future_poll_i8(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_cancel_i8(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_free_i8(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_complete_i8(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Byte
-external fun ffi_blazen_uniffi_rust_future_poll_u16(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_cancel_u16(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_free_u16(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_complete_u16(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Short
-external fun ffi_blazen_uniffi_rust_future_poll_i16(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_cancel_i16(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_free_i16(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_complete_i16(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Short
-external fun ffi_blazen_uniffi_rust_future_poll_u32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_cancel_u32(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_free_u32(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_complete_u32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Int
-external fun ffi_blazen_uniffi_rust_future_poll_i32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_cancel_i32(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_free_i32(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_complete_i32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Int
-external fun ffi_blazen_uniffi_rust_future_poll_u64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_cancel_u64(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_free_u64(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_complete_u64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun ffi_blazen_uniffi_rust_future_poll_i64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_cancel_i64(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_free_i64(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_complete_i64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun ffi_blazen_uniffi_rust_future_poll_f32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_cancel_f32(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_free_f32(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_complete_f32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Float
-external fun ffi_blazen_uniffi_rust_future_poll_f64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_cancel_f64(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_free_f64(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_complete_f64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Double
-external fun ffi_blazen_uniffi_rust_future_poll_rust_buffer(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_cancel_rust_buffer(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_free_rust_buffer(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_complete_rust_buffer(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun ffi_blazen_uniffi_rust_future_poll_void(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_cancel_void(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_free_void(`handle`: Long,
-): Unit
-external fun ffi_blazen_uniffi_rust_future_complete_void(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
 
-    
+    external fun uniffi_blazen_uniffi_fn_clone_agent(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_agent(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_agent_new(
+        `model`: Long,
+        `systemPrompt`: RustBuffer.ByValue,
+        `tools`: RustBuffer.ByValue,
+        `toolHandler`: Long,
+        `maxIterations`: Int,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_agent_run(
+        `ptr`: Long,
+        `userInput`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_agent_run_blocking(
+        `ptr`: Long,
+        `userInput`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_toolhandler(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_toolhandler(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_init_callback_vtable_toolhandler(`vtable`: UniffiVTableCallbackInterfaceToolHandler): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_toolhandler_execute(
+        `ptr`: Long,
+        `toolName`: RustBuffer.ByValue,
+        `argumentsJson`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_clone_imagegenmodel(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_imagegenmodel(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_imagegenmodel_generate(
+        `ptr`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `negativePrompt`: RustBuffer.ByValue,
+        `width`: RustBuffer.ByValue,
+        `height`: RustBuffer.ByValue,
+        `numImages`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_imagegenmodel_generate_blocking(
+        `ptr`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `negativePrompt`: RustBuffer.ByValue,
+        `width`: RustBuffer.ByValue,
+        `height`: RustBuffer.ByValue,
+        `numImages`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_sttmodel(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_sttmodel(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_sttmodel_transcribe(
+        `ptr`: Long,
+        `audioSource`: RustBuffer.ByValue,
+        `language`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_sttmodel_transcribe_blocking(
+        `ptr`: Long,
+        `audioSource`: RustBuffer.ByValue,
+        `language`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_ttsmodel(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_ttsmodel(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_ttsmodel_synthesize(
+        `ptr`: Long,
+        `text`: RustBuffer.ByValue,
+        `voice`: RustBuffer.ByValue,
+        `language`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_ttsmodel_synthesize_blocking(
+        `ptr`: Long,
+        `text`: RustBuffer.ByValue,
+        `voice`: RustBuffer.ByValue,
+        `language`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_completionmodel(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_completionmodel(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_completionmodel_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_completionmodel_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_completionmodel_model_id(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_embeddingmodel(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_embeddingmodel(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_embeddingmodel_dimensions(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Int
+
+    external fun uniffi_blazen_uniffi_fn_method_embeddingmodel_embed(
+        `ptr`: Long,
+        `inputs`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_embeddingmodel_embed_blocking(
+        `ptr`: Long,
+        `inputs`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_embeddingmodel_model_id(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_peerclient(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_peerclient(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_peerclient_connect(
+        `address`: RustBuffer.ByValue,
+        `clientNodeId`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_peerclient_node_id(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_peerclient_run_remote_workflow(
+        `ptr`: Long,
+        `workflowName`: RustBuffer.ByValue,
+        `stepIds`: RustBuffer.ByValue,
+        `inputJson`: RustBuffer.ByValue,
+        `timeoutSecs`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_peerclient_run_remote_workflow_blocking(
+        `ptr`: Long,
+        `workflowName`: RustBuffer.ByValue,
+        `stepIds`: RustBuffer.ByValue,
+        `inputJson`: RustBuffer.ByValue,
+        `timeoutSecs`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_peerserver(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_peerserver(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_peerserver_new(
+        `nodeId`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_peerserver_serve(
+        `ptr`: Long,
+        `listenAddress`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_peerserver_serve_blocking(
+        `ptr`: Long,
+        `listenAddress`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_clone_checkpointstore(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_checkpointstore(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_checkpointstore_delete(
+        `ptr`: Long,
+        `runId`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_checkpointstore_delete_blocking(
+        `ptr`: Long,
+        `runId`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_checkpointstore_list(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_checkpointstore_list_blocking(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_checkpointstore_list_run_ids(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_checkpointstore_list_run_ids_blocking(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_checkpointstore_load(
+        `ptr`: Long,
+        `runId`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_checkpointstore_load_blocking(
+        `ptr`: Long,
+        `runId`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_checkpointstore_save(
+        `ptr`: Long,
+        `checkpoint`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_checkpointstore_save_blocking(
+        `ptr`: Long,
+        `checkpoint`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_clone_pipeline(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_pipeline(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_pipeline_run(
+        `ptr`: Long,
+        `inputJson`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_pipeline_run_blocking(
+        `ptr`: Long,
+        `inputJson`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_pipeline_stage_names(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_pipelinebuilder(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_pipelinebuilder(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_pipelinebuilder_new(
+        `name`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_pipelinebuilder_add_workflow(
+        `ptr`: Long,
+        `workflow`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_pipelinebuilder_build(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_pipelinebuilder_parallel(
+        `ptr`: Long,
+        `name`: RustBuffer.ByValue,
+        `branchNames`: RustBuffer.ByValue,
+        `workflows`: RustBuffer.ByValue,
+        `waitAll`: Byte,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_pipelinebuilder_stage(
+        `ptr`: Long,
+        `name`: RustBuffer.ByValue,
+        `workflow`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_pipelinebuilder_timeout_per_stage_ms(
+        `ptr`: Long,
+        `millis`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_pipelinebuilder_total_timeout_ms(
+        `ptr`: Long,
+        `millis`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_clone_completionstreamsink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_completionstreamsink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_init_callback_vtable_completionstreamsink(
+        `vtable`: UniffiVTableCallbackInterfaceCompletionStreamSink,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_completionstreamsink_on_chunk(
+        `ptr`: Long,
+        `chunk`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_completionstreamsink_on_done(
+        `ptr`: Long,
+        `finishReason`: RustBuffer.ByValue,
+        `usage`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_completionstreamsink_on_error(
+        `ptr`: Long,
+        `err`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_clone_stephandler(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_stephandler(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_init_callback_vtable_stephandler(`vtable`: UniffiVTableCallbackInterfaceStepHandler): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_stephandler_invoke(
+        `ptr`: Long,
+        `event`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_clone_workflow(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_workflow(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_workflow_run(
+        `ptr`: Long,
+        `inputJson`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_workflow_run_blocking(
+        `ptr`: Long,
+        `inputJson`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_workflow_step_names(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_workflowbuilder(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_workflowbuilder(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_workflowbuilder_new(
+        `name`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_workflowbuilder_build(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_workflowbuilder_step(
+        `ptr`: Long,
+        `name`: RustBuffer.ByValue,
+        `accepts`: RustBuffer.ByValue,
+        `emits`: RustBuffer.ByValue,
+        `handler`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_workflowbuilder_step_timeout_ms(
+        `ptr`: Long,
+        `millis`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_workflowbuilder_timeout_ms(
+        `ptr`: Long,
+        `millis`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_version(uniffi_out_err: UniffiRustCallStatus): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_func_complete_batch(
+        `model`: Long,
+        `requests`: RustBuffer.ByValue,
+        `maxConcurrency`: Int,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_complete_batch_blocking(
+        `model`: Long,
+        `requests`: RustBuffer.ByValue,
+        `maxConcurrency`: Int,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_func_new_diffusion_model(
+        `modelId`: RustBuffer.ByValue,
+        `device`: RustBuffer.ByValue,
+        `width`: RustBuffer.ByValue,
+        `height`: RustBuffer.ByValue,
+        `numInferenceSteps`: RustBuffer.ByValue,
+        `guidanceScale`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_fal_image_gen_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_fal_stt_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_fal_tts_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_piper_tts_model(
+        `modelId`: RustBuffer.ByValue,
+        `speakerId`: RustBuffer.ByValue,
+        `sampleRate`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_whisper_stt_model(
+        `model`: RustBuffer.ByValue,
+        `device`: RustBuffer.ByValue,
+        `language`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_redb_checkpoint_store(
+        `path`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_valkey_checkpoint_store(
+        `url`: RustBuffer.ByValue,
+        `ttlSeconds`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_anthropic_completion_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_azure_completion_model(
+        `apiKey`: RustBuffer.ByValue,
+        `resourceName`: RustBuffer.ByValue,
+        `deploymentName`: RustBuffer.ByValue,
+        `apiVersion`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_bedrock_completion_model(
+        `apiKey`: RustBuffer.ByValue,
+        `region`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_candle_completion_model(
+        `modelId`: RustBuffer.ByValue,
+        `device`: RustBuffer.ByValue,
+        `quantization`: RustBuffer.ByValue,
+        `revision`: RustBuffer.ByValue,
+        `contextLength`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_candle_embedding_model(
+        `modelId`: RustBuffer.ByValue,
+        `device`: RustBuffer.ByValue,
+        `revision`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_cohere_completion_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_deepseek_completion_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_fal_completion_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        `endpoint`: RustBuffer.ByValue,
+        `enterprise`: Byte,
+        `autoRouteModality`: Byte,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_fal_embedding_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `dimensions`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_fastembed_embedding_model(
+        `modelName`: RustBuffer.ByValue,
+        `maxBatchSize`: RustBuffer.ByValue,
+        `showDownloadProgress`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_fireworks_completion_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_gemini_completion_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_groq_completion_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_llamacpp_completion_model(
+        `modelPath`: RustBuffer.ByValue,
+        `device`: RustBuffer.ByValue,
+        `quantization`: RustBuffer.ByValue,
+        `contextLength`: RustBuffer.ByValue,
+        `nGpuLayers`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_mistral_completion_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_mistralrs_completion_model(
+        `modelId`: RustBuffer.ByValue,
+        `device`: RustBuffer.ByValue,
+        `quantization`: RustBuffer.ByValue,
+        `contextLength`: RustBuffer.ByValue,
+        `vision`: Byte,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_openai_compat_completion_model(
+        `providerName`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_openai_completion_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_openai_embedding_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_openrouter_completion_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_perplexity_completion_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_together_completion_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_tract_embedding_model(
+        `modelName`: RustBuffer.ByValue,
+        `maxBatchSize`: RustBuffer.ByValue,
+        `showDownloadProgress`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_xai_completion_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_init(uniffi_out_err: UniffiRustCallStatus): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_complete_streaming(
+        `model`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_complete_streaming_blocking(
+        `model`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_init_langfuse(
+        `publicKey`: RustBuffer.ByValue,
+        `secretKey`: RustBuffer.ByValue,
+        `host`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_init_otlp(
+        `endpoint`: RustBuffer.ByValue,
+        `serviceName`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_init_prometheus(
+        `listenAddress`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_parse_workflow_history(
+        `historyJson`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_func_shutdown_telemetry(uniffi_out_err: UniffiRustCallStatus): Unit
+
+    external fun ffi_blazen_uniffi_rustbuffer_alloc(
+        `size`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun ffi_blazen_uniffi_rustbuffer_from_bytes(
+        `bytes`: ForeignBytes.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun ffi_blazen_uniffi_rustbuffer_free(
+        `buf`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun ffi_blazen_uniffi_rustbuffer_reserve(
+        `buf`: RustBuffer.ByValue,
+        `additional`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun ffi_blazen_uniffi_rust_future_poll_u8(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_cancel_u8(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_free_u8(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_complete_u8(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Byte
+
+    external fun ffi_blazen_uniffi_rust_future_poll_i8(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_cancel_i8(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_free_i8(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_complete_i8(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Byte
+
+    external fun ffi_blazen_uniffi_rust_future_poll_u16(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_cancel_u16(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_free_u16(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_complete_u16(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Short
+
+    external fun ffi_blazen_uniffi_rust_future_poll_i16(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_cancel_i16(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_free_i16(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_complete_i16(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Short
+
+    external fun ffi_blazen_uniffi_rust_future_poll_u32(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_cancel_u32(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_free_u32(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_complete_u32(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Int
+
+    external fun ffi_blazen_uniffi_rust_future_poll_i32(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_cancel_i32(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_free_i32(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_complete_i32(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Int
+
+    external fun ffi_blazen_uniffi_rust_future_poll_u64(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_cancel_u64(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_free_u64(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_complete_u64(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun ffi_blazen_uniffi_rust_future_poll_i64(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_cancel_i64(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_free_i64(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_complete_i64(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun ffi_blazen_uniffi_rust_future_poll_f32(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_cancel_f32(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_free_f32(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_complete_f32(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Float
+
+    external fun ffi_blazen_uniffi_rust_future_poll_f64(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_cancel_f64(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_free_f64(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_complete_f64(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Double
+
+    external fun ffi_blazen_uniffi_rust_future_poll_rust_buffer(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_cancel_rust_buffer(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_free_rust_buffer(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_complete_rust_buffer(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun ffi_blazen_uniffi_rust_future_poll_void(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_cancel_void(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_free_void(`handle`: Long): Unit
+
+    external fun ffi_blazen_uniffi_rust_future_complete_void(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
 }
 
 private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
@@ -1325,6 +2079,7 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI contract version mismatch: try cleaning and rebuilding your project")
     }
 }
+
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_func_version() != 61949.toShort()) {
@@ -1645,39 +2400,44 @@ internal const val UNIFFI_RUST_FUTURE_POLL_WAKE = 1.toByte()
 internal val uniffiContinuationHandleMap = UniffiHandleMap<CancellableContinuation<Byte>>()
 
 // FFI type for Rust future continuations
-internal object uniffiRustFutureContinuationCallbackImpl: UniffiRustFutureContinuationCallback {
-    override fun callback(data: Long, pollResult: Byte) {
+internal object uniffiRustFutureContinuationCallbackImpl : UniffiRustFutureContinuationCallback {
+    override fun callback(
+        data: Long,
+        pollResult: Byte,
+    ) {
         uniffiContinuationHandleMap.remove(data).resume(pollResult)
     }
 }
 
-internal suspend fun<T, F, E: kotlin.Exception> uniffiRustCallAsync(
+internal suspend fun <T, F, E : kotlin.Exception> uniffiRustCallAsync(
     rustFuture: Long,
     pollFunc: (Long, UniffiRustFutureContinuationCallback, Long) -> Unit,
     completeFunc: (Long, UniffiRustCallStatus) -> F,
     freeFunc: (Long) -> Unit,
     liftFunc: (F) -> T,
-    errorHandler: UniffiRustCallStatusErrorHandler<E>
+    errorHandler: UniffiRustCallStatusErrorHandler<E>,
 ): T {
     try {
         do {
-            val pollResult = suspendCancellableCoroutine<Byte> { continuation ->
-                pollFunc(
-                    rustFuture,
-                    uniffiRustFutureContinuationCallbackImpl,
-                    uniffiContinuationHandleMap.insert(continuation)
-                )
-            }
-        } while (pollResult != UNIFFI_RUST_FUTURE_POLL_READY);
+            val pollResult =
+                suspendCancellableCoroutine<Byte> { continuation ->
+                    pollFunc(
+                        rustFuture,
+                        uniffiRustFutureContinuationCallbackImpl,
+                        uniffiContinuationHandleMap.insert(continuation),
+                    )
+                }
+        } while (pollResult != UNIFFI_RUST_FUTURE_POLL_READY)
 
         return liftFunc(
-            uniffiRustCallWithError(errorHandler, { status -> completeFunc(rustFuture, status) })
+            uniffiRustCallWithError(errorHandler, { status -> completeFunc(rustFuture, status) }),
         )
     } finally {
         freeFunc(rustFuture)
     }
 }
-internal inline fun<T> uniffiTraitInterfaceCallAsync(
+
+internal inline fun <T> uniffiTraitInterfaceCallAsync(
     crossinline makeCall: suspend () -> T,
     crossinline handleSuccess: (T) -> Unit,
     crossinline handleError: (UniffiRustCallStatus.ByValue) -> Unit,
@@ -1689,33 +2449,35 @@ internal inline fun<T> uniffiTraitInterfaceCallAsync(
     // Uniffi does its best to support structured concurrency across the FFI.
     // If the Rust future is dropped, `uniffiForeignFutureDroppedCallbackImpl` is called, which will cancel the Kotlin coroutine if it's still running.
     @OptIn(DelicateCoroutinesApi::class)
-    val job = GlobalScope.launch coroutineBlock@ {
-        // Note: it's important we call either `handleSuccess` or `handleError` exactly once.  Each
-        // call consumes an Arc reference, which means there should be no possibility of a double
-        // call.  The following code is structured so that will will never call both `handleSuccess`
-        // and `handleError`, even in the face of weird exceptions.
-        //
-        // In extreme circumstances we may not call either, for example if we fail to make the JNA
-        // call to `handleSuccess`.  This means we will leak the Arc reference, which is better than
-        // double-freeing it.
-        val callResult = try {
-            makeCall()
-        } catch(e: kotlin.Exception) {
-            handleError(
-                UniffiRustCallStatus.create(
-                    UNIFFI_CALL_UNEXPECTED_ERROR,
-                    FfiConverterString.lower(e.toString()),
-                )
-            )
-            return@coroutineBlock
+    val job =
+        GlobalScope.launch coroutineBlock@{
+            // Note: it's important we call either `handleSuccess` or `handleError` exactly once.  Each
+            // call consumes an Arc reference, which means there should be no possibility of a double
+            // call.  The following code is structured so that will will never call both `handleSuccess`
+            // and `handleError`, even in the face of weird exceptions.
+            //
+            // In extreme circumstances we may not call either, for example if we fail to make the JNA
+            // call to `handleSuccess`.  This means we will leak the Arc reference, which is better than
+            // double-freeing it.
+            val callResult =
+                try {
+                    makeCall()
+                } catch (e: kotlin.Exception) {
+                    handleError(
+                        UniffiRustCallStatus.create(
+                            UNIFFI_CALL_UNEXPECTED_ERROR,
+                            FfiConverterString.lower(e.toString()),
+                        ),
+                    )
+                    return@coroutineBlock
+                }
+            handleSuccess(callResult)
         }
-        handleSuccess(callResult)
-    }
     val handle = uniffiForeignFutureHandleMap.insert(job)
     uniffiOutDroppedCallback.uniffiSetValue(UniffiForeignFutureDroppedCallbackStruct(handle, uniffiForeignFutureDroppedCallbackImpl))
 }
 
-internal inline fun<T, reified E: Throwable> uniffiTraitInterfaceCallAsyncWithError(
+internal inline fun <T, reified E : Throwable> uniffiTraitInterfaceCallAsyncWithError(
     crossinline makeCall: suspend () -> T,
     crossinline handleSuccess: (T) -> Unit,
     crossinline handleError: (UniffiRustCallStatus.ByValue) -> Unit,
@@ -1724,38 +2486,40 @@ internal inline fun<T, reified E: Throwable> uniffiTraitInterfaceCallAsyncWithEr
 ) {
     // See uniffiTraitInterfaceCallAsync for details on `DelicateCoroutinesApi`
     @OptIn(DelicateCoroutinesApi::class)
-    val job = GlobalScope.launch coroutineBlock@ {
-        // See the note in uniffiTraitInterfaceCallAsync for details on `handleSuccess` and
-        // `handleError`.
-        val callResult = try {
-            makeCall()
-        } catch(e: kotlin.Exception) {
-            if (e is E) {
-                handleError(
-                    UniffiRustCallStatus.create(
-                        UNIFFI_CALL_ERROR,
-                        lowerError(e),
-                    )
-                )
-            } else {
-                handleError(
-                    UniffiRustCallStatus.create(
-                        UNIFFI_CALL_UNEXPECTED_ERROR,
-                        FfiConverterString.lower(e.toString()),
-                    )
-                )
-            }
-            return@coroutineBlock
+    val job =
+        GlobalScope.launch coroutineBlock@{
+            // See the note in uniffiTraitInterfaceCallAsync for details on `handleSuccess` and
+            // `handleError`.
+            val callResult =
+                try {
+                    makeCall()
+                } catch (e: kotlin.Exception) {
+                    if (e is E) {
+                        handleError(
+                            UniffiRustCallStatus.create(
+                                UNIFFI_CALL_ERROR,
+                                lowerError(e),
+                            ),
+                        )
+                    } else {
+                        handleError(
+                            UniffiRustCallStatus.create(
+                                UNIFFI_CALL_UNEXPECTED_ERROR,
+                                FfiConverterString.lower(e.toString()),
+                            ),
+                        )
+                    }
+                    return@coroutineBlock
+                }
+            handleSuccess(callResult)
         }
-        handleSuccess(callResult)
-    }
     val handle = uniffiForeignFutureHandleMap.insert(job)
     uniffiOutDroppedCallback.uniffiSetValue(UniffiForeignFutureDroppedCallbackStruct(handle, uniffiForeignFutureDroppedCallbackImpl))
 }
 
 internal val uniffiForeignFutureHandleMap = UniffiHandleMap<Job>()
 
-internal object uniffiForeignFutureDroppedCallbackImpl: UniffiForeignFutureDroppedCallback {
+internal object uniffiForeignFutureDroppedCallbackImpl : UniffiForeignFutureDroppedCallback {
     override fun callback(handle: Long) {
         val job = uniffiForeignFutureHandleMap.remove(handle)
         if (!job.isCompleted) {
@@ -1769,7 +2533,6 @@ public fun uniffiForeignFutureHandleCount() = uniffiForeignFutureHandleMap.size
 
 // Public interface members begin here.
 
-
 // Interface implemented by anything that can contain an object reference.
 //
 // Such types expose a `destroy()` method that must be called to cleanly
@@ -1780,11 +2543,15 @@ public fun uniffiForeignFutureHandleCount() = uniffiForeignFutureHandleMap.size
 // helper method to execute a block and destroy the object at the end.
 interface Disposable {
     fun destroy()
+
     companion object {
         fun destroy(vararg args: Any?) {
             for (arg in args) {
                 when (arg) {
-                    is Disposable -> arg.destroy()
+                    is Disposable -> {
+                        arg.destroy()
+                    }
+
                     is ArrayList<*> -> {
                         for (idx in arg.indices) {
                             val element = arg[idx]
@@ -1793,6 +2560,7 @@ interface Disposable {
                             }
                         }
                     }
+
                     is Map<*, *> -> {
                         for (element in arg.values) {
                             if (element is Disposable) {
@@ -1800,6 +2568,7 @@ interface Disposable {
                             }
                         }
                     }
+
                     is Iterable<*> -> {
                         for (element in arg) {
                             if (element is Disposable) {
@@ -1828,7 +2597,7 @@ inline fun <T : Disposable?, R> T.use(block: (T) -> R) =
         }
     }
 
-/** 
+/**
  * Placeholder object used to signal that we're constructing an interface with a FFI handle.
  *
  * This is the first argument for interface constructors that input a raw handle. It exists is that
@@ -1839,14 +2608,16 @@ inline fun <T : Disposable?, R> T.use(block: (T) -> R) =
  * */
 object UniffiWithHandle
 
-/** 
+/**
  * Used to instantiate an interface without an actual pointer, for fakes in tests, mostly.
  *
  * @suppress
  * */
-object NoHandle// Magic number for the Rust proxy to call using the same mechanism as every other method,
+object NoHandle // Magic number for the Rust proxy to call using the same mechanism as every other method,
+
 // to free the callback once it's dropped by Rust.
 internal const val IDX_CALLBACK_FREE = 0
+
 // Callback return codes
 internal const val UNIFFI_CALLBACK_SUCCESS = 0
 internal const val UNIFFI_CALLBACK_ERROR = 1
@@ -1855,16 +2626,14 @@ internal const val UNIFFI_CALLBACK_UNEXPECTED_ERROR = 2
 /**
  * @suppress
  */
-public abstract class FfiConverterCallbackInterface<CallbackInterface: Any>: FfiConverter<CallbackInterface, Long> {
+public abstract class FfiConverterCallbackInterface<CallbackInterface : Any> : FfiConverter<CallbackInterface, Long> {
     internal val handleMap = UniffiHandleMap<CallbackInterface>()
 
     internal fun drop(handle: Long) {
         handleMap.remove(handle)
     }
 
-    override fun lift(value: Long): CallbackInterface {
-        return handleMap.get(value)
-    }
+    override fun lift(value: Long): CallbackInterface = handleMap.get(value)
 
     override fun read(buf: ByteBuffer) = lift(buf.getLong())
 
@@ -1872,10 +2641,14 @@ public abstract class FfiConverterCallbackInterface<CallbackInterface: Any>: Ffi
 
     override fun allocationSize(value: CallbackInterface) = 8UL
 
-    override fun write(value: CallbackInterface, buf: ByteBuffer) {
+    override fun write(
+        value: CallbackInterface,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(lower(value))
     }
 }
+
 /**
  * The cleaner interface for Object finalization code to run.
  * This is the entry point to any implementation that we're using.
@@ -1891,17 +2664,24 @@ interface UniffiCleaner {
         fun clean()
     }
 
-    fun register(value: Any, cleanUpTask: Runnable): UniffiCleaner.Cleanable
+    fun register(
+        value: Any,
+        cleanUpTask: Runnable,
+    ): UniffiCleaner.Cleanable
 
     companion object
 }
 
 // The fallback Jna cleaner, which is available for both Android, and the JVM.
 private class UniffiJnaCleaner : UniffiCleaner {
-    private val cleaner = com.sun.jna.internal.Cleaner.getCleaner()
+    private val cleaner =
+        com.sun.jna.internal.Cleaner
+            .getCleaner()
 
-    override fun register(value: Any, cleanUpTask: Runnable): UniffiCleaner.Cleanable =
-        UniffiJnaCleanable(cleaner.register(value, cleanUpTask))
+    override fun register(
+        value: Any,
+        cleanUpTask: Runnable,
+    ): UniffiCleaner.Cleanable = UniffiJnaCleanable(cleaner.register(value, cleanUpTask))
 }
 
 private class UniffiJnaCleanable(
@@ -1909,7 +2689,6 @@ private class UniffiJnaCleanable(
 ) : UniffiCleaner.Cleanable {
     override fun clean() = cleanable.clean()
 }
-
 
 // We decide at uniffi binding generation time whether we were
 // using Android or not.
@@ -1929,14 +2708,18 @@ private fun UniffiCleaner.Companion.create(): UniffiCleaner =
     }
 
 private class JavaLangRefCleaner : UniffiCleaner {
-    val cleaner = java.lang.ref.Cleaner.create()
+    val cleaner =
+        java.lang.ref.Cleaner
+            .create()
 
-    override fun register(value: Any, cleanUpTask: Runnable): UniffiCleaner.Cleanable =
-        JavaLangRefCleanable(cleaner.register(value, cleanUpTask))
+    override fun register(
+        value: Any,
+        cleanUpTask: Runnable,
+    ): UniffiCleaner.Cleanable = JavaLangRefCleanable(cleaner.register(value, cleanUpTask))
 }
 
 private class JavaLangRefCleanable(
-    val cleanable: java.lang.ref.Cleaner.Cleanable
+    val cleanable: java.lang.ref.Cleaner.Cleanable,
 ) : UniffiCleaner.Cleanable {
     override fun clean() = cleanable.clean()
 }
@@ -1944,22 +2727,19 @@ private class JavaLangRefCleanable(
 /**
  * @suppress
  */
-public object FfiConverterUInt: FfiConverter<UInt, Int> {
-    override fun lift(value: Int): UInt {
-        return value.toUInt()
-    }
+public object FfiConverterUInt : FfiConverter<UInt, Int> {
+    override fun lift(value: Int): UInt = value.toUInt()
 
-    override fun read(buf: ByteBuffer): UInt {
-        return lift(buf.getInt())
-    }
+    override fun read(buf: ByteBuffer): UInt = lift(buf.getInt())
 
-    override fun lower(value: UInt): Int {
-        return value.toInt()
-    }
+    override fun lower(value: UInt): Int = value.toInt()
 
     override fun allocationSize(value: UInt) = 4UL
 
-    override fun write(value: UInt, buf: ByteBuffer) {
+    override fun write(
+        value: UInt,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.toInt())
     }
 }
@@ -1967,22 +2747,19 @@ public object FfiConverterUInt: FfiConverter<UInt, Int> {
 /**
  * @suppress
  */
-public object FfiConverterULong: FfiConverter<ULong, Long> {
-    override fun lift(value: Long): ULong {
-        return value.toULong()
-    }
+public object FfiConverterULong : FfiConverter<ULong, Long> {
+    override fun lift(value: Long): ULong = value.toULong()
 
-    override fun read(buf: ByteBuffer): ULong {
-        return lift(buf.getLong())
-    }
+    override fun read(buf: ByteBuffer): ULong = lift(buf.getLong())
 
-    override fun lower(value: ULong): Long {
-        return value.toLong()
-    }
+    override fun lower(value: ULong): Long = value.toLong()
 
     override fun allocationSize(value: ULong) = 8UL
 
-    override fun write(value: ULong, buf: ByteBuffer) {
+    override fun write(
+        value: ULong,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(value.toLong())
     }
 }
@@ -1990,22 +2767,19 @@ public object FfiConverterULong: FfiConverter<ULong, Long> {
 /**
  * @suppress
  */
-public object FfiConverterFloat: FfiConverter<Float, Float> {
-    override fun lift(value: Float): Float {
-        return value
-    }
+public object FfiConverterFloat : FfiConverter<Float, Float> {
+    override fun lift(value: Float): Float = value
 
-    override fun read(buf: ByteBuffer): Float {
-        return buf.getFloat()
-    }
+    override fun read(buf: ByteBuffer): Float = buf.getFloat()
 
-    override fun lower(value: Float): Float {
-        return value
-    }
+    override fun lower(value: Float): Float = value
 
     override fun allocationSize(value: Float) = 4UL
 
-    override fun write(value: Float, buf: ByteBuffer) {
+    override fun write(
+        value: Float,
+        buf: ByteBuffer,
+    ) {
         buf.putFloat(value)
     }
 }
@@ -2013,22 +2787,19 @@ public object FfiConverterFloat: FfiConverter<Float, Float> {
 /**
  * @suppress
  */
-public object FfiConverterDouble: FfiConverter<Double, Double> {
-    override fun lift(value: Double): Double {
-        return value
-    }
+public object FfiConverterDouble : FfiConverter<Double, Double> {
+    override fun lift(value: Double): Double = value
 
-    override fun read(buf: ByteBuffer): Double {
-        return buf.getDouble()
-    }
+    override fun read(buf: ByteBuffer): Double = buf.getDouble()
 
-    override fun lower(value: Double): Double {
-        return value
-    }
+    override fun lower(value: Double): Double = value
 
     override fun allocationSize(value: Double) = 8UL
 
-    override fun write(value: Double, buf: ByteBuffer) {
+    override fun write(
+        value: Double,
+        buf: ByteBuffer,
+    ) {
         buf.putDouble(value)
     }
 }
@@ -2036,22 +2807,19 @@ public object FfiConverterDouble: FfiConverter<Double, Double> {
 /**
  * @suppress
  */
-public object FfiConverterBoolean: FfiConverter<Boolean, Byte> {
-    override fun lift(value: Byte): Boolean {
-        return value.toInt() != 0
-    }
+public object FfiConverterBoolean : FfiConverter<Boolean, Byte> {
+    override fun lift(value: Byte): Boolean = value.toInt() != 0
 
-    override fun read(buf: ByteBuffer): Boolean {
-        return lift(buf.get())
-    }
+    override fun read(buf: ByteBuffer): Boolean = lift(buf.get())
 
-    override fun lower(value: Boolean): Byte {
-        return if (value) 1.toByte() else 0.toByte()
-    }
+    override fun lower(value: Boolean): Byte = if (value) 1.toByte() else 0.toByte()
 
     override fun allocationSize(value: Boolean) = 1UL
 
-    override fun write(value: Boolean, buf: ByteBuffer) {
+    override fun write(
+        value: Boolean,
+        buf: ByteBuffer,
+    ) {
         buf.put(lower(value))
     }
 }
@@ -2059,7 +2827,7 @@ public object FfiConverterBoolean: FfiConverter<Boolean, Byte> {
 /**
  * @suppress
  */
-public object FfiConverterString: FfiConverter<String, RustBuffer.ByValue> {
+public object FfiConverterString : FfiConverter<String, RustBuffer.ByValue> {
     // Note: we don't inherit from FfiConverterRustBuffer, because we use a
     // special encoding when lowering/lifting.  We can use `RustBuffer.len` to
     // store our length and avoid writing it out to the buffer.
@@ -2106,13 +2874,15 @@ public object FfiConverterString: FfiConverter<String, RustBuffer.ByValue> {
         return sizeForLength + sizeForString
     }
 
-    override fun write(value: String, buf: ByteBuffer) {
+    override fun write(
+        value: String,
+        buf: ByteBuffer,
+    ) {
         val byteBuf = toUtf8(value)
         buf.putInt(byteBuf.limit())
         buf.put(byteBuf)
     }
 }
-
 
 // This template implements a class for working with a Rust struct via a handle
 // to the live Rust struct on the other side of the FFI.
@@ -2208,7 +2978,6 @@ public object FfiConverterString: FfiConverter<String, RustBuffer.ByValue> {
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
-
 /**
  * A configured LLM agent that drives the standard tool-execution loop.
  *
@@ -2222,7 +2991,6 @@ public object FfiConverterString: FfiConverter<String, RustBuffer.ByValue> {
  * underlying model handle is reference-counted, so cloning is cheap.
  */
 public interface AgentInterface {
-    
     /**
      * Run the agent loop until the model produces a final answer (no tool
      * calls) or `max_iterations` is reached.
@@ -2231,13 +2999,13 @@ public interface AgentInterface {
      * answer is returned in [`AgentResult::final_message`].
      */
     suspend fun `run`(`userInput`: kotlin.String): AgentResult
-    
+
     /**
      * Synchronous variant of [`run`](Self::run) — blocks the current thread
      * on the shared Tokio runtime.
      */
     fun `runBlocking`(`userInput`: kotlin.String): AgentResult
-    
+
     companion object
 }
 
@@ -2253,13 +3021,14 @@ public interface AgentInterface {
  * Reuse a single `Agent` across calls when configuration is stable — the
  * underlying model handle is reference-counted, so cloning is cheap.
  */
-open class Agent: Disposable, AutoCloseable, AgentInterface
-{
-
-    @Suppress("UNUSED_PARAMETER")
+open class Agent :
+    Disposable,
+    AutoCloseable,
+    AgentInterface {
     /**
      * @suppress
      */
+    @Suppress("UNUSED_PARAMETER")
     constructor(withHandle: UniffiWithHandle, handle: Long) {
         this.handle = handle
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
@@ -2277,6 +3046,7 @@ open class Agent: Disposable, AutoCloseable, AgentInterface
         this.handle = 0
         this.cleanable = null
     }
+
     /**
      * Build an agent.
      *
@@ -2289,14 +3059,26 @@ open class Agent: Disposable, AutoCloseable, AgentInterface
      * - `max_iterations`: hard cap on LLM round-trips before the loop is
      * forced to produce a final answer.
      */
-    constructor(`model`: CompletionModel, `systemPrompt`: kotlin.String?, `tools`: List<Tool>, `toolHandler`: ToolHandler, `maxIterations`: kotlin.UInt) :
-        this(UniffiWithHandle, 
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_constructor_agent_new(
-    
-        FfiConverterTypeCompletionModel.lower(`model`),FfiConverterOptionalString.lower(`systemPrompt`),FfiConverterSequenceTypeTool.lower(`tools`),FfiConverterTypeToolHandler.lower(`toolHandler`),FfiConverterUInt.lower(`maxIterations`),_status)
-}
-    )
+    constructor(
+        `model`: CompletionModel,
+        `systemPrompt`: kotlin.String?,
+        `tools`: List<Tool>,
+        `toolHandler`: ToolHandler,
+        `maxIterations`: kotlin.UInt,
+    ) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_agent_new(
+                    FfiConverterTypeCompletionModel.lower(`model`),
+                    FfiConverterOptionalString.lower(`systemPrompt`),
+                    FfiConverterSequenceTypeTool.lower(`tools`),
+                    FfiConverterTypeToolHandler.lower(`toolHandler`),
+                    FfiConverterUInt.lower(`maxIterations`),
+                    _status,
+                )
+            },
+        )
 
     protected val handle: Long
     protected val cleanable: UniffiCleaner.Cleanable?
@@ -2331,7 +3113,7 @@ open class Agent: Disposable, AutoCloseable, AgentInterface
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the handle being freed concurrently.
         try {
             return block(this.uniffiCloneHandle())
@@ -2345,11 +3127,13 @@ open class Agent: Disposable, AutoCloseable, AgentInterface
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(private val handle: Long) : Runnable {
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
         override fun run() {
             if (handle == 0.toLong()) {
                 // Fake object created with `NoHandle`, don't try to free.
-                return;
+                return
             }
             uniffiRustCall { status ->
                 UniffiLib.uniffi_blazen_uniffi_fn_free_agent(handle, status)
@@ -2362,14 +3146,13 @@ open class Agent: Disposable, AutoCloseable, AgentInterface
      */
     fun uniffiCloneHandle(): Long {
         if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
-        return uniffiRustCall() { status ->
+        return uniffiRustCall { status ->
             UniffiLib.uniffi_blazen_uniffi_fn_clone_agent(handle, status)
         }
     }
 
-    
     /**
      * Run the agent loop until the model produces a final answer (no tool
      * calls) or `max_iterations` is reached.
@@ -2379,80 +3162,66 @@ open class Agent: Disposable, AutoCloseable, AgentInterface
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `run`(`userInput`: kotlin.String) : AgentResult {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_agent_run(
-                uniffiHandle,
-                FfiConverterString.lower(`userInput`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterTypeAgentResult.lift(it) },
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-    }
+    override suspend fun `run`(`userInput`: kotlin.String): AgentResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_agent_run(
+                    uniffiHandle,
+                    FfiConverterString.lower(`userInput`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeAgentResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
-    
     /**
      * Synchronous variant of [`run`](Self::run) — blocks the current thread
      * on the shared Tokio runtime.
      */
-    @Throws(BlazenException::class)override fun `runBlocking`(`userInput`: kotlin.String): AgentResult {
-            return FfiConverterTypeAgentResult.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_agent_run_blocking(
-        it,
-        FfiConverterString.lower(`userInput`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `runBlocking`(`userInput`: kotlin.String): AgentResult =
+        FfiConverterTypeAgentResult.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_agent_run_blocking(
+                        it,
+                        FfiConverterString.lower(`userInput`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
-
-    
-
-
-    
-    
     /**
      * @suppress
      */
     companion object
-    
 }
-
 
 /**
  * @suppress
  */
-public object FfiConverterTypeAgent: FfiConverter<Agent, Long> {
-    override fun lower(value: Agent): Long {
-        return value.uniffiCloneHandle()
-    }
+public object FfiConverterTypeAgent : FfiConverter<Agent, Long> {
+    override fun lower(value: Agent): Long = value.uniffiCloneHandle()
 
-    override fun lift(value: Long): Agent {
-        return Agent(UniffiWithHandle, value)
-    }
+    override fun lift(value: Long): Agent = Agent(UniffiWithHandle, value)
 
-    override fun read(buf: ByteBuffer): Agent {
-        return lift(buf.getLong())
-    }
+    override fun read(buf: ByteBuffer): Agent = lift(buf.getLong())
 
     override fun allocationSize(value: Agent) = 8UL
 
-    override fun write(value: Agent, buf: ByteBuffer) {
+    override fun write(
+        value: Agent,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(lower(value))
     }
 }
-
 
 // This template implements a class for working with a Rust struct via a handle
 // to the live Rust struct on the other side of the FFI.
@@ -2547,7 +3316,6 @@ public object FfiConverterTypeAgent: FfiConverter<Agent, Long> {
 //
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
-
 
 /**
  * A workflow-checkpoint store handle.
@@ -2563,30 +3331,29 @@ public object FfiConverterTypeAgent: FfiConverter<Agent, Long> {
  * functions and quick scripts).
  */
 public interface CheckpointStoreInterface {
-    
     /**
      * Delete the checkpoint for the given run id (UUID string). Succeeds
      * even when no checkpoint exists for the id (the underlying backends
      * treat delete-of-missing as a no-op).
      */
     suspend fun `delete`(`runId`: kotlin.String)
-    
+
     /**
      * Synchronous variant of [`delete`](Self::delete).
      */
     fun `deleteBlocking`(`runId`: kotlin.String)
-    
+
     /**
      * List all stored checkpoints, ordered by timestamp descending (most
      * recent first).
      */
     suspend fun `list`(): List<WorkflowCheckpoint>
-    
+
     /**
      * Synchronous variant of [`list`](Self::list).
      */
     fun `listBlocking`(): List<WorkflowCheckpoint>
-    
+
     /**
      * List all stored run ids (as UUID strings), ordered by timestamp
      * descending (most recent first).
@@ -2597,34 +3364,34 @@ public interface CheckpointStoreInterface {
      * convenience wrapper rather than a true index scan.
      */
     suspend fun `listRunIds`(): List<kotlin.String>
-    
+
     /**
      * Synchronous variant of [`list_run_ids`](Self::list_run_ids).
      */
     fun `listRunIdsBlocking`(): List<kotlin.String>
-    
+
     /**
      * Load a checkpoint by its run id (UUID string). Returns `None` when no
      * checkpoint exists for the given id.
      */
     suspend fun `load`(`runId`: kotlin.String): WorkflowCheckpoint?
-    
+
     /**
      * Synchronous variant of [`load`](Self::load).
      */
     fun `loadBlocking`(`runId`: kotlin.String): WorkflowCheckpoint?
-    
+
     /**
      * Persist a checkpoint, overwriting any existing entry with the same
      * `run_id`. Async on Swift / Kotlin; blocking-with-suspension on Go.
      */
     suspend fun `save`(`checkpoint`: WorkflowCheckpoint)
-    
+
     /**
      * Synchronous variant of [`save`](Self::save).
      */
     fun `saveBlocking`(`checkpoint`: WorkflowCheckpoint)
-    
+
     companion object
 }
 
@@ -2641,13 +3408,14 @@ public interface CheckpointStoreInterface {
  * modern Ruby fibers) and a `_blocking` variant (handy for Go `main`
  * functions and quick scripts).
  */
-open class CheckpointStore: Disposable, AutoCloseable, CheckpointStoreInterface
-{
-
-    @Suppress("UNUSED_PARAMETER")
+open class CheckpointStore :
+    Disposable,
+    AutoCloseable,
+    CheckpointStoreInterface {
     /**
      * @suppress
      */
+    @Suppress("UNUSED_PARAMETER")
     constructor(withHandle: UniffiWithHandle, handle: Long) {
         this.handle = handle
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
@@ -2699,7 +3467,7 @@ open class CheckpointStore: Disposable, AutoCloseable, CheckpointStoreInterface
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the handle being freed concurrently.
         try {
             return block(this.uniffiCloneHandle())
@@ -2713,11 +3481,13 @@ open class CheckpointStore: Disposable, AutoCloseable, CheckpointStoreInterface
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(private val handle: Long) : Runnable {
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
         override fun run() {
             if (handle == 0.toLong()) {
                 // Fake object created with `NoHandle`, don't try to free.
-                return;
+                return
             }
             uniffiRustCall { status ->
                 UniffiLib.uniffi_blazen_uniffi_fn_free_checkpointstore(handle, status)
@@ -2730,14 +3500,13 @@ open class CheckpointStore: Disposable, AutoCloseable, CheckpointStoreInterface
      */
     fun uniffiCloneHandle(): Long {
         if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
-        return uniffiRustCall() { status ->
+        return uniffiRustCall { status ->
             UniffiLib.uniffi_blazen_uniffi_fn_clone_checkpointstore(handle, status)
         }
     }
 
-    
     /**
      * Delete the checkpoint for the given run id (UUID string). Succeeds
      * even when no checkpoint exists for the id (the underlying backends
@@ -2745,84 +3514,76 @@ open class CheckpointStore: Disposable, AutoCloseable, CheckpointStoreInterface
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `delete`(`runId`: kotlin.String) {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_delete(
-                uniffiHandle,
-                FfiConverterString.lower(`runId`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
-        // lift function
-        { Unit },
-        
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-    }
+    override suspend fun `delete`(`runId`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_delete(
+                    uniffiHandle,
+                    FfiConverterString.lower(`runId`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
-    
     /**
      * Synchronous variant of [`delete`](Self::delete).
      */
-    @Throws(BlazenException::class)override fun `deleteBlocking`(`runId`: kotlin.String)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_delete_blocking(
-        it,
-        FfiConverterString.lower(`runId`),_status)
-}
-    }
-    
-    
+    @Throws(BlazenException::class)
+    override fun `deleteBlocking`(`runId`: kotlin.String) =
+        callWithHandle {
+            uniffiRustCallWithError(BlazenException) { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_delete_blocking(
+                    it,
+                    FfiConverterString.lower(`runId`),
+                    _status,
+                )
+            }
+        }
 
-    
     /**
      * List all stored checkpoints, ordered by timestamp descending (most
      * recent first).
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `list`() : List<WorkflowCheckpoint> {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_list(
-                uniffiHandle,
-                
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterSequenceTypeWorkflowCheckpoint.lift(it) },
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-    }
+    override suspend fun `list`(): List<WorkflowCheckpoint> =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_list(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterSequenceTypeWorkflowCheckpoint.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
-    
     /**
      * Synchronous variant of [`list`](Self::list).
      */
-    @Throws(BlazenException::class)override fun `listBlocking`(): List<WorkflowCheckpoint> {
-            return FfiConverterSequenceTypeWorkflowCheckpoint.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_list_blocking(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `listBlocking`(): List<WorkflowCheckpoint> =
+        FfiConverterSequenceTypeWorkflowCheckpoint.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_list_blocking(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     /**
      * List all stored run ids (as UUID strings), ordered by timestamp
      * descending (most recent first).
@@ -2834,163 +3595,141 @@ open class CheckpointStore: Disposable, AutoCloseable, CheckpointStoreInterface
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `listRunIds`() : List<kotlin.String> {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_list_run_ids(
-                uniffiHandle,
-                
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterSequenceString.lift(it) },
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-    }
+    override suspend fun `listRunIds`(): List<kotlin.String> =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_list_run_ids(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterSequenceString.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
-    
     /**
      * Synchronous variant of [`list_run_ids`](Self::list_run_ids).
      */
-    @Throws(BlazenException::class)override fun `listRunIdsBlocking`(): List<kotlin.String> {
-            return FfiConverterSequenceString.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_list_run_ids_blocking(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `listRunIdsBlocking`(): List<kotlin.String> =
+        FfiConverterSequenceString.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_list_run_ids_blocking(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     /**
      * Load a checkpoint by its run id (UUID string). Returns `None` when no
      * checkpoint exists for the given id.
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `load`(`runId`: kotlin.String) : WorkflowCheckpoint? {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_load(
-                uniffiHandle,
-                FfiConverterString.lower(`runId`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterOptionalTypeWorkflowCheckpoint.lift(it) },
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-    }
+    override suspend fun `load`(`runId`: kotlin.String): WorkflowCheckpoint? =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_load(
+                    uniffiHandle,
+                    FfiConverterString.lower(`runId`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterOptionalTypeWorkflowCheckpoint.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
-    
     /**
      * Synchronous variant of [`load`](Self::load).
      */
-    @Throws(BlazenException::class)override fun `loadBlocking`(`runId`: kotlin.String): WorkflowCheckpoint? {
-            return FfiConverterOptionalTypeWorkflowCheckpoint.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_load_blocking(
-        it,
-        FfiConverterString.lower(`runId`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `loadBlocking`(`runId`: kotlin.String): WorkflowCheckpoint? =
+        FfiConverterOptionalTypeWorkflowCheckpoint.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_load_blocking(
+                        it,
+                        FfiConverterString.lower(`runId`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     /**
      * Persist a checkpoint, overwriting any existing entry with the same
      * `run_id`. Async on Swift / Kotlin; blocking-with-suspension on Go.
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `save`(`checkpoint`: WorkflowCheckpoint) {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_save(
-                uniffiHandle,
-                FfiConverterTypeWorkflowCheckpoint.lower(`checkpoint`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
-        // lift function
-        { Unit },
-        
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-    }
+    override suspend fun `save`(`checkpoint`: WorkflowCheckpoint) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_save(
+                    uniffiHandle,
+                    FfiConverterTypeWorkflowCheckpoint.lower(`checkpoint`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
-    
     /**
      * Synchronous variant of [`save`](Self::save).
      */
-    @Throws(BlazenException::class)override fun `saveBlocking`(`checkpoint`: WorkflowCheckpoint)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_save_blocking(
-        it,
-        FfiConverterTypeWorkflowCheckpoint.lower(`checkpoint`),_status)
-}
-    }
-    
-    
+    @Throws(BlazenException::class)
+    override fun `saveBlocking`(`checkpoint`: WorkflowCheckpoint) =
+        callWithHandle {
+            uniffiRustCallWithError(BlazenException) { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_checkpointstore_save_blocking(
+                    it,
+                    FfiConverterTypeWorkflowCheckpoint.lower(`checkpoint`),
+                    _status,
+                )
+            }
+        }
 
-    
-
-    
-
-
-    
-    
     /**
      * @suppress
      */
     companion object
-    
 }
-
 
 /**
  * @suppress
  */
-public object FfiConverterTypeCheckpointStore: FfiConverter<CheckpointStore, Long> {
-    override fun lower(value: CheckpointStore): Long {
-        return value.uniffiCloneHandle()
-    }
+public object FfiConverterTypeCheckpointStore : FfiConverter<CheckpointStore, Long> {
+    override fun lower(value: CheckpointStore): Long = value.uniffiCloneHandle()
 
-    override fun lift(value: Long): CheckpointStore {
-        return CheckpointStore(UniffiWithHandle, value)
-    }
+    override fun lift(value: Long): CheckpointStore = CheckpointStore(UniffiWithHandle, value)
 
-    override fun read(buf: ByteBuffer): CheckpointStore {
-        return lift(buf.getLong())
-    }
+    override fun read(buf: ByteBuffer): CheckpointStore = lift(buf.getLong())
 
     override fun allocationSize(value: CheckpointStore) = 8UL
 
-    override fun write(value: CheckpointStore, buf: ByteBuffer) {
+    override fun write(
+        value: CheckpointStore,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(lower(value))
     }
 }
-
 
 // This template implements a class for working with a Rust struct via a handle
 // to the live Rust struct on the other side of the FFI.
@@ -3086,7 +3825,6 @@ public object FfiConverterTypeCheckpointStore: FfiConverter<CheckpointStore, Lon
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
-
 /**
  * A chat completion model.
  *
@@ -3097,13 +3835,12 @@ public object FfiConverterTypeCheckpointStore: FfiConverter<CheckpointStore, Lon
  * responses.
  */
 public interface CompletionModelInterface {
-    
     /**
      * Perform a chat completion. Async on Swift / Kotlin; blocking on Go
      * (UniFFI's Go bindgen wraps the future in a goroutine-friendly call).
      */
     suspend fun `complete`(`request`: CompletionRequest): CompletionResponse
-    
+
     /**
      * Synchronous variant of [`complete`](Self::complete) — blocks the
      * current thread on the shared Tokio runtime. Handy for Ruby scripts
@@ -3111,12 +3848,12 @@ public interface CompletionModelInterface {
      * Prefer the async [`complete`](Self::complete) in long-running services.
      */
     fun `completeBlocking`(`request`: CompletionRequest): CompletionResponse
-    
+
     /**
      * The model's identifier (e.g. `"gpt-4o"`, `"claude-3-5-sonnet"`).
      */
     fun `modelId`(): kotlin.String
-    
+
     companion object
 }
 
@@ -3129,13 +3866,14 @@ public interface CompletionModelInterface {
  * [`complete_blocking`](Self::complete_blocking) (sync) to generate
  * responses.
  */
-open class CompletionModel: Disposable, AutoCloseable, CompletionModelInterface
-{
-
-    @Suppress("UNUSED_PARAMETER")
+open class CompletionModel :
+    Disposable,
+    AutoCloseable,
+    CompletionModelInterface {
     /**
      * @suppress
      */
+    @Suppress("UNUSED_PARAMETER")
     constructor(withHandle: UniffiWithHandle, handle: Long) {
         this.handle = handle
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
@@ -3187,7 +3925,7 @@ open class CompletionModel: Disposable, AutoCloseable, CompletionModelInterface
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the handle being freed concurrently.
         try {
             return block(this.uniffiCloneHandle())
@@ -3201,11 +3939,13 @@ open class CompletionModel: Disposable, AutoCloseable, CompletionModelInterface
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(private val handle: Long) : Runnable {
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
         override fun run() {
             if (handle == 0.toLong()) {
                 // Fake object created with `NoHandle`, don't try to free.
-                return;
+                return
             }
             uniffiRustCall { status ->
                 UniffiLib.uniffi_blazen_uniffi_fn_free_completionmodel(handle, status)
@@ -3218,112 +3958,96 @@ open class CompletionModel: Disposable, AutoCloseable, CompletionModelInterface
      */
     fun uniffiCloneHandle(): Long {
         if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
-        return uniffiRustCall() { status ->
+        return uniffiRustCall { status ->
             UniffiLib.uniffi_blazen_uniffi_fn_clone_completionmodel(handle, status)
         }
     }
 
-    
     /**
      * Perform a chat completion. Async on Swift / Kotlin; blocking on Go
      * (UniFFI's Go bindgen wraps the future in a goroutine-friendly call).
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `complete`(`request`: CompletionRequest) : CompletionResponse {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_completionmodel_complete(
-                uniffiHandle,
-                FfiConverterTypeCompletionRequest.lower(`request`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterTypeCompletionResponse.lift(it) },
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-    }
+    override suspend fun `complete`(`request`: CompletionRequest): CompletionResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_completionmodel_complete(
+                    uniffiHandle,
+                    FfiConverterTypeCompletionRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeCompletionResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
-    
     /**
      * Synchronous variant of [`complete`](Self::complete) — blocks the
      * current thread on the shared Tokio runtime. Handy for Ruby scripts
      * and quick Go `main` functions where async machinery is overkill.
      * Prefer the async [`complete`](Self::complete) in long-running services.
      */
-    @Throws(BlazenException::class)override fun `completeBlocking`(`request`: CompletionRequest): CompletionResponse {
-            return FfiConverterTypeCompletionResponse.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_completionmodel_complete_blocking(
-        it,
-        FfiConverterTypeCompletionRequest.lower(`request`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: CompletionRequest): CompletionResponse =
+        FfiConverterTypeCompletionResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_completionmodel_complete_blocking(
+                        it,
+                        FfiConverterTypeCompletionRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     /**
      * The model's identifier (e.g. `"gpt-4o"`, `"claude-3-5-sonnet"`).
-     */override fun `modelId`(): kotlin.String {
-            return FfiConverterString.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_completionmodel_model_id(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
+     */
+    override fun `modelId`(): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_completionmodel_model_id(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
-
-    
-
-
-    
-    
     /**
      * @suppress
      */
     companion object
-    
 }
-
 
 /**
  * @suppress
  */
-public object FfiConverterTypeCompletionModel: FfiConverter<CompletionModel, Long> {
-    override fun lower(value: CompletionModel): Long {
-        return value.uniffiCloneHandle()
-    }
+public object FfiConverterTypeCompletionModel : FfiConverter<CompletionModel, Long> {
+    override fun lower(value: CompletionModel): Long = value.uniffiCloneHandle()
 
-    override fun lift(value: Long): CompletionModel {
-        return CompletionModel(UniffiWithHandle, value)
-    }
+    override fun lift(value: Long): CompletionModel = CompletionModel(UniffiWithHandle, value)
 
-    override fun read(buf: ByteBuffer): CompletionModel {
-        return lift(buf.getLong())
-    }
+    override fun read(buf: ByteBuffer): CompletionModel = lift(buf.getLong())
 
     override fun allocationSize(value: CompletionModel) = 8UL
 
-    override fun write(value: CompletionModel, buf: ByteBuffer) {
+    override fun write(
+        value: CompletionModel,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(lower(value))
     }
 }
-
 
 // This template implements a class for working with a Rust struct via a handle
 // to the live Rust struct on the other side of the FFI.
@@ -3418,7 +4142,6 @@ public object FfiConverterTypeCompletionModel: FfiConverter<CompletionModel, Lon
 //
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
-
 
 /**
  * Sink for streaming chat completion output, implemented in foreign code.
@@ -3438,7 +4161,6 @@ public object FfiConverterTypeCompletionModel: FfiConverter<CompletionModel, Lon
  * - Ruby: blocking methods (wrap in `Async { ... }` for fiber concurrency)
  */
 public interface CompletionStreamSink {
-    
     /**
      * Receive a single chunk from the streaming response.
      *
@@ -3446,7 +4168,7 @@ public interface CompletionStreamSink {
      * call further `on_chunk` callbacks and will not call `on_done`.
      */
     suspend fun `onChunk`(`chunk`: StreamChunk)
-    
+
     /**
      * Receive the terminal completion signal. Called exactly once at the
      * end of a successful stream. Implementations should perform any
@@ -3458,15 +4180,18 @@ public interface CompletionStreamSink {
      * usage; some providers don't surface usage via the stream, in which
      * case all counters are zero.
      */
-    suspend fun `onDone`(`finishReason`: kotlin.String, `usage`: TokenUsage)
-    
+    suspend fun `onDone`(
+        `finishReason`: kotlin.String,
+        `usage`: TokenUsage,
+    )
+
     /**
      * Receive a fatal error from the stream. Called exactly once when the
      * stream fails midway. After `on_error` fires, neither further
      * `on_chunk` nor `on_done` will be called.
      */
     suspend fun `onError`(`err`: BlazenException)
-    
+
     companion object
 }
 
@@ -3487,13 +4212,14 @@ public interface CompletionStreamSink {
  * - Kotlin: `suspend fun` methods
  * - Ruby: blocking methods (wrap in `Async { ... }` for fiber concurrency)
  */
-open class CompletionStreamSinkImpl: Disposable, AutoCloseable, CompletionStreamSink
-{
-
-    @Suppress("UNUSED_PARAMETER")
+open class CompletionStreamSinkImpl :
+    Disposable,
+    AutoCloseable,
+    CompletionStreamSink {
     /**
      * @suppress
      */
+    @Suppress("UNUSED_PARAMETER")
     constructor(withHandle: UniffiWithHandle, handle: Long) {
         this.handle = handle
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
@@ -3545,7 +4271,7 @@ open class CompletionStreamSinkImpl: Disposable, AutoCloseable, CompletionStream
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the handle being freed concurrently.
         try {
             return block(this.uniffiCloneHandle())
@@ -3559,11 +4285,13 @@ open class CompletionStreamSinkImpl: Disposable, AutoCloseable, CompletionStream
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(private val handle: Long) : Runnable {
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
         override fun run() {
             if (handle == 0.toLong()) {
                 // Fake object created with `NoHandle`, don't try to free.
-                return;
+                return
             }
             uniffiRustCall { status ->
                 UniffiLib.uniffi_blazen_uniffi_fn_free_completionstreamsink(handle, status)
@@ -3576,14 +4304,13 @@ open class CompletionStreamSinkImpl: Disposable, AutoCloseable, CompletionStream
      */
     fun uniffiCloneHandle(): Long {
         if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
-        return uniffiRustCall() { status ->
+        return uniffiRustCall { status ->
             UniffiLib.uniffi_blazen_uniffi_fn_clone_completionstreamsink(handle, status)
         }
     }
 
-    
     /**
      * Receive a single chunk from the streaming response.
      *
@@ -3592,26 +4319,23 @@ open class CompletionStreamSinkImpl: Disposable, AutoCloseable, CompletionStream
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `onChunk`(`chunk`: StreamChunk) {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_completionstreamsink_on_chunk(
-                uniffiHandle,
-                FfiConverterTypeStreamChunk.lower(`chunk`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
-        // lift function
-        { Unit },
-        
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-    }
+    override suspend fun `onChunk`(`chunk`: StreamChunk) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_completionstreamsink_on_chunk(
+                    uniffiHandle,
+                    FfiConverterTypeStreamChunk.lower(`chunk`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
-    
     /**
      * Receive the terminal completion signal. Called exactly once at the
      * end of a successful stream. Implementations should perform any
@@ -3625,12 +4349,15 @@ open class CompletionStreamSinkImpl: Disposable, AutoCloseable, CompletionStream
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `onDone`(`finishReason`: kotlin.String, `usage`: TokenUsage) {
-        return uniffiRustCallAsync(
+    override suspend fun `onDone`(
+        `finishReason`: kotlin.String,
+        `usage`: TokenUsage,
+    ) = uniffiRustCallAsync(
         callWithHandle { uniffiHandle ->
             UniffiLib.uniffi_blazen_uniffi_fn_method_completionstreamsink_on_done(
                 uniffiHandle,
-                FfiConverterString.lower(`finishReason`),FfiConverterTypeTokenUsage.lower(`usage`),
+                FfiConverterString.lower(`finishReason`),
+                FfiConverterTypeTokenUsage.lower(`usage`),
             )
         },
         { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
@@ -3638,13 +4365,10 @@ open class CompletionStreamSinkImpl: Disposable, AutoCloseable, CompletionStream
         { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
         // lift function
         { Unit },
-        
         // Error FFI converter
         BlazenException.ErrorHandler,
     )
-    }
 
-    
     /**
      * Receive a fatal error from the stream. Called exactly once when the
      * stream fails midway. After `on_error` fires, neither further
@@ -3652,55 +4376,50 @@ open class CompletionStreamSinkImpl: Disposable, AutoCloseable, CompletionStream
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `onError`(`err`: BlazenException) {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_completionstreamsink_on_error(
-                uniffiHandle,
-                FfiConverterTypeBlazenError.lower(`err`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
-        // lift function
-        { Unit },
-        
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-    }
+    override suspend fun `onError`(`err`: BlazenException) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_completionstreamsink_on_error(
+                    uniffiHandle,
+                    FfiConverterTypeBlazenError.lower(`err`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
-    
-
-    
-
-
-    
-    
     /**
      * @suppress
      */
     companion object
-    
 }
-
-
 
 // Put the implementation in an object so we don't pollute the top-level namespace
 internal object uniffiCallbackInterfaceCompletionStreamSink {
-    internal object `onChunk`: UniffiCallbackInterfaceCompletionStreamSinkMethod0 {
-        override fun callback(`uniffiHandle`: Long,`chunk`: RustBuffer.ByValue,`uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,`uniffiCallbackData`: Long,`uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,) {
+    internal object `onChunk` : UniffiCallbackInterfaceCompletionStreamSinkMethod0 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `chunk`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
             val uniffiObj = FfiConverterTypeCompletionStreamSink.handleMap.get(uniffiHandle)
-            val makeCall = suspend { ->
-                uniffiObj.`onChunk`(
+            val makeCall =
+                suspend {  uniffiObj.`onChunk`(
                     FfiConverterTypeStreamChunk.lift(`chunk`),
                 )
-            }
+                }
             val uniffiHandleSuccess = { _: Unit ->
-                val uniffiResult = UniffiForeignFutureResultVoid.UniffiByValue(
-                    UniffiRustCallStatus.ByValue()
-                )
+                val uniffiResult =
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        UniffiRustCallStatus.ByValue(),
+                    )
                 uniffiResult.write()
                 uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
             }
@@ -3717,95 +4436,111 @@ internal object uniffiCallbackInterfaceCompletionStreamSink {
                 uniffiHandleSuccess,
                 uniffiHandleError,
                 { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
-                uniffiOutDroppedCallback
-            )
-        }
-    }
-    internal object `onDone`: UniffiCallbackInterfaceCompletionStreamSinkMethod1 {
-        override fun callback(`uniffiHandle`: Long,`finishReason`: RustBuffer.ByValue,`usage`: RustBuffer.ByValue,`uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,`uniffiCallbackData`: Long,`uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,) {
-            val uniffiObj = FfiConverterTypeCompletionStreamSink.handleMap.get(uniffiHandle)
-            val makeCall = suspend { ->
-                uniffiObj.`onDone`(
-                    FfiConverterString.lift(`finishReason`),
-                    FfiConverterTypeTokenUsage.lift(`usage`),
-                )
-            }
-            val uniffiHandleSuccess = { _: Unit ->
-                val uniffiResult = UniffiForeignFutureResultVoid.UniffiByValue(
-                    UniffiRustCallStatus.ByValue()
-                )
-                uniffiResult.write()
-                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
-            }
-            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
-                uniffiFutureCallback.callback(
-                    uniffiCallbackData,
-                    UniffiForeignFutureResultVoid.UniffiByValue(
-                        callStatus,
-                    ),
-                )
-            }
-            uniffiTraitInterfaceCallAsyncWithError(
-                makeCall,
-                uniffiHandleSuccess,
-                uniffiHandleError,
-                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
-                uniffiOutDroppedCallback
-            )
-        }
-    }
-    internal object `onError`: UniffiCallbackInterfaceCompletionStreamSinkMethod2 {
-        override fun callback(`uniffiHandle`: Long,`err`: RustBuffer.ByValue,`uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,`uniffiCallbackData`: Long,`uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,) {
-            val uniffiObj = FfiConverterTypeCompletionStreamSink.handleMap.get(uniffiHandle)
-            val makeCall = suspend { ->
-                uniffiObj.`onError`(
-                    FfiConverterTypeBlazenError.lift(`err`),
-                )
-            }
-            val uniffiHandleSuccess = { _: Unit ->
-                val uniffiResult = UniffiForeignFutureResultVoid.UniffiByValue(
-                    UniffiRustCallStatus.ByValue()
-                )
-                uniffiResult.write()
-                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
-            }
-            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
-                uniffiFutureCallback.callback(
-                    uniffiCallbackData,
-                    UniffiForeignFutureResultVoid.UniffiByValue(
-                        callStatus,
-                    ),
-                )
-            }
-            uniffiTraitInterfaceCallAsyncWithError(
-                makeCall,
-                uniffiHandleSuccess,
-                uniffiHandleError,
-                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
-                uniffiOutDroppedCallback
+                uniffiOutDroppedCallback,
             )
         }
     }
 
-    internal object uniffiFree: UniffiCallbackInterfaceFree {
+    internal object `onDone` : UniffiCallbackInterfaceCompletionStreamSinkMethod1 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `finishReason`: RustBuffer.ByValue,
+            `usage`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeCompletionStreamSink.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`onDone`(
+                    FfiConverterString.lift(`finishReason`),
+                    FfiConverterTypeTokenUsage.lift(`usage`),
+                )
+                }
+            val uniffiHandleSuccess = { _: Unit ->
+                val uniffiResult =
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `onError` : UniffiCallbackInterfaceCompletionStreamSinkMethod2 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `err`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeCompletionStreamSink.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`onError`(
+                    FfiConverterTypeBlazenError.lift(`err`),
+                )
+                }
+            val uniffiHandleSuccess = { _: Unit ->
+                val uniffiResult =
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object uniffiFree : UniffiCallbackInterfaceFree {
         override fun callback(handle: Long) {
             FfiConverterTypeCompletionStreamSink.handleMap.remove(handle)
         }
     }
 
-    internal object uniffiClone: UniffiCallbackInterfaceClone {
-        override fun callback(handle: Long): Long {
-            return FfiConverterTypeCompletionStreamSink.handleMap.clone(handle)
-        }
+    internal object uniffiClone : UniffiCallbackInterfaceClone {
+        override fun callback(handle: Long): Long = FfiConverterTypeCompletionStreamSink.handleMap.clone(handle)
     }
 
-    internal var vtable = UniffiVTableCallbackInterfaceCompletionStreamSink.UniffiByValue(
-        uniffiFree,
-        uniffiClone,
-        `onChunk`,
-        `onDone`,
-        `onError`,
-    )
+    internal var vtable =
+        UniffiVTableCallbackInterfaceCompletionStreamSink.UniffiByValue(
+            uniffiFree,
+            uniffiClone,
+            `onChunk`,
+            `onDone`,
+            `onError`,
+        )
 
     // Registers the foreign callback with the Rust side.
     // This method is generated for each callback interface.
@@ -3817,17 +4552,17 @@ internal object uniffiCallbackInterfaceCompletionStreamSink {
 /**
  * @suppress
  */
-public object FfiConverterTypeCompletionStreamSink: FfiConverter<CompletionStreamSink, Long> {
+public object FfiConverterTypeCompletionStreamSink : FfiConverter<CompletionStreamSink, Long> {
     internal val handleMap = UniffiHandleMap<CompletionStreamSink>()
 
     override fun lower(value: CompletionStreamSink): Long {
         if (value is CompletionStreamSinkImpl) {
-             // Rust-implemented object.  Clone the handle and return it
+            // Rust-implemented object.  Clone the handle and return it
             return value.uniffiCloneHandle()
-         } else {
+        } else {
             // Kotlin object, generate a new vtable handle and return that.
             return handleMap.insert(value)
-         }
+        }
     }
 
     override fun lift(value: Long): CompletionStreamSink {
@@ -3841,17 +4576,17 @@ public object FfiConverterTypeCompletionStreamSink: FfiConverter<CompletionStrea
         }
     }
 
-    override fun read(buf: ByteBuffer): CompletionStreamSink {
-        return lift(buf.getLong())
-    }
+    override fun read(buf: ByteBuffer): CompletionStreamSink = lift(buf.getLong())
 
     override fun allocationSize(value: CompletionStreamSink) = 8UL
 
-    override fun write(value: CompletionStreamSink, buf: ByteBuffer) {
+    override fun write(
+        value: CompletionStreamSink,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(lower(value))
     }
 }
-
 
 // This template implements a class for working with a Rust struct via a handle
 // to the live Rust struct on the other side of the FFI.
@@ -3947,34 +4682,32 @@ public object FfiConverterTypeCompletionStreamSink: FfiConverter<CompletionStrea
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
-
 /**
  * An embedding model that produces vector embeddings for text inputs.
  *
  * Construct one via the per-provider factories in `providers.rs`.
  */
 public interface EmbeddingModelInterface {
-    
     /**
      * The dimensionality of vectors produced by this model.
      */
     fun `dimensions`(): kotlin.UInt
-    
+
     /**
      * Embed one or more text strings, returning one vector per input.
      */
     suspend fun `embed`(`inputs`: List<kotlin.String>): EmbeddingResponse
-    
+
     /**
      * Synchronous variant of [`embed`](Self::embed).
      */
     fun `embedBlocking`(`inputs`: List<kotlin.String>): EmbeddingResponse
-    
+
     /**
      * The model's identifier (e.g. `"text-embedding-3-small"`).
      */
     fun `modelId`(): kotlin.String
-    
+
     companion object
 }
 
@@ -3983,13 +4716,14 @@ public interface EmbeddingModelInterface {
  *
  * Construct one via the per-provider factories in `providers.rs`.
  */
-open class EmbeddingModel: Disposable, AutoCloseable, EmbeddingModelInterface
-{
-
-    @Suppress("UNUSED_PARAMETER")
+open class EmbeddingModel :
+    Disposable,
+    AutoCloseable,
+    EmbeddingModelInterface {
     /**
      * @suppress
      */
+    @Suppress("UNUSED_PARAMETER")
     constructor(withHandle: UniffiWithHandle, handle: Long) {
         this.handle = handle
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
@@ -4041,7 +4775,7 @@ open class EmbeddingModel: Disposable, AutoCloseable, EmbeddingModelInterface
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the handle being freed concurrently.
         try {
             return block(this.uniffiCloneHandle())
@@ -4055,11 +4789,13 @@ open class EmbeddingModel: Disposable, AutoCloseable, EmbeddingModelInterface
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(private val handle: Long) : Runnable {
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
         override fun run() {
             if (handle == 0.toLong()) {
                 // Fake object created with `NoHandle`, don't try to free.
-                return;
+                return
             }
             uniffiRustCall { status ->
                 UniffiLib.uniffi_blazen_uniffi_fn_free_embeddingmodel(handle, status)
@@ -4072,124 +4808,107 @@ open class EmbeddingModel: Disposable, AutoCloseable, EmbeddingModelInterface
      */
     fun uniffiCloneHandle(): Long {
         if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
-        return uniffiRustCall() { status ->
+        return uniffiRustCall { status ->
             UniffiLib.uniffi_blazen_uniffi_fn_clone_embeddingmodel(handle, status)
         }
     }
 
-    
     /**
      * The dimensionality of vectors produced by this model.
-     */override fun `dimensions`(): kotlin.UInt {
-            return FfiConverterUInt.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_embeddingmodel_dimensions(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
+     */
+    override fun `dimensions`(): kotlin.UInt =
+        FfiConverterUInt.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_embeddingmodel_dimensions(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     /**
      * Embed one or more text strings, returning one vector per input.
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `embed`(`inputs`: List<kotlin.String>) : EmbeddingResponse {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_embeddingmodel_embed(
-                uniffiHandle,
-                FfiConverterSequenceString.lower(`inputs`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterTypeEmbeddingResponse.lift(it) },
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-    }
+    override suspend fun `embed`(`inputs`: List<kotlin.String>): EmbeddingResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_embeddingmodel_embed(
+                    uniffiHandle,
+                    FfiConverterSequenceString.lower(`inputs`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeEmbeddingResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
-    
     /**
      * Synchronous variant of [`embed`](Self::embed).
      */
-    @Throws(BlazenException::class)override fun `embedBlocking`(`inputs`: List<kotlin.String>): EmbeddingResponse {
-            return FfiConverterTypeEmbeddingResponse.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_embeddingmodel_embed_blocking(
-        it,
-        FfiConverterSequenceString.lower(`inputs`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `embedBlocking`(`inputs`: List<kotlin.String>): EmbeddingResponse =
+        FfiConverterTypeEmbeddingResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_embeddingmodel_embed_blocking(
+                        it,
+                        FfiConverterSequenceString.lower(`inputs`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     /**
      * The model's identifier (e.g. `"text-embedding-3-small"`).
-     */override fun `modelId`(): kotlin.String {
-            return FfiConverterString.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_embeddingmodel_model_id(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
+     */
+    override fun `modelId`(): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_embeddingmodel_model_id(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
-
-    
-
-
-    
-    
     /**
      * @suppress
      */
     companion object
-    
 }
-
 
 /**
  * @suppress
  */
-public object FfiConverterTypeEmbeddingModel: FfiConverter<EmbeddingModel, Long> {
-    override fun lower(value: EmbeddingModel): Long {
-        return value.uniffiCloneHandle()
-    }
+public object FfiConverterTypeEmbeddingModel : FfiConverter<EmbeddingModel, Long> {
+    override fun lower(value: EmbeddingModel): Long = value.uniffiCloneHandle()
 
-    override fun lift(value: Long): EmbeddingModel {
-        return EmbeddingModel(UniffiWithHandle, value)
-    }
+    override fun lift(value: Long): EmbeddingModel = EmbeddingModel(UniffiWithHandle, value)
 
-    override fun read(buf: ByteBuffer): EmbeddingModel {
-        return lift(buf.getLong())
-    }
+    override fun read(buf: ByteBuffer): EmbeddingModel = lift(buf.getLong())
 
     override fun allocationSize(value: EmbeddingModel) = 8UL
 
-    override fun write(value: EmbeddingModel, buf: ByteBuffer) {
+    override fun write(
+        value: EmbeddingModel,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(lower(value))
     }
 }
-
 
 // This template implements a class for working with a Rust struct via a handle
 // to the live Rust struct on the other side of the FFI.
@@ -4285,7 +5004,6 @@ public object FfiConverterTypeEmbeddingModel: FfiConverter<EmbeddingModel, Long>
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
-
 /**
  * An image-generation model.
  *
@@ -4295,7 +5013,6 @@ public object FfiConverterTypeEmbeddingModel: FfiConverter<EmbeddingModel, Long>
  * [`generate_blocking`](Self::generate_blocking) (sync) to render images.
  */
 public interface ImageGenModelInterface {
-    
     /**
      * Generate `num_images` images for `prompt` at the given dimensions.
      *
@@ -4303,13 +5020,27 @@ public interface ImageGenModelInterface {
      * provider's default endpoint (e.g. a specific fal.ai model id).
      * Backends ignore knobs they don't support.
      */
-    suspend fun `generate`(`prompt`: kotlin.String, `negativePrompt`: kotlin.String?, `width`: kotlin.UInt?, `height`: kotlin.UInt?, `numImages`: kotlin.UInt?, `model`: kotlin.String?): ImageGenResult
-    
+    suspend fun `generate`(
+        `prompt`: kotlin.String,
+        `negativePrompt`: kotlin.String?,
+        `width`: kotlin.UInt?,
+        `height`: kotlin.UInt?,
+        `numImages`: kotlin.UInt?,
+        `model`: kotlin.String?,
+    ): ImageGenResult
+
     /**
      * Synchronous variant of [`generate`](Self::generate).
      */
-    fun `generateBlocking`(`prompt`: kotlin.String, `negativePrompt`: kotlin.String?, `width`: kotlin.UInt?, `height`: kotlin.UInt?, `numImages`: kotlin.UInt?, `model`: kotlin.String?): ImageGenResult
-    
+    fun `generateBlocking`(
+        `prompt`: kotlin.String,
+        `negativePrompt`: kotlin.String?,
+        `width`: kotlin.UInt?,
+        `height`: kotlin.UInt?,
+        `numImages`: kotlin.UInt?,
+        `model`: kotlin.String?,
+    ): ImageGenResult
+
     companion object
 }
 
@@ -4321,13 +5052,14 @@ public interface ImageGenModelInterface {
  * [`generate`](Self::generate) (async) or
  * [`generate_blocking`](Self::generate_blocking) (sync) to render images.
  */
-open class ImageGenModel: Disposable, AutoCloseable, ImageGenModelInterface
-{
-
-    @Suppress("UNUSED_PARAMETER")
+open class ImageGenModel :
+    Disposable,
+    AutoCloseable,
+    ImageGenModelInterface {
     /**
      * @suppress
      */
+    @Suppress("UNUSED_PARAMETER")
     constructor(withHandle: UniffiWithHandle, handle: Long) {
         this.handle = handle
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
@@ -4379,7 +5111,7 @@ open class ImageGenModel: Disposable, AutoCloseable, ImageGenModelInterface
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the handle being freed concurrently.
         try {
             return block(this.uniffiCloneHandle())
@@ -4393,11 +5125,13 @@ open class ImageGenModel: Disposable, AutoCloseable, ImageGenModelInterface
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(private val handle: Long) : Runnable {
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
         override fun run() {
             if (handle == 0.toLong()) {
                 // Fake object created with `NoHandle`, don't try to free.
-                return;
+                return
             }
             uniffiRustCall { status ->
                 UniffiLib.uniffi_blazen_uniffi_fn_free_imagegenmodel(handle, status)
@@ -4410,14 +5144,13 @@ open class ImageGenModel: Disposable, AutoCloseable, ImageGenModelInterface
      */
     fun uniffiCloneHandle(): Long {
         if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
-        return uniffiRustCall() { status ->
+        return uniffiRustCall { status ->
             UniffiLib.uniffi_blazen_uniffi_fn_clone_imagegenmodel(handle, status)
         }
     }
 
-    
     /**
      * Generate `num_images` images for `prompt` at the given dimensions.
      *
@@ -4427,79 +5160,89 @@ open class ImageGenModel: Disposable, AutoCloseable, ImageGenModelInterface
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `generate`(`prompt`: kotlin.String, `negativePrompt`: kotlin.String?, `width`: kotlin.UInt?, `height`: kotlin.UInt?, `numImages`: kotlin.UInt?, `model`: kotlin.String?) : ImageGenResult {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_imagegenmodel_generate(
-                uniffiHandle,
-                FfiConverterString.lower(`prompt`),FfiConverterOptionalString.lower(`negativePrompt`),FfiConverterOptionalUInt.lower(`width`),FfiConverterOptionalUInt.lower(`height`),FfiConverterOptionalUInt.lower(`numImages`),FfiConverterOptionalString.lower(`model`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterTypeImageGenResult.lift(it) },
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-    }
+    override suspend fun `generate`(
+        `prompt`: kotlin.String,
+        `negativePrompt`: kotlin.String?,
+        `width`: kotlin.UInt?,
+        `height`: kotlin.UInt?,
+        `numImages`: kotlin.UInt?,
+        `model`: kotlin.String?,
+    ): ImageGenResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_imagegenmodel_generate(
+                    uniffiHandle,
+                    FfiConverterString.lower(`prompt`),
+                    FfiConverterOptionalString.lower(`negativePrompt`),
+                    FfiConverterOptionalUInt.lower(`width`),
+                    FfiConverterOptionalUInt.lower(`height`),
+                    FfiConverterOptionalUInt.lower(`numImages`),
+                    FfiConverterOptionalString.lower(`model`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeImageGenResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
-    
     /**
      * Synchronous variant of [`generate`](Self::generate).
      */
-    @Throws(BlazenException::class)override fun `generateBlocking`(`prompt`: kotlin.String, `negativePrompt`: kotlin.String?, `width`: kotlin.UInt?, `height`: kotlin.UInt?, `numImages`: kotlin.UInt?, `model`: kotlin.String?): ImageGenResult {
-            return FfiConverterTypeImageGenResult.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_imagegenmodel_generate_blocking(
-        it,
-        FfiConverterString.lower(`prompt`),FfiConverterOptionalString.lower(`negativePrompt`),FfiConverterOptionalUInt.lower(`width`),FfiConverterOptionalUInt.lower(`height`),FfiConverterOptionalUInt.lower(`numImages`),FfiConverterOptionalString.lower(`model`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `generateBlocking`(
+        `prompt`: kotlin.String,
+        `negativePrompt`: kotlin.String?,
+        `width`: kotlin.UInt?,
+        `height`: kotlin.UInt?,
+        `numImages`: kotlin.UInt?,
+        `model`: kotlin.String?,
+    ): ImageGenResult =
+        FfiConverterTypeImageGenResult.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_imagegenmodel_generate_blocking(
+                        it,
+                        FfiConverterString.lower(`prompt`),
+                        FfiConverterOptionalString.lower(`negativePrompt`),
+                        FfiConverterOptionalUInt.lower(`width`),
+                        FfiConverterOptionalUInt.lower(`height`),
+                        FfiConverterOptionalUInt.lower(`numImages`),
+                        FfiConverterOptionalString.lower(`model`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
-
-    
-
-
-    
-    
     /**
      * @suppress
      */
     companion object
-    
 }
-
 
 /**
  * @suppress
  */
-public object FfiConverterTypeImageGenModel: FfiConverter<ImageGenModel, Long> {
-    override fun lower(value: ImageGenModel): Long {
-        return value.uniffiCloneHandle()
-    }
+public object FfiConverterTypeImageGenModel : FfiConverter<ImageGenModel, Long> {
+    override fun lower(value: ImageGenModel): Long = value.uniffiCloneHandle()
 
-    override fun lift(value: Long): ImageGenModel {
-        return ImageGenModel(UniffiWithHandle, value)
-    }
+    override fun lift(value: Long): ImageGenModel = ImageGenModel(UniffiWithHandle, value)
 
-    override fun read(buf: ByteBuffer): ImageGenModel {
-        return lift(buf.getLong())
-    }
+    override fun read(buf: ByteBuffer): ImageGenModel = lift(buf.getLong())
 
     override fun allocationSize(value: ImageGenModel) = 8UL
 
-    override fun write(value: ImageGenModel, buf: ByteBuffer) {
+    override fun write(
+        value: ImageGenModel,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(lower(value))
     }
 }
-
 
 // This template implements a class for working with a Rust struct via a handle
 // to the live Rust struct on the other side of the FFI.
@@ -4595,7 +5338,6 @@ public object FfiConverterTypeImageGenModel: FfiConverter<ImageGenModel, Long> {
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
-
 /**
  * Client handle for invoking workflows on a remote [`PeerServer`].
  *
@@ -4604,12 +5346,11 @@ public object FfiConverterTypeImageGenModel: FfiConverter<ImageGenModel, Long> {
  * same `PeerClient` are safe and share the connection.
  */
 public interface PeerClientInterface {
-    
     /**
      * The node-id stamped into outgoing requests for tracing.
      */
     fun `nodeId`(): kotlin.String
-    
+
     /**
      * Invoke a workflow on the connected peer and wait for its terminal
      * result.
@@ -4638,8 +5379,13 @@ public interface PeerClientInterface {
      * version failures, or [`BlazenError::Workflow`] when the remote
      * reports a workflow-execution error in `SubWorkflowResponse::error`.
      */
-    suspend fun `runRemoteWorkflow`(`workflowName`: kotlin.String, `stepIds`: List<kotlin.String>, `inputJson`: kotlin.String, `timeoutSecs`: kotlin.ULong?): WorkflowResult
-    
+    suspend fun `runRemoteWorkflow`(
+        `workflowName`: kotlin.String,
+        `stepIds`: List<kotlin.String>,
+        `inputJson`: kotlin.String,
+        `timeoutSecs`: kotlin.ULong?,
+    ): WorkflowResult
+
     /**
      * Synchronous variant of [`PeerClient::run_remote_workflow`] — blocks
      * the current thread on the shared Tokio runtime.
@@ -4648,8 +5394,13 @@ public interface PeerClientInterface {
      *
      * Same as [`PeerClient::run_remote_workflow`].
      */
-    fun `runRemoteWorkflowBlocking`(`workflowName`: kotlin.String, `stepIds`: List<kotlin.String>, `inputJson`: kotlin.String, `timeoutSecs`: kotlin.ULong?): WorkflowResult
-    
+    fun `runRemoteWorkflowBlocking`(
+        `workflowName`: kotlin.String,
+        `stepIds`: List<kotlin.String>,
+        `inputJson`: kotlin.String,
+        `timeoutSecs`: kotlin.ULong?,
+    ): WorkflowResult
+
     companion object
 }
 
@@ -4660,13 +5411,14 @@ public interface PeerClientInterface {
  * HTTP/2 channel held inside the client; multiple concurrent calls on the
  * same `PeerClient` are safe and share the connection.
  */
-open class PeerClient: Disposable, AutoCloseable, PeerClientInterface
-{
-
-    @Suppress("UNUSED_PARAMETER")
+open class PeerClient :
+    Disposable,
+    AutoCloseable,
+    PeerClientInterface {
     /**
      * @suppress
      */
+    @Suppress("UNUSED_PARAMETER")
     constructor(withHandle: UniffiWithHandle, handle: Long) {
         this.handle = handle
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
@@ -4718,7 +5470,7 @@ open class PeerClient: Disposable, AutoCloseable, PeerClientInterface
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the handle being freed concurrently.
         try {
             return block(this.uniffiCloneHandle())
@@ -4732,11 +5484,13 @@ open class PeerClient: Disposable, AutoCloseable, PeerClientInterface
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(private val handle: Long) : Runnable {
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
         override fun run() {
             if (handle == 0.toLong()) {
                 // Fake object created with `NoHandle`, don't try to free.
-                return;
+                return
             }
             uniffiRustCall { status ->
                 UniffiLib.uniffi_blazen_uniffi_fn_free_peerclient(handle, status)
@@ -4749,30 +5503,28 @@ open class PeerClient: Disposable, AutoCloseable, PeerClientInterface
      */
     fun uniffiCloneHandle(): Long {
         if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
-        return uniffiRustCall() { status ->
+        return uniffiRustCall { status ->
             UniffiLib.uniffi_blazen_uniffi_fn_clone_peerclient(handle, status)
         }
     }
 
-    
     /**
      * The node-id stamped into outgoing requests for tracing.
-     */override fun `nodeId`(): kotlin.String {
-            return FfiConverterString.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_peerclient_node_id(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
+     */
+    override fun `nodeId`(): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_peerclient_node_id(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     /**
      * Invoke a workflow on the connected peer and wait for its terminal
      * result.
@@ -4803,25 +5555,31 @@ open class PeerClient: Disposable, AutoCloseable, PeerClientInterface
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `runRemoteWorkflow`(`workflowName`: kotlin.String, `stepIds`: List<kotlin.String>, `inputJson`: kotlin.String, `timeoutSecs`: kotlin.ULong?) : WorkflowResult {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_peerclient_run_remote_workflow(
-                uniffiHandle,
-                FfiConverterString.lower(`workflowName`),FfiConverterSequenceString.lower(`stepIds`),FfiConverterString.lower(`inputJson`),FfiConverterOptionalULong.lower(`timeoutSecs`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterTypeWorkflowResult.lift(it) },
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-    }
+    override suspend fun `runRemoteWorkflow`(
+        `workflowName`: kotlin.String,
+        `stepIds`: List<kotlin.String>,
+        `inputJson`: kotlin.String,
+        `timeoutSecs`: kotlin.ULong?,
+    ): WorkflowResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_peerclient_run_remote_workflow(
+                    uniffiHandle,
+                    FfiConverterString.lower(`workflowName`),
+                    FfiConverterSequenceString.lower(`stepIds`),
+                    FfiConverterString.lower(`inputJson`),
+                    FfiConverterOptionalULong.lower(`timeoutSecs`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeWorkflowResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
-    
     /**
      * Synchronous variant of [`PeerClient::run_remote_workflow`] — blocks
      * the current thread on the shared Tokio runtime.
@@ -4830,87 +5588,85 @@ open class PeerClient: Disposable, AutoCloseable, PeerClientInterface
      *
      * Same as [`PeerClient::run_remote_workflow`].
      */
-    @Throws(BlazenException::class)override fun `runRemoteWorkflowBlocking`(`workflowName`: kotlin.String, `stepIds`: List<kotlin.String>, `inputJson`: kotlin.String, `timeoutSecs`: kotlin.ULong?): WorkflowResult {
-            return FfiConverterTypeWorkflowResult.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_peerclient_run_remote_workflow_blocking(
-        it,
-        FfiConverterString.lower(`workflowName`),FfiConverterSequenceString.lower(`stepIds`),FfiConverterString.lower(`inputJson`),FfiConverterOptionalULong.lower(`timeoutSecs`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `runRemoteWorkflowBlocking`(
+        `workflowName`: kotlin.String,
+        `stepIds`: List<kotlin.String>,
+        `inputJson`: kotlin.String,
+        `timeoutSecs`: kotlin.ULong?,
+    ): WorkflowResult =
+        FfiConverterTypeWorkflowResult.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_peerclient_run_remote_workflow_blocking(
+                        it,
+                        FfiConverterString.lower(`workflowName`),
+                        FfiConverterSequenceString.lower(`stepIds`),
+                        FfiConverterString.lower(`inputJson`),
+                        FfiConverterOptionalULong.lower(`timeoutSecs`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
-
-    
-
-
-    
     companion object {
-        
-    /**
-     * Open a connection to the peer at `address`.
-     *
-     * `address` must be a valid gRPC endpoint URI such as
-     * `"http://node-a.local:7443"`. `client_node_id` identifies *this* end
-     * of the connection in trace logs on both sides and is typically the
-     * local hostname or a process-startup UUID.
-     *
-     * This constructor is blocking — it drives the TCP connect on the
-     * shared Tokio runtime so foreign callers without an async story
-     * (Ruby, synchronous Go code) can still set up a client. The async
-     * connect path is internal to upstream `BlazenPeerClient` and is not
-     * re-exposed across UniFFI to avoid a constructor that returns a
-     * coroutine in every target language.
-     *
-     * # Errors
-     *
-     * Returns [`BlazenError::Peer`] (`kind = "Transport"`) if the
-     * endpoint URI is invalid or the TCP / HTTP/2 handshake fails.
-     */
-    @Throws(BlazenException::class) fun `connect`(`address`: kotlin.String, `clientNodeId`: kotlin.String): PeerClient {
-            return FfiConverterTypePeerClient.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_constructor_peerclient_connect(
-    
-        FfiConverterString.lower(`address`),FfiConverterString.lower(`clientNodeId`),_status)
-}
-    )
+        /**
+         * Open a connection to the peer at `address`.
+         *
+         * `address` must be a valid gRPC endpoint URI such as
+         * `"http://node-a.local:7443"`. `client_node_id` identifies *this* end
+         * of the connection in trace logs on both sides and is typically the
+         * local hostname or a process-startup UUID.
+         *
+         * This constructor is blocking — it drives the TCP connect on the
+         * shared Tokio runtime so foreign callers without an async story
+         * (Ruby, synchronous Go code) can still set up a client. The async
+         * connect path is internal to upstream `BlazenPeerClient` and is not
+         * re-exposed across UniFFI to avoid a constructor that returns a
+         * coroutine in every target language.
+         *
+         * # Errors
+         *
+         * Returns [`BlazenError::Peer`] (`kind = "Transport"`) if the
+         * endpoint URI is invalid or the TCP / HTTP/2 handshake fails.
+         */
+        @Throws(BlazenException::class)
+        fun `connect`(
+            `address`: kotlin.String,
+            `clientNodeId`: kotlin.String,
+        ): PeerClient =
+            FfiConverterTypePeerClient.lift(
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_constructor_peerclient_connect(
+                        FfiConverterString.lower(`address`),
+                        FfiConverterString.lower(`clientNodeId`),
+                        _status,
+                    )
+                },
+            )
     }
-    
-
-        
-    }
-    
 }
-
 
 /**
  * @suppress
  */
-public object FfiConverterTypePeerClient: FfiConverter<PeerClient, Long> {
-    override fun lower(value: PeerClient): Long {
-        return value.uniffiCloneHandle()
-    }
+public object FfiConverterTypePeerClient : FfiConverter<PeerClient, Long> {
+    override fun lower(value: PeerClient): Long = value.uniffiCloneHandle()
 
-    override fun lift(value: Long): PeerClient {
-        return PeerClient(UniffiWithHandle, value)
-    }
+    override fun lift(value: Long): PeerClient = PeerClient(UniffiWithHandle, value)
 
-    override fun read(buf: ByteBuffer): PeerClient {
-        return lift(buf.getLong())
-    }
+    override fun read(buf: ByteBuffer): PeerClient = lift(buf.getLong())
 
     override fun allocationSize(value: PeerClient) = 8UL
 
-    override fun write(value: PeerClient, buf: ByteBuffer) {
+    override fun write(
+        value: PeerClient,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(lower(value))
     }
 }
-
 
 // This template implements a class for working with a Rust struct via a handle
 // to the live Rust struct on the other side of the FFI.
@@ -5005,7 +5761,6 @@ public object FfiConverterTypePeerClient: FfiConverter<PeerClient, Long> {
 //
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
-
 
 /**
  * Node-local Blazen peer gRPC server.
@@ -5020,7 +5775,6 @@ public object FfiConverterTypePeerClient: FfiConverter<PeerClient, Long> {
  * have been registered in this process can be invoked remotely by name.
  */
 public interface PeerServerInterface {
-    
     /**
      * Bind the gRPC server to `listen_address` and serve until the
      * listener errors or the caller's async task is cancelled.
@@ -5038,7 +5792,7 @@ public interface PeerServerInterface {
      * fails to bind or encounters a fatal I/O error while serving.
      */
     suspend fun `serve`(`listenAddress`: kotlin.String)
-    
+
     /**
      * Synchronous variant of [`PeerServer::serve`] — blocks the current
      * thread on the shared Tokio runtime until the server exits. Intended
@@ -5050,7 +5804,7 @@ public interface PeerServerInterface {
      * Same as [`PeerServer::serve`].
      */
     fun `serveBlocking`(`listenAddress`: kotlin.String)
-    
+
     companion object
 }
 
@@ -5066,13 +5820,14 @@ public interface PeerServerInterface {
  * process-wide [`blazen_core::step_registry`], so any workflow whose steps
  * have been registered in this process can be invoked remotely by name.
  */
-open class PeerServer: Disposable, AutoCloseable, PeerServerInterface
-{
-
-    @Suppress("UNUSED_PARAMETER")
+open class PeerServer :
+    Disposable,
+    AutoCloseable,
+    PeerServerInterface {
     /**
      * @suppress
      */
+    @Suppress("UNUSED_PARAMETER")
     constructor(withHandle: UniffiWithHandle, handle: Long) {
         this.handle = handle
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
@@ -5090,6 +5845,7 @@ open class PeerServer: Disposable, AutoCloseable, PeerServerInterface
         this.handle = 0
         this.cleanable = null
     }
+
     /**
      * Create a new peer server with a fresh, empty session-ref registry.
      *
@@ -5098,13 +5854,12 @@ open class PeerServer: Disposable, AutoCloseable, PeerServerInterface
      * a UUID picked at process startup.
      */
     constructor(`nodeId`: kotlin.String) :
-        this(UniffiWithHandle, 
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_constructor_peerserver_new(
-    
-        FfiConverterString.lower(`nodeId`),_status)
-}
-    )
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_peerserver_new(FfiConverterString.lower(`nodeId`), _status)
+            },
+        )
 
     protected val handle: Long
     protected val cleanable: UniffiCleaner.Cleanable?
@@ -5139,7 +5894,7 @@ open class PeerServer: Disposable, AutoCloseable, PeerServerInterface
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the handle being freed concurrently.
         try {
             return block(this.uniffiCloneHandle())
@@ -5153,11 +5908,13 @@ open class PeerServer: Disposable, AutoCloseable, PeerServerInterface
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(private val handle: Long) : Runnable {
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
         override fun run() {
             if (handle == 0.toLong()) {
                 // Fake object created with `NoHandle`, don't try to free.
-                return;
+                return
             }
             uniffiRustCall { status ->
                 UniffiLib.uniffi_blazen_uniffi_fn_free_peerserver(handle, status)
@@ -5170,14 +5927,13 @@ open class PeerServer: Disposable, AutoCloseable, PeerServerInterface
      */
     fun uniffiCloneHandle(): Long {
         if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
-        return uniffiRustCall() { status ->
+        return uniffiRustCall { status ->
             UniffiLib.uniffi_blazen_uniffi_fn_clone_peerserver(handle, status)
         }
     }
 
-    
     /**
      * Bind the gRPC server to `listen_address` and serve until the
      * listener errors or the caller's async task is cancelled.
@@ -5196,26 +5952,23 @@ open class PeerServer: Disposable, AutoCloseable, PeerServerInterface
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `serve`(`listenAddress`: kotlin.String) {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_peerserver_serve(
-                uniffiHandle,
-                FfiConverterString.lower(`listenAddress`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
-        // lift function
-        { Unit },
-        
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-    }
+    override suspend fun `serve`(`listenAddress`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_peerserver_serve(
+                    uniffiHandle,
+                    FfiConverterString.lower(`listenAddress`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
-    
     /**
      * Synchronous variant of [`PeerServer::serve`] — blocks the current
      * thread on the shared Tokio runtime until the server exits. Intended
@@ -5226,56 +5979,43 @@ open class PeerServer: Disposable, AutoCloseable, PeerServerInterface
      *
      * Same as [`PeerServer::serve`].
      */
-    @Throws(BlazenException::class)override fun `serveBlocking`(`listenAddress`: kotlin.String)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_peerserver_serve_blocking(
-        it,
-        FfiConverterString.lower(`listenAddress`),_status)
-}
-    }
-    
-    
+    @Throws(BlazenException::class)
+    override fun `serveBlocking`(`listenAddress`: kotlin.String) =
+        callWithHandle {
+            uniffiRustCallWithError(BlazenException) { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_peerserver_serve_blocking(
+                    it,
+                    FfiConverterString.lower(`listenAddress`),
+                    _status,
+                )
+            }
+        }
 
-    
-
-    
-
-
-    
-    
     /**
      * @suppress
      */
     companion object
-    
 }
-
 
 /**
  * @suppress
  */
-public object FfiConverterTypePeerServer: FfiConverter<PeerServer, Long> {
-    override fun lower(value: PeerServer): Long {
-        return value.uniffiCloneHandle()
-    }
+public object FfiConverterTypePeerServer : FfiConverter<PeerServer, Long> {
+    override fun lower(value: PeerServer): Long = value.uniffiCloneHandle()
 
-    override fun lift(value: Long): PeerServer {
-        return PeerServer(UniffiWithHandle, value)
-    }
+    override fun lift(value: Long): PeerServer = PeerServer(UniffiWithHandle, value)
 
-    override fun read(buf: ByteBuffer): PeerServer {
-        return lift(buf.getLong())
-    }
+    override fun read(buf: ByteBuffer): PeerServer = lift(buf.getLong())
 
     override fun allocationSize(value: PeerServer) = 8UL
 
-    override fun write(value: PeerServer, buf: ByteBuffer) {
+    override fun write(
+        value: PeerServer,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(lower(value))
     }
 }
-
 
 // This template implements a class for working with a Rust struct via a handle
 // to the live Rust struct on the other side of the FFI.
@@ -5371,7 +6111,6 @@ public object FfiConverterTypePeerServer: FfiConverter<PeerServer, Long> {
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
-
 /**
  * A validated, runnable pipeline.
  *
@@ -5381,7 +6120,6 @@ public object FfiConverterTypePeerServer: FfiConverter<PeerServer, Long> {
  * inner workflow state across concurrent foreign callers.
  */
 public interface PipelineInterface {
-    
     /**
      * Execute the pipeline to completion. `input_json` is parsed as JSON
      * and passed as the first stage's `StartEvent` payload; each
@@ -5393,7 +6131,7 @@ public interface PipelineInterface {
      * stage's `WorkflowResult`.
      */
     suspend fun `run`(`inputJson`: kotlin.String): WorkflowResult
-    
+
     /**
      * Synchronous variant of [`run`](Self::run) — blocks the current
      * thread on the shared Tokio runtime. Provided for callers that want
@@ -5401,13 +6139,13 @@ public interface PipelineInterface {
      * machinery (Ruby scripts, simple Go `main` functions).
      */
     fun `runBlocking`(`inputJson`: kotlin.String): WorkflowResult
-    
+
     /**
      * Stage names in registration order — useful for foreign-side
      * introspection / debug logging without re-running the pipeline.
      */
     fun `stageNames`(): List<kotlin.String>
-    
+
     companion object
 }
 
@@ -5419,13 +6157,14 @@ public interface PipelineInterface {
  * **overlapping** runs on the same handle to avoid surprising aliasing of
  * inner workflow state across concurrent foreign callers.
  */
-open class Pipeline: Disposable, AutoCloseable, PipelineInterface
-{
-
-    @Suppress("UNUSED_PARAMETER")
+open class Pipeline :
+    Disposable,
+    AutoCloseable,
+    PipelineInterface {
     /**
      * @suppress
      */
+    @Suppress("UNUSED_PARAMETER")
     constructor(withHandle: UniffiWithHandle, handle: Long) {
         this.handle = handle
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
@@ -5477,7 +6216,7 @@ open class Pipeline: Disposable, AutoCloseable, PipelineInterface
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the handle being freed concurrently.
         try {
             return block(this.uniffiCloneHandle())
@@ -5491,11 +6230,13 @@ open class Pipeline: Disposable, AutoCloseable, PipelineInterface
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(private val handle: Long) : Runnable {
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
         override fun run() {
             if (handle == 0.toLong()) {
                 // Fake object created with `NoHandle`, don't try to free.
-                return;
+                return
             }
             uniffiRustCall { status ->
                 UniffiLib.uniffi_blazen_uniffi_fn_free_pipeline(handle, status)
@@ -5508,14 +6249,13 @@ open class Pipeline: Disposable, AutoCloseable, PipelineInterface
      */
     fun uniffiCloneHandle(): Long {
         if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
-        return uniffiRustCall() { status ->
+        return uniffiRustCall { status ->
             UniffiLib.uniffi_blazen_uniffi_fn_clone_pipeline(handle, status)
         }
     }
 
-    
     /**
      * Execute the pipeline to completion. `input_json` is parsed as JSON
      * and passed as the first stage's `StartEvent` payload; each
@@ -5528,99 +6268,84 @@ open class Pipeline: Disposable, AutoCloseable, PipelineInterface
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `run`(`inputJson`: kotlin.String) : WorkflowResult {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_pipeline_run(
-                uniffiHandle,
-                FfiConverterString.lower(`inputJson`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterTypeWorkflowResult.lift(it) },
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-    }
+    override suspend fun `run`(`inputJson`: kotlin.String): WorkflowResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_pipeline_run(
+                    uniffiHandle,
+                    FfiConverterString.lower(`inputJson`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeWorkflowResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
-    
     /**
      * Synchronous variant of [`run`](Self::run) — blocks the current
      * thread on the shared Tokio runtime. Provided for callers that want
      * fire-and-forget usage without engaging their host language's async
      * machinery (Ruby scripts, simple Go `main` functions).
      */
-    @Throws(BlazenException::class)override fun `runBlocking`(`inputJson`: kotlin.String): WorkflowResult {
-            return FfiConverterTypeWorkflowResult.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_pipeline_run_blocking(
-        it,
-        FfiConverterString.lower(`inputJson`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `runBlocking`(`inputJson`: kotlin.String): WorkflowResult =
+        FfiConverterTypeWorkflowResult.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_pipeline_run_blocking(
+                        it,
+                        FfiConverterString.lower(`inputJson`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     /**
      * Stage names in registration order — useful for foreign-side
      * introspection / debug logging without re-running the pipeline.
-     */override fun `stageNames`(): List<kotlin.String> {
-            return FfiConverterSequenceString.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_pipeline_stage_names(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
+     */
+    override fun `stageNames`(): List<kotlin.String> =
+        FfiConverterSequenceString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_pipeline_stage_names(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
-
-    
-
-
-    
-    
     /**
      * @suppress
      */
     companion object
-    
 }
-
 
 /**
  * @suppress
  */
-public object FfiConverterTypePipeline: FfiConverter<Pipeline, Long> {
-    override fun lower(value: Pipeline): Long {
-        return value.uniffiCloneHandle()
-    }
+public object FfiConverterTypePipeline : FfiConverter<Pipeline, Long> {
+    override fun lower(value: Pipeline): Long = value.uniffiCloneHandle()
 
-    override fun lift(value: Long): Pipeline {
-        return Pipeline(UniffiWithHandle, value)
-    }
+    override fun lift(value: Long): Pipeline = Pipeline(UniffiWithHandle, value)
 
-    override fun read(buf: ByteBuffer): Pipeline {
-        return lift(buf.getLong())
-    }
+    override fun read(buf: ByteBuffer): Pipeline = lift(buf.getLong())
 
     override fun allocationSize(value: Pipeline) = 8UL
 
-    override fun write(value: Pipeline, buf: ByteBuffer) {
+    override fun write(
+        value: Pipeline,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(lower(value))
     }
 }
-
 
 // This template implements a class for working with a Rust struct via a handle
 // to the live Rust struct on the other side of the FFI.
@@ -5716,7 +6441,6 @@ public object FfiConverterTypePipeline: FfiConverter<Pipeline, Long> {
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
-
 /**
  * Builder for a [`Pipeline`].
  *
@@ -5726,7 +6450,6 @@ public object FfiConverterTypePipeline: FfiConverter<Pipeline, Long> {
  * validate and produce a runnable [`Pipeline`].
  */
 public interface PipelineBuilderInterface {
-    
     /**
      * Append a sequential workflow stage with an auto-generated stage name
      * of the form `"stage-{N}"` (zero-based).
@@ -5735,7 +6458,7 @@ public interface PipelineBuilderInterface {
      * downstream tooling that filters by it.
      */
     fun `addWorkflow`(`workflow`: Workflow): PipelineBuilder
-    
+
     /**
      * Validate the pipeline definition and produce a runnable
      * [`Pipeline`].
@@ -5744,7 +6467,7 @@ public interface PipelineBuilderInterface {
      * stages or if any stage names are duplicated.
      */
     fun `build`(): Pipeline
-    
+
     /**
      * Append a parallel stage running multiple workflows concurrently.
      *
@@ -5756,28 +6479,36 @@ public interface PipelineBuilderInterface {
      * remaining branches are dropped (which aborts their inner workflows
      * via `WorkflowHandler`'s `Drop` impl).
      */
-    fun `parallel`(`name`: kotlin.String, `branchNames`: List<kotlin.String>, `workflows`: List<Workflow>, `waitAll`: kotlin.Boolean): PipelineBuilder
-    
+    fun `parallel`(
+        `name`: kotlin.String,
+        `branchNames`: List<kotlin.String>,
+        `workflows`: List<Workflow>,
+        `waitAll`: kotlin.Boolean,
+    ): PipelineBuilder
+
     /**
      * Append a sequential stage with an explicit name. The stage name must
      * be unique within the pipeline (enforced at [`build`](Self::build)).
      */
-    fun `stage`(`name`: kotlin.String, `workflow`: Workflow): PipelineBuilder
-    
+    fun `stage`(
+        `name`: kotlin.String,
+        `workflow`: Workflow,
+    ): PipelineBuilder
+
     /**
      * Per-stage timeout in milliseconds. Each stage's workflow gets at
      * most this long to produce its `StopEvent` before the pipeline
      * aborts with [`BlazenError::Timeout`].
      */
     fun `timeoutPerStageMs`(`millis`: kotlin.ULong): PipelineBuilder
-    
+
     /**
      * Total wall-clock timeout for the entire pipeline run, in
      * milliseconds. The pipeline aborts with [`BlazenError::Timeout`] if
      * it does not finish within this duration.
      */
     fun `totalTimeoutMs`(`millis`: kotlin.ULong): PipelineBuilder
-    
+
     companion object
 }
 
@@ -5789,13 +6520,14 @@ public interface PipelineBuilderInterface {
  * [`parallel`](Self::parallel), then call [`build`](Self::build) to
  * validate and produce a runnable [`Pipeline`].
  */
-open class PipelineBuilder: Disposable, AutoCloseable, PipelineBuilderInterface
-{
-
-    @Suppress("UNUSED_PARAMETER")
+open class PipelineBuilder :
+    Disposable,
+    AutoCloseable,
+    PipelineBuilderInterface {
     /**
      * @suppress
      */
+    @Suppress("UNUSED_PARAMETER")
     constructor(withHandle: UniffiWithHandle, handle: Long) {
         this.handle = handle
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
@@ -5813,17 +6545,17 @@ open class PipelineBuilder: Disposable, AutoCloseable, PipelineBuilderInterface
         this.handle = 0
         this.cleanable = null
     }
+
     /**
      * Create a new builder with the given pipeline name.
      */
     constructor(`name`: kotlin.String) :
-        this(UniffiWithHandle, 
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_constructor_pipelinebuilder_new(
-    
-        FfiConverterString.lower(`name`),_status)
-}
-    )
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_pipelinebuilder_new(FfiConverterString.lower(`name`), _status)
+            },
+        )
 
     protected val handle: Long
     protected val cleanable: UniffiCleaner.Cleanable?
@@ -5858,7 +6590,7 @@ open class PipelineBuilder: Disposable, AutoCloseable, PipelineBuilderInterface
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the handle being freed concurrently.
         try {
             return block(this.uniffiCloneHandle())
@@ -5872,11 +6604,13 @@ open class PipelineBuilder: Disposable, AutoCloseable, PipelineBuilderInterface
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(private val handle: Long) : Runnable {
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
         override fun run() {
             if (handle == 0.toLong()) {
                 // Fake object created with `NoHandle`, don't try to free.
-                return;
+                return
             }
             uniffiRustCall { status ->
                 UniffiLib.uniffi_blazen_uniffi_fn_free_pipelinebuilder(handle, status)
@@ -5889,14 +6623,13 @@ open class PipelineBuilder: Disposable, AutoCloseable, PipelineBuilderInterface
      */
     fun uniffiCloneHandle(): Long {
         if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
-        return uniffiRustCall() { status ->
+        return uniffiRustCall { status ->
             UniffiLib.uniffi_blazen_uniffi_fn_clone_pipelinebuilder(handle, status)
         }
     }
 
-    
     /**
      * Append a sequential workflow stage with an auto-generated stage name
      * of the form `"stage-{N}"` (zero-based).
@@ -5904,20 +6637,20 @@ open class PipelineBuilder: Disposable, AutoCloseable, PipelineBuilderInterface
      * Use [`stage`](Self::stage) when the stage name matters for
      * downstream tooling that filters by it.
      */
-    @Throws(BlazenException::class)override fun `addWorkflow`(`workflow`: Workflow): PipelineBuilder {
-            return FfiConverterTypePipelineBuilder.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinebuilder_add_workflow(
-        it,
-        FfiConverterTypeWorkflow.lower(`workflow`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `addWorkflow`(`workflow`: Workflow): PipelineBuilder =
+        FfiConverterTypePipelineBuilder.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinebuilder_add_workflow(
+                        it,
+                        FfiConverterTypeWorkflow.lower(`workflow`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     /**
      * Validate the pipeline definition and produce a runnable
      * [`Pipeline`].
@@ -5925,20 +6658,19 @@ open class PipelineBuilder: Disposable, AutoCloseable, PipelineBuilderInterface
      * Fails with [`BlazenError::Validation`] if the pipeline has zero
      * stages or if any stage names are duplicated.
      */
-    @Throws(BlazenException::class)override fun `build`(): Pipeline {
-            return FfiConverterTypePipeline.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinebuilder_build(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `build`(): Pipeline =
+        FfiConverterTypePipeline.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinebuilder_build(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     /**
      * Append a parallel stage running multiple workflows concurrently.
      *
@@ -5950,113 +6682,113 @@ open class PipelineBuilder: Disposable, AutoCloseable, PipelineBuilderInterface
      * remaining branches are dropped (which aborts their inner workflows
      * via `WorkflowHandler`'s `Drop` impl).
      */
-    @Throws(BlazenException::class)override fun `parallel`(`name`: kotlin.String, `branchNames`: List<kotlin.String>, `workflows`: List<Workflow>, `waitAll`: kotlin.Boolean): PipelineBuilder {
-            return FfiConverterTypePipelineBuilder.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinebuilder_parallel(
-        it,
-        FfiConverterString.lower(`name`),FfiConverterSequenceString.lower(`branchNames`),FfiConverterSequenceTypeWorkflow.lower(`workflows`),FfiConverterBoolean.lower(`waitAll`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `parallel`(
+        `name`: kotlin.String,
+        `branchNames`: List<kotlin.String>,
+        `workflows`: List<Workflow>,
+        `waitAll`: kotlin.Boolean,
+    ): PipelineBuilder =
+        FfiConverterTypePipelineBuilder.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinebuilder_parallel(
+                        it,
+                        FfiConverterString.lower(`name`),
+                        FfiConverterSequenceString.lower(`branchNames`),
+                        FfiConverterSequenceTypeWorkflow.lower(`workflows`),
+                        FfiConverterBoolean.lower(`waitAll`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     /**
      * Append a sequential stage with an explicit name. The stage name must
      * be unique within the pipeline (enforced at [`build`](Self::build)).
      */
-    @Throws(BlazenException::class)override fun `stage`(`name`: kotlin.String, `workflow`: Workflow): PipelineBuilder {
-            return FfiConverterTypePipelineBuilder.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinebuilder_stage(
-        it,
-        FfiConverterString.lower(`name`),FfiConverterTypeWorkflow.lower(`workflow`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `stage`(
+        `name`: kotlin.String,
+        `workflow`: Workflow,
+    ): PipelineBuilder =
+        FfiConverterTypePipelineBuilder.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinebuilder_stage(
+                        it,
+                        FfiConverterString.lower(`name`),
+                        FfiConverterTypeWorkflow.lower(`workflow`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     /**
      * Per-stage timeout in milliseconds. Each stage's workflow gets at
      * most this long to produce its `StopEvent` before the pipeline
      * aborts with [`BlazenError::Timeout`].
      */
-    @Throws(BlazenException::class)override fun `timeoutPerStageMs`(`millis`: kotlin.ULong): PipelineBuilder {
-            return FfiConverterTypePipelineBuilder.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinebuilder_timeout_per_stage_ms(
-        it,
-        FfiConverterULong.lower(`millis`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `timeoutPerStageMs`(`millis`: kotlin.ULong): PipelineBuilder =
+        FfiConverterTypePipelineBuilder.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinebuilder_timeout_per_stage_ms(
+                        it,
+                        FfiConverterULong.lower(`millis`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     /**
      * Total wall-clock timeout for the entire pipeline run, in
      * milliseconds. The pipeline aborts with [`BlazenError::Timeout`] if
      * it does not finish within this duration.
      */
-    @Throws(BlazenException::class)override fun `totalTimeoutMs`(`millis`: kotlin.ULong): PipelineBuilder {
-            return FfiConverterTypePipelineBuilder.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinebuilder_total_timeout_ms(
-        it,
-        FfiConverterULong.lower(`millis`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `totalTimeoutMs`(`millis`: kotlin.ULong): PipelineBuilder =
+        FfiConverterTypePipelineBuilder.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinebuilder_total_timeout_ms(
+                        it,
+                        FfiConverterULong.lower(`millis`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
-
-    
-
-
-    
-    
     /**
      * @suppress
      */
     companion object
-    
 }
-
 
 /**
  * @suppress
  */
-public object FfiConverterTypePipelineBuilder: FfiConverter<PipelineBuilder, Long> {
-    override fun lower(value: PipelineBuilder): Long {
-        return value.uniffiCloneHandle()
-    }
+public object FfiConverterTypePipelineBuilder : FfiConverter<PipelineBuilder, Long> {
+    override fun lower(value: PipelineBuilder): Long = value.uniffiCloneHandle()
 
-    override fun lift(value: Long): PipelineBuilder {
-        return PipelineBuilder(UniffiWithHandle, value)
-    }
+    override fun lift(value: Long): PipelineBuilder = PipelineBuilder(UniffiWithHandle, value)
 
-    override fun read(buf: ByteBuffer): PipelineBuilder {
-        return lift(buf.getLong())
-    }
+    override fun read(buf: ByteBuffer): PipelineBuilder = lift(buf.getLong())
 
     override fun allocationSize(value: PipelineBuilder) = 8UL
 
-    override fun write(value: PipelineBuilder, buf: ByteBuffer) {
+    override fun write(
+        value: PipelineBuilder,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(lower(value))
     }
 }
-
 
 // This template implements a class for working with a Rust struct via a handle
 // to the live Rust struct on the other side of the FFI.
@@ -6151,7 +6883,6 @@ public object FfiConverterTypePipelineBuilder: FfiConverter<PipelineBuilder, Lon
 //
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
-
 
 /**
  * Step handler implemented in foreign code (Go / Swift / Kotlin / Ruby).
@@ -6169,9 +6900,8 @@ public object FfiConverterTypePipelineBuilder: FfiConverter<PipelineBuilder, Lon
  * - Ruby: blocking method (wrap in `Async { ... }` block for fiber concurrency)
  */
 public interface StepHandler {
-    
     suspend fun `invoke`(`event`: Event): StepOutput
-    
+
     companion object
 }
 
@@ -6190,13 +6920,14 @@ public interface StepHandler {
  * - Kotlin: `suspend fun` method
  * - Ruby: blocking method (wrap in `Async { ... }` block for fiber concurrency)
  */
-open class StepHandlerImpl: Disposable, AutoCloseable, StepHandler
-{
-
-    @Suppress("UNUSED_PARAMETER")
+open class StepHandlerImpl :
+    Disposable,
+    AutoCloseable,
+    StepHandler {
     /**
      * @suppress
      */
+    @Suppress("UNUSED_PARAMETER")
     constructor(withHandle: UniffiWithHandle, handle: Long) {
         this.handle = handle
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
@@ -6248,7 +6979,7 @@ open class StepHandlerImpl: Disposable, AutoCloseable, StepHandler
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the handle being freed concurrently.
         try {
             return block(this.uniffiCloneHandle())
@@ -6262,11 +6993,13 @@ open class StepHandlerImpl: Disposable, AutoCloseable, StepHandler
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(private val handle: Long) : Runnable {
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
         override fun run() {
             if (handle == 0.toLong()) {
                 // Fake object created with `NoHandle`, don't try to free.
-                return;
+                return
             }
             uniffiRustCall { status ->
                 UniffiLib.uniffi_blazen_uniffi_fn_free_stephandler(handle, status)
@@ -6279,65 +7012,60 @@ open class StepHandlerImpl: Disposable, AutoCloseable, StepHandler
      */
     fun uniffiCloneHandle(): Long {
         if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
-        return uniffiRustCall() { status ->
+        return uniffiRustCall { status ->
             UniffiLib.uniffi_blazen_uniffi_fn_clone_stephandler(handle, status)
         }
     }
 
-    
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `invoke`(`event`: Event) : StepOutput {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_stephandler_invoke(
-                uniffiHandle,
-                FfiConverterTypeEvent.lower(`event`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterTypeStepOutput.lift(it) },
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-    }
+    override suspend fun `invoke`(`event`: Event): StepOutput =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_stephandler_invoke(
+                    uniffiHandle,
+                    FfiConverterTypeEvent.lower(`event`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeStepOutput.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
-    
-
-    
-
-
-    
-    
     /**
      * @suppress
      */
     companion object
-    
 }
-
-
 
 // Put the implementation in an object so we don't pollute the top-level namespace
 internal object uniffiCallbackInterfaceStepHandler {
-    internal object `invoke`: UniffiCallbackInterfaceStepHandlerMethod0 {
-        override fun callback(`uniffiHandle`: Long,`event`: RustBuffer.ByValue,`uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,`uniffiCallbackData`: Long,`uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,) {
+    internal object `invoke` : UniffiCallbackInterfaceStepHandlerMethod0 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `event`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
             val uniffiObj = FfiConverterTypeStepHandler.handleMap.get(uniffiHandle)
-            val makeCall = suspend { ->
-                uniffiObj.`invoke`(
+            val makeCall =
+                suspend {  uniffiObj.`invoke`(
                     FfiConverterTypeEvent.lift(`event`),
                 )
-            }
+                }
             val uniffiHandleSuccess = { returnValue: StepOutput ->
-                val uniffiResult = UniffiForeignFutureResultRustBuffer.UniffiByValue(
-                    FfiConverterTypeStepOutput.lower(returnValue),
-                    UniffiRustCallStatus.ByValue()
-                )
+                val uniffiResult =
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        FfiConverterTypeStepOutput.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
                 uniffiResult.write()
                 uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
             }
@@ -6355,28 +7083,27 @@ internal object uniffiCallbackInterfaceStepHandler {
                 uniffiHandleSuccess,
                 uniffiHandleError,
                 { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
-                uniffiOutDroppedCallback
+                uniffiOutDroppedCallback,
             )
         }
     }
 
-    internal object uniffiFree: UniffiCallbackInterfaceFree {
+    internal object uniffiFree : UniffiCallbackInterfaceFree {
         override fun callback(handle: Long) {
             FfiConverterTypeStepHandler.handleMap.remove(handle)
         }
     }
 
-    internal object uniffiClone: UniffiCallbackInterfaceClone {
-        override fun callback(handle: Long): Long {
-            return FfiConverterTypeStepHandler.handleMap.clone(handle)
-        }
+    internal object uniffiClone : UniffiCallbackInterfaceClone {
+        override fun callback(handle: Long): Long = FfiConverterTypeStepHandler.handleMap.clone(handle)
     }
 
-    internal var vtable = UniffiVTableCallbackInterfaceStepHandler.UniffiByValue(
-        uniffiFree,
-        uniffiClone,
-        `invoke`,
-    )
+    internal var vtable =
+        UniffiVTableCallbackInterfaceStepHandler.UniffiByValue(
+            uniffiFree,
+            uniffiClone,
+            `invoke`,
+        )
 
     // Registers the foreign callback with the Rust side.
     // This method is generated for each callback interface.
@@ -6388,17 +7115,17 @@ internal object uniffiCallbackInterfaceStepHandler {
 /**
  * @suppress
  */
-public object FfiConverterTypeStepHandler: FfiConverter<StepHandler, Long> {
+public object FfiConverterTypeStepHandler : FfiConverter<StepHandler, Long> {
     internal val handleMap = UniffiHandleMap<StepHandler>()
 
     override fun lower(value: StepHandler): Long {
         if (value is StepHandlerImpl) {
-             // Rust-implemented object.  Clone the handle and return it
+            // Rust-implemented object.  Clone the handle and return it
             return value.uniffiCloneHandle()
-         } else {
+        } else {
             // Kotlin object, generate a new vtable handle and return that.
             return handleMap.insert(value)
-         }
+        }
     }
 
     override fun lift(value: Long): StepHandler {
@@ -6412,17 +7139,17 @@ public object FfiConverterTypeStepHandler: FfiConverter<StepHandler, Long> {
         }
     }
 
-    override fun read(buf: ByteBuffer): StepHandler {
-        return lift(buf.getLong())
-    }
+    override fun read(buf: ByteBuffer): StepHandler = lift(buf.getLong())
 
     override fun allocationSize(value: StepHandler) = 8UL
 
-    override fun write(value: StepHandler, buf: ByteBuffer) {
+    override fun write(
+        value: StepHandler,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(lower(value))
     }
 }
-
 
 // This template implements a class for working with a Rust struct via a handle
 // to the live Rust struct on the other side of the FFI.
@@ -6518,7 +7245,6 @@ public object FfiConverterTypeStepHandler: FfiConverter<StepHandler, Long> {
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
-
 /**
  * A speech-to-text model.
  *
@@ -6529,7 +7255,6 @@ public object FfiConverterTypeStepHandler: FfiConverter<StepHandler, Long> {
  * audio.
  */
 public interface SttModelInterface {
-    
     /**
      * Transcribe audio at `audio_source` and return the transcript.
      *
@@ -6539,13 +7264,19 @@ public interface SttModelInterface {
      * an optional ISO-639-1 hint — when omitted, providers that support
      * language detection will auto-detect.
      */
-    suspend fun `transcribe`(`audioSource`: kotlin.String, `language`: kotlin.String?): SttResult
-    
+    suspend fun `transcribe`(
+        `audioSource`: kotlin.String,
+        `language`: kotlin.String?,
+    ): SttResult
+
     /**
      * Synchronous variant of [`transcribe`](Self::transcribe).
      */
-    fun `transcribeBlocking`(`audioSource`: kotlin.String, `language`: kotlin.String?): SttResult
-    
+    fun `transcribeBlocking`(
+        `audioSource`: kotlin.String,
+        `language`: kotlin.String?,
+    ): SttResult
+
     companion object
 }
 
@@ -6558,13 +7289,14 @@ public interface SttModelInterface {
  * [`transcribe_blocking`](Self::transcribe_blocking) (sync) to transcribe
  * audio.
  */
-open class SttModel: Disposable, AutoCloseable, SttModelInterface
-{
-
-    @Suppress("UNUSED_PARAMETER")
+open class SttModel :
+    Disposable,
+    AutoCloseable,
+    SttModelInterface {
     /**
      * @suppress
      */
+    @Suppress("UNUSED_PARAMETER")
     constructor(withHandle: UniffiWithHandle, handle: Long) {
         this.handle = handle
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
@@ -6616,7 +7348,7 @@ open class SttModel: Disposable, AutoCloseable, SttModelInterface
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the handle being freed concurrently.
         try {
             return block(this.uniffiCloneHandle())
@@ -6630,11 +7362,13 @@ open class SttModel: Disposable, AutoCloseable, SttModelInterface
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(private val handle: Long) : Runnable {
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
         override fun run() {
             if (handle == 0.toLong()) {
                 // Fake object created with `NoHandle`, don't try to free.
-                return;
+                return
             }
             uniffiRustCall { status ->
                 UniffiLib.uniffi_blazen_uniffi_fn_free_sttmodel(handle, status)
@@ -6647,14 +7381,13 @@ open class SttModel: Disposable, AutoCloseable, SttModelInterface
      */
     fun uniffiCloneHandle(): Long {
         if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
-        return uniffiRustCall() { status ->
+        return uniffiRustCall { status ->
             UniffiLib.uniffi_blazen_uniffi_fn_clone_sttmodel(handle, status)
         }
     }
 
-    
     /**
      * Transcribe audio at `audio_source` and return the transcript.
      *
@@ -6666,79 +7399,73 @@ open class SttModel: Disposable, AutoCloseable, SttModelInterface
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `transcribe`(`audioSource`: kotlin.String, `language`: kotlin.String?) : SttResult {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_sttmodel_transcribe(
-                uniffiHandle,
-                FfiConverterString.lower(`audioSource`),FfiConverterOptionalString.lower(`language`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterTypeSttResult.lift(it) },
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-    }
+    override suspend fun `transcribe`(
+        `audioSource`: kotlin.String,
+        `language`: kotlin.String?,
+    ): SttResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_sttmodel_transcribe(
+                    uniffiHandle,
+                    FfiConverterString.lower(`audioSource`),
+                    FfiConverterOptionalString.lower(`language`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeSttResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
-    
     /**
      * Synchronous variant of [`transcribe`](Self::transcribe).
      */
-    @Throws(BlazenException::class)override fun `transcribeBlocking`(`audioSource`: kotlin.String, `language`: kotlin.String?): SttResult {
-            return FfiConverterTypeSttResult.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_sttmodel_transcribe_blocking(
-        it,
-        FfiConverterString.lower(`audioSource`),FfiConverterOptionalString.lower(`language`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `transcribeBlocking`(
+        `audioSource`: kotlin.String,
+        `language`: kotlin.String?,
+    ): SttResult =
+        FfiConverterTypeSttResult.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_sttmodel_transcribe_blocking(
+                        it,
+                        FfiConverterString.lower(`audioSource`),
+                        FfiConverterOptionalString.lower(`language`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
-
-    
-
-
-    
-    
     /**
      * @suppress
      */
     companion object
-    
 }
-
 
 /**
  * @suppress
  */
-public object FfiConverterTypeSttModel: FfiConverter<SttModel, Long> {
-    override fun lower(value: SttModel): Long {
-        return value.uniffiCloneHandle()
-    }
+public object FfiConverterTypeSttModel : FfiConverter<SttModel, Long> {
+    override fun lower(value: SttModel): Long = value.uniffiCloneHandle()
 
-    override fun lift(value: Long): SttModel {
-        return SttModel(UniffiWithHandle, value)
-    }
+    override fun lift(value: Long): SttModel = SttModel(UniffiWithHandle, value)
 
-    override fun read(buf: ByteBuffer): SttModel {
-        return lift(buf.getLong())
-    }
+    override fun read(buf: ByteBuffer): SttModel = lift(buf.getLong())
 
     override fun allocationSize(value: SttModel) = 8UL
 
-    override fun write(value: SttModel, buf: ByteBuffer) {
+    override fun write(
+        value: SttModel,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(lower(value))
     }
 }
-
 
 // This template implements a class for working with a Rust struct via a handle
 // to the live Rust struct on the other side of the FFI.
@@ -6833,7 +7560,6 @@ public object FfiConverterTypeSttModel: FfiConverter<SttModel, Long> {
 //
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
-
 
 /**
  * Foreign-language tool executor invoked by the agent loop.
@@ -6849,7 +7575,6 @@ public object FfiConverterTypeSttModel: FfiConverter<SttModel, Long> {
  * surfaced verbatim to the foreign caller.
  */
 public interface ToolHandler {
-    
     /**
      * Execute the named tool with JSON-encoded arguments.
      *
@@ -6857,8 +7582,11 @@ public interface ToolHandler {
      * as the tool result on the next turn. Return `"null"` (the JSON literal)
      * when the tool produced no useful result.
      */
-    suspend fun `execute`(`toolName`: kotlin.String, `argumentsJson`: kotlin.String): kotlin.String
-    
+    suspend fun `execute`(
+        `toolName`: kotlin.String,
+        `argumentsJson`: kotlin.String,
+    ): kotlin.String
+
     companion object
 }
 
@@ -6875,13 +7603,14 @@ public interface ToolHandler {
  * error. Use [`BlazenError::Tool`] for handler-side failures; the message is
  * surfaced verbatim to the foreign caller.
  */
-open class ToolHandlerImpl: Disposable, AutoCloseable, ToolHandler
-{
-
-    @Suppress("UNUSED_PARAMETER")
+open class ToolHandlerImpl :
+    Disposable,
+    AutoCloseable,
+    ToolHandler {
     /**
      * @suppress
      */
+    @Suppress("UNUSED_PARAMETER")
     constructor(withHandle: UniffiWithHandle, handle: Long) {
         this.handle = handle
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
@@ -6933,7 +7662,7 @@ open class ToolHandlerImpl: Disposable, AutoCloseable, ToolHandler
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the handle being freed concurrently.
         try {
             return block(this.uniffiCloneHandle())
@@ -6947,11 +7676,13 @@ open class ToolHandlerImpl: Disposable, AutoCloseable, ToolHandler
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(private val handle: Long) : Runnable {
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
         override fun run() {
             if (handle == 0.toLong()) {
                 // Fake object created with `NoHandle`, don't try to free.
-                return;
+                return
             }
             uniffiRustCall { status ->
                 UniffiLib.uniffi_blazen_uniffi_fn_free_toolhandler(handle, status)
@@ -6964,14 +7695,13 @@ open class ToolHandlerImpl: Disposable, AutoCloseable, ToolHandler
      */
     fun uniffiCloneHandle(): Long {
         if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
-        return uniffiRustCall() { status ->
+        return uniffiRustCall { status ->
             UniffiLib.uniffi_blazen_uniffi_fn_clone_toolhandler(handle, status)
         }
     }
 
-    
     /**
      * Execute the named tool with JSON-encoded arguments.
      *
@@ -6981,56 +7711,57 @@ open class ToolHandlerImpl: Disposable, AutoCloseable, ToolHandler
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `execute`(`toolName`: kotlin.String, `argumentsJson`: kotlin.String) : kotlin.String {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_toolhandler_execute(
-                uniffiHandle,
-                FfiConverterString.lower(`toolName`),FfiConverterString.lower(`argumentsJson`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterString.lift(it) },
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-    }
+    override suspend fun `execute`(
+        `toolName`: kotlin.String,
+        `argumentsJson`: kotlin.String,
+    ): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_toolhandler_execute(
+                    uniffiHandle,
+                    FfiConverterString.lower(`toolName`),
+                    FfiConverterString.lower(`argumentsJson`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
-    
-
-    
-
-
-    
-    
     /**
      * @suppress
      */
     companion object
-    
 }
-
-
 
 // Put the implementation in an object so we don't pollute the top-level namespace
 internal object uniffiCallbackInterfaceToolHandler {
-    internal object `execute`: UniffiCallbackInterfaceToolHandlerMethod0 {
-        override fun callback(`uniffiHandle`: Long,`toolName`: RustBuffer.ByValue,`argumentsJson`: RustBuffer.ByValue,`uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,`uniffiCallbackData`: Long,`uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,) {
+    internal object `execute` : UniffiCallbackInterfaceToolHandlerMethod0 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `toolName`: RustBuffer.ByValue,
+            `argumentsJson`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
             val uniffiObj = FfiConverterTypeToolHandler.handleMap.get(uniffiHandle)
-            val makeCall = suspend { ->
-                uniffiObj.`execute`(
+            val makeCall =
+                suspend {  uniffiObj.`execute`(
                     FfiConverterString.lift(`toolName`),
                     FfiConverterString.lift(`argumentsJson`),
                 )
-            }
+                }
             val uniffiHandleSuccess = { returnValue: kotlin.String ->
-                val uniffiResult = UniffiForeignFutureResultRustBuffer.UniffiByValue(
-                    FfiConverterString.lower(returnValue),
-                    UniffiRustCallStatus.ByValue()
-                )
+                val uniffiResult =
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        FfiConverterString.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
                 uniffiResult.write()
                 uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
             }
@@ -7048,28 +7779,27 @@ internal object uniffiCallbackInterfaceToolHandler {
                 uniffiHandleSuccess,
                 uniffiHandleError,
                 { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
-                uniffiOutDroppedCallback
+                uniffiOutDroppedCallback,
             )
         }
     }
 
-    internal object uniffiFree: UniffiCallbackInterfaceFree {
+    internal object uniffiFree : UniffiCallbackInterfaceFree {
         override fun callback(handle: Long) {
             FfiConverterTypeToolHandler.handleMap.remove(handle)
         }
     }
 
-    internal object uniffiClone: UniffiCallbackInterfaceClone {
-        override fun callback(handle: Long): Long {
-            return FfiConverterTypeToolHandler.handleMap.clone(handle)
-        }
+    internal object uniffiClone : UniffiCallbackInterfaceClone {
+        override fun callback(handle: Long): Long = FfiConverterTypeToolHandler.handleMap.clone(handle)
     }
 
-    internal var vtable = UniffiVTableCallbackInterfaceToolHandler.UniffiByValue(
-        uniffiFree,
-        uniffiClone,
-        `execute`,
-    )
+    internal var vtable =
+        UniffiVTableCallbackInterfaceToolHandler.UniffiByValue(
+            uniffiFree,
+            uniffiClone,
+            `execute`,
+        )
 
     // Registers the foreign callback with the Rust side.
     // This method is generated for each callback interface.
@@ -7081,17 +7811,17 @@ internal object uniffiCallbackInterfaceToolHandler {
 /**
  * @suppress
  */
-public object FfiConverterTypeToolHandler: FfiConverter<ToolHandler, Long> {
+public object FfiConverterTypeToolHandler : FfiConverter<ToolHandler, Long> {
     internal val handleMap = UniffiHandleMap<ToolHandler>()
 
     override fun lower(value: ToolHandler): Long {
         if (value is ToolHandlerImpl) {
-             // Rust-implemented object.  Clone the handle and return it
+            // Rust-implemented object.  Clone the handle and return it
             return value.uniffiCloneHandle()
-         } else {
+        } else {
             // Kotlin object, generate a new vtable handle and return that.
             return handleMap.insert(value)
-         }
+        }
     }
 
     override fun lift(value: Long): ToolHandler {
@@ -7105,17 +7835,17 @@ public object FfiConverterTypeToolHandler: FfiConverter<ToolHandler, Long> {
         }
     }
 
-    override fun read(buf: ByteBuffer): ToolHandler {
-        return lift(buf.getLong())
-    }
+    override fun read(buf: ByteBuffer): ToolHandler = lift(buf.getLong())
 
     override fun allocationSize(value: ToolHandler) = 8UL
 
-    override fun write(value: ToolHandler, buf: ByteBuffer) {
+    override fun write(
+        value: ToolHandler,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(lower(value))
     }
 }
-
 
 // This template implements a class for working with a Rust struct via a handle
 // to the live Rust struct on the other side of the FFI.
@@ -7211,7 +7941,6 @@ public object FfiConverterTypeToolHandler: FfiConverter<ToolHandler, Long> {
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
-
 /**
  * A text-to-speech model.
  *
@@ -7222,7 +7951,6 @@ public object FfiConverterTypeToolHandler: FfiConverter<ToolHandler, Long> {
  * speech.
  */
 public interface TtsModelInterface {
-    
     /**
      * Synthesize speech from `text` and return the audio payload.
      *
@@ -7230,14 +7958,22 @@ public interface TtsModelInterface {
      * optional ISO-639-1 hint. Both are ignored by providers that don't
      * support them.
      */
-    suspend fun `synthesize`(`text`: kotlin.String, `voice`: kotlin.String?, `language`: kotlin.String?): TtsResult
-    
+    suspend fun `synthesize`(
+        `text`: kotlin.String,
+        `voice`: kotlin.String?,
+        `language`: kotlin.String?,
+    ): TtsResult
+
     /**
      * Synchronous variant of [`synthesize`](Self::synthesize) — blocks on
      * the shared Tokio runtime.
      */
-    fun `synthesizeBlocking`(`text`: kotlin.String, `voice`: kotlin.String?, `language`: kotlin.String?): TtsResult
-    
+    fun `synthesizeBlocking`(
+        `text`: kotlin.String,
+        `voice`: kotlin.String?,
+        `language`: kotlin.String?,
+    ): TtsResult
+
     companion object
 }
 
@@ -7250,13 +7986,14 @@ public interface TtsModelInterface {
  * [`synthesize_blocking`](Self::synthesize_blocking) (sync) to generate
  * speech.
  */
-open class TtsModel: Disposable, AutoCloseable, TtsModelInterface
-{
-
-    @Suppress("UNUSED_PARAMETER")
+open class TtsModel :
+    Disposable,
+    AutoCloseable,
+    TtsModelInterface {
     /**
      * @suppress
      */
+    @Suppress("UNUSED_PARAMETER")
     constructor(withHandle: UniffiWithHandle, handle: Long) {
         this.handle = handle
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
@@ -7308,7 +8045,7 @@ open class TtsModel: Disposable, AutoCloseable, TtsModelInterface
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the handle being freed concurrently.
         try {
             return block(this.uniffiCloneHandle())
@@ -7322,11 +8059,13 @@ open class TtsModel: Disposable, AutoCloseable, TtsModelInterface
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(private val handle: Long) : Runnable {
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
         override fun run() {
             if (handle == 0.toLong()) {
                 // Fake object created with `NoHandle`, don't try to free.
-                return;
+                return
             }
             uniffiRustCall { status ->
                 UniffiLib.uniffi_blazen_uniffi_fn_free_ttsmodel(handle, status)
@@ -7339,14 +8078,13 @@ open class TtsModel: Disposable, AutoCloseable, TtsModelInterface
      */
     fun uniffiCloneHandle(): Long {
         if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
-        return uniffiRustCall() { status ->
+        return uniffiRustCall { status ->
             UniffiLib.uniffi_blazen_uniffi_fn_clone_ttsmodel(handle, status)
         }
     }
 
-    
     /**
      * Synthesize speech from `text` and return the audio payload.
      *
@@ -7356,80 +8094,78 @@ open class TtsModel: Disposable, AutoCloseable, TtsModelInterface
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `synthesize`(`text`: kotlin.String, `voice`: kotlin.String?, `language`: kotlin.String?) : TtsResult {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_ttsmodel_synthesize(
-                uniffiHandle,
-                FfiConverterString.lower(`text`),FfiConverterOptionalString.lower(`voice`),FfiConverterOptionalString.lower(`language`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterTypeTtsResult.lift(it) },
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-    }
+    override suspend fun `synthesize`(
+        `text`: kotlin.String,
+        `voice`: kotlin.String?,
+        `language`: kotlin.String?,
+    ): TtsResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_ttsmodel_synthesize(
+                    uniffiHandle,
+                    FfiConverterString.lower(`text`),
+                    FfiConverterOptionalString.lower(`voice`),
+                    FfiConverterOptionalString.lower(`language`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeTtsResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
-    
     /**
      * Synchronous variant of [`synthesize`](Self::synthesize) — blocks on
      * the shared Tokio runtime.
      */
-    @Throws(BlazenException::class)override fun `synthesizeBlocking`(`text`: kotlin.String, `voice`: kotlin.String?, `language`: kotlin.String?): TtsResult {
-            return FfiConverterTypeTtsResult.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_ttsmodel_synthesize_blocking(
-        it,
-        FfiConverterString.lower(`text`),FfiConverterOptionalString.lower(`voice`),FfiConverterOptionalString.lower(`language`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `synthesizeBlocking`(
+        `text`: kotlin.String,
+        `voice`: kotlin.String?,
+        `language`: kotlin.String?,
+    ): TtsResult =
+        FfiConverterTypeTtsResult.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_ttsmodel_synthesize_blocking(
+                        it,
+                        FfiConverterString.lower(`text`),
+                        FfiConverterOptionalString.lower(`voice`),
+                        FfiConverterOptionalString.lower(`language`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
-
-    
-
-
-    
-    
     /**
      * @suppress
      */
     companion object
-    
 }
-
 
 /**
  * @suppress
  */
-public object FfiConverterTypeTtsModel: FfiConverter<TtsModel, Long> {
-    override fun lower(value: TtsModel): Long {
-        return value.uniffiCloneHandle()
-    }
+public object FfiConverterTypeTtsModel : FfiConverter<TtsModel, Long> {
+    override fun lower(value: TtsModel): Long = value.uniffiCloneHandle()
 
-    override fun lift(value: Long): TtsModel {
-        return TtsModel(UniffiWithHandle, value)
-    }
+    override fun lift(value: Long): TtsModel = TtsModel(UniffiWithHandle, value)
 
-    override fun read(buf: ByteBuffer): TtsModel {
-        return lift(buf.getLong())
-    }
+    override fun read(buf: ByteBuffer): TtsModel = lift(buf.getLong())
 
     override fun allocationSize(value: TtsModel) = 8UL
 
-    override fun write(value: TtsModel, buf: ByteBuffer) {
+    override fun write(
+        value: TtsModel,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(lower(value))
     }
 }
-
 
 // This template implements a class for working with a Rust struct via a handle
 // to the live Rust struct on the other side of the FFI.
@@ -7525,19 +8261,17 @@ public object FfiConverterTypeTtsModel: FfiConverter<TtsModel, Long> {
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
-
 /**
  * A built workflow ready to run.
  */
 public interface WorkflowInterface {
-    
     /**
      * Run the workflow to completion with the given JSON input as the
      * `StartEvent` payload. Blocks (in Go) / suspends (in Swift/Kotlin)
      * until the workflow emits its `StopEvent` (or fails).
      */
     suspend fun `run`(`inputJson`: kotlin.String): WorkflowResult
-    
+
     /**
      * Synchronous variant of [`run`] — blocks the current thread on the
      * shared Tokio runtime. Provided for callers that want fire-and-forget
@@ -7546,25 +8280,26 @@ public interface WorkflowInterface {
      * running services.
      */
     fun `runBlocking`(`inputJson`: kotlin.String): WorkflowResult
-    
+
     /**
      * Names of all registered steps, in registration order.
      */
     fun `stepNames`(): List<kotlin.String>
-    
+
     companion object
 }
 
 /**
  * A built workflow ready to run.
  */
-open class Workflow: Disposable, AutoCloseable, WorkflowInterface
-{
-
-    @Suppress("UNUSED_PARAMETER")
+open class Workflow :
+    Disposable,
+    AutoCloseable,
+    WorkflowInterface {
     /**
      * @suppress
      */
+    @Suppress("UNUSED_PARAMETER")
     constructor(withHandle: UniffiWithHandle, handle: Long) {
         this.handle = handle
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
@@ -7616,7 +8351,7 @@ open class Workflow: Disposable, AutoCloseable, WorkflowInterface
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the handle being freed concurrently.
         try {
             return block(this.uniffiCloneHandle())
@@ -7630,11 +8365,13 @@ open class Workflow: Disposable, AutoCloseable, WorkflowInterface
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(private val handle: Long) : Runnable {
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
         override fun run() {
             if (handle == 0.toLong()) {
                 // Fake object created with `NoHandle`, don't try to free.
-                return;
+                return
             }
             uniffiRustCall { status ->
                 UniffiLib.uniffi_blazen_uniffi_fn_free_workflow(handle, status)
@@ -7647,14 +8384,13 @@ open class Workflow: Disposable, AutoCloseable, WorkflowInterface
      */
     fun uniffiCloneHandle(): Long {
         if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
-        return uniffiRustCall() { status ->
+        return uniffiRustCall { status ->
             UniffiLib.uniffi_blazen_uniffi_fn_clone_workflow(handle, status)
         }
     }
 
-    
     /**
      * Run the workflow to completion with the given JSON input as the
      * `StartEvent` payload. Blocks (in Go) / suspends (in Swift/Kotlin)
@@ -7662,25 +8398,23 @@ open class Workflow: Disposable, AutoCloseable, WorkflowInterface
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `run`(`inputJson`: kotlin.String) : WorkflowResult {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_workflow_run(
-                uniffiHandle,
-                FfiConverterString.lower(`inputJson`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterTypeWorkflowResult.lift(it) },
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-    }
+    override suspend fun `run`(`inputJson`: kotlin.String): WorkflowResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_workflow_run(
+                    uniffiHandle,
+                    FfiConverterString.lower(`inputJson`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeWorkflowResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
-    
     /**
      * Synchronous variant of [`run`] — blocks the current thread on the
      * shared Tokio runtime. Provided for callers that want fire-and-forget
@@ -7688,73 +8422,60 @@ open class Workflow: Disposable, AutoCloseable, WorkflowInterface
      * scripts and quick Go main fns). Prefer the async [`run`] in long-
      * running services.
      */
-    @Throws(BlazenException::class)override fun `runBlocking`(`inputJson`: kotlin.String): WorkflowResult {
-            return FfiConverterTypeWorkflowResult.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_workflow_run_blocking(
-        it,
-        FfiConverterString.lower(`inputJson`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `runBlocking`(`inputJson`: kotlin.String): WorkflowResult =
+        FfiConverterTypeWorkflowResult.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_workflow_run_blocking(
+                        it,
+                        FfiConverterString.lower(`inputJson`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     /**
      * Names of all registered steps, in registration order.
-     */override fun `stepNames`(): List<kotlin.String> {
-            return FfiConverterSequenceString.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_workflow_step_names(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
+     */
+    override fun `stepNames`(): List<kotlin.String> =
+        FfiConverterSequenceString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_workflow_step_names(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
-
-    
-
-
-    
-    
     /**
      * @suppress
      */
     companion object
-    
 }
-
 
 /**
  * @suppress
  */
-public object FfiConverterTypeWorkflow: FfiConverter<Workflow, Long> {
-    override fun lower(value: Workflow): Long {
-        return value.uniffiCloneHandle()
-    }
+public object FfiConverterTypeWorkflow : FfiConverter<Workflow, Long> {
+    override fun lower(value: Workflow): Long = value.uniffiCloneHandle()
 
-    override fun lift(value: Long): Workflow {
-        return Workflow(UniffiWithHandle, value)
-    }
+    override fun lift(value: Long): Workflow = Workflow(UniffiWithHandle, value)
 
-    override fun read(buf: ByteBuffer): Workflow {
-        return lift(buf.getLong())
-    }
+    override fun read(buf: ByteBuffer): Workflow = lift(buf.getLong())
 
     override fun allocationSize(value: Workflow) = 8UL
 
-    override fun write(value: Workflow, buf: ByteBuffer) {
+    override fun write(
+        value: Workflow,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(lower(value))
     }
 }
-
 
 // This template implements a class for working with a Rust struct via a handle
 // to the live Rust struct on the other side of the FFI.
@@ -7850,18 +8571,16 @@ public object FfiConverterTypeWorkflow: FfiConverter<Workflow, Long> {
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
-
 /**
  * Builder for [`Workflow`]. Use [`Workflow::builder`] or
  * `WorkflowBuilder::new()` to start.
  */
 public interface WorkflowBuilderInterface {
-    
     /**
      * Consume the builder and produce a [`Workflow`] ready to run.
      */
     fun `build`(): Workflow
-    
+
     /**
      * Register a step.
      *
@@ -7873,18 +8592,23 @@ public interface WorkflowBuilderInterface {
      * return.
      * - `handler`: the foreign-implemented step handler.
      */
-    fun `step`(`name`: kotlin.String, `accepts`: List<kotlin.String>, `emits`: List<kotlin.String>, `handler`: StepHandler): WorkflowBuilder
-    
+    fun `step`(
+        `name`: kotlin.String,
+        `accepts`: List<kotlin.String>,
+        `emits`: List<kotlin.String>,
+        `handler`: StepHandler,
+    ): WorkflowBuilder
+
     /**
      * Per-step timeout in milliseconds. Steps that exceed this are aborted.
      */
     fun `stepTimeoutMs`(`millis`: kotlin.ULong): WorkflowBuilder
-    
+
     /**
      * Workflow-wide timeout in milliseconds. Whole run aborts after this.
      */
     fun `timeoutMs`(`millis`: kotlin.ULong): WorkflowBuilder
-    
+
     companion object
 }
 
@@ -7892,13 +8616,14 @@ public interface WorkflowBuilderInterface {
  * Builder for [`Workflow`]. Use [`Workflow::builder`] or
  * `WorkflowBuilder::new()` to start.
  */
-open class WorkflowBuilder: Disposable, AutoCloseable, WorkflowBuilderInterface
-{
-
-    @Suppress("UNUSED_PARAMETER")
+open class WorkflowBuilder :
+    Disposable,
+    AutoCloseable,
+    WorkflowBuilderInterface {
     /**
      * @suppress
      */
+    @Suppress("UNUSED_PARAMETER")
     constructor(withHandle: UniffiWithHandle, handle: Long) {
         this.handle = handle
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
@@ -7916,17 +8641,17 @@ open class WorkflowBuilder: Disposable, AutoCloseable, WorkflowBuilderInterface
         this.handle = 0
         this.cleanable = null
     }
+
     /**
      * Create a new builder with the given workflow name.
      */
     constructor(`name`: kotlin.String) :
-        this(UniffiWithHandle, 
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_constructor_workflowbuilder_new(
-    
-        FfiConverterString.lower(`name`),_status)
-}
-    )
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_workflowbuilder_new(FfiConverterString.lower(`name`), _status)
+            },
+        )
 
     protected val handle: Long
     protected val cleanable: UniffiCleaner.Cleanable?
@@ -7961,7 +8686,7 @@ open class WorkflowBuilder: Disposable, AutoCloseable, WorkflowBuilderInterface
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the handle being freed concurrently.
         try {
             return block(this.uniffiCloneHandle())
@@ -7975,11 +8700,13 @@ open class WorkflowBuilder: Disposable, AutoCloseable, WorkflowBuilderInterface
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(private val handle: Long) : Runnable {
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
         override fun run() {
             if (handle == 0.toLong()) {
                 // Fake object created with `NoHandle`, don't try to free.
-                return;
+                return
             }
             uniffiRustCall { status ->
                 UniffiLib.uniffi_blazen_uniffi_fn_free_workflowbuilder(handle, status)
@@ -7992,31 +8719,29 @@ open class WorkflowBuilder: Disposable, AutoCloseable, WorkflowBuilderInterface
      */
     fun uniffiCloneHandle(): Long {
         if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
-        return uniffiRustCall() { status ->
+        return uniffiRustCall { status ->
             UniffiLib.uniffi_blazen_uniffi_fn_clone_workflowbuilder(handle, status)
         }
     }
 
-    
     /**
      * Consume the builder and produce a [`Workflow`] ready to run.
      */
-    @Throws(BlazenException::class)override fun `build`(): Workflow {
-            return FfiConverterTypeWorkflow.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_workflowbuilder_build(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `build`(): Workflow =
+        FfiConverterTypeWorkflow.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_workflowbuilder_build(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     /**
      * Register a step.
      *
@@ -8028,92 +8753,87 @@ open class WorkflowBuilder: Disposable, AutoCloseable, WorkflowBuilderInterface
      * return.
      * - `handler`: the foreign-implemented step handler.
      */
-    @Throws(BlazenException::class)override fun `step`(`name`: kotlin.String, `accepts`: List<kotlin.String>, `emits`: List<kotlin.String>, `handler`: StepHandler): WorkflowBuilder {
-            return FfiConverterTypeWorkflowBuilder.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_workflowbuilder_step(
-        it,
-        FfiConverterString.lower(`name`),FfiConverterSequenceString.lower(`accepts`),FfiConverterSequenceString.lower(`emits`),FfiConverterTypeStepHandler.lower(`handler`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `step`(
+        `name`: kotlin.String,
+        `accepts`: List<kotlin.String>,
+        `emits`: List<kotlin.String>,
+        `handler`: StepHandler,
+    ): WorkflowBuilder =
+        FfiConverterTypeWorkflowBuilder.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_workflowbuilder_step(
+                        it,
+                        FfiConverterString.lower(`name`),
+                        FfiConverterSequenceString.lower(`accepts`),
+                        FfiConverterSequenceString.lower(`emits`),
+                        FfiConverterTypeStepHandler.lower(`handler`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     /**
      * Per-step timeout in milliseconds. Steps that exceed this are aborted.
      */
-    @Throws(BlazenException::class)override fun `stepTimeoutMs`(`millis`: kotlin.ULong): WorkflowBuilder {
-            return FfiConverterTypeWorkflowBuilder.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_workflowbuilder_step_timeout_ms(
-        it,
-        FfiConverterULong.lower(`millis`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `stepTimeoutMs`(`millis`: kotlin.ULong): WorkflowBuilder =
+        FfiConverterTypeWorkflowBuilder.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_workflowbuilder_step_timeout_ms(
+                        it,
+                        FfiConverterULong.lower(`millis`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     /**
      * Workflow-wide timeout in milliseconds. Whole run aborts after this.
      */
-    @Throws(BlazenException::class)override fun `timeoutMs`(`millis`: kotlin.ULong): WorkflowBuilder {
-            return FfiConverterTypeWorkflowBuilder.lift(
-    callWithHandle {
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_method_workflowbuilder_timeout_ms(
-        it,
-        FfiConverterULong.lower(`millis`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(BlazenException::class)
+    override fun `timeoutMs`(`millis`: kotlin.ULong): WorkflowBuilder =
+        FfiConverterTypeWorkflowBuilder.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_workflowbuilder_timeout_ms(
+                        it,
+                        FfiConverterULong.lower(`millis`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
-
-    
-
-
-    
-    
     /**
      * @suppress
      */
     companion object
-    
 }
-
 
 /**
  * @suppress
  */
-public object FfiConverterTypeWorkflowBuilder: FfiConverter<WorkflowBuilder, Long> {
-    override fun lower(value: WorkflowBuilder): Long {
-        return value.uniffiCloneHandle()
-    }
+public object FfiConverterTypeWorkflowBuilder : FfiConverter<WorkflowBuilder, Long> {
+    override fun lower(value: WorkflowBuilder): Long = value.uniffiCloneHandle()
 
-    override fun lift(value: Long): WorkflowBuilder {
-        return WorkflowBuilder(UniffiWithHandle, value)
-    }
+    override fun lift(value: Long): WorkflowBuilder = WorkflowBuilder(UniffiWithHandle, value)
 
-    override fun read(buf: ByteBuffer): WorkflowBuilder {
-        return lift(buf.getLong())
-    }
+    override fun read(buf: ByteBuffer): WorkflowBuilder = lift(buf.getLong())
 
     override fun allocationSize(value: WorkflowBuilder) = 8UL
 
-    override fun write(value: WorkflowBuilder, buf: ByteBuffer) {
+    override fun write(
+        value: WorkflowBuilder,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(lower(value))
     }
 }
-
-
 
 /**
  * Outcome of an [`Agent::run`] call.
@@ -8123,74 +8843,65 @@ public object FfiConverterTypeWorkflowBuilder: FfiConverter<WorkflowBuilder, Lon
  * "zero" from "unknown" — foreign callers wanting fidelity should pull
  * pricing from telemetry).
  */
-data class AgentResult (
+data class AgentResult(
     /**
      * The model's final textual response after the loop terminates.
      */
-    var `finalMessage`: kotlin.String
-    , 
+    var `finalMessage`: kotlin.String,
     /**
      * Number of iterations (LLM round-trips) the loop executed before
      * terminating.
      */
-    var `iterations`: kotlin.UInt
-    , 
+    var `iterations`: kotlin.UInt,
     /**
      * Total number of tool calls executed across all iterations.
      */
-    var `toolCallCount`: kotlin.UInt
-    , 
+    var `toolCallCount`: kotlin.UInt,
     /**
      * Aggregated token usage across every completion call in the loop.
      */
-    var `totalUsage`: TokenUsage
-    , 
+    var `totalUsage`: TokenUsage,
     /**
      * Aggregated USD cost across every completion call in the loop.
      */
-    var `totalCostUsd`: kotlin.Double
-    
-){
-    
-
-    
-
-    
+    var `totalCostUsd`: kotlin.Double,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeAgentResult: FfiConverterRustBuffer<AgentResult> {
-    override fun read(buf: ByteBuffer): AgentResult {
-        return AgentResult(
+public object FfiConverterTypeAgentResult : FfiConverterRustBuffer<AgentResult> {
+    override fun read(buf: ByteBuffer): AgentResult =
+        AgentResult(
             FfiConverterString.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterTypeTokenUsage.read(buf),
             FfiConverterDouble.read(buf),
         )
-    }
 
-    override fun allocationSize(value: AgentResult) = (
+    override fun allocationSize(value: AgentResult) =
+        (
             FfiConverterString.allocationSize(value.`finalMessage`) +
-            FfiConverterUInt.allocationSize(value.`iterations`) +
-            FfiConverterUInt.allocationSize(value.`toolCallCount`) +
-            FfiConverterTypeTokenUsage.allocationSize(value.`totalUsage`) +
-            FfiConverterDouble.allocationSize(value.`totalCostUsd`)
-    )
+                FfiConverterUInt.allocationSize(value.`iterations`) +
+                FfiConverterUInt.allocationSize(value.`toolCallCount`) +
+                FfiConverterTypeTokenUsage.allocationSize(value.`totalUsage`) +
+                FfiConverterDouble.allocationSize(value.`totalCostUsd`)
+        )
 
-    override fun write(value: AgentResult, buf: ByteBuffer) {
-            FfiConverterString.write(value.`finalMessage`, buf)
-            FfiConverterUInt.write(value.`iterations`, buf)
-            FfiConverterUInt.write(value.`toolCallCount`, buf)
-            FfiConverterTypeTokenUsage.write(value.`totalUsage`, buf)
-            FfiConverterDouble.write(value.`totalCostUsd`, buf)
+    override fun write(
+        value: AgentResult,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`finalMessage`, buf)
+        FfiConverterUInt.write(value.`iterations`, buf)
+        FfiConverterUInt.write(value.`toolCallCount`, buf)
+        FfiConverterTypeTokenUsage.write(value.`totalUsage`, buf)
+        FfiConverterDouble.write(value.`totalCostUsd`, buf)
     }
 }
-
-
 
 /**
  * Outcome of a [`complete_batch`] call.
@@ -8199,57 +8910,50 @@ public object FfiConverterTypeAgentResult: FfiConverterRustBuffer<AgentResult> {
  * — failed slots contribute zero. When no provider reports cost data the
  * total is `0.0` (the wire format does not distinguish "zero" from "unknown").
  */
-data class BatchResult (
+data class BatchResult(
     /**
      * One slot per input request, in the same order.
      */
-    var `responses`: List<BatchItem>
-    , 
+    var `responses`: List<BatchItem>,
     /**
      * Aggregated token usage across successful responses.
      */
-    var `totalUsage`: TokenUsage
-    , 
+    var `totalUsage`: TokenUsage,
     /**
      * Aggregated USD cost across successful responses.
      */
-    var `totalCostUsd`: kotlin.Double
-    
-){
-    
-
-    
-
-    
+    var `totalCostUsd`: kotlin.Double,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeBatchResult: FfiConverterRustBuffer<BatchResult> {
-    override fun read(buf: ByteBuffer): BatchResult {
-        return BatchResult(
+public object FfiConverterTypeBatchResult : FfiConverterRustBuffer<BatchResult> {
+    override fun read(buf: ByteBuffer): BatchResult =
+        BatchResult(
             FfiConverterSequenceTypeBatchItem.read(buf),
             FfiConverterTypeTokenUsage.read(buf),
             FfiConverterDouble.read(buf),
         )
-    }
 
-    override fun allocationSize(value: BatchResult) = (
+    override fun allocationSize(value: BatchResult) =
+        (
             FfiConverterSequenceTypeBatchItem.allocationSize(value.`responses`) +
-            FfiConverterTypeTokenUsage.allocationSize(value.`totalUsage`) +
-            FfiConverterDouble.allocationSize(value.`totalCostUsd`)
-    )
+                FfiConverterTypeTokenUsage.allocationSize(value.`totalUsage`) +
+                FfiConverterDouble.allocationSize(value.`totalCostUsd`)
+        )
 
-    override fun write(value: BatchResult, buf: ByteBuffer) {
-            FfiConverterSequenceTypeBatchItem.write(value.`responses`, buf)
-            FfiConverterTypeTokenUsage.write(value.`totalUsage`, buf)
-            FfiConverterDouble.write(value.`totalCostUsd`, buf)
+    override fun write(
+        value: BatchResult,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterSequenceTypeBatchItem.write(value.`responses`, buf)
+        FfiConverterTypeTokenUsage.write(value.`totalUsage`, buf)
+        FfiConverterDouble.write(value.`totalCostUsd`, buf)
     }
 }
-
-
 
 /**
  * A single message in a chat conversation.
@@ -8258,34 +8962,23 @@ public object FfiConverterTypeBatchResult: FfiConverterRustBuffer<BatchResult> {
  * `content` is the text payload (empty string when the message carries only
  * tool calls or media). Multimodal media attaches via [`media_parts`].
  */
-data class ChatMessage (
-    var `role`: kotlin.String
-    , 
-    var `content`: kotlin.String
-    , 
-    var `mediaParts`: List<Media>
-    , 
-    var `toolCalls`: List<ToolCall>
-    , 
-    var `toolCallId`: kotlin.String?
-    , 
-    var `name`: kotlin.String?
-    
-){
-    
-
-    
-
-    
+data class ChatMessage(
+    var `role`: kotlin.String,
+    var `content`: kotlin.String,
+    var `mediaParts`: List<Media>,
+    var `toolCalls`: List<ToolCall>,
+    var `toolCallId`: kotlin.String?,
+    var `name`: kotlin.String?,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeChatMessage: FfiConverterRustBuffer<ChatMessage> {
-    override fun read(buf: ByteBuffer): ChatMessage {
-        return ChatMessage(
+public object FfiConverterTypeChatMessage : FfiConverterRustBuffer<ChatMessage> {
+    override fun read(buf: ByteBuffer): ChatMessage =
+        ChatMessage(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterSequenceTypeMedia.read(buf),
@@ -8293,28 +8986,29 @@ public object FfiConverterTypeChatMessage: FfiConverterRustBuffer<ChatMessage> {
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
         )
-    }
 
-    override fun allocationSize(value: ChatMessage) = (
+    override fun allocationSize(value: ChatMessage) =
+        (
             FfiConverterString.allocationSize(value.`role`) +
-            FfiConverterString.allocationSize(value.`content`) +
-            FfiConverterSequenceTypeMedia.allocationSize(value.`mediaParts`) +
-            FfiConverterSequenceTypeToolCall.allocationSize(value.`toolCalls`) +
-            FfiConverterOptionalString.allocationSize(value.`toolCallId`) +
-            FfiConverterOptionalString.allocationSize(value.`name`)
-    )
+                FfiConverterString.allocationSize(value.`content`) +
+                FfiConverterSequenceTypeMedia.allocationSize(value.`mediaParts`) +
+                FfiConverterSequenceTypeToolCall.allocationSize(value.`toolCalls`) +
+                FfiConverterOptionalString.allocationSize(value.`toolCallId`) +
+                FfiConverterOptionalString.allocationSize(value.`name`)
+        )
 
-    override fun write(value: ChatMessage, buf: ByteBuffer) {
-            FfiConverterString.write(value.`role`, buf)
-            FfiConverterString.write(value.`content`, buf)
-            FfiConverterSequenceTypeMedia.write(value.`mediaParts`, buf)
-            FfiConverterSequenceTypeToolCall.write(value.`toolCalls`, buf)
-            FfiConverterOptionalString.write(value.`toolCallId`, buf)
-            FfiConverterOptionalString.write(value.`name`, buf)
+    override fun write(
+        value: ChatMessage,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`role`, buf)
+        FfiConverterString.write(value.`content`, buf)
+        FfiConverterSequenceTypeMedia.write(value.`mediaParts`, buf)
+        FfiConverterSequenceTypeToolCall.write(value.`toolCalls`, buf)
+        FfiConverterOptionalString.write(value.`toolCallId`, buf)
+        FfiConverterOptionalString.write(value.`name`, buf)
     }
 }
-
-
 
 /**
  * A provider-agnostic chat completion request.
@@ -8324,49 +9018,36 @@ public object FfiConverterTypeChatMessage: FfiConverterRustBuffer<ChatMessage> {
  * convenience because most foreign callers think of the system prompt as a
  * request-level field, not a message.
  */
-data class CompletionRequest (
-    var `messages`: List<ChatMessage>
-    , 
-    var `tools`: List<Tool>
-    , 
-    var `temperature`: kotlin.Double?
-    , 
-    var `maxTokens`: kotlin.UInt?
-    , 
-    var `topP`: kotlin.Double?
-    , 
+data class CompletionRequest(
+    var `messages`: List<ChatMessage>,
+    var `tools`: List<Tool>,
+    var `temperature`: kotlin.Double?,
+    var `maxTokens`: kotlin.UInt?,
+    var `topP`: kotlin.Double?,
     /**
      * Optional model identifier to use for this request, overriding the
      * provider's default model.
      */
-    var `model`: kotlin.String?
-    , 
+    var `model`: kotlin.String?,
     /**
      * Optional JSON Schema (encoded as a string) constraining the model's
      * output. Passed through to upstream's `response_format` slot.
      */
-    var `responseFormatJson`: kotlin.String?
-    , 
+    var `responseFormatJson`: kotlin.String?,
     /**
      * Optional system prompt, prepended as a `system`-role message.
      */
-    var `system`: kotlin.String?
-    
-){
-    
-
-    
-
-    
+    var `system`: kotlin.String?,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeCompletionRequest: FfiConverterRustBuffer<CompletionRequest> {
-    override fun read(buf: ByteBuffer): CompletionRequest {
-        return CompletionRequest(
+public object FfiConverterTypeCompletionRequest : FfiConverterRustBuffer<CompletionRequest> {
+    override fun read(buf: ByteBuffer): CompletionRequest =
+        CompletionRequest(
             FfiConverterSequenceTypeChatMessage.read(buf),
             FfiConverterSequenceTypeTool.read(buf),
             FfiConverterOptionalDouble.read(buf),
@@ -8376,32 +9057,33 @@ public object FfiConverterTypeCompletionRequest: FfiConverterRustBuffer<Completi
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
         )
-    }
 
-    override fun allocationSize(value: CompletionRequest) = (
+    override fun allocationSize(value: CompletionRequest) =
+        (
             FfiConverterSequenceTypeChatMessage.allocationSize(value.`messages`) +
-            FfiConverterSequenceTypeTool.allocationSize(value.`tools`) +
-            FfiConverterOptionalDouble.allocationSize(value.`temperature`) +
-            FfiConverterOptionalUInt.allocationSize(value.`maxTokens`) +
-            FfiConverterOptionalDouble.allocationSize(value.`topP`) +
-            FfiConverterOptionalString.allocationSize(value.`model`) +
-            FfiConverterOptionalString.allocationSize(value.`responseFormatJson`) +
-            FfiConverterOptionalString.allocationSize(value.`system`)
-    )
+                FfiConverterSequenceTypeTool.allocationSize(value.`tools`) +
+                FfiConverterOptionalDouble.allocationSize(value.`temperature`) +
+                FfiConverterOptionalUInt.allocationSize(value.`maxTokens`) +
+                FfiConverterOptionalDouble.allocationSize(value.`topP`) +
+                FfiConverterOptionalString.allocationSize(value.`model`) +
+                FfiConverterOptionalString.allocationSize(value.`responseFormatJson`) +
+                FfiConverterOptionalString.allocationSize(value.`system`)
+        )
 
-    override fun write(value: CompletionRequest, buf: ByteBuffer) {
-            FfiConverterSequenceTypeChatMessage.write(value.`messages`, buf)
-            FfiConverterSequenceTypeTool.write(value.`tools`, buf)
-            FfiConverterOptionalDouble.write(value.`temperature`, buf)
-            FfiConverterOptionalUInt.write(value.`maxTokens`, buf)
-            FfiConverterOptionalDouble.write(value.`topP`, buf)
-            FfiConverterOptionalString.write(value.`model`, buf)
-            FfiConverterOptionalString.write(value.`responseFormatJson`, buf)
-            FfiConverterOptionalString.write(value.`system`, buf)
+    override fun write(
+        value: CompletionRequest,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterSequenceTypeChatMessage.write(value.`messages`, buf)
+        FfiConverterSequenceTypeTool.write(value.`tools`, buf)
+        FfiConverterOptionalDouble.write(value.`temperature`, buf)
+        FfiConverterOptionalUInt.write(value.`maxTokens`, buf)
+        FfiConverterOptionalDouble.write(value.`topP`, buf)
+        FfiConverterOptionalString.write(value.`model`, buf)
+        FfiConverterOptionalString.write(value.`responseFormatJson`, buf)
+        FfiConverterOptionalString.write(value.`system`, buf)
     }
 }
-
-
 
 /**
  * The result of a non-streaming chat completion.
@@ -8410,58 +9092,49 @@ public object FfiConverterTypeCompletionRequest: FfiConverterRustBuffer<Completi
  * the model emitted only tool calls). `finish_reason` is the empty string
  * when the provider didn't report one.
  */
-data class CompletionResponse (
-    var `content`: kotlin.String
-    , 
-    var `toolCalls`: List<ToolCall>
-    , 
-    var `finishReason`: kotlin.String
-    , 
-    var `model`: kotlin.String
-    , 
-    var `usage`: TokenUsage
-    
-){
-    
-
-    
-
-    
+data class CompletionResponse(
+    var `content`: kotlin.String,
+    var `toolCalls`: List<ToolCall>,
+    var `finishReason`: kotlin.String,
+    var `model`: kotlin.String,
+    var `usage`: TokenUsage,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeCompletionResponse: FfiConverterRustBuffer<CompletionResponse> {
-    override fun read(buf: ByteBuffer): CompletionResponse {
-        return CompletionResponse(
+public object FfiConverterTypeCompletionResponse : FfiConverterRustBuffer<CompletionResponse> {
+    override fun read(buf: ByteBuffer): CompletionResponse =
+        CompletionResponse(
             FfiConverterString.read(buf),
             FfiConverterSequenceTypeToolCall.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterTypeTokenUsage.read(buf),
         )
-    }
 
-    override fun allocationSize(value: CompletionResponse) = (
+    override fun allocationSize(value: CompletionResponse) =
+        (
             FfiConverterString.allocationSize(value.`content`) +
-            FfiConverterSequenceTypeToolCall.allocationSize(value.`toolCalls`) +
-            FfiConverterString.allocationSize(value.`finishReason`) +
-            FfiConverterString.allocationSize(value.`model`) +
-            FfiConverterTypeTokenUsage.allocationSize(value.`usage`)
-    )
+                FfiConverterSequenceTypeToolCall.allocationSize(value.`toolCalls`) +
+                FfiConverterString.allocationSize(value.`finishReason`) +
+                FfiConverterString.allocationSize(value.`model`) +
+                FfiConverterTypeTokenUsage.allocationSize(value.`usage`)
+        )
 
-    override fun write(value: CompletionResponse, buf: ByteBuffer) {
-            FfiConverterString.write(value.`content`, buf)
-            FfiConverterSequenceTypeToolCall.write(value.`toolCalls`, buf)
-            FfiConverterString.write(value.`finishReason`, buf)
-            FfiConverterString.write(value.`model`, buf)
-            FfiConverterTypeTokenUsage.write(value.`usage`, buf)
+    override fun write(
+        value: CompletionResponse,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`content`, buf)
+        FfiConverterSequenceTypeToolCall.write(value.`toolCalls`, buf)
+        FfiConverterString.write(value.`finishReason`, buf)
+        FfiConverterString.write(value.`model`, buf)
+        FfiConverterTypeTokenUsage.write(value.`usage`, buf)
     }
 }
-
-
 
 /**
  * Response from an embedding model.
@@ -8470,48 +9143,41 @@ public object FfiConverterTypeCompletionResponse: FfiConverterRustBuffer<Complet
  * `f64` for FFI uniformity (UniFFI doesn't expose `f32`); upstream `f32`
  * values widen losslessly.
  */
-data class EmbeddingResponse (
-    var `embeddings`: List<List<kotlin.Double>>
-    , 
-    var `model`: kotlin.String
-    , 
-    var `usage`: TokenUsage
-    
-){
-    
-
-    
-
-    
+data class EmbeddingResponse(
+    var `embeddings`: List<List<kotlin.Double>>,
+    var `model`: kotlin.String,
+    var `usage`: TokenUsage,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeEmbeddingResponse: FfiConverterRustBuffer<EmbeddingResponse> {
-    override fun read(buf: ByteBuffer): EmbeddingResponse {
-        return EmbeddingResponse(
+public object FfiConverterTypeEmbeddingResponse : FfiConverterRustBuffer<EmbeddingResponse> {
+    override fun read(buf: ByteBuffer): EmbeddingResponse =
+        EmbeddingResponse(
             FfiConverterSequenceSequenceDouble.read(buf),
             FfiConverterString.read(buf),
             FfiConverterTypeTokenUsage.read(buf),
         )
-    }
 
-    override fun allocationSize(value: EmbeddingResponse) = (
+    override fun allocationSize(value: EmbeddingResponse) =
+        (
             FfiConverterSequenceSequenceDouble.allocationSize(value.`embeddings`) +
-            FfiConverterString.allocationSize(value.`model`) +
-            FfiConverterTypeTokenUsage.allocationSize(value.`usage`)
-    )
+                FfiConverterString.allocationSize(value.`model`) +
+                FfiConverterTypeTokenUsage.allocationSize(value.`usage`)
+        )
 
-    override fun write(value: EmbeddingResponse, buf: ByteBuffer) {
-            FfiConverterSequenceSequenceDouble.write(value.`embeddings`, buf)
-            FfiConverterString.write(value.`model`, buf)
-            FfiConverterTypeTokenUsage.write(value.`usage`, buf)
+    override fun write(
+        value: EmbeddingResponse,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterSequenceSequenceDouble.write(value.`embeddings`, buf)
+        FfiConverterString.write(value.`model`, buf)
+        FfiConverterTypeTokenUsage.write(value.`usage`, buf)
     }
 }
-
-
 
 /**
  * Event crossed across the FFI boundary.
@@ -8522,43 +9188,37 @@ public object FfiConverterTypeEmbeddingResponse: FfiConverterRustBuffer<Embeddin
  * to/from native types (Go structs, Swift `Codable`, Kotlin `@Serializable`,
  * Ruby hashes) just outside this module's boundary.
  */
-data class Event (
-    var `eventType`: kotlin.String
-    , 
-    var `dataJson`: kotlin.String
-    
-){
-    
-
-    
-
-    
+data class Event(
+    var `eventType`: kotlin.String,
+    var `dataJson`: kotlin.String,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeEvent: FfiConverterRustBuffer<Event> {
-    override fun read(buf: ByteBuffer): Event {
-        return Event(
+public object FfiConverterTypeEvent : FfiConverterRustBuffer<Event> {
+    override fun read(buf: ByteBuffer): Event =
+        Event(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
         )
-    }
 
-    override fun allocationSize(value: Event) = (
+    override fun allocationSize(value: Event) =
+        (
             FfiConverterString.allocationSize(value.`eventType`) +
-            FfiConverterString.allocationSize(value.`dataJson`)
-    )
+                FfiConverterString.allocationSize(value.`dataJson`)
+        )
 
-    override fun write(value: Event, buf: ByteBuffer) {
-            FfiConverterString.write(value.`eventType`, buf)
-            FfiConverterString.write(value.`dataJson`, buf)
+    override fun write(
+        value: Event,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`eventType`, buf)
+        FfiConverterString.write(value.`dataJson`, buf)
     }
 }
-
-
 
 /**
  * The result of an image-generation call.
@@ -8568,38 +9228,33 @@ public object FfiConverterTypeEvent: FfiConverterRustBuffer<Event> {
  * populated) or the URL string (when only `MediaOutput.url` is set);
  * callers must inspect `mime_type` and treat the field accordingly.
  */
-data class ImageGenResult (
-    var `images`: List<Media>
-    
-){
-    
-
-    
-
-    
+data class ImageGenResult(
+    var `images`: List<Media>,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeImageGenResult: FfiConverterRustBuffer<ImageGenResult> {
-    override fun read(buf: ByteBuffer): ImageGenResult {
-        return ImageGenResult(
+public object FfiConverterTypeImageGenResult : FfiConverterRustBuffer<ImageGenResult> {
+    override fun read(buf: ByteBuffer): ImageGenResult =
+        ImageGenResult(
             FfiConverterSequenceTypeMedia.read(buf),
         )
-    }
 
-    override fun allocationSize(value: ImageGenResult) = (
+    override fun allocationSize(value: ImageGenResult) =
+        (
             FfiConverterSequenceTypeMedia.allocationSize(value.`images`)
-    )
+        )
 
-    override fun write(value: ImageGenResult, buf: ByteBuffer) {
-            FfiConverterSequenceTypeMedia.write(value.`images`, buf)
+    override fun write(
+        value: ImageGenResult,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterSequenceTypeMedia.write(value.`images`, buf)
     }
 }
-
-
 
 /**
  * Multimodal media attached to a [`ChatMessage`].
@@ -8613,48 +9268,41 @@ public object FfiConverterTypeImageGenResult: FfiConverterRustBuffer<ImageGenRes
  * the FFI surface single-shape; providers that need URL fidelity can be
  * reached via `providers.rs`.)
  */
-data class Media (
-    var `kind`: kotlin.String
-    , 
-    var `mimeType`: kotlin.String
-    , 
-    var `dataBase64`: kotlin.String
-    
-){
-    
-
-    
-
-    
+data class Media(
+    var `kind`: kotlin.String,
+    var `mimeType`: kotlin.String,
+    var `dataBase64`: kotlin.String,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeMedia: FfiConverterRustBuffer<Media> {
-    override fun read(buf: ByteBuffer): Media {
-        return Media(
+public object FfiConverterTypeMedia : FfiConverterRustBuffer<Media> {
+    override fun read(buf: ByteBuffer): Media =
+        Media(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
         )
-    }
 
-    override fun allocationSize(value: Media) = (
+    override fun allocationSize(value: Media) =
+        (
             FfiConverterString.allocationSize(value.`kind`) +
-            FfiConverterString.allocationSize(value.`mimeType`) +
-            FfiConverterString.allocationSize(value.`dataBase64`)
-    )
+                FfiConverterString.allocationSize(value.`mimeType`) +
+                FfiConverterString.allocationSize(value.`dataBase64`)
+        )
 
-    override fun write(value: Media, buf: ByteBuffer) {
-            FfiConverterString.write(value.`kind`, buf)
-            FfiConverterString.write(value.`mimeType`, buf)
-            FfiConverterString.write(value.`dataBase64`, buf)
+    override fun write(
+        value: Media,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`kind`, buf)
+        FfiConverterString.write(value.`mimeType`, buf)
+        FfiConverterString.write(value.`dataBase64`, buf)
     }
 }
-
-
 
 /**
  * A serialized representation of a queued event captured in a checkpoint.
@@ -8664,50 +9312,44 @@ public object FfiConverterTypeMedia: FfiConverterRustBuffer<Media> {
  * stores a `serde_json::Value`, which is not a UniFFI-supported wire
  * type — JSON strings cross cleanly instead).
  */
-data class PersistedEvent (
+data class PersistedEvent(
     /**
      * The event type identifier (e.g. `"blazen::StartEvent"`).
      */
-    var `eventType`: kotlin.String
-    , 
+    var `eventType`: kotlin.String,
     /**
      * The event payload, JSON-encoded. Decode with the host language's
      * standard JSON library on the foreign side.
      */
-    var `dataJson`: kotlin.String
-    
-){
-    
-
-    
-
-    
+    var `dataJson`: kotlin.String,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypePersistedEvent: FfiConverterRustBuffer<PersistedEvent> {
-    override fun read(buf: ByteBuffer): PersistedEvent {
-        return PersistedEvent(
+public object FfiConverterTypePersistedEvent : FfiConverterRustBuffer<PersistedEvent> {
+    override fun read(buf: ByteBuffer): PersistedEvent =
+        PersistedEvent(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
         )
-    }
 
-    override fun allocationSize(value: PersistedEvent) = (
+    override fun allocationSize(value: PersistedEvent) =
+        (
             FfiConverterString.allocationSize(value.`eventType`) +
-            FfiConverterString.allocationSize(value.`dataJson`)
-    )
+                FfiConverterString.allocationSize(value.`dataJson`)
+        )
 
-    override fun write(value: PersistedEvent, buf: ByteBuffer) {
-            FfiConverterString.write(value.`eventType`, buf)
-            FfiConverterString.write(value.`dataJson`, buf)
+    override fun write(
+        value: PersistedEvent,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`eventType`, buf)
+        FfiConverterString.write(value.`dataJson`, buf)
     }
 }
-
-
 
 /**
  * A single chunk from a streaming chat completion.
@@ -8723,61 +9365,54 @@ public object FfiConverterTypePersistedEvent: FfiConverterRustBuffer<PersistedEv
  * [`CompletionStreamSink::on_done`] fires. It is a UI hint (e.g. "stop
  * showing the typing cursor") and does not replace `on_done` for cleanup.
  */
-data class StreamChunk (
+data class StreamChunk(
     /**
      * Incremental text delta since the previous chunk. Empty when the
      * chunk carries only tool-call deltas, reasoning trace, citations, or
      * artifacts.
      */
-    var `contentDelta`: kotlin.String
-    , 
+    var `contentDelta`: kotlin.String,
     /**
      * Tool-call snapshot for this chunk. May grow as the provider streams
      * tool-call arguments piecewise; consumers should replace, not append.
      */
-    var `toolCalls`: List<ToolCall>
-    , 
+    var `toolCalls`: List<ToolCall>,
     /**
      * True if this is the final content-bearing chunk before `on_done`.
      * Hint only — `on_done` is the authoritative completion signal.
      */
-    var `isFinal`: kotlin.Boolean
-    
-){
-    
-
-    
-
-    
+    var `isFinal`: kotlin.Boolean,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeStreamChunk: FfiConverterRustBuffer<StreamChunk> {
-    override fun read(buf: ByteBuffer): StreamChunk {
-        return StreamChunk(
+public object FfiConverterTypeStreamChunk : FfiConverterRustBuffer<StreamChunk> {
+    override fun read(buf: ByteBuffer): StreamChunk =
+        StreamChunk(
             FfiConverterString.read(buf),
             FfiConverterSequenceTypeToolCall.read(buf),
             FfiConverterBoolean.read(buf),
         )
-    }
 
-    override fun allocationSize(value: StreamChunk) = (
+    override fun allocationSize(value: StreamChunk) =
+        (
             FfiConverterString.allocationSize(value.`contentDelta`) +
-            FfiConverterSequenceTypeToolCall.allocationSize(value.`toolCalls`) +
-            FfiConverterBoolean.allocationSize(value.`isFinal`)
-    )
+                FfiConverterSequenceTypeToolCall.allocationSize(value.`toolCalls`) +
+                FfiConverterBoolean.allocationSize(value.`isFinal`)
+        )
 
-    override fun write(value: StreamChunk, buf: ByteBuffer) {
-            FfiConverterString.write(value.`contentDelta`, buf)
-            FfiConverterSequenceTypeToolCall.write(value.`toolCalls`, buf)
-            FfiConverterBoolean.write(value.`isFinal`, buf)
+    override fun write(
+        value: StreamChunk,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`contentDelta`, buf)
+        FfiConverterSequenceTypeToolCall.write(value.`toolCalls`, buf)
+        FfiConverterBoolean.write(value.`isFinal`, buf)
     }
 }
-
-
 
 /**
  * The result of a speech-to-text transcription call.
@@ -8787,48 +9422,41 @@ public object FfiConverterTypeStreamChunk: FfiConverterRustBuffer<StreamChunk> {
  * [`RequestTiming::total_ms`](blazen_llm::RequestTiming) — zero when the
  * backend didn't measure it.
  */
-data class SttResult (
-    var `transcript`: kotlin.String
-    , 
-    var `language`: kotlin.String
-    , 
-    var `durationMs`: kotlin.ULong
-    
-){
-    
-
-    
-
-    
+data class SttResult(
+    var `transcript`: kotlin.String,
+    var `language`: kotlin.String,
+    var `durationMs`: kotlin.ULong,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeSttResult: FfiConverterRustBuffer<SttResult> {
-    override fun read(buf: ByteBuffer): SttResult {
-        return SttResult(
+public object FfiConverterTypeSttResult : FfiConverterRustBuffer<SttResult> {
+    override fun read(buf: ByteBuffer): SttResult =
+        SttResult(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterULong.read(buf),
         )
-    }
 
-    override fun allocationSize(value: SttResult) = (
+    override fun allocationSize(value: SttResult) =
+        (
             FfiConverterString.allocationSize(value.`transcript`) +
-            FfiConverterString.allocationSize(value.`language`) +
-            FfiConverterULong.allocationSize(value.`durationMs`)
-    )
+                FfiConverterString.allocationSize(value.`language`) +
+                FfiConverterULong.allocationSize(value.`durationMs`)
+        )
 
-    override fun write(value: SttResult, buf: ByteBuffer) {
-            FfiConverterString.write(value.`transcript`, buf)
-            FfiConverterString.write(value.`language`, buf)
-            FfiConverterULong.write(value.`durationMs`, buf)
+    override fun write(
+        value: SttResult,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`transcript`, buf)
+        FfiConverterString.write(value.`language`, buf)
+        FfiConverterULong.write(value.`durationMs`, buf)
     }
 }
-
-
 
 /**
  * Token usage statistics for a completion or embedding request.
@@ -8837,159 +9465,136 @@ public object FfiConverterTypeSttResult: FfiConverterRustBuffer<SttResult> {
  * losslessly. Zero means either "the provider didn't report this counter"
  * or "the counter is genuinely zero" — the wire format does not distinguish.
  */
-data class TokenUsage (
-    var `promptTokens`: kotlin.ULong
-    , 
-    var `completionTokens`: kotlin.ULong
-    , 
-    var `totalTokens`: kotlin.ULong
-    , 
-    var `cachedInputTokens`: kotlin.ULong
-    , 
-    var `reasoningTokens`: kotlin.ULong
-    
-){
-    
-
-    
-
-    
+data class TokenUsage(
+    var `promptTokens`: kotlin.ULong,
+    var `completionTokens`: kotlin.ULong,
+    var `totalTokens`: kotlin.ULong,
+    var `cachedInputTokens`: kotlin.ULong,
+    var `reasoningTokens`: kotlin.ULong,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeTokenUsage: FfiConverterRustBuffer<TokenUsage> {
-    override fun read(buf: ByteBuffer): TokenUsage {
-        return TokenUsage(
+public object FfiConverterTypeTokenUsage : FfiConverterRustBuffer<TokenUsage> {
+    override fun read(buf: ByteBuffer): TokenUsage =
+        TokenUsage(
             FfiConverterULong.read(buf),
             FfiConverterULong.read(buf),
             FfiConverterULong.read(buf),
             FfiConverterULong.read(buf),
             FfiConverterULong.read(buf),
         )
-    }
 
-    override fun allocationSize(value: TokenUsage) = (
+    override fun allocationSize(value: TokenUsage) =
+        (
             FfiConverterULong.allocationSize(value.`promptTokens`) +
-            FfiConverterULong.allocationSize(value.`completionTokens`) +
-            FfiConverterULong.allocationSize(value.`totalTokens`) +
-            FfiConverterULong.allocationSize(value.`cachedInputTokens`) +
-            FfiConverterULong.allocationSize(value.`reasoningTokens`)
-    )
+                FfiConverterULong.allocationSize(value.`completionTokens`) +
+                FfiConverterULong.allocationSize(value.`totalTokens`) +
+                FfiConverterULong.allocationSize(value.`cachedInputTokens`) +
+                FfiConverterULong.allocationSize(value.`reasoningTokens`)
+        )
 
-    override fun write(value: TokenUsage, buf: ByteBuffer) {
-            FfiConverterULong.write(value.`promptTokens`, buf)
-            FfiConverterULong.write(value.`completionTokens`, buf)
-            FfiConverterULong.write(value.`totalTokens`, buf)
-            FfiConverterULong.write(value.`cachedInputTokens`, buf)
-            FfiConverterULong.write(value.`reasoningTokens`, buf)
+    override fun write(
+        value: TokenUsage,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterULong.write(value.`promptTokens`, buf)
+        FfiConverterULong.write(value.`completionTokens`, buf)
+        FfiConverterULong.write(value.`totalTokens`, buf)
+        FfiConverterULong.write(value.`cachedInputTokens`, buf)
+        FfiConverterULong.write(value.`reasoningTokens`, buf)
     }
 }
-
-
 
 /**
  * A tool that the model may invoke during a completion.
  */
-data class Tool (
-    var `name`: kotlin.String
-    , 
-    var `description`: kotlin.String
-    , 
+data class Tool(
+    var `name`: kotlin.String,
+    var `description`: kotlin.String,
     /**
      * JSON Schema describing the tool's input parameters. Stored as a string
      * on the wire; foreign callers serialize their native schema dict/struct
      * to JSON just before constructing the [`Tool`].
      */
-    var `parametersJson`: kotlin.String
-    
-){
-    
-
-    
-
-    
+    var `parametersJson`: kotlin.String,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeTool: FfiConverterRustBuffer<Tool> {
-    override fun read(buf: ByteBuffer): Tool {
-        return Tool(
+public object FfiConverterTypeTool : FfiConverterRustBuffer<Tool> {
+    override fun read(buf: ByteBuffer): Tool =
+        Tool(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
         )
-    }
 
-    override fun allocationSize(value: Tool) = (
+    override fun allocationSize(value: Tool) =
+        (
             FfiConverterString.allocationSize(value.`name`) +
-            FfiConverterString.allocationSize(value.`description`) +
-            FfiConverterString.allocationSize(value.`parametersJson`)
-    )
+                FfiConverterString.allocationSize(value.`description`) +
+                FfiConverterString.allocationSize(value.`parametersJson`)
+        )
 
-    override fun write(value: Tool, buf: ByteBuffer) {
-            FfiConverterString.write(value.`name`, buf)
-            FfiConverterString.write(value.`description`, buf)
-            FfiConverterString.write(value.`parametersJson`, buf)
+    override fun write(
+        value: Tool,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`name`, buf)
+        FfiConverterString.write(value.`description`, buf)
+        FfiConverterString.write(value.`parametersJson`, buf)
     }
 }
-
-
 
 /**
  * A tool invocation requested by the model.
  */
-data class ToolCall (
-    var `id`: kotlin.String
-    , 
-    var `name`: kotlin.String
-    , 
+data class ToolCall(
+    var `id`: kotlin.String,
+    var `name`: kotlin.String,
     /**
      * JSON-encoded arguments object. Foreign callers parse this with their
      * native JSON library to access the tool's input parameters.
      */
-    var `argumentsJson`: kotlin.String
-    
-){
-    
-
-    
-
-    
+    var `argumentsJson`: kotlin.String,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeToolCall: FfiConverterRustBuffer<ToolCall> {
-    override fun read(buf: ByteBuffer): ToolCall {
-        return ToolCall(
+public object FfiConverterTypeToolCall : FfiConverterRustBuffer<ToolCall> {
+    override fun read(buf: ByteBuffer): ToolCall =
+        ToolCall(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
         )
-    }
 
-    override fun allocationSize(value: ToolCall) = (
+    override fun allocationSize(value: ToolCall) =
+        (
             FfiConverterString.allocationSize(value.`id`) +
-            FfiConverterString.allocationSize(value.`name`) +
-            FfiConverterString.allocationSize(value.`argumentsJson`)
-    )
+                FfiConverterString.allocationSize(value.`name`) +
+                FfiConverterString.allocationSize(value.`argumentsJson`)
+        )
 
-    override fun write(value: ToolCall, buf: ByteBuffer) {
-            FfiConverterString.write(value.`id`, buf)
-            FfiConverterString.write(value.`name`, buf)
-            FfiConverterString.write(value.`argumentsJson`, buf)
+    override fun write(
+        value: ToolCall,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`id`, buf)
+        FfiConverterString.write(value.`name`, buf)
+        FfiConverterString.write(value.`argumentsJson`, buf)
     }
 }
-
-
 
 /**
  * The result of a text-to-speech synthesis call.
@@ -9002,48 +9607,41 @@ public object FfiConverterTypeToolCall: FfiConverterRustBuffer<ToolCall> {
  * [`MediaType`](blazen_llm::MediaType); `duration_ms` is zero when the
  * provider didn't report timing.
  */
-data class TtsResult (
-    var `audioBase64`: kotlin.String
-    , 
-    var `mimeType`: kotlin.String
-    , 
-    var `durationMs`: kotlin.ULong
-    
-){
-    
-
-    
-
-    
+data class TtsResult(
+    var `audioBase64`: kotlin.String,
+    var `mimeType`: kotlin.String,
+    var `durationMs`: kotlin.ULong,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeTtsResult: FfiConverterRustBuffer<TtsResult> {
-    override fun read(buf: ByteBuffer): TtsResult {
-        return TtsResult(
+public object FfiConverterTypeTtsResult : FfiConverterRustBuffer<TtsResult> {
+    override fun read(buf: ByteBuffer): TtsResult =
+        TtsResult(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterULong.read(buf),
         )
-    }
 
-    override fun allocationSize(value: TtsResult) = (
+    override fun allocationSize(value: TtsResult) =
+        (
             FfiConverterString.allocationSize(value.`audioBase64`) +
-            FfiConverterString.allocationSize(value.`mimeType`) +
-            FfiConverterULong.allocationSize(value.`durationMs`)
-    )
+                FfiConverterString.allocationSize(value.`mimeType`) +
+                FfiConverterULong.allocationSize(value.`durationMs`)
+        )
 
-    override fun write(value: TtsResult, buf: ByteBuffer) {
-            FfiConverterString.write(value.`audioBase64`, buf)
-            FfiConverterString.write(value.`mimeType`, buf)
-            FfiConverterULong.write(value.`durationMs`, buf)
+    override fun write(
+        value: TtsResult,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`audioBase64`, buf)
+        FfiConverterString.write(value.`mimeType`, buf)
+        FfiConverterULong.write(value.`durationMs`, buf)
     }
 }
-
-
 
 /**
  * A snapshot of a workflow's state at a point in time.
@@ -9054,55 +9652,44 @@ public object FfiConverterTypeTtsResult: FfiConverterRustBuffer<TtsResult> {
  *
  * See the module docs for the upstream field-name mapping.
  */
-data class WorkflowCheckpoint (
+data class WorkflowCheckpoint(
     /**
      * The name of the workflow that produced this checkpoint.
      */
-    var `workflowName`: kotlin.String
-    , 
+    var `workflowName`: kotlin.String,
     /**
      * Unique identifier for this workflow run, formatted as a UUID
      * string (`"550e8400-e29b-41d4-a716-446655440000"`).
      */
-    var `runId`: kotlin.String
-    , 
+    var `runId`: kotlin.String,
     /**
      * When the checkpoint was created, as Unix-epoch milliseconds.
      */
-    var `timestampMs`: kotlin.ULong
-    , 
+    var `timestampMs`: kotlin.ULong,
     /**
      * Serialized context state, as a JSON object encoded into a string
      * (`"{\"counter\":42}"`). Decode with the host language's JSON library.
      */
-    var `stateJson`: kotlin.String
-    , 
+    var `stateJson`: kotlin.String,
     /**
      * Events in the queue at checkpoint time.
      */
-    var `pendingEvents`: List<PersistedEvent>
-    , 
+    var `pendingEvents`: List<PersistedEvent>,
     /**
      * Arbitrary metadata attached to this checkpoint, as a JSON object
      * encoded into a string. Decode with the host language's JSON library.
      */
-    var `metadataJson`: kotlin.String
-    
-){
-    
-
-    
-
-    
+    var `metadataJson`: kotlin.String,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeWorkflowCheckpoint: FfiConverterRustBuffer<WorkflowCheckpoint> {
-    override fun read(buf: ByteBuffer): WorkflowCheckpoint {
-        return WorkflowCheckpoint(
+public object FfiConverterTypeWorkflowCheckpoint : FfiConverterRustBuffer<WorkflowCheckpoint> {
+    override fun read(buf: ByteBuffer): WorkflowCheckpoint =
+        WorkflowCheckpoint(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterULong.read(buf),
@@ -9110,28 +9697,29 @@ public object FfiConverterTypeWorkflowCheckpoint: FfiConverterRustBuffer<Workflo
             FfiConverterSequenceTypePersistedEvent.read(buf),
             FfiConverterString.read(buf),
         )
-    }
 
-    override fun allocationSize(value: WorkflowCheckpoint) = (
+    override fun allocationSize(value: WorkflowCheckpoint) =
+        (
             FfiConverterString.allocationSize(value.`workflowName`) +
-            FfiConverterString.allocationSize(value.`runId`) +
-            FfiConverterULong.allocationSize(value.`timestampMs`) +
-            FfiConverterString.allocationSize(value.`stateJson`) +
-            FfiConverterSequenceTypePersistedEvent.allocationSize(value.`pendingEvents`) +
-            FfiConverterString.allocationSize(value.`metadataJson`)
-    )
+                FfiConverterString.allocationSize(value.`runId`) +
+                FfiConverterULong.allocationSize(value.`timestampMs`) +
+                FfiConverterString.allocationSize(value.`stateJson`) +
+                FfiConverterSequenceTypePersistedEvent.allocationSize(value.`pendingEvents`) +
+                FfiConverterString.allocationSize(value.`metadataJson`)
+        )
 
-    override fun write(value: WorkflowCheckpoint, buf: ByteBuffer) {
-            FfiConverterString.write(value.`workflowName`, buf)
-            FfiConverterString.write(value.`runId`, buf)
-            FfiConverterULong.write(value.`timestampMs`, buf)
-            FfiConverterString.write(value.`stateJson`, buf)
-            FfiConverterSequenceTypePersistedEvent.write(value.`pendingEvents`, buf)
-            FfiConverterString.write(value.`metadataJson`, buf)
+    override fun write(
+        value: WorkflowCheckpoint,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`workflowName`, buf)
+        FfiConverterString.write(value.`runId`, buf)
+        FfiConverterULong.write(value.`timestampMs`, buf)
+        FfiConverterString.write(value.`stateJson`, buf)
+        FfiConverterSequenceTypePersistedEvent.write(value.`pendingEvents`, buf)
+        FfiConverterString.write(value.`metadataJson`, buf)
     }
 }
-
-
 
 /**
  * One flattened slot of a workflow execution history, suitable for FFI.
@@ -9148,59 +9736,47 @@ public object FfiConverterTypeWorkflowCheckpoint: FfiConverterRustBuffer<Workflo
  * [`blazen_telemetry::WorkflowHistory::run_id`] so each entry is
  * self-identifying.
  */
-data class WorkflowHistoryEntry (
+data class WorkflowHistoryEntry(
     /**
      * UUID of the workflow run this event belongs to.
      */
-    var `workflowId`: kotlin.String
-    , 
+    var `workflowId`: kotlin.String,
     /**
      * Step name when the event is step- or LLM-call-scoped; empty otherwise.
      */
-    var `stepName`: kotlin.String
-    , 
+    var `stepName`: kotlin.String,
     /**
      * Variant tag of the upstream `HistoryEventKind` (e.g.
      * `"WorkflowStarted"`, `"StepCompleted"`, `"LlmCallFailed"`).
      */
-    var `eventType`: kotlin.String
-    , 
+    var `eventType`: kotlin.String,
     /**
      * Full serde JSON payload of the upstream `HistoryEventKind` variant —
      * always includes the variant tag plus every typed field.
      */
-    var `eventDataJson`: kotlin.String
-    , 
+    var `eventDataJson`: kotlin.String,
     /**
      * Event timestamp as Unix epoch milliseconds.
      */
-    var `timestampMs`: kotlin.ULong
-    , 
+    var `timestampMs`: kotlin.ULong,
     /**
      * Step / LLM-call duration in milliseconds, when the variant carries it.
      */
-    var `durationMs`: kotlin.ULong?
-    , 
+    var `durationMs`: kotlin.ULong?,
     /**
      * Error message, when the variant is a failure variant.
      */
-    var `error`: kotlin.String?
-    
-){
-    
-
-    
-
-    
+    var `error`: kotlin.String?,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeWorkflowHistoryEntry: FfiConverterRustBuffer<WorkflowHistoryEntry> {
-    override fun read(buf: ByteBuffer): WorkflowHistoryEntry {
-        return WorkflowHistoryEntry(
+public object FfiConverterTypeWorkflowHistoryEntry : FfiConverterRustBuffer<WorkflowHistoryEntry> {
+    override fun read(buf: ByteBuffer): WorkflowHistoryEntry =
+        WorkflowHistoryEntry(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
@@ -9209,90 +9785,83 @@ public object FfiConverterTypeWorkflowHistoryEntry: FfiConverterRustBuffer<Workf
             FfiConverterOptionalULong.read(buf),
             FfiConverterOptionalString.read(buf),
         )
-    }
 
-    override fun allocationSize(value: WorkflowHistoryEntry) = (
+    override fun allocationSize(value: WorkflowHistoryEntry) =
+        (
             FfiConverterString.allocationSize(value.`workflowId`) +
-            FfiConverterString.allocationSize(value.`stepName`) +
-            FfiConverterString.allocationSize(value.`eventType`) +
-            FfiConverterString.allocationSize(value.`eventDataJson`) +
-            FfiConverterULong.allocationSize(value.`timestampMs`) +
-            FfiConverterOptionalULong.allocationSize(value.`durationMs`) +
-            FfiConverterOptionalString.allocationSize(value.`error`)
-    )
+                FfiConverterString.allocationSize(value.`stepName`) +
+                FfiConverterString.allocationSize(value.`eventType`) +
+                FfiConverterString.allocationSize(value.`eventDataJson`) +
+                FfiConverterULong.allocationSize(value.`timestampMs`) +
+                FfiConverterOptionalULong.allocationSize(value.`durationMs`) +
+                FfiConverterOptionalString.allocationSize(value.`error`)
+        )
 
-    override fun write(value: WorkflowHistoryEntry, buf: ByteBuffer) {
-            FfiConverterString.write(value.`workflowId`, buf)
-            FfiConverterString.write(value.`stepName`, buf)
-            FfiConverterString.write(value.`eventType`, buf)
-            FfiConverterString.write(value.`eventDataJson`, buf)
-            FfiConverterULong.write(value.`timestampMs`, buf)
-            FfiConverterOptionalULong.write(value.`durationMs`, buf)
-            FfiConverterOptionalString.write(value.`error`, buf)
+    override fun write(
+        value: WorkflowHistoryEntry,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`workflowId`, buf)
+        FfiConverterString.write(value.`stepName`, buf)
+        FfiConverterString.write(value.`eventType`, buf)
+        FfiConverterString.write(value.`eventDataJson`, buf)
+        FfiConverterULong.write(value.`timestampMs`, buf)
+        FfiConverterOptionalULong.write(value.`durationMs`, buf)
+        FfiConverterOptionalString.write(value.`error`, buf)
     }
 }
-
-
 
 /**
  * Final result of a workflow run.
  */
-data class WorkflowResult (
+data class WorkflowResult(
     /**
      * The terminal event (typically `"StopEvent"`).
      */
-    var `event`: Event
-    , 
+    var `event`: Event,
     /**
      * Total LLM token usage across the run, if any LLM steps ran.
      */
-    var `totalInputTokens`: kotlin.ULong
-    , 
-    var `totalOutputTokens`: kotlin.ULong
-    , 
+    var `totalInputTokens`: kotlin.ULong,
+    var `totalOutputTokens`: kotlin.ULong,
     /**
      * Total cost in USD across the run, if pricing data was available.
      */
-    var `totalCostUsd`: kotlin.Double
-    
-){
-    
-
-    
-
-    
+    var `totalCostUsd`: kotlin.Double,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeWorkflowResult: FfiConverterRustBuffer<WorkflowResult> {
-    override fun read(buf: ByteBuffer): WorkflowResult {
-        return WorkflowResult(
+public object FfiConverterTypeWorkflowResult : FfiConverterRustBuffer<WorkflowResult> {
+    override fun read(buf: ByteBuffer): WorkflowResult =
+        WorkflowResult(
             FfiConverterTypeEvent.read(buf),
             FfiConverterULong.read(buf),
             FfiConverterULong.read(buf),
             FfiConverterDouble.read(buf),
         )
-    }
 
-    override fun allocationSize(value: WorkflowResult) = (
+    override fun allocationSize(value: WorkflowResult) =
+        (
             FfiConverterTypeEvent.allocationSize(value.`event`) +
-            FfiConverterULong.allocationSize(value.`totalInputTokens`) +
-            FfiConverterULong.allocationSize(value.`totalOutputTokens`) +
-            FfiConverterDouble.allocationSize(value.`totalCostUsd`)
-    )
+                FfiConverterULong.allocationSize(value.`totalInputTokens`) +
+                FfiConverterULong.allocationSize(value.`totalOutputTokens`) +
+                FfiConverterDouble.allocationSize(value.`totalCostUsd`)
+        )
 
-    override fun write(value: WorkflowResult, buf: ByteBuffer) {
-            FfiConverterTypeEvent.write(value.`event`, buf)
-            FfiConverterULong.write(value.`totalInputTokens`, buf)
-            FfiConverterULong.write(value.`totalOutputTokens`, buf)
-            FfiConverterDouble.write(value.`totalCostUsd`, buf)
+    override fun write(
+        value: WorkflowResult,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterTypeEvent.write(value.`event`, buf)
+        FfiConverterULong.write(value.`totalInputTokens`, buf)
+        FfiConverterULong.write(value.`totalOutputTokens`, buf)
+        FfiConverterDouble.write(value.`totalCostUsd`, buf)
     }
 }
-
-
 
 /**
  * Per-request outcome within a [`BatchResult`].
@@ -9305,38 +9874,24 @@ public object FfiConverterTypeWorkflowResult: FfiConverterRustBuffer<WorkflowRes
  * typed errors should run requests individually).
  */
 sealed class BatchItem {
-    
     /**
      * The request completed and the model returned a response.
      */
     data class Success(
-        val `response`: dev.zorpx.blazen.uniffi.CompletionResponse) : BatchItem()
-        
-    {
-        
-
+        val `response`: dev.zorpx.blazen.uniffi.CompletionResponse,
+    ) : BatchItem() {
         companion object
     }
-    
+
     /**
      * The request failed. The message mirrors the `Display` form of the
      * underlying [`BlazenError`].
      */
     data class Failure(
-        val `errorMessage`: kotlin.String) : BatchItem()
-        
-    {
-        
-
+        val `errorMessage`: kotlin.String,
+    ) : BatchItem() {
         companion object
     }
-    
-
-    
-
-    
-    
-
 
     companion object
 }
@@ -9344,43 +9899,56 @@ sealed class BatchItem {
 /**
  * @suppress
  */
-public object FfiConverterTypeBatchItem : FfiConverterRustBuffer<BatchItem>{
-    override fun read(buf: ByteBuffer): BatchItem {
-        return when(buf.getInt()) {
-            1 -> BatchItem.Success(
-                FfiConverterTypeCompletionResponse.read(buf),
+public object FfiConverterTypeBatchItem : FfiConverterRustBuffer<BatchItem> {
+    override fun read(buf: ByteBuffer): BatchItem =
+        when (buf.getInt()) {
+            1 -> {
+                BatchItem.Success(
+                    FfiConverterTypeCompletionResponse.read(buf),
                 )
-            2 -> BatchItem.Failure(
-                FfiConverterString.read(buf),
+            }
+
+            2 -> {
+                BatchItem.Failure(
+                    FfiConverterString.read(buf),
                 )
-            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
-        }
-    }
+            }
 
-    override fun allocationSize(value: BatchItem) = when(value) {
-        is BatchItem.Success -> {
-            // Add the size for the Int that specifies the variant plus the size needed for all fields
-            (
-                4UL
-                + FfiConverterTypeCompletionResponse.allocationSize(value.`response`)
-            )
+            else -> {
+                throw RuntimeException("invalid enum value, something is very wrong!!")
+            }
         }
-        is BatchItem.Failure -> {
-            // Add the size for the Int that specifies the variant plus the size needed for all fields
-            (
-                4UL
-                + FfiConverterString.allocationSize(value.`errorMessage`)
-            )
-        }
-    }
 
-    override fun write(value: BatchItem, buf: ByteBuffer) {
-        when(value) {
+    override fun allocationSize(value: BatchItem) =
+        when (value) {
+            is BatchItem.Success -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterTypeCompletionResponse.allocationSize(value.`response`)
+                )
+            }
+
+            is BatchItem.Failure -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`errorMessage`)
+                )
+            }
+        }
+
+    override fun write(
+        value: BatchItem,
+        buf: ByteBuffer,
+    ) {
+        when (value) {
             is BatchItem.Success -> {
                 buf.putInt(1)
                 FfiConverterTypeCompletionResponse.write(value.`response`, buf)
                 Unit
             }
+
             is BatchItem.Failure -> {
                 buf.putInt(2)
                 FfiConverterString.write(value.`errorMessage`, buf)
@@ -9390,12 +9958,6 @@ public object FfiConverterTypeBatchItem : FfiConverterRustBuffer<BatchItem>{
     }
 }
 
-
-
-
-
-
-
 /**
  * Canonical error type for all Blazen UniFFI bindings.
  *
@@ -9403,77 +9965,66 @@ public object FfiConverterTypeBatchItem : FfiConverterRustBuffer<BatchItem>{
  * (matching the corresponding Node/Python error's `.message`). Variants with
  * sub-types carry a `kind` string discriminator (e.g. `Provider.kind = "LlamaCppModelLoad"`).
  */
-sealed class BlazenException: kotlin.Exception() {
-    
+sealed class BlazenException : kotlin.Exception() {
     /**
      * Authentication / credentials failure (missing API key, invalid token, etc.).
      */
     class Auth(
-        
-        override val `message`: kotlin.String
-        ) : BlazenException()
-    
+        override val `message`: kotlin.String,
+    ) : BlazenException()
+
     /**
      * Rate limit exceeded. `retry_after_ms` is set when the provider returned a
      * Retry-After hint.
      */
     class RateLimit(
-        
-        override val `message`: kotlin.String, 
-        
-        val `retryAfterMs`: kotlin.ULong?
-        ) : BlazenException()
-    
+        override val `message`: kotlin.String,
+        val `retryAfterMs`: kotlin.ULong?,
+    ) : BlazenException()
+
     /**
      * Operation timed out before the provider responded.
      */
     class Timeout(
-        
-        override val `message`: kotlin.String, 
-        
-        val `elapsedMs`: kotlin.ULong
-        ) : BlazenException()
-    
+        override val `message`: kotlin.String,
+        val `elapsedMs`: kotlin.ULong,
+    ) : BlazenException()
+
     /**
      * Input validation failed (bad schema, missing required field, etc.).
      */
     class Validation(
-        
-        override val `message`: kotlin.String
-        ) : BlazenException()
-    
+        override val `message`: kotlin.String,
+    ) : BlazenException()
+
     /**
      * Content policy violation (provider refused due to safety filters).
      */
     class ContentPolicy(
-        
-        override val `message`: kotlin.String
-        ) : BlazenException()
-    
+        override val `message`: kotlin.String,
+    ) : BlazenException()
+
     /**
      * Operation unsupported on this platform / build / provider.
      */
     class Unsupported(
-        
-        override val `message`: kotlin.String
-        ) : BlazenException()
-    
+        override val `message`: kotlin.String,
+    ) : BlazenException()
+
     /**
      * Compute error (CPU/GPU/accelerator failure, OOM, etc.).
      */
     class Compute(
-        
-        override val `message`: kotlin.String
-        ) : BlazenException()
-    
+        override val `message`: kotlin.String,
+    ) : BlazenException()
+
     /**
      * Media-handling error (decode, encode, transcoding).
      */
     class Media(
-        
-        override val `message`: kotlin.String
-        ) : BlazenException()
-    
+        override val `message`: kotlin.String,
+    ) : BlazenException()
+
     /**
      * Provider / backend error. `kind` identifies the specific backend and failure
      * mode, mirroring the Node binding's `[ProviderError]` sentinel JSON shape.
@@ -9481,350 +10032,403 @@ sealed class BlazenException: kotlin.Exception() {
      * `"CandleEmbedInference"`, `"OpenAIHttp"`, `"AnthropicHttp"`.
      */
     class Provider(
-        
-        val `kind`: kotlin.String, 
-        
-        override val `message`: kotlin.String, 
-        
-        val `provider`: kotlin.String?, 
-        
-        val `status`: kotlin.UInt?, 
-        
-        val `endpoint`: kotlin.String?, 
-        
-        val `requestId`: kotlin.String?, 
-        
-        val `detail`: kotlin.String?, 
-        
-        val `retryAfterMs`: kotlin.ULong?
-        ) : BlazenException()
-    
+        val `kind`: kotlin.String,
+        override val `message`: kotlin.String,
+        val `provider`: kotlin.String?,
+        val `status`: kotlin.UInt?,
+        val `endpoint`: kotlin.String?,
+        val `requestId`: kotlin.String?,
+        val `detail`: kotlin.String?,
+        val `retryAfterMs`: kotlin.ULong?,
+    ) : BlazenException()
+
     /**
      * Workflow execution error (step panic, deadlock, missing context, etc.).
      */
     class Workflow(
-        
-        override val `message`: kotlin.String
-        ) : BlazenException()
-    
+        override val `message`: kotlin.String,
+    ) : BlazenException()
+
     /**
      * Tool / function-call error during LLM agent execution.
      */
     class Tool(
-        
-        override val `message`: kotlin.String
-        ) : BlazenException()
-    
+        override val `message`: kotlin.String,
+    ) : BlazenException()
+
     /**
      * Distributed peer-to-peer error. `kind` is one of: `"Encode"`, `"Transport"`,
      * `"EnvelopeVersion"`, `"Workflow"`, `"Tls"`, `"UnknownStep"`.
      */
     class Peer(
-        
-        val `kind`: kotlin.String, 
-        
-        override val `message`: kotlin.String
-        ) : BlazenException()
-    
+        val `kind`: kotlin.String,
+        override val `message`: kotlin.String,
+    ) : BlazenException()
+
     /**
      * Persistence layer error (redb / valkey checkpoint store).
      */
     class Persist(
-        
-        override val `message`: kotlin.String
-        ) : BlazenException()
-    
+        override val `message`: kotlin.String,
+    ) : BlazenException()
+
     /**
      * Prompt template error. `kind`: `"MissingVariable"`, `"NotFound"`, `"VersionNotFound"`,
      * `"Io"`, `"Yaml"`, `"Json"`, `"Validation"`.
      */
     class Prompt(
-        
-        val `kind`: kotlin.String, 
-        
-        override val `message`: kotlin.String
-        ) : BlazenException()
-    
+        val `kind`: kotlin.String,
+        override val `message`: kotlin.String,
+    ) : BlazenException()
+
     /**
      * Memory subsystem error. `kind`: `"NoEmbedder"`, `"Elid"`, `"Embedding"`,
      * `"NotFound"`, `"Serialization"`, `"Io"`, `"Backend"`.
      */
     class Memory(
-        
-        val `kind`: kotlin.String, 
-        
-        override val `message`: kotlin.String
-        ) : BlazenException()
-    
+        val `kind`: kotlin.String,
+        override val `message`: kotlin.String,
+    ) : BlazenException()
+
     /**
      * Model-cache / download error. `kind`: `"Download"`, `"CacheDir"`, `"Io"`.
      */
     class Cache(
-        
-        val `kind`: kotlin.String, 
-        
-        override val `message`: kotlin.String
-        ) : BlazenException()
-    
+        val `kind`: kotlin.String,
+        override val `message`: kotlin.String,
+    ) : BlazenException()
+
     /**
      * Operation was cancelled (e.g. via a foreign-language `context.Context`
      * or `Task.cancel()` request). Mapped to `context.Canceled` /
      * `Task.CancellationError` / `Kotlin CancellationException` on the foreign side.
      */
-    class Cancelled(
-        ) : BlazenException() {
+    class Cancelled : BlazenException() {
         override val message
             get() = ""
     }
-    
+
     /**
      * Fallback for errors that don't fit any other variant — should be rare;
      * new errors should usually get their own variant or a `kind` extension.
      */
     class Internal(
-        
-        override val `message`: kotlin.String
-        ) : BlazenException()
-    
-
-    
-
+        override val `message`: kotlin.String,
+    ) : BlazenException()
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<BlazenException> {
         override fun lift(error_buf: RustBuffer.ByValue): BlazenException = FfiConverterTypeBlazenError.lift(error_buf)
     }
-
-    
 }
 
 /**
  * @suppress
  */
 public object FfiConverterTypeBlazenError : FfiConverterRustBuffer<BlazenException> {
-    override fun read(buf: ByteBuffer): BlazenException {
-        
+    override fun read(buf: ByteBuffer): BlazenException =
+        when (buf.getInt()) {
+            1 -> {
+                BlazenException.Auth(
+                    FfiConverterString.read(buf),
+                )
+            }
 
-        return when(buf.getInt()) {
-            1 -> BlazenException.Auth(
-                FfiConverterString.read(buf),
+            2 -> {
+                BlazenException.RateLimit(
+                    FfiConverterString.read(buf),
+                    FfiConverterOptionalULong.read(buf),
                 )
-            2 -> BlazenException.RateLimit(
-                FfiConverterString.read(buf),
-                FfiConverterOptionalULong.read(buf),
+            }
+
+            3 -> {
+                BlazenException.Timeout(
+                    FfiConverterString.read(buf),
+                    FfiConverterULong.read(buf),
                 )
-            3 -> BlazenException.Timeout(
-                FfiConverterString.read(buf),
-                FfiConverterULong.read(buf),
+            }
+
+            4 -> {
+                BlazenException.Validation(
+                    FfiConverterString.read(buf),
                 )
-            4 -> BlazenException.Validation(
-                FfiConverterString.read(buf),
+            }
+
+            5 -> {
+                BlazenException.ContentPolicy(
+                    FfiConverterString.read(buf),
                 )
-            5 -> BlazenException.ContentPolicy(
-                FfiConverterString.read(buf),
+            }
+
+            6 -> {
+                BlazenException.Unsupported(
+                    FfiConverterString.read(buf),
                 )
-            6 -> BlazenException.Unsupported(
-                FfiConverterString.read(buf),
+            }
+
+            7 -> {
+                BlazenException.Compute(
+                    FfiConverterString.read(buf),
                 )
-            7 -> BlazenException.Compute(
-                FfiConverterString.read(buf),
+            }
+
+            8 -> {
+                BlazenException.Media(
+                    FfiConverterString.read(buf),
                 )
-            8 -> BlazenException.Media(
-                FfiConverterString.read(buf),
+            }
+
+            9 -> {
+                BlazenException.Provider(
+                    FfiConverterString.read(buf),
+                    FfiConverterString.read(buf),
+                    FfiConverterOptionalString.read(buf),
+                    FfiConverterOptionalUInt.read(buf),
+                    FfiConverterOptionalString.read(buf),
+                    FfiConverterOptionalString.read(buf),
+                    FfiConverterOptionalString.read(buf),
+                    FfiConverterOptionalULong.read(buf),
                 )
-            9 -> BlazenException.Provider(
-                FfiConverterString.read(buf),
-                FfiConverterString.read(buf),
-                FfiConverterOptionalString.read(buf),
-                FfiConverterOptionalUInt.read(buf),
-                FfiConverterOptionalString.read(buf),
-                FfiConverterOptionalString.read(buf),
-                FfiConverterOptionalString.read(buf),
-                FfiConverterOptionalULong.read(buf),
+            }
+
+            10 -> {
+                BlazenException.Workflow(
+                    FfiConverterString.read(buf),
                 )
-            10 -> BlazenException.Workflow(
-                FfiConverterString.read(buf),
+            }
+
+            11 -> {
+                BlazenException.Tool(
+                    FfiConverterString.read(buf),
                 )
-            11 -> BlazenException.Tool(
-                FfiConverterString.read(buf),
+            }
+
+            12 -> {
+                BlazenException.Peer(
+                    FfiConverterString.read(buf),
+                    FfiConverterString.read(buf),
                 )
-            12 -> BlazenException.Peer(
-                FfiConverterString.read(buf),
-                FfiConverterString.read(buf),
+            }
+
+            13 -> {
+                BlazenException.Persist(
+                    FfiConverterString.read(buf),
                 )
-            13 -> BlazenException.Persist(
-                FfiConverterString.read(buf),
+            }
+
+            14 -> {
+                BlazenException.Prompt(
+                    FfiConverterString.read(buf),
+                    FfiConverterString.read(buf),
                 )
-            14 -> BlazenException.Prompt(
-                FfiConverterString.read(buf),
-                FfiConverterString.read(buf),
+            }
+
+            15 -> {
+                BlazenException.Memory(
+                    FfiConverterString.read(buf),
+                    FfiConverterString.read(buf),
                 )
-            15 -> BlazenException.Memory(
-                FfiConverterString.read(buf),
-                FfiConverterString.read(buf),
+            }
+
+            16 -> {
+                BlazenException.Cache(
+                    FfiConverterString.read(buf),
+                    FfiConverterString.read(buf),
                 )
-            16 -> BlazenException.Cache(
-                FfiConverterString.read(buf),
-                FfiConverterString.read(buf),
+            }
+
+            17 -> {
+                BlazenException.Cancelled()
+            }
+
+            18 -> {
+                BlazenException.Internal(
+                    FfiConverterString.read(buf),
                 )
-            17 -> BlazenException.Cancelled()
-            18 -> BlazenException.Internal(
-                FfiConverterString.read(buf),
-                )
-            else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
+            }
+
+            else -> {
+                throw RuntimeException("invalid error enum value, something is very wrong!!")
+            }
         }
-    }
 
-    override fun allocationSize(value: BlazenException): ULong {
-        return when(value) {
+    override fun allocationSize(value: BlazenException): ULong =
+        when (value) {
             is BlazenException.Auth -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                4UL +
+                    FfiConverterString.allocationSize(value.`message`)
             )
+
             is BlazenException.RateLimit -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-                + FfiConverterString.allocationSize(value.`message`)
-                + FfiConverterOptionalULong.allocationSize(value.`retryAfterMs`)
+                4UL +
+                    FfiConverterString.allocationSize(value.`message`) +
+                    FfiConverterOptionalULong.allocationSize(value.`retryAfterMs`)
             )
+
             is BlazenException.Timeout -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-                + FfiConverterString.allocationSize(value.`message`)
-                + FfiConverterULong.allocationSize(value.`elapsedMs`)
+                4UL +
+                    FfiConverterString.allocationSize(value.`message`) +
+                    FfiConverterULong.allocationSize(value.`elapsedMs`)
             )
+
             is BlazenException.Validation -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                4UL +
+                    FfiConverterString.allocationSize(value.`message`)
             )
+
             is BlazenException.ContentPolicy -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                4UL +
+                    FfiConverterString.allocationSize(value.`message`)
             )
+
             is BlazenException.Unsupported -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                4UL +
+                    FfiConverterString.allocationSize(value.`message`)
             )
+
             is BlazenException.Compute -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                4UL +
+                    FfiConverterString.allocationSize(value.`message`)
             )
+
             is BlazenException.Media -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                4UL +
+                    FfiConverterString.allocationSize(value.`message`)
             )
+
             is BlazenException.Provider -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-                + FfiConverterString.allocationSize(value.`kind`)
-                + FfiConverterString.allocationSize(value.`message`)
-                + FfiConverterOptionalString.allocationSize(value.`provider`)
-                + FfiConverterOptionalUInt.allocationSize(value.`status`)
-                + FfiConverterOptionalString.allocationSize(value.`endpoint`)
-                + FfiConverterOptionalString.allocationSize(value.`requestId`)
-                + FfiConverterOptionalString.allocationSize(value.`detail`)
-                + FfiConverterOptionalULong.allocationSize(value.`retryAfterMs`)
+                4UL +
+                    FfiConverterString.allocationSize(value.`kind`) +
+                    FfiConverterString.allocationSize(value.`message`) +
+                    FfiConverterOptionalString.allocationSize(value.`provider`) +
+                    FfiConverterOptionalUInt.allocationSize(value.`status`) +
+                    FfiConverterOptionalString.allocationSize(value.`endpoint`) +
+                    FfiConverterOptionalString.allocationSize(value.`requestId`) +
+                    FfiConverterOptionalString.allocationSize(value.`detail`) +
+                    FfiConverterOptionalULong.allocationSize(value.`retryAfterMs`)
             )
+
             is BlazenException.Workflow -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                4UL +
+                    FfiConverterString.allocationSize(value.`message`)
             )
+
             is BlazenException.Tool -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                4UL +
+                    FfiConverterString.allocationSize(value.`message`)
             )
+
             is BlazenException.Peer -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-                + FfiConverterString.allocationSize(value.`kind`)
-                + FfiConverterString.allocationSize(value.`message`)
+                4UL +
+                    FfiConverterString.allocationSize(value.`kind`) +
+                    FfiConverterString.allocationSize(value.`message`)
             )
+
             is BlazenException.Persist -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                4UL +
+                    FfiConverterString.allocationSize(value.`message`)
             )
+
             is BlazenException.Prompt -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-                + FfiConverterString.allocationSize(value.`kind`)
-                + FfiConverterString.allocationSize(value.`message`)
+                4UL +
+                    FfiConverterString.allocationSize(value.`kind`) +
+                    FfiConverterString.allocationSize(value.`message`)
             )
+
             is BlazenException.Memory -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-                + FfiConverterString.allocationSize(value.`kind`)
-                + FfiConverterString.allocationSize(value.`message`)
+                4UL +
+                    FfiConverterString.allocationSize(value.`kind`) +
+                    FfiConverterString.allocationSize(value.`message`)
             )
+
             is BlazenException.Cache -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-                + FfiConverterString.allocationSize(value.`kind`)
-                + FfiConverterString.allocationSize(value.`message`)
+                4UL +
+                    FfiConverterString.allocationSize(value.`kind`) +
+                    FfiConverterString.allocationSize(value.`message`)
             )
+
             is BlazenException.Cancelled -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
             )
+
             is BlazenException.Internal -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                4UL +
+                    FfiConverterString.allocationSize(value.`message`)
             )
         }
-    }
 
-    override fun write(value: BlazenException, buf: ByteBuffer) {
-        when(value) {
+    override fun write(
+        value: BlazenException,
+        buf: ByteBuffer,
+    ) {
+        when (value) {
             is BlazenException.Auth -> {
                 buf.putInt(1)
                 FfiConverterString.write(value.`message`, buf)
                 Unit
             }
+
             is BlazenException.RateLimit -> {
                 buf.putInt(2)
                 FfiConverterString.write(value.`message`, buf)
                 FfiConverterOptionalULong.write(value.`retryAfterMs`, buf)
                 Unit
             }
+
             is BlazenException.Timeout -> {
                 buf.putInt(3)
                 FfiConverterString.write(value.`message`, buf)
                 FfiConverterULong.write(value.`elapsedMs`, buf)
                 Unit
             }
+
             is BlazenException.Validation -> {
                 buf.putInt(4)
                 FfiConverterString.write(value.`message`, buf)
                 Unit
             }
+
             is BlazenException.ContentPolicy -> {
                 buf.putInt(5)
                 FfiConverterString.write(value.`message`, buf)
                 Unit
             }
+
             is BlazenException.Unsupported -> {
                 buf.putInt(6)
                 FfiConverterString.write(value.`message`, buf)
                 Unit
             }
+
             is BlazenException.Compute -> {
                 buf.putInt(7)
                 FfiConverterString.write(value.`message`, buf)
                 Unit
             }
+
             is BlazenException.Media -> {
                 buf.putInt(8)
                 FfiConverterString.write(value.`message`, buf)
                 Unit
             }
+
             is BlazenException.Provider -> {
                 buf.putInt(9)
                 FfiConverterString.write(value.`kind`, buf)
@@ -9837,49 +10441,58 @@ public object FfiConverterTypeBlazenError : FfiConverterRustBuffer<BlazenExcepti
                 FfiConverterOptionalULong.write(value.`retryAfterMs`, buf)
                 Unit
             }
+
             is BlazenException.Workflow -> {
                 buf.putInt(10)
                 FfiConverterString.write(value.`message`, buf)
                 Unit
             }
+
             is BlazenException.Tool -> {
                 buf.putInt(11)
                 FfiConverterString.write(value.`message`, buf)
                 Unit
             }
+
             is BlazenException.Peer -> {
                 buf.putInt(12)
                 FfiConverterString.write(value.`kind`, buf)
                 FfiConverterString.write(value.`message`, buf)
                 Unit
             }
+
             is BlazenException.Persist -> {
                 buf.putInt(13)
                 FfiConverterString.write(value.`message`, buf)
                 Unit
             }
+
             is BlazenException.Prompt -> {
                 buf.putInt(14)
                 FfiConverterString.write(value.`kind`, buf)
                 FfiConverterString.write(value.`message`, buf)
                 Unit
             }
+
             is BlazenException.Memory -> {
                 buf.putInt(15)
                 FfiConverterString.write(value.`kind`, buf)
                 FfiConverterString.write(value.`message`, buf)
                 Unit
             }
+
             is BlazenException.Cache -> {
                 buf.putInt(16)
                 FfiConverterString.write(value.`kind`, buf)
                 FfiConverterString.write(value.`message`, buf)
                 Unit
             }
+
             is BlazenException.Cancelled -> {
                 buf.putInt(17)
                 Unit
             }
+
             is BlazenException.Internal -> {
                 buf.putInt(18)
                 FfiConverterString.write(value.`message`, buf)
@@ -9887,52 +10500,34 @@ public object FfiConverterTypeBlazenError : FfiConverterRustBuffer<BlazenExcepti
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
     }
-
 }
-
-
 
 /**
  * What a [`StepHandler`] returns: zero, one, or many events to publish.
  */
 sealed class StepOutput {
-    
     /**
      * Step performed work but produced no event.
      */
     object None : StepOutput()
-    
-    
+
     /**
      * Step produced exactly one event (the common case).
      */
     data class Single(
-        val `event`: dev.zorpx.blazen.uniffi.Event) : StepOutput()
-        
-    {
-        
-
+        val `event`: dev.zorpx.blazen.uniffi.Event,
+    ) : StepOutput() {
         companion object
     }
-    
+
     /**
      * Step fans out — produced multiple events at once.
      */
     data class Multiple(
-        val `events`: List<dev.zorpx.blazen.uniffi.Event>) : StepOutput()
-        
-    {
-        
-
+        val `events`: List<dev.zorpx.blazen.uniffi.Event>,
+    ) : StepOutput() {
         companion object
     }
-    
-
-    
-
-    
-    
-
 
     companion object
 }
@@ -9940,54 +10535,72 @@ sealed class StepOutput {
 /**
  * @suppress
  */
-public object FfiConverterTypeStepOutput : FfiConverterRustBuffer<StepOutput>{
-    override fun read(buf: ByteBuffer): StepOutput {
-        return when(buf.getInt()) {
-            1 -> StepOutput.None
-            2 -> StepOutput.Single(
-                FfiConverterTypeEvent.read(buf),
-                )
-            3 -> StepOutput.Multiple(
-                FfiConverterSequenceTypeEvent.read(buf),
-                )
-            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
-        }
-    }
+public object FfiConverterTypeStepOutput : FfiConverterRustBuffer<StepOutput> {
+    override fun read(buf: ByteBuffer): StepOutput =
+        when (buf.getInt()) {
+            1 -> {
+                StepOutput.None
+            }
 
-    override fun allocationSize(value: StepOutput) = when(value) {
-        is StepOutput.None -> {
-            // Add the size for the Int that specifies the variant plus the size needed for all fields
-            (
-                4UL
-            )
-        }
-        is StepOutput.Single -> {
-            // Add the size for the Int that specifies the variant plus the size needed for all fields
-            (
-                4UL
-                + FfiConverterTypeEvent.allocationSize(value.`event`)
-            )
-        }
-        is StepOutput.Multiple -> {
-            // Add the size for the Int that specifies the variant plus the size needed for all fields
-            (
-                4UL
-                + FfiConverterSequenceTypeEvent.allocationSize(value.`events`)
-            )
-        }
-    }
+            2 -> {
+                StepOutput.Single(
+                    FfiConverterTypeEvent.read(buf),
+                )
+            }
 
-    override fun write(value: StepOutput, buf: ByteBuffer) {
-        when(value) {
+            3 -> {
+                StepOutput.Multiple(
+                    FfiConverterSequenceTypeEvent.read(buf),
+                )
+            }
+
+            else -> {
+                throw RuntimeException("invalid enum value, something is very wrong!!")
+            }
+        }
+
+    override fun allocationSize(value: StepOutput) =
+        when (value) {
+            is StepOutput.None -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL
+                )
+            }
+
+            is StepOutput.Single -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterTypeEvent.allocationSize(value.`event`)
+                )
+            }
+
+            is StepOutput.Multiple -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterSequenceTypeEvent.allocationSize(value.`events`)
+                )
+            }
+        }
+
+    override fun write(
+        value: StepOutput,
+        buf: ByteBuffer,
+    ) {
+        when (value) {
             is StepOutput.None -> {
                 buf.putInt(1)
                 Unit
             }
+
             is StepOutput.Single -> {
                 buf.putInt(2)
                 FfiConverterTypeEvent.write(value.`event`, buf)
                 Unit
             }
+
             is StepOutput.Multiple -> {
                 buf.putInt(3)
                 FfiConverterSequenceTypeEvent.write(value.`events`, buf)
@@ -9997,15 +10610,10 @@ public object FfiConverterTypeStepOutput : FfiConverterRustBuffer<StepOutput>{
     }
 }
 
-
-
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterOptionalUInt: FfiConverterRustBuffer<kotlin.UInt?> {
+public object FfiConverterOptionalUInt : FfiConverterRustBuffer<kotlin.UInt?> {
     override fun read(buf: ByteBuffer): kotlin.UInt? {
         if (buf.get().toInt() == 0) {
             return null
@@ -10021,7 +10629,10 @@ public object FfiConverterOptionalUInt: FfiConverterRustBuffer<kotlin.UInt?> {
         }
     }
 
-    override fun write(value: kotlin.UInt?, buf: ByteBuffer) {
+    override fun write(
+        value: kotlin.UInt?,
+        buf: ByteBuffer,
+    ) {
         if (value == null) {
             buf.put(0)
         } else {
@@ -10031,13 +10642,10 @@ public object FfiConverterOptionalUInt: FfiConverterRustBuffer<kotlin.UInt?> {
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterOptionalULong: FfiConverterRustBuffer<kotlin.ULong?> {
+public object FfiConverterOptionalULong : FfiConverterRustBuffer<kotlin.ULong?> {
     override fun read(buf: ByteBuffer): kotlin.ULong? {
         if (buf.get().toInt() == 0) {
             return null
@@ -10053,7 +10661,10 @@ public object FfiConverterOptionalULong: FfiConverterRustBuffer<kotlin.ULong?> {
         }
     }
 
-    override fun write(value: kotlin.ULong?, buf: ByteBuffer) {
+    override fun write(
+        value: kotlin.ULong?,
+        buf: ByteBuffer,
+    ) {
         if (value == null) {
             buf.put(0)
         } else {
@@ -10063,13 +10674,10 @@ public object FfiConverterOptionalULong: FfiConverterRustBuffer<kotlin.ULong?> {
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterOptionalFloat: FfiConverterRustBuffer<kotlin.Float?> {
+public object FfiConverterOptionalFloat : FfiConverterRustBuffer<kotlin.Float?> {
     override fun read(buf: ByteBuffer): kotlin.Float? {
         if (buf.get().toInt() == 0) {
             return null
@@ -10085,7 +10693,10 @@ public object FfiConverterOptionalFloat: FfiConverterRustBuffer<kotlin.Float?> {
         }
     }
 
-    override fun write(value: kotlin.Float?, buf: ByteBuffer) {
+    override fun write(
+        value: kotlin.Float?,
+        buf: ByteBuffer,
+    ) {
         if (value == null) {
             buf.put(0)
         } else {
@@ -10095,13 +10706,10 @@ public object FfiConverterOptionalFloat: FfiConverterRustBuffer<kotlin.Float?> {
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterOptionalDouble: FfiConverterRustBuffer<kotlin.Double?> {
+public object FfiConverterOptionalDouble : FfiConverterRustBuffer<kotlin.Double?> {
     override fun read(buf: ByteBuffer): kotlin.Double? {
         if (buf.get().toInt() == 0) {
             return null
@@ -10117,7 +10725,10 @@ public object FfiConverterOptionalDouble: FfiConverterRustBuffer<kotlin.Double?>
         }
     }
 
-    override fun write(value: kotlin.Double?, buf: ByteBuffer) {
+    override fun write(
+        value: kotlin.Double?,
+        buf: ByteBuffer,
+    ) {
         if (value == null) {
             buf.put(0)
         } else {
@@ -10127,13 +10738,10 @@ public object FfiConverterOptionalDouble: FfiConverterRustBuffer<kotlin.Double?>
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterOptionalBoolean: FfiConverterRustBuffer<kotlin.Boolean?> {
+public object FfiConverterOptionalBoolean : FfiConverterRustBuffer<kotlin.Boolean?> {
     override fun read(buf: ByteBuffer): kotlin.Boolean? {
         if (buf.get().toInt() == 0) {
             return null
@@ -10149,7 +10757,10 @@ public object FfiConverterOptionalBoolean: FfiConverterRustBuffer<kotlin.Boolean
         }
     }
 
-    override fun write(value: kotlin.Boolean?, buf: ByteBuffer) {
+    override fun write(
+        value: kotlin.Boolean?,
+        buf: ByteBuffer,
+    ) {
         if (value == null) {
             buf.put(0)
         } else {
@@ -10159,13 +10770,10 @@ public object FfiConverterOptionalBoolean: FfiConverterRustBuffer<kotlin.Boolean
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterOptionalString: FfiConverterRustBuffer<kotlin.String?> {
+public object FfiConverterOptionalString : FfiConverterRustBuffer<kotlin.String?> {
     override fun read(buf: ByteBuffer): kotlin.String? {
         if (buf.get().toInt() == 0) {
             return null
@@ -10181,7 +10789,10 @@ public object FfiConverterOptionalString: FfiConverterRustBuffer<kotlin.String?>
         }
     }
 
-    override fun write(value: kotlin.String?, buf: ByteBuffer) {
+    override fun write(
+        value: kotlin.String?,
+        buf: ByteBuffer,
+    ) {
         if (value == null) {
             buf.put(0)
         } else {
@@ -10191,13 +10802,10 @@ public object FfiConverterOptionalString: FfiConverterRustBuffer<kotlin.String?>
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterOptionalTypeWorkflowCheckpoint: FfiConverterRustBuffer<WorkflowCheckpoint?> {
+public object FfiConverterOptionalTypeWorkflowCheckpoint : FfiConverterRustBuffer<WorkflowCheckpoint?> {
     override fun read(buf: ByteBuffer): WorkflowCheckpoint? {
         if (buf.get().toInt() == 0) {
             return null
@@ -10213,7 +10821,10 @@ public object FfiConverterOptionalTypeWorkflowCheckpoint: FfiConverterRustBuffer
         }
     }
 
-    override fun write(value: WorkflowCheckpoint?, buf: ByteBuffer) {
+    override fun write(
+        value: WorkflowCheckpoint?,
+        buf: ByteBuffer,
+    ) {
         if (value == null) {
             buf.put(0)
         } else {
@@ -10223,13 +10834,10 @@ public object FfiConverterOptionalTypeWorkflowCheckpoint: FfiConverterRustBuffer
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceDouble: FfiConverterRustBuffer<List<kotlin.Double>> {
+public object FfiConverterSequenceDouble : FfiConverterRustBuffer<List<kotlin.Double>> {
     override fun read(buf: ByteBuffer): List<kotlin.Double> {
         val len = buf.getInt()
         return List<kotlin.Double>(len) {
@@ -10243,7 +10851,10 @@ public object FfiConverterSequenceDouble: FfiConverterRustBuffer<List<kotlin.Dou
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<kotlin.Double>, buf: ByteBuffer) {
+    override fun write(
+        value: List<kotlin.Double>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterDouble.write(it, buf)
@@ -10251,13 +10862,10 @@ public object FfiConverterSequenceDouble: FfiConverterRustBuffer<List<kotlin.Dou
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.String>> {
+public object FfiConverterSequenceString : FfiConverterRustBuffer<List<kotlin.String>> {
     override fun read(buf: ByteBuffer): List<kotlin.String> {
         val len = buf.getInt()
         return List<kotlin.String>(len) {
@@ -10271,7 +10879,10 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.Str
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<kotlin.String>, buf: ByteBuffer) {
+    override fun write(
+        value: List<kotlin.String>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterString.write(it, buf)
@@ -10279,13 +10890,10 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.Str
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeWorkflow: FfiConverterRustBuffer<List<Workflow>> {
+public object FfiConverterSequenceTypeWorkflow : FfiConverterRustBuffer<List<Workflow>> {
     override fun read(buf: ByteBuffer): List<Workflow> {
         val len = buf.getInt()
         return List<Workflow>(len) {
@@ -10299,7 +10907,10 @@ public object FfiConverterSequenceTypeWorkflow: FfiConverterRustBuffer<List<Work
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<Workflow>, buf: ByteBuffer) {
+    override fun write(
+        value: List<Workflow>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeWorkflow.write(it, buf)
@@ -10307,13 +10918,10 @@ public object FfiConverterSequenceTypeWorkflow: FfiConverterRustBuffer<List<Work
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeChatMessage: FfiConverterRustBuffer<List<ChatMessage>> {
+public object FfiConverterSequenceTypeChatMessage : FfiConverterRustBuffer<List<ChatMessage>> {
     override fun read(buf: ByteBuffer): List<ChatMessage> {
         val len = buf.getInt()
         return List<ChatMessage>(len) {
@@ -10327,7 +10935,10 @@ public object FfiConverterSequenceTypeChatMessage: FfiConverterRustBuffer<List<C
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<ChatMessage>, buf: ByteBuffer) {
+    override fun write(
+        value: List<ChatMessage>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeChatMessage.write(it, buf)
@@ -10335,13 +10946,10 @@ public object FfiConverterSequenceTypeChatMessage: FfiConverterRustBuffer<List<C
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeCompletionRequest: FfiConverterRustBuffer<List<CompletionRequest>> {
+public object FfiConverterSequenceTypeCompletionRequest : FfiConverterRustBuffer<List<CompletionRequest>> {
     override fun read(buf: ByteBuffer): List<CompletionRequest> {
         val len = buf.getInt()
         return List<CompletionRequest>(len) {
@@ -10355,7 +10963,10 @@ public object FfiConverterSequenceTypeCompletionRequest: FfiConverterRustBuffer<
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<CompletionRequest>, buf: ByteBuffer) {
+    override fun write(
+        value: List<CompletionRequest>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeCompletionRequest.write(it, buf)
@@ -10363,13 +10974,10 @@ public object FfiConverterSequenceTypeCompletionRequest: FfiConverterRustBuffer<
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeEvent: FfiConverterRustBuffer<List<Event>> {
+public object FfiConverterSequenceTypeEvent : FfiConverterRustBuffer<List<Event>> {
     override fun read(buf: ByteBuffer): List<Event> {
         val len = buf.getInt()
         return List<Event>(len) {
@@ -10383,7 +10991,10 @@ public object FfiConverterSequenceTypeEvent: FfiConverterRustBuffer<List<Event>>
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<Event>, buf: ByteBuffer) {
+    override fun write(
+        value: List<Event>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeEvent.write(it, buf)
@@ -10391,13 +11002,10 @@ public object FfiConverterSequenceTypeEvent: FfiConverterRustBuffer<List<Event>>
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeMedia: FfiConverterRustBuffer<List<Media>> {
+public object FfiConverterSequenceTypeMedia : FfiConverterRustBuffer<List<Media>> {
     override fun read(buf: ByteBuffer): List<Media> {
         val len = buf.getInt()
         return List<Media>(len) {
@@ -10411,7 +11019,10 @@ public object FfiConverterSequenceTypeMedia: FfiConverterRustBuffer<List<Media>>
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<Media>, buf: ByteBuffer) {
+    override fun write(
+        value: List<Media>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMedia.write(it, buf)
@@ -10419,13 +11030,10 @@ public object FfiConverterSequenceTypeMedia: FfiConverterRustBuffer<List<Media>>
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypePersistedEvent: FfiConverterRustBuffer<List<PersistedEvent>> {
+public object FfiConverterSequenceTypePersistedEvent : FfiConverterRustBuffer<List<PersistedEvent>> {
     override fun read(buf: ByteBuffer): List<PersistedEvent> {
         val len = buf.getInt()
         return List<PersistedEvent>(len) {
@@ -10439,7 +11047,10 @@ public object FfiConverterSequenceTypePersistedEvent: FfiConverterRustBuffer<Lis
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<PersistedEvent>, buf: ByteBuffer) {
+    override fun write(
+        value: List<PersistedEvent>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypePersistedEvent.write(it, buf)
@@ -10447,13 +11058,10 @@ public object FfiConverterSequenceTypePersistedEvent: FfiConverterRustBuffer<Lis
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeTool: FfiConverterRustBuffer<List<Tool>> {
+public object FfiConverterSequenceTypeTool : FfiConverterRustBuffer<List<Tool>> {
     override fun read(buf: ByteBuffer): List<Tool> {
         val len = buf.getInt()
         return List<Tool>(len) {
@@ -10467,7 +11075,10 @@ public object FfiConverterSequenceTypeTool: FfiConverterRustBuffer<List<Tool>> {
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<Tool>, buf: ByteBuffer) {
+    override fun write(
+        value: List<Tool>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeTool.write(it, buf)
@@ -10475,13 +11086,10 @@ public object FfiConverterSequenceTypeTool: FfiConverterRustBuffer<List<Tool>> {
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeToolCall: FfiConverterRustBuffer<List<ToolCall>> {
+public object FfiConverterSequenceTypeToolCall : FfiConverterRustBuffer<List<ToolCall>> {
     override fun read(buf: ByteBuffer): List<ToolCall> {
         val len = buf.getInt()
         return List<ToolCall>(len) {
@@ -10495,7 +11103,10 @@ public object FfiConverterSequenceTypeToolCall: FfiConverterRustBuffer<List<Tool
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<ToolCall>, buf: ByteBuffer) {
+    override fun write(
+        value: List<ToolCall>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeToolCall.write(it, buf)
@@ -10503,13 +11114,10 @@ public object FfiConverterSequenceTypeToolCall: FfiConverterRustBuffer<List<Tool
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeWorkflowCheckpoint: FfiConverterRustBuffer<List<WorkflowCheckpoint>> {
+public object FfiConverterSequenceTypeWorkflowCheckpoint : FfiConverterRustBuffer<List<WorkflowCheckpoint>> {
     override fun read(buf: ByteBuffer): List<WorkflowCheckpoint> {
         val len = buf.getInt()
         return List<WorkflowCheckpoint>(len) {
@@ -10523,7 +11131,10 @@ public object FfiConverterSequenceTypeWorkflowCheckpoint: FfiConverterRustBuffer
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<WorkflowCheckpoint>, buf: ByteBuffer) {
+    override fun write(
+        value: List<WorkflowCheckpoint>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeWorkflowCheckpoint.write(it, buf)
@@ -10531,13 +11142,10 @@ public object FfiConverterSequenceTypeWorkflowCheckpoint: FfiConverterRustBuffer
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeWorkflowHistoryEntry: FfiConverterRustBuffer<List<WorkflowHistoryEntry>> {
+public object FfiConverterSequenceTypeWorkflowHistoryEntry : FfiConverterRustBuffer<List<WorkflowHistoryEntry>> {
     override fun read(buf: ByteBuffer): List<WorkflowHistoryEntry> {
         val len = buf.getInt()
         return List<WorkflowHistoryEntry>(len) {
@@ -10551,7 +11159,10 @@ public object FfiConverterSequenceTypeWorkflowHistoryEntry: FfiConverterRustBuff
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<WorkflowHistoryEntry>, buf: ByteBuffer) {
+    override fun write(
+        value: List<WorkflowHistoryEntry>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeWorkflowHistoryEntry.write(it, buf)
@@ -10559,13 +11170,10 @@ public object FfiConverterSequenceTypeWorkflowHistoryEntry: FfiConverterRustBuff
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeBatchItem: FfiConverterRustBuffer<List<BatchItem>> {
+public object FfiConverterSequenceTypeBatchItem : FfiConverterRustBuffer<List<BatchItem>> {
     override fun read(buf: ByteBuffer): List<BatchItem> {
         val len = buf.getInt()
         return List<BatchItem>(len) {
@@ -10579,7 +11187,10 @@ public object FfiConverterSequenceTypeBatchItem: FfiConverterRustBuffer<List<Bat
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<BatchItem>, buf: ByteBuffer) {
+    override fun write(
+        value: List<BatchItem>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeBatchItem.write(it, buf)
@@ -10587,13 +11198,10 @@ public object FfiConverterSequenceTypeBatchItem: FfiConverterRustBuffer<List<Bat
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceSequenceDouble: FfiConverterRustBuffer<List<List<kotlin.Double>>> {
+public object FfiConverterSequenceSequenceDouble : FfiConverterRustBuffer<List<List<kotlin.Double>>> {
     override fun read(buf: ByteBuffer): List<List<kotlin.Double>> {
         val len = buf.getInt()
         return List<List<kotlin.Double>>(len) {
@@ -10607,7 +11215,10 @@ public object FfiConverterSequenceSequenceDouble: FfiConverterRustBuffer<List<Li
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<List<kotlin.Double>>, buf: ByteBuffer) {
+    override fun write(
+        value: List<List<kotlin.Double>>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterSequenceDouble.write(it, buf)
@@ -10615,51 +11226,49 @@ public object FfiConverterSequenceSequenceDouble: FfiConverterRustBuffer<List<Li
     }
 }
 
-
-
-
-
-
-
- fun `version`(): kotlin.String {
-            return FfiConverterString.lift(
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_version(
-    
-        _status)
-}
+fun `version`(): kotlin.String =
+    FfiConverterString.lift(
+        uniffiRustCall { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_version(_status)
+        },
     )
-    }
-    
 
-        /**
-         * Run a batch of completion requests with bounded concurrency.
-         *
-         * - `model`: the model to drive (one provider, one model id; for cross-model
-         * batches dispatch from foreign code instead).
-         * - `requests`: the requests to send, in order. Each is converted to the
-         * upstream wire format before dispatch; conversion errors short-circuit
-         * the entire batch (the request list is rejected as a whole, since a bad
-         * schema means the batch was misconfigured).
-         * - `max_concurrency`: hard cap on in-flight requests. `0` means unlimited
-         * (all dispatched in parallel).
-         *
-         * Returns a [`BatchResult`] with per-request outcomes and aggregated
-         * usage / cost. Individual request failures appear in
-         * [`BatchResult::responses`] as [`BatchItem::Failure`] — they do not cause
-         * this function itself to return `Err`.
-         *
-         * # Errors
-         *
-         * Returns [`BlazenError::Validation`] if any input request fails to convert
-         * to the upstream wire format (typically a malformed `parameters_json` or
-         * `response_format_json` payload).
-         */
-    @Throws(BlazenException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-     suspend fun `completeBatch`(`model`: CompletionModel, `requests`: List<CompletionRequest>, `maxConcurrency`: kotlin.UInt) : BatchResult {
-        return uniffiRustCallAsync(
-        UniffiLib.uniffi_blazen_uniffi_fn_func_complete_batch(FfiConverterTypeCompletionModel.lower(`model`),FfiConverterSequenceTypeCompletionRequest.lower(`requests`),FfiConverterUInt.lower(`maxConcurrency`),),
+/**
+ * Run a batch of completion requests with bounded concurrency.
+ *
+ * - `model`: the model to drive (one provider, one model id; for cross-model
+ * batches dispatch from foreign code instead).
+ * - `requests`: the requests to send, in order. Each is converted to the
+ * upstream wire format before dispatch; conversion errors short-circuit
+ * the entire batch (the request list is rejected as a whole, since a bad
+ * schema means the batch was misconfigured).
+ * - `max_concurrency`: hard cap on in-flight requests. `0` means unlimited
+ * (all dispatched in parallel).
+ *
+ * Returns a [`BatchResult`] with per-request outcomes and aggregated
+ * usage / cost. Individual request failures appear in
+ * [`BatchResult::responses`] as [`BatchItem::Failure`] — they do not cause
+ * this function itself to return `Err`.
+ *
+ * # Errors
+ *
+ * Returns [`BlazenError::Validation`] if any input request fails to convert
+ * to the upstream wire format (typically a malformed `parameters_json` or
+ * `response_format_json` payload).
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `completeBatch`(
+    `model`: CompletionModel,
+    `requests`: List<CompletionRequest>,
+    `maxConcurrency`: kotlin.UInt,
+): BatchResult =
+    uniffiRustCallAsync(
+        UniffiLib.uniffi_blazen_uniffi_fn_func_complete_batch(
+            FfiConverterTypeCompletionModel.lower(`model`),
+            FfiConverterSequenceTypeCompletionRequest.lower(`requests`),
+            FfiConverterUInt.lower(`maxConcurrency`),
+        ),
         { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
         { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
         { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
@@ -10668,815 +11277,1023 @@ public object FfiConverterSequenceSequenceDouble: FfiConverterRustBuffer<List<Li
         // Error FFI converter
         BlazenException.ErrorHandler,
     )
-    }
 
-        /**
-         * Synchronous variant of [`complete_batch`] — blocks the current thread on
-         * the shared Tokio runtime.
-         *
-         * # Errors
-         *
-         * Same as [`complete_batch`].
-         */
-    @Throws(BlazenException::class) fun `completeBatchBlocking`(`model`: CompletionModel, `requests`: List<CompletionRequest>, `maxConcurrency`: kotlin.UInt): BatchResult {
-            return FfiConverterTypeBatchResult.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_complete_batch_blocking(
-    
-        FfiConverterTypeCompletionModel.lower(`model`),FfiConverterSequenceTypeCompletionRequest.lower(`requests`),FfiConverterUInt.lower(`maxConcurrency`),_status)
-}
+/**
+ * Synchronous variant of [`complete_batch`] — blocks the current thread on
+ * the shared Tokio runtime.
+ *
+ * # Errors
+ *
+ * Same as [`complete_batch`].
+ */
+@Throws(BlazenException::class)
+fun `completeBatchBlocking`(
+    `model`: CompletionModel,
+    `requests`: List<CompletionRequest>,
+    `maxConcurrency`: kotlin.UInt,
+): BatchResult =
+    FfiConverterTypeBatchResult.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_complete_batch_blocking(
+                FfiConverterTypeCompletionModel.lower(`model`),
+                FfiConverterSequenceTypeCompletionRequest.lower(`requests`),
+                FfiConverterUInt.lower(`maxConcurrency`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a local diffusion-rs image-generation model.
-         *
-         * `model_id` is the HuggingFace repo id of the Stable Diffusion variant
-         * (e.g. `"stabilityai/stable-diffusion-2-1"`). `device` follows the same
-         * device-string format as the local-LLM factories. `width` / `height` /
-         * `num_inference_steps` / `guidance_scale` set provider defaults applied
-         * to every generate call. Calls surface the upstream "engine not yet
-         * wired" message until the Phase 5.3 work lands; construction succeeds so
-         * foreign callers can plumb their options today.
-         */
-    @Throws(BlazenException::class) fun `newDiffusionModel`(`modelId`: kotlin.String?, `device`: kotlin.String?, `width`: kotlin.UInt?, `height`: kotlin.UInt?, `numInferenceSteps`: kotlin.UInt?, `guidanceScale`: kotlin.Float?): ImageGenModel {
-            return FfiConverterTypeImageGenModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_diffusion_model(
-    
-        FfiConverterOptionalString.lower(`modelId`),FfiConverterOptionalString.lower(`device`),FfiConverterOptionalUInt.lower(`width`),FfiConverterOptionalUInt.lower(`height`),FfiConverterOptionalUInt.lower(`numInferenceSteps`),FfiConverterOptionalFloat.lower(`guidanceScale`),_status)
-}
+/**
+ * Build a local diffusion-rs image-generation model.
+ *
+ * `model_id` is the HuggingFace repo id of the Stable Diffusion variant
+ * (e.g. `"stabilityai/stable-diffusion-2-1"`). `device` follows the same
+ * device-string format as the local-LLM factories. `width` / `height` /
+ * `num_inference_steps` / `guidance_scale` set provider defaults applied
+ * to every generate call. Calls surface the upstream "engine not yet
+ * wired" message until the Phase 5.3 work lands; construction succeeds so
+ * foreign callers can plumb their options today.
+ */
+@Throws(BlazenException::class)
+fun `newDiffusionModel`(
+    `modelId`: kotlin.String?,
+    `device`: kotlin.String?,
+    `width`: kotlin.UInt?,
+    `height`: kotlin.UInt?,
+    `numInferenceSteps`: kotlin.UInt?,
+    `guidanceScale`: kotlin.Float?,
+): ImageGenModel =
+    FfiConverterTypeImageGenModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_diffusion_model(
+                FfiConverterOptionalString.lower(`modelId`),
+                FfiConverterOptionalString.lower(`device`),
+                FfiConverterOptionalUInt.lower(`width`),
+                FfiConverterOptionalUInt.lower(`height`),
+                FfiConverterOptionalUInt.lower(`numInferenceSteps`),
+                FfiConverterOptionalFloat.lower(`guidanceScale`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a fal.ai-backed [`ImageGenModel`].
-         *
-         * `api_key` may be empty when the provider resolves it from `FAL_KEY`.
-         * `model` overrides the default fal image-gen endpoint (e.g.
-         * `"fal-ai/flux/dev"`); when `None`, fal routes to its current default
-         * image model. The per-call `model` argument on
-         * [`ImageGenModel::generate`] takes precedence over this default when
-         * both are set.
-         */
-    @Throws(BlazenException::class) fun `newFalImageGenModel`(`apiKey`: kotlin.String, `model`: kotlin.String?): ImageGenModel {
-            return FfiConverterTypeImageGenModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_fal_image_gen_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterOptionalString.lower(`model`),_status)
-}
+/**
+ * Build a fal.ai-backed [`ImageGenModel`].
+ *
+ * `api_key` may be empty when the provider resolves it from `FAL_KEY`.
+ * `model` overrides the default fal image-gen endpoint (e.g.
+ * `"fal-ai/flux/dev"`); when `None`, fal routes to its current default
+ * image model. The per-call `model` argument on
+ * [`ImageGenModel::generate`] takes precedence over this default when
+ * both are set.
+ */
+@Throws(BlazenException::class)
+fun `newFalImageGenModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+): ImageGenModel =
+    FfiConverterTypeImageGenModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fal_image_gen_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a fal.ai-backed [`SttModel`].
-         *
-         * `api_key` may be empty when the provider resolves it from `FAL_KEY`.
-         * `model` overrides the default fal transcription endpoint (e.g.
-         * `"fal-ai/whisper"`); when `None`, fal routes to its current default
-         * Whisper endpoint.
-         */
-    @Throws(BlazenException::class) fun `newFalSttModel`(`apiKey`: kotlin.String, `model`: kotlin.String?): SttModel {
-            return FfiConverterTypeSttModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_fal_stt_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterOptionalString.lower(`model`),_status)
-}
+/**
+ * Build a fal.ai-backed [`SttModel`].
+ *
+ * `api_key` may be empty when the provider resolves it from `FAL_KEY`.
+ * `model` overrides the default fal transcription endpoint (e.g.
+ * `"fal-ai/whisper"`); when `None`, fal routes to its current default
+ * Whisper endpoint.
+ */
+@Throws(BlazenException::class)
+fun `newFalSttModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+): SttModel =
+    FfiConverterTypeSttModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fal_stt_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a fal.ai-backed [`TtsModel`].
-         *
-         * `api_key` may be empty when the provider resolves it from `FAL_KEY`.
-         * `model` overrides the default fal TTS endpoint (e.g.
-         * `"fal-ai/dia-tts"`); when `None`, the per-call `voice` / `language`
-         * arguments decide which endpoint fal routes to.
-         */
-    @Throws(BlazenException::class) fun `newFalTtsModel`(`apiKey`: kotlin.String, `model`: kotlin.String?): TtsModel {
-            return FfiConverterTypeTtsModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_fal_tts_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterOptionalString.lower(`model`),_status)
-}
+/**
+ * Build a fal.ai-backed [`TtsModel`].
+ *
+ * `api_key` may be empty when the provider resolves it from `FAL_KEY`.
+ * `model` overrides the default fal TTS endpoint (e.g.
+ * `"fal-ai/dia-tts"`); when `None`, the per-call `voice` / `language`
+ * arguments decide which endpoint fal routes to.
+ */
+@Throws(BlazenException::class)
+fun `newFalTtsModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+): TtsModel =
+    FfiConverterTypeTtsModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fal_tts_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a local Piper text-to-speech model.
-         *
-         * `model_id` selects a Piper voice model (e.g. `"en_US-amy-medium"`).
-         * `speaker_id` selects a speaker for multi-speaker voice models;
-         * `sample_rate` overrides the model's native sample rate. Returns a
-         * [`TtsModel`] handle whose [`synthesize`](TtsModel::synthesize) call
-         * surfaces the upstream "engine not available" error until the Piper
-         * Phase 9 wiring lands — but construction succeeds so foreign callers
-         * can wire option plumbing today.
-         */
-    @Throws(BlazenException::class) fun `newPiperTtsModel`(`modelId`: kotlin.String?, `speakerId`: kotlin.UInt?, `sampleRate`: kotlin.UInt?): TtsModel {
-            return FfiConverterTypeTtsModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_piper_tts_model(
-    
-        FfiConverterOptionalString.lower(`modelId`),FfiConverterOptionalUInt.lower(`speakerId`),FfiConverterOptionalUInt.lower(`sampleRate`),_status)
-}
+/**
+ * Build a local Piper text-to-speech model.
+ *
+ * `model_id` selects a Piper voice model (e.g. `"en_US-amy-medium"`).
+ * `speaker_id` selects a speaker for multi-speaker voice models;
+ * `sample_rate` overrides the model's native sample rate. Returns a
+ * [`TtsModel`] handle whose [`synthesize`](TtsModel::synthesize) call
+ * surfaces the upstream "engine not available" error until the Piper
+ * Phase 9 wiring lands — but construction succeeds so foreign callers
+ * can wire option plumbing today.
+ */
+@Throws(BlazenException::class)
+fun `newPiperTtsModel`(
+    `modelId`: kotlin.String?,
+    `speakerId`: kotlin.UInt?,
+    `sampleRate`: kotlin.UInt?,
+): TtsModel =
+    FfiConverterTypeTtsModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_piper_tts_model(
+                FfiConverterOptionalString.lower(`modelId`),
+                FfiConverterOptionalUInt.lower(`speakerId`),
+                FfiConverterOptionalUInt.lower(`sampleRate`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a local whisper.cpp speech-to-text model.
-         *
-         * `model` selects a Whisper variant by name (case-insensitive:
-         * `"tiny"`, `"base"`, `"small"`, `"medium"`, `"large-v3"`); unrecognised
-         * values default to `Small`. `device` accepts the same format strings as
-         * `blazen_llm::Device::parse` (`"cpu"`, `"cuda"`, `"cuda:N"`, `"metal"`).
-         * `language` is an optional default ISO-639-1 hint (overridable per
-         * [`SttModel::transcribe`] call).
-         */
-    @Throws(BlazenException::class) fun `newWhisperSttModel`(`model`: kotlin.String?, `device`: kotlin.String?, `language`: kotlin.String?): SttModel {
-            return FfiConverterTypeSttModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_whisper_stt_model(
-    
-        FfiConverterOptionalString.lower(`model`),FfiConverterOptionalString.lower(`device`),FfiConverterOptionalString.lower(`language`),_status)
-}
+/**
+ * Build a local whisper.cpp speech-to-text model.
+ *
+ * `model` selects a Whisper variant by name (case-insensitive:
+ * `"tiny"`, `"base"`, `"small"`, `"medium"`, `"large-v3"`); unrecognised
+ * values default to `Small`. `device` accepts the same format strings as
+ * `blazen_llm::Device::parse` (`"cpu"`, `"cuda"`, `"cuda:N"`, `"metal"`).
+ * `language` is an optional default ISO-639-1 hint (overridable per
+ * [`SttModel::transcribe`] call).
+ */
+@Throws(BlazenException::class)
+fun `newWhisperSttModel`(
+    `model`: kotlin.String?,
+    `device`: kotlin.String?,
+    `language`: kotlin.String?,
+): SttModel =
+    FfiConverterTypeSttModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_whisper_stt_model(
+                FfiConverterOptionalString.lower(`model`),
+                FfiConverterOptionalString.lower(`device`),
+                FfiConverterOptionalString.lower(`language`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build an embedded redb-backed checkpoint store rooted at `path`.
-         *
-         * The database file is created if it does not exist. Re-opening an
-         * existing file is safe and preserves prior checkpoints. The returned
-         * handle is cheap to clone and safe to share across threads / tasks.
-         */
-    @Throws(BlazenException::class) fun `newRedbCheckpointStore`(`path`: kotlin.String): CheckpointStore {
-            return FfiConverterTypeCheckpointStore.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_redb_checkpoint_store(
-    
-        FfiConverterString.lower(`path`),_status)
-}
+/**
+ * Build an embedded redb-backed checkpoint store rooted at `path`.
+ *
+ * The database file is created if it does not exist. Re-opening an
+ * existing file is safe and preserves prior checkpoints. The returned
+ * handle is cheap to clone and safe to share across threads / tasks.
+ */
+@Throws(BlazenException::class)
+fun `newRedbCheckpointStore`(`path`: kotlin.String): CheckpointStore =
+    FfiConverterTypeCheckpointStore.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_redb_checkpoint_store(FfiConverterString.lower(`path`), _status)
+        },
     )
-    }
-    
 
-        /**
-         * Build a Redis/ValKey-backed checkpoint store connected to `url`.
-         *
-         * `url` is in the form `redis://host:port/db` (or `rediss://` for TLS).
-         * When `ttl_seconds` is provided every saved checkpoint will auto-expire
-         * after that many seconds — useful for transient workflows where old
-         * checkpoints should not accumulate indefinitely.
-         *
-         * The initial connection is established eagerly on the shared Tokio
-         * runtime; subsequent reconnections are handled automatically by the
-         * underlying connection manager.
-         *
-         * # Naming deviation from spec
-         *
-         * The task spec named the second argument `namespace`, but
-         * [`blazen_persist::valkey::ValkeyCheckpointStore`] has no namespace
-         * concept — instead it supports an optional per-key TTL via
-         * [`with_ttl`](blazen_persist::valkey::ValkeyCheckpointStore::with_ttl).
-         * This factory exposes that real option.
-         */
-    @Throws(BlazenException::class) fun `newValkeyCheckpointStore`(`url`: kotlin.String, `ttlSeconds`: kotlin.ULong?): CheckpointStore {
-            return FfiConverterTypeCheckpointStore.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_valkey_checkpoint_store(
-    
-        FfiConverterString.lower(`url`),FfiConverterOptionalULong.lower(`ttlSeconds`),_status)
-}
+/**
+ * Build a Redis/ValKey-backed checkpoint store connected to `url`.
+ *
+ * `url` is in the form `redis://host:port/db` (or `rediss://` for TLS).
+ * When `ttl_seconds` is provided every saved checkpoint will auto-expire
+ * after that many seconds — useful for transient workflows where old
+ * checkpoints should not accumulate indefinitely.
+ *
+ * The initial connection is established eagerly on the shared Tokio
+ * runtime; subsequent reconnections are handled automatically by the
+ * underlying connection manager.
+ *
+ * # Naming deviation from spec
+ *
+ * The task spec named the second argument `namespace`, but
+ * [`blazen_persist::valkey::ValkeyCheckpointStore`] has no namespace
+ * concept — instead it supports an optional per-key TTL via
+ * [`with_ttl`](blazen_persist::valkey::ValkeyCheckpointStore::with_ttl).
+ * This factory exposes that real option.
+ */
+@Throws(BlazenException::class)
+fun `newValkeyCheckpointStore`(
+    `url`: kotlin.String,
+    `ttlSeconds`: kotlin.ULong?,
+): CheckpointStore =
+    FfiConverterTypeCheckpointStore.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_valkey_checkpoint_store(
+                FfiConverterString.lower(`url`),
+                FfiConverterOptionalULong.lower(`ttlSeconds`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build an Anthropic Messages-API chat-completion model.
-         */
-    @Throws(BlazenException::class) fun `newAnthropicCompletionModel`(`apiKey`: kotlin.String, `model`: kotlin.String?, `baseUrl`: kotlin.String?): CompletionModel {
-            return FfiConverterTypeCompletionModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_anthropic_completion_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterOptionalString.lower(`model`),FfiConverterOptionalString.lower(`baseUrl`),_status)
-}
+/**
+ * Build an Anthropic Messages-API chat-completion model.
+ */
+@Throws(BlazenException::class)
+fun `newAnthropicCompletionModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+    `baseUrl`: kotlin.String?,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_anthropic_completion_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                FfiConverterOptionalString.lower(`baseUrl`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build an Azure `OpenAI` chat-completion model.
-         *
-         * Azure derives its endpoint from `resource_name` + `deployment_name` and
-         * its model id from `deployment_name`, so `base_url` is intentionally not
-         * exposed here. `api_version` defaults to the provider's pinned API
-         * version when `None`.
-         */
-    @Throws(BlazenException::class) fun `newAzureCompletionModel`(`apiKey`: kotlin.String, `resourceName`: kotlin.String, `deploymentName`: kotlin.String, `apiVersion`: kotlin.String?): CompletionModel {
-            return FfiConverterTypeCompletionModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_azure_completion_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterString.lower(`resourceName`),FfiConverterString.lower(`deploymentName`),FfiConverterOptionalString.lower(`apiVersion`),_status)
-}
+/**
+ * Build an Azure `OpenAI` chat-completion model.
+ *
+ * Azure derives its endpoint from `resource_name` + `deployment_name` and
+ * its model id from `deployment_name`, so `base_url` is intentionally not
+ * exposed here. `api_version` defaults to the provider's pinned API
+ * version when `None`.
+ */
+@Throws(BlazenException::class)
+fun `newAzureCompletionModel`(
+    `apiKey`: kotlin.String,
+    `resourceName`: kotlin.String,
+    `deploymentName`: kotlin.String,
+    `apiVersion`: kotlin.String?,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_azure_completion_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterString.lower(`resourceName`),
+                FfiConverterString.lower(`deploymentName`),
+                FfiConverterOptionalString.lower(`apiVersion`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build an AWS Bedrock chat-completion model.
-         *
-         * `region` selects the AWS region (e.g. `"us-east-1"`); `api_key` is the
-         * Bedrock API key (which can be obtained via `aws bedrock` IAM keys or
-         * passed as an empty string to resolve from `AWS_BEARER_TOKEN_BEDROCK`).
-         */
-    @Throws(BlazenException::class) fun `newBedrockCompletionModel`(`apiKey`: kotlin.String, `region`: kotlin.String, `model`: kotlin.String?, `baseUrl`: kotlin.String?): CompletionModel {
-            return FfiConverterTypeCompletionModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_bedrock_completion_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterString.lower(`region`),FfiConverterOptionalString.lower(`model`),FfiConverterOptionalString.lower(`baseUrl`),_status)
-}
+/**
+ * Build an AWS Bedrock chat-completion model.
+ *
+ * `region` selects the AWS region (e.g. `"us-east-1"`); `api_key` is the
+ * Bedrock API key (which can be obtained via `aws bedrock` IAM keys or
+ * passed as an empty string to resolve from `AWS_BEARER_TOKEN_BEDROCK`).
+ */
+@Throws(BlazenException::class)
+fun `newBedrockCompletionModel`(
+    `apiKey`: kotlin.String,
+    `region`: kotlin.String,
+    `model`: kotlin.String?,
+    `baseUrl`: kotlin.String?,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_bedrock_completion_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterString.lower(`region`),
+                FfiConverterOptionalString.lower(`model`),
+                FfiConverterOptionalString.lower(`baseUrl`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a local candle chat-completion model.
-         *
-         * Wraps [`CandleLlmProvider`](blazen_llm::CandleLlmProvider) through the
-         * [`CandleLlmCompletionModel`](blazen_llm::CandleLlmCompletionModel) trait
-         * bridge so it satisfies the same `CompletionModel` trait as remote
-         * providers.
-         */
-    @Throws(BlazenException::class) fun `newCandleCompletionModel`(`modelId`: kotlin.String, `device`: kotlin.String?, `quantization`: kotlin.String?, `revision`: kotlin.String?, `contextLength`: kotlin.UInt?): CompletionModel {
-            return FfiConverterTypeCompletionModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_candle_completion_model(
-    
-        FfiConverterString.lower(`modelId`),FfiConverterOptionalString.lower(`device`),FfiConverterOptionalString.lower(`quantization`),FfiConverterOptionalString.lower(`revision`),FfiConverterOptionalUInt.lower(`contextLength`),_status)
-}
+/**
+ * Build a local candle chat-completion model.
+ *
+ * Wraps [`CandleLlmProvider`](blazen_llm::CandleLlmProvider) through the
+ * [`CandleLlmCompletionModel`](blazen_llm::CandleLlmCompletionModel) trait
+ * bridge so it satisfies the same `CompletionModel` trait as remote
+ * providers.
+ */
+@Throws(BlazenException::class)
+fun `newCandleCompletionModel`(
+    `modelId`: kotlin.String,
+    `device`: kotlin.String?,
+    `quantization`: kotlin.String?,
+    `revision`: kotlin.String?,
+    `contextLength`: kotlin.UInt?,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_candle_completion_model(
+                FfiConverterString.lower(`modelId`),
+                FfiConverterOptionalString.lower(`device`),
+                FfiConverterOptionalString.lower(`quantization`),
+                FfiConverterOptionalString.lower(`revision`),
+                FfiConverterOptionalUInt.lower(`contextLength`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a local candle text-embedding model.
-         *
-         * Loads weights from `HuggingFace` and runs inference on-device. Defaults
-         * to `"sentence-transformers/all-MiniLM-L6-v2"` when `model_id` is `None`.
-         */
-    @Throws(BlazenException::class) fun `newCandleEmbeddingModel`(`modelId`: kotlin.String?, `device`: kotlin.String?, `revision`: kotlin.String?): EmbeddingModel {
-            return FfiConverterTypeEmbeddingModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_candle_embedding_model(
-    
-        FfiConverterOptionalString.lower(`modelId`),FfiConverterOptionalString.lower(`device`),FfiConverterOptionalString.lower(`revision`),_status)
-}
+/**
+ * Build a local candle text-embedding model.
+ *
+ * Loads weights from `HuggingFace` and runs inference on-device. Defaults
+ * to `"sentence-transformers/all-MiniLM-L6-v2"` when `model_id` is `None`.
+ */
+@Throws(BlazenException::class)
+fun `newCandleEmbeddingModel`(
+    `modelId`: kotlin.String?,
+    `device`: kotlin.String?,
+    `revision`: kotlin.String?,
+): EmbeddingModel =
+    FfiConverterTypeEmbeddingModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_candle_embedding_model(
+                FfiConverterOptionalString.lower(`modelId`),
+                FfiConverterOptionalString.lower(`device`),
+                FfiConverterOptionalString.lower(`revision`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a Cohere chat-completion model.
-         */
-    @Throws(BlazenException::class) fun `newCohereCompletionModel`(`apiKey`: kotlin.String, `model`: kotlin.String?, `baseUrl`: kotlin.String?): CompletionModel {
-            return FfiConverterTypeCompletionModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_cohere_completion_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterOptionalString.lower(`model`),FfiConverterOptionalString.lower(`baseUrl`),_status)
-}
+/**
+ * Build a Cohere chat-completion model.
+ */
+@Throws(BlazenException::class)
+fun `newCohereCompletionModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+    `baseUrl`: kotlin.String?,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_cohere_completion_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                FfiConverterOptionalString.lower(`baseUrl`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a `DeepSeek` chat-completion model.
-         */
-    @Throws(BlazenException::class) fun `newDeepseekCompletionModel`(`apiKey`: kotlin.String, `model`: kotlin.String?, `baseUrl`: kotlin.String?): CompletionModel {
-            return FfiConverterTypeCompletionModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_deepseek_completion_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterOptionalString.lower(`model`),FfiConverterOptionalString.lower(`baseUrl`),_status)
-}
+/**
+ * Build a `DeepSeek` chat-completion model.
+ */
+@Throws(BlazenException::class)
+fun `newDeepseekCompletionModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+    `baseUrl`: kotlin.String?,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_deepseek_completion_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                FfiConverterOptionalString.lower(`baseUrl`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a fal.ai chat-completion model.
-         *
-         * `endpoint` selects the fal endpoint family — one of
-         * `"openai_chat"` (default), `"openai_responses"`, `"openai_embeddings"`,
-         * `"openrouter"`, `"any_llm"`. Unrecognised values fall back to
-         * `OpenAiChat`. `enterprise` promotes the endpoint to its enterprise /
-         * SOC2-eligible variant; `auto_route_modality` toggles automatic routing
-         * to a vision/audio/video endpoint when the request carries media.
-         */
-    @Throws(BlazenException::class) fun `newFalCompletionModel`(`apiKey`: kotlin.String, `model`: kotlin.String?, `baseUrl`: kotlin.String?, `endpoint`: kotlin.String?, `enterprise`: kotlin.Boolean, `autoRouteModality`: kotlin.Boolean): CompletionModel {
-            return FfiConverterTypeCompletionModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_fal_completion_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterOptionalString.lower(`model`),FfiConverterOptionalString.lower(`baseUrl`),FfiConverterOptionalString.lower(`endpoint`),FfiConverterBoolean.lower(`enterprise`),FfiConverterBoolean.lower(`autoRouteModality`),_status)
-}
+/**
+ * Build a fal.ai chat-completion model.
+ *
+ * `endpoint` selects the fal endpoint family — one of
+ * `"openai_chat"` (default), `"openai_responses"`, `"openai_embeddings"`,
+ * `"openrouter"`, `"any_llm"`. Unrecognised values fall back to
+ * `OpenAiChat`. `enterprise` promotes the endpoint to its enterprise /
+ * SOC2-eligible variant; `auto_route_modality` toggles automatic routing
+ * to a vision/audio/video endpoint when the request carries media.
+ */
+@Throws(BlazenException::class)
+fun `newFalCompletionModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+    `baseUrl`: kotlin.String?,
+    `endpoint`: kotlin.String?,
+    `enterprise`: kotlin.Boolean,
+    `autoRouteModality`: kotlin.Boolean,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fal_completion_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                FfiConverterOptionalString.lower(`baseUrl`),
+                FfiConverterOptionalString.lower(`endpoint`),
+                FfiConverterBoolean.lower(`enterprise`),
+                FfiConverterBoolean.lower(`autoRouteModality`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a fal.ai embedding model.
-         *
-         * Routes through fal's OpenAI-compatible embeddings endpoint.
-         * `model` defaults to `"openai/text-embedding-3-small"` (1536 dims);
-         * `dimensions` overrides the produced vector size (matching the upstream
-         * model's supported dimensionality).
-         */
-    @Throws(BlazenException::class) fun `newFalEmbeddingModel`(`apiKey`: kotlin.String, `model`: kotlin.String?, `dimensions`: kotlin.UInt?): EmbeddingModel {
-            return FfiConverterTypeEmbeddingModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_fal_embedding_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterOptionalString.lower(`model`),FfiConverterOptionalUInt.lower(`dimensions`),_status)
-}
+/**
+ * Build a fal.ai embedding model.
+ *
+ * Routes through fal's OpenAI-compatible embeddings endpoint.
+ * `model` defaults to `"openai/text-embedding-3-small"` (1536 dims);
+ * `dimensions` overrides the produced vector size (matching the upstream
+ * model's supported dimensionality).
+ */
+@Throws(BlazenException::class)
+fun `newFalEmbeddingModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+    `dimensions`: kotlin.UInt?,
+): EmbeddingModel =
+    FfiConverterTypeEmbeddingModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fal_embedding_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                FfiConverterOptionalUInt.lower(`dimensions`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a local fastembed (ONNX Runtime) embedding model.
-         *
-         * `model_name` selects a variant from fastembed's catalog (case-insensitive
-         * debug spelling: `"BGESmallENV15"`, `"AllMiniLML6V2"`, ...). When `None`,
-         * defaults to `BGESmallENV15`.
-         */
-    @Throws(BlazenException::class) fun `newFastembedEmbeddingModel`(`modelName`: kotlin.String?, `maxBatchSize`: kotlin.UInt?, `showDownloadProgress`: kotlin.Boolean?): EmbeddingModel {
-            return FfiConverterTypeEmbeddingModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_fastembed_embedding_model(
-    
-        FfiConverterOptionalString.lower(`modelName`),FfiConverterOptionalUInt.lower(`maxBatchSize`),FfiConverterOptionalBoolean.lower(`showDownloadProgress`),_status)
-}
+/**
+ * Build a local fastembed (ONNX Runtime) embedding model.
+ *
+ * `model_name` selects a variant from fastembed's catalog (case-insensitive
+ * debug spelling: `"BGESmallENV15"`, `"AllMiniLML6V2"`, ...). When `None`,
+ * defaults to `BGESmallENV15`.
+ */
+@Throws(BlazenException::class)
+fun `newFastembedEmbeddingModel`(
+    `modelName`: kotlin.String?,
+    `maxBatchSize`: kotlin.UInt?,
+    `showDownloadProgress`: kotlin.Boolean?,
+): EmbeddingModel =
+    FfiConverterTypeEmbeddingModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fastembed_embedding_model(
+                FfiConverterOptionalString.lower(`modelName`),
+                FfiConverterOptionalUInt.lower(`maxBatchSize`),
+                FfiConverterOptionalBoolean.lower(`showDownloadProgress`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a Fireworks AI chat-completion model.
-         */
-    @Throws(BlazenException::class) fun `newFireworksCompletionModel`(`apiKey`: kotlin.String, `model`: kotlin.String?, `baseUrl`: kotlin.String?): CompletionModel {
-            return FfiConverterTypeCompletionModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_fireworks_completion_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterOptionalString.lower(`model`),FfiConverterOptionalString.lower(`baseUrl`),_status)
-}
+/**
+ * Build a Fireworks AI chat-completion model.
+ */
+@Throws(BlazenException::class)
+fun `newFireworksCompletionModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+    `baseUrl`: kotlin.String?,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fireworks_completion_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                FfiConverterOptionalString.lower(`baseUrl`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a Google Gemini chat-completion model.
-         */
-    @Throws(BlazenException::class) fun `newGeminiCompletionModel`(`apiKey`: kotlin.String, `model`: kotlin.String?, `baseUrl`: kotlin.String?): CompletionModel {
-            return FfiConverterTypeCompletionModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_gemini_completion_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterOptionalString.lower(`model`),FfiConverterOptionalString.lower(`baseUrl`),_status)
-}
+/**
+ * Build a Google Gemini chat-completion model.
+ */
+@Throws(BlazenException::class)
+fun `newGeminiCompletionModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+    `baseUrl`: kotlin.String?,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_gemini_completion_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                FfiConverterOptionalString.lower(`baseUrl`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a Groq chat-completion model.
-         */
-    @Throws(BlazenException::class) fun `newGroqCompletionModel`(`apiKey`: kotlin.String, `model`: kotlin.String?, `baseUrl`: kotlin.String?): CompletionModel {
-            return FfiConverterTypeCompletionModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_groq_completion_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterOptionalString.lower(`model`),FfiConverterOptionalString.lower(`baseUrl`),_status)
-}
+/**
+ * Build a Groq chat-completion model.
+ */
+@Throws(BlazenException::class)
+fun `newGroqCompletionModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+    `baseUrl`: kotlin.String?,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_groq_completion_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                FfiConverterOptionalString.lower(`baseUrl`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a local llama.cpp chat-completion model.
-         *
-         * `model_path` is either a local GGUF file path or a `HuggingFace` repo
-         * id; `n_gpu_layers` offloads the given number of layers to the GPU when
-         * the device supports it.
-         */
-    @Throws(BlazenException::class) fun `newLlamacppCompletionModel`(`modelPath`: kotlin.String, `device`: kotlin.String?, `quantization`: kotlin.String?, `contextLength`: kotlin.UInt?, `nGpuLayers`: kotlin.UInt?): CompletionModel {
-            return FfiConverterTypeCompletionModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_llamacpp_completion_model(
-    
-        FfiConverterString.lower(`modelPath`),FfiConverterOptionalString.lower(`device`),FfiConverterOptionalString.lower(`quantization`),FfiConverterOptionalUInt.lower(`contextLength`),FfiConverterOptionalUInt.lower(`nGpuLayers`),_status)
-}
+/**
+ * Build a local llama.cpp chat-completion model.
+ *
+ * `model_path` is either a local GGUF file path or a `HuggingFace` repo
+ * id; `n_gpu_layers` offloads the given number of layers to the GPU when
+ * the device supports it.
+ */
+@Throws(BlazenException::class)
+fun `newLlamacppCompletionModel`(
+    `modelPath`: kotlin.String,
+    `device`: kotlin.String?,
+    `quantization`: kotlin.String?,
+    `contextLength`: kotlin.UInt?,
+    `nGpuLayers`: kotlin.UInt?,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_llamacpp_completion_model(
+                FfiConverterString.lower(`modelPath`),
+                FfiConverterOptionalString.lower(`device`),
+                FfiConverterOptionalString.lower(`quantization`),
+                FfiConverterOptionalUInt.lower(`contextLength`),
+                FfiConverterOptionalUInt.lower(`nGpuLayers`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a Mistral chat-completion model.
-         */
-    @Throws(BlazenException::class) fun `newMistralCompletionModel`(`apiKey`: kotlin.String, `model`: kotlin.String?, `baseUrl`: kotlin.String?): CompletionModel {
-            return FfiConverterTypeCompletionModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_mistral_completion_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterOptionalString.lower(`model`),FfiConverterOptionalString.lower(`baseUrl`),_status)
-}
+/**
+ * Build a Mistral chat-completion model.
+ */
+@Throws(BlazenException::class)
+fun `newMistralCompletionModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+    `baseUrl`: kotlin.String?,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_mistral_completion_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                FfiConverterOptionalString.lower(`baseUrl`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a local mistral.rs chat-completion model.
-         *
-         * `model_id` is the `HuggingFace` repo id (e.g.
-         * `"mistralai/Mistral-7B-Instruct-v0.3"`) or a local GGUF path. The
-         * optional `device`/`quantization` strings follow Blazen's parser format
-         * (`"cpu"`, `"cuda:0"`, `"metal"`, `"q4_k_m"`, ...). Set `vision = true`
-         * for multimodal models like LLaVA / Qwen2-VL.
-         */
-    @Throws(BlazenException::class) fun `newMistralrsCompletionModel`(`modelId`: kotlin.String, `device`: kotlin.String?, `quantization`: kotlin.String?, `contextLength`: kotlin.UInt?, `vision`: kotlin.Boolean): CompletionModel {
-            return FfiConverterTypeCompletionModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_mistralrs_completion_model(
-    
-        FfiConverterString.lower(`modelId`),FfiConverterOptionalString.lower(`device`),FfiConverterOptionalString.lower(`quantization`),FfiConverterOptionalUInt.lower(`contextLength`),FfiConverterBoolean.lower(`vision`),_status)
-}
+/**
+ * Build a local mistral.rs chat-completion model.
+ *
+ * `model_id` is the `HuggingFace` repo id (e.g.
+ * `"mistralai/Mistral-7B-Instruct-v0.3"`) or a local GGUF path. The
+ * optional `device`/`quantization` strings follow Blazen's parser format
+ * (`"cpu"`, `"cuda:0"`, `"metal"`, `"q4_k_m"`, ...). Set `vision = true`
+ * for multimodal models like LLaVA / Qwen2-VL.
+ */
+@Throws(BlazenException::class)
+fun `newMistralrsCompletionModel`(
+    `modelId`: kotlin.String,
+    `device`: kotlin.String?,
+    `quantization`: kotlin.String?,
+    `contextLength`: kotlin.UInt?,
+    `vision`: kotlin.Boolean,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_mistralrs_completion_model(
+                FfiConverterString.lower(`modelId`),
+                FfiConverterOptionalString.lower(`device`),
+                FfiConverterOptionalString.lower(`quantization`),
+                FfiConverterOptionalUInt.lower(`contextLength`),
+                FfiConverterBoolean.lower(`vision`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a generic OpenAI-compatible chat-completion model.
-         *
-         * Targets any service that speaks the official OpenAI Chat Completions
-         * wire format (vLLM, llama-server, LM Studio, local proxies, ...). Uses
-         * `Authorization: Bearer <api_key>` auth.
-         */
-    @Throws(BlazenException::class) fun `newOpenaiCompatCompletionModel`(`providerName`: kotlin.String, `baseUrl`: kotlin.String, `apiKey`: kotlin.String, `model`: kotlin.String): CompletionModel {
-            return FfiConverterTypeCompletionModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_openai_compat_completion_model(
-    
-        FfiConverterString.lower(`providerName`),FfiConverterString.lower(`baseUrl`),FfiConverterString.lower(`apiKey`),FfiConverterString.lower(`model`),_status)
-}
+/**
+ * Build a generic OpenAI-compatible chat-completion model.
+ *
+ * Targets any service that speaks the official OpenAI Chat Completions
+ * wire format (vLLM, llama-server, LM Studio, local proxies, ...). Uses
+ * `Authorization: Bearer <api_key>` auth.
+ */
+@Throws(BlazenException::class)
+fun `newOpenaiCompatCompletionModel`(
+    `providerName`: kotlin.String,
+    `baseUrl`: kotlin.String,
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_openai_compat_completion_model(
+                FfiConverterString.lower(`providerName`),
+                FfiConverterString.lower(`baseUrl`),
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterString.lower(`model`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build an `OpenAI` chat-completion model.
-         *
-         * `base_url` defaults to `https://api.openai.com/v1`; override it to target
-         * any OpenAI-compatible proxy that uses the official-OpenAI request shape.
-         */
-    @Throws(BlazenException::class) fun `newOpenaiCompletionModel`(`apiKey`: kotlin.String, `model`: kotlin.String?, `baseUrl`: kotlin.String?): CompletionModel {
-            return FfiConverterTypeCompletionModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_openai_completion_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterOptionalString.lower(`model`),FfiConverterOptionalString.lower(`baseUrl`),_status)
-}
+/**
+ * Build an `OpenAI` chat-completion model.
+ *
+ * `base_url` defaults to `https://api.openai.com/v1`; override it to target
+ * any OpenAI-compatible proxy that uses the official-OpenAI request shape.
+ */
+@Throws(BlazenException::class)
+fun `newOpenaiCompletionModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+    `baseUrl`: kotlin.String?,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_openai_completion_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                FfiConverterOptionalString.lower(`baseUrl`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build an `OpenAI` embedding model.
-         *
-         * Defaults to `text-embedding-3-small` (1536 dimensions) when `model` is
-         * `None`. Passing a custom `model` keeps the model's default
-         * dimensionality; callers needing a non-default dimensionality should
-         * drop down to the underlying Rust API.
-         */
-    @Throws(BlazenException::class) fun `newOpenaiEmbeddingModel`(`apiKey`: kotlin.String, `model`: kotlin.String?, `baseUrl`: kotlin.String?): EmbeddingModel {
-            return FfiConverterTypeEmbeddingModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_openai_embedding_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterOptionalString.lower(`model`),FfiConverterOptionalString.lower(`baseUrl`),_status)
-}
+/**
+ * Build an `OpenAI` embedding model.
+ *
+ * Defaults to `text-embedding-3-small` (1536 dimensions) when `model` is
+ * `None`. Passing a custom `model` keeps the model's default
+ * dimensionality; callers needing a non-default dimensionality should
+ * drop down to the underlying Rust API.
+ */
+@Throws(BlazenException::class)
+fun `newOpenaiEmbeddingModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+    `baseUrl`: kotlin.String?,
+): EmbeddingModel =
+    FfiConverterTypeEmbeddingModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_openai_embedding_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                FfiConverterOptionalString.lower(`baseUrl`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build an `OpenRouter` chat-completion model.
-         */
-    @Throws(BlazenException::class) fun `newOpenrouterCompletionModel`(`apiKey`: kotlin.String, `model`: kotlin.String?, `baseUrl`: kotlin.String?): CompletionModel {
-            return FfiConverterTypeCompletionModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_openrouter_completion_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterOptionalString.lower(`model`),FfiConverterOptionalString.lower(`baseUrl`),_status)
-}
+/**
+ * Build an `OpenRouter` chat-completion model.
+ */
+@Throws(BlazenException::class)
+fun `newOpenrouterCompletionModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+    `baseUrl`: kotlin.String?,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_openrouter_completion_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                FfiConverterOptionalString.lower(`baseUrl`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a Perplexity chat-completion model.
-         */
-    @Throws(BlazenException::class) fun `newPerplexityCompletionModel`(`apiKey`: kotlin.String, `model`: kotlin.String?, `baseUrl`: kotlin.String?): CompletionModel {
-            return FfiConverterTypeCompletionModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_perplexity_completion_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterOptionalString.lower(`model`),FfiConverterOptionalString.lower(`baseUrl`),_status)
-}
+/**
+ * Build a Perplexity chat-completion model.
+ */
+@Throws(BlazenException::class)
+fun `newPerplexityCompletionModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+    `baseUrl`: kotlin.String?,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_perplexity_completion_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                FfiConverterOptionalString.lower(`baseUrl`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a Together AI chat-completion model.
-         */
-    @Throws(BlazenException::class) fun `newTogetherCompletionModel`(`apiKey`: kotlin.String, `model`: kotlin.String?, `baseUrl`: kotlin.String?): CompletionModel {
-            return FfiConverterTypeCompletionModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_together_completion_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterOptionalString.lower(`model`),FfiConverterOptionalString.lower(`baseUrl`),_status)
-}
+/**
+ * Build a Together AI chat-completion model.
+ */
+@Throws(BlazenException::class)
+fun `newTogetherCompletionModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+    `baseUrl`: kotlin.String?,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_together_completion_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                FfiConverterOptionalString.lower(`baseUrl`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build a local tract (pure-Rust ONNX) embedding model.
-         *
-         * Drop-in replacement for [`new_fastembed_embedding_model`] for targets
-         * where the prebuilt ONNX Runtime binaries can't link (musl-libc, some
-         * sandboxed environments). Loads the same fastembed model catalog via
-         * `tract_onnx`.
-         */
-    @Throws(BlazenException::class) fun `newTractEmbeddingModel`(`modelName`: kotlin.String?, `maxBatchSize`: kotlin.UInt?, `showDownloadProgress`: kotlin.Boolean?): EmbeddingModel {
-            return FfiConverterTypeEmbeddingModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_tract_embedding_model(
-    
-        FfiConverterOptionalString.lower(`modelName`),FfiConverterOptionalUInt.lower(`maxBatchSize`),FfiConverterOptionalBoolean.lower(`showDownloadProgress`),_status)
-}
+/**
+ * Build a local tract (pure-Rust ONNX) embedding model.
+ *
+ * Drop-in replacement for [`new_fastembed_embedding_model`] for targets
+ * where the prebuilt ONNX Runtime binaries can't link (musl-libc, some
+ * sandboxed environments). Loads the same fastembed model catalog via
+ * `tract_onnx`.
+ */
+@Throws(BlazenException::class)
+fun `newTractEmbeddingModel`(
+    `modelName`: kotlin.String?,
+    `maxBatchSize`: kotlin.UInt?,
+    `showDownloadProgress`: kotlin.Boolean?,
+): EmbeddingModel =
+    FfiConverterTypeEmbeddingModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_tract_embedding_model(
+                FfiConverterOptionalString.lower(`modelName`),
+                FfiConverterOptionalUInt.lower(`maxBatchSize`),
+                FfiConverterOptionalBoolean.lower(`showDownloadProgress`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Build an xAI (Grok) chat-completion model.
-         */
-    @Throws(BlazenException::class) fun `newXaiCompletionModel`(`apiKey`: kotlin.String, `model`: kotlin.String?, `baseUrl`: kotlin.String?): CompletionModel {
-            return FfiConverterTypeCompletionModel.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_new_xai_completion_model(
-    
-        FfiConverterString.lower(`apiKey`),FfiConverterOptionalString.lower(`model`),FfiConverterOptionalString.lower(`baseUrl`),_status)
-}
+/**
+ * Build an xAI (Grok) chat-completion model.
+ */
+@Throws(BlazenException::class)
+fun `newXaiCompletionModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+    `baseUrl`: kotlin.String?,
+): CompletionModel =
+    FfiConverterTypeCompletionModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_xai_completion_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                FfiConverterOptionalString.lower(`baseUrl`),
+                _status,
+            )
+        },
     )
-    }
-    
 
-        /**
-         * Eagerly initialise the Tokio runtime and tracing subscriber.
-         *
-         * Safe to call multiple times — both initialisations are idempotent.
-         * Foreign callers typically invoke this once at app startup
-         * (`blazen.Init()` in Go, `Blazen.initialize()` in Swift, etc.) so the
-         * first real async call doesn't pay runtime-build latency.
-         */ fun `init`()
-        = 
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_init(
-    
-        _status)
-}
-    
-    
-
-        /**
-         * Drive a streaming chat completion, dispatching each chunk to the sink.
-         *
-         * On success, calls `sink.on_done(finish_reason, usage)` exactly once and
-         * returns `Ok(())`. On a provider-side failure (or sink-side
-         * `on_chunk`/`on_done` failure), calls `sink.on_error(...)` exactly once
-         * and returns `Ok(())` — the error is *delivered* via the sink, not
-         * propagated to this function's caller. This keeps the foreign-language
-         * surface symmetric: the sink owns both happy-path and error-path
-         * observation.
-         *
-         * The only way this function itself returns `Err` is when the initial
-         * request conversion fails (malformed JSON in tool definitions, etc.) or
-         * when the upstream `stream()` call fails to *start* the stream. Sink
-         * callback failures are surfaced via `on_error`.
-         */
-    @Throws(BlazenException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-     suspend fun `completeStreaming`(`model`: CompletionModel, `request`: CompletionRequest, `sink`: CompletionStreamSink) {
-        return uniffiRustCallAsync(
-        UniffiLib.uniffi_blazen_uniffi_fn_func_complete_streaming(FfiConverterTypeCompletionModel.lower(`model`),FfiConverterTypeCompletionRequest.lower(`request`),FfiConverterTypeCompletionStreamSink.lower(`sink`),),
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
-        // lift function
-        { Unit },
-        
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
+/**
+ * Eagerly initialise the Tokio runtime and tracing subscriber.
+ *
+ * Safe to call multiple times — both initialisations are idempotent.
+ * Foreign callers typically invoke this once at app startup
+ * (`blazen.Init()` in Go, `Blazen.initialize()` in Swift, etc.) so the
+ * first real async call doesn't pay runtime-build latency.
+ */
+fun `init`() =
+    uniffiRustCall { _status ->
+        UniffiLib.uniffi_blazen_uniffi_fn_func_init(_status)
     }
 
-        /**
-         * Synchronous variant of [`complete_streaming`] — blocks the current
-         * thread on the shared Tokio runtime.
-         *
-         * Handy for Ruby scripts and quick Go main fns where async machinery is
-         * overkill. The sink's `async` methods still run on the shared runtime
-         * (they're just driven synchronously from the caller's thread).
-         */
-    @Throws(BlazenException::class) fun `completeStreamingBlocking`(`model`: CompletionModel, `request`: CompletionRequest, `sink`: CompletionStreamSink)
-        = 
-    uniffiRustCallWithError(BlazenException) { _status ->
+/**
+ * Drive a streaming chat completion, dispatching each chunk to the sink.
+ *
+ * On success, calls `sink.on_done(finish_reason, usage)` exactly once and
+ * returns `Ok(())`. On a provider-side failure (or sink-side
+ * `on_chunk`/`on_done` failure), calls `sink.on_error(...)` exactly once
+ * and returns `Ok(())` — the error is *delivered* via the sink, not
+ * propagated to this function's caller. This keeps the foreign-language
+ * surface symmetric: the sink owns both happy-path and error-path
+ * observation.
+ *
+ * The only way this function itself returns `Err` is when the initial
+ * request conversion fails (malformed JSON in tool definitions, etc.) or
+ * when the upstream `stream()` call fails to *start* the stream. Sink
+ * callback failures are surfaced via `on_error`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `completeStreaming`(
+    `model`: CompletionModel,
+    `request`: CompletionRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_complete_streaming(
+        FfiConverterTypeCompletionModel.lower(`model`),
+        FfiConverterTypeCompletionRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`complete_streaming`] — blocks the current
+ * thread on the shared Tokio runtime.
+ *
+ * Handy for Ruby scripts and quick Go main fns where async machinery is
+ * overkill. The sink's `async` methods still run on the shared runtime
+ * (they're just driven synchronously from the caller's thread).
+ */
+@Throws(BlazenException::class)
+fun `completeStreamingBlocking`(
+    `model`: CompletionModel,
+    `request`: CompletionRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
     UniffiLib.uniffi_blazen_uniffi_fn_func_complete_streaming_blocking(
-    
-        FfiConverterTypeCompletionModel.lower(`model`),FfiConverterTypeCompletionRequest.lower(`request`),FfiConverterTypeCompletionStreamSink.lower(`sink`),_status)
-}
-    
-    
-
-        /**
-         * Initialize the Langfuse LLM-observability exporter and install it as the
-         * global `tracing` subscriber layer.
-         *
-         * Spawns a background tokio task that periodically flushes buffered LLM
-         * call traces, token usage, and latency data to the Langfuse ingestion API.
-         * Call once at process startup, before any traced work.
-         *
-         * Arguments:
-         * - `public_key`: Langfuse public API key (HTTP Basic-auth username).
-         * - `secret_key`: Langfuse secret API key (HTTP Basic-auth password).
-         * - `host`: optional Langfuse host URL; defaults to
-         * `https://cloud.langfuse.com` when `None`.
-         *
-         * Batch size and flush interval use upstream defaults (100 events / 5000 ms).
-         * If a finer-grained config knob is needed, expose it here later — upstream's
-         * `LangfuseConfig` supports both via `with_batch_size` / `with_flush_interval_ms`.
-         *
-         * If a global `tracing` subscriber is already installed, the underlying
-         * `LangfuseLayer` is still constructed (so its background dispatcher runs)
-         * and this returns `Ok(())` without overwriting the existing subscriber.
-         *
-         * # Errors
-         *
-         * Returns [`BlazenError::Internal`] if the underlying HTTP client or
-         * dispatcher cannot be built.
-         */
-    @Throws(BlazenException::class) fun `initLangfuse`(`publicKey`: kotlin.String, `secretKey`: kotlin.String, `host`: kotlin.String?)
-        = 
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_init_langfuse(
-    
-        FfiConverterString.lower(`publicKey`),FfiConverterString.lower(`secretKey`),FfiConverterOptionalString.lower(`host`),_status)
-}
-    
-    
-
-        /**
-         * Initialize the OpenTelemetry OTLP (gRPC/tonic) trace exporter and install
-         * it as the global `tracing` subscriber stack.
-         *
-         * Arguments:
-         * - `endpoint`: OTLP gRPC endpoint URL (e.g. `"http://localhost:4317"`).
-         * - `service_name`: service name reported to the backend; defaults to
-         * `"blazen"` when `None`.
-         *
-         * Upstream's [`blazen_telemetry::OtlpConfig`] does not currently accept
-         * per-request headers — if your backend needs an `Authorization` header
-         * (Honeycomb, Datadog, Grafana Cloud, etc.), set it via the
-         * `OTEL_EXPORTER_OTLP_HEADERS` environment variable, which the
-         * `opentelemetry-otlp` crate reads at exporter-build time.
-         *
-         * # Errors
-         *
-         * Returns [`BlazenError::Internal`] if the OTLP exporter or tracer provider
-         * cannot be constructed.
-         */
-    @Throws(BlazenException::class) fun `initOtlp`(`endpoint`: kotlin.String, `serviceName`: kotlin.String?)
-        = 
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_init_otlp(
-    
-        FfiConverterString.lower(`endpoint`),FfiConverterOptionalString.lower(`serviceName`),_status)
-}
-    
-    
-
-        /**
-         * Initialize the Prometheus metrics exporter and start the HTTP listener.
-         *
-         * Installs a global `metrics` recorder backed by Prometheus and starts an
-         * HTTP server serving the `/metrics` endpoint.
-         *
-         * `listen_address` accepts a `host:port` string (e.g. `"0.0.0.0:9100"`).
-         * Upstream [`blazen_telemetry::init_prometheus`] always binds `0.0.0.0` and
-         * only takes a port, so the host portion of `listen_address` is parsed for
-         * validation but does **not** override the upstream bind address — the
-         * listener always accepts traffic on every interface. Pass a plain port
-         * string like `"9100"` to skip the host portion.
-         *
-         * # Errors
-         *
-         * Returns [`BlazenError::Validation`] if `listen_address` is not a
-         * well-formed `host:port` (or bare port) string, or
-         * [`BlazenError::Internal`] if the HTTP listener cannot be bound or the
-         * global metrics recorder cannot be installed (e.g. one is already set).
-         */
-    @Throws(BlazenException::class) fun `initPrometheus`(`listenAddress`: kotlin.String)
-        = 
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_init_prometheus(
-    
-        FfiConverterString.lower(`listenAddress`),_status)
-}
-    
-    
-
-        /**
-         * Decode a JSON-serialised upstream [`blazen_telemetry::WorkflowHistory`]
-         * into a flat `Vec<WorkflowHistoryEntry>`.
-         *
-         * The expected input is the exact format produced by
-         * `serde_json::to_string(&history)` on a
-         * [`blazen_telemetry::WorkflowHistory`] (i.e. an object with `run_id`,
-         * `workflow_name`, and `events: [{timestamp, sequence, kind}]`). This is
-         * the same shape the Python binding's `WorkflowHistory.from_json` accepts,
-         * so foreign callers can round-trip history JSON across bindings.
-         *
-         * Returns an empty vector if the history has no events.
-         *
-         * `blazen-telemetry`'s `history` feature is hard-pinned on in this crate's
-         * `Cargo.toml`, so this function is always available regardless of which
-         * optional exporter features are enabled.
-         *
-         * # Errors
-         *
-         * Returns [`BlazenError::Validation`] when `history_json` fails to
-         * deserialise as a [`blazen_telemetry::WorkflowHistory`].
-         */
-    @Throws(BlazenException::class) fun `parseWorkflowHistory`(`historyJson`: kotlin.String): List<WorkflowHistoryEntry> {
-            return FfiConverterSequenceTypeWorkflowHistoryEntry.lift(
-    uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_parse_workflow_history(
-    
-        FfiConverterString.lower(`historyJson`),_status)
-}
+        FfiConverterTypeCompletionModel.lower(`model`),
+        FfiConverterTypeCompletionRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
     )
-    }
-    
-
-        /**
-         * Best-effort flush + shutdown of any initialised telemetry exporters.
-         *
-         * Upstream [`blazen_telemetry`] does not currently expose explicit
-         * shutdown hooks: the Langfuse dispatcher flushes on its own interval and
-         * drops cleanly when the process exits; the OTLP `SdkTracerProvider` is
-         * owned globally by `opentelemetry::global` and flushed on drop; the
-         * Prometheus listener runs until the process exits. Calling this function
-         * is therefore safe but currently has no observable effect — it exists so
-         * foreign callers can wire a single "shutdown" hook into their app
-         * lifecycle without conditionally branching on features. When upstream
-         * grows explicit shutdown APIs, this function will route to them.
-         *
-         * Safe to call even if no exporter was initialised.
-         */ fun `shutdownTelemetry`()
-        = 
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_shutdown_telemetry(
-    
-        _status)
 }
-    
-    
 
+/**
+ * Initialize the Langfuse LLM-observability exporter and install it as the
+ * global `tracing` subscriber layer.
+ *
+ * Spawns a background tokio task that periodically flushes buffered LLM
+ * call traces, token usage, and latency data to the Langfuse ingestion API.
+ * Call once at process startup, before any traced work.
+ *
+ * Arguments:
+ * - `public_key`: Langfuse public API key (HTTP Basic-auth username).
+ * - `secret_key`: Langfuse secret API key (HTTP Basic-auth password).
+ * - `host`: optional Langfuse host URL; defaults to
+ * `https://cloud.langfuse.com` when `None`.
+ *
+ * Batch size and flush interval use upstream defaults (100 events / 5000 ms).
+ * If a finer-grained config knob is needed, expose it here later — upstream's
+ * `LangfuseConfig` supports both via `with_batch_size` / `with_flush_interval_ms`.
+ *
+ * If a global `tracing` subscriber is already installed, the underlying
+ * `LangfuseLayer` is still constructed (so its background dispatcher runs)
+ * and this returns `Ok(())` without overwriting the existing subscriber.
+ *
+ * # Errors
+ *
+ * Returns [`BlazenError::Internal`] if the underlying HTTP client or
+ * dispatcher cannot be built.
+ */
+@Throws(BlazenException::class)
+fun `initLangfuse`(
+    `publicKey`: kotlin.String,
+    `secretKey`: kotlin.String,
+    `host`: kotlin.String?,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_init_langfuse(
+        FfiConverterString.lower(`publicKey`),
+        FfiConverterString.lower(`secretKey`),
+        FfiConverterOptionalString.lower(`host`),
+        _status,
+    )
+}
 
+/**
+ * Initialize the OpenTelemetry OTLP (gRPC/tonic) trace exporter and install
+ * it as the global `tracing` subscriber stack.
+ *
+ * Arguments:
+ * - `endpoint`: OTLP gRPC endpoint URL (e.g. `"http://localhost:4317"`).
+ * - `service_name`: service name reported to the backend; defaults to
+ * `"blazen"` when `None`.
+ *
+ * Upstream's [`blazen_telemetry::OtlpConfig`] does not currently accept
+ * per-request headers — if your backend needs an `Authorization` header
+ * (Honeycomb, Datadog, Grafana Cloud, etc.), set it via the
+ * `OTEL_EXPORTER_OTLP_HEADERS` environment variable, which the
+ * `opentelemetry-otlp` crate reads at exporter-build time.
+ *
+ * # Errors
+ *
+ * Returns [`BlazenError::Internal`] if the OTLP exporter or tracer provider
+ * cannot be constructed.
+ */
+@Throws(BlazenException::class)
+fun `initOtlp`(
+    `endpoint`: kotlin.String,
+    `serviceName`: kotlin.String?,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_init_otlp(
+        FfiConverterString.lower(`endpoint`),
+        FfiConverterOptionalString.lower(`serviceName`),
+        _status,
+    )
+}
+
+/**
+ * Initialize the Prometheus metrics exporter and start the HTTP listener.
+ *
+ * Installs a global `metrics` recorder backed by Prometheus and starts an
+ * HTTP server serving the `/metrics` endpoint.
+ *
+ * `listen_address` accepts a `host:port` string (e.g. `"0.0.0.0:9100"`).
+ * Upstream [`blazen_telemetry::init_prometheus`] always binds `0.0.0.0` and
+ * only takes a port, so the host portion of `listen_address` is parsed for
+ * validation but does **not** override the upstream bind address — the
+ * listener always accepts traffic on every interface. Pass a plain port
+ * string like `"9100"` to skip the host portion.
+ *
+ * # Errors
+ *
+ * Returns [`BlazenError::Validation`] if `listen_address` is not a
+ * well-formed `host:port` (or bare port) string, or
+ * [`BlazenError::Internal`] if the HTTP listener cannot be bound or the
+ * global metrics recorder cannot be installed (e.g. one is already set).
+ */
+@Throws(BlazenException::class)
+fun `initPrometheus`(`listenAddress`: kotlin.String) =
+    uniffiRustCallWithError(BlazenException) { _status ->
+        UniffiLib.uniffi_blazen_uniffi_fn_func_init_prometheus(FfiConverterString.lower(`listenAddress`), _status)
+    }
+
+/**
+ * Decode a JSON-serialised upstream [`blazen_telemetry::WorkflowHistory`]
+ * into a flat `Vec<WorkflowHistoryEntry>`.
+ *
+ * The expected input is the exact format produced by
+ * `serde_json::to_string(&history)` on a
+ * [`blazen_telemetry::WorkflowHistory`] (i.e. an object with `run_id`,
+ * `workflow_name`, and `events: [{timestamp, sequence, kind}]`). This is
+ * the same shape the Python binding's `WorkflowHistory.from_json` accepts,
+ * so foreign callers can round-trip history JSON across bindings.
+ *
+ * Returns an empty vector if the history has no events.
+ *
+ * `blazen-telemetry`'s `history` feature is hard-pinned on in this crate's
+ * `Cargo.toml`, so this function is always available regardless of which
+ * optional exporter features are enabled.
+ *
+ * # Errors
+ *
+ * Returns [`BlazenError::Validation`] when `history_json` fails to
+ * deserialise as a [`blazen_telemetry::WorkflowHistory`].
+ */
+@Throws(BlazenException::class)
+fun `parseWorkflowHistory`(`historyJson`: kotlin.String): List<WorkflowHistoryEntry> =
+    FfiConverterSequenceTypeWorkflowHistoryEntry.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_parse_workflow_history(FfiConverterString.lower(`historyJson`), _status)
+        },
+    )
+
+/**
+ * Best-effort flush + shutdown of any initialised telemetry exporters.
+ *
+ * Upstream [`blazen_telemetry`] does not currently expose explicit
+ * shutdown hooks: the Langfuse dispatcher flushes on its own interval and
+ * drops cleanly when the process exits; the OTLP `SdkTracerProvider` is
+ * owned globally by `opentelemetry::global` and flushed on drop; the
+ * Prometheus listener runs until the process exits. Calling this function
+ * is therefore safe but currently has no observable effect — it exists so
+ * foreign callers can wire a single "shutdown" hook into their app
+ * lifecycle without conditionally branching on features. When upstream
+ * grows explicit shutdown APIs, this function will route to them.
+ *
+ * Safe to call even if no exporter was initialised.
+ */
+fun `shutdownTelemetry`() =
+    uniffiRustCall { _status ->
+        UniffiLib.uniffi_blazen_uniffi_fn_func_shutdown_telemetry(_status)
+    }
