@@ -183,7 +183,7 @@ module Blazen
     # -------------------------------------------------------------------
     attach_function :blazen_future_fd,    [:pointer], :int64
     attach_function :blazen_future_poll,  [:pointer], :int32
-    attach_function :blazen_future_wait,  [:pointer], :int32
+    attach_function :blazen_future_wait,  [:pointer], :int32, blocking: true
     attach_function :blazen_future_free,  [:pointer], :void
 
     # Typed future-take functions (one per output type)
@@ -216,7 +216,8 @@ module Blazen
     # Agent (opaque object methods)
     # -------------------------------------------------------------------
     attach_function :blazen_agent_run_blocking,
-                    [:pointer, :pointer, :pointer, :pointer], :int32
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
     attach_function :blazen_agent_run, [:pointer, :pointer], :pointer
     attach_function :blazen_agent_free, [:pointer], :void
     attach_function :blazen_agent_new,
@@ -238,7 +239,8 @@ module Blazen
     # -------------------------------------------------------------------
     attach_function :blazen_complete_batch_blocking,
                     [:pointer, :pointer, :size_t, :uint32, :pointer, :pointer],
-                    :int32
+                    :int32,
+                    blocking: true
     attach_function :blazen_complete_batch,
                     [:pointer, :pointer, :size_t, :uint32],
                     :pointer
@@ -261,7 +263,8 @@ module Blazen
     # -------------------------------------------------------------------
     attach_function :blazen_tts_model_synthesize_blocking,
                     [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer],
-                    :int32
+                    :int32,
+                    blocking: true
     attach_function :blazen_tts_model_synthesize,
                     [:pointer, :pointer, :pointer, :pointer],
                     :pointer
@@ -269,7 +272,8 @@ module Blazen
 
     attach_function :blazen_stt_model_transcribe_blocking,
                     [:pointer, :pointer, :pointer, :pointer, :pointer],
-                    :int32
+                    :int32,
+                    blocking: true
     attach_function :blazen_stt_model_transcribe,
                     [:pointer, :pointer, :pointer],
                     :pointer
@@ -278,7 +282,8 @@ module Blazen
     attach_function :blazen_image_gen_model_generate_blocking,
                     [:pointer, :pointer, :pointer, :int32, :int32, :int32,
                      :pointer, :pointer, :pointer],
-                    :int32
+                    :int32,
+                    blocking: true
     attach_function :blazen_image_gen_model_generate,
                     [:pointer, :pointer, :pointer, :int32, :int32, :int32, :pointer],
                     :pointer
@@ -322,7 +327,8 @@ module Blazen
     # -------------------------------------------------------------------
     attach_function :blazen_completion_model_model_id, [:pointer], :pointer
     attach_function :blazen_completion_model_complete_blocking,
-                    [:pointer, :pointer, :pointer, :pointer], :int32
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
     attach_function :blazen_completion_model_complete,
                     [:pointer, :pointer], :pointer
     attach_function :blazen_completion_model_free, [:pointer], :void
@@ -330,7 +336,8 @@ module Blazen
     attach_function :blazen_embedding_model_model_id,   [:pointer], :pointer
     attach_function :blazen_embedding_model_dimensions, [:pointer], :uint32
     attach_function :blazen_embedding_model_embed_blocking,
-                    [:pointer, :pointer, :size_t, :pointer, :pointer], :int32
+                    [:pointer, :pointer, :size_t, :pointer, :pointer], :int32,
+                    blocking: true
     attach_function :blazen_embedding_model_embed,
                     [:pointer, :pointer, :size_t], :pointer
     attach_function :blazen_embedding_model_free, [:pointer], :void
@@ -495,7 +502,8 @@ module Blazen
     attach_function :blazen_complete_streaming_blocking,
                     [:pointer, :pointer,
                      BlazenCompletionStreamSinkVTable.by_value, :pointer],
-                    :int32
+                    :int32,
+                    blocking: true
     attach_function :blazen_complete_streaming,
                     [:pointer, :pointer,
                      BlazenCompletionStreamSinkVTable.by_value],
@@ -516,7 +524,8 @@ module Blazen
     # -------------------------------------------------------------------
     attach_function :blazen_peer_server_new, [:pointer], :pointer
     attach_function :blazen_peer_server_serve_blocking,
-                    [:pointer, :pointer, :pointer], :int32
+                    [:pointer, :pointer, :pointer], :int32,
+                    blocking: true
     attach_function :blazen_peer_server_serve,
                     [:pointer, :pointer], :pointer
     attach_function :blazen_peer_server_free, [:pointer], :void
@@ -527,7 +536,8 @@ module Blazen
     attach_function :blazen_peer_client_run_remote_workflow_blocking,
                     [:pointer, :pointer, :pointer, :size_t, :pointer, :int64,
                      :pointer, :pointer],
-                    :int32
+                    :int32,
+                    blocking: true
     attach_function :blazen_peer_client_run_remote_workflow,
                     [:pointer, :pointer, :pointer, :size_t, :pointer, :int64],
                     :pointer
@@ -537,23 +547,28 @@ module Blazen
     # Persist — CheckpointStore / WorkflowCheckpoint / PersistedEvent
     # -------------------------------------------------------------------
     attach_function :blazen_checkpoint_store_save_blocking,
-                    [:pointer, :pointer, :pointer], :int32
+                    [:pointer, :pointer, :pointer], :int32,
+                    blocking: true
     attach_function :blazen_checkpoint_store_save,
                     [:pointer, :pointer], :pointer
     attach_function :blazen_checkpoint_store_load_blocking,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
+                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
     attach_function :blazen_checkpoint_store_load,
                     [:pointer, :pointer], :pointer
     attach_function :blazen_checkpoint_store_delete_blocking,
-                    [:pointer, :pointer, :pointer], :int32
+                    [:pointer, :pointer, :pointer], :int32,
+                    blocking: true
     attach_function :blazen_checkpoint_store_delete,
                     [:pointer, :pointer], :pointer
     attach_function :blazen_checkpoint_store_list_blocking,
-                    [:pointer, :pointer, :pointer, :pointer], :int32
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
     attach_function :blazen_checkpoint_store_list,
                     [:pointer], :pointer
     attach_function :blazen_checkpoint_store_list_run_ids_blocking,
-                    [:pointer, :pointer, :pointer, :pointer], :int32
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
     attach_function :blazen_checkpoint_store_list_run_ids,
                     [:pointer], :pointer
     attach_function :blazen_checkpoint_store_free, [:pointer], :void
@@ -609,7 +624,8 @@ module Blazen
     attach_function :blazen_pipeline_builder_free, [:pointer], :void
 
     attach_function :blazen_pipeline_run_blocking,
-                    [:pointer, :pointer, :pointer, :pointer], :int32
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
     attach_function :blazen_pipeline_run,
                     [:pointer, :pointer], :pointer
     attach_function :blazen_pipeline_stage_names_count, [:pointer], :size_t
@@ -666,7 +682,8 @@ module Blazen
     attach_function :blazen_workflow_builder_free, [:pointer], :void
 
     attach_function :blazen_workflow_run_blocking,
-                    [:pointer, :pointer, :pointer, :pointer], :int32
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
     attach_function :blazen_workflow_run,
                     [:pointer, :pointer], :pointer
     attach_function :blazen_workflow_step_names_count, [:pointer], :size_t

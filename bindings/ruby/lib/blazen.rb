@@ -54,6 +54,21 @@ require_relative "blazen/telemetry"
 require_relative "blazen/peer"
 
 module Blazen
+  # Initialises the native runtime (warms the cabi tokio runtime and
+  # installs a default tracing subscriber if none is set). Idempotent.
+  #
+  # @return [Integer] 0 on success.
+  def self.init
+    Blazen::FFI.blazen_init
+  end
+
+  # Returns the native blazen-cabi crate version as a Ruby string.
+  #
+  # @return [String]
+  def self.version
+    Blazen::FFI.consume_cstring(Blazen::FFI.blazen_version)
+  end
+
   class << self
     # Shuts down telemetry exporters, flushing any buffered spans/metrics.
     #
