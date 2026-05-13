@@ -1,0 +1,173 @@
+---
+title: "Quickstart"
+description: "Build your first Blazen workflow in Kotlin"
+language: "kotlin"
+section: "guides"
+order: 1
+---
+
+# Quickstart
+
+Get a Blazen workflow running on the JVM in under five minutes.
+
+## Installation
+
+The Kotlin binding lives in the Blazen monorepo at `bindings/kotlin/` and builds as a Gradle JVM module. It depends on JNA (which loads `libblazen_uniffi.{so,dylib,dll}` from the classpath) and `kotlinx-coroutines-core`. The minimum JDK is 17.
+
+```kotlin
+// build.gradle.kts
+plugins {
+    kotlin("jvm") version "2.1.20"
+    kotlin("plugin.serialization") version "2.1.20"
+}
+
+dependencies {
+    implementation("dev.zorpx.blazen:blazen-kotlin:0.1.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+    implementation("net.java.dev.jna:jna:5.14.0")
+}
+```
+
+The published artefact bundles the prebuilt native library for the supported platforms (linux-x86_64, linux-aarch64, macos-arm64, macos-x86_64, windows-x86_64). JNA finds it at startup automatically.
+
+## Where to import from
+
+The hand-written wrapper layer under `dev.zorpx.blazen.*` (`Workflow.kt`, `Pipeline.kt`, `LLM.kt`, ...) currently redeclares the FFI types without bridging to the generated UniFFI surface, so day-to-day code should import directly from the generated package:
+
+```kotlin
+import dev.zorpx.blazen.uniffi.Event
+import dev.zorpx.blazen.uniffi.StepHandler
+import dev.zorpx.blazen.uniffi.StepOutput
+import dev.zorpx.blazen.uniffi.WorkflowBuilder
+import dev.zorpx.blazen.uniffi.newOpenaiCompletionModel
+```
+
+Every example on the Kotlin docs uses the `dev.zorpx.blazen.uniffi.*` import path. When the wrapper layer is wired up later, both paths will coexist and the wrapper will re-export the same names — existing code that imports from `dev.zorpx.blazen.uniffi.*` will keep working.
+
+## Your first workflow
+
+```kotlin
+import dev.zorpx.blazen.uniffi.Event
+import dev.zorpx.blazen.uniffi.StepHandler
+import dev.zorpx.blazen.uniffi.StepOutput
+import dev.zorpx.blazen.uniffi.WorkflowBuilder
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+
+fun main() = runBlocking {
+    // Step handler that pulls `name` out of the start event and emits a
+    // StopEvent carrying the greeting.
+    val greet = object : StepHandler {
+        override suspend fun invoke(event: Event): StepOutput {
+            // StartEvent wire shape: {"data": {"name": "Blazen"}}
+            val parsed = Json.parseToJsonElement(event.dataJson).jsonObject
+            val data = parsed["data"]?.jsonObject
+            val name = data?.get("name")?.jsonPrimitive?.content ?: "world"
+
+            val payload = """{"result":{"greeting":"Hello, $name!"}}"""
+            return StepOutput.Single(
+                Event(eventType = "blazen::StopEvent", dataJson = payload),
+            )
+        }
+    }
+
+    val builder = WorkflowBuilder("greeter")
+    try {
+        builder.step(
+            name = "greet",
+            accepts = listOf("blazen::StartEvent"),
+            emits = listOf("blazen::StopEvent"),
+            handler = greet,
+        )
+        val workflow = builder.build()
+        try {
+            val result = workflow.run("""{"name":"Blazen"}""")
+            println(result.event.dataJson)
+            // => {"result":{"greeting":"Hello, Blazen!"}}
+        } finally {
+            workflow.close()
+        }
+    } finally {
+        builder.close()
+    }
+}
+```
+
+Run it:
+
+```bash
+./gradlew run
+```
+
+## How it works
+
+**Events** are `Event` records with two fields: `eventType` (a free-form class name like `"blazen::StartEvent"`) and `dataJson` (the JSON-encoded payload). Two event types are special-cased by the engine:
+
+- `"blazen::StartEvent"` — emitted when the workflow begins. The string you pass to `workflow.run(_:)` is wrapped as `{"data": <your-json>}` and arrives as the start payload.
+- `"blazen::StopEvent"` — returning an `Event` whose `eventType` contains `StopEvent` terminates the workflow. Attach your final output under the `"result"` key.
+
+**Steps** are registered on a `WorkflowBuilder` with `step(name, accepts, emits, handler)`:
+
+- `name` — a unique identifier for the step.
+- `accepts` — event-type strings that trigger this step (`listOf("blazen::StartEvent")`).
+- `emits` — every event type the handler may return; declared up front so the engine can validate routing.
+- `handler` — any object satisfying the `StepHandler` interface. The handler returns a `StepOutput` (one of `StepOutput.Single`, `StepOutput.Multiple`, or `StepOutput.None`).
+
+**Result** — `workflow.run(_:)` returns a `WorkflowResult` carrying the terminal `Event` plus aggregated `totalInputTokens`, `totalOutputTokens`, and `totalCostUsd` for any LLM steps in the run. `result.event.dataJson` is the raw JSON payload of the `StopEvent` your handler produced.
+
+## Implementing `StepHandler`
+
+`StepHandler` is a generated callback interface with a single `suspend fun invoke(event: Event): StepOutput` method. Since Kotlin's `fun interface` (SAM) syntax does not currently bridge through UniFFI's callback ABI, implement it with an anonymous object expression:
+
+```kotlin
+val handler = object : StepHandler {
+    override suspend fun invoke(event: Event): StepOutput {
+        // your logic
+        return StepOutput.None
+    }
+}
+```
+
+A named class works the same way:
+
+```kotlin
+class GreetHandler : StepHandler {
+    override suspend fun invoke(event: Event): StepOutput {
+        return StepOutput.None
+    }
+}
+```
+
+`invoke` is a `suspend fun`, so anything you do inside (network calls, database queries, LLM completions) can suspend without blocking the underlying Tokio thread the engine dispatches you from.
+
+## Lifecycle and `close()`
+
+Every UniFFI handle (`WorkflowBuilder`, `Workflow`, `CompletionModel`, `Agent`, `Pipeline`, ...) implements `AutoCloseable`. Use Kotlin's `use { }` block or wrap construction in `try { ... } finally { it.close() }` to release the native handle deterministically:
+
+```kotlin
+WorkflowBuilder("greeter").use { builder ->
+    builder.step(name = "greet", accepts = listOf("blazen::StartEvent"),
+                 emits = listOf("blazen::StopEvent"), handler = greet)
+    builder.build().use { workflow ->
+        val result = workflow.run("""{"name":"Blazen"}""")
+        println(result.event.dataJson)
+    }
+}
+```
+
+A cleaner finaliser is attached as a safety net, but explicit `close()` is preferred — JVM finalisation timing is not deterministic and you don't want native handles to leak while the GC schedules them.
+
+## Cancellation
+
+Every `suspend fun` in the binding honors Kotlin coroutine cancellation. When the surrounding coroutine is cancelled, the suspended `invoke` / `run` / `complete` call unwinds by throwing — usually `kotlinx.coroutines.CancellationException`, which the framework surfaces as `BlazenException.Cancelled` for adapters that need a uniform error type. See the [Context guide](/guides/kotlin/context/) for the full story.
+
+## Next steps
+
+You now have a working workflow. From here you can:
+
+- Chain more steps together to build multi-stage pipelines — see [Events](/guides/kotlin/events/).
+- Stream LLM responses through `Flow<StreamChunk>` — see [Streaming](/guides/kotlin/streaming/).
+- Drive an LLM tool-call loop with `Agent` — see [Agent](/guides/kotlin/agent/).

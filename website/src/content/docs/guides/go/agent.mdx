@@ -1,0 +1,209 @@
+---
+title: "Agent"
+description: "Drive an LLM tool-call loop with blazen.Agent in Go"
+language: "go"
+section: "guides"
+order: 8
+---
+
+`blazen.Agent` wraps the canonical LLM agent loop -- alternating between calls to a completion model and dispatching the tools the model selects, until the model produces a final text response (no tool calls) or the iteration budget is exhausted. The Go binding hands you a `*blazen.Agent` handle plus a single `ToolHandler` interface to satisfy; the loop itself runs in Rust.
+
+## Constructing an Agent
+
+```go
+agent := blazen.NewAgent(model, systemPrompt, tools, handler, maxIterations)
+```
+
+The arguments:
+
+- `model` -- a `*blazen.CompletionModel` from any provider factory (see [LLM](/guides/go/llm/)).
+- `systemPrompt` -- the system message prepended to every turn; pass `""` to omit.
+- `tools` -- the catalogue exposed to the model. Each `Tool.Name` must match the names your handler dispatches on.
+- `handler` -- a value satisfying `blazen.ToolHandler` (or a `blazen.ToolHandlerFunc` for closures).
+- `maxIterations` -- a safety cap on the LLM round-trip count. The loop terminates with the model's last message if the cap is hit.
+
+`NewAgent` is infallible -- the constructor panics on a nil model or nil handler because those are programmer errors that mirror the upstream FFI contract. Otherwise it always returns a usable handle.
+
+## The Tool catalogue
+
+`blazen.Tool` describes a function the model may invoke. The arguments schema is a JSON Schema string:
+
+```go
+tools := []blazen.Tool{
+    {
+        Name:        "get_weather",
+        Description: "Look up the current weather for a city.",
+        ParametersJSON: `{
+            "type": "object",
+            "properties": {
+                "city": {"type": "string", "description": "City name"}
+            },
+            "required": ["city"]
+        }`,
+    },
+}
+```
+
+The schema constrains what the model is allowed to emit; the binding does not validate the arguments before handing them to your handler. Use `encoding/json` to decode `argumentsJSON` into a typed Go struct inside the handler.
+
+## ToolHandler
+
+`ToolHandler` is the single interface you implement to execute the tools the model picks:
+
+```go
+type ToolHandler interface {
+    Execute(ctx context.Context, toolName string, argumentsJSON string) (string, error)
+}
+```
+
+- `toolName` is the model's chosen tool (matches one of `tools[i].Name`).
+- `argumentsJSON` is the model's JSON-encoded arguments object.
+- The returned string MUST be valid JSON. Use `"null"` for tools with no useful return value.
+- Returning a non-nil error aborts the agent loop and the error message is surfaced verbatim to the caller of `Run` / `RunBlocking`.
+
+The `ctx` argument is always `context.Background()` -- the UniFFI callback ABI does not propagate the per-call context across the FFI boundary. Handlers that need cancellation should consult external state (see the [Context guide](/guides/go/context/)).
+
+### Dispatch with a switch
+
+The idiomatic pattern is a tagged switch in `Execute`:
+
+```go
+type weatherHandler struct {
+    api WeatherClient
+}
+
+func (h weatherHandler) Execute(_ context.Context, toolName, argumentsJSON string) (string, error) {
+    switch toolName {
+    case "get_weather":
+        var args struct {
+            City string `json:"city"`
+        }
+        if err := json.Unmarshal([]byte(argumentsJSON), &args); err != nil {
+            return "", fmt.Errorf("decode get_weather args: %w", err)
+        }
+        forecast, err := h.api.Lookup(args.City)
+        if err != nil {
+            return "", err
+        }
+        out, _ := json.Marshal(forecast)
+        return string(out), nil
+    default:
+        return "", fmt.Errorf("unknown tool: %s", toolName)
+    }
+}
+```
+
+### ToolHandlerFunc
+
+For one-off handlers that close over a small amount of state, `ToolHandlerFunc` adapts a bare function value into a `ToolHandler`:
+
+```go
+handler := blazen.ToolHandlerFunc(func(_ context.Context, name, args string) (string, error) {
+    // ...
+    return `null`, nil
+})
+```
+
+## Running the loop
+
+`Agent` exposes the same `(ctx, blocking)` pair as `CompletionModel`:
+
+```go
+// Cancellable: returns ctx.Err() if ctx fires before the loop finishes.
+func (*Agent) Run(ctx context.Context, userInput string) (*AgentResult, error)
+
+// Synchronous: blocks the caller until the loop terminates.
+func (*Agent) RunBlocking(userInput string) (*AgentResult, error)
+```
+
+A complete example wiring an OpenAI model to a single tool:
+
+```go
+package main
+
+import (
+    "context"
+    "encoding/json"
+    "fmt"
+    "os"
+    "time"
+
+    blazen "github.com/zachhandley/Blazen/bindings/go"
+)
+
+func main() {
+    blazen.Init()
+    defer blazen.Shutdown()
+
+    model, err := blazen.NewOpenAICompletion(os.Getenv("OPENAI_API_KEY"), "gpt-4o", "")
+    if err != nil {
+        panic(err)
+    }
+    defer model.Close()
+
+    tools := []blazen.Tool{
+        {
+            Name:        "now",
+            Description: "Returns the current ISO-8601 UTC timestamp.",
+            ParametersJSON: `{"type":"object","properties":{},"required":[]}`,
+        },
+    }
+
+    handler := blazen.ToolHandlerFunc(func(_ context.Context, name, args string) (string, error) {
+        if name != "now" {
+            return "", fmt.Errorf("unknown tool: %s", name)
+        }
+        out, _ := json.Marshal(map[string]string{
+            "timestamp": time.Now().UTC().Format(time.RFC3339),
+        })
+        return string(out), nil
+    })
+
+    agent := blazen.NewAgent(model, "You are a precise assistant.", tools, handler, 5)
+    defer agent.Close()
+
+    ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+    defer cancel()
+
+    res, err := agent.Run(ctx, "What time is it right now?")
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(res.FinalMessage)
+    fmt.Printf("iterations=%d tool_calls=%d tokens=%d cost=$%.6f\n",
+        res.Iterations, res.ToolCallCount, res.TotalUsage.TotalTokens, res.TotalCostUSD)
+}
+```
+
+## AgentResult
+
+```go
+type AgentResult struct {
+    FinalMessage  string
+    Iterations    uint32       // LLM round-trip count
+    ToolCallCount uint32       // total tool invocations
+    TotalUsage    TokenUsage   // aggregated across every completion call
+    TotalCostUSD  float64      // summed per-iteration cost
+}
+```
+
+`TotalCostUSD` is zero when the active provider did not report cost data -- the wire format does not distinguish "zero" from "unknown", so treat zero as "not reported" rather than "free".
+
+## Iteration budget
+
+`maxIterations` is enforced by the Rust loop, not the Go caller. If the model keeps emitting tool calls without ever returning a final text response, the loop terminates after `maxIterations` round-trips with the model's last message as `FinalMessage` and `Iterations == maxIterations`. Use this to bound runaway loops; pick a value that fits the longest plausible task (5-20 is typical for narrow tools, 50+ for open-ended research agents).
+
+## Lifecycle
+
+`Agent.Close()` releases the underlying native handle and is idempotent. A `runtime.SetFinalizer` is attached as a safety net, but explicit `defer agent.Close()` is preferred. Reuse a single `Agent` across calls when configuration is stable -- the underlying native handle holds the model, tool catalogue, and iteration budget that would otherwise be re-allocated per call.
+
+## Cancellation
+
+`Agent.Run(ctx, userInput)` honors `ctx` the same way every other blocking entry point does: it launches the FFI call on a background goroutine and returns `ctx.Err()` if `ctx` fires first. The Rust-side loop continues until it finishes naturally -- see [Context](/guides/go/context/#the-cancellation-gap) for the full story and the workaround pattern (an `atomic.Bool` consulted from the handler).
+
+## See also
+
+- [LLM](/guides/go/llm/) -- provider factories, `Complete`, `CompleteBlocking`.
+- [Streaming](/guides/go/streaming/) -- `blazen.Stream` for incremental delivery (no tool-call loop).
+- [Multimodal](/guides/go/multimodal/) -- attach images / audio / video to messages the agent sees.
+- [Context](/guides/go/context/) -- cancellation semantics across every blocking entry point.

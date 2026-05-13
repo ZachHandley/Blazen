@@ -1,0 +1,158 @@
+---
+title: "Multimodal"
+description: "Attach images, audio, video, and documents to chat completions in Swift"
+language: "swift"
+section: "guides"
+order: 5
+---
+
+# Multimodal
+
+Blazen's Swift binding accepts multimodal payloads (images, audio, video, documents) as `Media` parts attached to a `ChatMessage`. The framework handles provider-specific wire encoding — base64 inline for OpenAI, the same with media-type headers for Anthropic, Files API references when a content store is wired in.
+
+## The `Media` part
+
+Every `ChatMessage` carries an optional `mediaParts: [Media]` array. Each `Media` entry pairs the raw bytes (base64-encoded) with its MIME type:
+
+```swift
+public struct Media: Codable, Sendable {
+    let mediaType: String        // e.g. "image/png", "audio/mpeg"
+    let dataBase64: String       // base64-encoded payload OR a URL string,
+                                 //   depending on the provider's preference
+    // ... plus optional kind / display name fields
+}
+```
+
+`dataBase64` is the canonical wire field across all providers. For URL-only providers (where the upstream API wants a public link instead of inline bytes), the same field carries the URL string and the framework dispatches on `mediaType` to decide which encoding to send.
+
+## Sending an image
+
+Attach a `Media` to the `.user(_:media:)` helper. The Swift wrapper exposes ergonomic constructors on `ChatMessage` so you can write the message without filling in the empty-array boilerplate for tool calls / tool ids:
+
+```swift
+import Foundation
+import BlazenSwift
+
+Blazen.initialize()
+defer { Blazen.shutdown() }
+
+let imageData = try Data(contentsOf: URL(fileURLWithPath: "/path/to/logo.png"))
+let imagePart = Media(
+    mediaType: "image/png",
+    dataBase64: imageData.base64EncodedString()
+)
+
+let model = try Providers.openAI(apiKey: "", model: "gpt-4o-mini")
+let request = CompletionRequest(messages: [
+    .system("You describe images concisely."),
+    .user("What is in this image?", media: [imagePart]),
+])
+let response = try await model.complete(request)
+print(response.message.content)
+```
+
+Pass the empty string for `apiKey` to fall back to `OPENAI_API_KEY`. Every provider factory in `Providers` accepts the same shape.
+
+## Audio and video
+
+The shape is identical for audio and video — pick the right MIME type and the framework routes to the right provider modality:
+
+```swift
+let audioData = try Data(contentsOf: URL(fileURLWithPath: "/path/to/clip.mp3"))
+let audioPart = Media(
+    mediaType: "audio/mpeg",
+    dataBase64: audioData.base64EncodedString()
+)
+let request = CompletionRequest(messages: [
+    .user("Transcribe this clip.", media: [audioPart]),
+])
+```
+
+For providers that gate multimodal behind an explicit feature (e.g. Gemini's vision-only models), the framework returns `BlazenError.Unsupported` rather than silently dropping the part.
+
+## Documents
+
+`application/pdf` works the same way. The framework picks the appropriate wire encoding (Anthropic's documents content type, OpenAI's file upload pattern, etc.) based on the active provider:
+
+```swift
+let pdfData = try Data(contentsOf: URL(fileURLWithPath: "/path/to/spec.pdf"))
+let docPart = Media(
+    mediaType: "application/pdf",
+    dataBase64: pdfData.base64EncodedString()
+)
+let request = CompletionRequest(messages: [
+    .user("Summarize this document.", media: [docPart]),
+])
+```
+
+## Multiple parts in one message
+
+A single message can carry as many media parts as the upstream provider allows. They are attached in array order, and providers that lay out media inline (Anthropic, Gemini) preserve that order in the rendered prompt:
+
+```swift
+let request = CompletionRequest(messages: [
+    .user(
+        "Compare these two images.",
+        media: [
+            Media(mediaType: "image/png", dataBase64: imageA),
+            Media(mediaType: "image/png", dataBase64: imageB),
+        ]
+    ),
+])
+```
+
+## URL-only providers
+
+Some providers (fal.ai's image endpoints, OpenAI's hosted vision URLs) prefer a public URL over inline bytes. The framework supports both wire forms in the same `Media` struct — when the body is a URL, set `mediaType` to the MIME type the upstream wants and put the URL string in `dataBase64`:
+
+```swift
+let urlPart = Media(
+    mediaType: "image/png",
+    dataBase64: "https://example.com/image.png"
+)
+```
+
+The framework inspects the body — if it parses as a URL, it dispatches as a URL reference; otherwise it treats the string as base64 bytes.
+
+## Generated multimodal output
+
+Image-generation models live under `Compute.diffusion(...)` (local) and `Compute.falImageGen(...)` (fal.ai). They return `ImageGenResult` whose `images` array carries `Media` parts in the same shape as inputs — base64 bytes or a URL, depending on the provider:
+
+```swift
+let model = try Compute.falImageGen(apiKey: "", model: "fal-ai/flux/dev")
+let result = try await model.generate(
+    prompt: "A teal hummingbird sipping from a fuschia flower",
+    negativePrompt: nil,
+    width: 1024,
+    height: 1024,
+    seed: nil
+)
+for image in result.images {
+    print("got \(image.mediaType) (\(image.dataBase64.count) chars)")
+}
+```
+
+For text-to-speech and speech-to-text, `Compute.piperTts(...)` / `Compute.whisperStt(...)` (local) and `Compute.falTts(...)` / `Compute.falStt(...)` (cloud) follow the same factory pattern. Each modality has its own result struct (`TtsResult`, `SttResult`) but the audio bytes ride the same base64-or-URL convention.
+
+## Errors
+
+Multimodal failures show up as the same `BlazenError` variants you'd see on a text-only request — `BlazenError.Validation` for a malformed payload, `BlazenError.Unsupported` for a provider that does not accept that modality, `BlazenError.Media` for a payload that fails to decode upstream:
+
+```swift
+do {
+    let response = try await model.complete(request)
+} catch let error as BlazenError {
+    switch error {
+    case .Media: print("media decode failed: \(error.message)")
+    case .Unsupported: print("provider rejected modality: \(error.message)")
+    case .Validation: print("malformed request: \(error.message)")
+    default: print("completion failed: \(error.message)")
+    }
+}
+```
+
+## See also
+
+- [LLM](/guides/swift/llm/) -- non-streaming completions, the `ChatMessage` helpers, and the full `Providers` factory list.
+- [Streaming](/guides/swift/streaming/) -- attach `Media` to a streaming request the same way.
+- [Tool multimodal](/guides/tool-multimodal/) -- cross-cutting guide for tool results that carry images / audio.

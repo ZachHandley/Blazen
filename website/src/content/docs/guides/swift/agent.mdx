@@ -1,0 +1,182 @@
+---
+title: "Agent"
+description: "Drive the LLM tool-call loop end-to-end in Swift"
+language: "swift"
+section: "guides"
+order: 7
+---
+
+# Agent
+
+`Agent` drives the canonical LLM tool-execution loop end-to-end: completion → execute tool calls → feed results back → repeat, until either the model emits a plain-text answer (no more tool calls) or the `maxIterations` budget is exhausted. You hand it a `CompletionModel`, the `Tool` definitions the model may invoke, a `ToolHandler` that executes those tools, and an iteration cap. `run(userInput:)` does the rest.
+
+## Constructing an agent
+
+```swift
+import BlazenSwift
+
+Blazen.initialize()
+defer { Blazen.shutdown() }
+
+let model = try Providers.openAI(apiKey: "", model: "gpt-4o-mini")
+
+let weatherTool = Tool(
+    name: "get_weather",
+    description: "Get the current weather for a city.",
+    parametersJson: """
+    {"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}
+    """
+)
+
+let agent = Agent(
+    model: model,
+    systemPrompt: "You are a concise weather assistant.",
+    tools: [weatherTool],
+    toolHandler: WeatherToolHandler(),
+    maxIterations: 6
+)
+
+let result = try await agent.run(userInput: "How hot is it in Paris right now?")
+print(result.finalMessage)
+print("iterations: \(result.iterations), tool calls: \(result.toolCallCount)")
+print("tokens: in=\(result.totalUsage.inputTokens), out=\(result.totalUsage.outputTokens)")
+print("cost: $\(result.totalCostUsd)")
+```
+
+Pass `systemPrompt: nil` to skip the prepended system message. `maxIterations` is a hard cap on LLM round-trips — the loop terminates after that many completion calls even if the model still wants to invoke more tools.
+
+## Implementing `ToolHandler`
+
+`ToolHandler` is a `Sendable` protocol with one async method. Implementations dispatch on `toolName`, decode `argumentsJson` into whatever shape the schema declared, do the work, and return a JSON-encoded result string the framework feeds back into the model on the next turn:
+
+```swift
+import Foundation
+
+final class WeatherToolHandler: ToolHandler, @unchecked Sendable {
+    func execute(toolName: String, argumentsJson: String) async throws -> String {
+        switch toolName {
+        case "get_weather":
+            let args = try JSONDecoder().decode(
+                WeatherArgs.self,
+                from: Data(argumentsJson.utf8)
+            )
+            let reading = try await fetchWeather(for: args.city)
+            let data = try JSONEncoder().encode(reading)
+            return String(data: data, encoding: .utf8) ?? "null"
+        default:
+            throw BlazenError.Tool(message: "unknown tool: \(toolName)")
+        }
+    }
+}
+
+private struct WeatherArgs: Codable { let city: String }
+private struct WeatherReading: Codable {
+    let city: String
+    let temperatureCelsius: Double
+    let conditions: String
+}
+```
+
+Return the JSON literal `"null"` when a tool produced no useful result — `Data("null".utf8)` is the canonical empty response. Throwing a `BlazenError.Tool(message:)` aborts the loop with that error; the message is surfaced verbatim to the caller.
+
+## The result
+
+`AgentResult` carries the final assistant message plus everything you might want to log or surface to a UI:
+
+```swift
+public struct AgentResult: Equatable, Hashable, Sendable {
+    public var finalMessage: String        // the plain-text answer
+    public var iterations: UInt32          // number of completion round-trips
+    public var toolCallCount: UInt32       // total tool invocations across all iterations
+    public var totalUsage: TokenUsage      // aggregated token counts
+    public var totalCostUsd: Double        // aggregated estimated USD cost
+}
+```
+
+When the loop exits cleanly because the model produced an answer without further tool calls, `finalMessage` carries that answer. When the loop exits because `maxIterations` ran out, `finalMessage` carries whatever the model's last partial answer was — typically a sign you need a larger budget or a smarter tool schema.
+
+## Sharing state between tool calls
+
+A `ToolHandler` is a long-lived reference type, so any state the handler needs across calls lives on the instance. Wrap mutable state in an `actor` so the handler stays `Sendable`:
+
+```swift
+actor WeatherCache {
+    private var entries: [String: WeatherReading] = [:]
+    func cached(for city: String) -> WeatherReading? { entries[city] }
+    func store(_ reading: WeatherReading, for city: String) { entries[city] = reading }
+}
+
+final class CachedWeatherToolHandler: ToolHandler, @unchecked Sendable {
+    private let cache = WeatherCache()
+
+    func execute(toolName: String, argumentsJson: String) async throws -> String {
+        let args = try JSONDecoder().decode(WeatherArgs.self, from: Data(argumentsJson.utf8))
+        if let hit = await cache.cached(for: args.city) {
+            return encodeJson(hit)
+        }
+        let fresh = try await fetchWeather(for: args.city)
+        await cache.store(fresh, for: args.city)
+        return encodeJson(fresh)
+    }
+}
+```
+
+## Cancellation
+
+`agent.run(userInput:)` honors Swift's structured-concurrency cancellation. Cancelling the surrounding `Task` resumes the in-flight `await` by throwing — typically as `CancellationError`, which higher-level adapters fold into `BlazenError.Cancelled` via the wrapper's `wrap(_:)` helper:
+
+```swift
+let task = Task {
+    do {
+        let result = try await agent.run(userInput: "How hot is it in Paris?")
+        return result.finalMessage
+    } catch let error as BlazenError where error == .Cancelled(message: error.message) {
+        return "cancelled"
+    } catch let error as BlazenError {
+        return "agent failed: \(error.message)"
+    }
+}
+// Sometime later:
+task.cancel()
+```
+
+When the in-flight call is an LLM round-trip, the cancellation propagates into the streaming completion's Tokio task and the model request is torn down cooperatively. When the in-flight call is a `ToolHandler.execute(...)`, the cancellation surfaces inside your handler — propagate it by checking `Task.isCancelled` or by letting downstream `await`s throw naturally.
+
+## Error handling
+
+Every failure surfaces as a `BlazenError` with a typed `.message` accessor:
+
+```swift
+do {
+    let result = try await agent.run(userInput: "...")
+} catch let error as BlazenError {
+    switch error {
+    case .Tool:           print("tool failed: \(error.message)")
+    case .RateLimit:      print("rate limited: \(error.message)")
+    case .Timeout:        print("timed out: \(error.message)")
+    case .ContentPolicy:  print("blocked: \(error.message)")
+    case .Cancelled:      print("user cancelled")
+    case .Provider:       print("provider failure: \(error.message)")
+    default:              print("agent failed: \(error.message)")
+    }
+}
+```
+
+A `BlazenError.Tool` raised inside `ToolHandler.execute(...)` aborts the loop immediately — the handler's message is surfaced verbatim to the caller, so write it for human consumption.
+
+## Blocking variant
+
+`Agent.runBlocking(userInput:)` exists as an escape hatch for synchronous call sites (CLI scripts, init code that can't `await`). It blocks the calling thread until the loop completes:
+
+```swift
+let result = try agent.runBlocking(userInput: "What's the time in Tokyo?")
+print(result.finalMessage)
+```
+
+Prefer the async `run(userInput:)` in any context that already supports `await` — it cooperates with Swift's structured concurrency model and honors `Task` cancellation; `runBlocking` does neither.
+
+## See also
+
+- [LLM](/guides/swift/llm/) -- the underlying `CompletionModel` and `Tool` shapes.
+- [Streaming](/guides/swift/streaming/) -- the agent's internal loop drives streaming completions; the same cancellation rules apply.
+- [Multimodal](/guides/swift/multimodal/) -- pass images / audio / video into the user input the agent receives.

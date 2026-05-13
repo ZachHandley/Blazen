@@ -1,0 +1,74 @@
+---
+title: "Human-in-the-Loop"
+description: "Patterns for human review and async input in Go workflows"
+language: "go"
+section: "guides"
+order: 5
+---
+
+## Status
+
+The Go binding does not yet expose the dedicated human-in-the-loop surface that the Python, Node, and WASM bindings offer (`runWithHandler`, `respondToInput`, the `InputRequestEvent` auto-pause flow, and pause/resume snapshotting). Those features sit behind UniFFI scaffolding that is not yet wired into the Go wrapper -- they are tracked work, not a permanent gap.
+
+This guide covers the patterns that **are** available today and shows how to translate the eventual surface into idiomatic Go when it lands.
+
+## Side-effect steps
+
+The most common human-in-the-loop pattern in Go right now is a side-effect step that performs the human review synchronously inside its handler, then emits the routing event for the next step. `StepHandler.Invoke` is a regular blocking Go function, so any synchronous mechanism for getting a human answer -- a database poll, a webhook callback, a queue subscriber, a Slack approval -- can be used directly:
+
+```go
+type reviewHandler struct {
+    queue   ApprovalQueue
+}
+
+func (h reviewHandler) Invoke(_ context.Context, ev blazen.Event) (blazen.StepOutput, error) {
+    // 1. Decode the event payload.
+    var input ReviewRequest
+    if err := json.Unmarshal([]byte(ev.DataJSON), &input); err != nil {
+        return nil, err
+    }
+
+    // 2. Block until the human responds. The handler's ctx is always
+    //    context.Background() (see the Context guide), so the queue itself
+    //    needs to honor its own cancellation strategy.
+    decision, err := h.queue.WaitForDecision(input.RequestID)
+    if err != nil {
+        return nil, err
+    }
+
+    // 3. Emit the next event based on the decision.
+    payload, _ := json.Marshal(map[string]any{"approved": decision.Approved})
+    return blazen.NewStepOutputSingle(blazen.Event{
+        EventType: "ReviewComplete",
+        DataJSON:  string(payload),
+    }), nil
+}
+```
+
+This approach holds the workflow open for the duration of the human review, which is fine for short reviews (seconds to minutes) and acceptable for medium reviews (minutes to hours) as long as the runtime is allowed to stay alive. For long-running reviews that need to survive process restarts, you currently need to manage your own persistence outside Blazen.
+
+## What's coming
+
+The Python and Node bindings expose two related surfaces that will land for Go:
+
+1. **Pause/resume.** `wf.runWithHandler(input)` returns a handle on which you can call `handler.pause()` to serialise the workflow state into a snapshot, then `wf.resume(snapshot)` later (possibly in a different process) to continue execution. The Go equivalent will accept `[]byte` snapshots and the same `Workflow.Resume` entry point.
+2. **Input request events.** When a step emits a `blazen::InputRequestEvent`, the workflow auto-pauses and surfaces the event on the handler's stream. The caller subscribes, prompts the human, and calls `handler.respondToInput(requestId, response)` to inject the answer. The Go equivalent will surface input requests over a channel on a handler-style API.
+
+If you are designing a Go workflow today that will eventually use these primitives, structure your step handlers around event-driven dispatch (emit a request event, wait for a response event) rather than synchronous blocking, so the migration is straightforward when the surface lands.
+
+## Step and workflow timeouts
+
+In the meantime, lean on the engine-side timeouts to bound how long a side-effect step can wait:
+
+```go
+builder := blazen.NewWorkflowBuilder("hitl")
+builder, _ = builder.StepTimeout(15 * time.Minute)   // per-step cap
+builder, _ = builder.Timeout(2 * time.Hour)          // whole-workflow cap
+```
+
+A step that exceeds its budget fails with a `*blazen.TimeoutError`. This is enforced by the Rust runtime, not the Go caller, so it works correctly even if the handler is blocked in a `WaitForDecision` call.
+
+## See also
+
+- [Context](/guides/go/context/) -- why the handler `ctx` is always `context.Background()` and how to thread cancellation in.
+- [Events](/guides/go/events/) -- routing events, fan-out, side-effect steps.

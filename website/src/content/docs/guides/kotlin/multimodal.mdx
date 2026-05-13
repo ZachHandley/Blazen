@@ -1,0 +1,221 @@
+---
+title: "Multimodal"
+description: "Attach images, audio, video, and documents to chat completions in Kotlin"
+language: "kotlin"
+section: "guides"
+order: 5
+---
+
+# Multimodal
+
+Blazen's Kotlin binding accepts multimodal payloads (images, audio, video, documents) as `Media` parts attached to a `ChatMessage`. The framework handles provider-specific wire encoding — base64 inline for OpenAI, the same with media-type headers for Anthropic, Files API references when a content store is wired in.
+
+## The `Media` part
+
+Every `ChatMessage` carries a `mediaParts: List<Media>` field. Each `Media` entry pairs the raw bytes (base64-encoded) with its MIME type:
+
+```kotlin
+data class Media(
+    var kind: String,        // "image", "audio", "video"
+    var mimeType: String,    // e.g. "image/png", "audio/mpeg"
+    var dataBase64: String,  // base64-encoded payload OR a URL string
+)
+```
+
+`dataBase64` is the canonical wire field across all providers. For URL-only providers (where the upstream API wants a public link instead of inline bytes), the same field carries the URL string and the framework dispatches on `mimeType` to decide which encoding to send.
+
+## Sending an image
+
+Attach a `Media` to a user message. The base64 conversion uses `java.util.Base64`:
+
+```kotlin
+import dev.zorpx.blazen.uniffi.ChatMessage
+import dev.zorpx.blazen.uniffi.CompletionRequest
+import dev.zorpx.blazen.uniffi.Media
+import dev.zorpx.blazen.uniffi.newOpenaiCompletionModel
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.Base64
+import kotlinx.coroutines.runBlocking
+
+fun main() = runBlocking {
+    val bytes = Files.readAllBytes(Path.of("/path/to/logo.png"))
+    val imagePart = Media(
+        kind = "image",
+        mimeType = "image/png",
+        dataBase64 = Base64.getEncoder().encodeToString(bytes),
+    )
+
+    val model = newOpenaiCompletionModel(
+        apiKey = System.getenv("OPENAI_API_KEY") ?: "",
+        model = "gpt-4o-mini",
+        baseUrl = null,
+    )
+    model.use {
+        val request = CompletionRequest(
+            messages = listOf(
+                ChatMessage(role = "system", content = "You describe images concisely.",
+                            mediaParts = emptyList(), toolCalls = emptyList(),
+                            toolCallId = null, name = null),
+                ChatMessage(role = "user", content = "What is in this image?",
+                            mediaParts = listOf(imagePart), toolCalls = emptyList(),
+                            toolCallId = null, name = null),
+            ),
+            tools = emptyList(), temperature = null, maxTokens = null, topP = null,
+            model = null, responseFormatJson = null, system = null,
+        )
+        val response = model.complete(request)
+        println(response.content)
+    }
+}
+```
+
+Pass the empty string for `apiKey` to fall back to `OPENAI_API_KEY`. Every provider factory in `dev.zorpx.blazen.uniffi` accepts the same shape.
+
+## Audio and video
+
+The shape is identical for audio and video — pick the right `kind` and MIME type and the framework routes to the right provider modality:
+
+```kotlin
+val audioBytes = Files.readAllBytes(Path.of("/path/to/clip.mp3"))
+val audioPart = Media(
+    kind = "audio",
+    mimeType = "audio/mpeg",
+    dataBase64 = Base64.getEncoder().encodeToString(audioBytes),
+)
+
+val request = CompletionRequest(
+    messages = listOf(
+        ChatMessage(role = "user", content = "Transcribe this clip.",
+                    mediaParts = listOf(audioPart), toolCalls = emptyList(),
+                    toolCallId = null, name = null),
+    ),
+    tools = emptyList(), temperature = null, maxTokens = null, topP = null,
+    model = null, responseFormatJson = null, system = null,
+)
+```
+
+For providers that gate multimodal behind an explicit feature (e.g. Gemini's vision-only models), the framework throws `BlazenException.Unsupported` rather than silently dropping the part.
+
+## Documents
+
+`application/pdf` works the same way. The framework picks the appropriate wire encoding (Anthropic's documents content type, OpenAI's file upload pattern, etc.) based on the active provider:
+
+```kotlin
+val pdfBytes = Files.readAllBytes(Path.of("/path/to/spec.pdf"))
+val docPart = Media(
+    kind = "document",
+    mimeType = "application/pdf",
+    dataBase64 = Base64.getEncoder().encodeToString(pdfBytes),
+)
+val request = CompletionRequest(
+    messages = listOf(
+        ChatMessage(role = "user", content = "Summarize this document.",
+                    mediaParts = listOf(docPart), toolCalls = emptyList(),
+                    toolCallId = null, name = null),
+    ),
+    tools = emptyList(), temperature = null, maxTokens = null, topP = null,
+    model = null, responseFormatJson = null, system = null,
+)
+```
+
+## Multiple parts in one message
+
+A single message can carry as many media parts as the upstream provider allows. They are attached in list order, and providers that lay out media inline (Anthropic, Gemini) preserve that order in the rendered prompt:
+
+```kotlin
+val request = CompletionRequest(
+    messages = listOf(
+        ChatMessage(
+            role = "user",
+            content = "Compare these two images.",
+            mediaParts = listOf(
+                Media(kind = "image", mimeType = "image/png", dataBase64 = imageA),
+                Media(kind = "image", mimeType = "image/png", dataBase64 = imageB),
+            ),
+            toolCalls = emptyList(), toolCallId = null, name = null,
+        ),
+    ),
+    tools = emptyList(), temperature = null, maxTokens = null, topP = null,
+    model = null, responseFormatJson = null, system = null,
+)
+```
+
+## URL-only providers
+
+Some providers (fal.ai's image endpoints, OpenAI's hosted vision URLs) prefer a public URL over inline bytes. The framework supports both wire forms in the same `Media` struct — when the body is a URL, set `mimeType` to the MIME type the upstream wants and put the URL string in `dataBase64`:
+
+```kotlin
+val urlPart = Media(
+    kind = "image",
+    mimeType = "image/png",
+    dataBase64 = "https://example.com/image.png",
+)
+```
+
+The framework inspects the body — if it parses as a URL, it dispatches as a URL reference; otherwise it treats the string as base64 bytes.
+
+## Generated multimodal output
+
+Image-generation models are constructed via `newDiffusionImageGenModel(...)` (local, feature-gated) and `newFalImageGenModel(...)` (fal.ai). They return an `ImageGenResult` whose `images: List<Media>` carries `Media` parts in the same shape as inputs — base64 bytes or a URL, depending on the provider:
+
+```kotlin
+import dev.zorpx.blazen.uniffi.newFalImageGenModel
+
+val model = newFalImageGenModel(
+    apiKey = System.getenv("FAL_KEY") ?: "",
+    model = "fal-ai/flux/dev",
+)
+model.use {
+    val result = it.generate(
+        prompt = "A teal hummingbird sipping from a fuschia flower",
+        negativePrompt = null,
+        width = 1024u,
+        height = 1024u,
+        numImages = 1u,
+        model = null,
+    )
+    for (image in result.images) {
+        println("got ${image.mimeType} (${image.dataBase64.length} chars)")
+    }
+}
+```
+
+Text-to-speech and speech-to-text follow the same factory pattern. `newPiperTtsModel(...)` / `newWhisperSttModel(...)` are local (feature-gated); `newFalTtsModel(...)` / `newFalSttModel(...)` are cloud. Each modality has its own result struct (`TtsResult`, `SttResult`) but the audio bytes ride the same base64-or-URL convention.
+
+```kotlin
+import dev.zorpx.blazen.uniffi.newFalTtsModel
+
+val tts = newFalTtsModel(apiKey = System.getenv("FAL_KEY") ?: "", model = null)
+tts.use {
+    val result = it.synthesize(
+        text = "Hello from Blazen.",
+        voice = null,
+        language = "en",
+    )
+    println("audio: ${result.mimeType}, ${result.durationMs}ms")
+}
+```
+
+## Errors
+
+Multimodal failures show up as the same `BlazenException` variants you'd see on a text-only request — `BlazenException.Validation` for a malformed payload, `BlazenException.Unsupported` for a provider that does not accept that modality, `BlazenException.Media` for a payload that fails to decode upstream:
+
+```kotlin
+try {
+    val response = model.complete(request)
+} catch (e: BlazenException) {
+    when (e) {
+        is BlazenException.Media       -> println("media decode failed: ${e.message}")
+        is BlazenException.Unsupported -> println("provider rejected modality: ${e.message}")
+        is BlazenException.Validation  -> println("malformed request: ${e.message}")
+        else                            -> println("completion failed: ${e.message}")
+    }
+}
+```
+
+## See also
+
+- [LLM](/guides/kotlin/llm/) — non-streaming completions, the full provider factory list, and embeddings.
+- [Streaming](/guides/kotlin/streaming/) — attach `Media` to a streaming request the same way.
+- [Tool multimodal](/guides/tool-multimodal/) — cross-cutting guide for tool results that carry images / audio.

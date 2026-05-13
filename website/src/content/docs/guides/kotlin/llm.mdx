@@ -1,0 +1,258 @@
+---
+title: "LLM"
+description: "Call chat completion and embedding models in Kotlin"
+language: "kotlin"
+section: "guides"
+order: 6
+---
+
+# LLM
+
+`CompletionModel` is the chat-completion handle and `EmbeddingModel` is the embedding handle. Both are constructed via free-function factories from `dev.zorpx.blazen.uniffi` and accept the same idiomatic call shapes across every provider Blazen supports.
+
+## Picking a provider
+
+The package exposes one `new*CompletionModel` / `new*EmbeddingModel` free function per supported backend. Each cloud factory takes an API key (pass the empty string to fall back to the provider's well-known environment variable, like `OPENAI_API_KEY`), an optional model id, and an optional `baseUrl` override for proxies and self-hosted gateways:
+
+```kotlin
+import dev.zorpx.blazen.uniffi.newAnthropicCompletionModel
+import dev.zorpx.blazen.uniffi.newGeminiCompletionModel
+import dev.zorpx.blazen.uniffi.newGroqCompletionModel
+import dev.zorpx.blazen.uniffi.newOpenaiCompletionModel
+
+val openai    = newOpenaiCompletionModel(apiKey = "", model = "gpt-4o-mini", baseUrl = null)
+val anthropic = newAnthropicCompletionModel(apiKey = "", model = "claude-3-5-sonnet-latest", baseUrl = null)
+val gemini    = newGeminiCompletionModel(apiKey = "", model = "gemini-1.5-flash", baseUrl = null)
+val groq      = newGroqCompletionModel(apiKey = "", model = "llama-3.1-70b-versatile", baseUrl = null)
+```
+
+The full list covers OpenAI, Anthropic, Gemini, Azure OpenAI, AWS Bedrock, OpenRouter, Groq, Together, Mistral, DeepSeek, Fireworks, Perplexity, xAI, Cohere, fal.ai, and a generic `newOpenaiCompatCompletionModel(...)` factory for anything that speaks the standard OpenAI Chat Completions wire format (vLLM, llama-server, LM Studio, ...).
+
+Each handle implements `AutoCloseable` — use `model.use { }` (or `try { ... } finally { model.close() }`) to release the native handle when you're done.
+
+## Building a request
+
+`CompletionRequest` carries the message list plus the usual knobs. Every named argument except `messages` is nullable — pass `null` to use the provider's default:
+
+```kotlin
+import dev.zorpx.blazen.uniffi.ChatMessage
+import dev.zorpx.blazen.uniffi.CompletionRequest
+
+val request = CompletionRequest(
+    messages = listOf(
+        ChatMessage(role = "system", content = "You are a helpful assistant.",
+                    mediaParts = emptyList(), toolCalls = emptyList(),
+                    toolCallId = null, name = null),
+        ChatMessage(role = "user", content = "What is the capital of France?",
+                    mediaParts = emptyList(), toolCalls = emptyList(),
+                    toolCallId = null, name = null),
+    ),
+    tools = emptyList(),
+    temperature = 0.7,
+    maxTokens = 256u,
+    topP = null,
+    model = null,
+    responseFormatJson = null,
+    system = null,
+)
+```
+
+`maxTokens` and `topP` use unsigned types (`UInt?` and `Double?`); the `u` suffix marks the unsigned literal.
+
+## Building messages
+
+`ChatMessage` is a `data class` with one role-agnostic constructor. The `mediaParts` and `toolCalls` lists default to empty *only* in the hand-written wrapper layer — when constructing the generated `dev.zorpx.blazen.uniffi.ChatMessage` directly, you must pass `emptyList()` explicitly:
+
+```kotlin
+// User message
+ChatMessage(role = "user", content = "Hello!",
+            mediaParts = emptyList(), toolCalls = emptyList(),
+            toolCallId = null, name = null)
+
+// Tool response (carries toolCallId so the model can correlate)
+ChatMessage(role = "tool", content = "temperature=22C",
+            mediaParts = emptyList(), toolCalls = emptyList(),
+            toolCallId = "call_abc123", name = null)
+
+// Multimodal user message (see the Multimodal guide)
+ChatMessage(role = "user", content = "What does this image show?",
+            mediaParts = listOf(imagePart), toolCalls = emptyList(),
+            toolCallId = null, name = null)
+```
+
+## Non-streaming completions
+
+`CompletionModel.complete(request)` is a `suspend fun` that returns a `CompletionResponse`:
+
+```kotlin
+import kotlinx.coroutines.runBlocking
+
+fun main() = runBlocking {
+    val model = newOpenaiCompletionModel(apiKey = "", model = "gpt-4o-mini", baseUrl = null)
+    model.use {
+        val response = it.complete(request)
+        println(response.content)
+        println("tokens: in=${response.usage.promptTokens} out=${response.usage.completionTokens}")
+        println("finish: ${response.finishReason}")
+    }
+}
+```
+
+The response carries `content: String` (the assistant's text reply), `toolCalls: List<ToolCall>` (any tool calls the model emitted), `finishReason: String`, `model: String`, and `usage: TokenUsage`.
+
+For callers in non-suspend contexts (a Spring controller, an old-style `Runnable`, a quick CLI script), `completeBlocking(request)` blocks the current thread on the shared Tokio runtime and returns the same `CompletionResponse`.
+
+## Streaming completions
+
+`completeStreaming(model, request, sink)` is a top-level `suspend fun` that drives the stream through a `CompletionStreamSink` callback. The most ergonomic way to consume one is to wrap it in a `Flow<StreamChunk>` via `callbackFlow` — see the [Streaming guide](/guides/kotlin/streaming/) for the full pattern. The short version:
+
+```kotlin
+model.streamChunks(request).collect { chunk ->
+    print(chunk.contentDelta)
+}
+```
+
+Cancelling the collecting coroutine tears the stream down and stops the underlying provider connection.
+
+## Tool calls
+
+A request with `tools` declared lets the model emit tool invocations. Each `ToolCall` in the response carries an `id`, the `name` of the tool, and `argumentsJson` — a JSON string the model emitted. Hand that back to your tool, then feed the result into a follow-up `tool`-role message:
+
+```kotlin
+import dev.zorpx.blazen.uniffi.Tool
+import dev.zorpx.blazen.uniffi.ToolCall
+
+val weatherTool = Tool(
+    name = "get_weather",
+    description = "Get the current weather for a city.",
+    parametersJson = """{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}""",
+)
+
+val messages = mutableListOf(
+    ChatMessage(role = "user", content = "Weather in Paris?",
+                mediaParts = emptyList(), toolCalls = emptyList(),
+                toolCallId = null, name = null),
+)
+val first = model.complete(CompletionRequest(
+    messages = messages, tools = listOf(weatherTool),
+    temperature = null, maxTokens = null, topP = null,
+    model = null, responseFormatJson = null, system = null,
+))
+
+// Append the assistant message (mirroring the upstream protocol).
+messages.add(ChatMessage(
+    role = "assistant", content = first.content,
+    mediaParts = emptyList(), toolCalls = first.toolCalls,
+    toolCallId = null, name = null,
+))
+
+for (call in first.toolCalls) {
+    val result = runWeatherTool(call.argumentsJson)
+    messages.add(ChatMessage(
+        role = "tool", content = result,
+        mediaParts = emptyList(), toolCalls = emptyList(),
+        toolCallId = call.id, name = null,
+    ))
+}
+
+val second = model.complete(CompletionRequest(
+    messages = messages, tools = listOf(weatherTool),
+    temperature = null, maxTokens = null, topP = null,
+    model = null, responseFormatJson = null, system = null,
+))
+println(second.content)
+```
+
+For the full tool-call loop with iteration budgets and error handling, use the [`Agent`](/guides/kotlin/agent/) type instead of orchestrating turns by hand.
+
+## Embeddings
+
+`EmbeddingModel.embed(inputs)` returns one vector per input string. Build a model via `newOpenaiEmbeddingModel(...)` for OpenAI, `newFalEmbeddingModel(...)` for fal.ai, or one of the local factories (`newFastembedEmbeddingModel(...)`, `newTractEmbeddingModel(...)`, `newCandleEmbeddingModel(...)`):
+
+```kotlin
+import dev.zorpx.blazen.uniffi.newOpenaiEmbeddingModel
+
+val embedder = newOpenaiEmbeddingModel(
+    apiKey = "",
+    model = "text-embedding-3-small",
+    baseUrl = null,
+)
+embedder.use {
+    val response = it.embed(listOf(
+        "blazen orchestrates LLM workflows",
+        "kotlin loves coroutines",
+    ))
+    for ((input, vector) in listOf("A" to response.embeddings[0], "B" to response.embeddings[1])) {
+        println("$input -> ${vector.size} dims, first=${vector.first()}")
+    }
+    println("model: ${it.modelId()}, dimensions: ${it.dimensions()}")
+}
+```
+
+`modelId()` and `dimensions()` are method calls (not properties) because the generated UniFFI surface exposes them as `fun` rather than `val`.
+
+## Local backends
+
+For local inference, several feature-gated factories ship in the same namespace:
+
+```kotlin
+import dev.zorpx.blazen.uniffi.newCandleCompletionModel
+import dev.zorpx.blazen.uniffi.newLlamacppCompletionModel
+import dev.zorpx.blazen.uniffi.newMistralrsCompletionModel
+
+val llama = newLlamacppCompletionModel(
+    modelPath = "/models/llama-3.2-1b-q4_k_m.gguf",
+    device = "cuda:0",
+    quantization = null,
+    contextLength = 8192u,
+    nGpuLayers = 99u,
+)
+
+val mistralrs = newMistralrsCompletionModel(
+    modelId = "mistralai/Mistral-7B-Instruct-v0.3",
+    device = null,
+    quantization = null,
+    contextLength = null,
+    vision = false,
+)
+
+val candle = newCandleCompletionModel(
+    modelId = "meta-llama/Llama-3.2-1B-Instruct",
+    device = null,
+    quantization = null,
+    revision = null,
+    contextLength = null,
+)
+```
+
+Each requires the underlying native lib to be built with the corresponding feature flag (`llamacpp`, `mistralrs`, `candle-llm`). The prebuilt artefact ships with the cloud factories always enabled; check the release notes for the per-platform local-backend matrix.
+
+## Errors
+
+Every failure surfaces as a `BlazenException` (sealed class). Switch on the variant for typed handling, or just read `.message` for a uniform `String`:
+
+```kotlin
+import dev.zorpx.blazen.uniffi.BlazenException
+
+try {
+    val response = model.complete(request)
+} catch (e: BlazenException) {
+    when (e) {
+        is BlazenException.Auth          -> println("bad credentials: ${e.message}")
+        is BlazenException.RateLimit     -> println("rate limited: ${e.message}")
+        is BlazenException.Timeout       -> println("timed out: ${e.message}")
+        is BlazenException.Validation    -> println("bad input: ${e.message}")
+        is BlazenException.ContentPolicy -> println("blocked: ${e.message}")
+        is BlazenException.Provider      -> println("provider ${e.provider} (${e.kind}): ${e.message}")
+        else                              -> println("completion failed: ${e.message}")
+    }
+}
+```
+
+See the [Context guide](/guides/kotlin/context/#errors) for the full list of variants and their structured fields.
+
+## See also
+
+- [Streaming](/guides/kotlin/streaming/) — consume `completeStreaming(...)` through a `Flow<StreamChunk>`.
+- [Multimodal](/guides/kotlin/multimodal/) — attach images, audio, video, and documents to a request.
+- [Agent](/guides/kotlin/agent/) — drive the full tool-call loop with `Agent` instead of orchestrating turns by hand.

@@ -14,7 +14,10 @@
         "rust",
         "python",
         "node",
-        "wasm"
+        "wasm",
+        "go",
+        "swift",
+        "kotlin"
       ]
     },
     "section": {

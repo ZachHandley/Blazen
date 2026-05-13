@@ -1,0 +1,94 @@
+---
+title: "Context"
+description: "Cancellation and lifetime management in the Go binding"
+language: "go"
+section: "guides"
+order: 3
+---
+
+## What context means in the Go binding
+
+The Blazen Go binding uses Go's standard `context.Context` for one thing: caller-side cancellation of the FFI calls that drive workflow runs, completions, embeddings, and agent loops. There is no `ctx.set / ctx.get` key-value store on the Go surface -- the Python and Node bindings expose a shared per-run state map, but the Go binding deliberately omits it for this release. If you need to thread state between steps, use Go-side state your handler closes over (a struct field, an `*sync.Map`, a database, etc.).
+
+The `context.Context` argument on `StepHandler.Invoke` and `ToolHandler.Execute` is **always `context.Background()`**. UniFFI's callback ABI does not propagate the per-call context across the FFI boundary, so handlers see a fresh background context on every invocation. If your handler needs cancellation, consult external state (a `sync.Once`, an atomic flag, etc.) rather than relying on the handler's `ctx`.
+
+## Cancellation surface
+
+Every blocking entry point on the Go binding accepts a `context.Context` and honours its cancellation:
+
+| Method | Cancellation behavior |
+|---|---|
+| `Workflow.Run(ctx, input)` | Returns `ctx.Err()` on cancellation; Rust run continues. |
+| `CompletionModel.Complete(ctx, req)` | Returns `ctx.Err()` on cancellation; provider request continues. |
+| `EmbeddingModel.Embed(ctx, inputs)` | Returns `ctx.Err()` on cancellation; provider request continues. |
+| `Agent.Run(ctx, userInput)` | Returns `ctx.Err()` on cancellation; agent loop continues. |
+| `blazen.Stream(ctx, model, req)` | Channel receives a `*StreamErrorEvent` carrying `ctx.Err()` and closes. |
+
+Each method launches the FFI call on a background goroutine and races a `select` on `ctx.Done()`. When the context fires first, the function returns `ctx.Err()` immediately and the caller is unblocked.
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+defer cancel()
+
+result, err := wf.Run(ctx, input)
+if errors.Is(err, context.DeadlineExceeded) {
+    // The 10s budget elapsed before the workflow finished.
+}
+```
+
+## The cancellation gap
+
+Returning `ctx.Err()` unblocks the Go caller, but it does **not** stop the Rust-side run. The workflow / completion / agent keeps executing on the native side until it finishes naturally. This is a known limitation pending an upstream UniFFI feature for ABI-level cancellation propagation.
+
+Two practical consequences:
+
+1. **Resources keep moving.** If a workflow step is in the middle of an HTTP request to a provider, that request continues until it gets a response or times out at the HTTP layer. You are not billed for the cancellation, but you also do not get a free abort.
+2. **Don't `Close()` an in-flight handle.** Calling `Workflow.Close()` while a `Run` is still racing on the Rust side races the finalizer logic. Wait for `Run` to return -- even if it returned `ctx.Err()`, the underlying goroutine still has to drain the response channel before exiting.
+
+For workflows that **need** cooperative cancellation, plumb the cancellation through your step handler's external state: capture an `atomic.Bool` in the handler's closure, set it from a watchdog goroutine when your `ctx` fires, and have the handler check it at each natural yield point.
+
+```go
+type cancellableHandler struct {
+    stop *atomic.Bool
+}
+
+func (h cancellableHandler) Invoke(_ context.Context, ev blazen.Event) (blazen.StepOutput, error) {
+    for i := 0; i < bigLoop; i++ {
+        if h.stop.Load() {
+            return nil, &blazen.CancelledError{}
+        }
+        // ...do work...
+    }
+    return blazen.NewStepOutputNone(), nil
+}
+```
+
+## Step and tool timeouts
+
+If you want a hard time budget enforced by the Rust runtime (not just the Go caller), use the engine's built-in timeouts:
+
+```go
+builder := blazen.NewWorkflowBuilder("with-timeouts")
+builder, _ = builder.StepTimeout(5 * time.Second)   // per-step cap
+builder, _ = builder.Timeout(30 * time.Second)      // whole-workflow cap
+builder, _ = builder.Step(...)
+wf, _ := builder.Build()
+```
+
+A run that overruns the workflow timeout fails with a `*blazen.TimeoutError` whose `ElapsedMs` reports the wall-clock budget at the time of abort. This **is** enforced by the Rust runtime -- it tears down the active step and returns immediately. Use timeouts for cooperative cancellation; use `ctx.WithTimeout` only when you want to unblock the Go caller earlier than the Rust-side budget would allow.
+
+## Lifecycle: Init, Shutdown, Close
+
+The binding has a small lifecycle surface:
+
+| Call | When |
+|---|---|
+| `blazen.Init()` | Boots the embedded Tokio runtime + tracing subscriber. Idempotent; called lazily by every entry point. |
+| `blazen.Shutdown()` | Flushes telemetry exporters. Safe to `defer` from `main`. |
+| `Workflow.Close()` / `CompletionModel.Close()` / `EmbeddingModel.Close()` / `Agent.Close()` | Releases the underlying native handle. Idempotent and safe to call from multiple goroutines. |
+
+All handles install a `runtime.SetFinalizer` as a safety net, so a forgotten `Close()` does not leak native memory across a GC -- but explicit `defer handle.Close()` is preferred for predictable release.
+
+## Run IDs and telemetry
+
+Run IDs are surfaced via the native telemetry exporters (Langfuse, OTLP, Prometheus), not through the Go context. If you need to correlate Go-side logs with a workflow run, use the `TotalInputTokens`, `TotalOutputTokens`, `TotalCostUSD` fields on `WorkflowResult` for post-hoc aggregation, or wire up an OTLP exporter through `blazen.InitOTLP(...)` (see the telemetry guide for details).

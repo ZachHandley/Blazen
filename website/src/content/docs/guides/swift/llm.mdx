@@ -1,0 +1,214 @@
+---
+title: "LLM"
+description: "Call chat completion and embedding models in Swift"
+language: "swift"
+section: "guides"
+order: 6
+---
+
+# LLM
+
+`CompletionModel` is the chat-completion handle and `EmbeddingModel` is the embedding handle. Both are constructed via the `Providers` factory namespace and accept the same idiomatic call shapes across every provider Blazen supports.
+
+## Picking a provider
+
+The `Providers` enum exposes one factory per supported backend. Each cloud factory takes an API key (pass the empty string to fall back to the provider's well-known environment variable, like `OPENAI_API_KEY`), an optional model id, and an optional `baseURL` override for proxies and self-hosted gateways:
+
+```swift
+import BlazenSwift
+
+Blazen.initialize()
+defer { Blazen.shutdown() }
+
+let openai    = try Providers.openAI(apiKey: "", model: "gpt-4o-mini")
+let anthropic = try Providers.anthropic(apiKey: "", model: "claude-3-5-sonnet-latest")
+let gemini    = try Providers.gemini(apiKey: "", model: "gemini-1.5-flash")
+let groq      = try Providers.groq(apiKey: "", model: "llama-3.1-70b-versatile")
+```
+
+The full list covers OpenAI, Anthropic, Gemini, Azure OpenAI, AWS Bedrock, OpenRouter, Groq, Together, Mistral, DeepSeek, Fireworks, Perplexity, xAI, Cohere, fal.ai, and a generic `openAICompatible(...)` factory for anything that speaks the standard OpenAI Chat Completions wire format (vLLM, llama-server, LM Studio, ...).
+
+## Building a request
+
+`CompletionRequest` carries the message list plus the usual knobs. The Swift wrapper ships an ergonomic init with sensible defaults for the rarely-used fields:
+
+```swift
+let request = CompletionRequest(
+    messages: [
+        .system("You are a helpful assistant."),
+        .user("What is the capital of France?"),
+    ],
+    temperature: 0.7,
+    maxTokens: 256
+)
+```
+
+Every named argument except `messages` is optional. `tools`, `temperature`, `maxTokens`, `topP`, `model`, `system`, and `responseFormatJson` all accept `nil` (or are absent) to use the provider's default.
+
+## Building messages
+
+`ChatMessage` is a value type with role-specific constructors so call sites read naturally:
+
+```swift
+.system("You are a helpful assistant.")
+.user("Explain Swift actors briefly.")
+.assistant("Sure! Actors isolate mutable state...")
+.tool("temperature=22C", toolCallId: "call_abc123")
+.user("What does this image show?", media: [imagePart])   // multimodal
+```
+
+The constructors zero-fill every field you don't pass (`mediaParts`, `toolCalls`, `toolCallId`, `name`), so you write only what your message actually needs.
+
+## Non-streaming completions
+
+`CompletionModel.complete(_:)` returns a `CompletionResponse`:
+
+```swift
+let response = try await openai.complete(request)
+print(response.message.content)
+print("tokens: in=\(response.usage.inputTokens) out=\(response.usage.outputTokens)")
+print("cost:   $\(response.costUsd)")
+```
+
+The response carries the assistant `ChatMessage`, token usage, an estimated USD cost, the upstream-reported finish reason, and any tool calls the model emitted.
+
+## Streaming completions
+
+`CompletionModel.completeStream(_:)` returns an `AsyncThrowingStream<StreamEvent, Error>`. See the [Streaming guide](/guides/swift/streaming/) for the full pattern; the short version:
+
+```swift
+for try await event in openai.completeStream(request) {
+    switch event {
+    case .chunk(let chunk):
+        if let delta = chunk.contentDelta { print(delta, terminator: "") }
+    case .done(let reason, let usage):
+        print("\n[done: \(reason), tokens=\(usage.outputTokens)]")
+    }
+}
+```
+
+Breaking out of the `for try await` loop cancels the underlying Tokio task cooperatively.
+
+## Tool calls
+
+A request with `tools` declared lets the model emit tool invocations. Each `ToolCall` in the response carries an `id`, the `name` of the tool, and `argumentsJson` — a JSON string the model emitted. Hand that back to your tool, then feed the result into a follow-up `.tool(_:toolCallId:)` message:
+
+```swift
+let weatherTool = Tool(
+    name: "get_weather",
+    description: "Get the current weather for a city.",
+    parametersJson: """
+    {"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}
+    """
+)
+
+var messages: [ChatMessage] = [.user("Weather in Paris?")]
+let first = try await openai.complete(
+    CompletionRequest(messages: messages, tools: [weatherTool])
+)
+messages.append(first.message)
+
+for call in first.message.toolCalls {
+    let result = runWeatherTool(argumentsJson: call.argumentsJson)
+    messages.append(.tool(result, toolCallId: call.id))
+}
+
+let second = try await openai.complete(CompletionRequest(messages: messages))
+print(second.message.content)
+```
+
+For the full tool-call loop with iteration budgets and error handling, use the [`Agent`](/guides/swift/agent/) type instead of orchestrating turns by hand.
+
+## Embeddings
+
+`EmbeddingModel.embed(_:)` returns one vector per input string. Build a model via `Providers.openAIEmbedding(...)` for OpenAI, `Providers.falEmbedding(...)` for fal.ai, or one of the local factories (`Providers.fastEmbed(...)`, `Providers.tractEmbedding(...)`, `Providers.candleEmbedding(...)`):
+
+```swift
+let embedder = try Providers.openAIEmbedding(apiKey: "", model: "text-embedding-3-small")
+
+let response = try await embedder.embed([
+    "blazen orchestrates LLM workflows",
+    "swift loves structured concurrency",
+])
+for (input, vector) in zip(["A", "B"], response.embeddings) {
+    print("\(input) -> \(vector.count) dims, first=\(vector.first ?? 0)")
+}
+print("model: \(embedder.id), dimensions: \(embedder.dimension)")
+```
+
+Both `embedder.id` and `embedder.dimension` are exposed as Swift properties — call sites read like metadata access rather than method invocation.
+
+## Batch completions
+
+`completeBatch(model:requests:maxConcurrency:)` runs multiple requests against one model with bounded concurrency. Per-request failures land in the result as `BatchItem.failure(errorMessage:)` rather than throwing — the function itself only throws on validation failure:
+
+```swift
+let requests = (1...10).map { i in
+    CompletionRequest(messages: [.user("Tell me fact #\(i)")])
+}
+
+let result = try await completeBatch(
+    model: openai,
+    requests: requests,
+    maxConcurrency: 4
+)
+
+for (index, item) in result.responses.enumerated() {
+    switch item {
+    case .success(let response):
+        print("[\(index)] \(response.message.content.prefix(80))")
+    case .failure(let errorMessage):
+        print("[\(index)] failed: \(errorMessage)")
+    }
+}
+print("total tokens out=\(result.totalUsage.outputTokens), cost=$\(result.totalCostUsd)")
+```
+
+`maxConcurrency` of `0` means unlimited (every request dispatched in parallel). Cap it according to your provider's rate limits.
+
+## Local backends
+
+For local inference, three feature-gated factories ship in `Providers`:
+
+```swift
+let llama = try Providers.llamaCpp(
+    modelPath: "/models/llama-3.2-1b-q4_k_m.gguf",
+    nGpuLayers: 99
+)
+
+let mistralrs = try Providers.mistralRs(
+    modelId: "mistralai/Mistral-7B-Instruct-v0.3"
+)
+
+let candle = try Providers.candle(
+    modelId: "meta-llama/Llama-3.2-1B-Instruct"
+)
+```
+
+Each requires the underlying native lib to be built with the corresponding feature flag (`llamacpp`, `mistralrs`, `candle-llm`). The prebuilt `XCFramework` shipped by `BlazenSwift` includes these features on macOS; check the package release notes for iOS.
+
+## Errors
+
+Every failure surfaces as a `BlazenError`. Switch on the variant for typed handling, or just read `.message` for a uniform `String`:
+
+```swift
+do {
+    let response = try await openai.complete(request)
+} catch let error as BlazenError {
+    switch error {
+    case .Auth:           print("bad credentials: \(error.message)")
+    case .RateLimit:      print("rate limited: \(error.message)")
+    case .Timeout:        print("timed out: \(error.message)")
+    case .Validation:     print("bad input: \(error.message)")
+    case .ContentPolicy:  print("blocked: \(error.message)")
+    case .Provider:       print("provider failure: \(error.message)")
+    default:              print("completion failed: \(error.message)")
+    }
+}
+```
+
+## See also
+
+- [Streaming](/guides/swift/streaming/) -- consume `completeStream(_:)` with `for try await`.
+- [Multimodal](/guides/swift/multimodal/) -- attach images, audio, video, and documents to a request.
+- [Agent](/guides/swift/agent/) -- drive the full tool-call loop with `Agent` instead of orchestrating turns by hand.

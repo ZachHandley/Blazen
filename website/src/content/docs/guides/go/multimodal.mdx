@@ -1,0 +1,169 @@
+---
+title: "Multimodal Content"
+description: "Send images, audio, and video to multimodal models from Go"
+language: "go"
+section: "guides"
+order: 6
+---
+
+The Go binding accepts multimodal inputs through the `MediaParts` field on `ChatMessage`. Each `Media` value carries a base64-encoded blob plus its MIME type, and the Rust side rewrites it into the provider-native shape (OpenAI vision, Anthropic vision, Gemini multimodal, etc.) at request-build time.
+
+This guide covers the Go binding (`github.com/zachhandley/Blazen/bindings/go`). For the cross-cutting design notes -- including the content-handle abstraction the Node and Python bindings expose -- see [`/guides/tool-multimodal/`](/guides/tool-multimodal/). The Go binding does not yet expose `ContentStore` / `ContentHandle`; multimodal inputs are passed inline as base64 today.
+
+## The `Media` struct
+
+```go
+type Media struct {
+    Kind       string // "image", "audio", or "video"
+    MimeType   string // IANA media type (e.g. "image/png", "audio/wav")
+    DataBase64 string // raw bytes, base64-encoded
+}
+```
+
+`DataBase64` may be the empty string when the provider accepts a URL referenced elsewhere in the message body (for example, OpenAI's `image_url` form). For the inline-bytes path, base64-encode the raw bytes with the standard library:
+
+```go
+import "encoding/base64"
+
+raw, err := os.ReadFile("cat.png")
+if err != nil {
+    return err
+}
+b64 := base64.StdEncoding.EncodeToString(raw)
+```
+
+## Attaching media to a message
+
+`ChatMessage.MediaParts` is a slice -- attach as many parts as the provider's multimodal endpoint supports:
+
+```go
+import (
+    "context"
+    "encoding/base64"
+    "os"
+
+    blazen "github.com/zachhandley/Blazen/bindings/go"
+)
+
+func describeImage(ctx context.Context, path string) (string, error) {
+    raw, err := os.ReadFile(path)
+    if err != nil {
+        return "", err
+    }
+    b64 := base64.StdEncoding.EncodeToString(raw)
+
+    model, err := blazen.NewOpenAICompletion(os.Getenv("OPENAI_API_KEY"), "gpt-4o", "")
+    if err != nil {
+        return "", err
+    }
+    defer model.Close()
+
+    req := blazen.CompletionRequest{
+        Messages: []blazen.ChatMessage{
+            {
+                Role:    "user",
+                Content: "What is in this image?",
+                MediaParts: []blazen.Media{
+                    {
+                        Kind:       "image",
+                        MimeType:   "image/png",
+                        DataBase64: b64,
+                    },
+                },
+            },
+        },
+    }
+
+    res, err := model.Complete(ctx, req)
+    if err != nil {
+        return "", err
+    }
+    return res.Content, nil
+}
+```
+
+The Rust side resolves `MediaParts` against the active provider:
+
+- **OpenAI vision** -- the bytes are rewritten into an `image_url` data URL or an `input_image` part depending on the model.
+- **Anthropic vision** -- the bytes are rewritten into the `{type: "image", source: {type: "base64", ...}}` block.
+- **Gemini multimodal** -- the bytes are rewritten into an `inline_data` part with the matching MIME type.
+- **OpenAI-compatible** -- the request is built against whichever multimodal shape the upstream `providerName` advertises.
+
+You write one `Media{Kind: "image", MimeType: "image/png", DataBase64: ...}` and Blazen handles the wire-format dance.
+
+## Audio and video
+
+Audio and video work identically -- the `Kind` field discriminates and Blazen routes to the appropriate provider surface:
+
+```go
+audio := blazen.Media{
+    Kind:       "audio",
+    MimeType:   "audio/wav",
+    DataBase64: encodeWav(samples),
+}
+
+video := blazen.Media{
+    Kind:       "video",
+    MimeType:   "video/mp4",
+    DataBase64: encodeMp4(frames),
+}
+
+req := blazen.CompletionRequest{
+    Messages: []blazen.ChatMessage{
+        {Role: "user", Content: "Transcribe this clip.", MediaParts: []blazen.Media{audio}},
+    },
+}
+```
+
+Provider support for audio and video varies -- Gemini and OpenAI Realtime accept both, Anthropic accepts video frames but not raw audio at the message level, and most others are text-and-image only. A provider that does not support the requested `Kind` returns a `*blazen.UnsupportedError`.
+
+## Multimodal in workflows
+
+Multimodal messages compose cleanly with the workflow engine. A step that needs to call a vision model from inside a handler does the same `model.Complete(...)` call as standalone code -- the only difference is that the result is wrapped under a routing event before being returned:
+
+```go
+type captionHandler struct {
+    model *blazen.CompletionModel
+}
+
+func (h captionHandler) Invoke(ctx context.Context, ev blazen.Event) (blazen.StepOutput, error) {
+    var input struct {
+        Data struct {
+            ImageB64 string `json:"image_b64"`
+            MimeType string `json:"mime_type"`
+        } `json:"data"`
+    }
+    if err := json.Unmarshal([]byte(ev.DataJSON), &input); err != nil {
+        return nil, err
+    }
+
+    res, err := h.model.Complete(ctx, blazen.CompletionRequest{
+        Messages: []blazen.ChatMessage{
+            {
+                Role:    "user",
+                Content: "Caption this image in one sentence.",
+                MediaParts: []blazen.Media{
+                    {Kind: "image", MimeType: input.Data.MimeType, DataBase64: input.Data.ImageB64},
+                },
+            },
+        },
+    })
+    if err != nil {
+        return nil, err
+    }
+
+    out, _ := json.Marshal(map[string]string{"result": res.Content})
+    return blazen.NewStepOutputSingle(blazen.Event{
+        EventType: "blazen::StopEvent",
+        DataJSON:  string(out),
+    }), nil
+}
+```
+
+Note the wrapping convention -- `StartEvent` payloads arrive under `"data"`, `StopEvent` payloads must be wrapped under `"result"`. See the [Events guide](/guides/go/events/#built-in-events) for the full envelope shape.
+
+## See also
+
+- [`/guides/tool-multimodal/`](/guides/tool-multimodal/) -- cross-cutting design notes and provider behavior.
+- [LLM](/guides/go/llm/) -- chat completion surface and provider factories.
+- [Agent](/guides/go/agent/) -- tool-call loop with multimodal-aware tools.

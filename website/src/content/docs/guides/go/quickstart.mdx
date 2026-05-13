@@ -1,0 +1,136 @@
+---
+title: "Quickstart"
+description: "Build your first Blazen workflow in Go"
+language: "go"
+section: "guides"
+order: 1
+---
+
+# Quickstart
+
+Get a Blazen workflow running in Go in under five minutes.
+
+## Installation
+
+The Go binding lives in the Blazen monorepo and links against a prebuilt native library via cgo. Add it to your module:
+
+```bash
+go get github.com/zachhandley/Blazen/bindings/go
+```
+
+The package ships a static `libblazen_uniffi.a` for the supported `GOOS_GOARCH` tuples under `internal/clib/`, so no extra environment setup is required on linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, or windows/amd64.
+
+## Your first workflow
+
+Create a file called `main.go`:
+
+```go
+package main
+
+import (
+    "context"
+    "encoding/json"
+    "fmt"
+    "time"
+
+    blazen "github.com/zachhandley/Blazen/bindings/go"
+)
+
+// GreetHandler reads {"name": "..."} from the StartEvent payload and
+// emits a StopEvent carrying a friendly greeting.
+type GreetHandler struct{}
+
+func (GreetHandler) Invoke(_ context.Context, event blazen.Event) (blazen.StepOutput, error) {
+    // StartEvent payloads arrive wrapped: {"data": <user-input>}.
+    var envelope struct {
+        Data struct {
+            Name string `json:"name"`
+        } `json:"data"`
+    }
+    if err := json.Unmarshal([]byte(event.DataJSON), &envelope); err != nil {
+        return nil, err
+    }
+    name := envelope.Data.Name
+    if name == "" {
+        name = "world"
+    }
+
+    // StopEvent payloads must be wrapped under "result".
+    payload, err := json.Marshal(map[string]string{
+        "result": "Hello, " + name + "!",
+    })
+    if err != nil {
+        return nil, err
+    }
+    return blazen.NewStepOutputSingle(blazen.Event{
+        EventType: "blazen::StopEvent",
+        DataJSON:  string(payload),
+    }), nil
+}
+
+func main() {
+    blazen.Init()
+    defer blazen.Shutdown()
+
+    builder, err := blazen.NewWorkflowBuilder("greeter").Step(
+        "greet",
+        []string{"blazen::StartEvent"},
+        []string{"blazen::StopEvent"},
+        GreetHandler{},
+    )
+    if err != nil {
+        panic(err)
+    }
+    wf, err := builder.Build()
+    if err != nil {
+        panic(err)
+    }
+    defer wf.Close()
+
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+
+    result, err := wf.Run(ctx, map[string]string{"name": "Blazen"})
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(result.Event.DataJSON)
+    // => {"result":"Hello, Blazen!"}
+}
+```
+
+Run it:
+
+```bash
+go run .
+```
+
+## How it works
+
+**Events** are `blazen.Event` records with two fields: `EventType` (a free-form class name such as `"blazen::StartEvent"`) and `DataJSON` (the JSON-encoded payload). Two event types are special-cased by the engine:
+
+- `"blazen::StartEvent"` -- emitted when the workflow begins. The value you pass to `wf.Run(ctx, input)` is JSON-marshalled and arrives as `{"data": <input>}`.
+- `"blazen::StopEvent"` -- returning an `Event` with this type ends the workflow. Attach your final output under the `"result"` key.
+
+**Steps** are registered on a `WorkflowBuilder` with `Step(name, accepts, emits, handler)`:
+
+- `name` -- a unique identifier for the step.
+- `accepts` -- the list of event type strings that trigger this step.
+- `emits` -- every event type the handler may return; declared up front so the engine can validate routing.
+- `handler` -- a value implementing `blazen.StepHandler`. The handler returns a `StepOutput` (use `NewStepOutputSingle`, `NewStepOutputMultiple`, or `NewStepOutputNone`).
+
+**Result** -- `wf.Run` returns a `*WorkflowResult` carrying the terminal `Event` plus aggregated token counts and the summed USD cost. `result.Event.DataJSON` is the raw JSON payload of the `StopEvent` your handler produced.
+
+**Lifecycle** -- `Init()` boots the embedded Tokio runtime and tracing subscriber. It is idempotent and is called lazily by every entry point, so explicit `Init()` is optional but cheap. `Shutdown()` flushes telemetry exporters and is safe to defer. `Workflow.Close()` releases the native handle; a finalizer is attached as a safety net, but explicit Close is preferred.
+
+## Cancellation
+
+`Workflow.Run` accepts a `context.Context`. When the context fires before the run completes, `Run` returns `ctx.Err()` immediately. The Rust-side run keeps executing until it finishes naturally -- cancellation propagation into the native runtime is a known gap pending an upstream UniFFI feature. See the [Context guide](/guides/go/context/) for the full story.
+
+## Next steps
+
+You now have a working workflow. From here you can:
+
+- Chain more steps together to build multi-stage pipelines -- see [Events](/guides/go/events/).
+- Stream LLM responses via `blazen.Stream(...)` -- see [Streaming](/guides/go/streaming/).
+- Drive an LLM tool-call loop with `blazen.Agent` -- see [Agent](/guides/go/agent/).

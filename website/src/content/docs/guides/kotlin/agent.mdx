@@ -1,0 +1,233 @@
+---
+title: "Agent"
+description: "Drive an LLM tool-call loop with Agent in Kotlin"
+language: "kotlin"
+section: "guides"
+order: 7
+---
+
+# Agent
+
+`Agent` wraps the canonical LLM agent loop — alternating between calls to a completion model and dispatching the tools the model selects, until the model produces a final text response (no tool calls) or the iteration budget is exhausted. The Kotlin binding hands you an `Agent` handle plus a single `ToolHandler` interface to satisfy; the loop itself runs in Rust.
+
+## Constructing an Agent
+
+`Agent` is a regular class with a public constructor that takes the model, an optional system prompt, the tool catalogue, the handler, and the iteration cap:
+
+```kotlin
+import dev.zorpx.blazen.uniffi.Agent
+import dev.zorpx.blazen.uniffi.Tool
+import dev.zorpx.blazen.uniffi.ToolHandler
+
+val agent = Agent(
+    model = model,
+    systemPrompt = "You are a precise assistant.",
+    tools = tools,
+    toolHandler = handler,
+    maxIterations = 5u,
+)
+```
+
+The arguments:
+
+- `model` — a `CompletionModel` from any provider factory (see [LLM](/guides/kotlin/llm/)).
+- `systemPrompt` — the system message prepended to every turn; pass `null` to omit.
+- `tools` — the catalogue exposed to the model. Each `Tool.name` must match the names your handler dispatches on.
+- `toolHandler` — any object satisfying the `ToolHandler` interface.
+- `maxIterations` — a safety cap on the LLM round-trip count (`UInt`). The loop terminates with the model's last message if the cap is hit.
+
+The constructor is infallible — it returns a usable handle even if the upstream model later errors out at `run` time.
+
+## The Tool catalogue
+
+`Tool` describes a function the model may invoke. The arguments schema is a JSON Schema string:
+
+```kotlin
+val tools = listOf(
+    Tool(
+        name = "get_weather",
+        description = "Look up the current weather for a city.",
+        parametersJson = """
+            {
+                "type": "object",
+                "properties": {
+                    "city": {"type": "string", "description": "City name"}
+                },
+                "required": ["city"]
+            }
+        """.trimIndent(),
+    ),
+)
+```
+
+The schema constrains what the model is allowed to emit; the binding does not validate the arguments before handing them to your handler. Use `kotlinx.serialization.json.Json` (or any JSON library on the JVM) to decode `argumentsJson` into a typed Kotlin class inside the handler.
+
+## Implementing `ToolHandler`
+
+`ToolHandler` is the single interface you implement to execute the tools the model picks:
+
+```kotlin
+public interface ToolHandler {
+    suspend fun execute(toolName: String, argumentsJson: String): String
+}
+```
+
+- `toolName` is the model's chosen tool (matches one of `tools[i].name`).
+- `argumentsJson` is the model's JSON-encoded arguments object.
+- The returned string MUST be valid JSON. Return `"null"` (the JSON literal) when the tool produced no useful result.
+- Throwing any `Throwable` aborts the agent loop; throwing `BlazenException.Tool("...")` is the canonical way to surface a clean handler-side failure.
+
+`execute` is a `suspend fun`, so anything you do inside (HTTP calls, database queries, file I/O) can suspend without blocking the underlying Tokio thread.
+
+### Dispatch with a `when`
+
+The idiomatic pattern is a `when` over the tool name inside `execute`:
+
+```kotlin
+import dev.zorpx.blazen.uniffi.BlazenException
+import dev.zorpx.blazen.uniffi.ToolHandler
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+
+@Serializable
+data class WeatherArgs(val city: String)
+
+@Serializable
+data class Forecast(val temperatureC: Double, val summary: String)
+
+class WeatherToolHandler(private val api: WeatherClient) : ToolHandler {
+    override suspend fun execute(toolName: String, argumentsJson: String): String {
+        return when (toolName) {
+            "get_weather" -> {
+                val args = Json.decodeFromString(WeatherArgs.serializer(), argumentsJson)
+                val forecast = api.lookup(args.city)
+                Json.encodeToString(Forecast.serializer(), forecast)
+            }
+            else -> throw BlazenException.Tool("unknown tool: $toolName")
+        }
+    }
+}
+```
+
+### Closure-style handlers
+
+For one-off handlers that close over a small amount of state, an anonymous `object : ToolHandler { ... }` expression works the same way:
+
+```kotlin
+val handler = object : ToolHandler {
+    override suspend fun execute(toolName: String, argumentsJson: String): String {
+        // ...
+        return "null"
+    }
+}
+```
+
+`ToolHandler` is not a `fun interface` because UniFFI's callback ABI does not propagate Kotlin SAM conversions — write the `object` expression explicitly.
+
+## Running the loop
+
+`Agent` exposes `run(userInput)` (a `suspend fun`) and `runBlocking(userInput)` (a regular blocking function for callers without a coroutine context):
+
+```kotlin
+suspend fun runAgent(): AgentResult = agent.run("What time is it right now?")
+
+// Or from a non-suspend context:
+val result = agent.runBlocking("What time is it right now?")
+```
+
+A complete example wiring an OpenAI model to a single tool:
+
+```kotlin
+import dev.zorpx.blazen.uniffi.Agent
+import dev.zorpx.blazen.uniffi.Tool
+import dev.zorpx.blazen.uniffi.ToolHandler
+import dev.zorpx.blazen.uniffi.newOpenaiCompletionModel
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import java.time.Instant
+
+fun main() = runBlocking {
+    val model = newOpenaiCompletionModel(
+        apiKey = System.getenv("OPENAI_API_KEY") ?: "",
+        model = "gpt-4o",
+        baseUrl = null,
+    )
+
+    val tools = listOf(
+        Tool(
+            name = "now",
+            description = "Returns the current ISO-8601 UTC timestamp.",
+            parametersJson = """{"type":"object","properties":{},"required":[]}""",
+        ),
+    )
+
+    val handler = object : ToolHandler {
+        override suspend fun execute(toolName: String, argumentsJson: String): String {
+            return when (toolName) {
+                "now" -> """{"timestamp":"${Instant.now()}"}"""
+                else  -> throw IllegalArgumentException("unknown tool: $toolName")
+            }
+        }
+    }
+
+    val agent = Agent(
+        model = model,
+        systemPrompt = "You are a precise assistant.",
+        tools = tools,
+        toolHandler = handler,
+        maxIterations = 5u,
+    )
+
+    agent.use {
+        val res = it.run("What time is it right now?")
+        println(res.finalMessage)
+        println("iterations=${res.iterations} tool_calls=${res.toolCallCount} " +
+                "tokens=${res.totalUsage.totalTokens} cost=$${res.totalCostUsd}")
+    }
+}
+```
+
+## `AgentResult`
+
+```kotlin
+data class AgentResult(
+    var finalMessage: String,
+    var iterations: UInt,        // LLM round-trip count
+    var toolCallCount: UInt,     // total tool invocations
+    var totalUsage: TokenUsage,  // aggregated across every completion call
+    var totalCostUsd: Double,    // summed per-iteration cost
+)
+```
+
+`totalCostUsd` is zero when the active provider did not report cost data — the wire format does not distinguish "zero" from "unknown", so treat zero as "not reported" rather than "free".
+
+## Iteration budget
+
+`maxIterations` is enforced by the Rust loop, not the Kotlin caller. If the model keeps emitting tool calls without ever returning a final text response, the loop terminates after `maxIterations` round-trips with the model's last message as `finalMessage` and `iterations == maxIterations`. Use this to bound runaway loops; pick a value that fits the longest plausible task (5-20 is typical for narrow tools, 50+ for open-ended research agents).
+
+## Lifecycle
+
+`Agent.close()` releases the underlying native handle and is idempotent. Use `agent.use { ... }` to release it deterministically, or wrap construction in `try { ... } finally { agent.close() }`. Reuse a single `Agent` across calls when configuration is stable — the underlying handle owns the model, tool catalogue, and iteration budget that would otherwise be re-allocated per call.
+
+## Cancellation
+
+`Agent.run(userInput)` honors coroutine cancellation the same way every other `suspend fun` in the binding does — cancelling the surrounding coroutine signals the Rust loop to abort cooperatively, and the `run` call resumes by throwing `BlazenException.Cancelled` (or `CancellationException`, depending on where in the loop the cancel fired):
+
+```kotlin
+import kotlinx.coroutines.withTimeout
+
+try {
+    val result = withTimeout(60_000) { agent.run("Plan a 3-day trip to Paris") }
+} catch (e: BlazenException.Cancelled) {
+    println("agent run cancelled")
+}
+```
+
+See [Context](/guides/kotlin/context/#cancellation-through-coroutines) for the full cancellation story.
+
+## See also
+
+- [LLM](/guides/kotlin/llm/) — provider factories, `complete`, and `completeBlocking`.
+- [Streaming](/guides/kotlin/streaming/) — `completeStreaming` for incremental delivery (no tool-call loop).
+- [Multimodal](/guides/kotlin/multimodal/) — attach images / audio / video to messages the agent sees.
+- [Context](/guides/kotlin/context/) — coroutine cancellation and shared state across handlers.

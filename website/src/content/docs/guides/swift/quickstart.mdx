@@ -1,0 +1,135 @@
+---
+title: "Quickstart"
+description: "Build your first Blazen workflow in Swift"
+language: "swift"
+section: "guides"
+order: 1
+---
+
+# Quickstart
+
+Get a Blazen workflow running in Swift in under five minutes.
+
+## Installation
+
+The Swift binding lives in the Blazen monorepo and ships as a `BlazenSwift` SwiftPM target that links against a prebuilt `libblazen_uniffi` native library. Add it to your `Package.swift` dependencies:
+
+```swift
+// Package.swift
+let package = Package(
+    name: "MyApp",
+    platforms: [.macOS(.v13), .iOS(.v16)],
+    dependencies: [
+        .package(url: "https://github.com/zachhandley/Blazen.git", branch: "main"),
+    ],
+    targets: [
+        .executableTarget(
+            name: "MyApp",
+            dependencies: [
+                .product(name: "BlazenSwift", package: "Blazen"),
+            ],
+            path: "Sources/MyApp"
+        ),
+    ]
+)
+```
+
+The package vends a prebuilt `XCFramework` for macOS (arm64, x86_64) and iOS (arm64). No extra environment setup is required.
+
+## Your first workflow
+
+Create a file called `Sources/MyApp/main.swift`:
+
+```swift
+import Foundation
+import BlazenSwift
+
+/// Step handler that pulls the `name` field out of the incoming
+/// `StartEvent` and emits a `StopEvent` carrying a greeting.
+final class GreetHandler: StepHandler, @unchecked Sendable {
+    func invoke(event: Event) async throws -> StepOutput {
+        let payload = event.dataJson.data(using: .utf8) ?? Data()
+        let parsed = try JSONSerialization.jsonObject(with: payload) as? [String: Any] ?? [:]
+        let name = (parsed["name"] as? String) ?? "world"
+
+        let response: [String: String] = ["result": "Hello, \(name)!"]
+        let data = try JSONSerialization.data(withJSONObject: response)
+        let resultJson = String(data: data, encoding: .utf8) ?? "{}"
+
+        return .single(event: Event(eventType: "StopEvent", dataJson: resultJson))
+    }
+}
+
+@main
+struct HelloWorkflow {
+    static func main() async throws {
+        Blazen.initialize()
+        defer { Blazen.shutdown() }
+
+        let builder = WorkflowBuilder(name: "greeter")
+        _ = try builder.step(
+            name: "greet",
+            accepts: ["blazen::StartEvent"],
+            emits: ["blazen::StopEvent"],
+            handler: GreetHandler()
+        )
+        let workflow = try builder.build()
+
+        let result = try await workflow.run(["name": "Blazen"])
+        print(result.event.dataJson)
+        // => {"result":"Hello, Blazen!"}
+    }
+}
+```
+
+Run it:
+
+```bash
+swift run
+```
+
+## How it works
+
+**Events** are `Event` records with two fields: `eventType` (a free-form class name such as `"blazen::StartEvent"`) and `dataJson` (the JSON-encoded payload). Two event types are special-cased by the engine:
+
+- `"blazen::StartEvent"` -- emitted when the workflow begins. The value you pass to `workflow.run(input)` is JSON-encoded with `JSONEncoder` and arrives as the start payload.
+- `"blazen::StopEvent"` -- returning an `Event` with a type containing `StopEvent` ends the workflow. Attach your final output under the `"result"` key.
+
+**Steps** are registered on a `WorkflowBuilder` with `step(name:accepts:emits:handler:)`:
+
+- `name` -- a unique identifier for the step.
+- `accepts` -- the list of event type strings that trigger this step.
+- `emits` -- every event type the handler may return; declared up front so the engine can validate routing.
+- `handler` -- any `Sendable` reference type conforming to `StepHandler`. The handler returns a `StepOutput` (use `.single(event:)`, `.multiple(events:)`, or `.none`).
+
+**Result** -- `workflow.run(_:)` returns a `WorkflowResult` carrying the terminal `Event` plus aggregated token counts and total cost. `result.event.dataJson` is the raw JSON payload of the `StopEvent` your handler produced.
+
+**Lifecycle** -- `Blazen.initialize()` boots the embedded Tokio runtime that backs every `async` call in this binding. It is idempotent, but worth calling once at app launch so the first request your user issues does not pay the runtime spin-up cost. `Blazen.shutdown()` flushes telemetry exporters; `defer { Blazen.shutdown() }` near the entry point is a good habit.
+
+## Encoding the input
+
+`workflow.run(_:)` is a generic helper that JSON-encodes any `Encodable` and hands it to the underlying `run(inputJson:)`:
+
+```swift
+// Dictionary
+try await workflow.run(["name": "Blazen", "count": 3])
+
+// Custom Codable struct
+struct GreetInput: Encodable { let name: String }
+try await workflow.run(GreetInput(name: "Blazen"))
+
+// Empty payload
+try await workflow.runEmpty()
+```
+
+## Cancellation
+
+`workflow.run(_:)` is an `async throws` function — the standard Swift structured-concurrency cancellation rules apply. If the surrounding `Task` is cancelled, the suspended `await` resumes by throwing `CancellationError`, and the framework's `wrap(_:)` helper folds that into `BlazenError.Cancelled` for any adapter that needs a uniform error surface. See the [Context guide](/guides/swift/context/) for the full story.
+
+## Next steps
+
+You now have a working workflow. From here you can:
+
+- Chain more steps together to build multi-stage pipelines -- see [Events](/guides/swift/events/).
+- Stream LLM responses via `model.completeStream(_:)` -- see [Streaming](/guides/swift/streaming/).
+- Drive an LLM tool-call loop with `Agent` -- see [Agent](/guides/swift/agent/).

@@ -1,0 +1,229 @@
+---
+title: "LLM"
+description: "Provider factories, chat completion, and embeddings in Go"
+language: "go"
+section: "guides"
+order: 7
+---
+
+The Go binding exposes Blazen's LLM surface through two opaque handles -- `*blazen.CompletionModel` for chat models and `*blazen.EmbeddingModel` for embedding models -- plus a flat set of provider factory functions that mint them. Both handles own native resources; call `Close()` when finished (or rely on the finalizer as a safety net).
+
+## Provider factories
+
+Every supported provider has a `New<Name><Surface>` factory. The naming follows Go conventions for acronyms (`OpenAI`, `XAI`, `LlamaCpp`, `DeepSeek`) rather than UniFFI's PascalCase-of-snake.
+
+### HTTP completion providers
+
+Each of these accepts `(apiKey, model, baseURL)`, where `model` and `baseURL` use the empty-string-means-unset convention:
+
+```go
+model, err := blazen.NewOpenAICompletion(os.Getenv("OPENAI_API_KEY"), "gpt-4o", "")
+```
+
+The factory list, all with the same `(apiKey, model, baseURL)` shape:
+
+- `NewOpenAICompletion`
+- `NewAnthropicCompletion`
+- `NewGeminiCompletion`
+- `NewMistralCompletion`
+- `NewCohereCompletion`
+- `NewDeepSeekCompletion`
+- `NewFireworksCompletion`
+- `NewGroqCompletion`
+- `NewOpenRouterCompletion`
+- `NewPerplexityCompletion`
+- `NewTogetherCompletion`
+- `NewXAICompletion`
+
+Two providers take additional positional arguments because their request topology is different:
+
+- `NewAzureCompletion(apiKey, resourceName, deploymentName, apiVersion)` -- Azure OpenAI deployments are named per-resource.
+- `NewBedrockCompletion(apiKey, region, model, baseURL)` -- AWS Bedrock is region-scoped.
+- `NewOpenAICompatCompletion(providerName, baseURL, apiKey, model)` -- a generic OpenAI-compatible factory for Ollama, vLLM, LM Studio, LocalAI, and similar. All four arguments are required; pass a placeholder `apiKey` when the upstream does not require one.
+
+### Local-runtime completion providers
+
+Three local-runtime factories take an options struct so the various optional knobs stay readable. All use the empty-string-means-unset and zero-means-default conventions for optional fields:
+
+```go
+// Candle (CPU / CUDA / Metal via the Candle runtime)
+model, err := blazen.NewCandleCompletion(blazen.CandleCompletionOpts{
+    ModelID:       "meta-llama/Llama-3-8B",
+    Device:        "cuda:0",
+    Quantization:  "q4_0",
+    ContextLength: 4096,
+})
+
+// llama.cpp (GGUF files)
+model, err = blazen.NewLlamaCppCompletion(blazen.LlamaCppCompletionOpts{
+    ModelPath:     "/models/llama3-8b-instruct.Q4_K_M.gguf",
+    ContextLength: 8192,
+    NGpuLayers:    32,
+})
+
+// mistral.rs (multimodal-capable local runtime)
+model, err = blazen.NewMistralRsCompletion(blazen.MistralRsCompletionOpts{
+    ModelID: "mistralai/Mistral-7B-Instruct-v0.3",
+    Vision:  false,
+})
+```
+
+Fal.ai's chat surface uses its own options struct because of the enterprise + auto-route toggles:
+
+```go
+model, err := blazen.NewFalCompletion(blazen.FalCompletionOpts{
+    APIKey: os.Getenv("FAL_KEY"),
+    Model:  "fal-ai/any-llm/openai/gpt-4o",
+})
+```
+
+### Embedding providers
+
+The embedding factories follow the same conventions:
+
+```go
+// HTTP
+emb, err := blazen.NewOpenAIEmbedding(os.Getenv("OPENAI_API_KEY"), "text-embedding-3-small", "")
+
+// Fal.ai (Matryoshka-style truncation supported)
+emb, err = blazen.NewFalEmbedding(blazen.FalEmbeddingOpts{
+    APIKey:     os.Getenv("FAL_KEY"),
+    Dimensions: 256,
+})
+
+// Local: Candle, FastEmbed (ONNX), Tract (pure-Rust ONNX)
+emb, err = blazen.NewCandleEmbedding(blazen.CandleEmbeddingOpts{
+    ModelID: "sentence-transformers/all-MiniLM-L6-v2",
+})
+emb, err = blazen.NewFastEmbedEmbedding(blazen.FastEmbedEmbeddingOpts{})
+emb, err = blazen.NewTractEmbedding(blazen.TractEmbeddingOpts{})
+```
+
+## CompletionRequest
+
+`blazen.CompletionRequest` is the provider-agnostic chat request shape:
+
+```go
+type CompletionRequest struct {
+    Messages           []ChatMessage
+    Tools              []Tool
+    Temperature        *float64  // nil = provider default
+    MaxTokens          *uint32   // nil = provider default
+    TopP               *float64  // nil = provider default
+    Model              string    // "" = use the model bound at factory time
+    ResponseFormatJSON string    // "" = no schema constraint
+    System             string    // "" = no system message
+}
+```
+
+The pointer-typed numeric fields exist so callers can distinguish "explicitly zero" from "unset" -- pass nil to defer to the provider. The string fields use the empty-string-means-unset convention.
+
+`ResponseFormatJSON`, when set, is a JSON Schema string constraining the model's output (the provider's structured-output / JSON-mode feature). `System`, when set, is prepended as a system-role message before `Messages`.
+
+```go
+temp := 0.2
+maxTok := uint32(512)
+
+req := blazen.CompletionRequest{
+    System:      "You are a concise assistant.",
+    Messages:    []blazen.ChatMessage{{Role: "user", Content: "Hello"}},
+    Temperature: &temp,
+    MaxTokens:   &maxTok,
+}
+```
+
+## Complete and CompleteBlocking
+
+Every `CompletionModel` exposes two completion entry points:
+
+```go
+// Cancellable: launches the FFI call on a background goroutine and
+// returns ctx.Err() if ctx fires first.
+func (*CompletionModel) Complete(ctx context.Context, req CompletionRequest) (*CompletionResponse, error)
+
+// Synchronous: blocks the calling goroutine until the provider responds.
+func (*CompletionModel) CompleteBlocking(req CompletionRequest) (*CompletionResponse, error)
+```
+
+Prefer `Complete` in long-running services where cancellation matters. Use `CompleteBlocking` in short scripts or one-shot `main` functions where the async wiring is overkill -- it has no `select` dance, no background goroutine, and exactly one error return path.
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+defer cancel()
+
+res, err := model.Complete(ctx, blazen.CompletionRequest{
+    Messages: []blazen.ChatMessage{{Role: "user", Content: "Pi to 5 digits?"}},
+})
+if err != nil {
+    return err
+}
+fmt.Println(res.Content)             // "3.14159"
+fmt.Println(res.FinishReason)        // "stop"
+fmt.Println(res.Usage.TotalTokens)   // aggregated tokens
+```
+
+See the [Context guide](/guides/go/context/#the-cancellation-gap) for the cancellation propagation caveat -- returning `ctx.Err()` unblocks the Go caller, but the Rust-side request continues until it finishes naturally.
+
+## CompletionResponse
+
+```go
+type CompletionResponse struct {
+    Content      string      // empty when the model emitted only tool calls
+    ToolCalls    []ToolCall  // model-requested tool invocations
+    FinishReason string      // "stop", "tool_calls", "length", or ""
+    Model        string      // provider-reported model id
+    Usage        TokenUsage
+}
+```
+
+`Content` is the empty string when the response carried only tool calls -- dispatch on `len(res.ToolCalls) > 0` rather than `res.Content != ""` to detect that case. `FinishReason` is the empty string when the provider did not report one.
+
+## Embeddings
+
+`EmbeddingModel.Embed` and `EmbeddingModel.EmbedBlocking` are the same pattern at a different signature:
+
+```go
+func (*EmbeddingModel) Embed(ctx context.Context, inputs []string) (*EmbeddingResponse, error)
+func (*EmbeddingModel) EmbedBlocking(inputs []string) (*EmbeddingResponse, error)
+```
+
+```go
+emb, _ := blazen.NewOpenAIEmbedding(os.Getenv("OPENAI_API_KEY"), "text-embedding-3-small", "")
+defer emb.Close()
+
+res, err := emb.Embed(ctx, []string{"hello", "world", "blazen"})
+if err != nil {
+    return err
+}
+for i, vec := range res.Embeddings {
+    fmt.Printf("input[%d] -> %d-dim vector\n", i, len(vec))
+}
+fmt.Println(emb.Dimensions())  // model's native dimensionality
+```
+
+The returned `EmbeddingResponse.Embeddings` is a `[][]float64` -- one vector per input string, in input order. `Dimensions()` reports the model's vector size as a `uint32`, useful for sizing a downstream vector store.
+
+## Streaming
+
+For incremental token delivery, use `blazen.Stream(ctx, model, req)`. The streaming surface is documented in detail on the [Streaming page](/guides/go/streaming/).
+
+## Lifecycle
+
+Every model handle implements `Close()`. The call is idempotent and safe from multiple goroutines:
+
+```go
+model, err := blazen.NewOpenAICompletion(apiKey, "gpt-4o", "")
+if err != nil {
+    return err
+}
+defer model.Close()
+```
+
+A `runtime.SetFinalizer` is attached as a safety net, but explicit `Close()` is preferred for predictable resource release -- particularly when you are mid-stream (see the streaming guide's "Lifetime" section).
+
+## See also
+
+- [Streaming](/guides/go/streaming/) -- channel-based streaming completions.
+- [Agent](/guides/go/agent/) -- LLM tool-call loop built on `CompletionModel`.
+- [Multimodal](/guides/go/multimodal/) -- attaching images, audio, and video to chat messages.
+- [Context](/guides/go/context/) -- cancellation semantics on `Complete` and `Embed`.

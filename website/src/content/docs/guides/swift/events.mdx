@@ -1,0 +1,142 @@
+---
+title: "Events"
+description: "Create and route custom events in Swift"
+language: "swift"
+section: "guides"
+order: 2
+---
+
+# Events
+
+Events are the unit of work in a Blazen workflow. Every step consumes events of one or more declared types and emits zero, one, or many events in response.
+
+## The `Event` record
+
+`Event` is a simple value type re-exported from the underlying UniFFI glue:
+
+```swift
+public struct Event: Codable, Sendable {
+    let eventType: String   // class name such as "blazen::StartEvent" or "AnalyzeEvent"
+    let dataJson: String    // JSON-encoded payload
+}
+```
+
+The Swift wrapper makes `Event` `Codable` for you, so it round-trips cleanly through `JSONEncoder` / `JSONDecoder` if you ever need to log or persist one.
+
+## Built-in event types
+
+Two event-type strings are special-cased by the engine:
+
+| Wire type | Role |
+|---|---|
+| `"blazen::StartEvent"` | Emitted when the workflow begins. Carries the JSON payload you passed to `workflow.run(_:)`. |
+| `"blazen::StopEvent"` | Returning an `Event` whose `eventType` contains `StopEvent` terminates the workflow. Attach your final output under the `"result"` key. |
+
+For your own routing events, the `eventType` can be any string -- typically the type name of a Swift struct you've defined to wrap the payload:
+
+```swift
+struct AnalyzeEvent: Codable {
+    let text: String
+    let score: Double
+}
+
+// Emit one.
+let payload = AnalyzeEvent(text: "hello", score: 0.9)
+let data = try JSONEncoder().encode(payload)
+let event = Event(
+    eventType: "AnalyzeEvent",
+    dataJson: String(data: data, encoding: .utf8) ?? "{}"
+)
+```
+
+## Implementing `StepHandler`
+
+Every step has a handler conforming to `StepHandler`. The handler receives the incoming event, does whatever work it wants, and returns a `StepOutput`:
+
+```swift
+final class AnalyzeHandler: StepHandler, @unchecked Sendable {
+    func invoke(event: Event) async throws -> StepOutput {
+        let parsed = try JSONDecoder().decode(
+            AnalyzeInput.self,
+            from: Data(event.dataJson.utf8)
+        )
+        let scored = AnalyzeEvent(text: parsed.text, score: classify(parsed.text))
+        let data = try JSONEncoder().encode(scored)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return .single(event: Event(eventType: "AnalyzeEvent", dataJson: json))
+    }
+}
+
+private struct AnalyzeInput: Codable { let text: String }
+```
+
+The `@unchecked Sendable` annotation is the canonical idiom for handler classes -- the handler is invoked from the Tokio runtime that backs the workflow, so the underlying type must be sendable across actor boundaries. Use it for handlers that don't hold non-`Sendable` state; for handlers that do, lock the state behind an actor and have `invoke(event:)` `await` into the actor.
+
+## Returning events from a step
+
+`StepOutput` is an enum with three variants:
+
+```swift
+return .single(event: nextEvent)                  // emit one event
+return .multiple(events: [branchA, branchB])      // fan out to multiple steps
+return .none                                       // side-effect step, no follow-up event
+```
+
+A handler that wants to do real work without scheduling another step (e.g. to write to a sink, fire telemetry, or update an external store) returns `.none`.
+
+## Event routing via `accepts` / `emits`
+
+Routing is declared at builder time, not derived from the handler signature. Each step states the event types it accepts and the event types it might emit:
+
+```swift
+let builder = WorkflowBuilder(name: "analyzer")
+_ = try builder.step(
+    name: "parse",
+    accepts: ["blazen::StartEvent"],
+    emits: ["AnalyzeEvent"],
+    handler: ParseHandler()
+)
+_ = try builder.step(
+    name: "score",
+    accepts: ["AnalyzeEvent"],
+    emits: ["blazen::StopEvent"],
+    handler: ScoreHandler()
+)
+let workflow = try builder.build()
+```
+
+The engine validates the graph at `build()` time -- a step whose `emits` list contains an event type that no other step `accepts` is a build-time error (unless that event terminates the workflow, like `blazen::StopEvent`).
+
+## Fan-out
+
+A step that emits multiple events at once routes each event independently. Both downstream steps run -- in parallel where the runtime can, sequentially otherwise:
+
+```swift
+final class FanOutHandler: StepHandler, @unchecked Sendable {
+    func invoke(event: Event) async throws -> StepOutput {
+        return .multiple(events: [
+            Event(eventType: "BranchA", dataJson: "{\"value\":\"a\"}"),
+            Event(eventType: "BranchB", dataJson: "{\"value\":\"b\"}"),
+        ])
+    }
+}
+```
+
+Declare both event types in the step's `emits` list so the engine knows about them.
+
+## Inspecting registered steps
+
+A built workflow exposes its step names as a property — useful for logging or debugging:
+
+```swift
+let workflow = try builder.build()
+print(workflow.steps)   // ["parse", "score"]
+```
+
+This re-exposes the underlying `stepNames()` method as a property so call sites match Swift naming conventions.
+
+## See also
+
+- [Context](/guides/swift/context/) -- share state between steps.
+- [Streaming](/guides/swift/streaming/) -- stream chunks out of LLM completions.
+- [Agent](/guides/swift/agent/) -- drive a tool-call loop end-to-end.

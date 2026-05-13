@@ -9,7 +9,10 @@ export type CodeLang =
   | "shell"
   | "toml"
   | "json"
-  | "yaml";
+  | "yaml"
+  | "go"
+  | "swift"
+  | "kotlin";
 
 const THEME = "github-dark";
 const LANGS: CodeLang[] = [
@@ -22,6 +25,9 @@ const LANGS: CodeLang[] = [
   "toml",
   "json",
   "yaml",
+  "go",
+  "swift",
+  "kotlin",
 ];
 
 let highlighterPromise: Promise<Highlighter> | null = null;

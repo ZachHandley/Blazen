@@ -1,0 +1,181 @@
+---
+title: "Context"
+description: "Cancellation, lifecycle, and sharing state across Swift workflows"
+language: "swift"
+section: "guides"
+order: 3
+---
+
+# Context
+
+Blazen's Swift binding leans on Swift's structured concurrency for cancellation and lifecycle. There is no `Context` parameter that gets threaded through every step the way the Python binding does — instead, the surrounding `Task` carries cancellation through every `await`, and per-run state lives in your own handler types.
+
+## Process lifecycle
+
+`Blazen.initialize()` boots the embedded Tokio runtime that backs every `async` call in this binding. It is idempotent — subsequent calls are no-ops — but worth pinning at app launch so the first request your user issues does not pay the runtime spin-up cost:
+
+```swift
+import BlazenSwift
+
+@main
+struct MyApp {
+    static func main() async throws {
+        Blazen.initialize()
+        defer { Blazen.shutdown() }
+
+        // ... run workflows, drive agents, etc.
+    }
+}
+```
+
+`Blazen.shutdown()` flushes telemetry exporters and is always safe to call, even when none were initialised. The `defer` pattern above is the canonical idiom for ensuring buffered spans / metrics make it out before the process exits.
+
+`Blazen.version` returns the semantic version of the underlying `libblazen_uniffi` artefact — handy for diagnosing version skew between the Swift wrapper and the bundled native lib:
+
+```swift
+print("Blazen \(Blazen.version)")
+```
+
+## Cancellation through `Task`
+
+Every async function in the Swift binding honors Swift's structured-concurrency cancellation. When the surrounding `Task` is cancelled, the suspended `await` unwinds by throwing — usually `CancellationError`, which the wrapper layer's `wrap(_:)` helper folds into `BlazenError.Cancelled`.
+
+```swift
+let task = Task {
+    do {
+        let result = try await workflow.run(["name": "Blazen"])
+        print(result.event.dataJson)
+    } catch is CancellationError {
+        print("cancelled")
+    } catch let error as BlazenError {
+        print("workflow failed: \(error.message)")
+    }
+}
+
+// Sometime later, cancel.
+task.cancel()
+```
+
+The same applies to streaming completions — breaking out of a `for try await` loop, or cancelling the enclosing `Task`, signals the underlying Tokio task to shut down cooperatively. See [Streaming](/guides/swift/streaming/) for the iterator-level details.
+
+## Per-run state in handlers
+
+Because the Swift binding does not pass a `Context` object into `StepHandler.invoke(event:)`, run-scoped state lives on your handler type. The simplest pattern is a stored property:
+
+```swift
+final class CounterHandler: StepHandler, @unchecked Sendable {
+    private let counter = Counter()
+
+    func invoke(event: Event) async throws -> StepOutput {
+        let next = await counter.increment()
+        let payload = "{\"count\":\(next)}"
+        return .single(event: Event(eventType: "CountedEvent", dataJson: payload))
+    }
+}
+
+/// Actor-isolated counter. Safe to access from any task.
+actor Counter {
+    private var value: Int = 0
+    func increment() -> Int { value += 1; return value }
+}
+```
+
+Wrapping the mutable state in an `actor` is the idiomatic way to share state across concurrent invocations. The handler itself is `@unchecked Sendable` because the engine invokes it from the Tokio runtime, and any mutable state needs to be funnelled through an actor (or some other thread-safe abstraction) so the type still respects `Sendable`.
+
+## Sharing state across steps
+
+When two handlers need to communicate, hand both of them a reference to the same actor (or any thread-safe shared object) at construction time:
+
+```swift
+actor SharedState {
+    var name: String = ""
+    func setName(_ value: String) { name = value }
+    func currentName() -> String { name }
+}
+
+final class ParseHandler: StepHandler, @unchecked Sendable {
+    let shared: SharedState
+    init(shared: SharedState) { self.shared = shared }
+
+    func invoke(event: Event) async throws -> StepOutput {
+        let parsed = try JSONSerialization.jsonObject(
+            with: Data(event.dataJson.utf8)
+        ) as? [String: Any] ?? [:]
+        await shared.setName((parsed["name"] as? String) ?? "world")
+        return .single(event: Event(eventType: "GreetEvent", dataJson: "{}"))
+    }
+}
+
+final class GreetHandler: StepHandler, @unchecked Sendable {
+    let shared: SharedState
+    init(shared: SharedState) { self.shared = shared }
+
+    func invoke(event: Event) async throws -> StepOutput {
+        let name = await shared.currentName()
+        let json = "{\"result\":\"Hello, \(name)!\"}"
+        return .single(event: Event(eventType: "StopEvent", dataJson: json))
+    }
+}
+
+let shared = SharedState()
+let builder = WorkflowBuilder(name: "greeter")
+_ = try builder.step(
+    name: "parse",
+    accepts: ["blazen::StartEvent"],
+    emits: ["GreetEvent"],
+    handler: ParseHandler(shared: shared)
+)
+_ = try builder.step(
+    name: "greet",
+    accepts: ["GreetEvent"],
+    emits: ["blazen::StopEvent"],
+    handler: GreetHandler(shared: shared)
+)
+```
+
+Each handler instance is registered once and reused across every event the engine dispatches to it. Because handler references are pinned for the lifetime of the workflow, captured state survives every step invocation in a run.
+
+## Timeouts
+
+The `WorkflowBuilder` exposes both per-step and overall-run timeouts. The Swift wrapper accepts a `TimeInterval` (seconds) so call sites read in human units:
+
+```swift
+let builder = WorkflowBuilder(name: "timed")
+_ = try builder.step(
+    name: "compute",
+    accepts: ["blazen::StartEvent"],
+    emits: ["blazen::StopEvent"],
+    handler: ComputeHandler()
+)
+_ = try builder.stepTimeout(5)   // 5 seconds per step
+_ = try builder.timeout(30)      // 30 seconds total
+let workflow = try builder.build()
+```
+
+When a step exceeds its budget the engine raises `BlazenError.Timeout`; when the overall workflow budget fires, the next `await` resumes by throwing the same. The underlying methods (`stepTimeoutMs(millis:)` / `timeoutMs(millis:)`) remain available for callers that prefer milliseconds.
+
+## Errors
+
+Every failure that crosses the FFI boundary is a `BlazenError`. The Swift wrapper makes that type `LocalizedError`, `Equatable`, and `Hashable`, and adds a typed `.message` accessor that yields the underlying message string regardless of which variant fired:
+
+```swift
+do {
+    let result = try await workflow.run(["name": "Blazen"])
+    print(result.event.dataJson)
+} catch let error as BlazenError {
+    switch error {
+    case .Timeout: print("timed out: \(error.message)")
+    case .Validation: print("bad input: \(error.message)")
+    case .Provider: print("provider failure: \(error.message)")
+    default: print("workflow failed: \(error.message)")
+    }
+}
+```
+
+For higher-level adapters that need a uniform error type even when the failure originated on the Swift side (a `CancellationError`, a `URLError` from a helper, etc.), the wrapper exposes a `wrap(_:)` helper that folds any `Error` into the corresponding `BlazenError` variant — `CancellationError` becomes `.Cancelled(message:)`, everything else becomes `.Internal(message:)`.
+
+## See also
+
+- [Events](/guides/swift/events/) -- declare event types and emit them from handlers.
+- [Streaming](/guides/swift/streaming/) -- structured-concurrency cancellation for streaming completions.
+- [Agent](/guides/swift/agent/) -- the agent loop honors the same `Task` cancellation rules.

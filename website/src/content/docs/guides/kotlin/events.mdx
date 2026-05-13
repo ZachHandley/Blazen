@@ -1,0 +1,157 @@
+---
+title: "Events"
+description: "Create and route custom events in Kotlin"
+language: "kotlin"
+section: "guides"
+order: 2
+---
+
+# Events
+
+Events are the unit of work in a Blazen workflow. Every step consumes events of one or more declared types and emits zero, one, or many events in response.
+
+## The `Event` record
+
+`Event` is a `data class` re-exported from the generated UniFFI surface:
+
+```kotlin
+data class Event(
+    var eventType: String,   // class name such as "blazen::StartEvent" or "AnalyzeEvent"
+    var dataJson: String,    // JSON-encoded payload
+)
+```
+
+The Kotlin binding declares `@Serializable`-compatible field names so the type round-trips cleanly through `kotlinx.serialization` if you ever need to log or persist one:
+
+```kotlin
+import kotlinx.serialization.json.Json
+import dev.zorpx.blazen.uniffi.Event
+
+val ev = Event(eventType = "AnalyzeEvent", dataJson = """{"text":"hello"}""")
+val encoded = Json.encodeToString(Event.serializer(), ev)
+val decoded = Json.decodeFromString(Event.serializer(), encoded)
+```
+
+## Built-in event types
+
+Two event-type strings are special-cased by the engine:
+
+| Wire type | Role |
+|---|---|
+| `"blazen::StartEvent"` | Emitted when the workflow begins. Carries the JSON payload you passed to `workflow.run(inputJson)` wrapped as `{"data": <your-json>}`. |
+| `"blazen::StopEvent"` | Returning an `Event` whose `eventType` contains `StopEvent` terminates the workflow. Attach your final output under the `"result"` key. |
+
+For your own routing events, `eventType` can be any string — typically the name of a Kotlin class you've defined for the payload:
+
+```kotlin
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+
+@Serializable
+data class AnalyzePayload(val text: String, val score: Double)
+
+val payload = AnalyzePayload(text = "hello", score = 0.9)
+val event = Event(
+    eventType = "AnalyzeEvent",
+    dataJson = Json.encodeToString(AnalyzePayload.serializer(), payload),
+)
+```
+
+## Implementing `StepHandler`
+
+Every step has a handler conforming to the generated `StepHandler` interface. The handler receives the incoming event and returns a `StepOutput`:
+
+```kotlin
+import dev.zorpx.blazen.uniffi.Event
+import dev.zorpx.blazen.uniffi.StepHandler
+import dev.zorpx.blazen.uniffi.StepOutput
+import kotlinx.serialization.json.Json
+
+class AnalyzeHandler : StepHandler {
+    override suspend fun invoke(event: Event): StepOutput {
+        // StartEvent wire shape: {"data": {"text": "hello"}}
+        val parsed = Json.parseToJsonElement(event.dataJson).jsonObject
+        val data = parsed["data"]?.jsonObject ?: return StepOutput.None
+        val text = data["text"]?.jsonPrimitive?.content ?: ""
+
+        val out = Json.encodeToString(
+            AnalyzePayload.serializer(),
+            AnalyzePayload(text = text, score = classify(text)),
+        )
+        return StepOutput.Single(Event(eventType = "AnalyzeEvent", dataJson = out))
+    }
+}
+```
+
+`StepHandler` is a regular callback interface (not a `fun interface`) because UniFFI's callback ABI does not propagate the Kotlin SAM-conversion path. Implement it with either a named class or an anonymous `object : StepHandler { ... }` expression — both work identically.
+
+## Returning events from a step
+
+`StepOutput` is a sealed class with three variants:
+
+```kotlin
+return StepOutput.Single(nextEvent)                       // emit one event
+return StepOutput.Multiple(listOf(branchA, branchB))      // fan out to multiple steps
+return StepOutput.None                                     // side-effect step, no follow-up event
+```
+
+A handler that wants to do real work without scheduling another step (e.g. write to a sink, fire telemetry, update an external store) returns `StepOutput.None`. The sealed-class shape means `when (output) { ... }` over a `StepOutput` is exhaustive and the compiler will flag missing branches.
+
+## Event routing via `accepts` / `emits`
+
+Routing is declared at builder time, not derived from the handler signature. Each step states the event types it accepts and the event types it might emit:
+
+```kotlin
+import dev.zorpx.blazen.uniffi.WorkflowBuilder
+
+val builder = WorkflowBuilder("analyzer")
+builder.step(
+    name = "parse",
+    accepts = listOf("blazen::StartEvent"),
+    emits = listOf("AnalyzeEvent"),
+    handler = ParseHandler(),
+)
+builder.step(
+    name = "score",
+    accepts = listOf("AnalyzeEvent"),
+    emits = listOf("blazen::StopEvent"),
+    handler = ScoreHandler(),
+)
+val workflow = builder.build()
+```
+
+The engine validates the graph at `build()` time — a step whose `emits` list contains an event type that no other step `accepts` is a build-time error (unless that event terminates the workflow, like `blazen::StopEvent`).
+
+## Fan-out
+
+A step that emits multiple events at once routes each event independently. Both downstream steps run — in parallel where the runtime can, sequentially otherwise:
+
+```kotlin
+class FanOutHandler : StepHandler {
+    override suspend fun invoke(event: Event): StepOutput {
+        return StepOutput.Multiple(listOf(
+            Event(eventType = "BranchA", dataJson = """{"value":"a"}"""),
+            Event(eventType = "BranchB", dataJson = """{"value":"b"}"""),
+        ))
+    }
+}
+```
+
+Declare both event types in the step's `emits` list so the engine knows about them.
+
+## Inspecting registered steps
+
+A built workflow exposes its step names — useful for logging or debugging:
+
+```kotlin
+val workflow = builder.build()
+println(workflow.stepNames())   // [parse, score]
+```
+
+`stepNames()` returns the steps in registration order.
+
+## See also
+
+- [Context](/guides/kotlin/context/) — coroutine cancellation, lifecycle, and shared state between handlers.
+- [Streaming](/guides/kotlin/streaming/) — consume `Flow<StreamChunk>` from LLM completions.
+- [Agent](/guides/kotlin/agent/) — drive a full tool-call loop end-to-end.

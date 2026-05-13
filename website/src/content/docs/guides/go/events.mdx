@@ -1,0 +1,126 @@
+---
+title: "Events"
+description: "Create and route custom events in Go"
+language: "go"
+section: "guides"
+order: 2
+---
+
+## The Event record
+
+Events are plain Go structs of type `blazen.Event` with two fields:
+
+```go
+type Event struct {
+    EventType string // e.g. "AnalyzeEvent", "blazen::StartEvent"
+    DataJSON  string // JSON-encoded payload
+}
+```
+
+Step handlers receive an `Event` and unmarshal `DataJSON` into a domain-specific Go struct with `encoding/json` (or any JSON library you prefer). There is no Go-side class hierarchy -- the event type is a free-form string and the payload is opaque JSON until you decode it.
+
+## Built-in events
+
+The engine special-cases two event type strings:
+
+- `"blazen::StartEvent"` -- the input event, created by `wf.Run(ctx, input)`. The value you pass to `Run` is JSON-marshalled and arrives wrapped as `{"data": <input>}`.
+- `"blazen::StopEvent"` -- terminates the workflow. The handler must wrap its final output under a `"result"` key.
+
+```go
+// StartEvent payload shape (built by wf.Run):
+// { "data": { "message": "hello" } }
+
+// StopEvent payload shape (returned by the final step):
+// { "result": { "answer": 42 } }
+```
+
+This wrapping is the authoritative wire format -- it matches the Rust `StartEvent { data: ... }` and `StopEvent { result: ... }` shapes and round-trips through every other Blazen binding.
+
+## Custom event types
+
+Any non-empty string that isn't `"blazen::StartEvent"` or `"blazen::StopEvent"` is a custom event. Define a Go struct for each payload shape and marshal it yourself:
+
+```go
+type AnalyzeEvent struct {
+    Text  string  `json:"text"`
+    Score float64 `json:"score"`
+}
+
+payload, _ := json.Marshal(AnalyzeEvent{Text: "hello", Score: 0.9})
+ev := blazen.Event{EventType: "AnalyzeEvent", DataJSON: string(payload)}
+```
+
+The engine never inspects the payload of a custom event -- it just routes the `Event` to every step whose `accepts` list contains the matching `EventType` string.
+
+## Routing
+
+Steps declare which event types they handle in the `Step(name, accepts, emits, handler)` call. `accepts` drives dispatch; `emits` is declared up front so the engine can validate routing before the workflow runs:
+
+```go
+builder := blazen.NewWorkflowBuilder("analyze")
+builder, _ = builder.Step(
+    "ingest",
+    []string{"blazen::StartEvent"},
+    []string{"AnalyzeEvent"},
+    ingestHandler{},
+)
+builder, _ = builder.Step(
+    "analyze",
+    []string{"AnalyzeEvent"},
+    []string{"blazen::StopEvent"},
+    analyzeHandler{},
+)
+wf, _ := builder.Build()
+```
+
+A handler that declares an `emits` type it never actually emits is fine. A handler that emits a type it did not declare is a routing error surfaced as a `*blazen.WorkflowError`.
+
+## Step output variants
+
+`StepHandler.Invoke` returns a `blazen.StepOutput`. There are three variants, constructed by package helpers:
+
+```go
+blazen.NewStepOutputNone()              // step did work but produced no event
+blazen.NewStepOutputSingle(event)       // common case: exactly one event
+blazen.NewStepOutputMultiple([]Event{   // fan-out: multiple events at once
+    {EventType: "BranchA", DataJSON: `{"value":"a"}`},
+    {EventType: "BranchB", DataJSON: `{"value":"b"}`},
+})
+```
+
+Returning `NewStepOutputNone()` terminates the chain at this step without emitting anything -- useful for side-effect steps that record state but do not advance the workflow on their own.
+
+## Fan-out example
+
+Use `NewStepOutputMultiple` to dispatch several events from a single step:
+
+```go
+type fanHandler struct{}
+
+func (fanHandler) Invoke(_ context.Context, _ blazen.Event) (blazen.StepOutput, error) {
+    a, _ := json.Marshal(map[string]string{"value": "a"})
+    b, _ := json.Marshal(map[string]string{"value": "b"})
+    return blazen.NewStepOutputMultiple([]blazen.Event{
+        {EventType: "BranchA", DataJSON: string(a)},
+        {EventType: "BranchB", DataJSON: string(b)},
+    }), nil
+}
+```
+
+Each emitted event is dispatched independently to the steps that accept it.
+
+## Returning errors
+
+Returning a non-nil error from `Invoke` aborts the workflow and surfaces the error to the caller of `wf.Run`. The error is funnelled through the binding's `*ValidationError` adapter so the Rust side receives a typed error rather than an opaque foreign value -- on the Go side you can switch on the typed-error hierarchy with `errors.As`:
+
+```go
+func (h myHandler) Invoke(_ context.Context, ev blazen.Event) (blazen.StepOutput, error) {
+    var payload mySchema
+    if err := json.Unmarshal([]byte(ev.DataJSON), &payload); err != nil {
+        return nil, fmt.Errorf("decode payload: %w", err)
+    }
+    // ...
+}
+```
+
+See the [Quickstart](/guides/go/quickstart/#how-it-works) for a worked example, and `bindings/go/examples/hello_workflow/main.go` for the canonical `errors.As` classifier covering every Blazen error variant.
