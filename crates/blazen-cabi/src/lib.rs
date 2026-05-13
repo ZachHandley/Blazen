@@ -10,11 +10,19 @@
 
 #![allow(unsafe_code)] // entire crate is an unsafe FFI surface; safety contracts documented per-fn
 
+pub mod agent_records;
+pub mod batch_records;
+pub mod compute_records;
 pub mod error;
 pub mod future;
 pub mod init;
+pub mod llm_records;
+pub mod persist_records;
 pub mod runtime;
+pub mod streaming_records;
 pub mod string;
+pub mod telemetry_records;
+pub mod workflow_records;
 
 use std::ffi::{CString, c_char};
 

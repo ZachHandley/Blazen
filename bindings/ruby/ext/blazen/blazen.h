@@ -14,6 +14,18 @@
 #include <stdbool.h>
 
 /**
+ * Variant tag for [`InnerBatchItem::Success`]: the request returned a
+ * completion response.
+ */
+#define BLAZEN_BATCH_ITEM_SUCCESS 0
+
+/**
+ * Variant tag for [`InnerBatchItem::Failure`]: the request failed and only
+ * carries an error message.
+ */
+#define BLAZEN_BATCH_ITEM_FAILURE 1
+
+/**
  * Variant tag for the `Auth` error category.
  */
 #define BLAZEN_ERROR_KIND_AUTH 1
@@ -104,6 +116,66 @@
 #define BLAZEN_ERROR_KIND_INTERNAL 18
 
 /**
+ * `StepOutput` variant tag for the `None` case — the step performed work
+ * but produced no event.
+ */
+#define BLAZEN_STEP_OUTPUT_NONE 0
+
+/**
+ * `StepOutput` variant tag for the `Single` case — the step produced
+ * exactly one event.
+ */
+#define BLAZEN_STEP_OUTPUT_SINGLE 1
+
+/**
+ * `StepOutput` variant tag for the `Multiple` case — the step produced
+ * zero, one, or many events (fan-out).
+ */
+#define BLAZEN_STEP_OUTPUT_MULTIPLE 2
+
+/**
+ * Opaque handle wrapping [`InnerAgentResult`].
+ *
+ * Produced by the cabi `Agent::run` wrapper (Phase R3). The wrapped value
+ * is the canonical wire format from `blazen_uniffi::agent`; field
+ * accessors below clone individual pieces out so FFI hosts can read them
+ * without exposing the Rust enum layout.
+ */
+typedef struct BlazenAgentResult BlazenAgentResult;
+
+/**
+ * Opaque wrapper around [`blazen_uniffi::batch::BatchItem`].
+ */
+typedef struct BlazenBatchItem BlazenBatchItem;
+
+/**
+ * Opaque wrapper around [`blazen_uniffi::batch::BatchResult`].
+ */
+typedef struct BlazenBatchResult BlazenBatchResult;
+
+/**
+ * Opaque wrapper around [`blazen_uniffi::llm::ChatMessage`].
+ */
+typedef struct BlazenChatMessage BlazenChatMessage;
+
+/**
+ * Opaque wrapper around [`blazen_uniffi::llm::CompletionRequest`].
+ */
+typedef struct BlazenCompletionRequest BlazenCompletionRequest;
+
+/**
+ * Opaque wrapper around [`blazen_uniffi::llm::CompletionResponse`]. Produced
+ * by `complete` / `complete_blocking` in Phase R3; no public constructor.
+ */
+typedef struct BlazenCompletionResponse BlazenCompletionResponse;
+
+/**
+ * Opaque wrapper around [`blazen_uniffi::llm::EmbeddingResponse`]. Produced
+ * by `embed` / `embed_blocking` in Phase R3; no public constructor.
+ */
+typedef struct BlazenEmbeddingResponse BlazenEmbeddingResponse;
+
+/**
  * Opaque error handle owned by the caller. Produced by any fallible cabi
  * function via an out-parameter `*mut *mut BlazenError`. Released with
  * [`blazen_error_free`].
@@ -116,6 +188,14 @@
 typedef struct BlazenError BlazenError;
 
 /**
+ * Opaque handle wrapping a `blazen_uniffi::workflow::Event` value.
+ *
+ * Deliberately not `#[repr(C)]` — cbindgen emits this as a forward-
+ * declared opaque struct on the C side.
+ */
+typedef struct BlazenEvent BlazenEvent;
+
+/**
  * Opaque async-result handle. cbindgen renders the C side as a
  * forward-declared `typedef struct BlazenFuture BlazenFuture;` — FFI hosts
  * never inspect the layout directly.
@@ -123,6 +203,114 @@ typedef struct BlazenError BlazenError;
  * Deliberately not `#[repr(C)]`.
  */
 typedef struct BlazenFuture BlazenFuture;
+
+/**
+ * Opaque handle wrapping [`InnerImageGenResult`].
+ *
+ * Produced by the cabi `ImageGenModel::generate` wrapper (Phase R3). Holds
+ * the rendered image list; each entry's `data_base64` field carries either
+ * raw base64 bytes or a URL string per its `mime_type` (see the upstream
+ * [`ImageGenResult`](blazen_uniffi::compute::ImageGenResult) docs).
+ */
+typedef struct BlazenImageGenResult BlazenImageGenResult;
+
+/**
+ * Opaque wrapper around [`blazen_uniffi::llm::Media`].
+ */
+typedef struct BlazenMedia BlazenMedia;
+
+/**
+ * Opaque handle wrapping a `blazen_uniffi::persist::PersistedEvent`.
+ *
+ * Same wire shape as a workflow [`crate::workflow_records::BlazenEvent`] —
+ * `{ event_type, data_json }` — but a distinct opaque type because
+ * `PersistedEvent` carries the additional contract that `data_json` is
+ * derived from a `serde_json::Value` (see
+ * `blazen_uniffi::persist::PersistedEvent::TryFrom<SerializedEvent>`).
+ */
+typedef struct BlazenPersistedEvent BlazenPersistedEvent;
+
+/**
+ * Opaque handle wrapping a `blazen_uniffi::workflow::StepOutput` enum.
+ *
+ * `StepOutput` is what a foreign step handler returns to the Rust
+ * workflow engine, so this surface needs both constructors (for foreign
+ * step handlers being invoked from Rust via Phase R5 trampolines) and
+ * readers (for Rust producing values consumed by foreign code).
+ *
+ * Variant discrimination goes through [`blazen_step_output_kind`] which
+ * returns one of the `BLAZEN_STEP_OUTPUT_*` constants.
+ */
+typedef struct BlazenStepOutput BlazenStepOutput;
+
+/**
+ * Opaque wrapper around [`blazen_uniffi::streaming::StreamChunk`].
+ */
+typedef struct BlazenStreamChunk BlazenStreamChunk;
+
+/**
+ * Opaque handle wrapping [`InnerSttResult`].
+ *
+ * Produced by the cabi `SttModel::transcribe` wrapper (Phase R3). Holds
+ * the transcript text, an optional detected language (empty string when
+ * the provider didn't report one), and a duration in milliseconds.
+ */
+typedef struct BlazenSttResult BlazenSttResult;
+
+/**
+ * Opaque wrapper around [`blazen_uniffi::llm::TokenUsage`].
+ */
+typedef struct BlazenTokenUsage BlazenTokenUsage;
+
+/**
+ * Opaque wrapper around [`blazen_uniffi::llm::Tool`].
+ */
+typedef struct BlazenTool BlazenTool;
+
+/**
+ * Opaque wrapper around [`blazen_uniffi::llm::ToolCall`].
+ */
+typedef struct BlazenToolCall BlazenToolCall;
+
+/**
+ * Opaque handle wrapping [`InnerTtsResult`].
+ *
+ * Produced by the cabi `TtsModel::synthesize` wrapper (Phase R3). Holds a
+ * base64-encoded audio payload (empty when the provider returned a URL
+ * only), a MIME type string, and a duration in milliseconds.
+ */
+typedef struct BlazenTtsResult BlazenTtsResult;
+
+/**
+ * Opaque handle wrapping a `blazen_uniffi::persist::WorkflowCheckpoint`.
+ *
+ * `pending_events` is exposed via the `_pending_events_count` /
+ * `_pending_events_get(idx)` getter pair (cloning on read) plus a
+ * `_pending_events_push` adder (consuming on write). All other fields
+ * are simple scalars or strings with direct getters; the constructor
+ * takes the four input strings and `timestamp_ms` upfront.
+ */
+typedef struct BlazenWorkflowCheckpoint BlazenWorkflowCheckpoint;
+
+/**
+ * Opaque handle wrapping a `blazen_uniffi::telemetry::WorkflowHistoryEntry`.
+ *
+ * Produced exclusively by the Rust side (the cabi `parse_workflow_history`
+ * wrapper landing in Phase R3 will allocate a heap array of these).
+ * Foreign callers read individual fields via the getters below and
+ * release with [`blazen_workflow_history_entry_free`].
+ */
+typedef struct BlazenWorkflowHistoryEntry BlazenWorkflowHistoryEntry;
+
+/**
+ * Opaque handle wrapping a `blazen_uniffi::workflow::WorkflowResult`.
+ *
+ * Workflow results are output-only — produced by Rust at the end of a
+ * run — so no constructor is exposed across the FFI. The crate-private
+ * `into_ptr` helper is the only way to mint one (used by Phase R3+
+ * `blazen_workflow_run` wrappers).
+ */
+typedef struct BlazenWorkflowResult BlazenWorkflowResult;
 
 #ifdef __cplusplus
 extern "C" {
@@ -140,6 +328,309 @@ extern "C" {
  * The returned pointer is non-null and points to a NUL-terminated UTF-8 buffer.
  */
  char *blazen_version(void);
+
+/**
+ * Returns the agent's final message as a heap-allocated C string. Caller
+ * frees with `blazen_string_free`. Returns null if `result` is null or if
+ * the message contains an interior NUL byte.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenAgentResult`
+ * produced by the cabi surface.
+ */
+ char *blazen_agent_result_final_message(const BlazenAgentResult *result);
+
+/**
+ * Returns the number of iterations (LLM round-trips) the agent loop
+ * executed before terminating. Returns `0` if `result` is null.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenAgentResult`
+ * produced by the cabi surface.
+ */
+ uint32_t blazen_agent_result_iterations(const BlazenAgentResult *result);
+
+/**
+ * Returns the total number of tool calls executed across all iterations.
+ * Returns `0` if `result` is null.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenAgentResult`
+ * produced by the cabi surface.
+ */
+ uint32_t blazen_agent_result_tool_call_count(const BlazenAgentResult *result);
+
+/**
+ * Clones the aggregated [`TokenUsage`](blazen_uniffi::llm::TokenUsage) out
+ * of the result and returns a caller-owned handle. Returns null if
+ * `result` is null. Caller frees with `blazen_token_usage_free`.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenAgentResult`
+ * produced by the cabi surface.
+ */
+ BlazenTokenUsage *blazen_agent_result_total_usage(const BlazenAgentResult *result);
+
+/**
+ * Returns the aggregated USD cost across every completion call in the
+ * loop. Returns `0.0` if `result` is null or the provider did not report
+ * cost data (the wire format does not distinguish "zero" from "unknown").
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenAgentResult`
+ * produced by the cabi surface.
+ */
+ double blazen_agent_result_total_cost_usd(const BlazenAgentResult *result);
+
+/**
+ * Frees a `BlazenAgentResult` produced by the cabi surface. Passing null
+ * is a no-op.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a pointer produced by the cabi surface's
+ * agent-run wrapper. Double-free is undefined behavior.
+ */
+ void blazen_agent_result_free(BlazenAgentResult *result);
+
+/**
+ * Returns the variant tag for `handle` — one of [`BLAZEN_BATCH_ITEM_SUCCESS`]
+ * or [`BLAZEN_BATCH_ITEM_FAILURE`]. Returns [`BLAZEN_BATCH_ITEM_FAILURE`] on
+ * a null handle (treating a missing slot as a degenerate failure with no
+ * message).
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBatchItem` produced by the cabi
+ * surface.
+ */
+ uint32_t blazen_batch_item_kind(const BlazenBatchItem *handle);
+
+/**
+ * Returns a fresh `BlazenCompletionResponse` cloned from the
+ * [`InnerBatchItem::Success`] variant's payload. Returns null if `handle` is
+ * null or the variant is `Failure`. Caller frees with
+ * `blazen_completion_response_free`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBatchItem` produced by the cabi
+ * surface.
+ */
+ BlazenCompletionResponse *blazen_batch_item_success_response(const BlazenBatchItem *handle);
+
+/**
+ * Returns the [`InnerBatchItem::Failure`] variant's `error_message` as a
+ * caller-owned C string. Returns null if `handle` is null or the variant is
+ * `Success`. Caller frees with `blazen_string_free`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBatchItem` produced by the cabi
+ * surface.
+ */
+ char *blazen_batch_item_failure_message(const BlazenBatchItem *handle);
+
+/**
+ * Frees a `BlazenBatchItem` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer previously produced by the cabi
+ * surface. Double-free is undefined behavior.
+ */
+ void blazen_batch_item_free(BlazenBatchItem *handle);
+
+/**
+ * Returns the number of per-request response slots. Returns `0` on a null
+ * handle.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBatchResult` produced by the cabi
+ * surface.
+ */
+ uintptr_t blazen_batch_result_responses_count(const BlazenBatchResult *handle);
+
+/**
+ * Clones the `idx`-th response slot into a fresh `BlazenBatchItem` handle
+ * the caller owns. Returns null on a null handle or out-of-range index.
+ * Caller frees with `blazen_batch_item_free`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBatchResult` produced by the cabi
+ * surface.
+ */
+ BlazenBatchItem *blazen_batch_result_responses_get(const BlazenBatchResult *handle, uintptr_t idx);
+
+/**
+ * Returns a fresh `BlazenTokenUsage` handle cloned from the aggregated
+ * `total_usage` counters. Returns null on a null handle. Caller frees with
+ * `blazen_token_usage_free`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBatchResult` produced by the cabi
+ * surface.
+ */
+ BlazenTokenUsage *blazen_batch_result_total_usage(const BlazenBatchResult *handle);
+
+/**
+ * Returns the aggregated `total_cost_usd` across successful responses.
+ * Returns `0.0` on a null handle. The wire format does not distinguish
+ * "no cost data reported" from "exactly zero" — both produce `0.0`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBatchResult` produced by the cabi
+ * surface.
+ */
+ double blazen_batch_result_total_cost_usd(const BlazenBatchResult *handle);
+
+/**
+ * Frees a `BlazenBatchResult` handle and all owned per-slot contents. No-op
+ * on a null pointer.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer previously produced by the cabi
+ * surface. Double-free is undefined behavior.
+ */
+ void blazen_batch_result_free(BlazenBatchResult *handle);
+
+/**
+ * Returns the synthesized audio as a heap-allocated C string of
+ * base64-encoded bytes. Caller frees with `blazen_string_free`. Returns
+ * null if `result` is null. The returned string is empty when the upstream
+ * provider only returned a URL (not raw bytes).
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenTtsResult` produced
+ * by the cabi surface.
+ */
+ char *blazen_tts_result_audio_base64(const BlazenTtsResult *result);
+
+/**
+ * Returns the MIME type of the synthesized audio as a heap-allocated C
+ * string. Caller frees with `blazen_string_free`. Returns null if `result`
+ * is null.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenTtsResult` produced
+ * by the cabi surface.
+ */
+ char *blazen_tts_result_mime_type(const BlazenTtsResult *result);
+
+/**
+ * Returns the duration of the synthesized audio in milliseconds. Returns
+ * `0` if `result` is null or if the provider did not report timing.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenTtsResult` produced
+ * by the cabi surface.
+ */
+ uint64_t blazen_tts_result_duration_ms(const BlazenTtsResult *result);
+
+/**
+ * Frees a `BlazenTtsResult` produced by the cabi surface. Passing null is
+ * a no-op.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a pointer produced by the cabi surface's
+ * TTS-synthesis wrapper. Double-free is undefined behavior.
+ */
+ void blazen_tts_result_free(BlazenTtsResult *result);
+
+/**
+ * Returns the transcript text as a heap-allocated C string. Caller frees
+ * with `blazen_string_free`. Returns null if `result` is null.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenSttResult` produced
+ * by the cabi surface.
+ */
+ char *blazen_stt_result_transcript(const BlazenSttResult *result);
+
+/**
+ * Returns the detected language as a heap-allocated C string (ISO-639-1).
+ * Caller frees with `blazen_string_free`. The returned string is empty
+ * when the provider did not report a language. Returns null if `result`
+ * is null.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenSttResult` produced
+ * by the cabi surface.
+ */
+ char *blazen_stt_result_language(const BlazenSttResult *result);
+
+/**
+ * Returns the duration of the source audio in milliseconds. Returns `0`
+ * if `result` is null or the provider did not report timing.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenSttResult` produced
+ * by the cabi surface.
+ */
+ uint64_t blazen_stt_result_duration_ms(const BlazenSttResult *result);
+
+/**
+ * Frees a `BlazenSttResult` produced by the cabi surface. Passing null is
+ * a no-op.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a pointer produced by the cabi surface's
+ * STT-transcribe wrapper. Double-free is undefined behavior.
+ */
+ void blazen_stt_result_free(BlazenSttResult *result);
+
+/**
+ * Returns the number of images in the result. Returns `0` if `result` is
+ * null.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenImageGenResult`
+ * produced by the cabi surface.
+ */
+ uintptr_t blazen_image_gen_result_images_count(const BlazenImageGenResult *result);
+
+/**
+ * Clones the image at index `idx` out of the result and returns a
+ * caller-owned `BlazenMedia` handle. Returns null if `result` is null or
+ * `idx` is out of bounds. Caller frees the returned handle with
+ * `blazen_media_free`.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenImageGenResult`
+ * produced by the cabi surface.
+ */
+ BlazenMedia *blazen_image_gen_result_images_get(const BlazenImageGenResult *result, uintptr_t idx);
+
+/**
+ * Frees a `BlazenImageGenResult` produced by the cabi surface. Passing
+ * null is a no-op.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a pointer produced by the cabi surface's
+ * image-generation wrapper. Double-free is undefined behavior.
+ */
+ void blazen_image_gen_result_free(BlazenImageGenResult *result);
 
 /**
  * Returns the variant tag for `err` — one of the `BLAZEN_ERROR_KIND_*`
@@ -392,6 +883,965 @@ extern "C" {
  int32_t blazen_shutdown(void);
 
 /**
+ * Constructs a new `Media` handle from the three required string fields.
+ *
+ * Returns null if any pointer is null or contains non-UTF-8 bytes. Caller
+ * owns the returned handle and must free it with [`blazen_media_free`].
+ *
+ * # Safety
+ *
+ * `kind`, `mime_type`, and `data_base64` must each be null OR point to a
+ * NUL-terminated UTF-8 buffer that remains valid for the duration of this
+ * call.
+ */
+ BlazenMedia *blazen_media_new(const char *kind, const char *mime_type, const char *data_base64);
+
+/**
+ * Returns the `kind` field as a caller-owned C string. Returns null on a
+ * null handle. Caller frees with `blazen_string_free`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenMedia` produced by the cabi
+ * surface.
+ */
+ char *blazen_media_kind(const BlazenMedia *handle);
+
+/**
+ * Returns the `mime_type` field as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenMedia` produced by the cabi
+ * surface.
+ */
+ char *blazen_media_mime_type(const BlazenMedia *handle);
+
+/**
+ * Returns the `data_base64` field as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenMedia` produced by the cabi
+ * surface.
+ */
+ char *blazen_media_data_base64(const BlazenMedia *handle);
+
+/**
+ * Frees a `BlazenMedia` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer previously produced by
+ * [`blazen_media_new`] (or by a `*_get` that returned a cloned media). Calling
+ * this twice on the same non-null pointer is a double-free.
+ */
+ void blazen_media_free(BlazenMedia *handle);
+
+/**
+ * Constructs a new `ToolCall` handle. Returns null if any input is null or
+ * non-UTF-8.
+ *
+ * # Safety
+ *
+ * `id`, `name`, and `arguments_json` must each be null OR point to a
+ * NUL-terminated UTF-8 buffer valid for the duration of this call.
+ */
+ BlazenToolCall *blazen_tool_call_new(const char *id, const char *name, const char *arguments_json);
+
+/**
+ * Returns the `id` field as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenToolCall` produced by the cabi
+ * surface.
+ */
+ char *blazen_tool_call_id(const BlazenToolCall *handle);
+
+/**
+ * Returns the `name` field as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenToolCall` produced by the cabi
+ * surface.
+ */
+ char *blazen_tool_call_name(const BlazenToolCall *handle);
+
+/**
+ * Returns the `arguments_json` field as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenToolCall` produced by the cabi
+ * surface.
+ */
+ char *blazen_tool_call_arguments_json(const BlazenToolCall *handle);
+
+/**
+ * Frees a `BlazenToolCall` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer previously produced by the cabi
+ * surface. Double-free is undefined behavior.
+ */
+ void blazen_tool_call_free(BlazenToolCall *handle);
+
+/**
+ * Constructs a new `Tool` handle. Returns null if any input is null or
+ * non-UTF-8.
+ *
+ * # Safety
+ *
+ * `name`, `description`, and `parameters_json` must each be null OR point to
+ * a NUL-terminated UTF-8 buffer valid for the duration of this call.
+ */
+
+BlazenTool *blazen_tool_new(const char *name,
+                            const char *description,
+                            const char *parameters_json);
+
+/**
+ * Returns the `name` field as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTool` produced by the cabi surface.
+ */
+ char *blazen_tool_name(const BlazenTool *handle);
+
+/**
+ * Returns the `description` field as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTool` produced by the cabi surface.
+ */
+ char *blazen_tool_description(const BlazenTool *handle);
+
+/**
+ * Returns the `parameters_json` field as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTool` produced by the cabi surface.
+ */
+ char *blazen_tool_parameters_json(const BlazenTool *handle);
+
+/**
+ * Frees a `BlazenTool` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer previously produced by the cabi
+ * surface. Double-free is undefined behavior.
+ */
+ void blazen_tool_free(BlazenTool *handle);
+
+/**
+ * Constructs a new `TokenUsage` handle from its five `u64` counters.
+ *
+ * Always succeeds (never returns null). Caller owns the returned handle.
+ */
+
+BlazenTokenUsage *blazen_token_usage_new(uint64_t prompt_tokens,
+                                         uint64_t completion_tokens,
+                                         uint64_t total_tokens,
+                                         uint64_t cached_input_tokens,
+                                         uint64_t reasoning_tokens);
+
+/**
+ * Returns `prompt_tokens`. Returns `0` on a null handle.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTokenUsage` produced by the cabi
+ * surface.
+ */
+ uint64_t blazen_token_usage_prompt_tokens(const BlazenTokenUsage *handle);
+
+/**
+ * Returns `completion_tokens`. Returns `0` on a null handle.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTokenUsage` produced by the cabi
+ * surface.
+ */
+ uint64_t blazen_token_usage_completion_tokens(const BlazenTokenUsage *handle);
+
+/**
+ * Returns `total_tokens`. Returns `0` on a null handle.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTokenUsage` produced by the cabi
+ * surface.
+ */
+ uint64_t blazen_token_usage_total_tokens(const BlazenTokenUsage *handle);
+
+/**
+ * Returns `cached_input_tokens`. Returns `0` on a null handle.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTokenUsage` produced by the cabi
+ * surface.
+ */
+ uint64_t blazen_token_usage_cached_input_tokens(const BlazenTokenUsage *handle);
+
+/**
+ * Returns `reasoning_tokens`. Returns `0` on a null handle.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTokenUsage` produced by the cabi
+ * surface.
+ */
+ uint64_t blazen_token_usage_reasoning_tokens(const BlazenTokenUsage *handle);
+
+/**
+ * Frees a `BlazenTokenUsage` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer previously produced by the cabi
+ * surface. Double-free is undefined behavior.
+ */
+ void blazen_token_usage_free(BlazenTokenUsage *handle);
+
+/**
+ * Constructs a new `ChatMessage` with empty media-parts / tool-calls vecs
+ * and unset `tool_call_id` / `name` optionals.
+ *
+ * Returns null if either input is null or non-UTF-8.
+ *
+ * # Safety
+ *
+ * `role` and `content` must each be null OR point to a NUL-terminated UTF-8
+ * buffer valid for the duration of this call.
+ */
+ BlazenChatMessage *blazen_chat_message_new(const char *role, const char *content);
+
+/**
+ * Returns the `role` field as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenChatMessage`.
+ */
+ char *blazen_chat_message_role(const BlazenChatMessage *handle);
+
+/**
+ * Returns the `content` field as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenChatMessage`.
+ */
+ char *blazen_chat_message_content(const BlazenChatMessage *handle);
+
+/**
+ * Pushes a `BlazenMedia` onto the message's `media_parts` vec. Consumes
+ * the `media` handle — the caller must NOT free it afterwards. No-op if
+ * either pointer is null (the `media` allocation is still freed in that case
+ * to avoid a leak when only the handle is null).
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenChatMessage`. `media` must be null
+ * OR a live `BlazenMedia` produced by the cabi surface.
+ */
+ void blazen_chat_message_media_parts_push(BlazenChatMessage *handle, BlazenMedia *media);
+
+/**
+ * Returns the number of entries in the message's `media_parts` vec.
+ * Returns `0` on a null handle.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenChatMessage`.
+ */
+ uintptr_t blazen_chat_message_media_parts_count(const BlazenChatMessage *handle);
+
+/**
+ * Clones the `idx`-th entry from `media_parts` into a fresh `BlazenMedia`
+ * handle the caller owns. Returns null if `handle` is null or `idx` is out
+ * of range.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenChatMessage`.
+ */
+ BlazenMedia *blazen_chat_message_media_parts_get(const BlazenChatMessage *handle, uintptr_t idx);
+
+/**
+ * Pushes a `BlazenToolCall` onto the message's `tool_calls` vec. Consumes
+ * `tool_call`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenChatMessage`. `tool_call` must be
+ * null OR a live `BlazenToolCall`.
+ */
+ void blazen_chat_message_tool_calls_push(BlazenChatMessage *handle, BlazenToolCall *tool_call);
+
+/**
+ * Returns the number of entries in `tool_calls`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenChatMessage`.
+ */
+ uintptr_t blazen_chat_message_tool_calls_count(const BlazenChatMessage *handle);
+
+/**
+ * Clones the `idx`-th tool-call entry. Returns null on out-of-range / null
+ * handle.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenChatMessage`.
+ */
+ BlazenToolCall *blazen_chat_message_tool_calls_get(const BlazenChatMessage *handle, uintptr_t idx);
+
+/**
+ * Sets the optional `tool_call_id` field. A null `value` clears the field
+ * (sets `None`); a non-null pointer sets `Some(<string>)`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenChatMessage`. `value` must be null
+ * OR point to a NUL-terminated UTF-8 buffer valid for the duration of this
+ * call.
+ */
+ void blazen_chat_message_set_tool_call_id(BlazenChatMessage *handle, const char *value);
+
+/**
+ * Returns the optional `tool_call_id` as a caller-owned C string. Returns
+ * null if the field is unset or `handle` is null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenChatMessage`.
+ */
+ char *blazen_chat_message_tool_call_id(const BlazenChatMessage *handle);
+
+/**
+ * Sets the optional `name` field. Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenChatMessage`. `value` must be null
+ * OR point to a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_chat_message_set_name(BlazenChatMessage *handle, const char *value);
+
+/**
+ * Returns the optional `name` field as a caller-owned C string. Returns null
+ * if unset.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenChatMessage`.
+ */
+ char *blazen_chat_message_name(const BlazenChatMessage *handle);
+
+/**
+ * Frees a `BlazenChatMessage` handle (and all owned vec / option contents).
+ * No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer previously produced by the cabi
+ * surface.
+ */
+ void blazen_chat_message_free(BlazenChatMessage *handle);
+
+/**
+ * Constructs a new `CompletionRequest` with empty `messages`/`tools` vecs and
+ * every optional field unset. Always succeeds; caller owns the handle.
+ */
+ BlazenCompletionRequest *blazen_completion_request_new(void);
+
+/**
+ * Pushes a `BlazenChatMessage` onto the request's `messages` vec. Consumes
+ * `message`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionRequest`. `message` must
+ * be null OR a live `BlazenChatMessage`.
+ */
+
+void blazen_completion_request_messages_push(BlazenCompletionRequest *handle,
+                                             BlazenChatMessage *message);
+
+/**
+ * Pushes a `BlazenTool` onto the request's `tools` vec. Consumes `tool`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionRequest`. `tool` must be
+ * null OR a live `BlazenTool`.
+ */
+ void blazen_completion_request_tools_push(BlazenCompletionRequest *handle, BlazenTool *tool);
+
+/**
+ * Sets `temperature` to `Some(value)`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionRequest`.
+ */
+ void blazen_completion_request_set_temperature(BlazenCompletionRequest *handle, double value);
+
+/**
+ * Clears `temperature` back to `None`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionRequest`.
+ */
+ void blazen_completion_request_clear_temperature(BlazenCompletionRequest *handle);
+
+/**
+ * Sets `max_tokens` to `Some(value)`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionRequest`.
+ */
+ void blazen_completion_request_set_max_tokens(BlazenCompletionRequest *handle, uint32_t value);
+
+/**
+ * Clears `max_tokens` back to `None`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionRequest`.
+ */
+ void blazen_completion_request_clear_max_tokens(BlazenCompletionRequest *handle);
+
+/**
+ * Sets `top_p` to `Some(value)`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionRequest`.
+ */
+ void blazen_completion_request_set_top_p(BlazenCompletionRequest *handle, double value);
+
+/**
+ * Clears `top_p` back to `None`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionRequest`.
+ */
+ void blazen_completion_request_clear_top_p(BlazenCompletionRequest *handle);
+
+/**
+ * Sets the optional `model` field. Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionRequest`. `value` must be
+ * null OR point to a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_completion_request_set_model(BlazenCompletionRequest *handle, const char *value);
+
+/**
+ * Sets the optional `response_format_json` field. Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionRequest`. `value` must be
+ * null OR point to a NUL-terminated UTF-8 buffer.
+ */
+
+void blazen_completion_request_set_response_format_json(BlazenCompletionRequest *handle,
+                                                        const char *value);
+
+/**
+ * Sets the optional `system` field. Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionRequest`. `value` must be
+ * null OR point to a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_completion_request_set_system(BlazenCompletionRequest *handle, const char *value);
+
+/**
+ * Frees a `BlazenCompletionRequest` handle and all owned contents. No-op on
+ * a null pointer.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer previously produced by the cabi
+ * surface.
+ */
+ void blazen_completion_request_free(BlazenCompletionRequest *handle);
+
+/**
+ * Returns the `content` text as a caller-owned C string. Returns null on a
+ * null handle.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionResponse`.
+ */
+ char *blazen_completion_response_content(const BlazenCompletionResponse *handle);
+
+/**
+ * Returns the `finish_reason` field as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionResponse`.
+ */
+ char *blazen_completion_response_finish_reason(const BlazenCompletionResponse *handle);
+
+/**
+ * Returns the `model` identifier as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionResponse`.
+ */
+ char *blazen_completion_response_model(const BlazenCompletionResponse *handle);
+
+/**
+ * Returns the number of tool-call entries.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionResponse`.
+ */
+ uintptr_t blazen_completion_response_tool_calls_count(const BlazenCompletionResponse *handle);
+
+/**
+ * Clones the `idx`-th tool-call entry into a fresh handle.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionResponse`.
+ */
+
+BlazenToolCall *blazen_completion_response_tool_calls_get(const BlazenCompletionResponse *handle,
+                                                          uintptr_t idx);
+
+/**
+ * Returns a fresh `BlazenTokenUsage` handle cloned from the response's usage
+ * counters. Caller frees with `blazen_token_usage_free`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionResponse`.
+ */
+ BlazenTokenUsage *blazen_completion_response_usage(const BlazenCompletionResponse *handle);
+
+/**
+ * Frees a `BlazenCompletionResponse` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer previously produced by the cabi
+ * surface.
+ */
+ void blazen_completion_response_free(BlazenCompletionResponse *handle);
+
+/**
+ * Returns the number of embedding vectors. Returns `0` on a null handle.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenEmbeddingResponse`.
+ */
+ uintptr_t blazen_embedding_response_embeddings_count(const BlazenEmbeddingResponse *handle);
+
+/**
+ * Returns the dimensionality of the `vec_idx`-th embedding vector. Returns
+ * `0` on a null handle or an out-of-range index.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenEmbeddingResponse`.
+ */
+
+uintptr_t blazen_embedding_response_embedding_dim(const BlazenEmbeddingResponse *handle,
+                                                  uintptr_t vec_idx);
+
+/**
+ * Returns the `dim_idx`-th coordinate of the `vec_idx`-th embedding vector.
+ * Returns `0.0` on a null handle or any out-of-range index — callers should
+ * gate access with `_embeddings_count` and `_embedding_dim` first.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenEmbeddingResponse`.
+ */
+
+double blazen_embedding_response_embedding_get(const BlazenEmbeddingResponse *handle,
+                                               uintptr_t vec_idx,
+                                               uintptr_t dim_idx);
+
+/**
+ * Bulk-copy the `vec_idx`-th embedding vector into the caller-supplied
+ * buffer. Writes up to `min(vector_len, out_buf_len)` `f64`s starting at
+ * `out_buf` and returns the actual number of `f64`s written.
+ *
+ * Returns `0` if `handle` is null, `vec_idx` is out of range, or
+ * `out_buf` is null. Designed for hot paths in embedding-heavy workloads
+ * where allocating one C string per coordinate is unacceptable.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenEmbeddingResponse`. `out_buf` must
+ * be null OR point to a writable buffer of at least `out_buf_len`
+ * `f64`-aligned `sizeof(f64)`-spaced slots, valid for the duration of this
+ * call.
+ */
+
+uintptr_t blazen_embedding_response_embedding_to_buffer(const BlazenEmbeddingResponse *handle,
+                                                        uintptr_t vec_idx,
+                                                        double *out_buf,
+                                                        uintptr_t out_buf_len);
+
+/**
+ * Returns the embedding model identifier as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenEmbeddingResponse`.
+ */
+ char *blazen_embedding_response_model(const BlazenEmbeddingResponse *handle);
+
+/**
+ * Returns a fresh `BlazenTokenUsage` handle cloned from the response.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenEmbeddingResponse`.
+ */
+ BlazenTokenUsage *blazen_embedding_response_usage(const BlazenEmbeddingResponse *handle);
+
+/**
+ * Frees a `BlazenEmbeddingResponse` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer previously produced by the cabi
+ * surface.
+ */
+ void blazen_embedding_response_free(BlazenEmbeddingResponse *handle);
+
+/**
+ * Constructs a new persisted event with the given `event_type` (e.g.
+ * `"blazen::StartEvent"`) and JSON-encoded `data_json` payload. Returns
+ * null if either pointer is null or contains non-UTF-8 bytes.
+ *
+ * # Ownership
+ *
+ * Returned pointer is caller-owned. Free with
+ * [`blazen_persisted_event_free`].
+ *
+ * # Safety
+ *
+ * Both pointers must be null OR valid NUL-terminated UTF-8 buffers that
+ * remain live for the duration of the call.
+ */
+ BlazenPersistedEvent *blazen_persisted_event_new(const char *event_type, const char *data_json);
+
+/**
+ * Returns the persisted event's `event_type` as a heap-allocated C string.
+ * Returns null if `event` is null.
+ *
+ * # Ownership
+ *
+ * Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `event` must be null OR a valid pointer to a `BlazenPersistedEvent`
+ * previously produced by the cabi surface.
+ */
+ char *blazen_persisted_event_event_type(const BlazenPersistedEvent *event);
+
+/**
+ * Returns the persisted event's `data_json` as a heap-allocated C string.
+ * Returns null if `event` is null.
+ *
+ * # Ownership
+ *
+ * Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `event` must be null OR a valid pointer to a `BlazenPersistedEvent`
+ * previously produced by the cabi surface.
+ */
+ char *blazen_persisted_event_data_json(const BlazenPersistedEvent *event);
+
+/**
+ * Frees a `BlazenPersistedEvent` handle previously produced by the cabi
+ * surface. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `event` must be null OR a pointer previously produced by
+ * [`blazen_persisted_event_new`] (or any other cabi function producing
+ * a `BlazenPersistedEvent`). Calling this twice on the same non-null
+ * pointer is a double-free.
+ */
+ void blazen_persisted_event_free(BlazenPersistedEvent *event);
+
+/**
+ * Constructs a new workflow checkpoint.
+ *
+ * `workflow_name` is the human-readable workflow identifier. `run_id` is
+ * a UUID string (or empty — the inner `try_into::<CoreWorkflowCheckpoint>`
+ * generates a fresh UUID when persisted with an empty `run_id`).
+ * `state_json` and `metadata_json` are JSON-encoded objects (or empty
+ * strings to mean "no state" / "no metadata"). `timestamp_ms` is
+ * Unix-epoch milliseconds.
+ *
+ * Returns null if any of the four string pointers is null or contains
+ * non-UTF-8 bytes. The pending-events list starts empty — use
+ * [`blazen_workflow_checkpoint_pending_events_push`] to append entries.
+ *
+ * # Ownership
+ *
+ * Returned pointer is caller-owned. Free with
+ * [`blazen_workflow_checkpoint_free`].
+ *
+ * # Safety
+ *
+ * All four string pointers must be null OR valid NUL-terminated UTF-8
+ * buffers that remain live for the duration of the call.
+ */
+
+BlazenWorkflowCheckpoint *blazen_workflow_checkpoint_new(const char *workflow_name,
+                                                         const char *run_id,
+                                                         const char *state_json,
+                                                         const char *metadata_json,
+                                                         uint64_t timestamp_ms);
+
+/**
+ * Appends `event` to the checkpoint's `pending_events` vec. Consumes
+ * ownership of `event` — callers MUST NOT separately free it after a
+ * successful push.
+ *
+ * Returns `0` on success, `-1` if either pointer is null. On the
+ * null-checkpoint path the function will still reclaim and free `event`
+ * (if non-null) so the caller-allocated input doesn't leak.
+ *
+ * # Safety
+ *
+ * `checkpoint` must be a valid pointer to a `BlazenWorkflowCheckpoint`
+ * previously produced by the cabi surface. `event` must be null OR a
+ * pointer previously produced by [`blazen_persisted_event_new`].
+ */
+
+int32_t blazen_workflow_checkpoint_pending_events_push(BlazenWorkflowCheckpoint *checkpoint,
+                                                       BlazenPersistedEvent *event);
+
+/**
+ * Returns the checkpoint's `workflow_name` as a heap-allocated C string.
+ * Returns null if `checkpoint` is null.
+ *
+ * # Ownership
+ *
+ * Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `checkpoint` must be null OR a valid pointer to a
+ * `BlazenWorkflowCheckpoint` previously produced by the cabi surface.
+ */
+ char *blazen_workflow_checkpoint_workflow_name(const BlazenWorkflowCheckpoint *checkpoint);
+
+/**
+ * Returns the checkpoint's `run_id` (UUID string) as a heap-allocated C
+ * string. Returns null if `checkpoint` is null.
+ *
+ * # Ownership
+ *
+ * Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `checkpoint` must be null OR a valid pointer to a
+ * `BlazenWorkflowCheckpoint` previously produced by the cabi surface.
+ */
+ char *blazen_workflow_checkpoint_run_id(const BlazenWorkflowCheckpoint *checkpoint);
+
+/**
+ * Returns the checkpoint's `timestamp_ms` (Unix-epoch milliseconds), or
+ * `0` if `checkpoint` is null.
+ *
+ * # Safety
+ *
+ * `checkpoint` must be null OR a valid pointer to a
+ * `BlazenWorkflowCheckpoint` previously produced by the cabi surface.
+ */
+ uint64_t blazen_workflow_checkpoint_timestamp_ms(const BlazenWorkflowCheckpoint *checkpoint);
+
+/**
+ * Returns the checkpoint's `state_json` as a heap-allocated C string.
+ * Returns null if `checkpoint` is null.
+ *
+ * # Ownership
+ *
+ * Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `checkpoint` must be null OR a valid pointer to a
+ * `BlazenWorkflowCheckpoint` previously produced by the cabi surface.
+ */
+ char *blazen_workflow_checkpoint_state_json(const BlazenWorkflowCheckpoint *checkpoint);
+
+/**
+ * Returns the checkpoint's `metadata_json` as a heap-allocated C string.
+ * Returns null if `checkpoint` is null.
+ *
+ * # Ownership
+ *
+ * Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `checkpoint` must be null OR a valid pointer to a
+ * `BlazenWorkflowCheckpoint` previously produced by the cabi surface.
+ */
+ char *blazen_workflow_checkpoint_metadata_json(const BlazenWorkflowCheckpoint *checkpoint);
+
+/**
+ * Returns the number of entries in the checkpoint's `pending_events`
+ * vec, or `0` if `checkpoint` is null.
+ *
+ * # Safety
+ *
+ * `checkpoint` must be null OR a valid pointer to a
+ * `BlazenWorkflowCheckpoint` previously produced by the cabi surface.
+ */
+
+uintptr_t blazen_workflow_checkpoint_pending_events_count(const BlazenWorkflowCheckpoint *checkpoint);
+
+/**
+ * Returns a freshly-cloned `BlazenPersistedEvent` handle holding the
+ * event at position `idx` of the checkpoint's `pending_events` vec.
+ * Returns null if `checkpoint` is null or `idx` is out of bounds.
+ *
+ * # Ownership
+ *
+ * Returned pointer is caller-owned. Free with
+ * [`blazen_persisted_event_free`].
+ *
+ * # Safety
+ *
+ * `checkpoint` must be null OR a valid pointer to a
+ * `BlazenWorkflowCheckpoint` previously produced by the cabi surface.
+ */
+
+BlazenPersistedEvent *blazen_workflow_checkpoint_pending_events_get(const BlazenWorkflowCheckpoint *checkpoint,
+                                                                    uintptr_t idx);
+
+/**
+ * Frees a `BlazenWorkflowCheckpoint` handle previously produced by the
+ * cabi surface. No-op on a null pointer. Releasing the checkpoint also
+ * drops every inner `PersistedEvent` it owns — callers must NOT
+ * separately free events handed off via
+ * [`blazen_workflow_checkpoint_pending_events_push`].
+ *
+ * # Safety
+ *
+ * `checkpoint` must be null OR a pointer previously produced by
+ * [`blazen_workflow_checkpoint_new`] (or any other cabi function
+ * producing a `BlazenWorkflowCheckpoint`). Calling this twice on the
+ * same non-null pointer is a double-free.
+ */
+ void blazen_workflow_checkpoint_free(BlazenWorkflowCheckpoint *checkpoint);
+
+/**
+ * Constructs a new `StreamChunk` with the given `content_delta` and
+ * `is_final` flag. `tool_calls` is initialised empty.
+ *
+ * Returns null if `content_delta` is null or non-UTF-8.
+ *
+ * # Safety
+ *
+ * `content_delta` must be null OR point to a NUL-terminated UTF-8 buffer
+ * valid for the duration of this call.
+ */
+ BlazenStreamChunk *blazen_stream_chunk_new(const char *content_delta, bool is_final);
+
+/**
+ * Pushes a `BlazenToolCall` onto the chunk's `tool_calls` snapshot. Consumes
+ * `tool_call` — the caller must NOT free it afterwards.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenStreamChunk`. `tool_call` must be
+ * null OR a live `BlazenToolCall` produced by the cabi surface.
+ */
+ void blazen_stream_chunk_tool_calls_push(BlazenStreamChunk *handle, BlazenToolCall *tool_call);
+
+/**
+ * Returns the `content_delta` text as a caller-owned C string. Returns null
+ * on a null handle.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenStreamChunk`.
+ */
+ char *blazen_stream_chunk_content_delta(const BlazenStreamChunk *handle);
+
+/**
+ * Returns the chunk's `is_final` flag. Returns `false` on a null handle.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenStreamChunk`.
+ */
+ bool blazen_stream_chunk_is_final(const BlazenStreamChunk *handle);
+
+/**
+ * Returns the number of tool-call entries on this chunk. Returns `0` on a
+ * null handle.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenStreamChunk`.
+ */
+ uintptr_t blazen_stream_chunk_tool_calls_count(const BlazenStreamChunk *handle);
+
+/**
+ * Clones the `idx`-th tool-call entry into a fresh caller-owned handle.
+ * Returns null on a null handle or out-of-range index.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenStreamChunk`.
+ */
+ BlazenToolCall *blazen_stream_chunk_tool_calls_get(const BlazenStreamChunk *handle, uintptr_t idx);
+
+/**
+ * Frees a `BlazenStreamChunk` handle and all owned tool-call entries. No-op
+ * on a null pointer.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer previously produced by the cabi
+ * surface. Double-free is undefined behavior.
+ */
+ void blazen_stream_chunk_free(BlazenStreamChunk *handle);
+
+/**
  * Frees a heap-allocated C string produced by any `blazen_*` function that
  * returns `*mut c_char`. Passing a null pointer is a no-op.
  *
@@ -404,6 +1854,383 @@ extern "C" {
  * undefined behavior.
  */
  void blazen_string_free(char *ptr);
+
+/**
+ * Returns the history entry's `workflow_id` (UUID string of the
+ * enclosing run) as a heap-allocated C string. Returns null if `entry`
+ * is null.
+ *
+ * # Ownership
+ *
+ * Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `entry` must be null OR a valid pointer to a
+ * `BlazenWorkflowHistoryEntry` previously produced by the cabi surface.
+ */
+ char *blazen_workflow_history_entry_workflow_id(const BlazenWorkflowHistoryEntry *entry);
+
+/**
+ * Returns the history entry's `step_name` as a heap-allocated C string.
+ * The value is the step name for step- or LLM-call-scoped events and
+ * the empty string for workflow-level events (mirroring the inner
+ * record's plain-string field — there is no `Option<String>` here, only
+ * `""`).
+ *
+ * Returns null if `entry` is null.
+ *
+ * # Ownership
+ *
+ * Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `entry` must be null OR a valid pointer to a
+ * `BlazenWorkflowHistoryEntry` previously produced by the cabi surface.
+ */
+ char *blazen_workflow_history_entry_step_name(const BlazenWorkflowHistoryEntry *entry);
+
+/**
+ * Returns the history entry's `event_type` variant tag (e.g.
+ * `"WorkflowStarted"`, `"StepCompleted"`, `"LlmCallFailed"`) as a
+ * heap-allocated C string. Returns null if `entry` is null.
+ *
+ * # Ownership
+ *
+ * Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `entry` must be null OR a valid pointer to a
+ * `BlazenWorkflowHistoryEntry` previously produced by the cabi surface.
+ */
+ char *blazen_workflow_history_entry_event_type(const BlazenWorkflowHistoryEntry *entry);
+
+/**
+ * Returns the history entry's full `event_data_json` payload (the serde
+ * JSON of the upstream `HistoryEventKind` variant) as a heap-allocated
+ * C string. Returns null if `entry` is null.
+ *
+ * # Ownership
+ *
+ * Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `entry` must be null OR a valid pointer to a
+ * `BlazenWorkflowHistoryEntry` previously produced by the cabi surface.
+ */
+ char *blazen_workflow_history_entry_event_data_json(const BlazenWorkflowHistoryEntry *entry);
+
+/**
+ * Returns the history entry's `timestamp_ms` (Unix-epoch milliseconds),
+ * or `0` if `entry` is null.
+ *
+ * # Safety
+ *
+ * `entry` must be null OR a valid pointer to a
+ * `BlazenWorkflowHistoryEntry` previously produced by the cabi surface.
+ */
+ uint64_t blazen_workflow_history_entry_timestamp_ms(const BlazenWorkflowHistoryEntry *entry);
+
+/**
+ * Returns the history entry's `duration_ms` as an `i64`. The sentinel
+ * `-1` covers the `entry == null` case AND the inner
+ * `duration_ms: None` case (which the upstream record uses for events
+ * that have no duration concept, e.g. `WorkflowStarted`,
+ * `StepDispatched`, `LlmCallStarted`).
+ *
+ * If the inner `duration_ms: Some(value)` exceeds `i64::MAX`, the
+ * result saturates to `i64::MAX` rather than overflowing — in practice
+ * no real-world duration crosses that threshold (it would represent
+ * hundreds of millions of years).
+ *
+ * # Safety
+ *
+ * `entry` must be null OR a valid pointer to a
+ * `BlazenWorkflowHistoryEntry` previously produced by the cabi surface.
+ */
+ int64_t blazen_workflow_history_entry_duration_ms(const BlazenWorkflowHistoryEntry *entry);
+
+/**
+ * Returns the history entry's `error` message as a heap-allocated C
+ * string, or null if `entry` is null OR the inner `error: None` (i.e.
+ * the event is not a failure variant).
+ *
+ * # Ownership
+ *
+ * Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `entry` must be null OR a valid pointer to a
+ * `BlazenWorkflowHistoryEntry` previously produced by the cabi surface.
+ */
+ char *blazen_workflow_history_entry_error(const BlazenWorkflowHistoryEntry *entry);
+
+/**
+ * Frees a `BlazenWorkflowHistoryEntry` handle previously produced by
+ * the cabi surface. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `entry` must be null OR a pointer previously produced by the cabi
+ * surface as a `BlazenWorkflowHistoryEntry`. Calling this twice on the
+ * same non-null pointer is a double-free.
+ */
+ void blazen_workflow_history_entry_free(BlazenWorkflowHistoryEntry *entry);
+
+/**
+ * Constructs a new event with the given `event_type` (e.g. `"StartEvent"`)
+ * and JSON-encoded `data_json` payload. Returns null if either pointer is
+ * null or refers to non-UTF-8 bytes.
+ *
+ * # Ownership
+ *
+ * Returned pointer is caller-owned. Free with [`blazen_event_free`].
+ *
+ * # Safety
+ *
+ * Both pointers must be null OR valid NUL-terminated UTF-8 buffers that
+ * remain live for the duration of the call.
+ */
+ BlazenEvent *blazen_event_new(const char *event_type, const char *data_json);
+
+/**
+ * Returns the event's `event_type` field as a heap-allocated NUL-terminated
+ * UTF-8 C string. Returns null if `event` is null.
+ *
+ * # Ownership
+ *
+ * Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `event` must be null OR a valid pointer to a `BlazenEvent` previously
+ * produced by the cabi surface.
+ */
+ char *blazen_event_event_type(const BlazenEvent *event);
+
+/**
+ * Returns the event's `data_json` field as a heap-allocated NUL-terminated
+ * UTF-8 C string. Returns null if `event` is null.
+ *
+ * # Ownership
+ *
+ * Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `event` must be null OR a valid pointer to a `BlazenEvent` previously
+ * produced by the cabi surface.
+ */
+ char *blazen_event_data_json(const BlazenEvent *event);
+
+/**
+ * Frees a `BlazenEvent` handle previously produced by the cabi surface.
+ * No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `event` must be null OR a pointer previously produced by
+ * [`blazen_event_new`] (or any other cabi function documenting
+ * `BlazenEvent` ownership-transfer-to-caller semantics). Calling this
+ * twice on the same non-null pointer is a double-free.
+ */
+ void blazen_event_free(BlazenEvent *event);
+
+/**
+ * Returns a freshly-cloned `BlazenEvent` handle holding the terminal event
+ * of this workflow run (typically a `"StopEvent"`). Returns null if
+ * `result` is null.
+ *
+ * # Ownership
+ *
+ * Returned pointer is caller-owned. Free with [`blazen_event_free`].
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenWorkflowResult`
+ * previously produced by the cabi surface.
+ */
+ BlazenEvent *blazen_workflow_result_event(const BlazenWorkflowResult *result);
+
+/**
+ * Returns the total LLM input-token count accumulated across the run.
+ * Returns `0` if `result` is null.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenWorkflowResult`
+ * previously produced by the cabi surface.
+ */
+ uint64_t blazen_workflow_result_total_input_tokens(const BlazenWorkflowResult *result);
+
+/**
+ * Returns the total LLM output-token count accumulated across the run.
+ * Returns `0` if `result` is null.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenWorkflowResult`
+ * previously produced by the cabi surface.
+ */
+ uint64_t blazen_workflow_result_total_output_tokens(const BlazenWorkflowResult *result);
+
+/**
+ * Returns the total USD cost accumulated across the run. Returns `0.0` if
+ * `result` is null or if no pricing data was available for the providers
+ * involved.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenWorkflowResult`
+ * previously produced by the cabi surface.
+ */
+ double blazen_workflow_result_total_cost_usd(const BlazenWorkflowResult *result);
+
+/**
+ * Frees a `BlazenWorkflowResult` handle previously produced by the cabi
+ * surface. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a pointer previously produced by the cabi
+ * surface as a `BlazenWorkflowResult`. Calling this twice on the same
+ * non-null pointer is a double-free.
+ */
+ void blazen_workflow_result_free(BlazenWorkflowResult *result);
+
+/**
+ * Constructs a `StepOutput::None` value — the step performed work but
+ * produced no event.
+ *
+ * # Ownership
+ *
+ * Returned pointer is caller-owned. Free with [`blazen_step_output_free`].
+ */
+ BlazenStepOutput *blazen_step_output_new_none(void);
+
+/**
+ * Constructs a `StepOutput::Single { event }` value. Consumes ownership
+ * of `event` — callers MUST NOT separately free it after this call
+ * returns a non-null handle.
+ *
+ * Returns null if `event` is null. On the null-input path the function is
+ * a no-op (there's nothing to free).
+ *
+ * # Ownership
+ *
+ * Returned pointer is caller-owned. Free with [`blazen_step_output_free`].
+ *
+ * # Safety
+ *
+ * `event` must be null OR a pointer previously produced by
+ * [`blazen_event_new`] (or any cabi function producing a `BlazenEvent`).
+ * Calling this twice with the same non-null `event` is a double-free.
+ */
+ BlazenStepOutput *blazen_step_output_new_single(BlazenEvent *event);
+
+/**
+ * Constructs an empty `StepOutput::Multiple { events: [] }` value. Use
+ * [`blazen_step_output_multiple_push`] to append events to it.
+ *
+ * # Ownership
+ *
+ * Returned pointer is caller-owned. Free with [`blazen_step_output_free`].
+ */
+ BlazenStepOutput *blazen_step_output_new_multiple(void);
+
+/**
+ * Appends `event` to a `StepOutput::Multiple` value. Consumes ownership
+ * of `event` — callers MUST NOT separately free it after a successful
+ * push.
+ *
+ * If `output` currently holds `None`, it transitions to
+ * `Multiple { events: [event] }`. If it holds `Single { event: prior }`,
+ * it transitions to `Multiple { events: [prior, event] }`. If it already
+ * holds `Multiple`, the event is appended.
+ *
+ * Returns the previous variant tag (one of the `BLAZEN_STEP_OUTPUT_*`
+ * constants) on success, or `u32::MAX` if either pointer is null. On the
+ * `u32::MAX` path the function is a no-op and `event` (if non-null) is
+ * freed to avoid leaking caller-allocated input on the failure path.
+ *
+ * # Safety
+ *
+ * `output` must be a valid pointer to a `BlazenStepOutput` previously
+ * produced by the cabi surface. `event` must be null OR a pointer
+ * previously produced by [`blazen_event_new`].
+ */
+ uint32_t blazen_step_output_multiple_push(BlazenStepOutput *output, BlazenEvent *event);
+
+/**
+ * Returns the variant tag of `output` — one of the `BLAZEN_STEP_OUTPUT_*`
+ * constants. Returns `u32::MAX` if `output` is null.
+ *
+ * # Safety
+ *
+ * `output` must be null OR a valid pointer to a `BlazenStepOutput`
+ * previously produced by the cabi surface.
+ */
+ uint32_t blazen_step_output_kind(const BlazenStepOutput *output);
+
+/**
+ * Returns a freshly-cloned `BlazenEvent` handle holding the inner event
+ * of a `StepOutput::Single` value. Returns null if `output` is null or
+ * the variant is not `Single`.
+ *
+ * # Ownership
+ *
+ * Returned pointer is caller-owned. Free with [`blazen_event_free`].
+ *
+ * # Safety
+ *
+ * `output` must be null OR a valid pointer to a `BlazenStepOutput`
+ * previously produced by the cabi surface.
+ */
+ BlazenEvent *blazen_step_output_single_event(const BlazenStepOutput *output);
+
+/**
+ * Returns the number of events in a `StepOutput::Multiple` value, or `0`
+ * if `output` is null or the variant is not `Multiple`.
+ *
+ * # Safety
+ *
+ * `output` must be null OR a valid pointer to a `BlazenStepOutput`
+ * previously produced by the cabi surface.
+ */
+ uintptr_t blazen_step_output_multiple_count(const BlazenStepOutput *output);
+
+/**
+ * Returns a freshly-cloned `BlazenEvent` handle holding the event at
+ * position `idx` of a `StepOutput::Multiple` value. Returns null if
+ * `output` is null, the variant is not `Multiple`, or `idx` is out of
+ * bounds.
+ *
+ * # Ownership
+ *
+ * Returned pointer is caller-owned. Free with [`blazen_event_free`].
+ *
+ * # Safety
+ *
+ * `output` must be null OR a valid pointer to a `BlazenStepOutput`
+ * previously produced by the cabi surface.
+ */
+ BlazenEvent *blazen_step_output_multiple_get(const BlazenStepOutput *output, uintptr_t idx);
+
+/**
+ * Frees a `BlazenStepOutput` handle previously produced by the cabi
+ * surface. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `output` must be null OR a pointer previously produced by one of the
+ * `blazen_step_output_new_*` functions. Calling this twice on the same
+ * non-null pointer is a double-free.
+ */
+ void blazen_step_output_free(BlazenStepOutput *output);
 
 #ifdef __cplusplus
 }  // extern "C"
