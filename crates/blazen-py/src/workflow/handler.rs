@@ -56,10 +56,24 @@ impl PyWorkflowHandler {
     ///
     /// Immediately subscribes to the broadcast stream so that events
     /// published by steps are captured from the very start.
-    pub fn new(handler: blazen_core::WorkflowHandler) -> Self {
-        // Subscribe immediately -- the returned stream is fully owned
-        // (independent of &handler) thanks to `use<>` on the core method.
-        let stream = handler.stream_events();
+    /// Wrap a fresh `blazen_core::WorkflowHandler` for Python.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `handler.take_initial_stream()` returns `None`. The core
+    /// guarantees the initial stream is `Some` on a handler returned from
+    /// `Workflow::run`, so this only fires if the caller already consumed
+    /// it — a bug.
+    pub fn new(mut handler: blazen_core::WorkflowHandler) -> Self {
+        // Consume the pre-subscribed initial stream rather than calling
+        // `handler.stream_events()` here. The initial stream was subscribed
+        // in `Workflow::run_with_event_and_session_refs` BEFORE the event
+        // loop was spawned, so it catches events emitted by the very first
+        // step — a fresh `stream_events()` subscription at this point would
+        // race against the event loop and miss them.
+        let stream = handler
+            .take_initial_stream()
+            .expect("WorkflowHandler must expose a pre-subscribed initial stream");
         let session_refs = handler.session_refs();
         Self {
             inner: Arc::new(Mutex::new(Some(handler))),

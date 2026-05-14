@@ -61,6 +61,10 @@ type StreamCallbackTsfn =
 /// handler.streamEvents((event) => console.log(event));
 /// const result = await handler.result();
 /// ```
+type PinnedEventStream = std::pin::Pin<
+    Box<dyn tokio_stream::Stream<Item = Box<dyn blazen_events::AnyEvent>> + Send + Unpin>,
+>;
+
 #[napi(js_name = "WorkflowHandler")]
 pub struct JsWorkflowHandler {
     /// The inner handler is wrapped in `Arc<Mutex<Option<...>>>` because:
@@ -69,6 +73,11 @@ pub struct JsWorkflowHandler {
     /// - `Mutex` provides interior mutability for `&self` methods.
     /// - `Option` allows `take()` since `result()` consumes the Rust handler.
     inner: Arc<Mutex<Option<blazen_core::WorkflowHandler>>>,
+    /// Pre-subscribed event stream captured at handler-wrap time so the
+    /// first `streamEvents()` call doesn't race against the event loop and
+    /// miss events published by the first step. `take()`d on first use;
+    /// subsequent `streamEvents()` calls fall back to a fresh subscription.
+    pre_stream: Arc<Mutex<Option<PinnedEventStream>>>,
 }
 
 #[napi]
@@ -238,9 +247,32 @@ impl JsWorkflowHandler {
     /// The `onEvent` callback receives each event as a plain object.
     /// This must be called **before** `result()` or `pause()`.
     ///
-    /// Events published before this call are not replayed.
+    /// The first call drains the pre-subscribed stream that was set up
+    /// before the event loop spawned, so the very first step's events
+    /// are captured. Subsequent calls subscribe a fresh stream that
+    /// starts from the current point in time.
     #[napi(js_name = "streamEvents")]
     pub async fn stream_events(&self, on_event: StreamCallbackTsfn) -> Result<()> {
+        // Prefer the pre-subscribed stream (captured in `new()` before the
+        // event loop spawn) for the first call; that's the only way events
+        // from the first step survive the wrap-and-subscribe race window.
+        let pre = self.pre_stream.lock().await.take();
+        let on_event = Arc::new(on_event);
+
+        if let Some(mut stream) = pre {
+            runtime::spawn(async move {
+                while let Some(event) = stream.next().await {
+                    if event.event_type_id() == "blazen::StreamEnd" {
+                        break;
+                    }
+                    let js_event = any_event_to_js_value(&*event);
+                    let _ = on_event.call(js_event, ThreadsafeFunctionCallMode::NonBlocking);
+                }
+            });
+            return Ok(());
+        }
+
+        // No pre-stream available (already consumed); subscribe fresh.
         let guard = self.inner.lock().await;
         let handler = guard.as_ref().ok_or_else(|| {
             napi::Error::new(
@@ -251,13 +283,8 @@ impl JsWorkflowHandler {
         })?;
 
         let mut stream = handler.stream_events();
-        let on_event = Arc::new(on_event);
-
-        // Spawn a forwarding task. The stream will end when the workflow
-        // completes or is paused (signaled by the StreamEnd sentinel).
         runtime::spawn(async move {
             while let Some(event) = stream.next().await {
-                // Stop on the stream-end sentinel (same as Python bindings).
                 if event.event_type_id() == "blazen::StreamEnd" {
                     break;
                 }
@@ -272,9 +299,25 @@ impl JsWorkflowHandler {
 
 impl JsWorkflowHandler {
     /// Create a new `JsWorkflowHandler` wrapping a Rust `WorkflowHandler`.
-    pub(crate) fn new(handler: blazen_core::WorkflowHandler) -> Self {
+    ///
+    /// Pulls the pre-subscribed initial stream out of the handler immediately
+    /// so the first `streamEvents()` callback sees events from the very first
+    /// step. The pre-subscription was set up in
+    /// `Workflow::run_with_event_and_session_refs` BEFORE the event loop was
+    /// spawned.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the handler does not expose a pre-subscribed initial stream,
+    /// which should be impossible on a handler returned directly from
+    /// `Workflow::run` and indicates a bug in the wiring otherwise.
+    pub(crate) fn new(mut handler: blazen_core::WorkflowHandler) -> Self {
+        let stream = handler
+            .take_initial_stream()
+            .expect("WorkflowHandler must expose a pre-subscribed initial stream");
         Self {
             inner: Arc::new(Mutex::new(Some(handler))),
+            pre_stream: Arc::new(Mutex::new(Some(Box::pin(stream)))),
         }
     }
 }

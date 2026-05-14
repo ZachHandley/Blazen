@@ -396,6 +396,69 @@ export declare class BedrockProvider {
 export type JsBedrockProvider = BedrockProvider
 
 /**
+ * Client handle for talking to a remote `BlazenPeerServer`.
+ *
+ * ```typescript
+ * const client = await BlazenPeerClient.connect("http://node-b:7443", "node-a");
+ * const resp = await client.invokeSubWorkflow({
+ *     workflowName: "summarize",
+ *     stepIds: ["fetch", "summarize"],
+ *     input: { url: "https://example.com" },
+ *     timeoutSecs: 60,
+ * });
+ * ```
+ */
+export declare class BlazenPeerClient {
+  /**
+   * Open a connection to a peer at `endpoint`.
+   *
+   * `endpoint` must be a valid gRPC URI, e.g.
+   * `http://node-b.local:7443`. `nodeId` identifies this client in
+   * trace logs.
+   */
+  static connect(endpoint: string, nodeId: string): Promise<BlazenPeerClient>
+  /** Invoke a sub-workflow on the connected peer. */
+  invokeSubWorkflow(request: JsSubWorkflowRequest): Promise<JsSubWorkflowResponse>
+  /**
+   * Dereference a remote session ref. Returns the raw bytes of the
+   * underlying value and the envelope version of the response.
+   */
+  derefSessionRef(request: JsDerefRequest): Promise<JsDerefResponse>
+  /**
+   * Release (drop) a remote session ref. Returns whether the ref was
+   * found and released on the origin node.
+   */
+  releaseSessionRef(request: JsReleaseRequest): Promise<JsReleaseResponse>
+}
+export type JsBlazenPeerClient = BlazenPeerClient
+
+/**
+ * A Blazen peer gRPC server.
+ *
+ * Each instance owns a stable `node_id` used to stamp
+ * `RemoteRefDescriptor::origin_node_id` on session refs handed out by
+ * this node.
+ *
+ * ```typescript
+ * const server = BlazenPeerServer.create("node-a");
+ * await server.serve("127.0.0.1:7443");
+ * ```
+ */
+export declare class BlazenPeerServer {
+  /** Create a new peer server with the given stable `nodeId`. */
+  static create(nodeId: string): BlazenPeerServer
+  /**
+   * Bind the gRPC server to `addr` and serve forever.
+   *
+   * `addr` must be a valid `SocketAddr`-style string such as
+   * `"127.0.0.1:7443"` or `"[::1]:7443"`. Consumes the server: a
+   * second call to `serve` on the same instance throws.
+   */
+  serve(addr: string): Promise<void>
+}
+export type JsBlazenPeerServer = BlazenPeerServer
+
+/**
  * Thin newtype around a byte vector. Mirrors
  * [`blazen_core::BytesWrapper`] and exists so that JS callers can hand
  * the engine a typed binary blob without going through `Buffer` / JSON
@@ -484,6 +547,111 @@ export declare class CacheMiddleware {
 }
 export type JsCacheMiddleware = CacheMiddleware
 
+/**
+ * A local candle embedding provider.
+ *
+ * ```javascript
+ * const provider = await CandleEmbedProvider.create({
+ *   modelId: "BAAI/bge-small-en-v1.5",
+ * });
+ * const vectors = await provider.embed(["hello", "world"]);
+ * console.log(vectors.length); // 2
+ * ```
+ */
+export declare class CandleEmbedProvider {
+  /**
+   * Create a new candle embedding provider.
+   *
+   * This is async because candle may download model weights from
+   * `HuggingFace` on first use.
+   */
+  static create(options?: JsCandleEmbedOptions | undefined | null): Promise<CandleEmbedProvider>
+  /** Get the model ID. */
+  get modelId(): string
+  /** Get the dimensionality of the produced embedding vectors. */
+  get dimensions(): number
+  /**
+   * Embed one or more texts.
+   *
+   * Returns a list of embedding vectors (one per input text). JS
+   * `Number` is `f64`, so vectors are widened from `f32` for transport.
+   */
+  embed(texts: Array<string>): Promise<Array<Array<number>>>
+  /** Explicitly load the model weights into memory / `VRAM`. */
+  load(): Promise<void>
+  /** Drop the loaded model and free its memory / `VRAM`. */
+  unload(): Promise<void>
+  /** Whether the model is currently loaded. */
+  isLoaded(): Promise<boolean>
+}
+export type JsCandleEmbedProvider = CandleEmbedProvider
+
+/**
+ * Result from a non-streaming candle inference call.
+ *
+ * Mirrors the underlying `blazen_llm::CandleInferenceResult` struct and
+ * exposes the generated text alongside token-count and timing metadata.
+ *
+ * ```javascript
+ * const result = new CandleInferenceResult("hello", 12, 4, 0.42);
+ * console.log(result.content, result.promptTokens, result.completionTokens);
+ * ```
+ */
+export declare class CandleInferenceResult {
+  /**
+   * Construct a new `CandleInferenceResult`.
+   *
+   * `promptTokens` and `completionTokens` are token counts; pass `0`
+   * when unknown. `totalTimeSecs` is the wall-clock duration of the
+   * inference in seconds.
+   */
+  constructor(content: string, promptTokens: number, completionTokens: number, totalTimeSecs: number)
+  /** The generated text content. */
+  get content(): string
+  /** Number of prompt tokens consumed. */
+  get promptTokens(): number
+  /** Number of completion tokens generated. */
+  get completionTokens(): number
+  /** Wall-clock time for the inference in seconds. */
+  get totalTimeSecs(): number
+}
+export type JsCandleInferenceResult = CandleInferenceResult
+
+/**
+ * A local candle LLM provider with completion and streaming.
+ *
+ * ```javascript
+ * const provider = CandleLlmProvider.create({
+ *   modelId: "meta-llama/Llama-3.2-1B",
+ * });
+ * await provider.load();
+ * const response = await provider.complete([
+ *   ChatMessage.user("What is 2+2?"),
+ * ]);
+ * ```
+ */
+export declare class CandleLlmProvider {
+  /** Create a new candle LLM provider. */
+  static create(options?: JsCandleLlmOptions | undefined | null): CandleLlmProvider
+  /** Get the model ID. */
+  get modelId(): string
+  /** Perform a chat completion. */
+  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  /** Perform a chat completion with additional options. */
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  /** Stream a chat completion. */
+  stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
+  /** Explicitly load the model weights into memory / `VRAM`. */
+  load(): Promise<void>
+  /** Drop the loaded model and free its memory / `VRAM`. */
+  unload(): Promise<void>
+  /** Whether the model is currently loaded in memory / `VRAM`. */
+  isLoaded(): Promise<boolean>
+  /** Approximate `VRAM` footprint in bytes. */
+  vramBytes(): Promise<number | null>
+}
+export type JsCandleLlmProvider = CandleLlmProvider
+
 /** A single message in a chat conversation. */
 export declare class ChatMessage {
   /**
@@ -552,6 +720,26 @@ export declare class ChatMessage {
 export type JsChatMessage = ChatMessage
 
 /**
+ * A single chat message for the local mistral.rs / llama.cpp inference path,
+ * optionally carrying image attachments for vision-capable models.
+ */
+export declare class ChatMessageInput {
+  /** Build a chat message with text and optional image attachments. */
+  constructor(role: ChatRole, text: string, images?: Array<InferenceImage> | undefined | null)
+  /** Build a text-only chat message. */
+  static fromText(role: ChatRole, text: string): ChatMessageInput
+  /** The role of the message author. */
+  get role(): ChatRole
+  /** The textual content of the message. */
+  get text(): string
+  /** The image attachments on this message. */
+  get images(): Array<InferenceImage>
+  /** Whether this message has any image attachments. */
+  get hasImages(): boolean
+}
+export type JsChatMessageInput = ChatMessageInput
+
+/**
  * A token-windowed conversation memory.
  *
  * Holds a sequence of `ChatMessage` objects and automatically evicts the
@@ -607,6 +795,47 @@ export declare class ChatWindow {
   get length(): number
 }
 export type JsChatWindow = ChatWindow
+
+/**
+ * Base class for custom checkpoint storage backends.
+ *
+ * Extend and override all methods to implement a custom backend
+ * (e.g. `PostgreSQL`, `SQLite`, `S3`).
+ *
+ * ```javascript
+ * class PostgresStore extends CheckpointStore {
+ *     async save(checkpoint) { /* ... *\/ }
+ *     async load(runId) { /* ... *\/ }
+ *     async list() { /* ... *\/ }
+ *     async delete(runId) { /* ... *\/ }
+ * }
+ * ```
+ */
+export declare class CheckpointStore {
+  /** Create a new checkpoint store base instance. */
+  constructor()
+  /**
+   * Persist a checkpoint. If a checkpoint with the same run ID already
+   * exists it is overwritten. Subclasses **must** override this method.
+   */
+  save(checkpoint: WorkflowCheckpoint): Promise<void>
+  /**
+   * Load a checkpoint by its run ID. Returns `null` if no checkpoint
+   * exists for the given run ID. Subclasses **must** override this method.
+   */
+  load(runId: string): Promise<WorkflowCheckpoint | null>
+  /**
+   * List all stored checkpoints, ordered by timestamp descending
+   * (most recent first). Subclasses **must** override this method.
+   */
+  list(): Promise<Array<WorkflowCheckpoint>>
+  /**
+   * Delete the checkpoint for the given run ID. Subclasses **must**
+   * override this method.
+   */
+  delete(runId: string): Promise<void>
+}
+export type JsCheckpointStore = CheckpointStore
 
 /**
  * Class wrapper around [`Citation`].
@@ -908,6 +1137,18 @@ export declare class CompletionModel {
    */
   vramBytes(): Promise<number | null>
   /**
+   * Create a local mistral.rs completion model.
+   *
+   * Runs LLM inference entirely on-device -- no API key required.
+   *
+   * ```javascript
+   * const model = CompletionModel.mistralrs({
+   *   modelId: "mistralai/Mistral-7B-Instruct-v0.3",
+   * });
+   * ```
+   */
+  static mistralrs(options: JsMistralRsOptions): CompletionModel
+  /**
    * Wrap this model in a [`TracingCompletionModel`] that emits a
    * structured `tracing` span around every `complete` and `stream`
    * call.
@@ -1066,6 +1307,11 @@ export declare class ContentStore {
    * implementations on most stores are no-ops.
    */
   delete(handle: JsContentHandle): Promise<void>
+  /**
+   * Build a filesystem-backed store rooted at `root`. The directory is
+   * created if it doesn't yet exist.
+   */
+  static localFile(root: string): ContentStore
 }
 export type JsContentStore = ContentStore
 
@@ -1395,6 +1641,29 @@ export declare class DeepSeekProvider {
 export type JsDeepSeekProvider = DeepSeekProvider
 
 /**
+ * A local diffusion-rs image generation provider.
+ *
+ * ```javascript
+ * const provider = DiffusionProvider.create({
+ *   modelId: "stabilityai/stable-diffusion-2-1",
+ * });
+ * ```
+ */
+export declare class DiffusionProvider {
+  /** Create a new diffusion provider. */
+  static create(options?: JsDiffusionOptions | undefined | null): DiffusionProvider
+  /** The resolved width (user-specified or default 512). */
+  get width(): number
+  /** The resolved height (user-specified or default 512). */
+  get height(): number
+  /** The resolved number of inference steps (user-specified or default 20). */
+  get numInferenceSteps(): number
+  /** The resolved guidance scale (user-specified or default 7.5). */
+  get guidanceScale(): number
+}
+export type JsDiffusionProvider = DiffusionProvider
+
+/**
  * A type-erased event that carries its type name and JSON payload.
  *
  * Mirrors [`blazen_events::DynamicEvent`]. Use this when you want to
@@ -1487,6 +1756,17 @@ export declare class EmbeddingModel {
   get dimensions(): number
   /** Embed one or more texts, returning one vector per input text. */
   embed(texts: Array<string>): Promise<JsEmbeddingResponse>
+  /**
+   * Create a local embedding model (ONNX, no API key).
+   *
+   * Defaults to `BAAI/bge-small-en-v1.5` (384 dimensions).
+   *
+   * ```javascript
+   * const model = EmbeddingModel.embed();
+   * const response = await model.embed(["Hello", "World"]);
+   * ```
+   */
+  static embed(options?: JsEmbedOptions | undefined | null): EmbeddingModel
 }
 export type JsEmbeddingModel = EmbeddingModel
 
@@ -1499,6 +1779,41 @@ export declare class EmbeddingProviderDefaults {
   constructor(base?: BaseProviderDefaults | undefined | null)
 }
 export type JsEmbeddingProviderDefaults = EmbeddingProviderDefaults
+
+/**
+ * A local embedding provider.
+ *
+ * Reuses [`JsEmbedOptions`] from [`crate::types::embedding`] so the same
+ * option type drives both this standalone provider and the
+ * [`crate::types::embedding::JsEmbeddingModel::embed_local`] factory.
+ *
+ * ```javascript
+ * const provider = EmbedProvider.create();
+ * const vectors = await provider.embed(["hello", "world"]);
+ * console.log(vectors.length); // 2
+ * ```
+ */
+export declare class EmbedProvider {
+  /**
+   * Create a new local embedding provider.
+   *
+   * Defaults to `BAAI/bge-small-en-v1.5` (384 dimensions) on the
+   * platform's default ONNX backend.
+   */
+  static create(options?: JsEmbedOptions | undefined | null): EmbedProvider
+  /** Get the model identifier (e.g. `"Xenova/bge-small-en-v1.5"`). */
+  get modelId(): string
+  /** Get the dimensionality of the produced embedding vectors. */
+  get dimensions(): number
+  /**
+   * Embed one or more texts.
+   *
+   * Returns a list of embedding vectors (one per input text). JS
+   * `Number` is `f64`, so vectors are widened from `f32` for transport.
+   */
+  embed(texts: Array<string>): Promise<Array<Array<number>>>
+}
+export type JsEmbedProvider = EmbedProvider
 
 /**
  * Heuristic token counter that uses a characters-per-token ratio.
@@ -1675,6 +1990,44 @@ export declare class FalProvider {
   complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
 }
 export type JsFalProvider = FalProvider
+
+/**
+ * A local fastembed (ONNX Runtime) embedding model.
+ *
+ * Loads the same fastembed model catalog that backs
+ * [`crate::providers::JsEmbedProvider`] on non-musl targets, but
+ * exposes the typed standalone class for callers that want explicit
+ * feature gating or per-instance options.
+ *
+ * ```javascript
+ * const model = FastEmbedModel.create({ modelName: "BGESmallENV15" });
+ * const response = await model.embed(["hello", "world"]);
+ * console.log(response.embeddings.length); // 2
+ * ```
+ */
+export declare class FastEmbedModel {
+  /**
+   * Create a new fastembed model.
+   *
+   * This is a synchronous factory even though the underlying
+   * constructor may download model weights from Hugging Face on
+   * first use -- fastembed handles the runtime bridging
+   * internally.
+   */
+  static create(options?: JsFastEmbedOptions | undefined | null): FastEmbedModel
+  /** Get the Hugging Face model id this instance was loaded from. */
+  get modelId(): string
+  /** Get the dimensionality of the produced embedding vectors. */
+  get dimensions(): number
+  /**
+   * Embed one or more texts.
+   *
+   * Returns a [`JsFastEmbedResponse`] carrying one vector per input
+   * text and the model identifier that produced them.
+   */
+  embed(texts: Array<string>): Promise<JsFastEmbedResponse>
+}
+export type JsFastEmbedModel = FastEmbedModel
 
 /** A Fireworks AI chat completion provider. */
 export declare class FireworksProvider {
@@ -1977,6 +2330,126 @@ export declare class ImageUpscaleProviderDefaults {
 }
 export type JsImageUpscaleProviderDefaults = ImageUpscaleProviderDefaults
 
+/** A single chunk from a streaming local inference call. */
+export declare class InferenceChunk {
+  /** Incremental text content for this chunk, if any. */
+  get delta(): string | null
+  /** Incremental reasoning content for this chunk, if any. */
+  get reasoningDelta(): string | null
+  /** Tool calls completed in this chunk. */
+  get toolCalls(): Array<InferenceToolCall>
+  /** Present in the final chunk when generation stops. */
+  get finishReason(): string | null
+}
+export type JsInferenceChunk = InferenceChunk
+
+/**
+ * Async stream of [`InferenceChunk`] values.
+ *
+ * Drive the stream by repeatedly awaiting [`InferenceChunkStream.next`].
+ * Each call returns the next chunk, or `null` once the stream is exhausted.
+ * Errors from the underlying engine are surfaced as awaited rejections.
+ *
+ * ```javascript
+ * const stream = await provider.inferStream(messages);
+ * while (true) {
+ *   const chunk = await stream.next();
+ *   if (chunk === null) break;
+ *   process.stdout.write(chunk.delta ?? "");
+ * }
+ * ```
+ */
+export declare class InferenceChunkStream {
+  /**
+   * Pull the next chunk from the stream. Returns `null` once the stream
+   * is exhausted. Any engine error is raised as a thrown exception.
+   *
+   * # Errors
+   *
+   * Returns a JS error if the underlying mistral.rs engine reports an
+   * inference failure on this chunk.
+   */
+  next(): Promise<InferenceChunk | null>
+}
+export type JsInferenceChunkStream = InferenceChunkStream
+
+/** An image payload attached to a chat message. */
+export declare class InferenceImage {
+  /** Build an image from raw encoded bytes (PNG/JPEG/WebP). */
+  static fromBytes(bytes: Buffer): InferenceImage
+  /** Build an image from a local file path. */
+  static fromPath(path: string): InferenceImage
+  /** Build an image from an existing [`InferenceImageSource`]. */
+  static fromSource(source: InferenceImageSource): InferenceImage
+  /** The image source. */
+  get source(): InferenceImageSource
+}
+export type JsInferenceImage = InferenceImage
+
+/**
+ * Source of an image payload attached to a chat message.
+ *
+ * Construct with [`InferenceImageSource.bytes`] or
+ * [`InferenceImageSource.path`]. Inspect with the `kind` getter
+ * (`"bytes"` or `"path"`) and the appropriate value getter.
+ */
+export declare class InferenceImageSource {
+  /** Build an image source from raw encoded image bytes (PNG/JPEG/WebP). */
+  static bytes(data: Buffer): InferenceImageSource
+  /** Build an image source from a local file path. */
+  static path(path: string): InferenceImageSource
+  /** Discriminant: `"bytes"` or `"path"`. */
+  get kind(): string
+  /** The raw image bytes, if this source is a `bytes` variant. */
+  get data(): Buffer | null
+  /** The file path, if this source is a `path` variant. */
+  get filePath(): string | null
+}
+export type JsInferenceImageSource = InferenceImageSource
+
+/** Result of a non-streaming local inference call. */
+export declare class InferenceResult {
+  /** The generated text content, if any. */
+  get content(): string | null
+  /** Reasoning / chain-of-thought content, if the model exposes it. */
+  get reasoningContent(): string | null
+  /** Tool calls requested by the model. */
+  get toolCalls(): Array<InferenceToolCall>
+  /** Why the model stopped generating. */
+  get finishReason(): string
+  /** The model identifier that produced this result. */
+  get model(): string
+  /** Token usage statistics for this call. */
+  get usage(): InferenceUsage
+}
+export type JsInferenceResult = InferenceResult
+
+/** A tool call requested by the model during local inference. */
+export declare class InferenceToolCall {
+  /** Build a tool call explicitly. Mainly useful for tests / replays. */
+  constructor(id: string, name: string, arguments: string)
+  /** Provider-assigned call identifier. */
+  get id(): string
+  /** Function name to invoke. */
+  get name(): string
+  /** JSON-encoded arguments string. */
+  get arguments(): string
+}
+export type JsInferenceToolCall = InferenceToolCall
+
+/** Token usage statistics from a local inference call. */
+export declare class InferenceUsage {
+  /** Number of prompt tokens consumed. */
+  get promptTokens(): number
+  /** Number of completion tokens generated. */
+  get completionTokens(): number
+  /** Total tokens (prompt + completion). */
+  get totalTokens(): number
+  /** Total wall-clock inference time in seconds. */
+  get totalTimeSec(): number
+}
+export type JsInferenceUsage = InferenceUsage
+
 /**
  * An in-memory backend for the memory store.
  *
@@ -2038,6 +2511,28 @@ export declare class JobHandle {
 export type JsJobHandleClass = JobHandle
 
 /**
+ * A JSONL file-backed backend for the memory store.
+ *
+ * Loads entries from the file on creation, appends new entries, and rewrites
+ * on updates/deletes.
+ *
+ * ```javascript
+ * const backend = await JsonlBackend.create("./memory.jsonl");
+ * const memory = new Memory(embedder, backend);
+ * ```
+ */
+export declare class JsonlBackend {
+  /**
+   * Create a JSONL backend at the given file path.
+   *
+   * If the file exists, its contents are loaded. Otherwise an empty store
+   * is created and the file is written on the first insert.
+   */
+  static create(path: string): Promise<JsonlBackend>
+}
+export type JsJsonlBackend = JsonlBackend
+
+/**
  * Configuration for the Langfuse exporter.
  *
  * Wraps [`blazen_telemetry::LangfuseConfig`]. Construct with the public and
@@ -2070,6 +2565,130 @@ export declare class LangfuseConfig {
   get flushIntervalMs(): number
 }
 export type JsLangfuseConfig = LangfuseConfig
+
+/**
+ * A single chat message for input to the llama.cpp provider.
+ *
+ * ```javascript
+ * const msg = new LlamaCppChatMessageInput(LlamaCppChatRole.User, "Hello");
+ * ```
+ */
+export declare class LlamaCppChatMessageInput {
+  /** Build a chat message from a role and text body. */
+  constructor(role: LlamaCppChatRole, text: string)
+  /** Who produced this message. */
+  get role(): LlamaCppChatRole
+  /** The textual content of the message. */
+  get text(): string
+}
+export type JsLlamaCppChatMessageInput = LlamaCppChatMessageInput
+
+/** A single chunk from a streaming llama.cpp inference call. */
+export declare class LlamaCppInferenceChunk {
+  /** Incremental text content, if any. */
+  get delta(): string | null
+  /**
+   * Present in the final chunk when generation stops (e.g. `"stop"`,
+   * `"length"`).
+   */
+  get finishReason(): string | null
+}
+export type JsLlamaCppInferenceChunk = LlamaCppInferenceChunk
+
+/**
+ * An async iterator over llama.cpp streaming inference chunks.
+ *
+ * Wraps the underlying `Pin<Box<dyn Stream<Item = Result<...>> + Send>>`
+ * behind a `tokio::sync::Mutex` so it can be polled from JavaScript via
+ * `next()`. Each successful poll yields the next `LlamaCppInferenceChunk`
+ * (or `null` when the stream ends); a stream-level error is thrown.
+ *
+ * ```javascript
+ * for (let chunk = await stream.next(); chunk !== null; chunk = await stream.next()) {
+ *   process.stdout.write(chunk.delta ?? "");
+ * }
+ * ```
+ */
+export declare class LlamaCppInferenceChunkStream {
+  /**
+   * Pull the next chunk from the stream.
+   *
+   * Returns `null` once the stream is exhausted.
+   *
+   * # Errors
+   *
+   * Returns a JavaScript error if the underlying llama.cpp inference fails
+   * partway through generation (e.g. tokenization failure or a context
+   * decode error).
+   */
+  next(): Promise<LlamaCppInferenceChunk | null>
+}
+export type JsLlamaCppInferenceChunkStream = LlamaCppInferenceChunkStream
+
+/** Result of a single non-streaming llama.cpp inference call. */
+export declare class LlamaCppInferenceResult {
+  /** The generated text content, if any. */
+  get content(): string | null
+  /** Why the model stopped generating (e.g. `"stop"`, `"length"`). */
+  get finishReason(): string
+  /** The model identifier that produced this result. */
+  get model(): string
+  /** Token usage statistics. */
+  get usage(): LlamaCppInferenceUsage
+}
+export type JsLlamaCppInferenceResult = LlamaCppInferenceResult
+
+/** Token usage statistics from a llama.cpp inference call. */
+export declare class LlamaCppInferenceUsage {
+  /** Tokens in the prompt. */
+  get promptTokens(): number
+  /** Tokens generated. */
+  get completionTokens(): number
+  /** Total tokens (prompt + completion). */
+  get totalTokens(): number
+  /** Total wall-clock inference time in seconds. */
+  get totalTimeSec(): number
+}
+export type JsLlamaCppInferenceUsage = LlamaCppInferenceUsage
+
+/**
+ * A local llama.cpp LLM provider with completion and streaming.
+ *
+ * ```javascript
+ * const provider = await LlamaCppProvider.create({
+ *   modelPath: "/models/llama.gguf",
+ * });
+ * const response = await provider.complete([
+ *   ChatMessage.user("What is 2+2?"),
+ * ]);
+ * ```
+ */
+export declare class LlamaCppProvider {
+  /**
+   * Create a new llama.cpp provider.
+   *
+   * This is async because llama.cpp may download the GGUF model file
+   * from `HuggingFace` on first use.
+   */
+  static create(options?: JsLlamaCppOptions | undefined | null): Promise<LlamaCppProvider>
+  /** Get the model ID. */
+  get modelId(): string
+  /** Perform a chat completion. */
+  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  /** Perform a chat completion with additional options. */
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  /** Stream a chat completion. */
+  stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
+  /** Explicitly load the model weights into memory / `VRAM`. */
+  load(): Promise<void>
+  /** Drop the loaded model and free its memory / `VRAM`. */
+  unload(): Promise<void>
+  /** Whether the model is currently loaded in memory / `VRAM`. */
+  isLoaded(): Promise<boolean>
+  /** Approximate `VRAM` footprint in bytes. */
+  vramBytes(): Promise<number | null>
+}
+export type JsLlamaCppProvider = LlamaCppProvider
 
 /**
  * Base class for in-process model providers that load weights into
@@ -2194,6 +2813,14 @@ export declare class Memory {
   delete(id: string): Promise<boolean>
   /** Return the number of entries in the store. */
   count(): Promise<number>
+  /** Create a memory store with an embedding model and a `JsonlBackend`. */
+  static withJsonl(embedder: EmbeddingModel, backend: JsonlBackend): Memory
+  /** Create a memory store with an embedding model and a `ValkeyBackend`. */
+  static withValkey(embedder: EmbeddingModel, backend: ValkeyBackend): Memory
+  /** Create a memory store in local-only mode with a `JsonlBackend`. */
+  static localJsonl(backend: JsonlBackend): Memory
+  /** Create a memory store in local-only mode with a `ValkeyBackend`. */
+  static localValkey(backend: ValkeyBackend): Memory
   /** Create a memory store with an embedding model and an `UpstashBackend`. */
   static withUpstash(embedder: EmbeddingModel, backend: UpstashBackend): Memory
   /** Create a memory store in local-only mode with an `UpstashBackend`. */
@@ -2403,6 +3030,98 @@ export declare class MistralProvider {
   streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
 }
 export type JsMistralProvider = MistralProvider
+
+/**
+ * A local mistral.rs LLM provider with completion and streaming.
+ *
+ * ```javascript
+ * const provider = MistralRsProvider.create({
+ *   modelId: "mistralai/Mistral-7B-Instruct-v0.3",
+ * });
+ * await provider.load();
+ * const response = await provider.complete([
+ *   ChatMessage.user("What is 2+2?"),
+ * ]);
+ * ```
+ */
+export declare class MistralRsProvider {
+  /** Create a new mistral.rs provider. */
+  static create(options: JsMistralRsOptions): MistralRsProvider
+  /** Get the model ID. */
+  get modelId(): string
+  /** Perform a chat completion. */
+  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  /** Perform a chat completion with additional options. */
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  /** Stream a chat completion. */
+  stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
+  /** Explicitly load the model weights into memory / `VRAM`. */
+  load(): Promise<void>
+  /** Drop the loaded model and free its memory / `VRAM`. */
+  unload(): Promise<void>
+  /** Whether the model is currently loaded in memory / `VRAM`. */
+  isLoaded(): Promise<boolean>
+  /** Approximate `VRAM` footprint in bytes. */
+  vramBytes(): Promise<number | null>
+}
+export type JsMistralRsProvider = MistralRsProvider
+
+/**
+ * Local cache for ML models downloaded from `HuggingFace` Hub.
+ *
+ * Models are stored under `{cacheDir}/{repoId}/{filename}`. Files are
+ * downloaded only once; subsequent calls return the cached path immediately.
+ *
+ * ```javascript
+ * import { ModelCache } from 'blazen';
+ *
+ * const cache = ModelCache.create();
+ * if (!cache.isCached('bert-base-uncased', 'config.json')) {
+ *   await cache.download('bert-base-uncased', 'config.json', (downloaded, total) => {
+ *     if (total !== null) {
+ *       console.log(`${(downloaded / total * 100).toFixed(1)}%`);
+ *     }
+ *   });
+ * }
+ * ```
+ */
+export declare class ModelCache {
+  /**
+   * Create a cache in the default location.
+   *
+   * Uses `$BLAZEN_CACHE_DIR/models/` if set, otherwise falls back to
+   * `~/.cache/blazen/models/`.
+   */
+  static create(): ModelCache
+  /**
+   * Create a cache rooted at a specific directory.
+   *
+   * The directory does not need to exist yet; it will be created on the
+   * first download.
+   */
+  static withDir(path: string): ModelCache
+  /** The root cache directory path as a string. */
+  get cacheDir(): string
+  /** Check if a file is already present in the cache (without downloading). */
+  isCached(repo: string, file: string): boolean
+  /**
+   * Download a file from `HuggingFace` Hub if it is not already cached.
+   *
+   * Returns the local filesystem path to the cached file.
+   *
+   * The optional `onProgress` argument accepts either:
+   * - A raw callback `(downloaded: number, total: number | null) => void`
+   *   for a quick inline progress hook, or
+   * - A [`JsProgressCallback`] subclass instance (recommended for stateful
+   *   reporters), whose `onProgress(downloaded, total)` method receives
+   *   byte counts as `bigint` values.
+   *
+   * `total` is `null` when the server does not report the file size up
+   * front.
+   */
+  download(repo: string, file: string, onProgress?: ProgressTsfn | object | undefined | null): Promise<string>
+}
+export type JsModelCache = ModelCache
 
 /**
  * VRAM budget-aware model manager with LRU eviction.
@@ -2755,6 +3474,48 @@ export declare class ParallelSubWorkflowsStep {
 }
 export type JsParallelSubWorkflowsStep = ParallelSubWorkflowsStep
 
+/**
+ * Abstract base class for custom peer-client transports.
+ *
+ * Mirrors [`blazen_core::distributed::PeerClient`]. Subclass and
+ * override `invokeSubWorkflow`, `derefSessionRef`, and
+ * `releaseSessionRef` to plug a JS-side transport into Blazen's
+ * distributed-execution surface. The canonical gRPC implementation
+ * lives in `BlazenPeerClient`
+ * ([`crate::peer::JsBlazenPeerClient`]); this base exists for callers
+ * who want to swap in a different transport (HTTP, NATS, an in-process
+ * mock for tests, etc.) without touching the Rust core.
+ *
+ * ```javascript
+ * class MyTransport extends PeerClient {
+ *   async invokeSubWorkflow(request) { /* ... *\/ }
+ *   async derefSessionRef(refUuid) { /* ... *\/ }
+ *   async releaseSessionRef(refUuid) { /* ... *\/ }
+ * }
+ * ```
+ */
+export declare class PeerClient {
+  /** Create a new peer-client base instance. */
+  constructor()
+  /**
+   * Invoke a sub-workflow on the remote peer. Subclasses **must**
+   * override this method.
+   */
+  invokeSubWorkflow(request: JsRemoteWorkflowRequest): Promise<JsRemoteWorkflowResponse>
+  /**
+   * Dereference a remote session ref by UUID. Returns the raw
+   * payload bytes. Subclasses **must** override this method.
+   */
+  derefSessionRef(refUuid: string): Promise<Buffer>
+  /**
+   * Release (drop) a remote session ref on the origin node.
+   * Returns `true` when the ref was found and dropped, `false` when
+   * it was already gone. Subclasses **must** override this method.
+   */
+  releaseSessionRef(refUuid: string): Promise<boolean>
+}
+export type JsPeerClient = PeerClient
+
 /** A Perplexity chat completion provider. */
 export declare class PerplexityProvider {
   /** Create a new Perplexity provider. */
@@ -2918,6 +3679,74 @@ export declare class PipelineSnapshot {
   static fromJson(json: string): PipelineSnapshot
 }
 export type JsPipelineSnapshot = PipelineSnapshot
+
+/**
+ * A local Piper TTS provider.
+ *
+ * ```javascript
+ * const provider = PiperProvider.create({
+ *   modelId: "en_US-amy-medium",
+ * });
+ * ```
+ */
+export declare class PiperProvider {
+  /** Create a new Piper provider. */
+  static create(options?: JsPiperOptions | undefined | null): PiperProvider
+  /** Get the configured voice model identifier, if any. */
+  get modelId(): string | null
+  /**
+   * Whether the engine feature is compiled in. When `false`,
+   * synthesis methods will return errors.
+   */
+  get engineAvailable(): boolean
+}
+export type JsPiperProvider = PiperProvider
+
+/**
+ * Subclassable base for download progress callbacks.
+ *
+ * Extend this class and override `onProgress(downloaded, total)` to receive
+ * progress updates from [`JsModelCache::download`]. Byte counts are `bigint`
+ * values so large downloads (multi-gigabyte model files) keep full precision.
+ *
+ * `total` is `null` when the server does not report `Content-Length` up
+ * front (e.g. streaming responses without a known size).
+ *
+ * ```javascript
+ * import { ModelCache, ProgressCallback } from 'blazen';
+ *
+ * class LoggingProgress extends ProgressCallback {
+ *     onProgress(downloaded, total) {
+ *         if (total !== null) {
+ *             const pct = Number(downloaded * 100n / total);
+ *             console.log(`${pct}%`);
+ *         } else {
+ *             console.log(`${downloaded} bytes`);
+ *         }
+ *     }
+ * }
+ *
+ * const cache = ModelCache.create();
+ * await cache.download('bert-base-uncased', 'config.json', new LoggingProgress());
+ * ```
+ */
+export declare class ProgressCallback {
+  /**
+   * Create a new `ProgressCallback` base instance.
+   *
+   * Subclasses should call `super()` and override `onProgress`.
+   */
+  constructor()
+  /**
+   * Receive a progress update. Subclasses **must** override this method.
+   *
+   * Calling the base implementation always throws so that forgetting to
+   * override is caught loudly rather than silently swallowing progress
+   * events.
+   */
+  onProgress(downloaded: bigint, total?: bigint | undefined | null): void
+}
+export type JsProgressCallback = ProgressCallback
 
 /**
  * A serializable collection of prompt templates.
@@ -3095,6 +3924,40 @@ export declare class ReasoningTrace {
 export type JsReasoningTraceClass = ReasoningTrace
 
 /**
+ * An embedded, file-backed checkpoint store powered by `redb`.
+ *
+ * ```javascript
+ * const store = await RedbCheckpointStore.create("./workflow.db");
+ * await store.save(checkpoint);
+ * ```
+ */
+export declare class RedbCheckpointStore {
+  /**
+   * Create a redb-backed checkpoint store at the given file path.
+   *
+   * The file is created if it does not exist.
+   */
+  static create(path: string): RedbCheckpointStore
+  /** Create an in-memory redb-backed checkpoint store (useful for tests). */
+  static inMemory(): RedbCheckpointStore
+  /**
+   * Persist a checkpoint. If a checkpoint with the same run ID already
+   * exists it is overwritten.
+   */
+  save(checkpoint: WorkflowCheckpoint): Promise<void>
+  /** Load a checkpoint by its run ID. Returns `null` if not found. */
+  load(runId: string): Promise<WorkflowCheckpoint | null>
+  /**
+   * List all stored checkpoints, ordered by timestamp descending
+   * (most recent first).
+   */
+  list(): Promise<Array<WorkflowCheckpoint>>
+  /** Delete the checkpoint for the given run ID. */
+  delete(runId: string): Promise<void>
+}
+export type JsRedbCheckpointStore = RedbCheckpointStore
+
+/**
  * Opaque UUID handle for a session-ref entry. Mirrors
  * [`blazen_core::session_ref::RegistryKey`].
  */
@@ -3181,11 +4044,15 @@ export type JsRetryCompletionModel = RetryCompletionModel
 export declare class RetryMemoryBackend {
   /** Wrap an `InMemoryBackend` with retry-on-transient-error behaviour. */
   static wrapInMemory(backend: InMemoryBackend, config?: JsRetryConfig | undefined | null): RetryMemoryBackend
+  /** Wrap a `JsonlBackend` with retry-on-transient-error behaviour. */
+  static wrapJsonl(backend: JsonlBackend, config?: JsRetryConfig | undefined | null): RetryMemoryBackend
+  /** Wrap a `ValkeyBackend` with retry-on-transient-error behaviour. */
+  static wrapValkey(backend: ValkeyBackend, config?: JsRetryConfig | undefined | null): RetryMemoryBackend
   /** Wrap an `UpstashBackend` with retry-on-transient-error behaviour. */
   static wrapUpstash(backend: UpstashBackend, config?: JsRetryConfig | undefined | null): RetryMemoryBackend
   /**
-   * Generic factory accepting either of the wasi-compatible backends.
-   * Useful when the caller doesn't statically know which backend is in hand.
+   * Generic factory accepting any of the four concrete backends. Useful
+   * when the caller doesn't statically know which backend is in hand.
    */
   static wrap(backend: AnyBackend, config?: JsRetryConfig | undefined | null): RetryMemoryBackend
 }
@@ -3913,6 +4780,43 @@ export declare class ToolDefinition {
 export type JsToolDefinitionClass = ToolDefinition
 
 /**
+ * A local tract (pure-Rust ONNX) embedding model.
+ *
+ * Loads the same fastembed model catalog via tract-onnx instead of
+ * the ONNX Runtime native library. This is the musl-friendly
+ * equivalent of [`crate::providers::JsFastEmbedModel`].
+ *
+ * ```javascript
+ * const model = TractEmbedModel.create({ modelName: "BGESmallENV15" });
+ * const response = await model.embed(["hello", "world"]);
+ * console.log(response.embeddings.length); // 2
+ * ```
+ */
+export declare class TractEmbedModel {
+  /**
+   * Create a new tract embedding model.
+   *
+   * This is a synchronous factory even though the underlying
+   * constructor may download model weights from Hugging Face on
+   * first use -- tract's loader handles the runtime bridging
+   * internally.
+   */
+  static create(options?: JsTractOptions | undefined | null): TractEmbedModel
+  /** Get the Hugging Face model id this instance was loaded from. */
+  get modelId(): string
+  /** Get the dimensionality of the produced embedding vectors. */
+  get dimensions(): number
+  /**
+   * Embed one or more texts.
+   *
+   * Returns a [`JsTractResponse`] carrying one L2-normalized vector
+   * per input text and the model identifier that produced them.
+   */
+  embed(texts: Array<string>): Promise<JsTractResponse>
+}
+export type JsTractEmbedModel = TractEmbedModel
+
+/**
  * An audio transcription provider.
  *
  * Use the static factory methods to create a transcriber for a specific
@@ -3948,6 +4852,27 @@ export declare class Transcription {
    * path (whisper.cpp does not fetch remote URLs).
    */
   transcribe(request: JsTranscriptionRequest): Promise<JsTranscriptionResult>
+  /**
+   * Create a local whisper.cpp transcription provider.
+   *
+   * Runs transcription entirely on-device using whisper.cpp. The first
+   * call downloads the GGML model (tens to hundreds of MB depending on
+   * the chosen variant) and caches it for subsequent runs. No API key
+   * is required.
+   *
+   * whisper.cpp currently expects **16-bit PCM mono WAV at 16 kHz**.
+   * Remote URLs are not supported -- pass a local file path in
+   * `request.audioUrl`.
+   *
+   * ```javascript
+   * const transcriber = await Transcription.whispercpp({ model: "base" });
+   * const result = await transcriber.transcribe({
+   *   audioUrl: "/path/to/audio.wav",
+   * });
+   * console.log(result.text);
+   * ```
+   */
+  static whispercpp(options?: JsWhisperOptions | undefined | null): Promise<Transcription>
 }
 export type JsTranscription = Transcription
 
@@ -4123,6 +5048,62 @@ export declare class UsageRecordingEmbeddingModel {
 export type JsUsageRecordingEmbeddingModel = UsageRecordingEmbeddingModel
 
 /**
+ * A Valkey/Redis-backed backend for the memory store.
+ *
+ * ```javascript
+ * const backend = ValkeyBackend.create("redis://localhost:6379");
+ * const memory = new Memory(embedder, backend);
+ * ```
+ */
+export declare class ValkeyBackend {
+  /**
+   * Create a Valkey backend connected to the given Redis/Valkey URL.
+   *
+   * The URL should be in standard Redis format, e.g. `redis://localhost:6379`.
+   */
+  static create(url: string): ValkeyBackend
+}
+export type JsValkeyBackend = ValkeyBackend
+
+/**
+ * A ValKey/Redis-backed checkpoint store.
+ *
+ * ```javascript
+ * const store = await ValkeyCheckpointStore.create("redis://127.0.0.1/");
+ * await store.save(checkpoint);
+ * ```
+ */
+export declare class ValkeyCheckpointStore {
+  /**
+   * Create a checkpoint store connected to the given Redis/ValKey URL.
+   *
+   * The URL should be in standard Redis format, e.g.
+   * `redis://localhost:6379` (or `rediss://` for TLS).
+   */
+  static create(url: string): Promise<ValkeyCheckpointStore>
+  /**
+   * Create a checkpoint store with an automatic key expiration (TTL in
+   * seconds). Keys are stored with `SETEX` and expire after `ttlSeconds`.
+   */
+  static withTtl(url: string, ttlSeconds: number): Promise<ValkeyCheckpointStore>
+  /**
+   * Persist a checkpoint. If a checkpoint with the same run ID already
+   * exists it is overwritten.
+   */
+  save(checkpoint: WorkflowCheckpoint): Promise<void>
+  /** Load a checkpoint by its run ID. Returns `null` if not found. */
+  load(runId: string): Promise<WorkflowCheckpoint | null>
+  /**
+   * List all stored checkpoints, ordered by timestamp descending
+   * (most recent first).
+   */
+  list(): Promise<Array<WorkflowCheckpoint>>
+  /** Delete the checkpoint for the given run ID. */
+  delete(runId: string): Promise<void>
+}
+export type JsValkeyCheckpointStore = ValkeyCheckpointStore
+
+/**
  * r" Base class for video generation providers.
  * r"
  * r" Subclass and override `textToVideo()` and `imageToVideo()` to
@@ -4185,6 +5166,48 @@ export declare class VoiceProvider {
   deleteVoice(voice: any): Promise<any>
 }
 export type JsVoiceProvider = VoiceProvider
+
+/**
+ * A local whisper.cpp transcription provider.
+ *
+ * `JsWhisperOptions` and `JsWhisperModel` are defined in
+ * [`crate::providers::transcription`] -- they were already in place for
+ * the [`crate::providers::transcription::JsTranscription::whispercpp`]
+ * factory and are reused here unchanged.
+ *
+ * ```javascript
+ * const provider = await WhisperCppProvider.create({ model: "base" });
+ * const result = await provider.transcribe({
+ *   audioUrl: "/path/to/audio.wav",
+ * });
+ * console.log(result.text);
+ * ```
+ */
+export declare class WhisperCppProvider {
+  /**
+   * Create a new whisper.cpp provider.
+   *
+   * This is async because whisper.cpp may download the GGML model file
+   * from `HuggingFace` on first use.
+   */
+  static create(options?: JsWhisperOptions | undefined | null): Promise<WhisperCppProvider>
+  /** Get the provider identifier (`"whispercpp"`). */
+  get providerId(): string
+  /**
+   * Transcribe an audio clip to text.
+   *
+   * Pass `audioUrl` as a local file path -- whisper.cpp does not fetch
+   * remote URLs. The audio must be 16-bit PCM mono WAV at 16 kHz.
+   */
+  transcribe(request: JsTranscriptionRequest): Promise<JsTranscriptionResult>
+  /** Explicitly load the GGML model into memory. */
+  load(): Promise<void>
+  /** Drop the loaded model and free its memory. */
+  unload(): Promise<void>
+  /** Whether the model is currently loaded. */
+  isLoaded(): Promise<boolean>
+}
+export type JsWhisperCppProvider = WhisperCppProvider
 
 /**
  * A workflow builder and runner.
@@ -4487,46 +5510,43 @@ export declare class WorkflowBuilder {
    * are enabled in the Node binding's `Cargo.toml`.
    */
   build(): Workflow
+  /**
+   * Attach a checkpoint store to the workflow.
+   *
+   * Mirrors [`blazen_core::WorkflowBuilder::checkpoint_store`]. The
+   * underlying call is gated on the `persist` feature of
+   * `blazen-core`, which is **not** currently enabled in the Node
+   * binding's compilation. The flag is recorded on the builder for
+   * forward compatibility but does not yet flow into the core
+   * engine — pass a [`JsCheckpointStore`] (typically a concrete
+   * subclass like `RedbCheckpointStore` or `ValkeyCheckpointStore`)
+   * so the JS API is stable; the binding will start forwarding the
+   * store once the `blazen-core/persist` feature is enabled in
+   * `crates/blazen-node/Cargo.toml`.
+   */
+  checkpointStore(store: CheckpointStore): this
 }
 export type JsWorkflowBuilder = WorkflowBuilder
 
-/**
- * A handle to a running workflow.
- *
- * Returned by `Workflow.runWithHandler()`. Provides methods to:
- *
- * - **`result()`** -- await the final workflow result (consumes the handler).
- * - **`pause()`** -- signal the workflow to pause.
- * - **`snapshot()`** -- get a serializable snapshot as a JSON string.
- * - **`resumeInPlace()`** -- resume a paused workflow without creating a new one.
- * - **`respondToInput(requestId, response)`** -- respond to an input request.
- * - **`abort()`** -- abort the running workflow.
- * - **`streamEvents(callback)`** -- subscribe to intermediate events
- *   published via `ctx.writeEventToStream()`.
- *
- * **Important:** `result()` consumes the handler internally. You can only
- * call it once. The other control methods (`pause`, `resumeInPlace`,
- * `abort`, `respondToInput`, `snapshot`) borrow the handler and can be
- * called multiple times.
- *
- * ```javascript
- * const handler = await workflow.runWithHandler({ message: "hello" });
- *
- * // Option A: just get the result
- * const result = await handler.result();
- *
- * // Option B: pause, snapshot, then resume
- * await handler.pause();
- * const snap = await handler.snapshot();
- * fs.writeFileSync("snapshot.json", snap);
- * await handler.resumeInPlace();
- * const result = await handler.result();
- *
- * // Option C: stream events, then get the result
- * handler.streamEvents((event) => console.log(event));
- * const result = await handler.result();
- * ```
- */
+/** A snapshot of workflow state at a point in time. */
+export declare class WorkflowCheckpoint {
+  /** Construct a checkpoint from a plain options object. */
+  static create(init: JsWorkflowCheckpointInit): WorkflowCheckpoint
+  /** Parse a checkpoint from its JSON representation. */
+  static fromJson(json: string): WorkflowCheckpoint
+  /** Serialize this checkpoint to a JSON string. */
+  toJson(): string
+  /** Serialize this checkpoint to a pretty-printed JSON string. */
+  toJsonPretty(): string
+  get workflowName(): string
+  get runId(): string
+  get timestamp(): string
+  get state(): any
+  get pendingEvents(): Array<PersistedEvent>
+  get metadata(): any
+}
+export type JsWorkflowCheckpoint = WorkflowCheckpoint
+
 export declare class WorkflowHandler {
   /**
    * Await the final workflow result.
@@ -4591,7 +5611,10 @@ export declare class WorkflowHandler {
    * The `onEvent` callback receives each event as a plain object.
    * This must be called **before** `result()` or `pause()`.
    *
-   * Events published before this call are not replayed.
+   * The first call drains the pre-subscribed stream that was set up
+   * before the event loop spawned, so the very first step's events
+   * are captured. Subsequent calls subscribe a fresh stream that
+   * starts from the current point in time.
    */
   streamEvents(onEvent: StreamCallbackTsfn): Promise<void>
 }
@@ -4703,17 +5726,6 @@ export declare class XaiProvider {
 export type JsXaiProvider = XaiProvider
 
 /**
- * Pump the queue once. Exported to JS as `__blazenDrainAsyncQueue` so the
- * `Promise.resolve().then(...)` body can call back in.
- *
- * Drains the current queue into a local buffer, polls each task once, and
- * re-queues anything still pending. If the queue is non-empty after the
- * pass (either from re-queues or fresh spawns triggered by polled tasks),
- * schedules another drain.
- */
-export declare function __blazenDrainAsyncQueue(): void
-
-/**
  * Aggregate one [`JsUsageEvent`] into a [`crate::types::JsTokenUsageClass`].
  * Returns a fresh class instance that adds the seven token counters from the
  * event into the existing usage. Mirrors the Rust `TokenUsage::add` /
@@ -4823,6 +5835,14 @@ export interface ChatMessageOptions {
   content?: string
   /** Multimodal content parts (alternative to content). */
   parts?: Array<JsContentPart>
+}
+
+/** Role of a chat message in the local mistral.rs / llama.cpp inference path. */
+export declare const enum ChatRole {
+  System = 'system',
+  User = 'user',
+  Assistant = 'assistant',
+  Tool = 'tool'
 }
 
 /** Options for constructing a [`JsCitationClass`] from JavaScript. */
@@ -5093,6 +6113,22 @@ export interface EmbeddingModelConfig {
 }
 
 /**
+ * Response from a local embedding operation.
+ *
+ * Mirrors [`blazen_llm::EmbedResponse`] (a target-conditional alias for the
+ * underlying backend's response type).
+ */
+export interface EmbedResponse {
+  /**
+   * The embedding vectors. JS `Number` is `f64`, so vectors are widened
+   * from the backend's native `f32` for transport.
+   */
+  embeddings: Array<Array<number>>
+  /** The model identifier that produced these embeddings. */
+  model: string
+}
+
+/**
  * Return the environment variable name for `provider`, or `null` if the
  * provider has no well-known env var.
  */
@@ -5288,6 +6324,32 @@ export declare function imageInput(name: string, description: string): any
  * install is a no-op because a global subscriber is already registered.
  */
 export declare function initLangfuse(config: LangfuseConfig): void
+
+/**
+ * Initialize the OTLP trace exporter and install the global tracing
+ * subscriber.
+ *
+ * Calling this more than once in a single process will fail because the
+ * global subscriber can only be installed once.
+ */
+export declare function initOtlp(config: OtlpConfig): void
+
+/**
+ * Initialize the Prometheus metrics exporter and start its HTTP listener
+ * on `0.0.0.0:{port}`.
+ *
+ * After calling this, every workflow / step / LLM span emitted via the
+ * `tracing` infrastructure feeds into counters and histograms exposed at
+ * `http://0.0.0.0:{port}/metrics` for Prometheus to scrape.
+ *
+ * ```javascript
+ * initPrometheus(9100);
+ * ```
+ *
+ * Calling this more than once in a single process will fail because the
+ * global recorder can only be installed once.
+ */
+export declare function initPrometheus(port: number): void
 
 /**
  * A request for human input emitted by a workflow step.
@@ -5511,6 +6573,58 @@ export declare const enum JsCacheStrategy {
 }
 
 /**
+ * Options for the local candle embedding backend.
+ *
+ * All fields are optional. Defaults to `sentence-transformers/all-MiniLM-L6-v2`
+ * on CPU.
+ *
+ * ```javascript
+ * const provider = await CandleEmbedProvider.create({
+ *   modelId: "BAAI/bge-small-en-v1.5",
+ *   device: "cuda:0",
+ * });
+ * ```
+ */
+export interface JsCandleEmbedOptions {
+  /** `HuggingFace` model repository ID. */
+  modelId?: string
+  /** Hardware device specifier (e.g. `"cpu"`, `"cuda:0"`, `"metal"`). */
+  device?: string
+  /** `HuggingFace` revision / git ref. */
+  revision?: string
+  /** Path to cache downloaded models. */
+  cacheDir?: string
+}
+
+/**
+ * Options for the local candle LLM backend.
+ *
+ * All fields are optional. `modelId` defaults to a sensible model when
+ * omitted, but most callers will set it explicitly.
+ *
+ * ```javascript
+ * const provider = CandleLlmProvider.create({
+ *   modelId: "meta-llama/Llama-3.2-1B",
+ *   device: "cuda:0",
+ * });
+ * ```
+ */
+export interface JsCandleLlmOptions {
+  /** `HuggingFace` model ID or local path to model weights. */
+  modelId?: string
+  /** Hardware device specifier (e.g. `"cpu"`, `"cuda:0"`, `"metal"`). */
+  device?: string
+  /** Quantization format string (e.g. `"q4_k_m"` for GGUF). */
+  quantization?: string
+  /** `HuggingFace` revision / branch (e.g. `"main"`). */
+  revision?: string
+  /** Maximum context length in tokens. */
+  contextLength?: number
+  /** Path to cache downloaded models. */
+  cacheDir?: string
+}
+
+/**
  * A web/document citation backing a model statement.
  *
  * Populated by Perplexity (`citations` array), Gemini (`groundingMetadata`),
@@ -5662,6 +6776,53 @@ export interface JsDerefResponse {
   payload: Buffer
 }
 
+/**
+ * Options for the local diffusion-rs image generation backend.
+ *
+ * All fields are optional. Defaults: 512x512, 20 steps, 7.5 guidance,
+ * `eulerA` scheduler.
+ *
+ * ```javascript
+ * const provider = DiffusionProvider.create({
+ *   modelId: "stabilityai/stable-diffusion-2-1",
+ *   width: 1024,
+ *   height: 1024,
+ *   numInferenceSteps: 30,
+ * });
+ * ```
+ */
+export interface JsDiffusionOptions {
+  /** `HuggingFace` model repository ID. */
+  modelId?: string
+  /** Hardware device specifier (e.g. `"cpu"`, `"cuda:0"`, `"metal"`). */
+  device?: string
+  /** Output image width in pixels. */
+  width?: number
+  /** Output image height in pixels. */
+  height?: number
+  /** Number of denoising steps to run. */
+  numInferenceSteps?: number
+  /** Classifier-free guidance scale. */
+  guidanceScale?: number
+  /** Noise scheduler to use. */
+  scheduler?: JsDiffusionScheduler
+  /** Path to cache downloaded models. */
+  cacheDir?: string
+}
+
+/**
+ * Noise schedulers available for the diffusion process.
+ *
+ * Different schedulers trade off between generation speed and output
+ * quality. `eulerA` is a good default for most use cases.
+ */
+export declare const enum JsDiffusionScheduler {
+  Euler = 'euler',
+  EulerA = 'eulerA',
+  Dpm = 'dpm',
+  Ddim = 'ddim'
+}
+
 /** The result of an embedding operation. */
 export interface JsEmbeddingResponse {
   /** The embedding vectors (one per input text). */
@@ -5676,6 +6837,26 @@ export interface JsEmbeddingResponse {
   timing?: JsRequestTiming
   /** Provider-specific metadata. */
   metadata: any
+}
+
+/**
+ * Options for creating a local embedding model.
+ *
+ * All fields are optional; defaults produce a working model using
+ * `BAAI/bge-small-en-v1.5` on CPU with the backend's built-in cache.
+ */
+export interface JsEmbedOptions {
+  /** Embed model variant name (e.g. `"BGESmallENV15"`). */
+  modelName?: string
+  /** Model cache directory. When absent, the embedding backend uses its built-in cache. */
+  cacheDir?: string
+  /**
+   * Maximum batch size for embedding. When absent, the embedding backend uses its
+   * default (256).
+   */
+  maxBatchSize?: number
+  /** Whether to display download progress when fetching models. */
+  showDownloadProgress?: boolean
 }
 
 export declare const enum JsFalLlmEndpointKind {
@@ -5693,6 +6874,55 @@ export interface JsFalOptions {
   endpoint?: JsFalLlmEndpointKind
   enterprise?: boolean
   autoRouteModality?: boolean
+}
+
+/**
+ * Options for the fastembed local embedding backend.
+ *
+ * All fields are optional. Defaults produce a working model using
+ * `BGESmallENV15` (Hugging Face: `Xenova/bge-small-en-v1.5`) on CPU
+ * with fastembed's built-in cache.
+ *
+ * ```javascript
+ * const provider = FastEmbedModel.create({
+ *   modelName: "BGEBaseENV15",
+ * });
+ * ```
+ */
+export interface JsFastEmbedOptions {
+  /**
+   * Fastembed model variant name (e.g. `"BGESmallENV15"`).
+   * Parsed via `fastembed::EmbeddingModel::from_str`.
+   */
+  modelName?: string
+  /**
+   * Model cache directory. When absent, fastembed uses its built-in
+   * cache (controlled by `FASTEMBED_CACHE_DIR` / `HF_HOME` env vars).
+   */
+  cacheDir?: string
+  /**
+   * Maximum batch size for embedding. When absent, fastembed uses
+   * its default (256).
+   */
+  maxBatchSize?: number
+  /**
+   * Whether to display download progress when fetching models from
+   * Hugging Face. Defaults to `true`.
+   */
+  showDownloadProgress?: boolean
+}
+
+/**
+ * Response from a fastembed embedding operation.
+ *
+ * Mirrors [`blazen_embed_fastembed::FastEmbedResponse`]. Vectors are
+ * widened from `f32` to `f64` for transport across the JS boundary.
+ */
+export interface JsFastEmbedResponse {
+  /** The embedding vectors -- one per input text. */
+  embeddings: Array<Array<number>>
+  /** The model identifier that produced these embeddings. */
+  model: string
 }
 
 /**
@@ -5850,6 +7080,34 @@ export declare const enum JsJobStatus {
   Cancelled = 'cancelled'
 }
 
+/**
+ * Options for the local llama.cpp LLM backend.
+ *
+ * All fields are optional. `modelPath` defaults to a sensible local path
+ * resolution if omitted, but most callers will set it explicitly.
+ *
+ * ```javascript
+ * const provider = await LlamaCppProvider.create({
+ *   modelPath: "/models/llama-3.2-1b-q4_k_m.gguf",
+ *   nGpuLayers: 32,
+ * });
+ * ```
+ */
+export interface JsLlamaCppOptions {
+  /** Path to the GGUF model file, or a `HuggingFace` model ID. */
+  modelPath?: string
+  /** Hardware device specifier (e.g. `"cpu"`, `"cuda:0"`, `"metal"`). */
+  device?: string
+  /** Quantization format string (e.g. `"q4_k_m"`). */
+  quantization?: string
+  /** Maximum context length in tokens. */
+  contextLength?: number
+  /** Number of layers to offload to GPU. */
+  nGpuLayers?: number
+  /** Path to cache downloaded models. */
+  cacheDir?: string
+}
+
 export interface JsMediaOutput {
   url?: string
   base64?: string
@@ -5888,6 +7146,37 @@ export interface JsMiddlewareConfig {
    * omitted.
    */
   label?: string
+}
+
+/**
+ * Options for the local mistral.rs LLM backend.
+ *
+ * `modelId` is required (`HuggingFace` model ID or local GGUF path).
+ * All other fields are optional.
+ *
+ * ```javascript
+ * const model = CompletionModel.mistralrs({
+ *   modelId: "mistralai/Mistral-7B-Instruct-v0.3",
+ *   device: "cuda:0",
+ *   quantization: "q4_k_m",
+ * });
+ * ```
+ */
+export interface JsMistralRsOptions {
+  /** `HuggingFace` model ID or local GGUF path. */
+  modelId: string
+  /** Quantization format string (e.g. `"q4_k_m"`, `"f16"`, `"gptq-4bit"`). */
+  quantization?: string
+  /** Hardware device string (e.g. `"cpu"`, `"cuda:0"`, `"metal"`). */
+  device?: string
+  /** Maximum context length in tokens. */
+  contextLength?: number
+  /** Maximum batch size for concurrent requests. */
+  maxBatchSize?: number
+  /** Jinja2 chat template override. */
+  chatTemplate?: string
+  /** Path to cache downloaded models. */
+  cacheDir?: string
 }
 
 /**
@@ -5975,6 +7264,31 @@ export interface JsPeerRemoteRefDescriptor {
   createdAtEpochMs: number
 }
 
+/**
+ * Options for the local Piper TTS backend.
+ *
+ * All fields are optional. `modelId` selects the voice (e.g.
+ * `"en_US-amy-medium"`); when `null`, callers must set it before
+ * synthesis can run.
+ *
+ * ```javascript
+ * const provider = PiperProvider.create({
+ *   modelId: "en_US-amy-medium",
+ *   sampleRate: 22050,
+ * });
+ * ```
+ */
+export interface JsPiperOptions {
+  /** Piper voice model identifier. */
+  modelId?: string
+  /** Speaker ID for multi-speaker models. */
+  speakerId?: number
+  /** Output audio sample rate in Hz. */
+  sampleRate?: number
+  /** Path to cache downloaded voice models. */
+  cacheDir?: string
+}
+
 /** A single `(provider, envVar)` pair returned by [`provider_env_vars`]. */
 export interface JsProviderEnvVar {
   /** Canonical provider name (e.g. `"openai"`, `"anthropic"`). */
@@ -6029,6 +7343,52 @@ export interface JsReleaseResponse {
    * it was already gone.
    */
   released: boolean
+}
+
+/**
+ * Transport-agnostic request for invoking a sub-workflow on a remote
+ * peer.
+ *
+ * Mirrors [`blazen_core::distributed::RemoteWorkflowRequest`]. Concrete
+ * transports (gRPC, HTTP, NATS, etc.) serialize this into whatever
+ * wire format they require.
+ */
+export interface JsRemoteWorkflowRequest {
+  /** Symbolic name of the workflow to invoke on the remote peer. */
+  workflowName: string
+  /** Ordered list of step IDs to execute as part of this sub-workflow. */
+  stepIds: Array<string>
+  /** Initial input value passed to the workflow's first step. */
+  input: any
+  /**
+   * Optional timeout in seconds. `None` means "use the server's
+   * default deadline".
+   */
+  timeoutSecs?: number
+}
+
+/**
+ * Transport-agnostic response from a remote sub-workflow invocation.
+ *
+ * Mirrors [`blazen_core::distributed::RemoteWorkflowResponse`].
+ */
+export interface JsRemoteWorkflowResponse {
+  /**
+   * Optional terminal result. `None` when the workflow exited
+   * without producing one.
+   */
+  result?: any
+  /**
+   * Descriptors for any session refs the sub-workflow registered
+   * that the parent should be able to dereference remotely. Keyed
+   * by the registry UUID rendered as a string.
+   */
+  remoteRefs: Record<string, any>
+  /**
+   * Error message if the sub-workflow failed. When `Some`, callers
+   * should ignore `result`.
+   */
+  error?: string
 }
 
 export interface JsRequestTiming {
@@ -6242,6 +7602,55 @@ export interface JsToolDefinition {
   parameters: any
 }
 
+/**
+ * Options for the tract local embedding backend.
+ *
+ * All fields are optional. Defaults produce a working model using
+ * `BGESmallENV15` (Hugging Face: `Xenova/bge-small-en-v1.5`) on the
+ * platform's default model cache directory.
+ *
+ * ```javascript
+ * const provider = TractEmbedModel.create({
+ *   modelName: "BGEBaseENV15",
+ * });
+ * ```
+ */
+export interface JsTractOptions {
+  /**
+   * Tract model variant name matching the fastembed registry
+   * (e.g. `"BGESmallENV15"`). Case-insensitive.
+   */
+  modelName?: string
+  /**
+   * Model cache directory. When absent, uses the default from
+   * `blazen_model_cache`.
+   */
+  cacheDir?: string
+  /**
+   * Maximum batch size for embedding. When absent, the entire input
+   * vector is processed in a single forward pass.
+   */
+  maxBatchSize?: number
+  /**
+   * Whether to display download progress when fetching models from
+   * Hugging Face.
+   */
+  showDownloadProgress?: boolean
+}
+
+/**
+ * Response from a tract embedding operation.
+ *
+ * Mirrors [`blazen_embed_tract::TractResponse`]. Vectors are widened
+ * from `f32` to `f64` for transport across the JS boundary.
+ */
+export interface JsTractResponse {
+  /** The embedding vectors -- one per input text. */
+  embeddings: Array<Array<number>>
+  /** The model identifier that produced these embeddings. */
+  model: string
+}
+
 export interface JsTranscriptionRequest {
   audioUrl: string
   language?: string
@@ -6319,6 +7728,85 @@ export interface JsVoiceHandle {
   metadata: any
 }
 
+/**
+ * Whisper model size variant for the local whisper.cpp backend.
+ *
+ * Larger models are more accurate but require more memory and are slower.
+ *
+ * | Variant  | Params | RAM   |
+ * |----------|--------|-------|
+ * | tiny     | 39M    | ~1GB  |
+ * | base     | 74M    | ~1GB  |
+ * | small    | 244M   | ~2GB  |
+ * | medium   | 769M   | ~5GB  |
+ * | largeV3  | 1.5B   | ~10GB |
+ */
+export declare const enum JsWhisperModel {
+  Tiny = 'tiny',
+  Base = 'base',
+  Small = 'small',
+  Medium = 'medium',
+  LargeV3 = 'largeV3'
+}
+
+/**
+ * Options for the local whisper.cpp transcription backend.
+ *
+ * All fields are optional. When `model` is omitted, defaults to
+ * `JsWhisperModel::Small`. When `language` is omitted, whisper.cpp will
+ * auto-detect the spoken language.
+ *
+ * ```javascript
+ * const transcriber = Transcription.whispercpp({
+ *   model: "base",
+ *   language: "en",
+ * });
+ * ```
+ */
+export interface JsWhisperOptions {
+  /** Whisper model size (defaults to `"small"`). */
+  model?: JsWhisperModel
+  /** Hardware device specifier string (e.g. `"cpu"`, `"cuda:0"`, `"metal"`). */
+  device?: string
+  /**
+   * ISO 639-1 language code (e.g. `"en"`, `"es"`). When absent,
+   * whisper auto-detects the language.
+   */
+  language?: string
+  /**
+   * Enable speaker diarization. Currently unsupported by the whisper.cpp
+   * backend; setting `true` will cause transcription calls to fail.
+   */
+  diarize?: boolean
+  /**
+   * Directory to cache downloaded models. When absent, falls back to
+   * `$BLAZEN_CACHE_DIR` or `~/.cache/blazen/models`.
+   */
+  cacheDir?: string
+}
+
+/**
+ * Plain-object payload accepted by `WorkflowCheckpoint.create()` for
+ * constructing a checkpoint from JS.
+ */
+export interface JsWorkflowCheckpointInit {
+  /** The name of the workflow that produced this checkpoint. */
+  workflowName: string
+  /**
+   * Unique identifier for this workflow run (RFC 4122 UUID string). If
+   * omitted a new v4 UUID is generated.
+   */
+  runId?: string
+  /** Optional ISO 8601 timestamp. Defaults to the current time. */
+  timestamp?: string
+  /** Serialized context state as a JSON object. */
+  state?: any
+  /** Events in the queue at checkpoint time. */
+  pendingEvents?: Array<PersistedEvent>
+  /** Arbitrary metadata attached to this checkpoint as a JSON object. */
+  metadata?: any
+}
+
 /** The result of a workflow run. */
 export interface JsWorkflowResult {
   /** The event type of the final result (typically "`blazen::StopEvent`"). */
@@ -6335,6 +7823,20 @@ export interface JsWorkflowResult {
    * [`blazen_core::WorkflowResult::cost_total_usd`].
    */
   costTotalUsd: number
+}
+
+/**
+ * Simplified chat role for the llama.cpp bridge layer.
+ *
+ * Mirrors `blazen_llm::LlamaCppChatRole` (re-exported from
+ * `blazen-llm-llamacpp`). Distinct from the framework-wide `JsRole` because
+ * the llama.cpp bridge layer uses its own simplified four-variant enum.
+ */
+export declare const enum LlamaCppChatRole {
+  System = 'System',
+  User = 'User',
+  Assistant = 'Assistant',
+  Tool = 'Tool'
 }
 
 /**
@@ -6367,6 +7869,26 @@ export interface LlmPayload {
   /** Provider id string. Required for `kind: "provider_raw"`. */
   provider?: string
 }
+
+/**
+ * Validate that the supplied PEM files exist and can be loaded into a
+ * client-side TLS configuration.
+ *
+ * See [`load_server_tls`] for the same caveats about the native
+ * config not crossing the JS boundary.
+ */
+export declare function loadClientTls(certPemPath: string, keyPemPath: string, caPemPath: string): boolean
+
+/**
+ * Validate that the supplied PEM files exist and can be loaded into a
+ * server-side TLS configuration.
+ *
+ * The native `ServerTlsConfig` is not directly representable across
+ * the JS boundary, so this function only surfaces the load result --
+ * returning `true` on success and throwing `peerErrorToNapi`-style on
+ * failure. Wire the actual config into a server in Rust, not in JS.
+ */
+export declare function loadServerTls(certPemPath: string, keyPemPath: string, caPemPath: string): boolean
 
 /**
  * Look up pricing for a model by its ID.
@@ -6502,6 +8024,35 @@ export declare function newRetryStack(): RetryStack
 export declare function newUsageEvent(provider: string, model: string, runId: string): UsageEvent
 
 /**
+ * Configuration for the OTLP exporter.
+ *
+ * ```javascript
+ * initOtlp({
+ *   endpoint: "http://localhost:4317",
+ *   serviceName: "my-service",
+ *   serviceVersion: "1.0.0",
+ *   headers: { "x-api-key": "secret" },
+ * });
+ * ```
+ */
+export interface OtlpConfig {
+  /** The OTLP endpoint URL (e.g. `"http://localhost:4317"`). */
+  endpoint: string
+  /** The service name reported to the backend. */
+  serviceName: string
+  /**
+   * Service version reported to the backend (recorded for forward
+   * compatibility; not yet forwarded by the underlying exporter).
+   */
+  serviceVersion?: string
+  /**
+   * Additional headers to attach to OTLP requests (recorded for forward
+   * compatibility; not yet forwarded by the underlying exporter).
+   */
+  headers?: Record<string, string>
+}
+
+/**
  * Why a workflow was paused.
  *
  * - `Manual`: paused manually by user or API call.
@@ -6510,6 +8061,20 @@ export declare function newUsageEvent(provider: string, model: string, runId: st
 export declare const enum PauseReason {
   Manual = 'Manual',
   InputRequired = 'InputRequired'
+}
+
+/** Current envelope version spoken by this build of `blazen-peer`. */
+export declare function peerEnvelopeVersion(): number
+
+/** Environment variable name used to carry the peer auth token. */
+export declare function peerTokenEnv(): string
+
+/** A serialized representation of an event for persistence. */
+export interface PersistedEvent {
+  /** The event type identifier (e.g. `"blazen::StartEvent"`). */
+  eventType: string
+  /** The event data as a JSON value. */
+  data: any
 }
 
 /**
@@ -6826,6 +8391,14 @@ export interface RequestTimingOptions {
 export declare function resolveApiKey(provider: string, explicit?: string | undefined | null): string
 
 /**
+ * Read the peer authentication token from the process environment.
+ *
+ * Returns `null` when the env var (see [`peer_token_env`]) is unset
+ * or empty.
+ */
+export declare function resolveBeerToken(): string | null
+
+/**
  * Resolve the effective [`JsRetryConfig`] for the given stack and an
  * optional per-call override. Mirrors [`RetryStack::resolve`].
  *
@@ -6971,20 +8544,6 @@ export declare const enum SessionPausePolicy {
   WarnDrop = 'WarnDrop',
   HardError = 'HardError'
 }
-
-/**
- * Register the given HttpClient as the process-wide default for blazen-llm's
- * outbound HTTP. On wasi (Cloudflare Workers / Deno), this is required before
- * constructing cloud LLM providers, OTLP/Langfuse exporters, or distributed
- * peer clients — the wasi build has no built-in HTTP backend (no
- * `reqwest`-tokio, no `web_sys::fetch`), so the host must supply one via
- * `HttpClient.fromCallback(async (req) => /* fetch *\/)`.
- *
- * The first call wins (OnceLock semantics); subsequent calls are no-ops.
- * Throws if the JsHttpClient was created via subclassing (no callback bound)
- * — use `HttpClient.fromCallback(...)` instead.
- */
-export declare function setDefaultHttpClient(client: HttpClient): void
 
 /**
  * Parse a hex-encoded 128-bit `SimHash` and return its value as a decimal string.

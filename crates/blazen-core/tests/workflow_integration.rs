@@ -664,12 +664,9 @@ async fn test_streaming() {
     // Wait for stream collection to finish.
     let collected = collect_task.await.unwrap();
 
-    // We should have received at least some progress events.
-    // (Timing is non-deterministic, so just check we got at least one.)
-    // The broadcast channel might miss early events if subscription happened
-    // after they were sent, so we check >= 0 but ideally we'd get some.
-    // In practice, the step runs on a spawned task that starts after we
-    // subscribe, so we should get all events.
+    // `Workflow::run` pre-subscribes the broadcast channel before spawning
+    // the event loop, so even the first step's events land deterministically
+    // on this stream.
     let progress_events: Vec<_> = collected
         .iter()
         .filter(|e| e.event_type_id() == "test::ProgressEvent")

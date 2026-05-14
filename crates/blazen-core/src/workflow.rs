@@ -161,6 +161,18 @@ impl Workflow {
         // External broadcast channel for streaming.
         let (stream_tx, _stream_rx) = broadcast::channel::<Box<dyn AnyEvent>>(256);
 
+        // Pre-subscribe BEFORE the event-loop spawn below. `tokio::sync::broadcast`
+        // does not buffer for late subscribers: receivers attached after a
+        // `send` never see that event. Subscribing here closes the race
+        // between the spawned event loop emitting from the first step and
+        // the binding (PyWorkflowHandler::new, JsWorkflowHandler::new, ...)
+        // wrapping the returned `WorkflowHandler` and creating its own
+        // subscription. Without these two `subscribe()` calls, any event
+        // published by the first step before the binding wraps the handler
+        // is lost (see test_streamed_event_preserves_identity).
+        let accumulator_rx = stream_tx.subscribe();
+        let initial_stream_rx = stream_tx.subscribe();
+
         // Oneshot for the final result.
         let (result_tx, result_rx) = oneshot::channel();
 
@@ -250,6 +262,8 @@ impl Workflow {
         Ok(WorkflowHandler::new(
             result_rx,
             stream_tx,
+            accumulator_rx,
+            initial_stream_rx,
             control_tx,
             event_loop_handle,
             session_refs,
@@ -342,6 +356,11 @@ impl Workflow {
         // External broadcast channel.
         let (stream_tx, _stream_rx) = broadcast::channel::<Box<dyn AnyEvent>>(256);
 
+        // Pre-subscribe before the event-loop spawn — same race-avoidance as
+        // the non-resume path in run_with_event_and_session_refs.
+        let accumulator_rx = stream_tx.subscribe();
+        let initial_stream_rx = stream_tx.subscribe();
+
         // Result channel.
         let (result_tx, result_rx) = oneshot::channel();
 
@@ -422,6 +441,8 @@ impl Workflow {
         Ok(WorkflowHandler::new(
             result_rx,
             stream_tx,
+            accumulator_rx,
+            initial_stream_rx,
             control_tx,
             event_loop_handle,
             session_refs,

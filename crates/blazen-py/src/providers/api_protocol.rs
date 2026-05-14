@@ -34,19 +34,21 @@ pub(crate) enum ApiProtocolKind {
 ///
 /// Construct via the classmethod factories:
 ///
-///     >>> from blazen import ApiProtocol, OpenAiCompatConfig
-///     >>> cfg = OpenAiCompatConfig(
-///     ...     provider_name="ollama",
-///     ...     base_url="http://localhost:11434/v1",
-///     ...     api_key="",
-///     ...     default_model="llama3.1",
-///     ... )
-///     >>> proto = ApiProtocol.openai(cfg)
-///     >>> proto.kind
-///     'openai'
-///     >>> dispatch_proto = ApiProtocol.custom()
-///     >>> dispatch_proto.kind
-///     'custom'
+/// ```text
+/// >>> from blazen import ApiProtocol, OpenAiCompatConfig
+/// >>> cfg = OpenAiCompatConfig(
+/// ...     provider_name="ollama",
+/// ...     base_url="http://localhost:11434/v1",
+/// ...     api_key="",
+/// ...     default_model="llama3.1",
+/// ... )
+/// >>> proto = ApiProtocol.openai(cfg)
+/// >>> proto.kind
+/// 'openai'
+/// >>> dispatch_proto = ApiProtocol.custom()
+/// >>> dispatch_proto.kind
+/// 'custom'
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ApiProtocol", frozen, from_py_object)]
 #[derive(Clone)]

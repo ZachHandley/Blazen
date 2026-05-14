@@ -601,19 +601,21 @@ class ApiProtocol:
     
     Construct via the classmethod factories:
     
-        >>> from blazen import ApiProtocol, OpenAiCompatConfig
-        >>> cfg = OpenAiCompatConfig(
-        ...     provider_name="ollama",
-        ...     base_url="http://localhost:11434/v1",
-        ...     api_key="",
-        ...     default_model="llama3.1",
-        ... )
-        >>> proto = ApiProtocol.openai(cfg)
-        >>> proto.kind
-        'openai'
-        >>> dispatch_proto = ApiProtocol.custom()
-        >>> dispatch_proto.kind
-        'custom'
+    ```text
+    >>> from blazen import ApiProtocol, OpenAiCompatConfig
+    >>> cfg = OpenAiCompatConfig(
+    ...     provider_name="ollama",
+    ...     base_url="http://localhost:11434/v1",
+    ...     api_key="",
+    ...     default_model="llama3.1",
+    ... )
+    >>> proto = ApiProtocol.openai(cfg)
+    >>> proto.kind
+    'openai'
+    >>> dispatch_proto = ApiProtocol.custom()
+    >>> dispatch_proto.kind
+    'custom'
+    ```
     """
     @property
     def kind(self) -> builtins.str:
@@ -3319,30 +3321,32 @@ class CustomProvider(BaseProvider):
     ``openai_compat``) wrap the free functions in
     :rust:func:`blazen_llm::ollama`.
     
-    Example (subclass)::
+    Example (subclass):
     
-        class ElevenLabsProvider(CustomProvider):
-            def __init__(self, api_key):
-                super().__init__(provider_id="elevenlabs")
-                self._client = AsyncElevenLabs(api_key=api_key)
+    ```text
+    class ElevenLabsProvider(CustomProvider):
+        def __init__(self, api_key):
+            super().__init__(provider_id="elevenlabs")
+            self._client = AsyncElevenLabs(api_key=api_key)
     
-            async def text_to_speech(self, request):
-                audio = b"".join([
-                    chunk async for chunk in self._client.text_to_speech.convert(
-                        voice_id=request["voice"],
-                        text=request["text"],
-                        model_id="eleven_multilingual_v2",
-                    )
-                ])
-                return {
-                    "audio": [{"media": {"base64": base64.b64encode(audio).decode(),
-                                         "media_type": "mpeg"}}],
-                    "timing": {"total_ms": 0, "queue_ms": None, "execution_ms": None},
-                    "metadata": {},
-                }
+        async def text_to_speech(self, request):
+            audio = b"".join([
+                chunk async for chunk in self._client.text_to_speech.convert(
+                    voice_id=request["voice"],
+                    text=request["text"],
+                    model_id="eleven_multilingual_v2",
+                )
+            ])
+            return {
+                "audio": [{"media": {"base64": base64.b64encode(audio).decode(),
+                                     "media_type": "mpeg"}}],
+                "timing": {"total_ms": 0, "queue_ms": None, "execution_ms": None},
+                "metadata": {},
+            }
     
-        provider = ElevenLabsProvider(api_key="...")
-        result = await provider.text_to_speech(SpeechRequest(text="hi", voice="rachel"))
+    provider = ElevenLabsProvider(api_key="...")
+    result = await provider.text_to_speech(SpeechRequest(text="hi", voice="rachel"))
+    ```
     """
     @property
     def provider_id(self) -> builtins.str:

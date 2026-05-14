@@ -109,6 +109,13 @@ pub struct WorkflowHandler {
     /// Receives history events from the event loop (requires `telemetry` feature).
     #[cfg(feature = "telemetry")]
     history_rx: Option<mpsc::UnboundedReceiver<blazen_telemetry::HistoryEvent>>,
+    /// Pre-subscribed receiver created BEFORE the event loop was spawned.
+    /// The first binding wrapping this handler should call
+    /// [`take_initial_stream`](Self::take_initial_stream) to consume it; that
+    /// guarantees events published by the very first step land on a live
+    /// receiver. Subsequent subscribers use [`stream_events`](Self::stream_events)
+    /// which subscribes from the current point in time.
+    initial_stream_rx: Option<broadcast::Receiver<Box<dyn AnyEvent>>>,
 }
 
 impl WorkflowHandler {
@@ -124,6 +131,12 @@ impl WorkflowHandler {
     pub(crate) fn new(
         result_rx: oneshot::Receiver<Result<Box<dyn AnyEvent>, WorkflowError>>,
         stream_tx: broadcast::Sender<Box<dyn AnyEvent>>,
+        // Both receivers are pre-subscribed by the caller (Workflow::run) BEFORE
+        // the event loop is spawned. This is the only race-free way to capture
+        // events from the very first step, because `tokio::sync::broadcast`
+        // does not buffer for late subscribers.
+        mut accumulator_rx: broadcast::Receiver<Box<dyn AnyEvent>>,
+        initial_stream_rx: broadcast::Receiver<Box<dyn AnyEvent>>,
         control_tx: mpsc::UnboundedSender<WorkflowControl>,
         event_loop_handle: JoinHandle<()>,
         session_refs: Arc<SessionRefRegistry>,
@@ -132,10 +145,6 @@ impl WorkflowHandler {
         >,
     ) -> Self {
         let usage_totals = Arc::new(Mutex::new(UsageTotals::default()));
-
-        // Subscribe BEFORE spawning so we never miss a UsageEvent racing
-        // with the very first step.
-        let mut accumulator_rx = stream_tx.subscribe();
         let totals_for_task = Arc::clone(&usage_totals);
         let accumulator_handle = crate::runtime::spawn(async move {
             loop {
@@ -179,7 +188,28 @@ impl WorkflowHandler {
             usage_accumulator_handle: Some(accumulator_handle),
             #[cfg(feature = "telemetry")]
             history_rx,
+            initial_stream_rx: Some(initial_stream_rx),
         }
+    }
+
+    /// Consume the pre-subscribed initial event stream.
+    ///
+    /// Returns `Some(stream)` on the first call and `None` on subsequent
+    /// calls. The returned stream was subscribed BEFORE the event loop was
+    /// spawned, so it never misses events published by the very first step.
+    ///
+    /// Bindings that wrap this handler should call this exactly once at
+    /// construction time and hand the returned stream out the first time the
+    /// user requests `stream_events()`. For additional concurrent subscribers
+    /// (or for re-subscribing after the first stream is exhausted) use
+    /// [`stream_events`](Self::stream_events), which subscribes from the
+    /// current point in time.
+    pub fn take_initial_stream(
+        &mut self,
+    ) -> Option<impl tokio_stream::Stream<Item = Box<dyn AnyEvent>> + Send + Unpin + use<>> {
+        self.initial_stream_rx
+            .take()
+            .map(|rx| BroadcastStream::new(rx).filter_map(std::result::Result::ok))
     }
 
     /// Snapshot the current aggregated [`TokenUsage`] for this run.

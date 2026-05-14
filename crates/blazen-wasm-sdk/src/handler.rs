@@ -169,10 +169,20 @@ impl WasmWorkflowHandler {
     /// alive avoids that race.
     #[allow(dead_code)] // Wired up by A2.4 in `WasmWorkflow::run`.
     #[must_use]
-    pub(crate) fn new(handler: WorkflowHandler) -> Self {
+    pub(crate) fn new(mut handler: WorkflowHandler) -> Self {
+        // Pull the pre-subscribed initial stream out immediately. It was
+        // subscribed in `Workflow::run` BEFORE the event loop spawned, so
+        // even on workerd where `spawn_local`'d futures get a head start,
+        // the first step's `ctx.write_event_to_stream(...)` is captured.
+        // Storing it in the existing `stream` slot means `next_event()` and
+        // `stream_events()` both consume the pre-subscribed receiver on
+        // first use.
+        let stream = handler
+            .take_initial_stream()
+            .expect("WorkflowHandler must expose a pre-subscribed initial stream");
         Self {
             inner: Rc::new(RefCell::new(Some(handler))),
-            stream: Rc::new(RefCell::new(None)),
+            stream: Rc::new(RefCell::new(Some(Box::pin(stream)))),
             cached_run_id: Rc::new(RefCell::new(None)),
         }
     }
@@ -345,10 +355,13 @@ impl WasmWorkflowHandler {
         // see `yield_to_js` for the full explanation.
         yield_to_js().await;
 
-        // Lazily build the stream on first call. Subscribing here (rather
-        // than in `new()`) is fine because `stream_events()` returns a fresh
-        // broadcast subscription and JS callers are expected to start
-        // pulling events synchronously after `run()` returns.
+        // `new()` pre-populates `self.stream` with the pre-subscribed
+        // receiver from `WorkflowHandler::take_initial_stream()`, so
+        // the slot is normally already Some on the first call. If a
+        // later code path drained and didn't restore it (e.g. after
+        // an external takeover), fall back to a fresh subscription —
+        // that drops the race-vulnerable "first step" events but
+        // delivers anything emitted after the subscription point.
         if self.stream.borrow().is_none() {
             let inner = self.inner.borrow();
             let handler = inner
@@ -356,9 +369,6 @@ impl WasmWorkflowHandler {
                 .ok_or_else(|| JsValue::from_str("handler already consumed"))?;
 
             let stream = handler.stream_events();
-            // The native return type is `impl Stream + Send + Unpin`; we
-            // erase to a boxed dyn so the stream can live in a struct field
-            // across `await` points without naming the combinator type.
             let boxed: EventStream = Box::pin(stream);
             *self.stream.borrow_mut() = Some(boxed);
         }
@@ -575,12 +585,14 @@ impl WasmWorkflowHandler {
     /// consumed, or marshalling an event payload fails.
     #[wasm_bindgen(js_name = "streamEvents")]
     pub async fn stream_events(&self, callback: js_sys::Function) -> Result<(), JsValue> {
-        // Yield so the loop can publish any already-queued events into the
-        // broadcast channel before we subscribe. See `yield_to_js` for the
-        // workerd-specific explanation.
-        yield_to_js().await;
-
-        let mut stream: EventStream = {
+        // Prefer the pre-subscribed receiver that `new()` stashed in
+        // `self.stream` — that's the only one that catches events from the
+        // very first step. If it was already taken (e.g. `next_event()` drained
+        // it), fall back to a fresh subscription that starts "from now".
+        let pre = self.stream.borrow_mut().take();
+        let mut stream: EventStream = if let Some(s) = pre {
+            s
+        } else {
             let inner = self.inner.borrow();
             let handler = inner
                 .as_ref()
