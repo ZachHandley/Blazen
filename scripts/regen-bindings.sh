@@ -209,9 +209,15 @@ PY
 
 regen_swift() {
     mkdir -p bindings/swift/Sources/UniFFIBlazen
+    # --no-format: skip swift-format post-processing. CI's audit-bindings job
+    # doesn't install swift-format, so without this flag the committed
+    # (formatted) file disagrees with CI's regen and `git diff --exit-code`
+    # fails. Deterministic-everywhere unformatted output is preferable to
+    # env-dependent formatted output.
     "$UNIFFI_BINDGEN" generate \
         --library "$LIB_PATH" \
         --language swift \
+        --no-format \
         --config "$CFG" \
         --out-dir bindings/swift/Sources/UniFFIBlazen
     # uniffi-bindgen emits the FFI C header at
@@ -233,6 +239,10 @@ regen_kotlin() {
     # `src/main/kotlin/dev/zorpx/blazen/uniffi/blazen.kt` that the hand-
     # written wrappers in `src/main/kotlin/dev/zorpx/blazen/` import.
     mkdir -p bindings/kotlin/src/main/kotlin
+    # ktlint must be on PATH so uniffi-bindgen's post-process formatter runs.
+    # Without ktlint, the emitted file is unformatted and disagrees with the
+    # committed (formatted) version, causing CI's `git diff --exit-code` to
+    # fail. CI installs ktlint in the audit-bindings job to match local devs.
     "$UNIFFI_BINDGEN" generate \
         --library "$LIB_PATH" \
         --language kotlin \

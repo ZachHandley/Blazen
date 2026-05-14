@@ -46,16 +46,23 @@ if has '^crates/blazen-node/src/'; then
   REGEN+=("crates/blazen-node/index.d.ts")
 fi
 
-# UniFFI bindings (Go/Swift/Kotlin)
-if has '^crates/blazen-uniffi/'; then
+# UniFFI bindings (Go/Swift/Kotlin) and cabi (Ruby C header) are regenerated
+# whenever any crate that participates in their FFI surface is touched — not
+# just blazen-uniffi or blazen-cabi themselves. blazen-uniffi re-exports
+# types from blazen-core, blazen-llm, blazen-events, blazen-pipeline,
+# blazen-telemetry, etc., so a change to any of those can ripple into the
+# generated foreign-language bindings (or the cbindgen-generated Ruby C
+# header). Without this broad trigger the regen silently doesn't run and
+# CI's audit-bindings job catches the drift instead.
+FFI_SURFACE_REGEX='^crates/blazen-(uniffi|cabi|core|events|llm|manager|memory|memory-valkey|model-cache|peer|persist|pipeline|prompts|telemetry|embed-tract)/'
+
+if has "$FFI_SURFACE_REGEX"; then
   echo "[pre-commit] regenerating UniFFI bindings (Go/Swift/Kotlin)"
+  cargo build -p blazen-uniffi --release --bin uniffi-bindgen
   cargo build -p blazen-uniffi --release
   ./scripts/regen-bindings.sh
   REGEN+=("bindings/go" "bindings/swift" "bindings/kotlin")
-fi
 
-# Ruby C ABI header (cbindgen runs via blazen-cabi/build.rs)
-if has '^crates/blazen-cabi/'; then
   echo "[pre-commit] regenerating bindings/ruby/ext/blazen/blazen.h"
   cargo build -p blazen-cabi --release
   REGEN+=("bindings/ruby/ext/blazen/blazen.h")

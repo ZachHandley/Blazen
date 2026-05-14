@@ -753,15 +753,30 @@ jobs:
         # with cryptic link errors.
         run: cargo install uniffi-bindgen-go --tag v0.7.1+v0.31.0 --git https://github.com/NordSecurity/uniffi-bindgen-go
 
-      - name: Build local uniffi-bindgen CLI + native lib
+      - name: Setup ktlint (for Kotlin regen formatting)
+        if: steps.check.outputs.completed != 'true'
+        # uniffi-bindgen post-processes the generated Kotlin file with ktlint
+        # when it's on PATH. Without ktlint the file is emitted unformatted
+        # and disagrees with the committed (formatted) version, producing
+        # spurious `git diff --exit-code bindings/` failures. Pinned to 1.8.0
+        # to match the version contributors run locally.
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-kotlin@main
+        with:
+          ktlint-version: '1.8.0'
+
+      - name: Build local uniffi-bindgen CLI + native lib + cabi
         if: steps.check.outputs.completed != 'true'
         # The script prefers target/release/uniffi-bindgen (built from
         # blazen-uniffi's bin/uniffi-bindgen.rs) so the generator version is
         # guaranteed to match the runtime scaffolding in the cdylib. The
         # second build produces the rlib that the bindgens read for metadata.
+        # The cabi build invokes cbindgen via crates/blazen-cabi/build.rs and
+        # writes bindings/ruby/ext/blazen/blazen.h — without it, the drift
+        # check below would silently miss Ruby header drift.
         run: |
           cargo build -p blazen-uniffi --release --bin uniffi-bindgen
           cargo build -p blazen-uniffi --release
+          cargo build -p blazen-cabi --release
 
       - name: Regenerate Go/Swift/Kotlin/Ruby bindings + drift check
         if: steps.check.outputs.completed != 'true'
