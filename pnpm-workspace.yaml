@@ -1,6 +1,7 @@
 packages:
   - "crates/blazen-node"
   - "website"
+  - "examples/astro-cloudflare"
 
 ignoredBuiltDependencies:
   - esbuild

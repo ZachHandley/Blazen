@@ -369,6 +369,42 @@ jobs:
         working-directory: crates/blazen-node
         run: pnpm exec napi artifacts
 
+      - name: Patch wasm32-wasi subpackage exports map
+        if: steps.check.outputs.completed != 'true'
+        working-directory: crates/blazen-node
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The top-level `blazen/workers` entry does
+          #   import wasm from '@blazen-dev/blazen-wasm32-wasi/blazen.wasm32-wasi.wasm'
+          # which only resolves under exports-map-enforcing resolvers (Node >=16,
+          # wrangler, @cloudflare/vite-plugin) if the wasm32-wasi subpackage
+          # exposes the .wasm file as an exports subpath. napi-rs's default
+          # generated package.json doesn't, so we patch it here.
+          #
+          # The `.` entry mirrors the de-facto main/browser/require split napi-rs
+          # already uses; we promote it to an exports map so it's authoritative.
+          # Kept symmetric with examples/astro-cloudflare/scripts/stage-local-blazen.sh.
+          PKG="npm/wasm32-wasi/package.json"
+          if [ ! -f "$PKG" ]; then
+            echo "::error::expected $PKG to exist after `napi artifacts`"
+            exit 1
+          fi
+          jq '.exports = {
+            ".": {
+              "browser": "./blazen.wasi-browser.js",
+              "module":  "./blazen.wasi-browser.js",
+              "import":  "./blazen.wasi-browser.js",
+              "require": "./blazen.wasi.cjs",
+              "default": "./blazen.wasi.cjs"
+            },
+            "./blazen.wasm32-wasi.wasm": "./blazen.wasm32-wasi.wasm",
+            "./package.json": "./package.json"
+          }' "$PKG" > "$PKG.tmp"
+          mv "$PKG.tmp" "$PKG"
+          echo "=== patched $PKG ==="
+          cat "$PKG"
+
       - name: List napi subpackages
         if: steps.check.outputs.completed != 'true'
         working-directory: crates/blazen-node

@@ -4,6 +4,19 @@
   "description": "Blazen - Event-driven AI workflow framework for Node.js/TypeScript",
   "main": "index.js",
   "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js",
+      "require": "./index.js",
+      "default": "./index.js"
+    },
+    "./workers": {
+      "types": "./blazen.workers.d.ts",
+      "default": "./blazen.workers.js"
+    },
+    "./package.json": "./package.json"
+  },
   "napi": {
     "binaryName": "blazen",
     "packageName": "@blazen-dev/blazen",
@@ -37,13 +50,23 @@
   "files": [
     "index.js",
     "index.d.ts",
-    "error-classes.js"
+    "error-classes.js",
+    "blazen.workers.js",
+    "blazen.workers.d.ts"
   ],
   "dependencies": {
     "@emnapi/core": "^1.10.0",
     "@emnapi/runtime": "^1.10.0",
     "@napi-rs/wasm-runtime": "^1.1.4",
     "@tybys/wasm-util": "^0.10.2"
+  },
+  "peerDependencies": {
+    "@blazen-dev/blazen-wasm32-wasi": "^0.1.160"
+  },
+  "peerDependenciesMeta": {
+    "@blazen-dev/blazen-wasm32-wasi": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@biomejs/biome": "^2",

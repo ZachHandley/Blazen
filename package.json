@@ -15,6 +15,11 @@
   "devDependencies": {
     "ava": "^8.0.0"
   },
+  "pnpm": {
+    "overrides": {
+      "@blazen-dev/blazen-wasm32-wasi": "file:./examples/astro-cloudflare/local-wasi"
+    }
+  },
   "ava": {
     "files": [
       "tests/node/test_*.mjs"

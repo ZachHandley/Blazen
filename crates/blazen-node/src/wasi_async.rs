@@ -225,13 +225,29 @@ fn sleep_impl(dur: Duration) -> WasiSleepFut {
 /// fails. Both indicate a host-environment bug (bad eval support, threadsafe
 /// function unsupported), not a recoverable condition.
 pub fn install(env: &Env) -> napi::Result<()> {
+    // Cloudflare Workers / workerd disallows dynamic code generation, so
+    // `Env::run_script` (a wrapper around `napi_run_script` -> `eval`) throws
+    // `EvalError: Code generation from strings disallowed for this context`
+    // before any of our async machinery ever runs. The generated
+    // `blazen.workers.js` prelude predefines these as globals so we can pick
+    // them up here without invoking `eval`. The Node / browser entries
+    // (`blazen.wasi.cjs`, `blazen.wasi-browser.js`) don't set the globals, so
+    // we fall back to `run_script` on those hosts (where it works fine).
+    let global = env.get_global()?;
+
     // IIFE returns a fresh closure each time `install` is called, but we
     // only ever hit this path once — the `OnceLock::set` below guards
     // re-registration. The closure body runs on the main JS thread when the
     // microtask fires.
-    let scheduler: Function<'_, (), Unknown<'_>> = env.run_script(
-        "(() => () => { Promise.resolve().then(() => globalThis.__blazenDrainAsyncQueue()); })()",
-    )?;
+    let scheduler: Function<'_, (), Unknown<'_>> = if global
+        .has_named_property("__blazenScheduler")?
+    {
+        global.get_named_property_unchecked("__blazenScheduler")?
+    } else {
+        env.run_script(
+            "(() => () => { Promise.resolve().then(() => globalThis.__blazenDrainAsyncQueue()); })()",
+        )?
+    };
 
     let tsfn: ThreadsafeFunction<(), Unknown<'static>, (), Status, false> = scheduler
         .build_threadsafe_function::<()>()
@@ -250,9 +266,13 @@ pub fn install(env: &Env) -> napi::Result<()> {
     // Sleeper: a JS function `(ms) => new Promise(r => setTimeout(r, ms))`.
     // workerd exposes `globalThis.setTimeout` natively, so this works on
     // Cloudflare Workers' WASI runtime (where tokio's time wheel doesn't).
-    // The IIFE shape mirrors the scheduler IIFE above for symmetry.
-    let sleeper: Function<'_, u32, Promise<()>> =
-        env.run_script("(() => (ms) => new Promise(r => globalThis.setTimeout(r, ms)))()")?;
+    // Same `globalThis.__blazenSleeper` predefined-vs-eval fallback as the
+    // scheduler above.
+    let sleeper: Function<'_, u32, Promise<()>> = if global.has_named_property("__blazenSleeper")? {
+        global.get_named_property_unchecked("__blazenSleeper")?
+    } else {
+        env.run_script("(() => (ms) => new Promise(r => globalThis.setTimeout(r, ms)))()")?
+    };
 
     let sleeper_tsfn: ThreadsafeFunction<u32, Promise<()>, u32, Status, false, true> = sleeper
         .build_threadsafe_function::<u32>()
