@@ -29,12 +29,17 @@ uniffi::include_scaffolding!("blazen");
 pub mod agent;
 pub mod batch;
 pub mod compute;
+pub mod compute_types;
 pub mod errors;
 pub mod llm;
 #[cfg(feature = "distributed")]
 pub mod peer;
 pub mod persist;
 pub mod pipeline;
+pub mod provider_api_protocol;
+pub mod provider_base;
+pub mod provider_custom;
+pub mod provider_defaults;
 pub mod providers;
 pub mod runtime;
 pub mod streaming;
@@ -44,6 +49,13 @@ pub mod workflow;
 pub use agent::{Agent, AgentResult, ToolHandler};
 pub use batch::{BatchItem, BatchResult, complete_batch, complete_batch_blocking};
 pub use compute::{ImageGenModel, ImageGenResult, SttModel, SttResult, TtsModel, TtsResult};
+pub use compute_types::{
+    AudioResult, BackgroundRemovalRequest, Generated3DModel, GeneratedAudio, GeneratedImage,
+    GeneratedVideo, ImageRequest, ImageResult, MediaOutput, MusicRequest, RequestTiming,
+    SpeechRequest, ThreeDRequest, ThreeDResult, TranscriptionRequest, TranscriptionResult,
+    TranscriptionSegment, UpscaleRequest, VideoRequest, VideoResult, VoiceCloneRequest,
+    VoiceHandle,
+};
 pub use errors::{BlazenError, BlazenResult};
 pub use llm::{
     ChatMessage, CompletionModel, CompletionRequest, CompletionResponse, EmbeddingModel,
@@ -56,6 +68,18 @@ pub use persist::{
     new_valkey_checkpoint_store,
 };
 pub use pipeline::{Pipeline, PipelineBuilder};
+pub use provider_api_protocol::{ApiProtocol, AuthMethod, KeyValue, OpenAiCompatConfig};
+pub use provider_base::BaseProvider;
+pub use provider_custom::{
+    CustomProvider, CustomProviderHandle, custom_provider_from_foreign, lm_studio,
+    new_openai_compat_config, ollama, openai_compat,
+};
+pub use provider_defaults::{
+    AudioMusicProviderDefaults, AudioSpeechProviderDefaults, BackgroundRemovalProviderDefaults,
+    BaseProviderDefaults, CompletionProviderDefaults, EmbeddingProviderDefaults,
+    ImageGenerationProviderDefaults, ImageUpscaleProviderDefaults, ThreeDProviderDefaults,
+    TranscriptionProviderDefaults, VideoProviderDefaults, VoiceCloningProviderDefaults,
+};
 pub use runtime::init;
 pub use streaming::{
     CompletionStreamSink, StreamChunk, complete_streaming, complete_streaming_blocking,

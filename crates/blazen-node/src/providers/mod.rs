@@ -1,13 +1,16 @@
 //! Provider implementations for the Node.js bindings.
 
 pub mod anthropic;
+pub mod api_protocol;
 pub mod azure;
+pub mod base;
 pub mod bedrock;
 pub mod capability_providers;
 pub mod cohere;
 pub mod completion_model;
 pub mod custom;
 pub mod deepseek;
+pub mod defaults;
 pub mod embedding_models;
 pub mod fal;
 pub mod fireworks;
@@ -20,7 +23,6 @@ pub mod openai;
 pub mod openai_compat;
 pub mod openrouter;
 pub mod perplexity;
-pub(crate) mod subclass;
 pub mod together;
 pub mod transcription;
 pub mod typed_tool;
@@ -51,7 +53,9 @@ pub mod whispercpp;
 
 // Re-export the main types.
 pub use anthropic::JsAnthropicProvider;
+pub use api_protocol::JsApiProtocol;
 pub use azure::JsAzureOpenAiProvider;
+pub use base::JsBaseProvider;
 pub use bedrock::JsBedrockProvider;
 pub use capability_providers::{
     CapabilityProviderConfig, JsBackgroundRemovalProvider, JsImageProvider, JsMusicProvider,
@@ -59,8 +63,15 @@ pub use capability_providers::{
 };
 pub use cohere::JsCohereProvider;
 pub use completion_model::JsCompletionModel;
-pub use custom::{CustomProviderOptions, JsCustomProvider};
+pub use custom::JsCustomProvider;
 pub use deepseek::JsDeepSeekProvider;
+pub use defaults::{
+    JsAudioMusicProviderDefaults, JsAudioSpeechProviderDefaults,
+    JsBackgroundRemovalProviderDefaults, JsBaseProviderDefaults, JsCompletionProviderDefaults,
+    JsEmbeddingProviderDefaults, JsImageGenerationProviderDefaults, JsImageUpscaleProviderDefaults,
+    JsThreeDProviderDefaults, JsTranscriptionProviderDefaults, JsVideoProviderDefaults,
+    JsVoiceCloningProviderDefaults,
+};
 pub use embedding_models::{JsOpenAiCompatEmbeddingModel, JsOpenAiEmbeddingModel};
 pub use fal::{JsFalEmbeddingModel, JsFalProvider};
 pub use fireworks::JsFireworksProvider;

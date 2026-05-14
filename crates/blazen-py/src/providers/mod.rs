@@ -1,7 +1,9 @@
 //! Provider wrappers for LLM completion models and compute providers.
 
 pub mod anthropic;
+pub mod api_protocol;
 pub mod azure;
+pub mod base;
 pub mod bedrock;
 pub mod capability_providers;
 pub mod cohere;
@@ -10,6 +12,7 @@ pub mod config;
 pub mod custom;
 pub mod decorators;
 pub mod deepseek;
+pub mod defaults;
 pub mod fal;
 pub mod fireworks;
 pub mod funcs;

@@ -219,38 +219,6 @@ impl PyImageModel {
 }
 
 // ---------------------------------------------------------------------------
-// PyHostDispatch (ABC)
-// ---------------------------------------------------------------------------
-
-/// Subclassable ABC mirroring [`blazen_llm::HostDispatch`].
-///
-/// `HostDispatch` is the host-side bridge that a `CustomProvider` calls into
-/// for each capability method. Native Python providers usually plug into the
-/// concrete `PyHostDispatch` adapter inside `crate::providers::custom`, but
-/// this ABC documents the surface that adapter delegates to so user code can
-/// declare "implements HostDispatch" without coupling to the adapter type.
-#[gen_stub_pyclass]
-#[pyclass(name = "HostDispatch", subclass)]
-pub struct PyHostDispatchAbc;
-
-#[gen_stub_pymethods]
-#[pymethods]
-impl PyHostDispatchAbc {
-    #[new]
-    fn new() -> Self {
-        Self
-    }
-
-    /// Dispatch a host call by capability name with a JSON payload. Should
-    /// return a coroutine resolving to a JSON-serializable value.
-    fn call(&self, _capability: String, _payload: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "subclass must override call()",
-        ))
-    }
-}
-
-// ---------------------------------------------------------------------------
 // PyStructuredResponse
 // ---------------------------------------------------------------------------
 

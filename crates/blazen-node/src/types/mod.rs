@@ -36,7 +36,7 @@ pub use crate::generated::{
     JsGeneratedAudio, JsGeneratedImage, JsGeneratedVideo, JsImageResult, JsJobHandle,
     JsMediaOutput, JsThreeDResult, JsTranscriptionResult, JsTranscriptionSegment, JsVideoResult,
 };
-pub use abc::{JsHostDispatch, JsLocalModel, JsModelRegistry, JsStructuredOutput, JsTool};
+pub use abc::{JsLocalModel, JsModelRegistry, JsStructuredOutput, JsTool};
 pub use artifact::JsArtifact;
 pub use chat_window::JsChatWindow;
 pub use citation::{CitationOptions, JsCitation, JsCitationClass};

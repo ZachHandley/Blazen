@@ -24,14 +24,13 @@ const FAL_API_KEY = process.env.FAL_API_KEY;
 const FAL_COMPUTE = process.env.BLAZEN_TEST_FAL_COMPUTE === "1";
 const FAL_VIDEO = process.env.BLAZEN_TEST_FAL_VIDEO === "1";
 
-const IMAGE_URL =
-  "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png";
+const IMAGE_URL = "https://blazen.dev/test-fixtures/transparency.png";
 // 3D generation deliberately uses an unfetchable URL (`example.invalid` is
 // reserved by RFC 2606) so fal fast-fails with file_download_error rather
 // than running full triposr 3D gen, which regularly exceeds the 300s test
 // budget on fal's queue. The test only cares about routing verification.
 const UNFETCHABLE_IMAGE_URL = "https://example.invalid/triposr_input.jpg";
-const AUDIO_URL = "https://upload.wikimedia.org/wikipedia/commons/c/c8/Example.ogg";
+const AUDIO_URL = "https://blazen.dev/test-fixtures/example.ogg";
 const VIDEO_URL =
   "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
 

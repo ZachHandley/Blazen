@@ -28,6 +28,7 @@ pub mod capability_providers;
 pub mod chat_message;
 pub mod completion_model;
 pub mod completion_types;
+pub mod compute;
 pub mod compute_provider;
 pub mod content;
 pub mod context;

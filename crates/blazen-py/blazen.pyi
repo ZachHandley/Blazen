@@ -12,15 +12,21 @@ __all__ = [
     "AgentEvent",
     "AgentResult",
     "AnthropicProvider",
+    "ApiProtocol",
     "Artifact",
     "AsyncByteIter",
     "AudioContent",
+    "AudioMusicProviderDefaults",
+    "AudioSpeechProviderDefaults",
     "AuthError",
     "AuthMethod",
     "AzureOpenAiProvider",
     "AzureOptions",
     "BackgroundRemovalProvider",
+    "BackgroundRemovalProviderDefaults",
     "BackgroundRemovalRequest",
+    "BaseProvider",
+    "BaseProviderDefaults",
     "BatchConfig",
     "BatchResult",
     "BedrockOptions",
@@ -53,6 +59,7 @@ __all__ = [
     "CohereProvider",
     "CompletionModel",
     "CompletionOptions",
+    "CompletionProviderDefaults",
     "CompletionRequest",
     "CompletionResponse",
     "CompletionStream",
@@ -78,6 +85,7 @@ __all__ = [
     "DynamicEvent",
     "EmbedOptions",
     "EmbeddingModel",
+    "EmbeddingProviderDefaults",
     "EmbeddingResponse",
     "EstimateCounter",
     "Event",
@@ -97,16 +105,17 @@ __all__ = [
     "GroqProvider",
     "HistoryEvent",
     "HistoryEventKind",
-    "HostDispatch",
     "HttpClient",
     "HttpClientConfig",
     "HttpClientHandle",
     "HttpPeerClient",
     "ImageContent",
+    "ImageGenerationProviderDefaults",
     "ImageModel",
     "ImageProvider",
     "ImageRequest",
     "ImageSource",
+    "ImageUpscaleProviderDefaults",
     "InMemoryBackend",
     "InferenceChunk",
     "InferenceChunkStream",
@@ -255,6 +264,7 @@ __all__ = [
     "TTSProvider",
     "TemplateRole",
     "ThreeDProvider",
+    "ThreeDProviderDefaults",
     "ThreeDRequest",
     "TiktokenCounter",
     "TimeoutError",
@@ -271,6 +281,7 @@ __all__ = [
     "TractOptions",
     "TractResponse",
     "Transcription",
+    "TranscriptionProviderDefaults",
     "TranscriptionRequest",
     "TypedTool",
     "UnsupportedError",
@@ -285,8 +296,10 @@ __all__ = [
     "ValkeyCheckpointStore",
     "VideoContent",
     "VideoProvider",
+    "VideoProviderDefaults",
     "VideoRequest",
     "VoiceCloneRequest",
+    "VoiceCloningProviderDefaults",
     "VoiceHandle",
     "VoiceProvider",
     "WhisperCppProvider",
@@ -581,6 +594,51 @@ class AnthropicProvider:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class ApiProtocol:
+    r"""
+    Selects how a [`CustomProvider`] talks to its backend for completion
+    calls.
+    
+    Construct via the classmethod factories:
+    
+        >>> from blazen import ApiProtocol, OpenAiCompatConfig
+        >>> cfg = OpenAiCompatConfig(
+        ...     provider_name="ollama",
+        ...     base_url="http://localhost:11434/v1",
+        ...     api_key="",
+        ...     default_model="llama3.1",
+        ... )
+        >>> proto = ApiProtocol.openai(cfg)
+        >>> proto.kind
+        'openai'
+        >>> dispatch_proto = ApiProtocol.custom()
+        >>> dispatch_proto.kind
+        'custom'
+    """
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        String discriminator: ``"openai"`` or ``"custom"``.
+        """
+    @property
+    def config(self) -> typing.Optional[OpenAiCompatConfig]:
+        r"""
+        The embedded [`OpenAiCompatConfig`] for the ``openai`` variant,
+        or ``None`` for the ``custom`` variant.
+        """
+    @classmethod
+    def openai(cls, config: OpenAiCompatConfig) -> ApiProtocol:
+        r"""
+        Build an OpenAI-protocol selector wrapping the supplied config.
+        """
+    @classmethod
+    def custom(cls, _cls: type) -> ApiProtocol:
+        r"""
+        Build a host-dispatch (user-defined) protocol selector.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class Artifact:
     r"""
     A typed artifact extracted from or returned by a model.
@@ -736,6 +794,46 @@ class AudioContent:
         """
     def __repr__(self) -> builtins.str: ...
 
+class AudioMusicProviderDefaults:
+    @property
+    def base(self) -> BaseProviderDefaults: ...
+    @base.setter
+    def base(self, value: BaseProviderDefaults) -> None: ...
+    @property
+    def before(self) -> typing.Optional[typing.Any]: ...
+    @before.setter
+    def before(self, value: typing.Optional[typing.Any]) -> None: ...
+    def __new__(cls, base: typing.Optional[BaseProviderDefaults] = None, before: typing.Optional[typing.Any] = None) -> AudioMusicProviderDefaults:
+        r"""
+        Construct role-specific defaults.
+        
+        Args:
+            base: Universal [`BaseProviderDefaults`]; defaults to an empty bag.
+            before: Optional ``async def(request: dict) -> None`` typed
+                hook applied after the universal ``before_request``.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+class AudioSpeechProviderDefaults:
+    @property
+    def base(self) -> BaseProviderDefaults: ...
+    @base.setter
+    def base(self, value: BaseProviderDefaults) -> None: ...
+    @property
+    def before(self) -> typing.Optional[typing.Any]: ...
+    @before.setter
+    def before(self, value: typing.Optional[typing.Any]) -> None: ...
+    def __new__(cls, base: typing.Optional[BaseProviderDefaults] = None, before: typing.Optional[typing.Any] = None) -> AudioSpeechProviderDefaults:
+        r"""
+        Construct role-specific defaults.
+        
+        Args:
+            base: Universal [`BaseProviderDefaults`]; defaults to an empty bag.
+            before: Optional ``async def(request: dict) -> None`` typed
+                hook applied after the universal ``before_request``.
+        """
+    def __repr__(self) -> builtins.str: ...
+
 @typing.final
 class AzureOpenAiProvider:
     r"""
@@ -857,6 +955,26 @@ class BackgroundRemovalProvider:
         Remove the background from an image.
         """
 
+class BackgroundRemovalProviderDefaults:
+    @property
+    def base(self) -> BaseProviderDefaults: ...
+    @base.setter
+    def base(self, value: BaseProviderDefaults) -> None: ...
+    @property
+    def before(self) -> typing.Optional[typing.Any]: ...
+    @before.setter
+    def before(self, value: typing.Optional[typing.Any]) -> None: ...
+    def __new__(cls, base: typing.Optional[BaseProviderDefaults] = None, before: typing.Optional[typing.Any] = None) -> BackgroundRemovalProviderDefaults:
+        r"""
+        Construct role-specific defaults.
+        
+        Args:
+            base: Universal [`BaseProviderDefaults`]; defaults to an empty bag.
+            before: Optional ``async def(request: dict) -> None`` typed
+                hook applied after the universal ``before_request``.
+        """
+    def __repr__(self) -> builtins.str: ...
+
 @typing.final
 class BackgroundRemovalRequest:
     r"""
@@ -867,6 +985,135 @@ class BackgroundRemovalRequest:
     @property
     def model(self) -> typing.Optional[builtins.str]: ...
     def __new__(cls, *, image_url: builtins.str, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> BackgroundRemovalRequest: ...
+    def __repr__(self) -> builtins.str: ...
+
+class BaseProvider:
+    r"""
+    Wraps any [`CompletionModel`] with instance-level defaults that are
+    applied to every ``complete()`` / ``stream()`` call before delegation.
+    
+    Phase A exposes the structural builder surface so foreign-language
+    bindings, audits, and Phase D subclass wiring have something to bind
+    against. The defaults bag is propagated verbatim; full hook dispatch
+    arrives in Phase B.
+    
+    Example:
+        >>> from blazen import BaseProvider, CompletionModel
+        >>> inner = CompletionModel.openai()
+        >>> provider = (
+        ...     BaseProvider(inner)
+        ...     .with_system_prompt("be terse")
+        ...     .with_response_format({"type": "json_object"})
+        ... )
+    """
+    @property
+    def defaults(self) -> CompletionProviderDefaults:
+        r"""
+        The currently configured defaults.
+        """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        The wrapped completion model's ``model_id``.
+        """
+    @property
+    def provider_id(self) -> typing.Optional[builtins.str]:
+        r"""
+        The wrapped completion model's ``provider_id``, if it exposes one.
+        
+        Returns ``None`` for built-in providers that don't expose a
+        ``provider_id`` attribute (the inner ``CompletionModel`` trait has no
+        ``provider_id`` method --- it lives on the compute-side
+        ``ComputeProvider`` trait).
+        """
+    @property
+    def inner(self) -> CompletionModel:
+        r"""
+        Return a fresh handle to the wrapped completion model.
+        """
+    def __new__(cls, inner: CompletionModel, defaults: typing.Optional[CompletionProviderDefaults] = None) -> BaseProvider:
+        r"""
+        Wrap a [`CompletionModel`] with instance-level defaults.
+        
+        Args:
+            inner: Any [`CompletionModel`] (built-in factory or subclass).
+            defaults: Optional [`CompletionProviderDefaults`]; defaults to
+                an empty bag.
+        """
+    def with_system_prompt(self, system_prompt: builtins.str) -> BaseProvider:
+        r"""
+        Return a clone with ``system_prompt`` set on the completion defaults.
+        """
+    def with_tools(self, tools: typing.Sequence[ToolDefinition]) -> BaseProvider:
+        r"""
+        Return a clone with the default tool list replaced.
+        """
+    def with_response_format(self, response_format: typing.Any) -> BaseProvider:
+        r"""
+        Return a clone with the default ``response_format`` replaced.
+        """
+    def with_before_request(self, hook: typing.Any) -> BaseProvider:
+        r"""
+        Return a clone with the universal JSON-level ``before_request`` hook
+        set on the embedded base defaults.
+        """
+    def with_before_completion(self, hook: typing.Any) -> BaseProvider:
+        r"""
+        Return a clone with the typed ``before_completion`` hook set.
+        """
+    def with_defaults(self, defaults: CompletionProviderDefaults) -> BaseProvider:
+        r"""
+        Return a clone with the entire defaults bag replaced.
+        """
+    def __repr__(self) -> builtins.str: ...
+    async def extract(self, schema: typing.Any, messages: typing.Sequence[ChatMessage]) -> typing.Any:
+        r"""
+        Typed structured extraction.
+        
+        Calls ``complete()`` with a ``response_format`` derived from the
+        supplied pydantic model's ``model_json_schema()`` and returns
+        ``schema.model_validate(parsed_json_content)``.
+        
+        Args:
+            schema: A pydantic ``BaseModel`` subclass (the class, not an
+                instance). The class must expose ``model_json_schema()`` and
+                ``model_validate()`` (pydantic v2 convention).
+            messages: A list of [`ChatMessage`] objects forming the prompt.
+        
+        Returns:
+            A coroutine resolving to an instance of ``schema``.
+        """
+
+class BaseProviderDefaults:
+    r"""
+    Universal provider defaults applicable to any provider role.
+    
+    Phase A carries only the JSON-level ``before_request`` hook --- a
+    coroutine that receives the Rust method name (e.g. ``"complete"`` /
+    ``"text_to_speech"``) and a mutable ``dict`` view of the request and
+    may mutate it in place before downstream typed processing.
+    
+    Example:
+        >>> async def stamp(method, body):
+        ...     body["trace_id"] = "abc"
+        >>> base = BaseProviderDefaults(before_request=stamp)
+    """
+    @property
+    def before_request(self) -> typing.Optional[typing.Any]:
+        r"""
+        The configured ``before_request`` hook, if any.
+        """
+    @before_request.setter
+    def before_request(self, value: typing.Optional[typing.Any]) -> None: ...
+    def __new__(cls, before_request: typing.Optional[typing.Any] = None) -> BaseProviderDefaults:
+        r"""
+        Construct a new defaults bag.
+        
+        Args:
+            before_request: Optional ``async def(method: str, body: dict) -> None``
+                callable invoked before every provider request. Stored only in
+                Phase A; Phase B will wire it through to actual dispatch.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -2363,6 +2610,78 @@ class CompletionOptions:
         """
     def __new__(cls, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, top_p: typing.Optional[builtins.float] = None, model: typing.Optional[builtins.str] = None, tools: typing.Optional[typing.Sequence[ToolDef]] = None, response_format: typing.Optional[typing.Any] = None) -> CompletionOptions: ...
 
+class CompletionProviderDefaults:
+    r"""
+    Completion-role defaults. Carries the universal ``base`` bag plus
+    completion-specific fields: ``system_prompt``, default ``tools``,
+    default ``response_format``, and the typed ``before_completion``
+    hook.
+    
+    All fields are read/write so Python users can tweak them after
+    construction.
+    
+    Example:
+        >>> async def add_user(req):
+        ...     req["metadata"]["origin"] = "blazen-py"
+        >>> defaults = CompletionProviderDefaults(
+        ...     system_prompt="be terse",
+        ...     tools=[my_tool],
+        ...     response_format={"type": "json_object"},
+        ...     before_completion=add_user,
+        ... )
+    """
+    @property
+    def base(self) -> BaseProviderDefaults:
+        r"""
+        The universal base defaults bag.
+        """
+    @base.setter
+    def base(self, value: BaseProviderDefaults) -> None: ...
+    @property
+    def system_prompt(self) -> typing.Optional[builtins.str]:
+        r"""
+        Default system prompt, if set.
+        """
+    @system_prompt.setter
+    def system_prompt(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def tools(self) -> builtins.list[ToolDefinition]:
+        r"""
+        Default tool definitions.
+        """
+    @tools.setter
+    def tools(self, value: typing.Sequence[ToolDefinition]) -> None: ...
+    @property
+    def response_format(self) -> typing.Optional[typing.Any]:
+        r"""
+        Default response-format dict, if set.
+        """
+    @response_format.setter
+    def response_format(self, value: typing.Optional[typing.Any]) -> None: ...
+    @property
+    def before_completion(self) -> typing.Optional[typing.Any]:
+        r"""
+        Typed completion-level ``before_completion`` hook, if set.
+        """
+    @before_completion.setter
+    def before_completion(self, value: typing.Optional[typing.Any]) -> None: ...
+    def __new__(cls, base: typing.Optional[BaseProviderDefaults] = None, system_prompt: typing.Optional[builtins.str] = None, tools: typing.Optional[typing.Sequence[ToolDefinition]] = None, response_format: typing.Optional[typing.Any] = None, before_completion: typing.Optional[typing.Any] = None) -> CompletionProviderDefaults:
+        r"""
+        Construct completion defaults.
+        
+        Args:
+            base: Universal [`BaseProviderDefaults`]; defaults to an empty bag.
+            system_prompt: Default system message prepended when the request
+                has none.
+            tools: Default tool definitions appended to the request's tools
+                list (request entries win on name collision).
+            response_format: Default JSON-schema dict applied when the request
+                has no ``response_format``.
+            before_completion: Optional ``async def(request: dict) -> None``
+                typed hook applied after the universal ``before_request``.
+        """
+    def __repr__(self) -> builtins.str: ...
+
 @typing.final
 class CompletionRequest:
     r"""
@@ -2977,148 +3296,200 @@ class Context:
         """
     def __repr__(self) -> builtins.str: ...
 
-@typing.final
-class CustomProvider:
+class CustomProvider(BaseProvider):
     r"""
-    A user-defined Blazen provider backed by a Python class instance.
+    A user-defined Blazen provider.
     
-    Wraps an arbitrary Python object whose async methods match Blazen's
-    capability trait names (``text_to_speech``, ``clone_voice``,
-    ``generate_image``, etc.) and exposes them as a first-class provider.
-    The workflow engine treats the result as implementing every capability
-    trait whose methods the wrapped object provides; missing methods
-    return ``UnsupportedError`` when called.
+    Two construction modes:
     
-    Request/response shapes use Blazen's typed request/result classes on
-    the Python side and get serialized through ``pythonize`` to the
-    wrapped object's methods, which receive/return plain dicts.
+    1. **Subclass**: define `class MyProv(CustomProvider): ...` and
+       override any subset of the 16 typed `async def` methods
+       (``complete``, ``stream``, ``embed``, ``text_to_speech``,
+       ``generate_music``, ``generate_sfx``, ``clone_voice``,
+       ``list_voices``, ``delete_voice``, ``generate_image``,
+       ``upscale_image``, ``text_to_video``, ``image_to_video``,
+       ``transcribe``, ``generate_3d``, ``remove_background``). Missing
+       methods raise ``UnsupportedError`` when called.
+    2. **Built-in OpenAI-protocol**: ``CustomProvider("my-server",
+       protocol=ApiProtocol.openai(cfg))`` builds an OpenAI-compat
+       backed provider — no host dispatch installed; the framework
+       speaks the wire format itself.
     
-    Example:
-        >>> import base64
-        >>> from elevenlabs.client import AsyncElevenLabs
-        >>> class ElevenLabsProvider:
-        ...     def __init__(self, api_key):
-        ...         self._client = AsyncElevenLabs(api_key=api_key)
-        ...     async def text_to_speech(self, request):
-        ...         audio = b"".join([
-        ...             chunk async for chunk in self._client.text_to_speech.convert(
-        ...                 voice_id=request["voice"],
-        ...                 text=request["text"],
-        ...                 model_id="eleven_multilingual_v2",
-        ...             )
-        ...         ])
-        ...         return {
-        ...             "audio": [{
-        ...                 "media": {
-        ...                     "base64": base64.b64encode(audio).decode(),
-        ...                     "media_type": "mpeg",
-        ...                 },
-        ...             }],
-        ...             "timing": {"total_ms": 0, "queue_ms": None, "execution_ms": None},
-        ...             "metadata": {},
-        ...         }
-        >>> provider = CustomProvider(
-        ...     ElevenLabsProvider(api_key="..."),
-        ...     provider_id="elevenlabs",
-        ... )
-        >>> result = await provider.text_to_speech(SpeechRequest(text="hi", voice="rachel"))
+    Convenience classmethod factories (``ollama``, ``lm_studio``,
+    ``openai_compat``) wrap the free functions in
+    :rust:func:`blazen_llm::ollama`.
+    
+    Example (subclass)::
+    
+        class ElevenLabsProvider(CustomProvider):
+            def __init__(self, api_key):
+                super().__init__(provider_id="elevenlabs")
+                self._client = AsyncElevenLabs(api_key=api_key)
+    
+            async def text_to_speech(self, request):
+                audio = b"".join([
+                    chunk async for chunk in self._client.text_to_speech.convert(
+                        voice_id=request["voice"],
+                        text=request["text"],
+                        model_id="eleven_multilingual_v2",
+                    )
+                ])
+                return {
+                    "audio": [{"media": {"base64": base64.b64encode(audio).decode(),
+                                         "media_type": "mpeg"}}],
+                    "timing": {"total_ms": 0, "queue_ms": None, "execution_ms": None},
+                    "metadata": {},
+                }
+    
+        provider = ElevenLabsProvider(api_key="...")
+        result = await provider.text_to_speech(SpeechRequest(text="hi", voice="rachel"))
     """
     @property
     def provider_id(self) -> builtins.str:
         r"""
         The provider id used for logging (e.g. ``"elevenlabs"``).
         """
-    def __new__(cls, host_object: typing.Any, *, provider_id: typing.Optional[builtins.str] = None) -> CustomProvider:
+    def __new__(cls, provider_id: builtins.str, protocol: typing.Optional[ApiProtocol] = None) -> tuple[CustomProvider, BaseProvider]:
         r"""
-        Wrap a Python host object as a Blazen [`CustomProvider`].
+        Construct a [`CustomProvider`].
+        
+        When called as ``CustomProvider(provider_id, protocol=...)`` (no
+        subclassing), ``protocol`` is required and must be
+        ``ApiProtocol.openai(cfg)`` — the framework speaks the OpenAI
+        Chat Completions wire format directly.
+        
+        When called as a subclass constructor (``MyProv(...)``),
+        ``protocol`` is unused and the subclass instance acts as the
+        host. The 16 typed methods on the subclass are dispatched to
+        directly.
         
         Args:
-            host_object: A Python class instance whose async methods match
-                Blazen capability trait methods
-                (``text_to_speech``, ``generate_image``, ``clone_voice``, ...).
-                Host methods must be ``async def`` and accept a single dict
-                argument shaped like the corresponding Blazen request type.
-            provider_id: Optional short identifier used for logging and
-                returned by ``provider_id``. Defaults to ``"custom"``.
+            provider_id: Short identifier used for logging.
+            protocol: Optional [`ApiProtocol`] — only used when *not*
+                subclassing. Required for the non-subclass path.
+        """
+    def __init__(self, provider_id: builtins.str, protocol: typing.Optional[ApiProtocol] = None) -> None:
+        r"""
+        Initialize the provider.
+        
+        Detects subclassing by comparing ``type(self)`` against
+        ``CustomProvider``. When the caller is a subclass, installs a
+        [`PyCustomProviderAdapter`] that wraps ``self`` and routes every
+        trait method through the Python instance. Otherwise validates
+        the supplied ``protocol`` and builds a backend via
+        :rust:func:`blazen_llm::openai_compat`.
+        """
+    @classmethod
+    def ollama(cls, model: builtins.str, host: typing.Optional[builtins.str] = None, port: typing.Optional[builtins.int] = None) -> CustomProvider:
+        r"""
+        Build a [`CustomProvider`] for a local Ollama server.
+        
+        Equivalent to constructing an OpenAI-compatible provider with
+        ``base_url = f"http://{host}:{port}/v1"`` and no API key.
+        
+        Args:
+            model: Model identifier loaded on the server (e.g. ``"llama3.1"``).
+            host: Hostname or IP. Defaults to ``"localhost"``.
+            port: TCP port. Defaults to Ollama's standard ``11434``.
+        """
+    @classmethod
+    def lm_studio(cls, model: builtins.str, host: typing.Optional[builtins.str] = None, port: typing.Optional[builtins.int] = None) -> CustomProvider:
+        r"""
+        Build a [`CustomProvider`] for an LM Studio server.
+        
+        Equivalent to constructing an OpenAI-compatible provider with
+        ``base_url = f"http://{host}:{port}/v1"`` and no API key. LM
+        Studio's default port is ``1234``.
+        
+        Args:
+            model: Model identifier loaded on the server.
+            host: Hostname or IP. Defaults to ``"localhost"``.
+            port: TCP port. Defaults to LM Studio's standard ``1234``.
+        """
+    @classmethod
+    def openai_compat(cls, provider_id: builtins.str, config: OpenAiCompatConfig) -> CustomProvider:
+        r"""
+        Build a [`CustomProvider`] from an arbitrary OpenAI-compatible config.
+        
+        Use for OpenAI-compatible servers not pre-configured by the
+        ``ollama`` / ``lm_studio`` helpers (vLLM, llama.cpp's server, TGI,
+        or hosted OpenAI-compat services).
+        
+        Args:
+            provider_id: Short identifier used for logging.
+            config: A fully-specified [`OpenAiCompatConfig`].
         """
     async def text_to_speech(self, request: SpeechRequest) -> AudioResult:
         r"""
-        Synthesize speech from text by calling the host's
-        ``text_to_speech`` async method.
+        Synthesize speech from text.
+        
+        Dispatches to ``self.text_to_speech(request)`` on subclasses, or
+        to the underlying handle's typed method otherwise. Raises
+        ``UnsupportedError`` if the underlying provider doesn't expose
+        the capability.
         """
     async def generate_music(self, request: MusicRequest) -> AudioResult:
         r"""
-        Generate music by calling the host's ``generate_music`` async method.
+        Generate music.
         """
     async def generate_sfx(self, request: MusicRequest) -> AudioResult:
         r"""
-        Generate sound effects by calling the host's ``generate_sfx`` async method.
+        Generate sound effects.
         """
     async def clone_voice(self, request: VoiceCloneRequest) -> VoiceHandle:
         r"""
-        Clone a voice from reference audio clips by calling the host's
-        ``clone_voice`` async method. Returns a persistent
+        Clone a voice from reference audio clips. Returns a persistent
         [`VoiceHandle`] that can be passed as ``SpeechRequest.voice`` on
         subsequent TTS calls.
         """
     async def list_voices(self) -> list[VoiceHandle]:
         r"""
-        List all voices known to the host by calling its ``list_voices``
-        async method (which must return a list of dicts shaped like
-        [`VoiceHandle`]).
+        List all voices known to the provider.
         """
     async def delete_voice(self, voice: VoiceHandle) -> None:
         r"""
-        Delete a previously cloned voice by calling the host's
-        ``delete_voice`` async method.
+        Delete a previously-cloned voice.
         """
     async def generate_image(self, request: ImageRequest) -> ImageResult:
         r"""
-        Generate an image by calling the host's ``generate_image`` async method.
+        Generate an image.
         """
     async def upscale_image(self, request: UpscaleRequest) -> ImageResult:
         r"""
-        Upscale an image by calling the host's ``upscale_image`` async method.
+        Upscale an image.
         """
     async def text_to_video(self, request: VideoRequest) -> VideoResult:
         r"""
-        Generate a video from text by calling the host's ``text_to_video``
-        async method.
+        Generate a video from text.
         """
     async def image_to_video(self, request: VideoRequest) -> VideoResult:
         r"""
-        Generate a video from an image by calling the host's
-        ``image_to_video`` async method.
+        Generate a video from a source image.
         """
     async def transcribe(self, request: TranscriptionRequest) -> TranscriptionResult:
         r"""
-        Transcribe audio by calling the host's ``transcribe`` async method.
+        Transcribe audio.
         """
     async def generate_3d(self, request: ThreeDRequest) -> ThreeDResult:
         r"""
-        Generate a 3D model by calling the host's ``generate_3d`` async method.
+        Generate a 3D model.
         """
     async def remove_background(self, request: BackgroundRemovalRequest) -> ImageResult:
         r"""
-        Remove the background from an image by calling the host's
-        ``remove_background`` async method.
+        Remove the background from an image.
         """
     def with_retry_config(self, config: RetryConfig) -> CustomProvider:
         r"""
         Set the provider-level default retry config.
         
-        Returns a new provider sharing the same host object, with the given
-        retry config applied. Pipeline / workflow / step / call scopes can
-        override this; if all are unset, this is the fallback.
+        Returns a new provider sharing the same underlying handle, with
+        the given retry config applied. Pipeline / workflow / step /
+        call scopes can override this; if all are unset, this is the
+        fallback.
         """
     def http_client(self) -> typing.Optional[HttpClientHandle]:
         r"""
         Return an opaque handle to the underlying HTTP client, if any.
-        
-        [`CustomProvider`] dispatches entirely through the host language,
-        so it owns no wire-level HTTP client. This method always returns
-        ``None``; the shape mirrors the trait-level `http_client` accessor
-        for uniform probing across providers.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -3483,6 +3854,18 @@ class EmbeddingModel:
             >>> model = EmbeddingModel.local()
             >>> model = EmbeddingModel.local(options=EmbedOptions(model_name="BGESmallENV15"))
         """
+
+class EmbeddingProviderDefaults:
+    r"""
+    Embedding-role defaults. Currently only carries the universal ``base``
+    bag (V1 has no embedding-specific hook).
+    """
+    @property
+    def base(self) -> BaseProviderDefaults: ...
+    @base.setter
+    def base(self, value: BaseProviderDefaults) -> None: ...
+    def __new__(cls, base: typing.Optional[BaseProviderDefaults] = None) -> EmbeddingProviderDefaults: ...
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class EmbeddingResponse:
@@ -4370,23 +4753,6 @@ class HistoryEventKind:
         """
     def __repr__(self) -> builtins.str: ...
 
-class HostDispatch:
-    r"""
-    Subclassable ABC mirroring [`blazen_llm::HostDispatch`].
-    
-    `HostDispatch` is the host-side bridge that a `CustomProvider` calls into
-    for each capability method. Native Python providers usually plug into the
-    concrete `PyHostDispatch` adapter inside `crate::providers::custom`, but
-    this ABC documents the surface that adapter delegates to so user code can
-    declare "implements HostDispatch" without coupling to the adapter type.
-    """
-    def __new__(cls) -> HostDispatch: ...
-    def call(self, _capability: builtins.str, _payload: typing.Any) -> typing.Any:
-        r"""
-        Dispatch a host call by capability name with a JSON payload. Should
-        return a coroutine resolving to a JSON-serializable value.
-        """
-
 class HttpClient:
     r"""
     Abstract base class for an HTTP transport.
@@ -4587,6 +4953,26 @@ class ImageContent:
         """
     def __repr__(self) -> builtins.str: ...
 
+class ImageGenerationProviderDefaults:
+    @property
+    def base(self) -> BaseProviderDefaults: ...
+    @base.setter
+    def base(self, value: BaseProviderDefaults) -> None: ...
+    @property
+    def before(self) -> typing.Optional[typing.Any]: ...
+    @before.setter
+    def before(self, value: typing.Optional[typing.Any]) -> None: ...
+    def __new__(cls, base: typing.Optional[BaseProviderDefaults] = None, before: typing.Optional[typing.Any] = None) -> ImageGenerationProviderDefaults:
+        r"""
+        Construct role-specific defaults.
+        
+        Args:
+            base: Universal [`BaseProviderDefaults`]; defaults to an empty bag.
+            before: Optional ``async def(request: dict) -> None`` typed
+                hook applied after the universal ``before_request``.
+        """
+    def __repr__(self) -> builtins.str: ...
+
 class ImageModel:
     r"""
     Subclassable ABC mirroring the Rust
@@ -4721,6 +5107,26 @@ class ImageSource:
         r"""
         Build a local-file source. Only honoured by local backends; cloud
         providers reject this variant.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+class ImageUpscaleProviderDefaults:
+    @property
+    def base(self) -> BaseProviderDefaults: ...
+    @base.setter
+    def base(self, value: BaseProviderDefaults) -> None: ...
+    @property
+    def before(self) -> typing.Optional[typing.Any]: ...
+    @before.setter
+    def before(self, value: typing.Optional[typing.Any]) -> None: ...
+    def __new__(cls, base: typing.Optional[BaseProviderDefaults] = None, before: typing.Optional[typing.Any] = None) -> ImageUpscaleProviderDefaults:
+        r"""
+        Construct role-specific defaults.
+        
+        Args:
+            base: Universal [`BaseProviderDefaults`]; defaults to an empty bag.
+            before: Optional ``async def(request: dict) -> None`` typed
+                hook applied after the universal ``before_request``.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -9686,6 +10092,26 @@ class ThreeDProvider:
         Generate a 3D model from a prompt or image.
         """
 
+class ThreeDProviderDefaults:
+    @property
+    def base(self) -> BaseProviderDefaults: ...
+    @base.setter
+    def base(self, value: BaseProviderDefaults) -> None: ...
+    @property
+    def before(self) -> typing.Optional[typing.Any]: ...
+    @before.setter
+    def before(self, value: typing.Optional[typing.Any]) -> None: ...
+    def __new__(cls, base: typing.Optional[BaseProviderDefaults] = None, before: typing.Optional[typing.Any] = None) -> ThreeDProviderDefaults:
+        r"""
+        Construct role-specific defaults.
+        
+        Args:
+            base: Universal [`BaseProviderDefaults`]; defaults to an empty bag.
+            before: Optional ``async def(request: dict) -> None`` typed
+                hook applied after the universal ``before_request``.
+        """
+    def __repr__(self) -> builtins.str: ...
+
 @typing.final
 class ThreeDRequest:
     r"""
@@ -10246,6 +10672,26 @@ class Transcription:
             >>> print(result.text)
         """
 
+class TranscriptionProviderDefaults:
+    @property
+    def base(self) -> BaseProviderDefaults: ...
+    @base.setter
+    def base(self, value: BaseProviderDefaults) -> None: ...
+    @property
+    def before(self) -> typing.Optional[typing.Any]: ...
+    @before.setter
+    def before(self, value: typing.Optional[typing.Any]) -> None: ...
+    def __new__(cls, base: typing.Optional[BaseProviderDefaults] = None, before: typing.Optional[typing.Any] = None) -> TranscriptionProviderDefaults:
+        r"""
+        Construct role-specific defaults.
+        
+        Args:
+            base: Universal [`BaseProviderDefaults`]; defaults to an empty bag.
+            before: Optional ``async def(request: dict) -> None`` typed
+                hook applied after the universal ``before_request``.
+        """
+    def __repr__(self) -> builtins.str: ...
+
 @typing.final
 class TranscriptionRequest:
     r"""
@@ -10703,6 +11149,26 @@ class VideoProvider:
         Generate a video from an image (image-to-video).
         """
 
+class VideoProviderDefaults:
+    @property
+    def base(self) -> BaseProviderDefaults: ...
+    @base.setter
+    def base(self, value: BaseProviderDefaults) -> None: ...
+    @property
+    def before(self) -> typing.Optional[typing.Any]: ...
+    @before.setter
+    def before(self, value: typing.Optional[typing.Any]) -> None: ...
+    def __new__(cls, base: typing.Optional[BaseProviderDefaults] = None, before: typing.Optional[typing.Any] = None) -> VideoProviderDefaults:
+        r"""
+        Construct role-specific defaults.
+        
+        Args:
+            base: Universal [`BaseProviderDefaults`]; defaults to an empty bag.
+            before: Optional ``async def(request: dict) -> None`` typed
+                hook applied after the universal ``before_request``.
+        """
+    def __repr__(self) -> builtins.str: ...
+
 @typing.final
 class VideoRequest:
     r"""
@@ -10743,6 +11209,26 @@ class VoiceCloneRequest:
     @property
     def description(self) -> typing.Optional[builtins.str]: ...
     def __new__(cls, *, name: builtins.str, reference_urls: typing.Sequence[builtins.str], language: typing.Optional[builtins.str] = None, description: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> VoiceCloneRequest: ...
+    def __repr__(self) -> builtins.str: ...
+
+class VoiceCloningProviderDefaults:
+    @property
+    def base(self) -> BaseProviderDefaults: ...
+    @base.setter
+    def base(self, value: BaseProviderDefaults) -> None: ...
+    @property
+    def before(self) -> typing.Optional[typing.Any]: ...
+    @before.setter
+    def before(self, value: typing.Optional[typing.Any]) -> None: ...
+    def __new__(cls, base: typing.Optional[BaseProviderDefaults] = None, before: typing.Optional[typing.Any] = None) -> VoiceCloningProviderDefaults:
+        r"""
+        Construct role-specific defaults.
+        
+        Args:
+            base: Universal [`BaseProviderDefaults`]; defaults to an empty bag.
+            before: Optional ``async def(request: dict) -> None`` typed
+                hook applied after the universal ``before_request``.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final

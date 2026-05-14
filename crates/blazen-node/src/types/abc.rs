@@ -238,57 +238,6 @@ impl JsStructuredOutput {
 }
 
 // ---------------------------------------------------------------------------
-// JsHostDispatch
-// ---------------------------------------------------------------------------
-
-/// Base class for user-extendable host dispatchers.
-///
-/// Mirrors [`blazen_llm::HostDispatch`]. Subclasses override `call(method,
-/// request)` to plug a JS-side capability table into a Blazen
-/// [`CustomProvider`](crate::providers::JsCustomProvider). Most users
-/// will reach for [`crate::providers::JsCustomProvider`] directly with a
-/// plain JS object; this class exists so users can subclass with shared
-/// state and override `hasMethod` independently from `call`.
-#[napi(js_name = "HostDispatch")]
-pub struct JsHostDispatch {}
-
-#[napi]
-#[allow(
-    clippy::new_without_default,
-    clippy::must_use_candidate,
-    clippy::missing_errors_doc,
-    clippy::unused_async,
-    clippy::needless_pass_by_value
-)]
-impl JsHostDispatch {
-    /// Create a new host dispatch base instance.
-    #[napi(constructor)]
-    pub fn new() -> Self {
-        Self {}
-    }
-
-    /// Dispatch a Rust-side capability call to the JavaScript host.
-    /// Subclasses **must** override.
-    #[napi]
-    pub async fn call(
-        &self,
-        _method: String,
-        _request: serde_json::Value,
-    ) -> Result<serde_json::Value> {
-        Err(napi::Error::from_reason("subclass must override call()"))
-    }
-
-    /// Whether this dispatcher implements `method`. Subclasses **must**
-    /// override.
-    #[napi(js_name = "hasMethod")]
-    pub fn has_method(&self, _method: String) -> Result<bool> {
-        Err(napi::Error::from_reason(
-            "subclass must override hasMethod()",
-        ))
-    }
-}
-
-// ---------------------------------------------------------------------------
 // JsImageModel
 // ---------------------------------------------------------------------------
 

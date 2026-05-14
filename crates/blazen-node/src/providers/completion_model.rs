@@ -12,9 +12,10 @@ use napi_derive::napi;
 use tokio_stream::StreamExt;
 
 use blazen_llm::CompletionModel;
-use blazen_llm::HostDispatch;
+use blazen_llm::CustomProvider as CustomProviderTrait;
 use blazen_llm::cache::{CacheConfig, CachedCompletionModel};
 use blazen_llm::fallback::FallbackModel;
+use blazen_llm::providers::custom::CustomProviderHandle;
 use blazen_llm::providers::openai_compat::OpenAiCompatConfig;
 use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
 use blazen_llm::types::provider_options::ProviderOptions;
@@ -24,7 +25,7 @@ use crate::error::{blazen_error_to_napi, llm_error_to_napi};
 use crate::generated::{
     JsAzureOptions, JsBedrockOptions, JsCacheConfig, JsFalOptions, JsProviderOptions, JsRetryConfig,
 };
-use crate::providers::custom::NodeHostDispatch;
+use crate::providers::custom::JsCustomProviderAdapter;
 use crate::providers::openai_compat::JsOpenAiCompatConfig;
 use crate::types::{
     JsChatMessage, JsCompletionOptions, JsCompletionResponse, JsStreamChunk, build_response,
@@ -453,7 +454,7 @@ impl JsCompletionModel {
     /// ```
     #[napi(factory)]
     pub fn ollama(host: String, port: u16, model: String) -> Result<Self> {
-        let provider = blazen_llm::CustomProvider::ollama(host, port, model);
+        let provider = blazen_llm::ollama(host, port, model);
         Ok(Self {
             inner: Some(Arc::new(provider)),
             local_model: None,
@@ -470,7 +471,7 @@ impl JsCompletionModel {
     /// ```
     #[napi(factory, js_name = "lmStudio")]
     pub fn lm_studio(host: String, port: u16, model: String) -> Result<Self> {
-        let provider = blazen_llm::CustomProvider::lm_studio(host, port, model);
+        let provider = blazen_llm::lm_studio(host, port, model);
         Ok(Self {
             inner: Some(Arc::new(provider)),
             local_model: None,
@@ -494,7 +495,7 @@ impl JsCompletionModel {
     #[napi(factory, js_name = "openaiCompat")]
     pub fn openai_compat(provider_id: String, config: JsOpenAiCompatConfig) -> Result<Self> {
         let cfg: OpenAiCompatConfig = config.into();
-        let provider = blazen_llm::CustomProvider::openai_compat(provider_id, cfg);
+        let provider = blazen_llm::openai_compat(provider_id, cfg);
         Ok(Self {
             inner: Some(Arc::new(provider)),
             local_model: None,
@@ -506,7 +507,7 @@ impl JsCompletionModel {
     /// host object.
     ///
     /// `hostObject` must expose Blazen capability methods (e.g.
-    /// `complete`, `stream`) following the `NodeHostDispatch` mapping. The
+    /// `complete`, `stream`) using the camelCase trait-method names. The
     /// optional `providerId` is used for logging; defaults to `"custom"`.
     ///
     /// ```javascript
@@ -518,11 +519,11 @@ impl JsCompletionModel {
     #[napi(factory)]
     pub fn custom(host_object: Object<'_>, provider_id: Option<String>) -> Result<Self> {
         let id = provider_id.unwrap_or_else(|| "custom".to_owned());
-        let dispatch: Arc<dyn HostDispatch> =
-            Arc::new(NodeHostDispatch::from_host_object(&host_object)?);
-        let provider = blazen_llm::CustomProvider::with_dispatch(id, dispatch);
+        let adapter: Arc<dyn CustomProviderTrait> =
+            Arc::new(JsCustomProviderAdapter::from_host_object(id, &host_object)?);
+        let handle = CustomProviderHandle::new(adapter);
         Ok(Self {
-            inner: Some(Arc::new(provider)),
+            inner: Some(Arc::new(handle)),
             local_model: None,
             config: None,
         })
@@ -965,12 +966,8 @@ impl JsCompletionModel {
 ///   side here because the JavaScript instance handle is not retained on
 ///   `JsCompletionModel`. Callers should use the
 ///   [`JsCompletionModel::custom`] factory which accepts a host object
-///   directly.
-///
-/// The `JsSubclassCompletionModel` type exists in
-/// [`crate::providers::subclass`] for future wiring once `runAgent` is
-/// updated to accept an `Object` parameter, but is unreachable from this
-/// function today.
+///   directly, or subclass [`crate::providers::custom::JsCustomProvider`]
+///   instead.
 pub(crate) fn arc_from_js_model(
     model: &JsCompletionModel,
 ) -> napi::Result<Arc<dyn CompletionModel>> {

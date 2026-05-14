@@ -155,7 +155,17 @@ regen_swift() {
         --language swift \
         --config "$CFG" \
         --out-dir bindings/swift/Sources/UniFFIBlazen
-    echo "  ✓ Swift bindings → bindings/swift/Sources/UniFFIBlazen/"
+    # uniffi-bindgen emits the FFI C header at
+    # bindings/swift/Sources/UniFFIBlazen/BlazenFFI.h, but the SwiftPM
+    # target that actually links against the cdylib lives at
+    # bindings/swift/Sources/BlazenFFI/ and expects its header at
+    # include/BlazenFFI.h. Without this sync step, the second location
+    # silently goes stale and the Swift build fails with a missing-symbol
+    # link error after any UniFFI surface change.
+    mkdir -p bindings/swift/Sources/BlazenFFI/include
+    cp bindings/swift/Sources/UniFFIBlazen/BlazenFFI.h \
+       bindings/swift/Sources/BlazenFFI/include/BlazenFFI.h
+    echo "  ✓ Swift bindings → bindings/swift/Sources/UniFFIBlazen/ (header synced to BlazenFFI/include/)"
 }
 
 regen_kotlin() {

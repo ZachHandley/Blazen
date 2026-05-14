@@ -463,9 +463,9 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (host, port, model))]
     fn ollama(host: &str, port: u16, model: String) -> Self {
-        let provider = blazen_llm::CustomProvider::ollama(host, port, model);
+        let handle = blazen_llm::ollama(host, port, model);
         Self {
-            inner: Some(Arc::new(provider)),
+            inner: Some(Arc::new(handle)),
             local_model: None,
             config: None,
         }
@@ -480,9 +480,9 @@ impl PyCompletionModel {
     #[staticmethod]
     #[pyo3(signature = (host, port, model))]
     fn lm_studio(host: &str, port: u16, model: String) -> Self {
-        let provider = blazen_llm::CustomProvider::lm_studio(host, port, model);
+        let handle = blazen_llm::lm_studio(host, port, model);
         Self {
-            inner: Some(Arc::new(provider)),
+            inner: Some(Arc::new(handle)),
             local_model: None,
             config: None,
         }
@@ -499,9 +499,9 @@ impl PyCompletionModel {
         provider_id: String,
         config: PyRef<'_, crate::providers::openai_compat::PyOpenAiCompatConfig>,
     ) -> Self {
-        let provider = blazen_llm::CustomProvider::openai_compat(provider_id, config.inner.clone());
+        let handle = blazen_llm::openai_compat(provider_id, config.inner.clone());
         Self {
-            inner: Some(Arc::new(provider)),
+            inner: Some(Arc::new(handle)),
             local_model: None,
             config: None,
         }
@@ -521,11 +521,13 @@ impl PyCompletionModel {
     #[pyo3(signature = (host_object, provider_id=None))]
     fn custom(host_object: Py<PyAny>, provider_id: Option<String>) -> Self {
         let id = provider_id.unwrap_or_else(|| "custom".to_owned());
-        let dispatch: std::sync::Arc<dyn blazen_llm::HostDispatch> =
-            std::sync::Arc::new(crate::providers::custom::PyHostDispatch::new(host_object));
-        let provider = blazen_llm::CustomProvider::with_dispatch(id, dispatch);
+        let adapter =
+            crate::providers::custom::PyCustomProviderAdapter::new(host_object, id.clone());
+        let trait_obj: std::sync::Arc<dyn blazen_llm::CustomProvider> =
+            std::sync::Arc::new(adapter);
+        let handle = blazen_llm::CustomProviderHandle::new(trait_obj);
         Self {
-            inner: Some(Arc::new(provider)),
+            inner: Some(Arc::new(handle)),
             local_model: None,
             config: None,
         }

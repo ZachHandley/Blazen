@@ -257,6 +257,7 @@ dependencies = [
  "blazen-macros",
  "chrono",
  "dashmap",
+ "futures-core",
  "futures-executor",
  "futures-util",
  "js-sys",

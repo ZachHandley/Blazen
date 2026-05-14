@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package blazen.controlplane.v1;
+
+// BlazenControlPlane: central server that workers connect TO. Workers
+// register their capabilities via the bidi `WorkerSession` stream;
+// orchestrators submit/cancel/query workflows via unary or server-streaming
+// RPCs. Every payload is postcard-encoded inside a `PostcardRequest` /
+// `PostcardResponse` byte envelope so the proto schema never drifts —
+// per-message versioning lives in the `envelope_version` field on each
+// payload struct.
+service BlazenControlPlane {
+  // -------- Native worker transport (bidi stream) --------
+  // Worker sends Hello+Heartbeat+Result+Event; server pushes
+  // Assignment+Cancel+Drain. One TCP connection per worker session.
+  rpc WorkerSession(stream PostcardRequest) returns (stream PostcardResponse);
+
+  // -------- Orchestrator surface --------
+  rpc SubmitWorkflow(PostcardRequest) returns (PostcardResponse);
+  rpc CancelWorkflow(PostcardRequest) returns (PostcardResponse);
+  rpc DescribeWorkflow(PostcardRequest) returns (PostcardResponse);
+  rpc SubscribeRunEvents(PostcardRequest) returns (stream PostcardResponse);
+  rpc SubscribeAll(PostcardRequest) returns (stream PostcardResponse);
+
+  // -------- Admin / introspection --------
+  rpc ListWorkers(PostcardRequest) returns (PostcardResponse);
+  rpc DrainWorker(PostcardRequest) returns (PostcardResponse);
+}
+
+message PostcardRequest {
+  bytes postcard_payload = 1;
+}
+
+message PostcardResponse {
+  bytes postcard_payload = 1;
+}

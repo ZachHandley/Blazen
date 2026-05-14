@@ -24,9 +24,13 @@ use crate::chat_message::js_messages_to_vec;
 use crate::completion_model::WasmCompletionModel;
 
 pub mod anthropic;
+pub mod api_protocol;
 pub mod azure;
+pub mod base;
 pub mod bedrock;
 pub mod compat_providers;
+pub mod custom;
+pub mod defaults;
 pub mod fal;
 pub mod gemini;
 pub mod openai;
@@ -34,12 +38,23 @@ pub mod openai_compat;
 pub mod typed_tool;
 
 pub use anthropic::WasmAnthropicProvider;
+pub use api_protocol::WasmApiProtocol;
 pub use azure::WasmAzureOpenAiProvider;
+pub use base::WasmBaseProvider;
 pub use bedrock::WasmBedrockProvider;
 pub use compat_providers::{
     WasmCohereProvider, WasmDeepSeekProvider, WasmFireworksProvider, WasmGroqProvider,
     WasmMistralProvider, WasmOpenRouterProvider, WasmPerplexityProvider, WasmTogetherProvider,
     WasmXaiProvider,
+};
+pub use custom::WasmCustomProvider;
+pub use defaults::{
+    WasmAudioMusicProviderDefaults, WasmAudioSpeechProviderDefaults,
+    WasmBackgroundRemovalProviderDefaults, WasmBaseProviderDefaults,
+    WasmCompletionProviderDefaults, WasmEmbeddingProviderDefaults,
+    WasmImageGenerationProviderDefaults, WasmImageUpscaleProviderDefaults,
+    WasmThreeDProviderDefaults, WasmTranscriptionProviderDefaults, WasmVideoProviderDefaults,
+    WasmVoiceCloningProviderDefaults,
 };
 pub use fal::WasmFalProvider;
 pub use gemini::WasmGeminiProvider;

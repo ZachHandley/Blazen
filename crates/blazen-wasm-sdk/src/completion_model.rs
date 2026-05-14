@@ -828,7 +828,7 @@ pub fn create_ollama_provider(
     port: u16,
     model: &str,
 ) -> Result<WasmCompletionModel, JsValue> {
-    let provider = blazen_llm::CustomProvider::ollama(host, port, model);
+    let provider = blazen_llm::ollama(host, port, model);
     Ok(WasmCompletionModel::from_arc(Arc::new(provider)))
 }
 
@@ -847,7 +847,7 @@ pub fn create_lm_studio_provider(
     port: u16,
     model: &str,
 ) -> Result<WasmCompletionModel, JsValue> {
-    let provider = blazen_llm::CustomProvider::lm_studio(host, port, model);
+    let provider = blazen_llm::lm_studio(host, port, model);
     Ok(WasmCompletionModel::from_arc(Arc::new(provider)))
 }
 
@@ -882,7 +882,7 @@ pub fn create_openai_compat_provider(
         query_params: Vec::new(),
         supports_model_listing: true,
     };
-    let provider = blazen_llm::CustomProvider::openai_compat(provider_id, cfg);
+    let provider = blazen_llm::openai_compat(provider_id, cfg);
     Ok(WasmCompletionModel::from_arc(Arc::new(provider)))
 }
 

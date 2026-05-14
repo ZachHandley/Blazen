@@ -195,6 +195,15 @@ impl Clone for WasmOpenAiCompatConfig {
     }
 }
 
+impl WasmOpenAiCompatConfig {
+    /// Crate-internal accessor returning a clone of the wrapped
+    /// [`OpenAiCompatConfig`]. Used by Phase B factories on
+    /// `WasmCustomProvider` to build `blazen_llm::CustomProvider` instances.
+    pub(crate) fn inner_config(&self) -> OpenAiCompatConfig {
+        self.inner.clone()
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Provider class
 // ---------------------------------------------------------------------------

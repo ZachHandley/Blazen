@@ -1,398 +1,556 @@
 ---
 title: "Custom Providers (Subclassing)"
-description: "Bring your own LLM, embedding, TTS, image, or memory backend to Blazen"
+description: "Bring your own LLM, embedding, TTS, image, video, transcription, or 3D backend to Blazen — one typed trait, seven bindings"
 section: "guides"
 order: 25
 ---
 
-Blazen's capability types are subclassable from every SDK. You write an ordinary class that inherits from `CompletionModel`, `EmbeddingModel`, `TTSProvider`, `ImageProvider`, `MemoryBackend`, or any of the other base classes, override the relevant async methods, and Blazen's workflow engine, agents, retry/cache wrappers, `Memory`, and batch helpers consume your class exactly like a built-in.
+`CustomProvider` is Blazen's flagship integration point. Every public binding
+exposes it as the same foreign-implementable typed trait: subclass the class
+(or conform to the protocol) from Python, Node, WASM, Go, Swift, Kotlin, or
+Ruby, override one or more of **16 typed methods**, and the resulting
+handle plugs directly into agents, workflows, pipelines, `Memory`, and the
+batch helpers — exactly like a built-in provider.
 
-This is the release's flagship integration point: if an API, a local binary, a gRPC service, or a kernel-level SDK can be reached from Python, Node, or Rust, you can wire it into Blazen as a first-class provider.
+## What is `CustomProvider`?
 
-## Why subclass instead of wrapping?
+`CustomProvider` is a single trait with 16 async methods covering every
+capability Blazen knows how to dispatch:
 
-A subclassed provider is indistinguishable to Blazen from a built-in one. That unlocks:
+- **3 completion / embedding methods** — `complete`, `stream`, `embed`
+- **13 typed compute methods** — `text_to_speech`, `generate_music`,
+  `generate_sfx`, `clone_voice`, `list_voices`, `delete_voice`,
+  `generate_image`, `upscale_image`, `text_to_video`, `image_to_video`,
+  `transcribe`, `generate_3d`, `remove_background`
 
-- **Workflow step compatibility** -- use your provider with `@step` / `wf.addStep` / `#[step]` without adapter code.
-- **Agent and tool integrations** -- agents, tool-calling loops, and streaming consumers all dispatch through the same trait.
-- **`with_retry`, `with_cache`, `with_fallback`** -- transient-error handling and caching compose on top of any `CompletionModel`, built-in or subclassed (with a few current limitations -- see below).
-- **`Memory` drop-in** -- swap OpenAI embeddings for a self-hosted sentence-transformers endpoint without touching any retrieval code.
-- **Batch execution** -- `complete_batch` / `completeBatch` works with subclassed models.
+The same conceptual API exists in all 7 bindings. Names follow each
+language's idiomatic case (`text_to_speech` in Python / Ruby,
+`textToSpeech` in JS / Swift / Kotlin / Go), but the semantics are
+identical. Every method you do not override raises a typed `Unsupported`
+error when called — no stub returns, no silent failures.
 
-The alternative -- wrapping your HTTP client inside a workflow step -- forfeits all of the above.
+Concrete-handle types vary by binding:
 
-## Available base classes
+| Binding | Subclass / conform to | Handle returned by factories |
+|---|---|---|
+| Python | `class MyProv(CustomProvider): ...` | `CustomProvider` |
+| Node | `class MyProv extends CustomProvider { ... }` | `CustomProvider` |
+| WASM | `class MyProv { ... }` + `CustomProvider.fromJsObject(id, instance)` | `CustomProvider` |
+| Go | `type MyProv struct { blazen.UnsupportedCustomProvider }` | `*CustomProviderHandle` |
+| Swift | `class MyProv: CustomProvider { ... }` | `CustomProviderHandle` |
+| Kotlin | `class MyProv : CustomProviderBase() { ... }` | `CustomProviderHandle` |
+| Ruby | `class MyProv < Blazen::CustomProvider; ... end` | `CustomProviderHandle` |
 
-| Capability | Python base class | Node base class | Key method(s) |
-|---|---|---|---|
-| Chat completion | `CompletionModel` | `CompletionModel` | `complete`, `stream` |
-| Embeddings | `EmbeddingModel` | `EmbeddingModel` | `embed` |
-| Text-to-speech | `TTSProvider` | via `CustomProvider` | `text_to_speech` |
-| Music / SFX | `MusicProvider` | via `CustomProvider` | `generate_music`, `generate_sfx` |
-| Image generation | `ImageProvider` | via `CustomProvider` | `generate_image`, `upscale_image` |
-| Video generation | `VideoProvider` | via `CustomProvider` | `text_to_video`, `image_to_video` |
-| 3D model generation | `ThreeDProvider` | via `CustomProvider` | `generate_3d` |
-| Background removal | `BackgroundRemovalProvider` | via `CustomProvider` | `remove_background` |
-| Transcription | `Transcription` | via `CustomProvider` | `transcribe` |
-| Voice cloning | `VoiceProvider` | via `CustomProvider` | `clone_voice`, `list_voices`, `delete_voice` |
-| Memory backend | `MemoryBackend` | `MemoryBackend` | `put`, `get`, `delete`, `list`, `len`, `search_by_bands` |
+## Quick start — subclass to add a TTS provider
 
-Node.js wraps media providers through a single `CustomProvider` class that dispatches to whichever of the standard method names your host object implements -- the capability is inferred from the methods present, not declared upfront.
-
-## Custom completion model
-
-```python
-from blazen import CompletionModel, CompletionResponse, StreamChunk, ChatMessage
-import httpx
-
-class MyLlmProvider(CompletionModel):
-    def __init__(self, api_key: str):
-        super().__init__(model_id="my-model-v1", context_length=8192)
-        self._client = httpx.AsyncClient(
-            base_url="https://api.example.com/v1",
-            headers={"Authorization": f"Bearer {api_key}"},
-        )
-
-    async def complete(self, messages, options=None):
-        payload = {
-            "model": "my-model-v1",
-            "messages": [{"role": m.role, "content": m.content} for m in messages],
-            "temperature": options.temperature if options else 0.7,
-        }
-        resp = await self._client.post("/chat/completions", json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-        return CompletionResponse(
-            content=data["choices"][0]["message"]["content"],
-            model="my-model-v1",
-            finish_reason=data["choices"][0]["finish_reason"],
-        )
-
-    async def stream(self, messages, on_chunk=None, options=None):
-        async with self._client.stream("POST", "/chat/completions", json={
-            "model": "my-model-v1",
-            "messages": [{"role": m.role, "content": m.content} for m in messages],
-            "stream": True,
-        }) as r:
-            async for line in r.aiter_lines():
-                if line.startswith("data: "):
-                    chunk = StreamChunk(delta=line[6:])
-                    if on_chunk:
-                        on_chunk(chunk)
-                    yield chunk
-
-model = MyLlmProvider(api_key="...")
-response = await model.complete([ChatMessage.user("Hello!")])
-```
-
-```typescript
-import { CompletionModel, ChatMessage } from "blazen";
-
-class MyLlmProvider extends CompletionModel {
-  constructor(apiKey: string) {
-    super({ modelId: "my-model-v1", contextLength: 8192 });
-    this._apiKey = apiKey;
-  }
-
-  async complete(messages: ChatMessage[], options?: unknown) {
-    const resp = await fetch("https://api.example.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this._apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "my-model-v1",
-        messages: messages.map((m) => ({ role: m.role, content: m.content })),
-      }),
-    });
-    const data = await resp.json();
-    return {
-      content: data.choices[0].message.content,
-      model: "my-model-v1",
-      finishReason: data.choices[0].finish_reason,
-    };
-  }
-
-  async stream(messages: ChatMessage[], onChunk?: (c: unknown) => void) {
-    // ... SSE parsing, invoke onChunk per event ...
-  }
-
-  private _apiKey: string;
-}
-
-const model = new MyLlmProvider(process.env.MY_API_KEY!);
-const response = await model.complete([ChatMessage.user("Hello!")]);
-```
-
-```rust
-use async_trait::async_trait;
-use blazen_llm::{
-    BlazenError, ChatMessage, CompletionModel, CompletionRequest, CompletionResponse,
-    ProviderConfig, StreamChunk,
-};
-use futures_util::Stream;
-use std::pin::Pin;
-
-pub struct MyLlmProvider {
-    config: ProviderConfig,
-    api_key: String,
-}
-
-#[async_trait]
-impl CompletionModel for MyLlmProvider {
-    fn model_id(&self) -> &str {
-        "my-model-v1"
-    }
-
-    fn provider_config(&self) -> Option<&ProviderConfig> {
-        Some(&self.config)
-    }
-
-    async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, BlazenError> {
-        // Issue HTTP request, parse response, return CompletionResponse.
-        todo!()
-    }
-
-    async fn stream(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
-    {
-        // Issue streaming request, adapt to Stream<Item = Result<StreamChunk, ...>>.
-        todo!()
-    }
-}
-```
-
-## Custom embedding model
+Each example below overrides `text_to_speech` only; every other method
+inherits the `Unsupported` default.
 
 ```python
-from blazen import EmbeddingModel, EmbeddingResponse
+# Python
+from blazen import CustomProvider, SpeechRequest, AudioResult
 
-class MyEmbeddings(EmbeddingModel):
-    def __init__(self):
-        super().__init__(model_id="mini-lm-v6", dimensions=384)
-
-    async def embed(self, texts):
-        vectors = await my_http_embed(texts)  # your API call
-        return EmbeddingResponse(
-            embeddings=vectors,
-            model="mini-lm-v6",
-        )
-
-model = MyEmbeddings()
-resp = await model.embed(["hello", "world"])
-```
-
-```typescript
-import { EmbeddingModel } from "blazen";
-
-class MyEmbeddings extends EmbeddingModel {
-  constructor() {
-    super({ modelId: "mini-lm-v6", dimensions: 384 });
-  }
-
-  async embed(texts: string[]) {
-    const vectors = await myHttpEmbed(texts);
-    return { embeddings: vectors, model: "mini-lm-v6" };
-  }
-}
-```
-
-The custom embedder plugs straight into `Memory`:
-
-```python
-from blazen import Memory, InMemoryBackend
-memory = Memory(MyEmbeddings(), InMemoryBackend())
-```
-
-## Custom TTS / image / video / 3D providers (Python)
-
-Subclass the matching base class and override exactly one method. The dispatcher wires your subclass into the relevant capability trait automatically.
-
-```python
-from blazen import TTSProvider, AudioResult, GeneratedAudio, MediaOutput
-
-class ElevenLabsTTS(TTSProvider):
+class ElevenLabsTTS(CustomProvider):
     def __init__(self, api_key: str):
         super().__init__(provider_id="elevenlabs")
         self._api_key = api_key
 
-    async def text_to_speech(self, request):
-        audio_bytes = await eleven_labs_tts(self._api_key, request.text, request.voice)
+    async def text_to_speech(self, request: SpeechRequest) -> AudioResult:
+        audio_bytes = await elevenlabs_call(self._api_key, request.text, request.voice)
         return AudioResult(
-            audio=[GeneratedAudio(
-                media=MediaOutput.from_base64(
-                    base64.b64encode(audio_bytes).decode(),
-                    media_type="mpeg",
-                ),
-            )],
+            audio=[{"media": {"base64": base64.b64encode(audio_bytes).decode(),
+                              "media_type": "mpeg"}}],
+            timing={"total_ms": 0, "queue_ms": None, "execution_ms": None},
+            metadata={},
         )
+
+provider = ElevenLabsTTS(api_key="sk-...")
+result = await provider.text_to_speech(SpeechRequest(text="hi", voice="rachel"))
 ```
 
-The same pattern applies to `ImageProvider`, `VideoProvider`, `MusicProvider`, `ThreeDProvider`, `BackgroundRemovalProvider`, and `VoiceProvider`. Each exposes a `provider_id`, optional `base_url`, optional `pricing`, and optional `vram_estimate_bytes` -- fill in only the knobs that make sense for your backend.
-
-## Custom providers (Node.js)
-
-Node.js uses a single `CustomProvider` wrapper: write a plain class with `async` methods named after the capabilities you support and wrap it.
-
 ```typescript
-import { CustomProvider } from "blazen";
+// Node — extend CustomProvider; the constructor detects the subclass and
+// installs a JsCustomProviderAdapter automatically.
+import { ApiProtocol, CustomProvider } from "blazen";
 
-class ElevenLabsTTS {
-  constructor(private apiKey: string) {}
+class ElevenLabsTTS extends CustomProvider {
+  constructor(private apiKey: string) {
+    super("elevenlabs", ApiProtocol.custom());
+  }
 
-  async textToSpeech(request: { text: string; voice?: string }) {
-    const audio = await elevenLabs(this.apiKey, request);
+  async textToSpeech(request) {
+    const audio = await elevenlabsCall(this.apiKey, request.text, request.voice);
     return {
       audio: [{
-        media: {
-          base64: audio.toString("base64"),
-          mediaType: "mpeg",
-        },
+        media: { base64: Buffer.from(audio).toString("base64"), mediaType: "mpeg" },
       }],
+      timing: { totalMs: 0, queueMs: null, executionMs: null },
+      metadata: {},
+    };
+  }
+}
+
+const provider = new ElevenLabsTTS("sk-...");
+const audio = await provider.textToSpeech({ text: "hi", voice: "rachel" });
+```
+
+```typescript
+// WASM — there's no class-extends across the wasm-bindgen boundary, so wrap
+// a plain JS instance via CustomProvider.fromJsObject(...).
+import { CustomProvider } from "@zorpx/blazen";
+
+class ElevenLabsTTS {
+  constructor(apiKey) { this.apiKey = apiKey; }
+  async textToSpeech(request) {
+    const audio = await elevenlabsCall(this.apiKey, request.text, request.voice);
+    return {
+      audio: [{ media: { base64: btoa(audio), mediaType: "mpeg" } }],
       timing: { totalMs: 0 },
       metadata: {},
     };
   }
-
-  async cloneVoice(request) { /* ... */ }
-  async listVoices() { /* ... */ }
 }
 
-const provider = new CustomProvider(new ElevenLabsTTS("..."), {
-  providerId: "elevenlabs",
-});
-
-const result = await provider.textToSpeech({ text: "hi", voice: "rachel" });
+const provider = CustomProvider.fromJsObject("elevenlabs", new ElevenLabsTTS("sk-..."));
+const audio = await provider.textToSpeech({ text: "hi", voice: "rachel" });
 ```
 
-The wrapper inspects which methods exist on the host object; calls to missing methods surface as `UnsupportedError`, matching the behaviour of built-in providers that only implement some of the capability traits.
+```go
+// Go — embed UnsupportedCustomProvider for the Unsupported defaults, then
+// override the methods you implement.
+package main
 
-## Custom memory backend
+import (
+    "github.com/zorpxinc/blazen-go"
+)
 
-```python
-from blazen import MemoryBackend, Memory, EmbeddingModel, ProviderOptions
-import json, sqlite3
+type ElevenLabsTTS struct {
+    blazen.UnsupportedCustomProvider
+    apiKey string
+}
 
-class SqliteBackend(MemoryBackend):
-    def __init__(self, path: str):
-        super().__init__()
-        self._conn = sqlite3.connect(path)
-        self._conn.execute("""
-            CREATE TABLE IF NOT EXISTS entries (
-                id TEXT PRIMARY KEY,
-                text TEXT NOT NULL,
-                metadata TEXT,
-                bands TEXT NOT NULL
-            )
-        """)
+func (p *ElevenLabsTTS) ProviderId() string { return "elevenlabs" }
 
-    async def put(self, entry):
-        self._conn.execute(
-            "INSERT OR REPLACE INTO entries(id, text, metadata, bands) VALUES (?,?,?,?)",
-            (entry["id"], entry["text"], json.dumps(entry.get("metadata", {})), json.dumps(entry["bands"])),
-        )
-        self._conn.commit()
+func (p *ElevenLabsTTS) TextToSpeech(req blazen.SpeechRequest) (blazen.AudioResult, error) {
+    audio, err := elevenlabsCall(p.apiKey, req.Text, req.Voice)
+    if err != nil {
+        return blazen.AudioResult{}, err
+    }
+    return blazen.AudioResult{
+        Audio: []blazen.GeneratedAudio{{
+            Media: blazen.MediaOutput{Base64: base64.StdEncoding.EncodeToString(audio), MediaType: "mpeg"},
+        }},
+    }, nil
+}
 
-    async def get(self, id):
-        row = self._conn.execute(
-            "SELECT id, text, metadata, bands FROM entries WHERE id = ?", (id,)
-        ).fetchone()
-        return None if row is None else {
-            "id": row[0], "text": row[1],
-            "metadata": json.loads(row[2] or "{}"),
-            "bands": json.loads(row[3]),
-        }
-
-    async def delete(self, id):
-        cur = self._conn.execute("DELETE FROM entries WHERE id = ?", (id,))
-        self._conn.commit()
-        return cur.rowcount > 0
-
-    async def list(self):
-        return [await self.get(r[0]) for r in self._conn.execute("SELECT id FROM entries")]
-
-    async def len(self):
-        return self._conn.execute("SELECT COUNT(*) FROM entries").fetchone()[0]
-
-    async def search_by_bands(self, bands, limit):
-        # Return candidate entries whose band set intersects the query bands.
-        # Blazen does the final similarity ranking.
-        ...
-
-memory = Memory(EmbeddingModel.openai(), SqliteBackend("./memory.db"))
+handle := blazen.CustomProviderFrom(&ElevenLabsTTS{apiKey: "sk-..."})
+audio, err := handle.TextToSpeech(blazen.SpeechRequest{Text: "hi", Voice: blazen.Some("rachel")})
 ```
 
-## Custom progress callback
+```swift
+// Swift — protocol-extension defaults supply Unsupported for every method.
+// Conform a class and override what you support.
+import BlazenSwift
 
-`ProgressCallback` is the subclassable hook for download and load progress reporting -- model weight downloads, GGUF/safetensors loads, and any other long-running fetch path inside Blazen accept an instance and call its progress method as bytes arrive. The base class ships with a no-op default, so subclasses only need to override the one method they care about.
+final class ElevenLabsTTS: CustomProvider {
+    let apiKey: String
+    init(apiKey: String) { self.apiKey = apiKey }
+
+    func providerId() -> String { "elevenlabs" }
+
+    func textToSpeech(request: SpeechRequest) async throws -> AudioResult {
+        let audio = try await elevenlabsCall(apiKey, request.text, request.voice)
+        return AudioResult(
+            audio: [GeneratedAudio(media: MediaOutput(
+                base64: audio.base64EncodedString(), mediaType: "mpeg"))],
+            timing: nil, metadata: [:])
+    }
+}
+
+let handle = Providers.custom(ElevenLabsTTS(apiKey: "sk-..."))
+let result = try await handle.textToSpeech(
+    request: SpeechRequest(text: "hi", voice: "rachel"))
+```
+
+```kotlin
+// Kotlin — extend CustomProviderBase (abstract class with Unsupported-throwing
+// suspend defaults). Kotlin interfaces can't carry suspend default methods,
+// so the base class is the idiomatic path.
+import dev.zorpx.blazen.*
+
+class ElevenLabsTts(private val apiKey: String) : CustomProviderBase() {
+    override fun providerId(): String = "elevenlabs"
+
+    override suspend fun textToSpeech(request: SpeechRequest): AudioResult {
+        val audio = elevenlabsCall(apiKey, request.text, request.voice)
+        return AudioResult(
+            audio = listOf(GeneratedAudio(
+                media = MediaOutput(base64 = audio.encodeBase64(), mediaType = "mpeg"))),
+            timing = null, metadata = emptyMap())
+    }
+}
+
+val handle: CustomProviderHandle = Blazen.customProvider(ElevenLabsTts("sk-..."))
+val result = handle.textToSpeech(SpeechRequest(text = "hi", voice = "rachel"))
+```
+
+```ruby
+# Ruby — subclass Blazen::CustomProvider; every non-overridden method
+# raises Blazen::UnsupportedError. Use Blazen::CustomProvider.from_subclass
+# to obtain a handle that links to the cabi vtable.
+require "blazen"
+
+class ElevenLabsTts < Blazen::CustomProvider
+  def initialize(api_key)
+    super()
+    @api_key = api_key
+  end
+
+  def provider_id
+    "elevenlabs"
+  end
+
+  def text_to_speech(_request)
+    # V1 limitation: Ruby subclasses can raise UnsupportedError back through
+    # the cabi vtable, but cannot yet return a typed AudioResult record
+    # across the FFI boundary. Raise for now, or use a factory below.
+    raise Blazen::UnsupportedError, "ElevenLabsTts: result records pending"
+  end
+end
+
+handle = Blazen::CustomProvider.from_subclass(ElevenLabsTts.new("sk-..."))
+```
+
+## Quick start — factory for OpenAI-compatible servers
+
+Ollama, LM Studio, vLLM, llama.cpp's server, TGI, and any other
+OpenAI-chat-completions-wire-format backend ship as built-in factories.
+No subclassing required:
 
 ```python
-from blazen import ProgressCallback
+# Python
+from blazen import CustomProvider, OpenAiCompatConfig
 
-class LoggingProgress(ProgressCallback):
-    def on_progress(self, downloaded: int, total: int | None) -> None:
-        if total:
-            pct = downloaded / total * 100
-            print(f"{pct:.1f}% ({downloaded}/{total})")
+p = CustomProvider.ollama(model="llama3.1")
+p = CustomProvider.lm_studio(model="my-model", host="127.0.0.1", port=1234)
+p = CustomProvider.openai_compat("vllm", OpenAiCompatConfig(
+    base_url="http://gpu:8000/v1", default_model="meta-llama/Llama-3-70B"))
 ```
 
 ```typescript
-import { ProgressCallback } from "blazen";
+// Node
+import { CustomProvider } from "blazen";
 
-class LoggingProgress extends ProgressCallback {
-  override onProgress(downloaded: bigint, total?: bigint): void {
-    if (total) {
-      const pct = (Number(downloaded) / Number(total) * 100).toFixed(1);
-      console.log(`${pct}% (${downloaded}/${total})`);
-    }
-  }
-}
+const ollama  = CustomProvider.ollama("llama3.1");
+const lmStdio = CustomProvider.lmStudio("my-model", "127.0.0.1", 1234);
+const vllm    = CustomProvider.openaiCompat("vllm", {
+  baseUrl: "http://gpu:8000/v1", defaultModel: "meta-llama/Llama-3-70B",
+});
 ```
 
-Pass the instance to any API that accepts a `ProgressCallback` -- most commonly the model-cache download paths driven by `ModelManager` and the local-inference loaders. The default `on_progress` / `onProgress` is a no-op, so subclasses only override the method (no `super().__init__(...)` arguments required) and the dispatcher takes care of the rest. `total` is `None` / `undefined` whenever the upstream source does not advertise a `Content-Length`, so always guard on it before computing a percentage.
+```typescript
+// WASM
+import { CustomProvider } from "@zorpx/blazen";
 
-## Integrating with retry, cache, and agents
+const ollama = CustomProvider.ollama("llama3.1");
+const lmStd  = CustomProvider.lmStudio("my-model");
+```
 
-Subclassed `CompletionModel`s work with Blazen's workflow engine, `complete_batch`, streaming consumers, `ChatWindow`, and `Memory` out of the box. They also serve as the primary model inside an `Agent`.
+```go
+// Go
+ollama  := blazen.Ollama("localhost", 11434, "llama3.1")
+lmStdio := blazen.LMStudio("localhost", 1234, "my-model")
+vllm    := blazen.OpenAICompat("vllm", &blazen.OpenAICompatConfig{
+    BaseURL: "http://gpu:8000/v1", DefaultModel: "meta-llama/Llama-3-70B"})
+```
 
-The wrapper decorators currently have the following behaviour on subclassed models:
+```swift
+// Swift
+let ollama = Providers.ollama(model: "llama3.1")
+let lmStd  = Providers.lmStudio(host: "127.0.0.1", port: 1234, model: "my-model")
+```
 
-- **`with_fallback`** -- requires every model in the chain to be a built-in provider. Passing a subclass raises immediately with a clear error. If you need fallback for a custom provider, implement retry inside your subclass's `complete` / `stream` methods.
-- **`with_retry`** / **`with_cache`** -- not yet supported on subclassed models. The wrappers raise at construction time. Implement retry logic inside your own `complete` override (it is usually a few lines around `httpx` / `reqwest`) and cache via an external layer such as Redis.
+```kotlin
+// Kotlin
+val ollama = Blazen.ollama(model = "llama3.1")
+val lmStd  = Blazen.lmStudio(model = "my-model", port = 1234u)
+```
 
-These restrictions exist because the wrappers assume a specific internal `Arc<dyn CompletionModel>` shape that subclassed models do not yet expose. Lifting them is on the roadmap; track the issue in the blazen-llm crate if you need it.
+```ruby
+# Ruby
+ollama  = Blazen.ollama(model: "llama3.1")
+lm_stdio = Blazen.lm_studio(model: "my-model", port: 1234)
+```
 
-Every other integration -- streaming, tool-calling, agents, workflows, batch, memory, prompts, chat window -- works identically to built-in providers.
+All factories return a `CustomProvider` / `CustomProviderHandle` that
+exposes the same 16 methods as a subclassed implementation, but only
+`complete` / `stream` / `embed` succeed — the 13 compute methods raise
+`Unsupported` because the OpenAI chat-completions wire format does not
+cover those capabilities.
 
-## Error handling
+## The 16 methods
 
-Raise Blazen-compatible exceptions from your override and they surface as `BlazenError` to callers:
+| Method | Argument | Return | Role |
+|---|---|---|---|
+| `complete` | `CompletionRequest` (messages + options) | `CompletionResponse` | chat completion |
+| `stream` | `CompletionRequest` + sink | `void` (streaming chunks via sink / callback) | chat completion |
+| `embed` | `List<String>` | `EmbeddingResponse` | embeddings |
+| `text_to_speech` | `SpeechRequest` | `AudioResult` | speech synthesis |
+| `generate_music` | `MusicRequest` | `AudioResult` | music generation |
+| `generate_sfx` | `MusicRequest` | `AudioResult` | sound-effect generation |
+| `clone_voice` | `VoiceCloneRequest` | `VoiceHandle` | voice cloning |
+| `list_voices` | _(none)_ | `List<VoiceHandle>` | voice library listing |
+| `delete_voice` | `VoiceHandle` | `void` | voice library cleanup |
+| `generate_image` | `ImageRequest` | `ImageResult` | image generation |
+| `upscale_image` | `UpscaleRequest` | `ImageResult` | image upscale |
+| `text_to_video` | `VideoRequest` | `VideoResult` | text-to-video |
+| `image_to_video` | `VideoRequest` | `VideoResult` | image-to-video |
+| `transcribe` | `TranscriptionRequest` | `TranscriptionResult` | audio transcription |
+| `generate_3d` | `ThreeDRequest` | `ThreeDResult` | 3D model generation |
+| `remove_background` | `BackgroundRemovalRequest` | `ImageResult` | background removal |
+
+Each binding ships idiomatic record types backing these arguments and
+returns. Python and Ruby use snake_case fields; Node, WASM, Go, Swift,
+and Kotlin use camelCase. The Rust definitions in `blazen-llm` are the
+source of truth; bindings are regenerated from the workspace by
+`scripts/regen-bindings.sh` and `pnpm --filter blazen run build`.
+
+## Instance defaults
+
+Every `CustomProvider` / `BaseProvider` exposes builder methods to set
+defaults applied to every call before delegation. The four universal
+builders are:
+
+- `with_system_prompt(prompt)` — prepend a system message
+- `with_tools(tools)` — default tool list for completion
+- `with_response_format(format)` — default `response_format`
+  (e.g. JSON-mode)
+- `with_before_request(hook)` — universal pre-flight hook seeing the
+  Rust method name (`"complete"`, `"text_to_speech"`, ...) and the
+  request body for mutation
+
+A completion-specific `with_before_completion(hook)` typed-request hook
+is also available; nine role-specific `*ProviderDefaults` types
+(`AudioSpeechProviderDefaults`, `AudioMusicProviderDefaults`,
+`VoiceCloningProviderDefaults`, `ImageGenerationProviderDefaults`,
+`ImageUpscaleProviderDefaults`, `VideoProviderDefaults`,
+`TranscriptionProviderDefaults`, `ThreeDProviderDefaults`,
+`BackgroundRemovalProviderDefaults`) carry their own before-hook for
+each compute capability.
 
 ```python
-from blazen import BlazenError
-
-class MyProvider(CompletionModel):
-    async def complete(self, messages, options=None):
-        try:
-            return await self._call_api(messages)
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 429:
-                raise BlazenError.rate_limited(f"upstream rate limit: {e}")
-            raise BlazenError.provider("my-provider", str(e))
+# Python — chain builders on the inherited BaseProvider surface
+provider = (
+    CustomProvider.ollama(model="llama3.1")
+    .with_system_prompt("Be terse.")
+    .with_response_format({"type": "json_object"})
+    .with_before_request(lambda method, body: body.setdefault("trace_id", "abc"))
+)
 ```
 
-For Node, throw an `Error` with a descriptive message -- it crosses the napi-rs boundary as a `BlazenError` with source attached. For Rust, return `Err(BlazenError::…)` directly; the error taxonomy is the same as for built-in providers.
+```typescript
+// Node — same builder surface on every CustomProvider
+const provider = CustomProvider.ollama("llama3.1")
+  .withSystemPrompt("Be terse.")
+  .withResponseFormat({ type: "json_object" })
+  .withBeforeRequest(async (method, body) => { body.trace_id = "abc"; });
+```
 
-## When not to subclass
+```rust
+// Rust / Swift / Kotlin — builders return a new handle with mutated defaults
+let provider = ollama("localhost", 11434, "llama3.1")
+    .with_system_prompt("Be terse.")
+    .with_response_format(serde_json::json!({"type": "json_object"}));
+```
 
-If your backend speaks the OpenAI chat-completions wire format already (FastChat, vLLM, Ollama, LM Studio, LiteLLM), use `CompletionModel.openai` with a custom `base_url` via `ProviderOptions` instead. Subclassing is for providers that need genuinely different request/response handling, local execution, or side effects (signing, token exchange, hardware bring-up).
+```go
+// Go — JSON-encoded variants of with_tools_json and with_response_format_json
+provider := blazen.Ollama("localhost", 11434, "llama3.1")
+provider = provider.WithSystemPrompt("Be terse.")
+provider = provider.WithResponseFormatJson(`{"type":"json_object"}`)
+```
+
+```ruby
+# Ruby — fluent builder chain on the CustomProviderHandle
+provider = Blazen.ollama(model: "llama3.1")
+  .with_system_prompt("Be terse.")
+  .with_response_format_json('{"type":"json_object"}')
+```
+
+Per-role defaults plug in via `with_defaults(...)`:
+
+```python
+from blazen import CustomProvider, AudioSpeechProviderDefaults
+
+# Attach a per-role "before-TTS" hook that mutates SpeechRequest
+defaults = AudioSpeechProviderDefaults(before=stamp_speech_request)
+provider = my_tts_provider.with_speech_defaults(defaults)
+```
+
+```kotlin
+val provider = Blazen.ollama(model = "llama3.1")
+    .withDefaults(CompletionProviderDefaults(systemPrompt = "Be terse."))
+```
+
+## Typed `extract<T>` extraction
+
+`BaseProvider.extract(schema, messages)` is the ergonomic
+structured-output API. Each binding accepts whatever schema container
+is idiomatic for its language:
+
+```python
+# Python — pydantic BaseModel subclass
+from pydantic import BaseModel
+
+class Recipe(BaseModel):
+    title: str
+    ingredients: list[str]
+    steps: list[str]
+
+provider = CustomProvider.ollama(model="llama3.1")
+recipe = await provider.extract(Recipe, [
+    ChatMessage.user("Give me a chocolate chip cookie recipe."),
+])
+print(recipe.title)
+```
+
+```typescript
+// Node — zod schema or raw JSON Schema
+import { z } from "zod";
+
+const Recipe = z.object({
+  title: z.string(),
+  ingredients: z.array(z.string()),
+  steps: z.array(z.string()),
+});
+
+const provider = CustomProvider.ollama("llama3.1");
+const recipe = await provider.extract(Recipe, [
+  { role: "user", content: "Give me a cookie recipe." },
+]);
+```
+
+```typescript
+// WASM — JSON Schema object (zod schemas converted via zod-to-json-schema)
+const provider = CustomProvider.ollama("llama3.1");
+const recipe = await provider.extract(
+  {
+    type: "object",
+    properties: {
+      title: { type: "string" },
+      ingredients: { type: "array", items: { type: "string" } },
+    },
+    required: ["title", "ingredients"],
+  },
+  [{ role: "user", content: "Give me a cookie recipe." }],
+);
+```
+
+```go
+// Go — JSON Schema as a []byte; result is JSON the caller unmarshals.
+schema := []byte(`{
+    "type":"object",
+    "properties":{"title":{"type":"string"}},
+    "required":["title"]
+}`)
+provider := blazen.Ollama("localhost", 11434, "llama3.1")
+jsonStr, err := provider.AsBaseProvider().Extract(string(schema), messages)
+var recipe Recipe
+_ = json.Unmarshal([]byte(jsonStr), &recipe)
+```
+
+```swift
+// Swift — any Decodable type. The wrapper derives JSON Schema and decodes.
+struct Recipe: Decodable {
+    let title: String
+    let ingredients: [String]
+    let steps: [String]
+}
+
+let provider = Providers.ollama(model: "llama3.1")
+let recipe: Recipe = try await provider.extract(
+    schema: Recipe.self, messages: messages)
+```
+
+```kotlin
+// Kotlin — KSerializer<T> from kotlinx.serialization.
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.serializer
+
+@Serializable
+data class Recipe(val title: String, val ingredients: List<String>)
+
+val provider = Blazen.ollama(model = "llama3.1")
+val recipe: Recipe = provider.extract(Recipe.serializer(), messages)
+```
+
+```ruby
+# Ruby — schema as a Ruby Hash; result is a Hash the caller validates.
+schema = {
+  "type" => "object",
+  "properties" => { "title" => { "type" => "string" } },
+  "required" => ["title"],
+}
+provider = Blazen.ollama(model: "llama3.1")
+recipe = provider.extract(schema, messages)  # => { "title" => "..." }
+```
+
+Internally `extract` populates `response_format` with the JSON Schema,
+issues `complete()`, parses the assistant content as JSON, and validates
+against the supplied schema container.
+
+## `ApiProtocol` reference
+
+`ApiProtocol` is the enum that selects how a `CustomProvider` talks to
+its backend. There are two variants:
+
+- `ApiProtocol.openai(config)` — Blazen owns HTTP, SSE parsing, tool
+  serialization, and embeddings; the foreign side only supplies the
+  endpoint config (`OpenAiCompatConfig`).
+- `ApiProtocol.custom()` — Blazen forwards every dispatched method
+  through to the foreign-implemented `CustomProvider`.
+
+The four factories pick the right variant automatically:
+
+- `ollama` / `lm_studio` — `ApiProtocol.openai({ base_url: ... })`
+- `openai_compat(provider_id, config)` — `ApiProtocol.openai(config)`
+- `from_subclass` / `from_js_object` / `Providers.custom(...)` /
+  `Blazen.customProvider(...)` / `CustomProviderFrom(...)` —
+  `ApiProtocol.custom()`
+
+You can construct it explicitly when calling `CustomProvider(provider_id,
+protocol=...)` directly, but the factories cover every realistic use
+case.
+
+## Limitations
+
+Two limitations to flag for V1:
+
+- **Ruby V1 — typed return values across the FFI vtable.** A Ruby
+  subclass can `raise Blazen::UnsupportedError` from any method and the
+  cabi adapter surfaces it correctly back to Rust as a typed
+  `BlazenError`. However, Ruby cannot yet construct and return success
+  records (`AudioResult`, `ImageResult`, etc.) across the cabi vtable —
+  the response-side serializers are pending. Subclasses are useful for
+  raising structured errors, custom routing, and as the host for
+  factory-built providers (`Blazen.ollama` etc.), but for the moment
+  Ruby cannot directly return compute results from an overridden
+  method. The factory-built handles work end-to-end.
+
+- **Node prototype-walk re-entrance.** When the Node `CustomProvider`
+  base constructor detects subclassing it walks the prototype chain to
+  find user-defined methods. If a subclass's constructor invokes a
+  capability method on `this` _before_ `super()` returns, the override
+  has not yet been installed and the call will see the base class's
+  `Unsupported`-raising default. Always finish `super()` before
+  dispatching capability methods on `this`.
 
 ## See also
 
-- [Batch Completions](/guides/batch-processing/) -- subclassed models work with the batch helper
-- [Memory](/guides/memory/) -- drop in custom embedders and backends
-- [Media Generation](/guides/media-generation/) -- see the built-in capability contracts you are implementing
-- [Local Inference](/guides/local-inference/) -- for in-process providers, pair subclassing with `ModelManager` for VRAM budgeting
+- [Batch Completions](/guides/batch-processing/) — subclassed providers
+  work with the batch helper
+- [Memory](/guides/memory/) — drop in custom embedders and backends
+- [Media Generation](/guides/media-generation/) — the typed compute
+  surfaces your `CustomProvider` plugs into
+- [Local Inference](/guides/local-inference/) — pair subclassing with
+  `ModelManager` for VRAM budgeting on in-process providers

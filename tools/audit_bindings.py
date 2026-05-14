@@ -292,6 +292,36 @@ WHITELIST: frozenset[str] = frozenset(
         # it (the registry itself is filled at module init from `inventory`
         # entries on the Rust side).
         "StepDeserializerRegistry",
+        # --- blazen-llm providers/defaults BeforeRequestHook aliases ---
+        # Rust type aliases for `Arc<dyn Fn(&mut T) -> BoxFuture<Result<(), BlazenError>>>`.
+        # Closure aliases, same pattern as `StepFn` / `ConditionFn` -- bindings
+        # expose them as callback parameters on the `*ProviderDefaults` classes,
+        # not as standalone bindable types.
+        "BeforeRequestHook",
+        "BeforeCompletionRequestHook",
+        "BeforeSpeechRequestHook",
+        "BeforeMusicRequestHook",
+        "BeforeImageRequestHook",
+        "BeforeUpscaleRequestHook",
+        "BeforeVideoRequestHook",
+        "BeforeTranscriptionRequestHook",
+        "BeforeThreeDRequestHook",
+        "BeforeVoiceCloneRequestHook",
+        "BeforeBackgroundRemovalRequestHook",
+        # `CustomProviderHandle` is the Rust internal concrete wrapper that
+        # holds `Arc<dyn CustomProvider>` + role defaults. Bindings expose
+        # `CustomProvider` (the user-facing class) which wraps this handle;
+        # the handle type itself is not surfaced to users.
+        "CustomProviderHandle",
+        # `ollama`, `lm_studio`, `openai_compat` are free factory functions
+        # (`pub fn ollama(...) -> CustomProviderHandle`). Bindings expose them
+        # as classmethods on the binding's `CustomProvider` (Python/Node) or as
+        # module-level functions on the binding namespace (Go/Swift/Kotlin/Ruby
+        # via `Blazen.ollama(...)`). The audit only inspects classes, not
+        # functions, so they appear as "missing" -- whitelist accordingly.
+        "ollama",
+        "lm_studio",
+        "openai_compat",
     }
 )
 
@@ -462,16 +492,11 @@ WASM_SKIP: frozenset[str] = frozenset(
         # the Rust struct holds an `Arc<dyn TokenCounter>` whose dyn-dispatch
         # round-trip into JS is not yet wired up.
         "ChatWindow",
-        # `CustomProvider` + `HostDispatch` are the host-dispatch facade
-        # used by Python and Node to wrap a user-supplied `complete()`
-        # callback as a Rust `CompletionModel`. WASM achieves the same
-        # capability via `OpenAiCompatProvider` (which already accepts a
-        # custom base URL + header map) plus the `HttpClient` host-dispatch
-        # class, so the standalone `CustomProvider` class is not duplicated.
-        # `HostDispatch` is a pure Rust internal pattern (an Arc<dyn ...>
-        # closure) -- it has no equivalent class in any binding.
-        "CustomProvider",
-        "HostDispatch",
+        # `CustomProvider` is exposed in all 7 bindings (py/node/wasm/go/swift/
+        # kotlin/ruby) as the foreign-implementable typed trait — users
+        # subclass and override any of 16 typed methods. It is intentionally
+        # NOT whitelisted here; the audit should verify it lives in every
+        # binding. `HostDispatch` was deleted (replaced by the typed trait).
         # `EstimateCounter` is the heuristic token counter. The WASM SDK
         # exposes it via `TokenCounter.estimate()` and the free
         # `estimateTokens()` function instead of as a standalone class --
@@ -551,6 +576,17 @@ WHITELIST_REASONS: dict[str, str] = {
             "InputHandlerFn",
             "SubWorkflowInputMapper",
             "SubWorkflowOutputMapper",
+            "BeforeRequestHook",
+            "BeforeCompletionRequestHook",
+            "BeforeSpeechRequestHook",
+            "BeforeMusicRequestHook",
+            "BeforeImageRequestHook",
+            "BeforeUpscaleRequestHook",
+            "BeforeVideoRequestHook",
+            "BeforeTranscriptionRequestHook",
+            "BeforeThreeDRequestHook",
+            "BeforeVoiceCloneRequestHook",
+            "BeforeBackgroundRemovalRequestHook",
         )
     },
     # Pure-Rust traits

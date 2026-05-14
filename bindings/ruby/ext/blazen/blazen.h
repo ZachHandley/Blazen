@@ -133,6 +133,8 @@
  */
 #define BLAZEN_STEP_OUTPUT_MULTIPLE 2
 
+typedef struct Arc_InnerCustomProviderHandle Arc_InnerCustomProviderHandle;
+
 /**
  * Opaque wrapper around `blazen_uniffi::agent::Agent`.
  *
@@ -322,6 +324,22 @@ typedef struct BlazenStepOutput BlazenStepOutput;
 typedef struct BlazenStreamChunk BlazenStreamChunk;
 
 /**
+ * Opaque handle the foreign `stream` callback writes chunks into. The Rust
+ * adapter wraps the receiving end in a `Pin<Box<dyn Stream<...>>>` that
+ * drives the typed [`InnerCustomProviderTrait::stream`] return value.
+ *
+ * Each pushed chunk is a `*mut BlazenStreamChunk` whose ownership transfers
+ * into the pusher. The foreign caller terminates the stream with EXACTLY
+ * ONE of:
+ * - [`blazen_stream_pusher_end`] — graceful EOF.
+ * - [`blazen_stream_pusher_error`] — fatal error.
+ *
+ * Sending after termination is silently ignored (the channel half is
+ * already closed).
+ */
+typedef struct BlazenStreamPusher BlazenStreamPusher;
+
+/**
  * Opaque handle wrapping an `Arc<blazen_uniffi::compute::SttModel>`.
  *
  * Produced by the per-backend STT factory functions (Phase R4). Free with
@@ -417,6 +435,390 @@ typedef struct BlazenWorkflowHistoryEntry BlazenWorkflowHistoryEntry;
  * `blazen_workflow_run` wrappers).
  */
 typedef struct BlazenWorkflowResult BlazenWorkflowResult;
+
+/**
+ * Opaque wrapper around [`blazen_llm::compute::ImageRequest`].
+ */
+typedef struct {
+    InnerImageRequest _0;
+} BlazenImageRequest;
+
+/**
+ * Opaque wrapper around [`blazen_llm::compute::UpscaleRequest`].
+ */
+typedef struct {
+    InnerUpscaleRequest _0;
+} BlazenUpscaleRequest;
+
+/**
+ * Opaque wrapper around [`blazen_llm::compute::VideoRequest`].
+ */
+typedef struct {
+    InnerVideoRequest _0;
+} BlazenVideoRequest;
+
+/**
+ * Opaque wrapper around [`blazen_llm::compute::SpeechRequest`].
+ */
+typedef struct {
+    InnerSpeechRequest _0;
+} BlazenSpeechRequest;
+
+/**
+ * Opaque wrapper around [`blazen_llm::compute::VoiceCloneRequest`].
+ */
+typedef struct {
+    InnerVoiceCloneRequest _0;
+} BlazenVoiceCloneRequest;
+
+/**
+ * Opaque wrapper around [`blazen_llm::compute::MusicRequest`].
+ */
+typedef struct {
+    InnerMusicRequest _0;
+} BlazenMusicRequest;
+
+/**
+ * Opaque wrapper around [`blazen_llm::compute::TranscriptionRequest`].
+ */
+typedef struct {
+    InnerTranscriptionRequest _0;
+} BlazenTranscriptionRequest;
+
+/**
+ * Opaque wrapper around [`blazen_llm::compute::ThreeDRequest`].
+ */
+typedef struct {
+    InnerThreeDRequest _0;
+} BlazenThreeDRequest;
+
+/**
+ * Opaque wrapper around [`blazen_llm::compute::BackgroundRemovalRequest`].
+ */
+typedef struct {
+    InnerBackgroundRemovalRequest _0;
+} BlazenBackgroundRemovalRequest;
+
+/**
+ * Opaque wrapper around [`blazen_llm::compute::TranscriptionSegment`].
+ */
+typedef struct {
+    InnerTranscriptionSegment _0;
+} BlazenTranscriptionSegment;
+
+/**
+ * Opaque wrapper around [`blazen_llm::compute::ImageResult`].
+ */
+typedef struct {
+    InnerImageResult _0;
+} BlazenImageResult;
+
+/**
+ * Opaque wrapper around [`blazen_llm::compute::VideoResult`].
+ */
+typedef struct {
+    InnerVideoResult _0;
+} BlazenVideoResult;
+
+/**
+ * Opaque wrapper around [`blazen_llm::compute::AudioResult`].
+ */
+typedef struct {
+    InnerAudioResult _0;
+} BlazenAudioResult;
+
+/**
+ * Opaque wrapper around [`blazen_llm::compute::ThreeDResult`].
+ */
+typedef struct {
+    InnerThreeDResult _0;
+} BlazenThreeDResult;
+
+/**
+ * Opaque wrapper around [`blazen_llm::compute::TranscriptionResult`].
+ */
+typedef struct {
+    InnerTranscriptionResult _0;
+} BlazenTranscriptionResult;
+
+/**
+ * Opaque wrapper around [`blazen_llm::compute::VoiceHandle`].
+ */
+typedef struct {
+    InnerVoiceHandle _0;
+} BlazenVoiceHandle;
+
+/**
+ * Opaque wrapper around [`blazen_llm::providers::openai_compat::OpenAiCompatConfig`].
+ */
+typedef struct {
+    OpenAiCompatConfig _0;
+} BlazenOpenAiCompatConfig;
+
+/**
+ * Opaque wrapper around [`blazen_llm::providers::ApiProtocol`].
+ */
+typedef struct {
+    ApiProtocol _0;
+} BlazenApiProtocol;
+
+/**
+ * Opaque wrapper around [`BaseProvider`].
+ */
+typedef struct {
+    BaseProvider _0;
+} BlazenBaseProvider;
+
+/**
+ * Opaque wrapper around [`blazen_llm::providers::CompletionProviderDefaults`].
+ */
+typedef struct {
+    InnerCompletionProviderDefaults _0;
+} BlazenCompletionProviderDefaults;
+
+/**
+ * Opaque handle wrapping an `Arc<blazen_llm::providers::CustomProviderHandle>`.
+ *
+ * `Arc` so the compute methods can clone-and-move the handle into the
+ * spawned async task without forcing a deep copy of the inner defaults
+ * bundle on every call.
+ */
+typedef struct {
+    Arc_InnerCustomProviderHandle _0;
+} BlazenCustomProvider;
+
+/**
+ * C-side vtable for a foreign [`InnerCustomProviderTrait`] implementation.
+ *
+ * All 18 fields are required (no nullable function pointers): the four
+ * metadata fields (`provider_id`, `model_id`, `user_data`, `drop_user_data`),
+ * and 16 typed-method fn-pointers — one per [`InnerCustomProviderTrait`]
+ * method.
+ *
+ * The vtable is consumed by [`blazen_custom_provider_from_vtable`] which
+ * takes ownership of `user_data` for the lifetime of the resulting handle.
+ * `drop_user_data` is invoked exactly once when the wrapping
+ * [`CabiCustomProviderAdapter`] drops.
+ *
+ * ## Ownership conventions per call
+ *
+ * - **Request pointers** (e.g. `*mut BlazenSpeechRequest`): caller-owned and
+ *   the foreign callback OWNS them — must free via the matching `_free`
+ *   function before returning, OR consume them into a derivative structure.
+ * - **Result pointers** (e.g. `out_result: *mut *mut BlazenAudioResult`):
+ *   on a success return (status 0) the foreign callback writes a fresh
+ *   caller-owned `*mut BlazenAudioResult` (produced by one of the
+ *   `compute_results` constructors) into the slot; ownership transfers back
+ *   to the Rust adapter.
+ * - **Error pointers** (`out_err: *mut *mut BlazenError`): on a failure
+ *   return (status -1) the foreign callback writes a fresh caller-owned
+ *   `*mut BlazenError` into the slot; ownership transfers back to the Rust
+ *   adapter.
+ *
+ * Every callback returns `0` on success or `-1` on failure. A `-1` return
+ * surfaces as the corresponding [`InnerCustomProviderTrait`] method's
+ * `Err(BlazenError)`.
+ *
+ * ## Thread safety
+ *
+ * The Rust adapter dispatches each callback through
+ * `tokio::task::spawn_blocking`, so the foreign side is invoked from a
+ * blocking-pool worker that may differ from the thread that registered the
+ * vtable. The foreign side guarantees `user_data` and the function pointers
+ * are safe to invoke from any thread (Ruby's `ffi` gem reacquires the GVL
+ * automatically for declared `FFI::Callback` signatures; native hosts must
+ * opt into thread-safety in their own runtime model).
+ */
+typedef struct {
+    /**
+     * Opaque foreign-side context handed back to each function pointer.
+     * Owned by this vtable struct (released via `drop_user_data` on drop).
+     */
+    void *user_data;
+    /**
+     * Called exactly once when the wrapping `CabiCustomProviderAdapter`
+     * drops. Implementations should reclaim and release `user_data`.
+     */
+    void (*drop_user_data)(void *user_data);
+    /**
+     * Stable provider identifier (NUL-terminated UTF-8) — fed back by
+     * [`InnerCustomProviderTrait::provider_id`]. Owned by the vtable
+     * struct (NOT released by the adapter; the foreign side is expected to
+     * either return a static string or to free this pointer in
+     * `drop_user_data`).
+     */
+    const char *provider_id;
+    /**
+     * Model identifier (NUL-terminated UTF-8) — fed back by
+     * [`InnerCustomProviderTrait::model_id`]. Same ownership as
+     * `provider_id`. A null pointer reuses `provider_id`.
+     */
+    const char *model_id;
+    /**
+     * Non-streaming chat completion.
+     */
+    int32_t (*complete)(void *user_data,
+                        BlazenCompletionRequest *request,
+                        BlazenCompletionResponse **out_response,
+                        BlazenError **out_err);
+    /**
+     * Streaming chat completion. The foreign callback receives an opaque
+     * [`BlazenStreamPusher`] sink it pushes chunks into via
+     * [`blazen_stream_pusher_push`], finishing with either
+     * [`blazen_stream_pusher_end`] or [`blazen_stream_pusher_error`].
+     *
+     * Returns `0` on a successful stream START (chunks are then pushed
+     * asynchronously); `-1` if the stream can't be opened at all (writing a
+     * fresh `*mut BlazenError` into `*out_err`).
+     */
+    int32_t (*stream)(void *user_data,
+                      BlazenCompletionRequest *request,
+                      BlazenStreamPusher *pusher,
+                      BlazenError **out_err);
+    /**
+     * Batch text embedding. `texts` is an array of `count` NUL-terminated
+     * UTF-8 buffers — caller-owned for the duration of the call; the
+     * foreign callback MUST NOT free the underlying string memory (the
+     * adapter releases the backing Rust allocations after the call returns).
+     */
+    int32_t (*embed)(void *user_data,
+                     const char *const *texts,
+                     uintptr_t count,
+                     BlazenEmbeddingResponse **out_response,
+                     BlazenError **out_err);
+    int32_t (*text_to_speech)(void *user_data,
+                              BlazenSpeechRequest *request,
+                              BlazenAudioResult **out_result,
+                              BlazenError **out_err);
+    int32_t (*generate_music)(void *user_data,
+                              BlazenMusicRequest *request,
+                              BlazenAudioResult **out_result,
+                              BlazenError **out_err);
+    int32_t (*generate_sfx)(void *user_data,
+                            BlazenMusicRequest *request,
+                            BlazenAudioResult **out_result,
+                            BlazenError **out_err);
+    int32_t (*clone_voice)(void *user_data,
+                           BlazenVoiceCloneRequest *request,
+                           BlazenVoiceHandle **out_result,
+                           BlazenError **out_err);
+    /**
+     * On success, the callback writes a fresh array of caller-owned
+     * `*mut BlazenVoiceHandle` pointers (count in `*out_count`). The Rust
+     * adapter takes ownership of each element and frees the outer pointer-
+     * array via [`blazen_voice_handle_list_free`].
+     */
+    int32_t (*list_voices)(void *user_data,
+                           BlazenVoiceHandle ***out_array,
+                           uintptr_t *out_count,
+                           BlazenError **out_err);
+    int32_t (*delete_voice)(void *user_data, BlazenVoiceHandle *voice, BlazenError **out_err);
+    int32_t (*generate_image)(void *user_data,
+                              BlazenImageRequest *request,
+                              BlazenImageResult **out_result,
+                              BlazenError **out_err);
+    int32_t (*upscale_image)(void *user_data,
+                             BlazenUpscaleRequest *request,
+                             BlazenImageResult **out_result,
+                             BlazenError **out_err);
+    int32_t (*text_to_video)(void *user_data,
+                             BlazenVideoRequest *request,
+                             BlazenVideoResult **out_result,
+                             BlazenError **out_err);
+    int32_t (*image_to_video)(void *user_data,
+                              BlazenVideoRequest *request,
+                              BlazenVideoResult **out_result,
+                              BlazenError **out_err);
+    int32_t (*transcribe)(void *user_data,
+                          BlazenTranscriptionRequest *request,
+                          BlazenTranscriptionResult **out_result,
+                          BlazenError **out_err);
+    int32_t (*generate_3d)(void *user_data,
+                           BlazenThreeDRequest *request,
+                           BlazenThreeDResult **out_result,
+                           BlazenError **out_err);
+    int32_t (*remove_background)(void *user_data,
+                                 BlazenBackgroundRemovalRequest *request,
+                                 BlazenImageResult **out_result,
+                                 BlazenError **out_err);
+} BlazenCustomProviderVTable;
+
+/**
+ * Opaque wrapper around [`blazen_llm::providers::BaseProviderDefaults`].
+ */
+typedef struct {
+    InnerBaseProviderDefaults _0;
+} BlazenBaseProviderDefaults;
+
+/**
+ * Opaque wrapper around [`blazen_llm::providers::EmbeddingProviderDefaults`].
+ */
+typedef struct {
+    InnerEmbeddingProviderDefaults _0;
+} BlazenEmbeddingProviderDefaults;
+
+/**
+ * Opaque wrapper around [`InnerAudioSpeechProviderDefaults`].
+ */
+typedef struct {
+    InnerAudioSpeechProviderDefaults _0;
+} BlazenAudioSpeechProviderDefaults;
+
+/**
+ * Opaque wrapper around [`InnerAudioMusicProviderDefaults`].
+ */
+typedef struct {
+    InnerAudioMusicProviderDefaults _0;
+} BlazenAudioMusicProviderDefaults;
+
+/**
+ * Opaque wrapper around [`InnerVoiceCloningProviderDefaults`].
+ */
+typedef struct {
+    InnerVoiceCloningProviderDefaults _0;
+} BlazenVoiceCloningProviderDefaults;
+
+/**
+ * Opaque wrapper around [`InnerImageGenerationProviderDefaults`].
+ */
+typedef struct {
+    InnerImageGenerationProviderDefaults _0;
+} BlazenImageGenerationProviderDefaults;
+
+/**
+ * Opaque wrapper around [`InnerImageUpscaleProviderDefaults`].
+ */
+typedef struct {
+    InnerImageUpscaleProviderDefaults _0;
+} BlazenImageUpscaleProviderDefaults;
+
+/**
+ * Opaque wrapper around [`InnerVideoProviderDefaults`].
+ */
+typedef struct {
+    InnerVideoProviderDefaults _0;
+} BlazenVideoProviderDefaults;
+
+/**
+ * Opaque wrapper around [`InnerTranscriptionProviderDefaults`].
+ */
+typedef struct {
+    InnerTranscriptionProviderDefaults _0;
+} BlazenTranscriptionProviderDefaults;
+
+/**
+ * Opaque wrapper around [`InnerThreeDProviderDefaults`].
+ */
+typedef struct {
+    InnerThreeDProviderDefaults _0;
+} BlazenThreeDProviderDefaults;
+
+/**
+ * Opaque wrapper around [`InnerBackgroundRemovalProviderDefaults`].
+ */
+typedef struct {
+    InnerBackgroundRemovalProviderDefaults _0;
+} BlazenBackgroundRemovalProviderDefaults;
 
 /**
  * C-side vtable for a foreign `StepHandler` implementation.
@@ -1424,6 +1826,1446 @@ int32_t blazen_image_gen_model_new_diffusion(const char *model_id,
  * image-generation wrapper. Double-free is undefined behavior.
  */
  void blazen_image_gen_result_free(BlazenImageGenResult *result);
+
+/**
+ * Constructs a new `ImageRequest` with the given prompt and every optional
+ * field unset. Returns null if `prompt` is null or non-UTF-8.
+ *
+ * # Safety
+ *
+ * `prompt` must be null OR point to a NUL-terminated UTF-8 buffer valid for
+ * the duration of this call.
+ */
+ BlazenImageRequest *blazen_image_request_new(const char *prompt);
+
+/**
+ * Sets the optional `negative_prompt`. Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageRequest`. `value` must be null
+ * OR a NUL-terminated UTF-8 buffer valid for the duration of this call.
+ */
+ void blazen_image_request_set_negative_prompt(BlazenImageRequest *handle, const char *value);
+
+/**
+ * Sets the optional `width`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageRequest`.
+ */
+ void blazen_image_request_set_width(BlazenImageRequest *handle, uint32_t value);
+
+/**
+ * Clears `width` back to `None`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageRequest`.
+ */
+ void blazen_image_request_clear_width(BlazenImageRequest *handle);
+
+/**
+ * Sets the optional `height`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageRequest`.
+ */
+ void blazen_image_request_set_height(BlazenImageRequest *handle, uint32_t value);
+
+/**
+ * Clears `height` back to `None`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageRequest`.
+ */
+ void blazen_image_request_clear_height(BlazenImageRequest *handle);
+
+/**
+ * Sets the optional `num_images`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageRequest`.
+ */
+ void blazen_image_request_set_num_images(BlazenImageRequest *handle, uint32_t value);
+
+/**
+ * Clears `num_images` back to `None`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageRequest`.
+ */
+ void blazen_image_request_clear_num_images(BlazenImageRequest *handle);
+
+/**
+ * Sets the optional `model` field. Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageRequest`. `value` must be null
+ * OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_image_request_set_model(BlazenImageRequest *handle, const char *value);
+
+/**
+ * Replaces the `parameters` field with the JSON object decoded from `json`.
+ * Null / invalid JSON resets the field to an empty JSON object.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageRequest`. `json` must be null
+ * OR a NUL-terminated UTF-8 buffer valid for the duration of this call.
+ */
+ void blazen_image_request_set_parameters_json(BlazenImageRequest *handle, const char *json);
+
+/**
+ * Returns the `prompt` field as a caller-owned C string. Returns null on a
+ * null handle. Free with `blazen_string_free`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageRequest`.
+ */
+ char *blazen_image_request_prompt(const BlazenImageRequest *handle);
+
+/**
+ * Returns the `parameters` field as a JSON-encoded caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageRequest`.
+ */
+ char *blazen_image_request_parameters_json(const BlazenImageRequest *handle);
+
+/**
+ * Frees a `BlazenImageRequest`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by [`blazen_image_request_new`].
+ */
+ void blazen_image_request_free(BlazenImageRequest *handle);
+
+/**
+ * Constructs a new `UpscaleRequest` from the image URL and scale factor.
+ * Returns null if `image_url` is null or non-UTF-8.
+ *
+ * # Safety
+ *
+ * `image_url` must be null OR a NUL-terminated UTF-8 buffer valid for the
+ * duration of this call.
+ */
+ BlazenUpscaleRequest *blazen_upscale_request_new(const char *image_url, float scale);
+
+/**
+ * Sets the optional `model` field. Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenUpscaleRequest`. `value` must be
+ * null OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_upscale_request_set_model(BlazenUpscaleRequest *handle, const char *value);
+
+/**
+ * Replaces the `parameters` field with the JSON object decoded from `json`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenUpscaleRequest`. `json` must be null
+ * OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_upscale_request_set_parameters_json(BlazenUpscaleRequest *handle, const char *json);
+
+/**
+ * Returns the `image_url` field as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenUpscaleRequest`.
+ */
+ char *blazen_upscale_request_image_url(const BlazenUpscaleRequest *handle);
+
+/**
+ * Returns the `scale` factor. Returns `0.0` on a null handle.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenUpscaleRequest`.
+ */
+ float blazen_upscale_request_scale(const BlazenUpscaleRequest *handle);
+
+/**
+ * Returns the `parameters` field as a JSON-encoded caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenUpscaleRequest`.
+ */
+ char *blazen_upscale_request_parameters_json(const BlazenUpscaleRequest *handle);
+
+/**
+ * Frees a `BlazenUpscaleRequest`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_upscale_request_free(BlazenUpscaleRequest *handle);
+
+/**
+ * Constructs a new text-to-video request from the prompt. Returns null if
+ * `prompt` is null or non-UTF-8.
+ *
+ * # Safety
+ *
+ * `prompt` must be null OR a NUL-terminated UTF-8 buffer.
+ */
+ BlazenVideoRequest *blazen_video_request_new(const char *prompt);
+
+/**
+ * Sets the optional `image_url` (image-to-video). Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoRequest`. `value` must be null
+ * OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_video_request_set_image_url(BlazenVideoRequest *handle, const char *value);
+
+/**
+ * Sets the optional `duration_seconds`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoRequest`.
+ */
+ void blazen_video_request_set_duration_seconds(BlazenVideoRequest *handle, float value);
+
+/**
+ * Clears `duration_seconds` back to `None`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoRequest`.
+ */
+ void blazen_video_request_clear_duration_seconds(BlazenVideoRequest *handle);
+
+/**
+ * Sets the optional `negative_prompt`. Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoRequest`. `value` must be null
+ * OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_video_request_set_negative_prompt(BlazenVideoRequest *handle, const char *value);
+
+/**
+ * Sets the optional `width`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoRequest`.
+ */
+ void blazen_video_request_set_width(BlazenVideoRequest *handle, uint32_t value);
+
+/**
+ * Clears `width` back to `None`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoRequest`.
+ */
+ void blazen_video_request_clear_width(BlazenVideoRequest *handle);
+
+/**
+ * Sets the optional `height`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoRequest`.
+ */
+ void blazen_video_request_set_height(BlazenVideoRequest *handle, uint32_t value);
+
+/**
+ * Clears `height` back to `None`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoRequest`.
+ */
+ void blazen_video_request_clear_height(BlazenVideoRequest *handle);
+
+/**
+ * Sets the optional `model`. Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoRequest`. `value` must be null
+ * OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_video_request_set_model(BlazenVideoRequest *handle, const char *value);
+
+/**
+ * Replaces the `parameters` field with the JSON object decoded from `json`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoRequest`. `json` must be null
+ * OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_video_request_set_parameters_json(BlazenVideoRequest *handle, const char *json);
+
+/**
+ * Returns the `prompt` field as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoRequest`.
+ */
+ char *blazen_video_request_prompt(const BlazenVideoRequest *handle);
+
+/**
+ * Returns the `parameters` field as a JSON-encoded caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoRequest`.
+ */
+ char *blazen_video_request_parameters_json(const BlazenVideoRequest *handle);
+
+/**
+ * Frees a `BlazenVideoRequest`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_video_request_free(BlazenVideoRequest *handle);
+
+/**
+ * Constructs a new `SpeechRequest` from the input text. Returns null if
+ * `text` is null or non-UTF-8.
+ *
+ * # Safety
+ *
+ * `text` must be null OR a NUL-terminated UTF-8 buffer.
+ */
+ BlazenSpeechRequest *blazen_speech_request_new(const char *text);
+
+/**
+ * Sets the optional `voice`. Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenSpeechRequest`. `value` must be null
+ * OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_speech_request_set_voice(BlazenSpeechRequest *handle, const char *value);
+
+/**
+ * Sets the optional `voice_url` (reference audio for voice cloning). Null
+ * `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenSpeechRequest`. `value` must be null
+ * OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_speech_request_set_voice_url(BlazenSpeechRequest *handle, const char *value);
+
+/**
+ * Sets the optional `language` (ISO-639-1). Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenSpeechRequest`. `value` must be null
+ * OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_speech_request_set_language(BlazenSpeechRequest *handle, const char *value);
+
+/**
+ * Sets the optional `speed` multiplier (1.0 = normal).
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenSpeechRequest`.
+ */
+ void blazen_speech_request_set_speed(BlazenSpeechRequest *handle, float value);
+
+/**
+ * Clears `speed` back to `None`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenSpeechRequest`.
+ */
+ void blazen_speech_request_clear_speed(BlazenSpeechRequest *handle);
+
+/**
+ * Sets the optional `model`. Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenSpeechRequest`. `value` must be null
+ * OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_speech_request_set_model(BlazenSpeechRequest *handle, const char *value);
+
+/**
+ * Replaces the `parameters` field with the JSON object decoded from `json`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenSpeechRequest`. `json` must be null
+ * OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_speech_request_set_parameters_json(BlazenSpeechRequest *handle, const char *json);
+
+/**
+ * Returns the `text` field as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenSpeechRequest`.
+ */
+ char *blazen_speech_request_text(const BlazenSpeechRequest *handle);
+
+/**
+ * Returns the `parameters` field as a JSON-encoded caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenSpeechRequest`.
+ */
+ char *blazen_speech_request_parameters_json(const BlazenSpeechRequest *handle);
+
+/**
+ * Frees a `BlazenSpeechRequest`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_speech_request_free(BlazenSpeechRequest *handle);
+
+/**
+ * Constructs a new `VoiceCloneRequest` with the given human-readable name
+ * and an empty `reference_urls` list. Returns null if `name` is null or
+ * non-UTF-8. Push reference URLs via
+ * [`blazen_voice_clone_request_reference_urls_push`] before submitting.
+ *
+ * # Safety
+ *
+ * `name` must be null OR a NUL-terminated UTF-8 buffer.
+ */
+ BlazenVoiceCloneRequest *blazen_voice_clone_request_new(const char *name);
+
+/**
+ * Appends `url` (a NUL-terminated UTF-8 string) to the request's
+ * `reference_urls` vec. No-op on a null handle or non-UTF-8 `url`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVoiceCloneRequest`. `url` must be
+ * null OR a NUL-terminated UTF-8 buffer.
+ */
+
+void blazen_voice_clone_request_reference_urls_push(BlazenVoiceCloneRequest *handle,
+                                                    const char *url);
+
+/**
+ * Returns the number of entries in `reference_urls`. Returns `0` on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVoiceCloneRequest`.
+ */
+ uintptr_t blazen_voice_clone_request_reference_urls_count(const BlazenVoiceCloneRequest *handle);
+
+/**
+ * Returns the `idx`-th `reference_urls` entry as a caller-owned C string.
+ * Returns null on a null handle or out-of-range index.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVoiceCloneRequest`.
+ */
+
+char *blazen_voice_clone_request_reference_urls_get(const BlazenVoiceCloneRequest *handle,
+                                                    uintptr_t idx);
+
+/**
+ * Sets the optional `language`. Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVoiceCloneRequest`. `value` must be
+ * null OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_voice_clone_request_set_language(BlazenVoiceCloneRequest *handle, const char *value);
+
+/**
+ * Sets the optional `description`. Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVoiceCloneRequest`. `value` must be
+ * null OR a NUL-terminated UTF-8 buffer.
+ */
+
+void blazen_voice_clone_request_set_description(BlazenVoiceCloneRequest *handle,
+                                                const char *value);
+
+/**
+ * Replaces the `parameters` field with the JSON object decoded from `json`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVoiceCloneRequest`. `json` must be
+ * null OR a NUL-terminated UTF-8 buffer.
+ */
+
+void blazen_voice_clone_request_set_parameters_json(BlazenVoiceCloneRequest *handle,
+                                                    const char *json);
+
+/**
+ * Returns the `name` field as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVoiceCloneRequest`.
+ */
+ char *blazen_voice_clone_request_name(const BlazenVoiceCloneRequest *handle);
+
+/**
+ * Returns the `parameters` field as a JSON-encoded caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVoiceCloneRequest`.
+ */
+ char *blazen_voice_clone_request_parameters_json(const BlazenVoiceCloneRequest *handle);
+
+/**
+ * Frees a `BlazenVoiceCloneRequest`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_voice_clone_request_free(BlazenVoiceCloneRequest *handle);
+
+/**
+ * Constructs a new `MusicRequest` from the prompt. Returns null on null or
+ * non-UTF-8 input.
+ *
+ * # Safety
+ *
+ * `prompt` must be null OR a NUL-terminated UTF-8 buffer.
+ */
+ BlazenMusicRequest *blazen_music_request_new(const char *prompt);
+
+/**
+ * Sets the optional `duration_seconds`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenMusicRequest`.
+ */
+ void blazen_music_request_set_duration_seconds(BlazenMusicRequest *handle, float value);
+
+/**
+ * Clears `duration_seconds` back to `None`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenMusicRequest`.
+ */
+ void blazen_music_request_clear_duration_seconds(BlazenMusicRequest *handle);
+
+/**
+ * Sets the optional `model`. Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenMusicRequest`. `value` must be null
+ * OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_music_request_set_model(BlazenMusicRequest *handle, const char *value);
+
+/**
+ * Replaces the `parameters` field with the JSON object decoded from `json`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenMusicRequest`. `json` must be null
+ * OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_music_request_set_parameters_json(BlazenMusicRequest *handle, const char *json);
+
+/**
+ * Returns the `prompt` field as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenMusicRequest`.
+ */
+ char *blazen_music_request_prompt(const BlazenMusicRequest *handle);
+
+/**
+ * Returns the `parameters` field as a JSON-encoded caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenMusicRequest`.
+ */
+ char *blazen_music_request_parameters_json(const BlazenMusicRequest *handle);
+
+/**
+ * Frees a `BlazenMusicRequest`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_music_request_free(BlazenMusicRequest *handle);
+
+/**
+ * Constructs a new `TranscriptionRequest` from the source audio URL.
+ * Returns null on null or non-UTF-8 input. To transcribe a local file,
+ * pass an empty string here and call
+ * [`blazen_transcription_request_set_audio_source_file`].
+ *
+ * # Safety
+ *
+ * `audio_url` must be null OR a NUL-terminated UTF-8 buffer.
+ */
+ BlazenTranscriptionRequest *blazen_transcription_request_new(const char *audio_url);
+
+/**
+ * Sets `audio_source` to `MediaSource::Url { url }`. No-op on null/non-UTF-8
+ * input.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionRequest`. `url` must be
+ * null OR a NUL-terminated UTF-8 buffer.
+ */
+
+void blazen_transcription_request_set_audio_source_url(BlazenTranscriptionRequest *handle,
+                                                       const char *url);
+
+/**
+ * Sets `audio_source` to `MediaSource::Base64 { data }`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionRequest`. `data` must
+ * be null OR a NUL-terminated UTF-8 buffer.
+ */
+
+void blazen_transcription_request_set_audio_source_base64(BlazenTranscriptionRequest *handle,
+                                                          const char *data);
+
+/**
+ * Sets `audio_source` to `MediaSource::File { path }` so local backends can
+ * read audio directly from disk.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionRequest`. `path` must
+ * be null OR a NUL-terminated UTF-8 buffer.
+ */
+
+void blazen_transcription_request_set_audio_source_file(BlazenTranscriptionRequest *handle,
+                                                        const char *path);
+
+/**
+ * Clears `audio_source` back to `None`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionRequest`.
+ */
+ void blazen_transcription_request_clear_audio_source(BlazenTranscriptionRequest *handle);
+
+/**
+ * Sets the optional `language` hint. Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionRequest`. `value` must
+ * be null OR a NUL-terminated UTF-8 buffer.
+ */
+
+void blazen_transcription_request_set_language(BlazenTranscriptionRequest *handle,
+                                               const char *value);
+
+/**
+ * Sets the `diarize` flag.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionRequest`.
+ */
+ void blazen_transcription_request_set_diarize(BlazenTranscriptionRequest *handle, bool value);
+
+/**
+ * Sets the optional `model`. Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionRequest`. `value` must
+ * be null OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_transcription_request_set_model(BlazenTranscriptionRequest *handle, const char *value);
+
+/**
+ * Replaces the `parameters` field with the JSON object decoded from `json`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionRequest`. `json` must
+ * be null OR a NUL-terminated UTF-8 buffer.
+ */
+
+void blazen_transcription_request_set_parameters_json(BlazenTranscriptionRequest *handle,
+                                                      const char *json);
+
+/**
+ * Returns the `audio_url` field as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionRequest`.
+ */
+ char *blazen_transcription_request_audio_url(const BlazenTranscriptionRequest *handle);
+
+/**
+ * Returns the `diarize` flag. Returns `false` on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionRequest`.
+ */
+ bool blazen_transcription_request_diarize(const BlazenTranscriptionRequest *handle);
+
+/**
+ * Returns the `parameters` field as a JSON-encoded caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionRequest`.
+ */
+ char *blazen_transcription_request_parameters_json(const BlazenTranscriptionRequest *handle);
+
+/**
+ * Frees a `BlazenTranscriptionRequest`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_transcription_request_free(BlazenTranscriptionRequest *handle);
+
+/**
+ * Constructs a new text-to-3D request from the prompt. Returns null on
+ * null/non-UTF-8 input.
+ *
+ * # Safety
+ *
+ * `prompt` must be null OR a NUL-terminated UTF-8 buffer.
+ */
+ BlazenThreeDRequest *blazen_three_d_request_new(const char *prompt);
+
+/**
+ * Sets the optional `image_url` (image-to-3D). Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenThreeDRequest`. `value` must be
+ * null OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_three_d_request_set_image_url(BlazenThreeDRequest *handle, const char *value);
+
+/**
+ * Sets the optional `format` (e.g. `"glb"`, `"obj"`, `"usdz"`). Null `value`
+ * clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenThreeDRequest`. `value` must be
+ * null OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_three_d_request_set_format(BlazenThreeDRequest *handle, const char *value);
+
+/**
+ * Sets the optional `model`. Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenThreeDRequest`. `value` must be
+ * null OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_three_d_request_set_model(BlazenThreeDRequest *handle, const char *value);
+
+/**
+ * Replaces the `parameters` field with the JSON object decoded from `json`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenThreeDRequest`. `json` must be null
+ * OR a NUL-terminated UTF-8 buffer.
+ */
+ void blazen_three_d_request_set_parameters_json(BlazenThreeDRequest *handle, const char *json);
+
+/**
+ * Returns the `prompt` field as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenThreeDRequest`.
+ */
+ char *blazen_three_d_request_prompt(const BlazenThreeDRequest *handle);
+
+/**
+ * Returns the `parameters` field as a JSON-encoded caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenThreeDRequest`.
+ */
+ char *blazen_three_d_request_parameters_json(const BlazenThreeDRequest *handle);
+
+/**
+ * Frees a `BlazenThreeDRequest`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_three_d_request_free(BlazenThreeDRequest *handle);
+
+/**
+ * Constructs a new `BackgroundRemovalRequest` from the source image URL.
+ * `BackgroundRemovalRequest` has no `::new` constructor upstream; we
+ * initialize the struct manually with empty optionals and an empty
+ * `parameters` object. Returns null on null or non-UTF-8 input.
+ *
+ * # Safety
+ *
+ * `image_url` must be null OR a NUL-terminated UTF-8 buffer.
+ */
+ BlazenBackgroundRemovalRequest *blazen_background_removal_request_new(const char *image_url);
+
+/**
+ * Sets the optional `model`. Null `value` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBackgroundRemovalRequest`. `value`
+ * must be null OR a NUL-terminated UTF-8 buffer.
+ */
+
+void blazen_background_removal_request_set_model(BlazenBackgroundRemovalRequest *handle,
+                                                 const char *value);
+
+/**
+ * Replaces the `parameters` field with the JSON object decoded from `json`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBackgroundRemovalRequest`. `json`
+ * must be null OR a NUL-terminated UTF-8 buffer.
+ */
+
+void blazen_background_removal_request_set_parameters_json(BlazenBackgroundRemovalRequest *handle,
+                                                           const char *json);
+
+/**
+ * Returns the `image_url` field as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBackgroundRemovalRequest`.
+ */
+ char *blazen_background_removal_request_image_url(const BlazenBackgroundRemovalRequest *handle);
+
+/**
+ * Returns the `parameters` field as a JSON-encoded caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBackgroundRemovalRequest`.
+ */
+
+char *blazen_background_removal_request_parameters_json(const BlazenBackgroundRemovalRequest *handle);
+
+/**
+ * Frees a `BlazenBackgroundRemovalRequest`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_background_removal_request_free(BlazenBackgroundRemovalRequest *handle);
+
+/**
+ * Returns the segment's `text` as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionSegment`.
+ */
+ char *blazen_transcription_segment_text(const BlazenTranscriptionSegment *handle);
+
+/**
+ * Returns the segment's `start` time in seconds. Returns `0.0` on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionSegment`.
+ */
+ double blazen_transcription_segment_start(const BlazenTranscriptionSegment *handle);
+
+/**
+ * Returns the segment's `end` time in seconds. Returns `0.0` on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionSegment`.
+ */
+ double blazen_transcription_segment_end(const BlazenTranscriptionSegment *handle);
+
+/**
+ * Returns the segment's optional `speaker` label as a caller-owned C string,
+ * or null if no speaker was reported (e.g. diarization disabled).
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionSegment`.
+ */
+ char *blazen_transcription_segment_speaker(const BlazenTranscriptionSegment *handle);
+
+/**
+ * Frees a `BlazenTranscriptionSegment`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_transcription_segment_free(BlazenTranscriptionSegment *handle);
+
+/**
+ * Returns the number of images in the result. Returns `0` on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageResult`.
+ */
+ uintptr_t blazen_image_result_images_count(const BlazenImageResult *handle);
+
+/**
+ * Returns the `idx`-th image as a JSON-encoded caller-owned C string
+ * (serialized [`GeneratedImage`](blazen_llm::media::GeneratedImage) record),
+ * or null on null/out-of-range. The JSON carries the embedded
+ * `MediaOutput` (`url` / `base64` / `raw_content` / `media_type`) plus the
+ * optional `width` and `height` dimensions.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageResult`.
+ */
+ char *blazen_image_result_images_get_json(const BlazenImageResult *handle, uintptr_t idx);
+
+/**
+ * Returns the `image_count` reported by the provider. Returns `0` on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageResult`.
+ */
+ uint32_t blazen_image_result_image_count(const BlazenImageResult *handle);
+
+/**
+ * Returns the provider-reported `cost` in USD. Returns `0.0` on null or when
+ * the provider did not report a cost — check
+ * [`blazen_image_result_has_cost`] first to distinguish.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageResult`.
+ */
+ double blazen_image_result_cost(const BlazenImageResult *handle);
+
+/**
+ * Returns `true` if the provider reported a cost. Returns `false` on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageResult`.
+ */
+ bool blazen_image_result_has_cost(const BlazenImageResult *handle);
+
+/**
+ * Returns the `metadata` field as a JSON-encoded caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageResult`.
+ */
+ char *blazen_image_result_metadata_json(const BlazenImageResult *handle);
+
+/**
+ * Returns the request timing as a JSON-encoded caller-owned C string with
+ * keys `queue_ms`, `execution_ms`, `total_ms` (each optional).
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageResult`.
+ */
+ char *blazen_image_result_timing_json(const BlazenImageResult *handle);
+
+/**
+ * Returns the token-usage record as a JSON-encoded caller-owned C string, or
+ * null if the provider did not report usage.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageResult`.
+ */
+ char *blazen_image_result_usage_json(const BlazenImageResult *handle);
+
+/**
+ * Frees a `BlazenImageResult`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_image_result_free(BlazenImageResult *handle);
+
+/**
+ * Returns the number of videos in the result. Returns `0` on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoResult`.
+ */
+ uintptr_t blazen_video_result_videos_count(const BlazenVideoResult *handle);
+
+/**
+ * Returns the `idx`-th video as a JSON-encoded caller-owned C string
+ * (serialized [`GeneratedVideo`](blazen_llm::media::GeneratedVideo) record).
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoResult`.
+ */
+ char *blazen_video_result_videos_get_json(const BlazenVideoResult *handle, uintptr_t idx);
+
+/**
+ * Returns the total `video_seconds` across all returned videos.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoResult`.
+ */
+ double blazen_video_result_video_seconds(const BlazenVideoResult *handle);
+
+/**
+ * Returns the provider-reported `cost` in USD. Returns `0.0` on null or
+ * when the provider did not report a cost — check
+ * [`blazen_video_result_has_cost`] first.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoResult`.
+ */
+ double blazen_video_result_cost(const BlazenVideoResult *handle);
+
+/**
+ * Returns `true` if the provider reported a cost.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoResult`.
+ */
+ bool blazen_video_result_has_cost(const BlazenVideoResult *handle);
+
+/**
+ * Returns the `metadata` field as a JSON-encoded caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoResult`.
+ */
+ char *blazen_video_result_metadata_json(const BlazenVideoResult *handle);
+
+/**
+ * Returns the request timing as a JSON-encoded caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoResult`.
+ */
+ char *blazen_video_result_timing_json(const BlazenVideoResult *handle);
+
+/**
+ * Returns the token-usage record as a JSON-encoded caller-owned C string,
+ * or null if not reported.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoResult`.
+ */
+ char *blazen_video_result_usage_json(const BlazenVideoResult *handle);
+
+/**
+ * Frees a `BlazenVideoResult`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_video_result_free(BlazenVideoResult *handle);
+
+/**
+ * Returns the number of audio clips in the result. Returns `0` on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenAudioResult`.
+ */
+ uintptr_t blazen_audio_result_audio_count(const BlazenAudioResult *handle);
+
+/**
+ * Returns the `idx`-th audio clip as a JSON-encoded caller-owned C string
+ * (serialized [`GeneratedAudio`](blazen_llm::media::GeneratedAudio) record).
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenAudioResult`.
+ */
+ char *blazen_audio_result_audio_get_json(const BlazenAudioResult *handle, uintptr_t idx);
+
+/**
+ * Returns the total `audio_seconds` across all returned clips.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenAudioResult`.
+ */
+ double blazen_audio_result_audio_seconds(const BlazenAudioResult *handle);
+
+/**
+ * Returns the provider-reported `cost` in USD. Check
+ * [`blazen_audio_result_has_cost`] to distinguish missing from zero.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenAudioResult`.
+ */
+ double blazen_audio_result_cost(const BlazenAudioResult *handle);
+
+/**
+ * Returns `true` if the provider reported a cost.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenAudioResult`.
+ */
+ bool blazen_audio_result_has_cost(const BlazenAudioResult *handle);
+
+/**
+ * Returns the `metadata` field as a JSON-encoded caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenAudioResult`.
+ */
+ char *blazen_audio_result_metadata_json(const BlazenAudioResult *handle);
+
+/**
+ * Returns the request timing as a JSON-encoded caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenAudioResult`.
+ */
+ char *blazen_audio_result_timing_json(const BlazenAudioResult *handle);
+
+/**
+ * Returns the token-usage record as a JSON-encoded caller-owned C string,
+ * or null if not reported.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenAudioResult`.
+ */
+ char *blazen_audio_result_usage_json(const BlazenAudioResult *handle);
+
+/**
+ * Frees a `BlazenAudioResult`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_audio_result_free(BlazenAudioResult *handle);
+
+/**
+ * Returns the number of generated 3D models. Returns `0` on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenThreeDResult`.
+ */
+ uintptr_t blazen_three_d_result_models_count(const BlazenThreeDResult *handle);
+
+/**
+ * Returns the `idx`-th 3D model as a JSON-encoded caller-owned C string
+ * (serialized [`Generated3DModel`](blazen_llm::media::Generated3DModel)).
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenThreeDResult`.
+ */
+ char *blazen_three_d_result_models_get_json(const BlazenThreeDResult *handle, uintptr_t idx);
+
+/**
+ * Returns the provider-reported `cost` in USD. Check
+ * [`blazen_three_d_result_has_cost`] to distinguish missing from zero.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenThreeDResult`.
+ */
+ double blazen_three_d_result_cost(const BlazenThreeDResult *handle);
+
+/**
+ * Returns `true` if the provider reported a cost.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenThreeDResult`.
+ */
+ bool blazen_three_d_result_has_cost(const BlazenThreeDResult *handle);
+
+/**
+ * Returns the `metadata` field as a JSON-encoded caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenThreeDResult`.
+ */
+ char *blazen_three_d_result_metadata_json(const BlazenThreeDResult *handle);
+
+/**
+ * Returns the request timing as a JSON-encoded caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenThreeDResult`.
+ */
+ char *blazen_three_d_result_timing_json(const BlazenThreeDResult *handle);
+
+/**
+ * Returns the token-usage record as a JSON-encoded caller-owned C string,
+ * or null if not reported.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenThreeDResult`.
+ */
+ char *blazen_three_d_result_usage_json(const BlazenThreeDResult *handle);
+
+/**
+ * Frees a `BlazenThreeDResult`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_three_d_result_free(BlazenThreeDResult *handle);
+
+/**
+ * Returns the full transcript text as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionResult`.
+ */
+ char *blazen_transcription_result_text(const BlazenTranscriptionResult *handle);
+
+/**
+ * Returns the number of time-aligned segments. Returns `0` on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionResult`.
+ */
+ uintptr_t blazen_transcription_result_segments_count(const BlazenTranscriptionResult *handle);
+
+/**
+ * Clones the `idx`-th segment into a fresh caller-owned
+ * `BlazenTranscriptionSegment`. Caller frees with
+ * `blazen_transcription_segment_free`. Returns null on null/out-of-range.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionResult`.
+ */
+
+BlazenTranscriptionSegment *blazen_transcription_result_segments_get(const BlazenTranscriptionResult *handle,
+                                                                     uintptr_t idx);
+
+/**
+ * Returns the detected/specified `language` as a caller-owned C string, or
+ * null if not reported.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionResult`.
+ */
+ char *blazen_transcription_result_language(const BlazenTranscriptionResult *handle);
+
+/**
+ * Returns the duration of input audio that was transcribed, in seconds.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionResult`.
+ */
+ double blazen_transcription_result_audio_seconds(const BlazenTranscriptionResult *handle);
+
+/**
+ * Returns the provider-reported `cost` in USD. Check
+ * [`blazen_transcription_result_has_cost`] to distinguish missing from zero.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionResult`.
+ */
+ double blazen_transcription_result_cost(const BlazenTranscriptionResult *handle);
+
+/**
+ * Returns `true` if the provider reported a cost.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionResult`.
+ */
+ bool blazen_transcription_result_has_cost(const BlazenTranscriptionResult *handle);
+
+/**
+ * Returns the `metadata` field as a JSON-encoded caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionResult`.
+ */
+ char *blazen_transcription_result_metadata_json(const BlazenTranscriptionResult *handle);
+
+/**
+ * Returns the request timing as a JSON-encoded caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionResult`.
+ */
+ char *blazen_transcription_result_timing_json(const BlazenTranscriptionResult *handle);
+
+/**
+ * Returns the token-usage record as a JSON-encoded caller-owned C string,
+ * or null if not reported.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionResult`.
+ */
+ char *blazen_transcription_result_usage_json(const BlazenTranscriptionResult *handle);
+
+/**
+ * Frees a `BlazenTranscriptionResult`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_transcription_result_free(BlazenTranscriptionResult *handle);
+
+/**
+ * Returns the provider-specific voice `id` as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVoiceHandle`.
+ */
+ char *blazen_voice_handle_id(const BlazenVoiceHandle *handle);
+
+/**
+ * Returns the human-readable voice `name` as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVoiceHandle`.
+ */
+ char *blazen_voice_handle_name(const BlazenVoiceHandle *handle);
+
+/**
+ * Returns the owning provider name as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVoiceHandle`.
+ */
+ char *blazen_voice_handle_provider(const BlazenVoiceHandle *handle);
+
+/**
+ * Returns the optional language code as a caller-owned C string, or null if
+ * unset.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVoiceHandle`.
+ */
+ char *blazen_voice_handle_language(const BlazenVoiceHandle *handle);
+
+/**
+ * Returns the optional description as a caller-owned C string, or null if
+ * unset.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVoiceHandle`.
+ */
+ char *blazen_voice_handle_description(const BlazenVoiceHandle *handle);
+
+/**
+ * Returns the `metadata` field as a JSON-encoded caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVoiceHandle`.
+ */
+ char *blazen_voice_handle_metadata_json(const BlazenVoiceHandle *handle);
+
+/**
+ * Frees a `BlazenVoiceHandle`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_voice_handle_free(BlazenVoiceHandle *handle);
 
 /**
  * Returns the variant tag for `err` — one of the `BLAZEN_ERROR_KIND_*`
@@ -3542,6 +5384,1492 @@ int32_t blazen_pipeline_run_blocking(const BlazenPipeline *pipe,
  * pointer is a double-free.
  */
  void blazen_pipeline_free(BlazenPipeline *pipe);
+
+/**
+ * Constructs a new `OpenAiCompatConfig` with the four required string fields.
+ * `auth_code` selects the [`AuthMethod`] variant (see the module docs); for
+ * `auth_code == 1` (`ApiKeyHeader`) the supplied `auth_header_name` becomes
+ * the header. `supports_model_listing` defaults to the upstream value; pass
+ * `true` to opt in.
+ *
+ * Returns null if any of the four required strings is null or non-UTF-8.
+ *
+ * # Safety
+ *
+ * `provider_name`, `base_url`, `api_key`, and `default_model` must each be
+ * a valid NUL-terminated UTF-8 buffer for the duration of the call.
+ * `auth_header_name` must be null OR a valid NUL-terminated UTF-8 buffer.
+ */
+
+BlazenOpenAiCompatConfig *blazen_openai_compat_config_new(const char *provider_name,
+                                                          const char *base_url,
+                                                          const char *api_key,
+                                                          const char *default_model,
+                                                          uint32_t auth_code,
+                                                          const char *auth_header_name,
+                                                          bool supports_model_listing);
+
+/**
+ * Appends an `extra_headers` entry. Null `name` is a no-op.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOpenAiCompatConfig`. `name` and
+ * `value` must each be null OR a valid NUL-terminated UTF-8 buffer.
+ */
+
+void blazen_openai_compat_config_push_extra_header(BlazenOpenAiCompatConfig *handle,
+                                                   const char *name,
+                                                   const char *value);
+
+/**
+ * Appends a `query_params` entry. Null `name` is a no-op.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOpenAiCompatConfig`. `name` and
+ * `value` must each be null OR a valid NUL-terminated UTF-8 buffer.
+ */
+
+void blazen_openai_compat_config_push_query_param(BlazenOpenAiCompatConfig *handle,
+                                                  const char *name,
+                                                  const char *value);
+
+/**
+ * Returns `provider_name` as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOpenAiCompatConfig`.
+ */
+ char *blazen_openai_compat_config_provider_name(const BlazenOpenAiCompatConfig *handle);
+
+/**
+ * Returns `base_url` as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOpenAiCompatConfig`.
+ */
+ char *blazen_openai_compat_config_base_url(const BlazenOpenAiCompatConfig *handle);
+
+/**
+ * Returns `api_key` as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOpenAiCompatConfig`.
+ */
+ char *blazen_openai_compat_config_api_key(const BlazenOpenAiCompatConfig *handle);
+
+/**
+ * Returns `default_model` as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOpenAiCompatConfig`.
+ */
+ char *blazen_openai_compat_config_default_model(const BlazenOpenAiCompatConfig *handle);
+
+/**
+ * Returns the [`AuthMethod`] code (see module docs).
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOpenAiCompatConfig`. Returns `0`
+ * (Bearer) on a null handle.
+ */
+ uint32_t blazen_openai_compat_config_auth_code(const BlazenOpenAiCompatConfig *handle);
+
+/**
+ * Returns the header name for the `ApiKeyHeader` variant. Returns null for
+ * any other variant or a null handle.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOpenAiCompatConfig`.
+ */
+ char *blazen_openai_compat_config_auth_header_name(const BlazenOpenAiCompatConfig *handle);
+
+/**
+ * Returns `supports_model_listing`. Returns `false` on a null handle.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOpenAiCompatConfig`.
+ */
+ bool blazen_openai_compat_config_supports_model_listing(const BlazenOpenAiCompatConfig *handle);
+
+/**
+ * Returns the number of `extra_headers` entries.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOpenAiCompatConfig`.
+ */
+ uintptr_t blazen_openai_compat_config_extra_headers_len(const BlazenOpenAiCompatConfig *handle);
+
+/**
+ * Returns the name at `index` in `extra_headers` as a caller-owned C string.
+ * Out-of-bounds indices return null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOpenAiCompatConfig`.
+ */
+
+char *blazen_openai_compat_config_extra_header_name(const BlazenOpenAiCompatConfig *handle,
+                                                    uintptr_t index);
+
+/**
+ * Returns the value at `index` in `extra_headers` as a caller-owned C string.
+ * Out-of-bounds indices return null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOpenAiCompatConfig`.
+ */
+
+char *blazen_openai_compat_config_extra_header_value(const BlazenOpenAiCompatConfig *handle,
+                                                     uintptr_t index);
+
+/**
+ * Returns the number of `query_params` entries.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOpenAiCompatConfig`.
+ */
+ uintptr_t blazen_openai_compat_config_query_params_len(const BlazenOpenAiCompatConfig *handle);
+
+/**
+ * Returns the name at `index` in `query_params` as a caller-owned C string.
+ * Out-of-bounds indices return null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOpenAiCompatConfig`.
+ */
+
+char *blazen_openai_compat_config_query_param_name(const BlazenOpenAiCompatConfig *handle,
+                                                   uintptr_t index);
+
+/**
+ * Returns the value at `index` in `query_params` as a caller-owned C string.
+ * Out-of-bounds indices return null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOpenAiCompatConfig`.
+ */
+
+char *blazen_openai_compat_config_query_param_value(const BlazenOpenAiCompatConfig *handle,
+                                                    uintptr_t index);
+
+/**
+ * Frees a `BlazenOpenAiCompatConfig`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by
+ * [`blazen_openai_compat_config_new`] or [`blazen_api_protocol_config`].
+ */
+ void blazen_openai_compat_config_free(BlazenOpenAiCompatConfig *handle);
+
+/**
+ * Constructs an `ApiProtocol::OpenAi(config)` variant. Clones the inner
+ * `OpenAiCompatConfig` from the passed-in handle (caller retains ownership of
+ * the original config handle). Returns null on a null `config` argument.
+ *
+ * # Safety
+ *
+ * `config` must be null OR a live `BlazenOpenAiCompatConfig`.
+ */
+ BlazenApiProtocol *blazen_api_protocol_openai(const BlazenOpenAiCompatConfig *config);
+
+/**
+ * Constructs an `ApiProtocol::Custom` variant.
+ */
+ BlazenApiProtocol *blazen_api_protocol_custom(void);
+
+/**
+ * Returns `"openai"` or `"custom"` as a caller-owned C string.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenApiProtocol`.
+ */
+ char *blazen_api_protocol_kind(const BlazenApiProtocol *handle);
+
+/**
+ * Returns a clone of the inner `OpenAiCompatConfig` for the `OpenAi` variant,
+ * or null for the `Custom` variant / null handle. Caller owns the returned
+ * handle and must free with [`blazen_openai_compat_config_free`].
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenApiProtocol`.
+ */
+ BlazenOpenAiCompatConfig *blazen_api_protocol_config(const BlazenApiProtocol *handle);
+
+/**
+ * Frees a `BlazenApiProtocol`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by [`blazen_api_protocol_openai`]
+ * or [`blazen_api_protocol_custom`].
+ */
+ void blazen_api_protocol_free(BlazenApiProtocol *handle);
+
+/**
+ * Sets the `system_prompt` field on the inner defaults. Null `s` is a no-op
+ * (use [`blazen_completion_provider_defaults_set_system_prompt`] via
+ * `_set_defaults` if you need to clear).
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBaseProvider`. `s` must be null OR
+ * a valid NUL-terminated UTF-8 buffer.
+ */
+ void blazen_base_provider_with_system_prompt(BlazenBaseProvider *handle, const char *s);
+
+/**
+ * Replaces the `tools` list by parsing `json` as a JSON array of
+ * [`ToolDefinition`] values. Null `json` is a no-op; invalid JSON clears the
+ * list.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBaseProvider`. `json` must be null
+ * OR a valid NUL-terminated UTF-8 buffer.
+ */
+ void blazen_base_provider_with_tools_json(BlazenBaseProvider *handle, const char *json);
+
+/**
+ * Replaces the `response_format` field by parsing `json`. Null `json` is a
+ * no-op; invalid JSON stores `Value::Null`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBaseProvider`. `json` must be null
+ * OR a valid NUL-terminated UTF-8 buffer.
+ */
+ void blazen_base_provider_with_response_format_json(BlazenBaseProvider *handle, const char *json);
+
+/**
+ * Replaces the entire `CompletionProviderDefaults` on the provider with a
+ * clone of the supplied handle. Null `d` is a no-op.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBaseProvider`. `d` must be null OR
+ * a live `BlazenCompletionProviderDefaults`.
+ */
+
+void blazen_base_provider_with_defaults(BlazenBaseProvider *handle,
+                                        const BlazenCompletionProviderDefaults *d);
+
+/**
+ * Returns a clone of the configured `CompletionProviderDefaults`. Caller owns
+ * the returned handle and must free with
+ * [`crate::provider_defaults::blazen_completion_provider_defaults_free`].
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBaseProvider`.
+ */
+ BlazenCompletionProviderDefaults *blazen_base_provider_defaults(const BlazenBaseProvider *handle);
+
+/**
+ * Returns the inner model's `model_id` as a caller-owned C string. Free with
+ * [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBaseProvider`.
+ */
+ char *blazen_base_provider_model_id(const BlazenBaseProvider *handle);
+
+/**
+ * Returns the inner model's `provider_id` as a caller-owned C string. The
+ * `CompletionModel` trait surfaces this through `model_id()` plus the
+ * provider's own identification; for V1 we return the same string as
+ * [`blazen_base_provider_model_id`]. Free with
+ * [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBaseProvider`.
+ */
+ char *blazen_base_provider_provider_id(const BlazenBaseProvider *handle);
+
+/**
+ * Frees a `BlazenBaseProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by a Phase B `CustomProvider`
+ * factory that returns `BlazenBaseProvider`.
+ */
+ void blazen_base_provider_free(BlazenBaseProvider *handle);
+
+/**
+ * Spawns an async `extract(schema, messages)` against the wrapped provider.
+ *
+ * `schema_json` must be a JSON Schema string (the same shape a typed
+ * language binding would build via Pydantic's `model_json_schema()` or
+ * zod's `zodToJsonSchema`). `messages_json` must be a JSON-encoded
+ * `Vec<ChatMessage>`.
+ *
+ * The implementation:
+ *
+ * 1. Parses both JSON inputs.
+ * 2. Builds a [`CompletionRequest`] with `response_format = schema`.
+ * 3. Awaits the provider's `complete(...)`.
+ * 4. Returns the response's `content` string (the model's JSON output) as
+ *    the future's typed result.
+ *
+ * Pop the result with [`blazen_future_take_extract_result`]. The Ruby (or
+ * any host-language) caller is then responsible for `JSON.parse`-ing the
+ * content and validating against the schema.
+ *
+ * Returns null if any argument is null OR if either JSON blob fails to
+ * parse (`schema` must be valid JSON, `messages` must decode into
+ * `Vec<ChatMessage>`).
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBaseProvider`. `schema_json` and
+ * `messages_json` must each be a valid NUL-terminated UTF-8 buffer.
+ */
+
+BlazenFuture *blazen_base_provider_extract(const BlazenBaseProvider *handle,
+                                           const char *schema_json,
+                                           const char *messages_json);
+
+/**
+ * Pops the [`String`] result of [`blazen_base_provider_extract`] out of
+ * `fut`. On success returns `0` and writes a caller-owned `*mut c_char`
+ * (NUL-terminated UTF-8, JSON-encoded content) into `out`; on failure
+ * returns `-1` and writes a caller-owned `*mut BlazenError` into `err`.
+ *
+ * Either out-pointer may be null to discard. The C string is released via
+ * [`crate::string::blazen_string_free`]; the error via
+ * [`crate::error::blazen_error_free`].
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by
+ * [`blazen_base_provider_extract`], not yet freed, and not concurrently
+ * freed from another thread. `out` / `err` must be null OR writable
+ * pointers to the appropriate slot.
+ */
+ int32_t blazen_future_take_extract_result(BlazenFuture *fut, char **out, BlazenError **err);
+
+/**
+ * Pushes a single `BlazenStreamChunk` into the stream. Consumes `chunk`.
+ * No-op on null `pusher` or `chunk`. Returns `0` on success, `-1` if the
+ * receiver has already been dropped (the stream consumer disappeared).
+ *
+ * # Safety
+ *
+ * `pusher` must be null OR a live `BlazenStreamPusher` previously handed to
+ * the foreign callback by the cabi adapter. `chunk` must be null OR a live
+ * `BlazenStreamChunk`.
+ */
+ int32_t blazen_stream_pusher_push(BlazenStreamPusher *pusher, BlazenStreamChunk *chunk);
+
+/**
+ * Signals end-of-stream gracefully. After this call the pusher is closed —
+ * further pushes are no-ops. No-op on null `pusher`.
+ *
+ * The foreign callback MUST call exactly one of `blazen_stream_pusher_end`
+ * or [`blazen_stream_pusher_error`] before returning ownership of the
+ * pusher to the Rust adapter; the adapter assumes the channel is sealed
+ * once the synchronous callback returns success.
+ *
+ * # Safety
+ *
+ * `pusher` must be null OR a live `BlazenStreamPusher`.
+ */
+ void blazen_stream_pusher_end(BlazenStreamPusher *pusher);
+
+/**
+ * Signals a fatal stream error. Consumes `err`. No-op on null `pusher`
+ * (still frees `err` if non-null).
+ *
+ * # Safety
+ *
+ * `pusher` must be null OR a live `BlazenStreamPusher`. `err` must be null
+ * OR a live `BlazenError` produced by the cabi surface; ownership transfers
+ * into the pusher (or is dropped on a null-pusher path).
+ */
+ void blazen_stream_pusher_error(BlazenStreamPusher *pusher, BlazenError *err);
+
+/**
+ * Wraps a foreign-supplied [`BlazenCustomProviderVTable`] in an
+ * [`InnerCustomProviderHandle`] and hands back a caller-owned handle.
+ *
+ * The vtable's `user_data` ownership transfers into the wrapping
+ * [`BlazenCabiCustomProviderAdapter`] for the lifetime of the handle.
+ * `drop_user_data` is invoked exactly once when the handle is freed via
+ * [`blazen_custom_provider_free`].
+ *
+ * # Safety
+ *
+ * The vtable's function pointers must satisfy the contracts documented on
+ * [`BlazenCustomProviderVTable`]. `user_data` ownership transfers; foreign
+ * callers must NOT call `drop_user_data` themselves after this returns.
+ */
+ BlazenCustomProvider *blazen_custom_provider_from_vtable(BlazenCustomProviderVTable vtable);
+
+/**
+ * Constructs a `CustomProvider` speaking the `OpenAI` Chat Completions wire
+ * protocol against an arbitrary `OpenAI`-compatible server.
+ *
+ * Clones the supplied [`BlazenOpenAiCompatConfig`] into the new provider —
+ * caller retains ownership of the source config handle. Returns null if
+ * `provider_id` or `config` is null / non-UTF-8.
+ *
+ * # Safety
+ *
+ * `provider_id` must be a valid NUL-terminated UTF-8 buffer. `config` must
+ * be null OR a live `BlazenOpenAiCompatConfig`.
+ */
+
+BlazenCustomProvider *blazen_custom_provider_openai_compat(const char *provider_id,
+                                                           const BlazenOpenAiCompatConfig *config);
+
+/**
+ * Convenience factory for an Ollama server.
+ *
+ * Builds the canonical `http://<host>:<port>/v1` base URL and constructs an
+ * OpenAI-protocol `CustomProviderHandle` with `provider_id = "ollama"`.
+ * `host` being null is treated as `"localhost"`. `port` of `0` is treated
+ * as the upstream default (`11434`).
+ *
+ * # Safety
+ *
+ * `host` must be null OR a valid NUL-terminated UTF-8 buffer. `model` must
+ * be a valid NUL-terminated UTF-8 buffer.
+ */
+
+BlazenCustomProvider *blazen_custom_provider_ollama(const char *model,
+                                                    const char *host,
+                                                    uint16_t port);
+
+/**
+ * Convenience factory for an LM Studio server.
+ *
+ * Builds the canonical `http://<host>:<port>/v1` base URL and constructs an
+ * OpenAI-protocol `CustomProviderHandle` with `provider_id = "lm_studio"`.
+ * `host` being null is treated as `"localhost"`. `port` of `0` is treated
+ * as the upstream default (`1234`).
+ *
+ * # Safety
+ *
+ * `host` must be null OR a valid NUL-terminated UTF-8 buffer. `model` must
+ * be a valid NUL-terminated UTF-8 buffer.
+ */
+
+BlazenCustomProvider *blazen_custom_provider_lm_studio(const char *model,
+                                                       const char *host,
+                                                       uint16_t port);
+
+/**
+ * Returns the inner provider's `provider_id` as a caller-owned C string.
+ * Free with [`crate::string::blazen_string_free`]. Returns null on null
+ * `p`.
+ *
+ * # Safety
+ *
+ * `p` must be null OR a live `BlazenCustomProvider`.
+ */
+ char *blazen_custom_provider_provider_id(const BlazenCustomProvider *p);
+
+/**
+ * Returns the inner provider's `model_id` as a caller-owned C string. Free
+ * with [`crate::string::blazen_string_free`]. Returns null on null `p`.
+ *
+ * # Safety
+ *
+ * `p` must be null OR a live `BlazenCustomProvider`.
+ */
+ char *blazen_custom_provider_model_id(const BlazenCustomProvider *p);
+
+/**
+ * Wraps the underlying [`InnerCustomProviderHandle`] inside a brand-new
+ * [`InnerBaseProvider`] and returns it as a caller-owned
+ * `BlazenBaseProvider` handle.
+ *
+ * This lets the host attach base-provider builder mutations (system
+ * prompts, default tools, defaults bundles) without reaching into the
+ * private `base` field on `CustomProviderHandle`. The returned
+ * `BaseProvider` holds an `Arc<CustomProviderHandle>` as its inner
+ * `CompletionModel`, so `complete()` / `stream()` on the result delegate
+ * back through the `CustomProviderHandle` (including any vtable dispatch).
+ *
+ * Returns null if `p` is null.
+ *
+ * # Safety
+ *
+ * `p` must be null OR a live `BlazenCustomProvider`.
+ */
+ BlazenBaseProvider *blazen_custom_provider_as_base_provider(const BlazenCustomProvider *p);
+
+/**
+ * Frees a `BlazenCustomProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `p` must be null OR a pointer produced by one of the
+ * `blazen_custom_provider_*` factories. Double-free is undefined behavior.
+ */
+ void blazen_custom_provider_free(BlazenCustomProvider *p);
+
+/**
+ * Spawns an async `text_to_speech` against the host's `CustomProvider`.
+ *
+ * Consumes the request handle (the inner [`InnerSpeechRequest`] is moved
+ * into the async task). On completion the typed [`InnerAudioResult`] is
+ * popped with [`blazen_future_take_custom_audio_result`].
+ *
+ * Returns null if either argument is null.
+ *
+ * # Safety
+ *
+ * `p` must be null OR a live `BlazenCustomProvider`. `request` must be null
+ * OR a live `BlazenSpeechRequest`. Ownership of `request` transfers to the
+ * spawned task — do NOT call `blazen_speech_request_free` afterwards.
+ */
+
+BlazenFuture *blazen_custom_provider_text_to_speech(const BlazenCustomProvider *p,
+                                                    BlazenSpeechRequest *request);
+
+/**
+ * Spawns an async `generate_music`. See
+ * [`blazen_custom_provider_text_to_speech`] for ownership semantics.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_custom_provider_text_to_speech`] but `request` must be
+ * a `BlazenMusicRequest`.
+ */
+
+BlazenFuture *blazen_custom_provider_generate_music(const BlazenCustomProvider *p,
+                                                    BlazenMusicRequest *request);
+
+/**
+ * Spawns an async `generate_sfx`. See
+ * [`blazen_custom_provider_text_to_speech`] for ownership semantics.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_custom_provider_text_to_speech`] but `request` must be
+ * a `BlazenMusicRequest`.
+ */
+
+BlazenFuture *blazen_custom_provider_generate_sfx(const BlazenCustomProvider *p,
+                                                  BlazenMusicRequest *request);
+
+/**
+ * Spawns an async `clone_voice`. See
+ * [`blazen_custom_provider_text_to_speech`] for ownership semantics.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_custom_provider_text_to_speech`] but `request` must be
+ * a `BlazenVoiceCloneRequest`.
+ */
+
+BlazenFuture *blazen_custom_provider_clone_voice(const BlazenCustomProvider *p,
+                                                 BlazenVoiceCloneRequest *request);
+
+/**
+ * Spawns an async `list_voices`. Takes no request handle.
+ *
+ * On completion, pop the resulting `Vec<VoiceHandle>` via
+ * [`blazen_future_take_custom_voice_list`].
+ *
+ * Returns null if `p` is null.
+ *
+ * # Safety
+ *
+ * `p` must be null OR a live `BlazenCustomProvider`.
+ */
+ BlazenFuture *blazen_custom_provider_list_voices(const BlazenCustomProvider *p);
+
+/**
+ * Spawns an async `delete_voice`. Consumes `voice` — ownership of the
+ * handle transfers into the spawned task. After this call, the caller must
+ * NOT call `blazen_voice_handle_free`.
+ *
+ * Returns a future whose typed result is unit; observers should drain via
+ * [`blazen_future_take_custom_unit`].
+ *
+ * Returns null if `p` or `voice` is null.
+ *
+ * # Safety
+ *
+ * `p` must be null OR a live `BlazenCustomProvider`. `voice` must be null
+ * OR a live `BlazenVoiceHandle`; ownership transfers.
+ */
+
+BlazenFuture *blazen_custom_provider_delete_voice(const BlazenCustomProvider *p,
+                                                  BlazenVoiceHandle *voice);
+
+/**
+ * Spawns an async `generate_image`. See
+ * [`blazen_custom_provider_text_to_speech`] for ownership semantics.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_custom_provider_text_to_speech`] but `request` must be
+ * a `BlazenImageRequest`.
+ */
+
+BlazenFuture *blazen_custom_provider_generate_image(const BlazenCustomProvider *p,
+                                                    BlazenImageRequest *request);
+
+/**
+ * Spawns an async `upscale_image`. See
+ * [`blazen_custom_provider_text_to_speech`] for ownership semantics.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_custom_provider_text_to_speech`] but `request` must be
+ * a `BlazenUpscaleRequest`.
+ */
+
+BlazenFuture *blazen_custom_provider_upscale_image(const BlazenCustomProvider *p,
+                                                   BlazenUpscaleRequest *request);
+
+/**
+ * Spawns an async `text_to_video`. See
+ * [`blazen_custom_provider_text_to_speech`] for ownership semantics.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_custom_provider_text_to_speech`] but `request` must be
+ * a `BlazenVideoRequest`.
+ */
+
+BlazenFuture *blazen_custom_provider_text_to_video(const BlazenCustomProvider *p,
+                                                   BlazenVideoRequest *request);
+
+/**
+ * Spawns an async `image_to_video`. See
+ * [`blazen_custom_provider_text_to_speech`] for ownership semantics.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_custom_provider_text_to_speech`] but `request` must be
+ * a `BlazenVideoRequest`.
+ */
+
+BlazenFuture *blazen_custom_provider_image_to_video(const BlazenCustomProvider *p,
+                                                    BlazenVideoRequest *request);
+
+/**
+ * Spawns an async `transcribe`. See
+ * [`blazen_custom_provider_text_to_speech`] for ownership semantics.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_custom_provider_text_to_speech`] but `request` must be
+ * a `BlazenTranscriptionRequest`.
+ */
+
+BlazenFuture *blazen_custom_provider_transcribe(const BlazenCustomProvider *p,
+                                                BlazenTranscriptionRequest *request);
+
+/**
+ * Spawns an async `generate_3d`. See
+ * [`blazen_custom_provider_text_to_speech`] for ownership semantics.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_custom_provider_text_to_speech`] but `request` must be
+ * a `BlazenThreeDRequest`.
+ */
+
+BlazenFuture *blazen_custom_provider_generate_3d(const BlazenCustomProvider *p,
+                                                 BlazenThreeDRequest *request);
+
+/**
+ * Spawns an async `remove_background`. See
+ * [`blazen_custom_provider_text_to_speech`] for ownership semantics.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_custom_provider_text_to_speech`] but `request` must be
+ * a `BlazenBackgroundRemovalRequest`.
+ */
+
+BlazenFuture *blazen_custom_provider_remove_background(const BlazenCustomProvider *p,
+                                                       BlazenBackgroundRemovalRequest *request);
+
+/**
+ * Pops a typed [`InnerAudioResult`] (the `blazen_llm::compute::AudioResult`
+ * returned by `text_to_speech`, `generate_music`, `generate_sfx`) out of
+ * `fut`.
+ *
+ * On success returns `0` and writes a caller-owned `*mut BlazenAudioResult`
+ * into `out`; on failure returns `-1` and writes a caller-owned
+ * `*mut BlazenError` into `err`. Either out-pointer may be null.
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by one of the audio-result
+ * `blazen_custom_provider_*` entry points, not yet freed. `out` / `err`
+ * must be null OR writable pointers.
+ */
+
+int32_t blazen_future_take_custom_audio_result(BlazenFuture *fut,
+                                               BlazenAudioResult **out,
+                                               BlazenError **err);
+
+/**
+ * Pops a typed [`InnerImageResult`] (`generate_image`, `upscale_image`,
+ * `remove_background`) out of `fut`. Mirrors
+ * [`blazen_future_take_custom_audio_result`] semantics.
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by one of the image-result
+ * `blazen_custom_provider_*` entry points. `out` / `err` must be null OR
+ * writable pointers.
+ */
+
+int32_t blazen_future_take_custom_image_result(BlazenFuture *fut,
+                                               BlazenImageResult **out,
+                                               BlazenError **err);
+
+/**
+ * Pops a typed [`InnerVideoResult`] (`text_to_video`, `image_to_video`) out
+ * of `fut`. Mirrors [`blazen_future_take_custom_audio_result`] semantics.
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by one of the video-result
+ * `blazen_custom_provider_*` entry points. `out` / `err` must be null OR
+ * writable pointers.
+ */
+
+int32_t blazen_future_take_custom_video_result(BlazenFuture *fut,
+                                               BlazenVideoResult **out,
+                                               BlazenError **err);
+
+/**
+ * Pops a typed [`InnerTranscriptionResult`] (`transcribe`) out of `fut`.
+ * Mirrors [`blazen_future_take_custom_audio_result`] semantics.
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by
+ * [`blazen_custom_provider_transcribe`]. `out` / `err` must be null OR
+ * writable pointers.
+ */
+
+int32_t blazen_future_take_custom_transcription_result(BlazenFuture *fut,
+                                                       BlazenTranscriptionResult **out,
+                                                       BlazenError **err);
+
+/**
+ * Pops a typed [`InnerThreeDResult`] (`generate_3d`) out of `fut`. Mirrors
+ * [`blazen_future_take_custom_audio_result`] semantics.
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by
+ * [`blazen_custom_provider_generate_3d`]. `out` / `err` must be null OR
+ * writable pointers.
+ */
+
+int32_t blazen_future_take_custom_three_d_result(BlazenFuture *fut,
+                                                 BlazenThreeDResult **out,
+                                                 BlazenError **err);
+
+/**
+ * Pops a typed [`InnerVoiceHandle`] (`clone_voice`) out of `fut`. Mirrors
+ * [`blazen_future_take_custom_audio_result`] semantics.
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by
+ * [`blazen_custom_provider_clone_voice`]. `out` / `err` must be null OR
+ * writable pointers.
+ */
+
+int32_t blazen_future_take_custom_voice_handle(BlazenFuture *fut,
+                                               BlazenVoiceHandle **out,
+                                               BlazenError **err);
+
+/**
+ * Pops the typed `Vec<InnerVoiceHandle>` result of `list_voices` out of
+ * `fut`. On success returns `0`, writes the count into `*out_count`, and
+ * writes a caller-owned `*mut *mut BlazenVoiceHandle` array into
+ * `*out_array`.
+ *
+ * On failure returns `-1` and writes a caller-owned `*mut BlazenError`
+ * into `err`. Any of `out_array` / `out_count` / `err` may be null.
+ *
+ * ## Releasing the returned array
+ *
+ * Free each `BlazenVoiceHandle` element with
+ * [`crate::compute_results::blazen_voice_handle_free`], then release the
+ * outer pointer array with [`blazen_voice_handle_list_free`].
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by
+ * [`blazen_custom_provider_list_voices`]. `out_array` / `out_count` / `err`
+ * must each be null OR writable pointers.
+ */
+
+int32_t blazen_future_take_custom_voice_list(BlazenFuture *fut,
+                                             BlazenVoiceHandle ***out_array,
+                                             uintptr_t *out_count,
+                                             BlazenError **err);
+
+/**
+ * Frees the array of `*mut BlazenVoiceHandle` returned by
+ * [`blazen_future_take_custom_voice_list`]. Does NOT free the individual
+ * `BlazenVoiceHandle` elements — call
+ * [`crate::compute_results::blazen_voice_handle_free`] for each pointer
+ * first. No-op on null.
+ *
+ * # Safety
+ *
+ * `array` must be null OR a pointer-array produced by
+ * [`blazen_future_take_custom_voice_list`]. `count` must be the exact
+ * length reported by that call. Double-free is undefined behavior.
+ */
+ void blazen_voice_handle_list_free(BlazenVoiceHandle **array, uintptr_t count);
+
+/**
+ * Pops the unit `()` result of `delete_voice` out of `fut`. On success
+ * returns `0`; on failure returns `-1` and writes a caller-owned
+ * `*mut BlazenError` into `err`. `err` may be null.
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by
+ * [`blazen_custom_provider_delete_voice`]. `err` must be null OR a
+ * writable pointer.
+ */
+ int32_t blazen_future_take_custom_unit(BlazenFuture *fut, BlazenError **err);
+
+/**
+ * Constructs an empty `BaseProviderDefaults`.
+ */
+ BlazenBaseProviderDefaults *blazen_base_provider_defaults_new(void);
+
+/**
+ * Returns whether a `before_request` hook is set. V1 hooks are not yet
+ * settable from C — this always returns `false` until Phase C wires the
+ * vtable in.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBaseProviderDefaults`.
+ */
+ bool blazen_base_provider_defaults_has_before_request(const BlazenBaseProviderDefaults *handle);
+
+/**
+ * Frees a `BlazenBaseProviderDefaults`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by
+ * [`blazen_base_provider_defaults_new`] or a getter that clones it.
+ */
+ void blazen_base_provider_defaults_free(BlazenBaseProviderDefaults *handle);
+
+/**
+ * Constructs an empty `CompletionProviderDefaults`.
+ */
+ BlazenCompletionProviderDefaults *blazen_completion_provider_defaults_new(void);
+
+/**
+ * Sets the optional `system_prompt`. Null `prompt` clears it.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionProviderDefaults`.
+ * `prompt` must be null OR a valid NUL-terminated UTF-8 buffer.
+ */
+
+void blazen_completion_provider_defaults_set_system_prompt(BlazenCompletionProviderDefaults *handle,
+                                                           const char *prompt);
+
+/**
+ * Returns the `system_prompt` field as a caller-owned C string, or null when
+ * unset.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionProviderDefaults`.
+ */
+
+char *blazen_completion_provider_defaults_system_prompt(const BlazenCompletionProviderDefaults *handle);
+
+/**
+ * Replaces the `tools` field by parsing `json` as a JSON array of
+ * [`ToolDefinition`] objects. Null / invalid JSON clears the list.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionProviderDefaults`. `json`
+ * must be null OR a valid NUL-terminated UTF-8 buffer.
+ */
+
+void blazen_completion_provider_defaults_set_tools_json(BlazenCompletionProviderDefaults *handle,
+                                                        const char *json);
+
+/**
+ * Returns the `tools` field as a JSON-encoded caller-owned C string. Returns
+ * `"[]"` when no tools are set.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionProviderDefaults`.
+ */
+
+char *blazen_completion_provider_defaults_tools_json(const BlazenCompletionProviderDefaults *handle);
+
+/**
+ * Replaces the `response_format` field by parsing `json`. Null clears it;
+ * invalid JSON stores `Value::Null`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionProviderDefaults`. `json`
+ * must be null OR a valid NUL-terminated UTF-8 buffer.
+ */
+
+void blazen_completion_provider_defaults_set_response_format_json(BlazenCompletionProviderDefaults *handle,
+                                                                  const char *json);
+
+/**
+ * Returns the `response_format` field as a JSON-encoded caller-owned C
+ * string, or null when unset.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionProviderDefaults`.
+ */
+
+char *blazen_completion_provider_defaults_response_format_json(const BlazenCompletionProviderDefaults *handle);
+
+/**
+ * Replaces the `base` field with a clone of the supplied
+ * `BlazenBaseProviderDefaults`. Null `base` is a no-op.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionProviderDefaults`. `base`
+ * must be null OR a live `BlazenBaseProviderDefaults`.
+ */
+
+void blazen_completion_provider_defaults_set_base(BlazenCompletionProviderDefaults *handle,
+                                                  const BlazenBaseProviderDefaults *base);
+
+/**
+ * Returns a clone of the inner `base` field as a caller-owned
+ * `BlazenBaseProviderDefaults` handle. Free with
+ * [`blazen_base_provider_defaults_free`].
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionProviderDefaults`.
+ */
+
+BlazenBaseProviderDefaults *blazen_completion_provider_defaults_base(const BlazenCompletionProviderDefaults *handle);
+
+/**
+ * Returns whether a `before_completion` hook is set. V1 always returns
+ * `false` (hooks land in Phase C).
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCompletionProviderDefaults`.
+ */
+
+bool blazen_completion_provider_defaults_has_before_completion(const BlazenCompletionProviderDefaults *handle);
+
+/**
+ * Frees a `BlazenCompletionProviderDefaults`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by
+ * [`blazen_completion_provider_defaults_new`] or a clone getter.
+ */
+ void blazen_completion_provider_defaults_free(BlazenCompletionProviderDefaults *handle);
+
+/**
+ * Constructs an empty `EmbeddingProviderDefaults`.
+ */
+ BlazenEmbeddingProviderDefaults *blazen_embedding_provider_defaults_new(void);
+
+/**
+ * Replaces the `base` field with a clone of the supplied handle. Null `base`
+ * is a no-op.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenEmbeddingProviderDefaults`. `base`
+ * must be null OR a live `BlazenBaseProviderDefaults`.
+ */
+
+void blazen_embedding_provider_defaults_set_base(BlazenEmbeddingProviderDefaults *handle,
+                                                 const BlazenBaseProviderDefaults *base);
+
+/**
+ * Returns a clone of the inner `base` field.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenEmbeddingProviderDefaults`.
+ */
+
+BlazenBaseProviderDefaults *blazen_embedding_provider_defaults_base(const BlazenEmbeddingProviderDefaults *handle);
+
+/**
+ * Frees a `BlazenEmbeddingProviderDefaults`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by
+ * [`blazen_embedding_provider_defaults_new`].
+ */
+ void blazen_embedding_provider_defaults_free(BlazenEmbeddingProviderDefaults *handle);
+
+/**
+ * Constructs an empty `AudioSpeechProviderDefaults`.
+ */
+ BlazenAudioSpeechProviderDefaults *blazen_audio_speech_provider_defaults_new(void);
+
+/**
+ * Replaces the `base` field with a clone of the supplied handle. Null `base`
+ * is a no-op.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenAudioSpeechProviderDefaults`.
+ * `base` must be null OR a live `BlazenBaseProviderDefaults`.
+ */
+
+void blazen_audio_speech_provider_defaults_set_base(BlazenAudioSpeechProviderDefaults *handle,
+                                                    const BlazenBaseProviderDefaults *base);
+
+/**
+ * Returns a clone of the inner `base` field.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenAudioSpeechProviderDefaults`.
+ */
+
+BlazenBaseProviderDefaults *blazen_audio_speech_provider_defaults_base(const BlazenAudioSpeechProviderDefaults *handle);
+
+/**
+ * Returns whether the typed `before` hook is set. V1 always returns `false`
+ * (hooks land in Phase C).
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenAudioSpeechProviderDefaults`.
+ */
+
+bool blazen_audio_speech_provider_defaults_has_before(const BlazenAudioSpeechProviderDefaults *handle);
+
+/**
+ * Frees a `BlazenAudioSpeechProviderDefaults`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by
+ * [`blazen_audio_speech_provider_defaults_new`].
+ */
+ void blazen_audio_speech_provider_defaults_free(BlazenAudioSpeechProviderDefaults *handle);
+
+/**
+ * Constructs an empty `AudioMusicProviderDefaults`.
+ */
+ BlazenAudioMusicProviderDefaults *blazen_audio_music_provider_defaults_new(void);
+
+/**
+ * Replaces the `base` field. Null `base` is a no-op.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenAudioMusicProviderDefaults`.
+ * `base` must be null OR a live `BlazenBaseProviderDefaults`.
+ */
+
+void blazen_audio_music_provider_defaults_set_base(BlazenAudioMusicProviderDefaults *handle,
+                                                   const BlazenBaseProviderDefaults *base);
+
+/**
+ * Returns a clone of the inner `base` field.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenAudioMusicProviderDefaults`.
+ */
+
+BlazenBaseProviderDefaults *blazen_audio_music_provider_defaults_base(const BlazenAudioMusicProviderDefaults *handle);
+
+/**
+ * Returns whether the typed `before` hook is set. V1 always returns `false`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenAudioMusicProviderDefaults`.
+ */
+
+bool blazen_audio_music_provider_defaults_has_before(const BlazenAudioMusicProviderDefaults *handle);
+
+/**
+ * Frees a `BlazenAudioMusicProviderDefaults`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by
+ * [`blazen_audio_music_provider_defaults_new`].
+ */
+ void blazen_audio_music_provider_defaults_free(BlazenAudioMusicProviderDefaults *handle);
+
+/**
+ * Constructs an empty `VoiceCloningProviderDefaults`.
+ */
+ BlazenVoiceCloningProviderDefaults *blazen_voice_cloning_provider_defaults_new(void);
+
+/**
+ * Replaces the `base` field. Null `base` is a no-op.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVoiceCloningProviderDefaults`.
+ * `base` must be null OR a live `BlazenBaseProviderDefaults`.
+ */
+
+void blazen_voice_cloning_provider_defaults_set_base(BlazenVoiceCloningProviderDefaults *handle,
+                                                     const BlazenBaseProviderDefaults *base);
+
+/**
+ * Returns a clone of the inner `base` field.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVoiceCloningProviderDefaults`.
+ */
+
+BlazenBaseProviderDefaults *blazen_voice_cloning_provider_defaults_base(const BlazenVoiceCloningProviderDefaults *handle);
+
+/**
+ * Returns whether the typed `before` hook is set. V1 always returns `false`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVoiceCloningProviderDefaults`.
+ */
+
+bool blazen_voice_cloning_provider_defaults_has_before(const BlazenVoiceCloningProviderDefaults *handle);
+
+/**
+ * Frees a `BlazenVoiceCloningProviderDefaults`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by
+ * [`blazen_voice_cloning_provider_defaults_new`].
+ */
+ void blazen_voice_cloning_provider_defaults_free(BlazenVoiceCloningProviderDefaults *handle);
+
+/**
+ * Constructs an empty `ImageGenerationProviderDefaults`.
+ */
+ BlazenImageGenerationProviderDefaults *blazen_image_generation_provider_defaults_new(void);
+
+/**
+ * Replaces the `base` field. Null `base` is a no-op.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageGenerationProviderDefaults`.
+ * `base` must be null OR a live `BlazenBaseProviderDefaults`.
+ */
+
+void blazen_image_generation_provider_defaults_set_base(BlazenImageGenerationProviderDefaults *handle,
+                                                        const BlazenBaseProviderDefaults *base);
+
+/**
+ * Returns a clone of the inner `base` field.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageGenerationProviderDefaults`.
+ */
+
+BlazenBaseProviderDefaults *blazen_image_generation_provider_defaults_base(const BlazenImageGenerationProviderDefaults *handle);
+
+/**
+ * Returns whether the typed `before` hook is set. V1 always returns `false`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageGenerationProviderDefaults`.
+ */
+
+bool blazen_image_generation_provider_defaults_has_before(const BlazenImageGenerationProviderDefaults *handle);
+
+/**
+ * Frees a `BlazenImageGenerationProviderDefaults`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by
+ * [`blazen_image_generation_provider_defaults_new`].
+ */
+ void blazen_image_generation_provider_defaults_free(BlazenImageGenerationProviderDefaults *handle);
+
+/**
+ * Constructs an empty `ImageUpscaleProviderDefaults`.
+ */
+ BlazenImageUpscaleProviderDefaults *blazen_image_upscale_provider_defaults_new(void);
+
+/**
+ * Replaces the `base` field. Null `base` is a no-op.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageUpscaleProviderDefaults`.
+ * `base` must be null OR a live `BlazenBaseProviderDefaults`.
+ */
+
+void blazen_image_upscale_provider_defaults_set_base(BlazenImageUpscaleProviderDefaults *handle,
+                                                     const BlazenBaseProviderDefaults *base);
+
+/**
+ * Returns a clone of the inner `base` field.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageUpscaleProviderDefaults`.
+ */
+
+BlazenBaseProviderDefaults *blazen_image_upscale_provider_defaults_base(const BlazenImageUpscaleProviderDefaults *handle);
+
+/**
+ * Returns whether the typed `before` hook is set. V1 always returns `false`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenImageUpscaleProviderDefaults`.
+ */
+
+bool blazen_image_upscale_provider_defaults_has_before(const BlazenImageUpscaleProviderDefaults *handle);
+
+/**
+ * Frees a `BlazenImageUpscaleProviderDefaults`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by
+ * [`blazen_image_upscale_provider_defaults_new`].
+ */
+ void blazen_image_upscale_provider_defaults_free(BlazenImageUpscaleProviderDefaults *handle);
+
+/**
+ * Constructs an empty `VideoProviderDefaults`.
+ */
+ BlazenVideoProviderDefaults *blazen_video_provider_defaults_new(void);
+
+/**
+ * Replaces the `base` field. Null `base` is a no-op.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoProviderDefaults`.
+ * `base` must be null OR a live `BlazenBaseProviderDefaults`.
+ */
+
+void blazen_video_provider_defaults_set_base(BlazenVideoProviderDefaults *handle,
+                                             const BlazenBaseProviderDefaults *base);
+
+/**
+ * Returns a clone of the inner `base` field.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoProviderDefaults`.
+ */
+
+BlazenBaseProviderDefaults *blazen_video_provider_defaults_base(const BlazenVideoProviderDefaults *handle);
+
+/**
+ * Returns whether the typed `before` hook is set. V1 always returns `false`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVideoProviderDefaults`.
+ */
+ bool blazen_video_provider_defaults_has_before(const BlazenVideoProviderDefaults *handle);
+
+/**
+ * Frees a `BlazenVideoProviderDefaults`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by
+ * [`blazen_video_provider_defaults_new`].
+ */
+ void blazen_video_provider_defaults_free(BlazenVideoProviderDefaults *handle);
+
+/**
+ * Constructs an empty `TranscriptionProviderDefaults`.
+ */
+ BlazenTranscriptionProviderDefaults *blazen_transcription_provider_defaults_new(void);
+
+/**
+ * Replaces the `base` field. Null `base` is a no-op.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionProviderDefaults`.
+ * `base` must be null OR a live `BlazenBaseProviderDefaults`.
+ */
+
+void blazen_transcription_provider_defaults_set_base(BlazenTranscriptionProviderDefaults *handle,
+                                                     const BlazenBaseProviderDefaults *base);
+
+/**
+ * Returns a clone of the inner `base` field.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionProviderDefaults`.
+ */
+
+BlazenBaseProviderDefaults *blazen_transcription_provider_defaults_base(const BlazenTranscriptionProviderDefaults *handle);
+
+/**
+ * Returns whether the typed `before` hook is set. V1 always returns `false`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTranscriptionProviderDefaults`.
+ */
+
+bool blazen_transcription_provider_defaults_has_before(const BlazenTranscriptionProviderDefaults *handle);
+
+/**
+ * Frees a `BlazenTranscriptionProviderDefaults`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by
+ * [`blazen_transcription_provider_defaults_new`].
+ */
+ void blazen_transcription_provider_defaults_free(BlazenTranscriptionProviderDefaults *handle);
+
+/**
+ * Constructs an empty `ThreeDProviderDefaults`.
+ */
+ BlazenThreeDProviderDefaults *blazen_three_d_provider_defaults_new(void);
+
+/**
+ * Replaces the `base` field. Null `base` is a no-op.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenThreeDProviderDefaults`.
+ * `base` must be null OR a live `BlazenBaseProviderDefaults`.
+ */
+
+void blazen_three_d_provider_defaults_set_base(BlazenThreeDProviderDefaults *handle,
+                                               const BlazenBaseProviderDefaults *base);
+
+/**
+ * Returns a clone of the inner `base` field.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenThreeDProviderDefaults`.
+ */
+
+BlazenBaseProviderDefaults *blazen_three_d_provider_defaults_base(const BlazenThreeDProviderDefaults *handle);
+
+/**
+ * Returns whether the typed `before` hook is set. V1 always returns `false`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenThreeDProviderDefaults`.
+ */
+ bool blazen_three_d_provider_defaults_has_before(const BlazenThreeDProviderDefaults *handle);
+
+/**
+ * Frees a `BlazenThreeDProviderDefaults`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by
+ * [`blazen_three_d_provider_defaults_new`].
+ */
+ void blazen_three_d_provider_defaults_free(BlazenThreeDProviderDefaults *handle);
+
+/**
+ * Constructs an empty `BackgroundRemovalProviderDefaults`.
+ */
+ BlazenBackgroundRemovalProviderDefaults *blazen_background_removal_provider_defaults_new(void);
+
+/**
+ * Replaces the `base` field. Null `base` is a no-op.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBackgroundRemovalProviderDefaults`.
+ * `base` must be null OR a live `BlazenBaseProviderDefaults`.
+ */
+
+void blazen_background_removal_provider_defaults_set_base(BlazenBackgroundRemovalProviderDefaults *handle,
+                                                          const BlazenBaseProviderDefaults *base);
+
+/**
+ * Returns a clone of the inner `base` field.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBackgroundRemovalProviderDefaults`.
+ */
+
+BlazenBaseProviderDefaults *blazen_background_removal_provider_defaults_base(const BlazenBackgroundRemovalProviderDefaults *handle);
+
+/**
+ * Returns whether the typed `before` hook is set. V1 always returns `false`.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBackgroundRemovalProviderDefaults`.
+ */
+
+bool blazen_background_removal_provider_defaults_has_before(const BlazenBackgroundRemovalProviderDefaults *handle);
+
+/**
+ * Frees a `BlazenBackgroundRemovalProviderDefaults`. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer produced by
+ * [`blazen_background_removal_provider_defaults_new`].
+ */
+
+void blazen_background_removal_provider_defaults_free(BlazenBackgroundRemovalProviderDefaults *handle);
 
 /**
  * Constructs an `OpenAI` chat-completion model.

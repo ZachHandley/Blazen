@@ -53,6 +53,67 @@ export declare class AnthropicProvider {
 export type JsAnthropicProvider = AnthropicProvider
 
 /**
+ * Selects how a custom provider talks to its backend for completion
+ * calls.
+ *
+ * ```javascript
+ * import { ApiProtocol } from "blazen";
+ *
+ * const p1 = ApiProtocol.openai({
+ *   providerName: "my-host",
+ *   baseUrl: "https://api.example.com/v1",
+ *   apiKey: "sk-...",
+ *   defaultModel: "my-model",
+ * });
+ * console.log(p1.kind); // "openai"
+ *
+ * const p2 = ApiProtocol.custom();
+ * console.log(p2.kind); // "custom"
+ * ```
+ */
+export declare class ApiProtocol {
+  /**
+   * Build an OpenAI-compatible API protocol wrapping the supplied
+   * configuration.
+   */
+  static openai(config: JsOpenAiCompatConfig): ApiProtocol
+  /**
+   * Build a custom (user-defined) API protocol. The completion
+   * dispatch path is handled by the host-language object passed to
+   * `CustomProvider`.
+   */
+  static custom(): ApiProtocol
+  /** Discriminator string: `"openai"` or `"custom"`. */
+  get kind(): string
+  /**
+   * The wrapped [`JsOpenAiCompatConfig`] when `kind === "openai"`,
+   * otherwise `null`.
+   */
+  get config(): JsOpenAiCompatConfig | null
+}
+export type JsApiProtocol = ApiProtocol
+
+export declare class AudioMusicProviderDefaults {
+  /** Construct role-specific defaults. */
+  constructor(base?: BaseProviderDefaults | undefined | null, before?: BeforeRoleTsfn | undefined | null)
+  /** Returns `true` when a `before` hook is configured. */
+  get hasBefore(): boolean
+  /** Replace the typed `before` hook. Pass `null` to clear. */
+  set before(hook: BeforeRoleTsfn | undefined | null)
+}
+export type JsAudioMusicProviderDefaults = AudioMusicProviderDefaults
+
+export declare class AudioSpeechProviderDefaults {
+  /** Construct role-specific defaults. */
+  constructor(base?: BaseProviderDefaults | undefined | null, before?: BeforeRoleTsfn | undefined | null)
+  /** Returns `true` when a `before` hook is configured. */
+  get hasBefore(): boolean
+  /** Replace the typed `before` hook. Pass `null` to clear. */
+  set before(hook: BeforeRoleTsfn | undefined | null)
+}
+export type JsAudioSpeechProviderDefaults = AudioSpeechProviderDefaults
+
+/**
  * An Azure `OpenAI` chat completion provider.
  *
  * ```typescript
@@ -98,6 +159,158 @@ export declare class BackgroundRemovalProvider {
   removeBackground(request: any): Promise<any>
 }
 export type JsBackgroundRemovalProvider = BackgroundRemovalProvider
+
+export declare class BackgroundRemovalProviderDefaults {
+  /** Construct role-specific defaults. */
+  constructor(base?: BaseProviderDefaults | undefined | null, before?: BeforeRoleTsfn | undefined | null)
+  /** Returns `true` when a `before` hook is configured. */
+  get hasBefore(): boolean
+  /** Replace the typed `before` hook. Pass `null` to clear. */
+  set before(hook: BeforeRoleTsfn | undefined | null)
+}
+export type JsBackgroundRemovalProviderDefaults = BackgroundRemovalProviderDefaults
+
+/**
+ * A completion provider wrapper that applies a
+ * [`JsCompletionProviderDefaults`] to every completion request before
+ * delegating to the inner model.
+ *
+ * `BaseProvider` is intended to be subclassed from JavaScript:
+ *
+ * ```javascript
+ * import { BaseProvider, CompletionModel } from "blazen";
+ *
+ * class TerseLlm extends BaseProvider {
+ *   constructor() {
+ *     const inner = CompletionModel.openai({ apiKey: "sk-..." });
+ *     super(inner);
+ *     this.withSystemPrompt("Be terse.");
+ *   }
+ * }
+ * ```
+ *
+ * Today (V1) the constructor stores an opaque reference to the inner
+ * object — Phase D will wire `class extends` to fire the JS `complete`
+ * override before falling back to the inner Rust model.
+ */
+export declare class BaseProvider {
+  /**
+   * Construct a new [`BaseProvider`].
+   *
+   * `inner` is the underlying completion model — pass a
+   * [`JsCompletionModel`] instance. JS subclasses that fully
+   * override `complete` may pass `null` here (Phase D will wire
+   * subclass dispatch end-to-end; today calls to `complete` on a
+   * subclass-only provider report unsupported).
+   *
+   * `defaults` optionally seeds the
+   * [`JsCompletionProviderDefaults`]; when omitted, an empty
+   * defaults bag is created.
+   */
+  constructor(inner?: JsCompletionModel | undefined | null, defaults?: JsCompletionProviderDefaults | undefined | null)
+  /**
+   * Set the default system prompt prepended to requests when no
+   * system message is already present.
+   */
+  withSystemPrompt(prompt: string): BaseProvider
+  /** Replace the default tools appended to every completion request. */
+  withTools(tools: Array<JsToolDefinition>): BaseProvider
+  /** Set the default `responseFormat` (JSON Schema object). */
+  withResponseFormat(format: any): BaseProvider
+  /**
+   * Set the universal `beforeRequest` hook (fires for any request
+   * type). V1: stored only — Phase B wires dispatch.
+   */
+  withBeforeRequest(hook: BeforeRequestTsfn): BaseProvider
+  /**
+   * Set the typed `beforeCompletion` hook (fires after the universal
+   * hook, with a typed completion request). V1: stored only — Phase
+   * B wires dispatch.
+   */
+  withBeforeCompletion(hook: BeforeCompletionTsfn): BaseProvider
+  /** Replace the entire defaults bag. */
+  withDefaults(defaults: JsCompletionProviderDefaults): BaseProvider
+  /** The currently-configured defaults. */
+  get defaults(): JsCompletionProviderDefaults
+  /**
+   * The inner model's `modelId`. Returns the empty string when the
+   * provider was constructed without a Rust-side `inner` (JS subclass
+   * path).
+   */
+  get modelId(): string
+  /**
+   * The provider identifier used for logging. Defaults to the inner
+   * model's `modelId` when present, otherwise `"base"`. Subclasses
+   * may override.
+   */
+  get providerId(): string
+  /**
+   * Typed structured extraction.
+   *
+   * Sends a completion request with a JSON Schema `response_format`
+   * envelope and parses the model's response as JSON. The schema
+   * argument is a plain JSON Schema object (callers using zod can
+   * convert with `zodToJsonSchema(zSchema)` from the `zod-to-json-schema`
+   * package).
+   *
+   * The `response_format` is wired up as the `OpenAI`-style
+   * `{"type":"json_schema","json_schema":{"name":"Extract","schema":...,"strict":true}}`
+   * envelope; provider implementations that don't natively support
+   * structured outputs fall back to a system-instruction shim (see
+   * `crates/blazen-llm/src/providers/anthropic.rs::build_json_schema_system_instruction`).
+   *
+   * Returns the parsed JSON value. The TypeScript surface declares
+   * the return as `any` because the schema shape is only known at
+   * runtime; callers can narrow via TS generics on their wrapper.
+   *
+   * ```typescript
+   * const schema = {
+   *   type: "object",
+   *   properties: {
+   *     name: { type: "string" },
+   *     age:  { type: "integer" },
+   *   },
+   *   required: ["name", "age"],
+   * };
+   * const result = await provider.extract(schema, [
+   *   ChatMessage.user("My name is Alice and I am 30."),
+   * ]);
+   * // -> { name: "Alice", age: 30 }
+   * ```
+   */
+  extract(schema: any, messages: Array<JsChatMessage>): Promise<any>
+}
+export type JsBaseProvider = BaseProvider
+
+/**
+ * Universal provider defaults applicable to every provider role.
+ *
+ * Carries cross-cutting fields (currently just the `beforeRequest`
+ * hook). Embedded as a `base` field on every role-specific defaults
+ * class.
+ *
+ * ```javascript
+ * import { BaseProviderDefaults } from "blazen";
+ *
+ * const d = new BaseProviderDefaults(async (method, request) => {
+ *   console.log("request via", method);
+ * });
+ * ```
+ */
+export declare class BaseProviderDefaults {
+  /**
+   * Construct a new [`BaseProviderDefaults`].
+   *
+   * `beforeRequest` is an optional async callback fired before any
+   * provider request (V1: stored only, not yet dispatched).
+   */
+  constructor(beforeRequest?: BeforeRequestTsfn | undefined | null)
+  /** Returns `true` when a `beforeRequest` hook is configured. */
+  get hasBeforeRequest(): boolean
+  /** Replace the `beforeRequest` hook. Pass `null` to clear. */
+  set beforeRequest(hook: BeforeRequestTsfn | undefined | null)
+}
+export type JsBaseProviderDefaults = BaseProviderDefaults
 
 /**
  * Typed configuration for a batch completion run.
@@ -796,7 +1009,7 @@ export declare class CompletionModel {
    * host object.
    *
    * `hostObject` must expose Blazen capability methods (e.g.
-   * `complete`, `stream`) following the `NodeHostDispatch` mapping. The
+   * `complete`, `stream`) using the camelCase trait-method names. The
    * optional `providerId` is used for logging; defaults to `"custom"`.
    *
    * ```javascript
@@ -953,6 +1166,47 @@ export declare class CompletionModel {
   withTracing(name: string): CompletionModel
 }
 export type JsCompletionModel = CompletionModel
+
+/**
+ * Completion-role provider defaults: system prompt, default tools,
+ * `responseFormat`, and a typed `beforeCompletion` hook.
+ *
+ * ```javascript
+ * import { BaseProviderDefaults, CompletionProviderDefaults } from "blazen";
+ *
+ * const d = new CompletionProviderDefaults(
+ *   new BaseProviderDefaults(),
+ *   "Be terse.",
+ *   [], // default tools
+ *   { type: "json_object" },
+ *   async (request) => { /* mutate request *\/ },
+ * );
+ * ```
+ */
+export declare class CompletionProviderDefaults {
+  /** Construct completion-role defaults. */
+  constructor(base?: BaseProviderDefaults | undefined | null, systemPrompt?: string | undefined | null, tools?: Array<JsToolDefinition> | undefined | null, responseFormat?: any | undefined | null, beforeCompletion?: BeforeCompletionTsfn | undefined | null)
+  /**
+   * The system prompt prepended to requests when the request itself
+   * carries no system message.
+   */
+  get systemPrompt(): string | null
+  /** Replace the system prompt. Pass `null` to clear. */
+  set systemPrompt(value: string | undefined | null)
+  /** The default tools appended to every completion request. */
+  get tools(): Array<JsToolDefinition>
+  /** Replace the default tools. */
+  set tools(value: Array<JsToolDefinition> | undefined | null)
+  /** Default `response_format` (JSON Schema or similar object). */
+  get responseFormat(): any | null
+  /** Replace the default `responseFormat`. Pass `null` to clear. */
+  set responseFormat(value: any | undefined | null)
+  /** Returns `true` when a `beforeCompletion` hook is configured. */
+  get hasBeforeCompletion(): boolean
+  /** Replace the typed `beforeCompletion` hook. Pass `null` to clear. */
+  set beforeCompletion(hook: BeforeCompletionTsfn | undefined | null)
+}
+export type JsCompletionProviderDefaults = CompletionProviderDefaults
 
 /**
  * Pluggable registry for multimodal content. Wraps
@@ -1177,75 +1431,109 @@ export declare class Context {
 export type JsContext = Context
 
 /**
- * A user-defined Blazen provider backed by a JavaScript class instance.
+ * A user-defined Blazen provider exposed to JavaScript.
  *
- * Wraps an arbitrary object whose async methods match Blazen's
- * capability trait names (`textToSpeech`, `cloneVoice`,
- * `generateImage`, etc.) and exposes them as a first-class provider.
- * The workflow engine treats the result as implementing every
- * capability trait whose methods the wrapped object provides; missing
- * methods return `UnsupportedError` when called.
+ * `CustomProvider` is designed for two complementary use cases:
  *
- * Request/response shapes use Blazen's typed request/result types on
- * the JavaScript side and get serialized through napi's
- * `serde_json::Value` bridge to the wrapped object's methods, which
- * receive/return plain objects.
+ * 1. **Subclass from JavaScript** to plug an arbitrary backend into
+ *    Blazen. Override any combination of the typed methods
+ *    (`textToSpeech`, `generateImage`, `cloneVoice`, …). When the
+ *    framework dispatches a capability, the override fires; methods
+ *    you did not override report `UnsupportedError`.
+ * 2. **Use a static factory** ([`Self::ollama`], [`Self::lm_studio`],
+ *    [`Self::openai_compat`]) to get a ready-made handle that speaks
+ *    the `OpenAI` Chat Completions wire format.
  *
  * ```typescript
- * import { CustomProvider } from "blazen";
+ * import { ApiProtocol, CustomProvider } from "blazen";
  *
- * class MyElevenLabsProvider {
- *     constructor(apiKey: string) {
- *         this.client = new ElevenLabs({ apiKey });
- *     }
+ * class MyElevenLabsProvider extends CustomProvider {
+ *   constructor(apiKey: string) {
+ *     super("elevenlabs", ApiProtocol.custom());
+ *     this.client = new ElevenLabs({ apiKey });
+ *   }
  *
- *     async textToSpeech(request: { text: string; voice?: string }) {
- *         const audio = await this.client.textToSpeech.convert({
- *             voiceId: request.voice ?? "default",
- *             text: request.text,
- *             modelId: "eleven_multilingual_v2",
- *         });
- *         return {
- *             audio: [{
- *                 media: {
- *                     base64: Buffer.from(audio).toString("base64"),
- *                     mediaType: "mpeg",
- *                 },
- *             }],
- *             timing: { totalMs: 0, queueMs: null, executionMs: null },
- *             metadata: {},
- *         };
- *     }
+ *   async textToSpeech(request: { text: string; voice?: string }) {
+ *     const audio = await this.client.textToSpeech.convert({
+ *       voiceId: request.voice ?? "default",
+ *       text: request.text,
+ *       modelId: "eleven_multilingual_v2",
+ *     });
+ *     return {
+ *       audio: [{
+ *         media: {
+ *           base64: Buffer.from(audio).toString("base64"),
+ *           mediaType: "mpeg",
+ *         },
+ *       }],
+ *       timing: { totalMs: 0, queueMs: null, executionMs: null },
+ *       metadata: {},
+ *     };
+ *   }
  * }
  *
- * const provider = new CustomProvider(
- *     new MyElevenLabsProvider("..."),
- *     { providerId: "elevenlabs" },
- * );
+ * const provider = new MyElevenLabsProvider("sk-...");
  * const audio = await provider.textToSpeech({
- *     text: "hello",
- *     voice: "rachel",
+ *   text: "hello",
+ *   voice: "rachel",
  * });
  * ```
  */
 export declare class CustomProvider {
   /**
-   * Wrap a JavaScript host object as a Blazen [`CustomProvider`].
+   * Construct a `CustomProvider`.
    *
-   * `hostObject` is a class instance (or plain object) whose async
-   * methods match Blazen capability trait method names
-   * (`textToSpeech`, `generateImage`, `cloneVoice`, ...). Host
-   * methods should be `async` and accept a single object argument
-   * shaped like the corresponding Blazen request type. Synchronous
-   * host methods are supported as long as they return a `Promise`
-   * explicitly -- the ordinary async dispatch path awaits the
-   * returned `Promise`.
+   * - `providerId` — short identifier used for logging
+   *   (e.g. `"elevenlabs"`, `"my-ollama"`).
+   * - `protocol` — optional [`ApiProtocol`]; defaults to
+   *   [`ApiProtocol.custom`]. Subclasses that override capability
+   *   methods typically leave this at the default.
    *
-   * `options.providerId` is an optional short identifier used for
-   * logging and returned from [`JsCustomProvider::provider_id`].
-   * Defaults to `"custom"`.
+   * When the constructor is invoked via `new (class extends
+   * CustomProvider) { … }`, the prototype of the JS instance
+   * differs from `CustomProvider.prototype`. The Rust constructor
+   * detects that case and installs a [`JsCustomProviderAdapter`]
+   * wrapping the JS instance so every overridden method dispatches
+   * through the JS side.
+   *
+   * When the constructor is invoked directly as
+   * `new CustomProvider(…)` (no subclass), the resulting handle
+   * reports every typed method as `Unsupported` unless built via
+   * one of the static factories
+   * ([`Self::ollama`] / [`Self::lm_studio`] / [`Self::openai_compat`]).
    */
-  constructor(hostObject: object, options?: CustomProviderOptions | undefined | null)
+  constructor(providerId: string, protocol?: ApiProtocol | undefined | null)
+  /**
+   * Convenience constructor for a local Ollama server.
+   *
+   * Equivalent to building a `CustomProvider` whose protocol is
+   * `ApiProtocol.openai({ baseUrl: "http://<host>:<port>/v1", … })`.
+   *
+   * ```typescript
+   * const provider = CustomProvider.ollama("llama3.1");
+   * const provider = CustomProvider.ollama("llama3.1", "192.168.1.50", 11434);
+   * ```
+   */
+  static ollama(model: string, host?: string | undefined | null, port?: number | undefined | null): CustomProvider
+  /**
+   * Convenience constructor for a local LM Studio server.
+   *
+   * Equivalent to building a `CustomProvider` whose protocol is
+   * `ApiProtocol.openai({ baseUrl: "http://<host>:<port>/v1", … })`.
+   *
+   * ```typescript
+   * const provider = CustomProvider.lmStudio("my-model");
+   * const provider = CustomProvider.lmStudio("my-model", "127.0.0.1", 1234);
+   * ```
+   */
+  static lmStudio(model: string, host?: string | undefined | null, port?: number | undefined | null): CustomProvider
+  /**
+   * Build a `CustomProvider` that speaks the `OpenAI` Chat
+   * Completions protocol. Use for any OpenAI-compatible HTTP
+   * endpoint that is not already covered by [`Self::ollama`] /
+   * [`Self::lm_studio`].
+   */
+  static openaiCompat(providerId: string, config: JsOpenAiCompatConfig): CustomProvider
   /** The provider identifier used for logging (e.g. `"elevenlabs"`). */
   get providerId(): string
   /**
@@ -1465,6 +1753,16 @@ export declare class EmbeddingModel {
   static embed(options?: JsEmbedOptions | undefined | null): EmbeddingModel
 }
 export type JsEmbeddingModel = EmbeddingModel
+
+/**
+ * Embedding-role provider defaults. V1 just wraps a
+ * [`JsBaseProviderDefaults`].
+ */
+export declare class EmbeddingProviderDefaults {
+  /** Construct embedding-role defaults. */
+  constructor(base?: BaseProviderDefaults | undefined | null)
+}
+export type JsEmbeddingProviderDefaults = EmbeddingProviderDefaults
 
 /**
  * A local embedding provider.
@@ -1832,32 +2130,6 @@ export declare class HistoryEventKind {
 export type JsHistoryEventKind = HistoryEventKind
 
 /**
- * Base class for user-extendable host dispatchers.
- *
- * Mirrors [`blazen_llm::HostDispatch`]. Subclasses override `call(method,
- * request)` to plug a JS-side capability table into a Blazen
- * [`CustomProvider`](crate::providers::JsCustomProvider). Most users
- * will reach for [`crate::providers::JsCustomProvider`] directly with a
- * plain JS object; this class exists so users can subclass with shared
- * state and override `hasMethod` independently from `call`.
- */
-export declare class HostDispatch {
-  /** Create a new host dispatch base instance. */
-  constructor()
-  /**
-   * Dispatch a Rust-side capability call to the JavaScript host.
-   * Subclasses **must** override.
-   */
-  call(method: string, request: any): Promise<any>
-  /**
-   * Whether this dispatcher implements `method`. Subclasses **must**
-   * override.
-   */
-  hasMethod(method: string): boolean
-}
-export type JsHostDispatch = HostDispatch
-
-/**
  * Abstract base class for custom HTTP transports.
  *
  * Subclass this to plug in a custom HTTP backend (Cloudflare `fetch`,
@@ -1960,6 +2232,16 @@ export declare class HttpPeerClient {
 }
 export type JsHttpPeerClient = HttpPeerClient
 
+export declare class ImageGenerationProviderDefaults {
+  /** Construct role-specific defaults. */
+  constructor(base?: BaseProviderDefaults | undefined | null, before?: BeforeRoleTsfn | undefined | null)
+  /** Returns `true` when a `before` hook is configured. */
+  get hasBefore(): boolean
+  /** Replace the typed `before` hook. Pass `null` to clear. */
+  set before(hook: BeforeRoleTsfn | undefined | null)
+}
+export type JsImageGenerationProviderDefaults = ImageGenerationProviderDefaults
+
 /**
  * Base class for custom image-generation providers.
  *
@@ -2021,6 +2303,16 @@ export declare class ImageProvider {
   upscaleImage(request: any): Promise<any>
 }
 export type JsImageProvider = ImageProvider
+
+export declare class ImageUpscaleProviderDefaults {
+  /** Construct role-specific defaults. */
+  constructor(base?: BaseProviderDefaults | undefined | null, before?: BeforeRoleTsfn | undefined | null)
+  /** Returns `true` when a `before` hook is configured. */
+  get hasBefore(): boolean
+  /** Replace the typed `before` hook. Pass `null` to clear. */
+  set before(hook: BeforeRoleTsfn | undefined | null)
+}
+export type JsImageUpscaleProviderDefaults = ImageUpscaleProviderDefaults
 
 /** A single chunk from a streaming local inference call. */
 export declare class InferenceChunk {
@@ -4252,6 +4544,16 @@ export declare class ThreeDProvider {
 }
 export type JsThreeDProvider = ThreeDProvider
 
+export declare class ThreeDProviderDefaults {
+  /** Construct role-specific defaults. */
+  constructor(base?: BaseProviderDefaults | undefined | null, before?: BeforeRoleTsfn | undefined | null)
+  /** Returns `true` when a `before` hook is configured. */
+  get hasBefore(): boolean
+  /** Replace the typed `before` hook. Pass `null` to clear. */
+  set before(hook: BeforeRoleTsfn | undefined | null)
+}
+export type JsThreeDProviderDefaults = ThreeDProviderDefaults
+
 /**
  * Exact BPE token counter backed by `tiktoken-rs`.
  *
@@ -4558,6 +4860,16 @@ export declare class Transcription {
 }
 export type JsTranscription = Transcription
 
+export declare class TranscriptionProviderDefaults {
+  /** Construct role-specific defaults. */
+  constructor(base?: BaseProviderDefaults | undefined | null, before?: BeforeRoleTsfn | undefined | null)
+  /** Returns `true` when a `before` hook is configured. */
+  get hasBefore(): boolean
+  /** Replace the typed `before` hook. Pass `null` to clear. */
+  set before(hook: BeforeRoleTsfn | undefined | null)
+}
+export type JsTranscriptionProviderDefaults = TranscriptionProviderDefaults
+
 /**
  * r" Base class for text-to-speech providers.
  * r"
@@ -4795,6 +5107,26 @@ export declare class VideoProvider {
   imageToVideo(request: any): Promise<any>
 }
 export type JsVideoProvider = VideoProvider
+
+export declare class VideoProviderDefaults {
+  /** Construct role-specific defaults. */
+  constructor(base?: BaseProviderDefaults | undefined | null, before?: BeforeRoleTsfn | undefined | null)
+  /** Returns `true` when a `before` hook is configured. */
+  get hasBefore(): boolean
+  /** Replace the typed `before` hook. Pass `null` to clear. */
+  set before(hook: BeforeRoleTsfn | undefined | null)
+}
+export type JsVideoProviderDefaults = VideoProviderDefaults
+
+export declare class VoiceCloningProviderDefaults {
+  /** Construct role-specific defaults. */
+  constructor(base?: BaseProviderDefaults | undefined | null, before?: BeforeRoleTsfn | undefined | null)
+  /** Returns `true` when a `before` hook is configured. */
+  get hasBefore(): boolean
+  /** Replace the typed `before` hook. Pass `null` to clear. */
+  set before(hook: BeforeRoleTsfn | undefined | null)
+}
+export type JsVoiceCloningProviderDefaults = VoiceCloningProviderDefaults
 
 /**
  * r" Base class for voice cloning providers.
@@ -5769,15 +6101,6 @@ export interface CustomContentStoreOptions {
   delete?: (handle: ContentHandle) => Promise<void>
   /** Optional human-readable identifier for logs (default: `"custom"`). */
   name?: string
-}
-
-/** Optional configuration for a [`JsCustomProvider`]. */
-export interface CustomProviderOptions {
-  /**
-   * Short identifier used for logging and returned from
-   * [`ComputeProvider::provider_id`]. Defaults to `"custom"`.
-   */
-  providerId?: string
 }
 
 /** Build a default [`JsHttpClientConfig`] (60s request, 10s connect, no UA). */

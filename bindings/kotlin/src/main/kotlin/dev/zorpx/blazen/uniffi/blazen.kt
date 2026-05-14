@@ -737,6 +737,174 @@ internal interface UniffiCallbackInterfaceToolHandlerMethod0 : com.sun.jna.Callb
     )
 }
 
+internal interface UniffiCallbackInterfaceCustomProviderMethod0 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `uniffiOutReturn`: RustBuffer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
+internal interface UniffiCallbackInterfaceCustomProviderMethod1 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `request`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceCustomProviderMethod2 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceCustomProviderMethod3 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `texts`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceCustomProviderMethod4 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `request`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceCustomProviderMethod5 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `request`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceCustomProviderMethod6 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `request`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceCustomProviderMethod7 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `request`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceCustomProviderMethod8 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceCustomProviderMethod9 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `voice`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceCustomProviderMethod10 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `request`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceCustomProviderMethod11 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `request`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceCustomProviderMethod12 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `request`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceCustomProviderMethod13 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `request`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceCustomProviderMethod14 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `request`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceCustomProviderMethod15 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `request`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceCustomProviderMethod16 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `request`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
 internal interface UniffiCallbackInterfaceCompletionStreamSinkMethod0 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
@@ -795,6 +963,114 @@ internal open class UniffiVTableCallbackInterfaceToolHandler(
         `uniffiFree` = other.`uniffiFree`
         `uniffiClone` = other.`uniffiClone`
         `execute` = other.`execute`
+    }
+}
+
+@Structure.FieldOrder(
+    "uniffiFree",
+    "uniffiClone",
+    "providerId",
+    "complete",
+    "stream",
+    "embed",
+    "textToSpeech",
+    "generateMusic",
+    "generateSfx",
+    "cloneVoice",
+    "listVoices",
+    "deleteVoice",
+    "generateImage",
+    "upscaleImage",
+    "textToVideo",
+    "imageToVideo",
+    "transcribe",
+    "generate3d",
+    "removeBackground",
+)
+internal open class UniffiVTableCallbackInterfaceCustomProvider(
+    @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+    @JvmField internal var `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+    @JvmField internal var `providerId`: UniffiCallbackInterfaceCustomProviderMethod0? = null,
+    @JvmField internal var `complete`: UniffiCallbackInterfaceCustomProviderMethod1? = null,
+    @JvmField internal var `stream`: UniffiCallbackInterfaceCustomProviderMethod2? = null,
+    @JvmField internal var `embed`: UniffiCallbackInterfaceCustomProviderMethod3? = null,
+    @JvmField internal var `textToSpeech`: UniffiCallbackInterfaceCustomProviderMethod4? = null,
+    @JvmField internal var `generateMusic`: UniffiCallbackInterfaceCustomProviderMethod5? = null,
+    @JvmField internal var `generateSfx`: UniffiCallbackInterfaceCustomProviderMethod6? = null,
+    @JvmField internal var `cloneVoice`: UniffiCallbackInterfaceCustomProviderMethod7? = null,
+    @JvmField internal var `listVoices`: UniffiCallbackInterfaceCustomProviderMethod8? = null,
+    @JvmField internal var `deleteVoice`: UniffiCallbackInterfaceCustomProviderMethod9? = null,
+    @JvmField internal var `generateImage`: UniffiCallbackInterfaceCustomProviderMethod10? = null,
+    @JvmField internal var `upscaleImage`: UniffiCallbackInterfaceCustomProviderMethod11? = null,
+    @JvmField internal var `textToVideo`: UniffiCallbackInterfaceCustomProviderMethod12? = null,
+    @JvmField internal var `imageToVideo`: UniffiCallbackInterfaceCustomProviderMethod13? = null,
+    @JvmField internal var `transcribe`: UniffiCallbackInterfaceCustomProviderMethod14? = null,
+    @JvmField internal var `generate3d`: UniffiCallbackInterfaceCustomProviderMethod15? = null,
+    @JvmField internal var `removeBackground`: UniffiCallbackInterfaceCustomProviderMethod16? = null,
+) : Structure() {
+    class UniffiByValue(
+        `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+        `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+        `providerId`: UniffiCallbackInterfaceCustomProviderMethod0? = null,
+        `complete`: UniffiCallbackInterfaceCustomProviderMethod1? = null,
+        `stream`: UniffiCallbackInterfaceCustomProviderMethod2? = null,
+        `embed`: UniffiCallbackInterfaceCustomProviderMethod3? = null,
+        `textToSpeech`: UniffiCallbackInterfaceCustomProviderMethod4? = null,
+        `generateMusic`: UniffiCallbackInterfaceCustomProviderMethod5? = null,
+        `generateSfx`: UniffiCallbackInterfaceCustomProviderMethod6? = null,
+        `cloneVoice`: UniffiCallbackInterfaceCustomProviderMethod7? = null,
+        `listVoices`: UniffiCallbackInterfaceCustomProviderMethod8? = null,
+        `deleteVoice`: UniffiCallbackInterfaceCustomProviderMethod9? = null,
+        `generateImage`: UniffiCallbackInterfaceCustomProviderMethod10? = null,
+        `upscaleImage`: UniffiCallbackInterfaceCustomProviderMethod11? = null,
+        `textToVideo`: UniffiCallbackInterfaceCustomProviderMethod12? = null,
+        `imageToVideo`: UniffiCallbackInterfaceCustomProviderMethod13? = null,
+        `transcribe`: UniffiCallbackInterfaceCustomProviderMethod14? = null,
+        `generate3d`: UniffiCallbackInterfaceCustomProviderMethod15? = null,
+        `removeBackground`: UniffiCallbackInterfaceCustomProviderMethod16? = null,
+    ) : UniffiVTableCallbackInterfaceCustomProvider(
+            `uniffiFree`,
+            `uniffiClone`,
+            `providerId`,
+            `complete`,
+            `stream`,
+            `embed`,
+            `textToSpeech`,
+            `generateMusic`,
+            `generateSfx`,
+            `cloneVoice`,
+            `listVoices`,
+            `deleteVoice`,
+            `generateImage`,
+            `upscaleImage`,
+            `textToVideo`,
+            `imageToVideo`,
+            `transcribe`,
+            `generate3d`,
+            `removeBackground`,
+        ),
+        Structure.ByValue
+
+    internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceCustomProvider) {
+        `uniffiFree` = other.`uniffiFree`
+        `uniffiClone` = other.`uniffiClone`
+        `providerId` = other.`providerId`
+        `complete` = other.`complete`
+        `stream` = other.`stream`
+        `embed` = other.`embed`
+        `textToSpeech` = other.`textToSpeech`
+        `generateMusic` = other.`generateMusic`
+        `generateSfx` = other.`generateSfx`
+        `cloneVoice` = other.`cloneVoice`
+        `listVoices` = other.`listVoices`
+        `deleteVoice` = other.`deleteVoice`
+        `generateImage` = other.`generateImage`
+        `upscaleImage` = other.`upscaleImage`
+        `textToVideo` = other.`textToVideo`
+        `imageToVideo` = other.`imageToVideo`
+        `transcribe` = other.`transcribe`
+        `generate3d` = other.`generate3d`
+        `removeBackground` = other.`removeBackground`
     }
 }
 
@@ -888,6 +1164,16 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_blazen_uniffi_checksum_func_new_redb_checkpoint_store(): Short
 
     external fun uniffi_blazen_uniffi_checksum_func_new_valkey_checkpoint_store(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_custom_provider_from_foreign(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_lm_studio(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_openai_compat_config(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_ollama(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_openai_compat(): Short
 
     external fun uniffi_blazen_uniffi_checksum_func_new_anthropic_completion_model(): Short
 
@@ -1039,6 +1325,98 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_method_pipelinebuilder_total_timeout_ms(): Short
 
+    external fun uniffi_blazen_uniffi_checksum_method_baseprovider_as_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_baseprovider_defaults(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_baseprovider_extract(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_baseprovider_model_id(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_baseprovider_with_defaults(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_baseprovider_with_response_format_json(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_baseprovider_with_system_prompt(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_baseprovider_with_tools_json(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customprovider_provider_id(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customprovider_stream(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customprovider_embed(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customprovider_text_to_speech(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customprovider_generate_music(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customprovider_generate_sfx(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customprovider_clone_voice(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customprovider_list_voices(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customprovider_delete_voice(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customprovider_generate_image(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customprovider_upscale_image(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customprovider_text_to_video(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customprovider_image_to_video(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customprovider_transcribe(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customprovider_generate_3d(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customprovider_remove_background(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_as_base(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_clone_voice(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_delete_voice(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_embed(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_generate_3d(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_generate_image(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_generate_music(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_generate_sfx(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_image_to_video(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_list_voices(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_provider_id(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_remove_background(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_stream(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_text_to_speech(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_text_to_video(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_transcribe(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_upscale_image(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_with_response_format_json(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_with_system_prompt(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_customproviderhandle_with_tools_json(): Short
+
     external fun uniffi_blazen_uniffi_checksum_method_completionstreamsink_on_chunk(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_completionstreamsink_on_done(): Short
@@ -1069,6 +1447,10 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_constructor_pipelinebuilder_new(): Short
 
+    external fun uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_completion_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_baseprovider_with_completion_defaults(): Short
+
     external fun uniffi_blazen_uniffi_checksum_constructor_workflowbuilder_new(): Short
 
     external fun ffi_blazen_uniffi_uniffi_contract_version(): Int
@@ -1083,6 +1465,7 @@ internal object UniffiLib {
     init {
         Native.register(UniffiLib::class.java, findLibraryName(componentName = "blazen"))
         uniffiCallbackInterfaceCompletionStreamSink.register(this)
+        uniffiCallbackInterfaceCustomProvider.register(this)
         uniffiCallbackInterfaceStepHandler.register(this)
         uniffiCallbackInterfaceToolHandler.register(this)
     }
@@ -1472,6 +1855,283 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
+    external fun uniffi_blazen_uniffi_fn_clone_baseprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_baseprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_baseprovider_from_completion_model(
+        `model`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_constructor_baseprovider_with_completion_defaults(
+        `model`: Long,
+        `defaults`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_baseprovider_as_completion_model(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_baseprovider_defaults(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_baseprovider_extract(
+        `ptr`: Long,
+        `schemaJson`: RustBuffer.ByValue,
+        `messages`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_baseprovider_model_id(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_baseprovider_with_defaults(
+        `ptr`: Long,
+        `defaults`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_baseprovider_with_response_format_json(
+        `ptr`: Long,
+        `fmtJson`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_baseprovider_with_system_prompt(
+        `ptr`: Long,
+        `prompt`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_baseprovider_with_tools_json(
+        `ptr`: Long,
+        `toolsJson`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_clone_customprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_customprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_init_callback_vtable_customprovider(`vtable`: UniffiVTableCallbackInterfaceCustomProvider): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_customprovider_provider_id(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_customprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customprovider_stream(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customprovider_embed(
+        `ptr`: Long,
+        `texts`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customprovider_text_to_speech(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customprovider_generate_music(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customprovider_generate_sfx(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customprovider_clone_voice(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customprovider_list_voices(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customprovider_delete_voice(
+        `ptr`: Long,
+        `voice`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customprovider_generate_image(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customprovider_upscale_image(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customprovider_text_to_video(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customprovider_image_to_video(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customprovider_transcribe(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customprovider_generate_3d(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customprovider_remove_background(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_clone_customproviderhandle(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_customproviderhandle(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_as_base(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_clone_voice(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_delete_voice(
+        `ptr`: Long,
+        `voiceId`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_embed(
+        `ptr`: Long,
+        `texts`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_generate_3d(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_generate_image(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_generate_music(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_generate_sfx(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_image_to_video(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_list_voices(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_provider_id(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_remove_background(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_stream(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_text_to_speech(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_text_to_video(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_transcribe(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_upscale_image(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_with_response_format_json(
+        `ptr`: Long,
+        `fmtJson`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_with_system_prompt(
+        `ptr`: Long,
+        `prompt`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_customproviderhandle_with_tools_json(
+        `ptr`: Long,
+        `toolsJson`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
     external fun uniffi_blazen_uniffi_fn_clone_completionstreamsink(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
@@ -1651,6 +2311,41 @@ internal object UniffiLib {
     external fun uniffi_blazen_uniffi_fn_func_new_valkey_checkpoint_store(
         `url`: RustBuffer.ByValue,
         `ttlSeconds`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_custom_provider_from_foreign(
+        `provider`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_lm_studio(
+        `model`: RustBuffer.ByValue,
+        `host`: RustBuffer.ByValue,
+        `port`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_openai_compat_config(
+        `providerName`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        `apiKey`: RustBuffer.ByValue,
+        `defaultModel`: RustBuffer.ByValue,
+        `authMethod`: RustBuffer.ByValue,
+        `supportsModelListing`: Byte,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_func_ollama(
+        `model`: RustBuffer.ByValue,
+        `host`: RustBuffer.ByValue,
+        `port`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_openai_compat(
+        `providerId`: RustBuffer.ByValue,
+        `config`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
@@ -2143,6 +2838,21 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_func_new_valkey_checkpoint_store() != 24389.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_blazen_uniffi_checksum_func_custom_provider_from_foreign() != 38880.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_lm_studio() != 15777.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_openai_compat_config() != 41561.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_ollama() != 53366.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_openai_compat() != 1651.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_blazen_uniffi_checksum_func_new_anthropic_completion_model() != 51033.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -2161,7 +2871,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_func_new_cohere_completion_model() != 22601.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_custom_completion_model_with_openai_protocol() != 35048.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_custom_completion_model_with_openai_protocol() != 52541.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_func_new_deepseek_completion_model() != 51214.toShort()) {
@@ -2188,7 +2898,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_func_new_llamacpp_completion_model() != 2285.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_lm_studio_completion_model() != 33263.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_lm_studio_completion_model() != 21338.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_func_new_mistral_completion_model() != 22583.toShort()) {
@@ -2197,7 +2907,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_func_new_mistralrs_completion_model() != 26159.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_ollama_completion_model() != 55850.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_ollama_completion_model() != 4717.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_func_new_openai_compat_completion_model() != 63435.toShort()) {
@@ -2368,6 +3078,144 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_method_pipelinebuilder_total_timeout_ms() != 53032.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_blazen_uniffi_checksum_method_baseprovider_as_completion_model() != 16167.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_baseprovider_defaults() != 34325.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_baseprovider_extract() != 47282.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_baseprovider_model_id() != 18871.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_baseprovider_with_defaults() != 59299.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_baseprovider_with_response_format_json() != 25582.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_baseprovider_with_system_prompt() != 27915.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_baseprovider_with_tools_json() != 43254.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_provider_id() != 63939.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_complete() != 50396.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_stream() != 43804.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_embed() != 11956.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_text_to_speech() != 5652.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_generate_music() != 31843.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_generate_sfx() != 4679.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_clone_voice() != 49721.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_list_voices() != 52071.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_delete_voice() != 32490.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_generate_image() != 12529.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_upscale_image() != 11452.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_text_to_video() != 49611.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_image_to_video() != 28560.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_transcribe() != 8428.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_generate_3d() != 49932.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_remove_background() != 5224.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_as_base() != 14798.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_clone_voice() != 62032.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_complete() != 8359.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_delete_voice() != 40671.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_embed() != 25884.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_generate_3d() != 60831.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_generate_image() != 4562.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_generate_music() != 30761.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_generate_sfx() != 16555.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_image_to_video() != 1304.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_list_voices() != 20628.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_provider_id() != 2474.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_remove_background() != 30856.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_stream() != 19661.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_text_to_speech() != 20321.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_text_to_video() != 45453.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_transcribe() != 57418.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_upscale_image() != 48926.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_with_response_format_json() != 13552.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_with_system_prompt() != 22875.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_with_tools_json() != 18982.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_blazen_uniffi_checksum_method_completionstreamsink_on_chunk() != 55655.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -2411,6 +3259,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_constructor_pipelinebuilder_new() != 61410.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_completion_model() != 9239.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_baseprovider_with_completion_defaults() != 23775.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_constructor_workflowbuilder_new() != 14241.toShort()) {
@@ -3274,6 +4128,512 @@ public object FfiConverterTypeAgent : FfiConverter<Agent, Long> {
 
     override fun write(
         value: Agent,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * A [`crate::llm::CompletionModel`] wrapped with applied
+ * [`CompletionProviderDefaults`].
+ *
+ * Construct via [`BaseProvider::from_completion_model`] (wraps an existing
+ * model with no defaults) or [`BaseProvider::with_completion_defaults`]
+ * (wraps with explicit defaults). Mutate via the `with_*` builder methods.
+ *
+ * Phase B's `CustomProvider` factories will return `Arc<BaseProvider>`
+ * directly; for Phase A this class is reachable by lifting any existing
+ * `CompletionModel` factory result.
+ */
+public interface BaseProviderInterface {
+    /**
+     * Unwrap to a plain [`CompletionModel`] handle that applies the
+     * configured defaults on every call.
+     *
+     * Use this when you want to pass the wrapped provider to an API that
+     * takes a generic `CompletionModel` (the agent runner, workflow
+     * steps, etc.).
+     */
+    fun `asCompletionModel`(): CompletionModel
+
+    /**
+     * Inspect the currently-configured defaults (data only — hooks are
+     * not surfaced in Phase A).
+     */
+    fun `defaults`(): CompletionProviderDefaults
+
+    /**
+     * Extract structured output from the model by constraining its
+     * response to a JSON Schema.
+     *
+     * Mirrors the upstream
+     * [`blazen_llm::traits::StructuredOutput::extract`] blanket impl: the
+     * `schema_json` is injected as the request's `response_format` and
+     * the completion is dispatched as usual. Returns the model's raw
+     * content (which the foreign caller deserializes into its own typed
+     * shape — UniFFI cannot return a generic typed value across the FFI).
+     *
+     * `schema_json` must be a valid JSON Schema string; an empty string or
+     * malformed JSON falls back to `null` (the request is sent without a
+     * `response_format`).
+     */
+    suspend fun `extract`(
+        `schemaJson`: kotlin.String,
+        `messages`: List<ChatMessage>,
+    ): kotlin.String
+
+    /**
+     * The model id of the wrapped inner `CompletionModel`.
+     */
+    fun `modelId`(): kotlin.String
+
+    /**
+     * Replace the entire [`CompletionProviderDefaults`] on this provider,
+     * returning a new `Arc<BaseProvider>` (clone-with-mutation).
+     */
+    fun `withDefaults`(`defaults`: CompletionProviderDefaults): BaseProvider
+
+    /**
+     * Set the default `response_format` (JSON-encoded `serde_json::Value`).
+     *
+     * Malformed JSON or an empty string is treated as JSON null.
+     */
+    fun `withResponseFormatJson`(`fmtJson`: kotlin.String): BaseProvider
+
+    /**
+     * Set the default system prompt.
+     */
+    fun `withSystemPrompt`(`prompt`: kotlin.String): BaseProvider
+
+    /**
+     * Set the default tools (JSON-encoded `Vec<ToolDefinition>`).
+     *
+     * Malformed JSON is treated as an empty tool list — matching the
+     * upstream `#[derive(Default)]` semantics. Foreign callers should
+     * validate the JSON before sending it across the FFI.
+     */
+    fun `withToolsJson`(`toolsJson`: kotlin.String): BaseProvider
+
+    companion object
+}
+
+/**
+ * A [`crate::llm::CompletionModel`] wrapped with applied
+ * [`CompletionProviderDefaults`].
+ *
+ * Construct via [`BaseProvider::from_completion_model`] (wraps an existing
+ * model with no defaults) or [`BaseProvider::with_completion_defaults`]
+ * (wraps with explicit defaults). Mutate via the `with_*` builder methods.
+ *
+ * Phase B's `CustomProvider` factories will return `Arc<BaseProvider>`
+ * directly; for Phase A this class is reachable by lifting any existing
+ * `CompletionModel` factory result.
+ */
+open class BaseProvider :
+    Disposable,
+    AutoCloseable,
+    BaseProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_baseprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_baseprovider(handle, status)
+        }
+    }
+
+    /**
+     * Unwrap to a plain [`CompletionModel`] handle that applies the
+     * configured defaults on every call.
+     *
+     * Use this when you want to pass the wrapped provider to an API that
+     * takes a generic `CompletionModel` (the agent runner, workflow
+     * steps, etc.).
+     */
+    override fun `asCompletionModel`(): CompletionModel =
+        FfiConverterTypeCompletionModel.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_baseprovider_as_completion_model(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Inspect the currently-configured defaults (data only — hooks are
+     * not surfaced in Phase A).
+     */
+    override fun `defaults`(): CompletionProviderDefaults =
+        FfiConverterTypeCompletionProviderDefaults.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_baseprovider_defaults(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Extract structured output from the model by constraining its
+     * response to a JSON Schema.
+     *
+     * Mirrors the upstream
+     * [`blazen_llm::traits::StructuredOutput::extract`] blanket impl: the
+     * `schema_json` is injected as the request's `response_format` and
+     * the completion is dispatched as usual. Returns the model's raw
+     * content (which the foreign caller deserializes into its own typed
+     * shape — UniFFI cannot return a generic typed value across the FFI).
+     *
+     * `schema_json` must be a valid JSON Schema string; an empty string or
+     * malformed JSON falls back to `null` (the request is sent without a
+     * `response_format`).
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `extract`(
+        `schemaJson`: kotlin.String,
+        `messages`: List<ChatMessage>,
+    ): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_baseprovider_extract(
+                    uniffiHandle,
+                    FfiConverterString.lower(`schemaJson`),
+                    FfiConverterSequenceTypeChatMessage.lower(`messages`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * The model id of the wrapped inner `CompletionModel`.
+     */
+    override fun `modelId`(): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_baseprovider_model_id(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Replace the entire [`CompletionProviderDefaults`] on this provider,
+     * returning a new `Arc<BaseProvider>` (clone-with-mutation).
+     */
+    override fun `withDefaults`(`defaults`: CompletionProviderDefaults): BaseProvider =
+        FfiConverterTypeBaseProvider.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_baseprovider_with_defaults(
+                        it,
+                        FfiConverterTypeCompletionProviderDefaults.lower(`defaults`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Set the default `response_format` (JSON-encoded `serde_json::Value`).
+     *
+     * Malformed JSON or an empty string is treated as JSON null.
+     */
+    override fun `withResponseFormatJson`(`fmtJson`: kotlin.String): BaseProvider =
+        FfiConverterTypeBaseProvider.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_baseprovider_with_response_format_json(
+                        it,
+                        FfiConverterString.lower(`fmtJson`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Set the default system prompt.
+     */
+    override fun `withSystemPrompt`(`prompt`: kotlin.String): BaseProvider =
+        FfiConverterTypeBaseProvider.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_baseprovider_with_system_prompt(
+                        it,
+                        FfiConverterString.lower(`prompt`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Set the default tools (JSON-encoded `Vec<ToolDefinition>`).
+     *
+     * Malformed JSON is treated as an empty tool list — matching the
+     * upstream `#[derive(Default)]` semantics. Foreign callers should
+     * validate the JSON before sending it across the FFI.
+     */
+    override fun `withToolsJson`(`toolsJson`: kotlin.String): BaseProvider =
+        FfiConverterTypeBaseProvider.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_baseprovider_with_tools_json(
+                        it,
+                        FfiConverterString.lower(`toolsJson`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    companion object {
+        /**
+         * Wrap an existing [`CompletionModel`] with empty defaults.
+         *
+         * Equivalent to using the wrapped model directly, but lets callers
+         * attach defaults later via the `with_*` methods.
+         */
+        fun `fromCompletionModel`(`model`: CompletionModel): BaseProvider =
+            FfiConverterTypeBaseProvider.lift(
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_constructor_baseprovider_from_completion_model(
+                        FfiConverterTypeCompletionModel.lower(`model`),
+                        _status,
+                    )
+                },
+            )
+
+        /**
+         * Wrap a [`CompletionModel`] with explicit
+         * [`CompletionProviderDefaults`].
+         */
+        fun `withCompletionDefaults`(
+            `model`: CompletionModel,
+            `defaults`: CompletionProviderDefaults,
+        ): BaseProvider =
+            FfiConverterTypeBaseProvider.lift(
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_constructor_baseprovider_with_completion_defaults(
+                        FfiConverterTypeCompletionModel.lower(`model`),
+                        FfiConverterTypeCompletionProviderDefaults.lower(`defaults`),
+                        _status,
+                    )
+                },
+            )
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeBaseProvider : FfiConverter<BaseProvider, Long> {
+    override fun lower(value: BaseProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): BaseProvider = BaseProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): BaseProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: BaseProvider) = 8UL
+
+    override fun write(
+        value: BaseProvider,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -4639,6 +5999,2337 @@ public object FfiConverterTypeCompletionStreamSink : FfiConverter<CompletionStre
 
     override fun write(
         value: CompletionStreamSink,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * User-extensible provider trait the foreign side implements directly.
+ *
+ * Mirrors [`blazen_llm::CustomProvider`] across the UniFFI boundary. Has 16
+ * typed async methods (completion, streaming-via-sink, embeddings, plus 13
+ * compute / media methods) and one sync `provider_id` accessor.
+ *
+ * ## How foreign users use it
+ *
+ * Foreign users implement this trait on their own type and pass an instance
+ * to [`custom_provider_from_foreign`] to obtain a [`CustomProviderHandle`]
+ * usable wherever Blazen expects a provider.
+ *
+ * UniFFI's `with_foreign` traits require every method to be implemented at
+ * the foreign language level — there is no cross-FFI Rust "default impl"
+ * fallback. Each language binding ships a base class / extension that
+ * supplies throwing `Unsupported` defaults so users only need to override
+ * the capabilities their provider actually supports.
+ *
+ * ## Wire-format shape
+ *
+ * All argument and return types are UniFFI Records ([`SpeechRequest`],
+ * [`AudioResult`], ...) defined in [`crate::compute_types`]. The
+ * [`UniffiToCoreCustomProviderAdapter`] converts these to the upstream
+ * [`blazen_llm::compute`] types on each call.
+ *
+ * ## Async story
+ *
+ * Every method except [`provider_id`](Self::provider_id) is `async` on the
+ * Rust side. UniFFI exposes the methods as:
+ * - Go: blocking functions, safe from goroutines (compose with channels)
+ * - Swift: `async throws` methods
+ * - Kotlin: `suspend fun` methods
+ * - Ruby: blocking methods (wrap in `Async { ... }` block for fiber concurrency)
+ */
+public interface CustomProvider {
+    /**
+     * Stable provider identifier for logs and metrics.
+     */
+    fun `providerId`(): kotlin.String
+
+    /**
+     * Perform a non-streaming chat completion.
+     */
+    suspend fun `complete`(`request`: CompletionRequest): CompletionResponse
+
+    /**
+     * Perform a streaming chat completion, pushing chunks into the supplied
+     * sink. The implementation must call `sink.on_done` exactly once on
+     * success or `sink.on_error` exactly once on failure.
+     */
+    suspend fun `stream`(
+        `request`: CompletionRequest,
+        `sink`: CompletionStreamSink,
+    )
+
+    /**
+     * Embed one or more texts.
+     */
+    suspend fun `embed`(`texts`: List<kotlin.String>): EmbeddingResponse
+
+    /**
+     * Synthesize speech from text.
+     */
+    suspend fun `textToSpeech`(`request`: SpeechRequest): AudioResult
+
+    /**
+     * Generate music from a prompt.
+     */
+    suspend fun `generateMusic`(`request`: MusicRequest): AudioResult
+
+    /**
+     * Generate sound effects from a prompt.
+     */
+    suspend fun `generateSfx`(`request`: MusicRequest): AudioResult
+
+    /**
+     * Clone a voice from reference audio.
+     */
+    suspend fun `cloneVoice`(`request`: VoiceCloneRequest): VoiceHandle
+
+    /**
+     * List voices known to the provider.
+     */
+    suspend fun `listVoices`(): List<VoiceHandle>
+
+    /**
+     * Delete a previously-cloned voice.
+     */
+    suspend fun `deleteVoice`(`voice`: VoiceHandle)
+
+    /**
+     * Generate images from a prompt.
+     */
+    suspend fun `generateImage`(`request`: ImageRequest): ImageResult
+
+    /**
+     * Upscale an existing image.
+     */
+    suspend fun `upscaleImage`(`request`: UpscaleRequest): ImageResult
+
+    /**
+     * Generate a video from a text prompt.
+     */
+    suspend fun `textToVideo`(`request`: VideoRequest): VideoResult
+
+    /**
+     * Generate a video from a source image + prompt.
+     */
+    suspend fun `imageToVideo`(`request`: VideoRequest): VideoResult
+
+    /**
+     * Transcribe audio to text.
+     */
+    suspend fun `transcribe`(`request`: TranscriptionRequest): TranscriptionResult
+
+    /**
+     * Generate a 3D model.
+     */
+    suspend fun `generate3d`(`request`: ThreeDRequest): ThreeDResult
+
+    /**
+     * Remove the background from an image.
+     */
+    suspend fun `removeBackground`(`request`: BackgroundRemovalRequest): ImageResult
+
+    companion object
+}
+
+/**
+ * User-extensible provider trait the foreign side implements directly.
+ *
+ * Mirrors [`blazen_llm::CustomProvider`] across the UniFFI boundary. Has 16
+ * typed async methods (completion, streaming-via-sink, embeddings, plus 13
+ * compute / media methods) and one sync `provider_id` accessor.
+ *
+ * ## How foreign users use it
+ *
+ * Foreign users implement this trait on their own type and pass an instance
+ * to [`custom_provider_from_foreign`] to obtain a [`CustomProviderHandle`]
+ * usable wherever Blazen expects a provider.
+ *
+ * UniFFI's `with_foreign` traits require every method to be implemented at
+ * the foreign language level — there is no cross-FFI Rust "default impl"
+ * fallback. Each language binding ships a base class / extension that
+ * supplies throwing `Unsupported` defaults so users only need to override
+ * the capabilities their provider actually supports.
+ *
+ * ## Wire-format shape
+ *
+ * All argument and return types are UniFFI Records ([`SpeechRequest`],
+ * [`AudioResult`], ...) defined in [`crate::compute_types`]. The
+ * [`UniffiToCoreCustomProviderAdapter`] converts these to the upstream
+ * [`blazen_llm::compute`] types on each call.
+ *
+ * ## Async story
+ *
+ * Every method except [`provider_id`](Self::provider_id) is `async` on the
+ * Rust side. UniFFI exposes the methods as:
+ * - Go: blocking functions, safe from goroutines (compose with channels)
+ * - Swift: `async throws` methods
+ * - Kotlin: `suspend fun` methods
+ * - Ruby: blocking methods (wrap in `Async { ... }` block for fiber concurrency)
+ */
+open class CustomProviderImpl :
+    Disposable,
+    AutoCloseable,
+    CustomProvider {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_customprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_customprovider(handle, status)
+        }
+    }
+
+    /**
+     * Stable provider identifier for logs and metrics.
+     */
+    override fun `providerId`(): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_customprovider_provider_id(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Perform a non-streaming chat completion.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: CompletionRequest): CompletionResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customprovider_complete(
+                    uniffiHandle,
+                    FfiConverterTypeCompletionRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeCompletionResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Perform a streaming chat completion, pushing chunks into the supplied
+     * sink. The implementation must call `sink.on_done` exactly once on
+     * success or `sink.on_error` exactly once on failure.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `stream`(
+        `request`: CompletionRequest,
+        `sink`: CompletionStreamSink,
+    ) = uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_blazen_uniffi_fn_method_customprovider_stream(
+                uniffiHandle,
+                FfiConverterTypeCompletionRequest.lower(`request`),
+                FfiConverterTypeCompletionStreamSink.lower(`sink`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        // Error FFI converter
+        BlazenException.ErrorHandler,
+    )
+
+    /**
+     * Embed one or more texts.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `embed`(`texts`: List<kotlin.String>): EmbeddingResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customprovider_embed(
+                    uniffiHandle,
+                    FfiConverterSequenceString.lower(`texts`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeEmbeddingResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synthesize speech from text.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `textToSpeech`(`request`: SpeechRequest): AudioResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customprovider_text_to_speech(
+                    uniffiHandle,
+                    FfiConverterTypeSpeechRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeAudioResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Generate music from a prompt.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `generateMusic`(`request`: MusicRequest): AudioResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customprovider_generate_music(
+                    uniffiHandle,
+                    FfiConverterTypeMusicRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeAudioResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Generate sound effects from a prompt.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `generateSfx`(`request`: MusicRequest): AudioResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customprovider_generate_sfx(
+                    uniffiHandle,
+                    FfiConverterTypeMusicRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeAudioResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Clone a voice from reference audio.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `cloneVoice`(`request`: VoiceCloneRequest): VoiceHandle =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customprovider_clone_voice(
+                    uniffiHandle,
+                    FfiConverterTypeVoiceCloneRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeVoiceHandle.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * List voices known to the provider.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `listVoices`(): List<VoiceHandle> =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customprovider_list_voices(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterSequenceTypeVoiceHandle.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Delete a previously-cloned voice.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `deleteVoice`(`voice`: VoiceHandle) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customprovider_delete_voice(
+                    uniffiHandle,
+                    FfiConverterTypeVoiceHandle.lower(`voice`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Generate images from a prompt.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `generateImage`(`request`: ImageRequest): ImageResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customprovider_generate_image(
+                    uniffiHandle,
+                    FfiConverterTypeImageRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeImageResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Upscale an existing image.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `upscaleImage`(`request`: UpscaleRequest): ImageResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customprovider_upscale_image(
+                    uniffiHandle,
+                    FfiConverterTypeUpscaleRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeImageResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Generate a video from a text prompt.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `textToVideo`(`request`: VideoRequest): VideoResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customprovider_text_to_video(
+                    uniffiHandle,
+                    FfiConverterTypeVideoRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeVideoResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Generate a video from a source image + prompt.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `imageToVideo`(`request`: VideoRequest): VideoResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customprovider_image_to_video(
+                    uniffiHandle,
+                    FfiConverterTypeVideoRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeVideoResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Transcribe audio to text.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `transcribe`(`request`: TranscriptionRequest): TranscriptionResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customprovider_transcribe(
+                    uniffiHandle,
+                    FfiConverterTypeTranscriptionRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeTranscriptionResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Generate a 3D model.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `generate3d`(`request`: ThreeDRequest): ThreeDResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customprovider_generate_3d(
+                    uniffiHandle,
+                    FfiConverterTypeThreeDRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeThreeDResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Remove the background from an image.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `removeBackground`(`request`: BackgroundRemovalRequest): ImageResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customprovider_remove_background(
+                    uniffiHandle,
+                    FfiConverterTypeBackgroundRemovalRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeImageResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+// Put the implementation in an object so we don't pollute the top-level namespace
+internal object uniffiCallbackInterfaceCustomProvider {
+    internal object `providerId` : UniffiCallbackInterfaceCustomProviderMethod0 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `uniffiOutReturn`: RustBuffer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypeCustomProvider.handleMap.get(uniffiHandle)
+            val makeCall = { uniffiObj.`providerId`() }
+            val writeReturn = { value: kotlin.String -> uniffiOutReturn.setValue(FfiConverterString.lower(value)) }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object `complete` : UniffiCallbackInterfaceCustomProviderMethod1 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `request`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeCustomProvider.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`complete`(
+                    FfiConverterTypeCompletionRequest.lift(`request`),
+                )
+                }
+            val uniffiHandleSuccess = { returnValue: CompletionResponse ->
+                val uniffiResult =
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        FfiConverterTypeCompletionResponse.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        RustBuffer.ByValue(),
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `stream` : UniffiCallbackInterfaceCustomProviderMethod2 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `request`: RustBuffer.ByValue,
+            `sink`: Long,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeCustomProvider.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`stream`(
+                    FfiConverterTypeCompletionRequest.lift(`request`),
+                    FfiConverterTypeCompletionStreamSink.lift(`sink`),
+                )
+                }
+            val uniffiHandleSuccess = { _: Unit ->
+                val uniffiResult =
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `embed` : UniffiCallbackInterfaceCustomProviderMethod3 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `texts`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeCustomProvider.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`embed`(
+                    FfiConverterSequenceString.lift(`texts`),
+                )
+                }
+            val uniffiHandleSuccess = { returnValue: EmbeddingResponse ->
+                val uniffiResult =
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        FfiConverterTypeEmbeddingResponse.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        RustBuffer.ByValue(),
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `textToSpeech` : UniffiCallbackInterfaceCustomProviderMethod4 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `request`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeCustomProvider.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`textToSpeech`(
+                    FfiConverterTypeSpeechRequest.lift(`request`),
+                )
+                }
+            val uniffiHandleSuccess = { returnValue: AudioResult ->
+                val uniffiResult =
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        FfiConverterTypeAudioResult.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        RustBuffer.ByValue(),
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `generateMusic` : UniffiCallbackInterfaceCustomProviderMethod5 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `request`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeCustomProvider.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`generateMusic`(
+                    FfiConverterTypeMusicRequest.lift(`request`),
+                )
+                }
+            val uniffiHandleSuccess = { returnValue: AudioResult ->
+                val uniffiResult =
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        FfiConverterTypeAudioResult.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        RustBuffer.ByValue(),
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `generateSfx` : UniffiCallbackInterfaceCustomProviderMethod6 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `request`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeCustomProvider.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`generateSfx`(
+                    FfiConverterTypeMusicRequest.lift(`request`),
+                )
+                }
+            val uniffiHandleSuccess = { returnValue: AudioResult ->
+                val uniffiResult =
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        FfiConverterTypeAudioResult.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        RustBuffer.ByValue(),
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `cloneVoice` : UniffiCallbackInterfaceCustomProviderMethod7 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `request`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeCustomProvider.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`cloneVoice`(
+                    FfiConverterTypeVoiceCloneRequest.lift(`request`),
+                )
+                }
+            val uniffiHandleSuccess = { returnValue: VoiceHandle ->
+                val uniffiResult =
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        FfiConverterTypeVoiceHandle.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        RustBuffer.ByValue(),
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `listVoices` : UniffiCallbackInterfaceCustomProviderMethod8 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeCustomProvider.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend { uniffiObj.`listVoices`() }
+            val uniffiHandleSuccess = { returnValue: List<VoiceHandle> ->
+                val uniffiResult =
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        FfiConverterSequenceTypeVoiceHandle.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        RustBuffer.ByValue(),
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `deleteVoice` : UniffiCallbackInterfaceCustomProviderMethod9 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `voice`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeCustomProvider.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`deleteVoice`(
+                    FfiConverterTypeVoiceHandle.lift(`voice`),
+                )
+                }
+            val uniffiHandleSuccess = { _: Unit ->
+                val uniffiResult =
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `generateImage` : UniffiCallbackInterfaceCustomProviderMethod10 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `request`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeCustomProvider.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`generateImage`(
+                    FfiConverterTypeImageRequest.lift(`request`),
+                )
+                }
+            val uniffiHandleSuccess = { returnValue: ImageResult ->
+                val uniffiResult =
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        FfiConverterTypeImageResult.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        RustBuffer.ByValue(),
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `upscaleImage` : UniffiCallbackInterfaceCustomProviderMethod11 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `request`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeCustomProvider.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`upscaleImage`(
+                    FfiConverterTypeUpscaleRequest.lift(`request`),
+                )
+                }
+            val uniffiHandleSuccess = { returnValue: ImageResult ->
+                val uniffiResult =
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        FfiConverterTypeImageResult.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        RustBuffer.ByValue(),
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `textToVideo` : UniffiCallbackInterfaceCustomProviderMethod12 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `request`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeCustomProvider.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`textToVideo`(
+                    FfiConverterTypeVideoRequest.lift(`request`),
+                )
+                }
+            val uniffiHandleSuccess = { returnValue: VideoResult ->
+                val uniffiResult =
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        FfiConverterTypeVideoResult.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        RustBuffer.ByValue(),
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `imageToVideo` : UniffiCallbackInterfaceCustomProviderMethod13 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `request`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeCustomProvider.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`imageToVideo`(
+                    FfiConverterTypeVideoRequest.lift(`request`),
+                )
+                }
+            val uniffiHandleSuccess = { returnValue: VideoResult ->
+                val uniffiResult =
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        FfiConverterTypeVideoResult.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        RustBuffer.ByValue(),
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `transcribe` : UniffiCallbackInterfaceCustomProviderMethod14 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `request`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeCustomProvider.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`transcribe`(
+                    FfiConverterTypeTranscriptionRequest.lift(`request`),
+                )
+                }
+            val uniffiHandleSuccess = { returnValue: TranscriptionResult ->
+                val uniffiResult =
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        FfiConverterTypeTranscriptionResult.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        RustBuffer.ByValue(),
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `generate3d` : UniffiCallbackInterfaceCustomProviderMethod15 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `request`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeCustomProvider.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`generate3d`(
+                    FfiConverterTypeThreeDRequest.lift(`request`),
+                )
+                }
+            val uniffiHandleSuccess = { returnValue: ThreeDResult ->
+                val uniffiResult =
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        FfiConverterTypeThreeDResult.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        RustBuffer.ByValue(),
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `removeBackground` : UniffiCallbackInterfaceCustomProviderMethod16 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `request`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeCustomProvider.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`removeBackground`(
+                    FfiConverterTypeBackgroundRemovalRequest.lift(`request`),
+                )
+                }
+            val uniffiHandleSuccess = { returnValue: ImageResult ->
+                val uniffiResult =
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        FfiConverterTypeImageResult.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        RustBuffer.ByValue(),
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object uniffiFree : UniffiCallbackInterfaceFree {
+        override fun callback(handle: Long) {
+            FfiConverterTypeCustomProvider.handleMap.remove(handle)
+        }
+    }
+
+    internal object uniffiClone : UniffiCallbackInterfaceClone {
+        override fun callback(handle: Long): Long = FfiConverterTypeCustomProvider.handleMap.clone(handle)
+    }
+
+    internal var vtable =
+        UniffiVTableCallbackInterfaceCustomProvider.UniffiByValue(
+            uniffiFree,
+            uniffiClone,
+            `providerId`,
+            `complete`,
+            `stream`,
+            `embed`,
+            `textToSpeech`,
+            `generateMusic`,
+            `generateSfx`,
+            `cloneVoice`,
+            `listVoices`,
+            `deleteVoice`,
+            `generateImage`,
+            `upscaleImage`,
+            `textToVideo`,
+            `imageToVideo`,
+            `transcribe`,
+            `generate3d`,
+            `removeBackground`,
+        )
+
+    // Registers the foreign callback with the Rust side.
+    // This method is generated for each callback interface.
+    internal fun register(lib: UniffiLib) {
+        lib.uniffi_blazen_uniffi_fn_init_callback_vtable_customprovider(vtable)
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeCustomProvider : FfiConverter<CustomProvider, Long> {
+    internal val handleMap = UniffiHandleMap<CustomProvider>()
+
+    override fun lower(value: CustomProvider): Long {
+        if (value is CustomProviderImpl) {
+            // Rust-implemented object.  Clone the handle and return it
+            return value.uniffiCloneHandle()
+        } else {
+            // Kotlin object, generate a new vtable handle and return that.
+            return handleMap.insert(value)
+        }
+    }
+
+    override fun lift(value: Long): CustomProvider {
+        if ((value and 1.toLong()) == 0.toLong()) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return CustomProviderImpl(UniffiWithHandle, value)
+        } else {
+            // Kotlin-generated handle, get the object from the handle map
+            return handleMap.remove(value)
+        }
+    }
+
+    override fun read(buf: ByteBuffer): CustomProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: CustomProvider) = 8UL
+
+    override fun write(
+        value: CustomProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Opaque UniFFI handle that wraps the upstream
+ * [`blazen_llm::CustomProviderHandle`].
+ *
+ * Construct via one of the four free factory functions ([`ollama`],
+ * [`lm_studio`], [`openai_compat`], [`custom_provider_from_foreign`]). All
+ * 16 typed compute / completion methods dispatch through the inner handle,
+ * which applies any per-instance defaults attached via the builders before
+ * forwarding to the underlying [`CustomProvider`].
+ *
+ * The paired [`BaseProvider`] handle returned by [`as_base`](Self::as_base)
+ * exposes builder-style completion-defaults customisation
+ * (`with_system_prompt`, `with_tools_json`, ...).
+ */
+public interface CustomProviderHandleInterface {
+    /**
+     * Return the paired [`BaseProvider`] handle for builder-style chaining.
+     *
+     * Use for `.with_system_prompt(...)`, `.with_tools_json(...)`,
+     * `.with_response_format_json(...)`, or to hand the provider to an API
+     * expecting an opaque `CompletionModel`-shaped handle.
+     */
+    fun `asBase`(): BaseProvider
+
+    /**
+     * Clone a voice from reference audio.
+     */
+    suspend fun `cloneVoice`(`request`: VoiceCloneRequest): VoiceHandle
+
+    /**
+     * Perform a non-streaming chat completion. Applies any configured
+     * completion defaults (system prompt, tools, response format) before
+     * dispatching to the inner provider.
+     */
+    suspend fun `complete`(`request`: CompletionRequest): CompletionResponse
+
+    /**
+     * Delete a previously-cloned voice. Takes the voice id as a string so
+     * foreign callers can pass `voice_handle.id` directly without
+     * reconstructing the full record.
+     */
+    suspend fun `deleteVoice`(`voiceId`: kotlin.String): kotlin.Boolean
+
+    /**
+     * Embed one or more texts via the inner provider.
+     */
+    suspend fun `embed`(`texts`: List<kotlin.String>): EmbeddingResponse
+
+    /**
+     * Generate a 3D model.
+     */
+    suspend fun `generate3d`(`request`: ThreeDRequest): ThreeDResult
+
+    /**
+     * Generate an image from a text prompt.
+     */
+    suspend fun `generateImage`(`request`: ImageRequest): ImageResult
+
+    /**
+     * Generate music from a prompt.
+     */
+    suspend fun `generateMusic`(`request`: MusicRequest): AudioResult
+
+    /**
+     * Generate sound effects from a prompt.
+     */
+    suspend fun `generateSfx`(`request`: MusicRequest): AudioResult
+
+    /**
+     * Generate a video from a reference image.
+     */
+    suspend fun `imageToVideo`(`request`: VideoRequest): VideoResult
+
+    /**
+     * List voices known to the provider.
+     */
+    suspend fun `listVoices`(): List<VoiceHandle>
+
+    /**
+     * The provider id of the wrapped inner provider.
+     */
+    fun `providerId`(): kotlin.String
+
+    /**
+     * Remove the background from an existing image.
+     */
+    suspend fun `removeBackground`(`request`: BackgroundRemovalRequest): ImageResult
+
+    /**
+     * Drive a streaming chat completion, dispatching each chunk to the sink.
+     *
+     * Symmetric with [`crate::streaming::complete_streaming`]: success and
+     * failure are both delivered via the sink; the function itself only
+     * returns `Err` if the initial request conversion fails.
+     */
+    suspend fun `stream`(
+        `request`: CompletionRequest,
+        `sink`: CompletionStreamSink,
+    )
+
+    /**
+     * Synthesize speech from text. Applies the configured speech defaults
+     * (if any) before dispatching to the inner provider.
+     */
+    suspend fun `textToSpeech`(`request`: SpeechRequest): AudioResult
+
+    /**
+     * Generate a video from a text prompt.
+     */
+    suspend fun `textToVideo`(`request`: VideoRequest): VideoResult
+
+    /**
+     * Transcribe audio to text.
+     */
+    suspend fun `transcribe`(`request`: TranscriptionRequest): TranscriptionResult
+
+    /**
+     * Upscale an existing image.
+     */
+    suspend fun `upscaleImage`(`request`: UpscaleRequest): ImageResult
+
+    /**
+     * Set the default `response_format`. JSON-encoded `serde_json::Value`.
+     *
+     * Malformed JSON or an empty string is treated as JSON null (no default
+     * response format).
+     */
+    fun `withResponseFormatJson`(`fmtJson`: kotlin.String): CustomProviderHandle
+
+    /**
+     * Attach a default system prompt applied to every completion request
+     * that doesn't already include a system message.
+     *
+     * Returns a fresh handle (clone-with-mutation) so the call composes
+     * fluently with other `with_*` builders.
+     */
+    fun `withSystemPrompt`(`prompt`: kotlin.String): CustomProviderHandle
+
+    /**
+     * Replace the default tool list. JSON-encoded `Vec<ToolDefinition>`.
+     *
+     * Malformed JSON or an empty string yields an empty tool list — matching
+     * the permissive shape of the other `*_json` helpers on this type.
+     */
+    fun `withToolsJson`(`toolsJson`: kotlin.String): CustomProviderHandle
+
+    companion object
+}
+
+/**
+ * Opaque UniFFI handle that wraps the upstream
+ * [`blazen_llm::CustomProviderHandle`].
+ *
+ * Construct via one of the four free factory functions ([`ollama`],
+ * [`lm_studio`], [`openai_compat`], [`custom_provider_from_foreign`]). All
+ * 16 typed compute / completion methods dispatch through the inner handle,
+ * which applies any per-instance defaults attached via the builders before
+ * forwarding to the underlying [`CustomProvider`].
+ *
+ * The paired [`BaseProvider`] handle returned by [`as_base`](Self::as_base)
+ * exposes builder-style completion-defaults customisation
+ * (`with_system_prompt`, `with_tools_json`, ...).
+ */
+open class CustomProviderHandle :
+    Disposable,
+    AutoCloseable,
+    CustomProviderHandleInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_customproviderhandle(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_customproviderhandle(handle, status)
+        }
+    }
+
+    /**
+     * Return the paired [`BaseProvider`] handle for builder-style chaining.
+     *
+     * Use for `.with_system_prompt(...)`, `.with_tools_json(...)`,
+     * `.with_response_format_json(...)`, or to hand the provider to an API
+     * expecting an opaque `CompletionModel`-shaped handle.
+     */
+    override fun `asBase`(): BaseProvider =
+        FfiConverterTypeBaseProvider.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_as_base(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Clone a voice from reference audio.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `cloneVoice`(`request`: VoiceCloneRequest): VoiceHandle =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_clone_voice(
+                    uniffiHandle,
+                    FfiConverterTypeVoiceCloneRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeVoiceHandle.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Perform a non-streaming chat completion. Applies any configured
+     * completion defaults (system prompt, tools, response format) before
+     * dispatching to the inner provider.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: CompletionRequest): CompletionResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_complete(
+                    uniffiHandle,
+                    FfiConverterTypeCompletionRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeCompletionResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Delete a previously-cloned voice. Takes the voice id as a string so
+     * foreign callers can pass `voice_handle.id` directly without
+     * reconstructing the full record.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `deleteVoice`(`voiceId`: kotlin.String): kotlin.Boolean =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_delete_voice(
+                    uniffiHandle,
+                    FfiConverterString.lower(`voiceId`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_i8(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_i8(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_i8(future) },
+            // lift function
+            { FfiConverterBoolean.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Embed one or more texts via the inner provider.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `embed`(`texts`: List<kotlin.String>): EmbeddingResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_embed(
+                    uniffiHandle,
+                    FfiConverterSequenceString.lower(`texts`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeEmbeddingResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Generate a 3D model.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `generate3d`(`request`: ThreeDRequest): ThreeDResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_generate_3d(
+                    uniffiHandle,
+                    FfiConverterTypeThreeDRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeThreeDResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Generate an image from a text prompt.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `generateImage`(`request`: ImageRequest): ImageResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_generate_image(
+                    uniffiHandle,
+                    FfiConverterTypeImageRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeImageResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Generate music from a prompt.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `generateMusic`(`request`: MusicRequest): AudioResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_generate_music(
+                    uniffiHandle,
+                    FfiConverterTypeMusicRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeAudioResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Generate sound effects from a prompt.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `generateSfx`(`request`: MusicRequest): AudioResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_generate_sfx(
+                    uniffiHandle,
+                    FfiConverterTypeMusicRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeAudioResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Generate a video from a reference image.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `imageToVideo`(`request`: VideoRequest): VideoResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_image_to_video(
+                    uniffiHandle,
+                    FfiConverterTypeVideoRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeVideoResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * List voices known to the provider.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `listVoices`(): List<VoiceHandle> =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_list_voices(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterSequenceTypeVoiceHandle.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * The provider id of the wrapped inner provider.
+     */
+    override fun `providerId`(): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_provider_id(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Remove the background from an existing image.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `removeBackground`(`request`: BackgroundRemovalRequest): ImageResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_remove_background(
+                    uniffiHandle,
+                    FfiConverterTypeBackgroundRemovalRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeImageResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Drive a streaming chat completion, dispatching each chunk to the sink.
+     *
+     * Symmetric with [`crate::streaming::complete_streaming`]: success and
+     * failure are both delivered via the sink; the function itself only
+     * returns `Err` if the initial request conversion fails.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `stream`(
+        `request`: CompletionRequest,
+        `sink`: CompletionStreamSink,
+    ) = uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_stream(
+                uniffiHandle,
+                FfiConverterTypeCompletionRequest.lower(`request`),
+                FfiConverterTypeCompletionStreamSink.lower(`sink`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        // Error FFI converter
+        BlazenException.ErrorHandler,
+    )
+
+    /**
+     * Synthesize speech from text. Applies the configured speech defaults
+     * (if any) before dispatching to the inner provider.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `textToSpeech`(`request`: SpeechRequest): AudioResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_text_to_speech(
+                    uniffiHandle,
+                    FfiConverterTypeSpeechRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeAudioResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Generate a video from a text prompt.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `textToVideo`(`request`: VideoRequest): VideoResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_text_to_video(
+                    uniffiHandle,
+                    FfiConverterTypeVideoRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeVideoResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Transcribe audio to text.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `transcribe`(`request`: TranscriptionRequest): TranscriptionResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_transcribe(
+                    uniffiHandle,
+                    FfiConverterTypeTranscriptionRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeTranscriptionResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Upscale an existing image.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `upscaleImage`(`request`: UpscaleRequest): ImageResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_upscale_image(
+                    uniffiHandle,
+                    FfiConverterTypeUpscaleRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeImageResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Set the default `response_format`. JSON-encoded `serde_json::Value`.
+     *
+     * Malformed JSON or an empty string is treated as JSON null (no default
+     * response format).
+     */
+    override fun `withResponseFormatJson`(`fmtJson`: kotlin.String): CustomProviderHandle =
+        FfiConverterTypeCustomProviderHandle.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_with_response_format_json(
+                        it,
+                        FfiConverterString.lower(`fmtJson`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Attach a default system prompt applied to every completion request
+     * that doesn't already include a system message.
+     *
+     * Returns a fresh handle (clone-with-mutation) so the call composes
+     * fluently with other `with_*` builders.
+     */
+    override fun `withSystemPrompt`(`prompt`: kotlin.String): CustomProviderHandle =
+        FfiConverterTypeCustomProviderHandle.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_with_system_prompt(
+                        it,
+                        FfiConverterString.lower(`prompt`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Replace the default tool list. JSON-encoded `Vec<ToolDefinition>`.
+     *
+     * Malformed JSON or an empty string yields an empty tool list — matching
+     * the permissive shape of the other `*_json` helpers on this type.
+     */
+    override fun `withToolsJson`(`toolsJson`: kotlin.String): CustomProviderHandle =
+        FfiConverterTypeCustomProviderHandle.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_with_tools_json(
+                        it,
+                        FfiConverterString.lower(`toolsJson`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeCustomProviderHandle : FfiConverter<CustomProviderHandle, Long> {
+    override fun lower(value: CustomProviderHandle): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): CustomProviderHandle = CustomProviderHandle(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): CustomProviderHandle = lift(buf.getLong())
+
+    override fun allocationSize(value: CustomProviderHandle) = 8UL
+
+    override fun write(
+        value: CustomProviderHandle,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -8960,6 +12651,221 @@ public object FfiConverterTypeAgentResult : FfiConverterRustBuffer<AgentResult> 
     }
 }
 
+data class AudioMusicProviderDefaults(
+    var `base`: BaseProviderDefaults? = null,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAudioMusicProviderDefaults : FfiConverterRustBuffer<AudioMusicProviderDefaults> {
+    override fun read(buf: ByteBuffer): AudioMusicProviderDefaults =
+        AudioMusicProviderDefaults(
+            FfiConverterOptionalTypeBaseProviderDefaults.read(buf),
+        )
+
+    override fun allocationSize(value: AudioMusicProviderDefaults) =
+        (
+            FfiConverterOptionalTypeBaseProviderDefaults.allocationSize(value.`base`)
+        )
+
+    override fun write(
+        value: AudioMusicProviderDefaults,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterOptionalTypeBaseProviderDefaults.write(value.`base`, buf)
+    }
+}
+
+/**
+ * Result of an audio generation or TTS operation.
+ */
+data class AudioResult(
+    var `audio`: List<GeneratedAudio>,
+    var `timing`: RequestTiming,
+    var `cost`: kotlin.Double?,
+    var `usage`: TokenUsage?,
+    var `audioSeconds`: kotlin.Double,
+    var `metadata`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAudioResult : FfiConverterRustBuffer<AudioResult> {
+    override fun read(buf: ByteBuffer): AudioResult =
+        AudioResult(
+            FfiConverterSequenceTypeGeneratedAudio.read(buf),
+            FfiConverterTypeRequestTiming.read(buf),
+            FfiConverterOptionalDouble.read(buf),
+            FfiConverterOptionalTypeTokenUsage.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: AudioResult) =
+        (
+            FfiConverterSequenceTypeGeneratedAudio.allocationSize(value.`audio`) +
+                FfiConverterTypeRequestTiming.allocationSize(value.`timing`) +
+                FfiConverterOptionalDouble.allocationSize(value.`cost`) +
+                FfiConverterOptionalTypeTokenUsage.allocationSize(value.`usage`) +
+                FfiConverterDouble.allocationSize(value.`audioSeconds`) +
+                FfiConverterString.allocationSize(value.`metadata`)
+        )
+
+    override fun write(
+        value: AudioResult,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterSequenceTypeGeneratedAudio.write(value.`audio`, buf)
+        FfiConverterTypeRequestTiming.write(value.`timing`, buf)
+        FfiConverterOptionalDouble.write(value.`cost`, buf)
+        FfiConverterOptionalTypeTokenUsage.write(value.`usage`, buf)
+        FfiConverterDouble.write(value.`audioSeconds`, buf)
+        FfiConverterString.write(value.`metadata`, buf)
+    }
+}
+
+data class AudioSpeechProviderDefaults(
+    var `base`: BaseProviderDefaults? = null,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAudioSpeechProviderDefaults : FfiConverterRustBuffer<AudioSpeechProviderDefaults> {
+    override fun read(buf: ByteBuffer): AudioSpeechProviderDefaults =
+        AudioSpeechProviderDefaults(
+            FfiConverterOptionalTypeBaseProviderDefaults.read(buf),
+        )
+
+    override fun allocationSize(value: AudioSpeechProviderDefaults) =
+        (
+            FfiConverterOptionalTypeBaseProviderDefaults.allocationSize(value.`base`)
+        )
+
+    override fun write(
+        value: AudioSpeechProviderDefaults,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterOptionalTypeBaseProviderDefaults.write(value.`base`, buf)
+    }
+}
+
+data class BackgroundRemovalProviderDefaults(
+    var `base`: BaseProviderDefaults? = null,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeBackgroundRemovalProviderDefaults : FfiConverterRustBuffer<BackgroundRemovalProviderDefaults> {
+    override fun read(buf: ByteBuffer): BackgroundRemovalProviderDefaults =
+        BackgroundRemovalProviderDefaults(
+            FfiConverterOptionalTypeBaseProviderDefaults.read(buf),
+        )
+
+    override fun allocationSize(value: BackgroundRemovalProviderDefaults) =
+        (
+            FfiConverterOptionalTypeBaseProviderDefaults.allocationSize(value.`base`)
+        )
+
+    override fun write(
+        value: BackgroundRemovalProviderDefaults,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterOptionalTypeBaseProviderDefaults.write(value.`base`, buf)
+    }
+}
+
+/**
+ * Request for background removal on an existing image.
+ */
+data class BackgroundRemovalRequest(
+    var `imageUrl`: kotlin.String,
+    var `model`: kotlin.String?,
+    var `parameters`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeBackgroundRemovalRequest : FfiConverterRustBuffer<BackgroundRemovalRequest> {
+    override fun read(buf: ByteBuffer): BackgroundRemovalRequest =
+        BackgroundRemovalRequest(
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: BackgroundRemovalRequest) =
+        (
+            FfiConverterString.allocationSize(value.`imageUrl`) +
+                FfiConverterOptionalString.allocationSize(value.`model`) +
+                FfiConverterString.allocationSize(value.`parameters`)
+        )
+
+    override fun write(
+        value: BackgroundRemovalRequest,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`imageUrl`, buf)
+        FfiConverterOptionalString.write(value.`model`, buf)
+        FfiConverterString.write(value.`parameters`, buf)
+    }
+}
+
+/**
+ * Universal provider defaults applicable across every provider role.
+ *
+ * V1 carries no data fields — the upstream `before_request` hook is
+ * deferred to Phase C. A placeholder boolean field is included so the
+ * generated foreign-language struct is non-empty (UniFFI Records with
+ * zero fields generate slightly awkward foreign-side code).
+ */
+data class BaseProviderDefaults(
+    /**
+     * Reserved for future use. Currently ignored on both sides of the FFI.
+     * V1 carries no universal defaults data — the upstream `before_request`
+     * hook is exposed via Phase C's foreign-implementable callback trait.
+     */
+    var `reserved`: kotlin.Boolean = false,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeBaseProviderDefaults : FfiConverterRustBuffer<BaseProviderDefaults> {
+    override fun read(buf: ByteBuffer): BaseProviderDefaults =
+        BaseProviderDefaults(
+            FfiConverterBoolean.read(buf),
+        )
+
+    override fun allocationSize(value: BaseProviderDefaults) =
+        (
+            FfiConverterBoolean.allocationSize(value.`reserved`)
+        )
+
+    override fun write(
+        value: BaseProviderDefaults,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterBoolean.write(value.`reserved`, buf)
+    }
+}
+
 /**
  * Outcome of a [`complete_batch`] call.
  *
@@ -9064,6 +12970,61 @@ public object FfiConverterTypeChatMessage : FfiConverterRustBuffer<ChatMessage> 
         FfiConverterSequenceTypeToolCall.write(value.`toolCalls`, buf)
         FfiConverterOptionalString.write(value.`toolCallId`, buf)
         FfiConverterOptionalString.write(value.`name`, buf)
+    }
+}
+
+/**
+ * Completion-role defaults: system prompt, default tools, default
+ * `response_format`. Hooks (`before_completion`) deferred to Phase C.
+ */
+data class CompletionProviderDefaults(
+    var `base`: BaseProviderDefaults? = null,
+    /**
+     * Prepended as a system message if the request lacks one.
+     */
+    var `systemPrompt`: kotlin.String? = null,
+    /**
+     * JSON-encoded `Vec<ToolDefinition>`. Merged into the request's tool
+     * list — request-supplied tools win on name collision.
+     */
+    var `toolsJson`: kotlin.String? = null,
+    /**
+     * JSON-encoded `serde_json::Value` for the OpenAI-style
+     * `response_format` field. Set only if the request lacks one.
+     */
+    var `responseFormatJson`: kotlin.String? = null,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeCompletionProviderDefaults : FfiConverterRustBuffer<CompletionProviderDefaults> {
+    override fun read(buf: ByteBuffer): CompletionProviderDefaults =
+        CompletionProviderDefaults(
+            FfiConverterOptionalTypeBaseProviderDefaults.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+
+    override fun allocationSize(value: CompletionProviderDefaults) =
+        (
+            FfiConverterOptionalTypeBaseProviderDefaults.allocationSize(value.`base`) +
+                FfiConverterOptionalString.allocationSize(value.`systemPrompt`) +
+                FfiConverterOptionalString.allocationSize(value.`toolsJson`) +
+                FfiConverterOptionalString.allocationSize(value.`responseFormatJson`)
+        )
+
+    override fun write(
+        value: CompletionProviderDefaults,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterOptionalTypeBaseProviderDefaults.write(value.`base`, buf)
+        FfiConverterOptionalString.write(value.`systemPrompt`, buf)
+        FfiConverterOptionalString.write(value.`toolsJson`, buf)
+        FfiConverterOptionalString.write(value.`responseFormatJson`, buf)
     }
 }
 
@@ -9194,6 +13155,37 @@ public object FfiConverterTypeCompletionResponse : FfiConverterRustBuffer<Comple
 }
 
 /**
+ * Embedding-role defaults. V1 composes only `base`.
+ */
+data class EmbeddingProviderDefaults(
+    var `base`: BaseProviderDefaults? = null,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeEmbeddingProviderDefaults : FfiConverterRustBuffer<EmbeddingProviderDefaults> {
+    override fun read(buf: ByteBuffer): EmbeddingProviderDefaults =
+        EmbeddingProviderDefaults(
+            FfiConverterOptionalTypeBaseProviderDefaults.read(buf),
+        )
+
+    override fun allocationSize(value: EmbeddingProviderDefaults) =
+        (
+            FfiConverterOptionalTypeBaseProviderDefaults.allocationSize(value.`base`)
+        )
+
+    override fun write(
+        value: EmbeddingProviderDefaults,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterOptionalTypeBaseProviderDefaults.write(value.`base`, buf)
+    }
+}
+
+/**
  * Response from an embedding model.
  *
  * `embeddings[i]` is the vector for the `i`-th input string. Vectors are
@@ -9278,6 +13270,186 @@ public object FfiConverterTypeEvent : FfiConverterRustBuffer<Event> {
 }
 
 /**
+ * A single generated 3D model with optional mesh metadata.
+ */
+data class Generated3DModel(
+    var `media`: MediaOutput,
+    var `vertexCount`: kotlin.ULong?,
+    var `faceCount`: kotlin.ULong?,
+    var `hasTextures`: kotlin.Boolean,
+    var `hasAnimations`: kotlin.Boolean,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeGenerated3DModel : FfiConverterRustBuffer<Generated3DModel> {
+    override fun read(buf: ByteBuffer): Generated3DModel =
+        Generated3DModel(
+            FfiConverterTypeMediaOutput.read(buf),
+            FfiConverterOptionalULong.read(buf),
+            FfiConverterOptionalULong.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+
+    override fun allocationSize(value: Generated3DModel) =
+        (
+            FfiConverterTypeMediaOutput.allocationSize(value.`media`) +
+                FfiConverterOptionalULong.allocationSize(value.`vertexCount`) +
+                FfiConverterOptionalULong.allocationSize(value.`faceCount`) +
+                FfiConverterBoolean.allocationSize(value.`hasTextures`) +
+                FfiConverterBoolean.allocationSize(value.`hasAnimations`)
+        )
+
+    override fun write(
+        value: Generated3DModel,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterTypeMediaOutput.write(value.`media`, buf)
+        FfiConverterOptionalULong.write(value.`vertexCount`, buf)
+        FfiConverterOptionalULong.write(value.`faceCount`, buf)
+        FfiConverterBoolean.write(value.`hasTextures`, buf)
+        FfiConverterBoolean.write(value.`hasAnimations`, buf)
+    }
+}
+
+/**
+ * A single generated audio clip with optional metadata.
+ */
+data class GeneratedAudio(
+    var `media`: MediaOutput,
+    var `durationSeconds`: kotlin.Float?,
+    var `sampleRate`: kotlin.UInt?,
+    /**
+     * Number of channels, if known. UniFFI doesn't have a `u8` distinct from
+     * `u32`, so the upstream `Option<u8>` widens to `Option<u32>`.
+     */
+    var `channels`: kotlin.UInt?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeGeneratedAudio : FfiConverterRustBuffer<GeneratedAudio> {
+    override fun read(buf: ByteBuffer): GeneratedAudio =
+        GeneratedAudio(
+            FfiConverterTypeMediaOutput.read(buf),
+            FfiConverterOptionalFloat.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+        )
+
+    override fun allocationSize(value: GeneratedAudio) =
+        (
+            FfiConverterTypeMediaOutput.allocationSize(value.`media`) +
+                FfiConverterOptionalFloat.allocationSize(value.`durationSeconds`) +
+                FfiConverterOptionalUInt.allocationSize(value.`sampleRate`) +
+                FfiConverterOptionalUInt.allocationSize(value.`channels`)
+        )
+
+    override fun write(
+        value: GeneratedAudio,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterTypeMediaOutput.write(value.`media`, buf)
+        FfiConverterOptionalFloat.write(value.`durationSeconds`, buf)
+        FfiConverterOptionalUInt.write(value.`sampleRate`, buf)
+        FfiConverterOptionalUInt.write(value.`channels`, buf)
+    }
+}
+
+/**
+ * A single generated image with optional dimension metadata.
+ */
+data class GeneratedImage(
+    var `media`: MediaOutput,
+    var `width`: kotlin.UInt?,
+    var `height`: kotlin.UInt?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeGeneratedImage : FfiConverterRustBuffer<GeneratedImage> {
+    override fun read(buf: ByteBuffer): GeneratedImage =
+        GeneratedImage(
+            FfiConverterTypeMediaOutput.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+        )
+
+    override fun allocationSize(value: GeneratedImage) =
+        (
+            FfiConverterTypeMediaOutput.allocationSize(value.`media`) +
+                FfiConverterOptionalUInt.allocationSize(value.`width`) +
+                FfiConverterOptionalUInt.allocationSize(value.`height`)
+        )
+
+    override fun write(
+        value: GeneratedImage,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterTypeMediaOutput.write(value.`media`, buf)
+        FfiConverterOptionalUInt.write(value.`width`, buf)
+        FfiConverterOptionalUInt.write(value.`height`, buf)
+    }
+}
+
+/**
+ * A single generated video with optional metadata.
+ */
+data class GeneratedVideo(
+    var `media`: MediaOutput,
+    var `width`: kotlin.UInt?,
+    var `height`: kotlin.UInt?,
+    var `durationSeconds`: kotlin.Float?,
+    var `fps`: kotlin.Float?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeGeneratedVideo : FfiConverterRustBuffer<GeneratedVideo> {
+    override fun read(buf: ByteBuffer): GeneratedVideo =
+        GeneratedVideo(
+            FfiConverterTypeMediaOutput.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+            FfiConverterOptionalFloat.read(buf),
+            FfiConverterOptionalFloat.read(buf),
+        )
+
+    override fun allocationSize(value: GeneratedVideo) =
+        (
+            FfiConverterTypeMediaOutput.allocationSize(value.`media`) +
+                FfiConverterOptionalUInt.allocationSize(value.`width`) +
+                FfiConverterOptionalUInt.allocationSize(value.`height`) +
+                FfiConverterOptionalFloat.allocationSize(value.`durationSeconds`) +
+                FfiConverterOptionalFloat.allocationSize(value.`fps`)
+        )
+
+    override fun write(
+        value: GeneratedVideo,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterTypeMediaOutput.write(value.`media`, buf)
+        FfiConverterOptionalUInt.write(value.`width`, buf)
+        FfiConverterOptionalUInt.write(value.`height`, buf)
+        FfiConverterOptionalFloat.write(value.`durationSeconds`, buf)
+        FfiConverterOptionalFloat.write(value.`fps`, buf)
+    }
+}
+
+/**
  * The result of an image-generation call.
  *
  * `images[i].kind` is always `"image"`. `data_base64` contains either the
@@ -9310,6 +13482,209 @@ public object FfiConverterTypeImageGenResult : FfiConverterRustBuffer<ImageGenRe
         buf: ByteBuffer,
     ) {
         FfiConverterSequenceTypeMedia.write(value.`images`, buf)
+    }
+}
+
+data class ImageGenerationProviderDefaults(
+    var `base`: BaseProviderDefaults? = null,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeImageGenerationProviderDefaults : FfiConverterRustBuffer<ImageGenerationProviderDefaults> {
+    override fun read(buf: ByteBuffer): ImageGenerationProviderDefaults =
+        ImageGenerationProviderDefaults(
+            FfiConverterOptionalTypeBaseProviderDefaults.read(buf),
+        )
+
+    override fun allocationSize(value: ImageGenerationProviderDefaults) =
+        (
+            FfiConverterOptionalTypeBaseProviderDefaults.allocationSize(value.`base`)
+        )
+
+    override fun write(
+        value: ImageGenerationProviderDefaults,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterOptionalTypeBaseProviderDefaults.write(value.`base`, buf)
+    }
+}
+
+/**
+ * Request to generate images from a text prompt.
+ */
+data class ImageRequest(
+    var `prompt`: kotlin.String,
+    var `negativePrompt`: kotlin.String?,
+    var `width`: kotlin.UInt?,
+    var `height`: kotlin.UInt?,
+    var `numImages`: kotlin.UInt?,
+    var `model`: kotlin.String?,
+    /**
+     * JSON-encoded provider-specific parameters. Empty string is `null`.
+     */
+    var `parameters`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeImageRequest : FfiConverterRustBuffer<ImageRequest> {
+    override fun read(buf: ByteBuffer): ImageRequest =
+        ImageRequest(
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: ImageRequest) =
+        (
+            FfiConverterString.allocationSize(value.`prompt`) +
+                FfiConverterOptionalString.allocationSize(value.`negativePrompt`) +
+                FfiConverterOptionalUInt.allocationSize(value.`width`) +
+                FfiConverterOptionalUInt.allocationSize(value.`height`) +
+                FfiConverterOptionalUInt.allocationSize(value.`numImages`) +
+                FfiConverterOptionalString.allocationSize(value.`model`) +
+                FfiConverterString.allocationSize(value.`parameters`)
+        )
+
+    override fun write(
+        value: ImageRequest,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`prompt`, buf)
+        FfiConverterOptionalString.write(value.`negativePrompt`, buf)
+        FfiConverterOptionalUInt.write(value.`width`, buf)
+        FfiConverterOptionalUInt.write(value.`height`, buf)
+        FfiConverterOptionalUInt.write(value.`numImages`, buf)
+        FfiConverterOptionalString.write(value.`model`, buf)
+        FfiConverterString.write(value.`parameters`, buf)
+    }
+}
+
+/**
+ * Result of an image generation or upscale operation.
+ */
+data class ImageResult(
+    var `images`: List<GeneratedImage>,
+    var `timing`: RequestTiming,
+    var `cost`: kotlin.Double?,
+    var `usage`: TokenUsage?,
+    var `imageCount`: kotlin.UInt,
+    var `metadata`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeImageResult : FfiConverterRustBuffer<ImageResult> {
+    override fun read(buf: ByteBuffer): ImageResult =
+        ImageResult(
+            FfiConverterSequenceTypeGeneratedImage.read(buf),
+            FfiConverterTypeRequestTiming.read(buf),
+            FfiConverterOptionalDouble.read(buf),
+            FfiConverterOptionalTypeTokenUsage.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: ImageResult) =
+        (
+            FfiConverterSequenceTypeGeneratedImage.allocationSize(value.`images`) +
+                FfiConverterTypeRequestTiming.allocationSize(value.`timing`) +
+                FfiConverterOptionalDouble.allocationSize(value.`cost`) +
+                FfiConverterOptionalTypeTokenUsage.allocationSize(value.`usage`) +
+                FfiConverterUInt.allocationSize(value.`imageCount`) +
+                FfiConverterString.allocationSize(value.`metadata`)
+        )
+
+    override fun write(
+        value: ImageResult,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterSequenceTypeGeneratedImage.write(value.`images`, buf)
+        FfiConverterTypeRequestTiming.write(value.`timing`, buf)
+        FfiConverterOptionalDouble.write(value.`cost`, buf)
+        FfiConverterOptionalTypeTokenUsage.write(value.`usage`, buf)
+        FfiConverterUInt.write(value.`imageCount`, buf)
+        FfiConverterString.write(value.`metadata`, buf)
+    }
+}
+
+data class ImageUpscaleProviderDefaults(
+    var `base`: BaseProviderDefaults? = null,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeImageUpscaleProviderDefaults : FfiConverterRustBuffer<ImageUpscaleProviderDefaults> {
+    override fun read(buf: ByteBuffer): ImageUpscaleProviderDefaults =
+        ImageUpscaleProviderDefaults(
+            FfiConverterOptionalTypeBaseProviderDefaults.read(buf),
+        )
+
+    override fun allocationSize(value: ImageUpscaleProviderDefaults) =
+        (
+            FfiConverterOptionalTypeBaseProviderDefaults.allocationSize(value.`base`)
+        )
+
+    override fun write(
+        value: ImageUpscaleProviderDefaults,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterOptionalTypeBaseProviderDefaults.write(value.`base`, buf)
+    }
+}
+
+/**
+ * Simple key/value pair for extra HTTP headers and query parameters.
+ *
+ * Upstream uses `Vec<(String, String)>`; UniFFI Records can't represent
+ * raw tuples, so we lift them into a named record.
+ */
+data class KeyValue(
+    var `key`: kotlin.String,
+    var `value`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeKeyValue : FfiConverterRustBuffer<KeyValue> {
+    override fun read(buf: ByteBuffer): KeyValue =
+        KeyValue(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: KeyValue) =
+        (
+            FfiConverterString.allocationSize(value.`key`) +
+                FfiConverterString.allocationSize(value.`value`)
+        )
+
+    override fun write(
+        value: KeyValue,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`key`, buf)
+        FfiConverterString.write(value.`value`, buf)
     }
 }
 
@@ -9362,6 +13737,197 @@ public object FfiConverterTypeMedia : FfiConverterRustBuffer<Media> {
 }
 
 /**
+ * A single piece of generated media (image, video, audio, 3D, ...).
+ *
+ * At least one of `url`, `base64`, or `raw_content` is populated.
+ * `media_type` is the canonical MIME string (`"image/png"`, `"video/mp4"`,
+ * `"model/gltf-binary"`, ...). Unknown MIMEs map back to
+ * [`CoreMediaType::Other`].
+ */
+data class MediaOutput(
+    var `url`: kotlin.String?,
+    var `base64`: kotlin.String?,
+    var `rawContent`: kotlin.String?,
+    /**
+     * MIME type string (e.g. `"image/png"`).
+     */
+    var `mediaType`: kotlin.String,
+    var `fileSize`: kotlin.ULong?,
+    /**
+     * JSON-encoded arbitrary metadata. Empty string round-trips to `null`.
+     */
+    var `metadata`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMediaOutput : FfiConverterRustBuffer<MediaOutput> {
+    override fun read(buf: ByteBuffer): MediaOutput =
+        MediaOutput(
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalULong.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: MediaOutput) =
+        (
+            FfiConverterOptionalString.allocationSize(value.`url`) +
+                FfiConverterOptionalString.allocationSize(value.`base64`) +
+                FfiConverterOptionalString.allocationSize(value.`rawContent`) +
+                FfiConverterString.allocationSize(value.`mediaType`) +
+                FfiConverterOptionalULong.allocationSize(value.`fileSize`) +
+                FfiConverterString.allocationSize(value.`metadata`)
+        )
+
+    override fun write(
+        value: MediaOutput,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterOptionalString.write(value.`url`, buf)
+        FfiConverterOptionalString.write(value.`base64`, buf)
+        FfiConverterOptionalString.write(value.`rawContent`, buf)
+        FfiConverterString.write(value.`mediaType`, buf)
+        FfiConverterOptionalULong.write(value.`fileSize`, buf)
+        FfiConverterString.write(value.`metadata`, buf)
+    }
+}
+
+/**
+ * Request to generate music or sound effects.
+ */
+data class MusicRequest(
+    var `prompt`: kotlin.String,
+    var `durationSeconds`: kotlin.Float?,
+    var `model`: kotlin.String?,
+    var `parameters`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMusicRequest : FfiConverterRustBuffer<MusicRequest> {
+    override fun read(buf: ByteBuffer): MusicRequest =
+        MusicRequest(
+            FfiConverterString.read(buf),
+            FfiConverterOptionalFloat.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: MusicRequest) =
+        (
+            FfiConverterString.allocationSize(value.`prompt`) +
+                FfiConverterOptionalFloat.allocationSize(value.`durationSeconds`) +
+                FfiConverterOptionalString.allocationSize(value.`model`) +
+                FfiConverterString.allocationSize(value.`parameters`)
+        )
+
+    override fun write(
+        value: MusicRequest,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`prompt`, buf)
+        FfiConverterOptionalFloat.write(value.`durationSeconds`, buf)
+        FfiConverterOptionalString.write(value.`model`, buf)
+        FfiConverterString.write(value.`parameters`, buf)
+    }
+}
+
+/**
+ * Configuration for an OpenAI-compatible provider backend.
+ *
+ * Used by the [`ApiProtocol::OpenAi`] variant.
+ */
+data class OpenAiCompatConfig(
+    /**
+     * Human-readable name for this provider (used in logs and model info).
+     */
+    var `providerName`: kotlin.String,
+    /**
+     * Base URL for the API (e.g. `https://api.openai.com/v1`).
+     */
+    var `baseUrl`: kotlin.String,
+    /**
+     * API key. May be empty if the provider doesn't require auth.
+     */
+    var `apiKey`: kotlin.String,
+    /**
+     * Default model to use if a request doesn't override it.
+     */
+    var `defaultModel`: kotlin.String,
+    /**
+     * How to send the API key.
+     */
+    var `authMethod`: AuthMethod,
+    /**
+     * Extra HTTP headers to include in every request.
+     */
+    var `extraHeaders`: List<KeyValue>,
+    /**
+     * Query parameters to include in every request (e.g. Azure's
+     * `api-version`).
+     */
+    var `queryParams`: List<KeyValue>,
+    /**
+     * Whether this provider supports the `/models` listing endpoint.
+     */
+    var `supportsModelListing`: kotlin.Boolean,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeOpenAiCompatConfig : FfiConverterRustBuffer<OpenAiCompatConfig> {
+    override fun read(buf: ByteBuffer): OpenAiCompatConfig =
+        OpenAiCompatConfig(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterTypeAuthMethod.read(buf),
+            FfiConverterSequenceTypeKeyValue.read(buf),
+            FfiConverterSequenceTypeKeyValue.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+
+    override fun allocationSize(value: OpenAiCompatConfig) =
+        (
+            FfiConverterString.allocationSize(value.`providerName`) +
+                FfiConverterString.allocationSize(value.`baseUrl`) +
+                FfiConverterString.allocationSize(value.`apiKey`) +
+                FfiConverterString.allocationSize(value.`defaultModel`) +
+                FfiConverterTypeAuthMethod.allocationSize(value.`authMethod`) +
+                FfiConverterSequenceTypeKeyValue.allocationSize(value.`extraHeaders`) +
+                FfiConverterSequenceTypeKeyValue.allocationSize(value.`queryParams`) +
+                FfiConverterBoolean.allocationSize(value.`supportsModelListing`)
+        )
+
+    override fun write(
+        value: OpenAiCompatConfig,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`providerName`, buf)
+        FfiConverterString.write(value.`baseUrl`, buf)
+        FfiConverterString.write(value.`apiKey`, buf)
+        FfiConverterString.write(value.`defaultModel`, buf)
+        FfiConverterTypeAuthMethod.write(value.`authMethod`, buf)
+        FfiConverterSequenceTypeKeyValue.write(value.`extraHeaders`, buf)
+        FfiConverterSequenceTypeKeyValue.write(value.`queryParams`, buf)
+        FfiConverterBoolean.write(value.`supportsModelListing`, buf)
+    }
+}
+
+/**
  * A serialized representation of a queued event captured in a checkpoint.
  *
  * Mirrors [`blazen_persist::SerializedEvent`]. The `data_json` field is
@@ -9405,6 +13971,103 @@ public object FfiConverterTypePersistedEvent : FfiConverterRustBuffer<PersistedE
     ) {
         FfiConverterString.write(value.`eventType`, buf)
         FfiConverterString.write(value.`dataJson`, buf)
+    }
+}
+
+/**
+ * Timing metadata for a compute request.
+ *
+ * All three counters are optional; a `None` value means "the provider did
+ * not report this timing breakdown" rather than zero.
+ */
+data class RequestTiming(
+    var `queueMs`: kotlin.ULong?,
+    var `executionMs`: kotlin.ULong?,
+    var `totalMs`: kotlin.ULong?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeRequestTiming : FfiConverterRustBuffer<RequestTiming> {
+    override fun read(buf: ByteBuffer): RequestTiming =
+        RequestTiming(
+            FfiConverterOptionalULong.read(buf),
+            FfiConverterOptionalULong.read(buf),
+            FfiConverterOptionalULong.read(buf),
+        )
+
+    override fun allocationSize(value: RequestTiming) =
+        (
+            FfiConverterOptionalULong.allocationSize(value.`queueMs`) +
+                FfiConverterOptionalULong.allocationSize(value.`executionMs`) +
+                FfiConverterOptionalULong.allocationSize(value.`totalMs`)
+        )
+
+    override fun write(
+        value: RequestTiming,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterOptionalULong.write(value.`queueMs`, buf)
+        FfiConverterOptionalULong.write(value.`executionMs`, buf)
+        FfiConverterOptionalULong.write(value.`totalMs`, buf)
+    }
+}
+
+/**
+ * Request to generate speech from text (TTS).
+ */
+data class SpeechRequest(
+    var `text`: kotlin.String,
+    var `voice`: kotlin.String?,
+    var `voiceUrl`: kotlin.String?,
+    var `language`: kotlin.String?,
+    var `speed`: kotlin.Float?,
+    var `model`: kotlin.String?,
+    var `parameters`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSpeechRequest : FfiConverterRustBuffer<SpeechRequest> {
+    override fun read(buf: ByteBuffer): SpeechRequest =
+        SpeechRequest(
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalFloat.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: SpeechRequest) =
+        (
+            FfiConverterString.allocationSize(value.`text`) +
+                FfiConverterOptionalString.allocationSize(value.`voice`) +
+                FfiConverterOptionalString.allocationSize(value.`voiceUrl`) +
+                FfiConverterOptionalString.allocationSize(value.`language`) +
+                FfiConverterOptionalFloat.allocationSize(value.`speed`) +
+                FfiConverterOptionalString.allocationSize(value.`model`) +
+                FfiConverterString.allocationSize(value.`parameters`)
+        )
+
+    override fun write(
+        value: SpeechRequest,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`text`, buf)
+        FfiConverterOptionalString.write(value.`voice`, buf)
+        FfiConverterOptionalString.write(value.`voiceUrl`, buf)
+        FfiConverterOptionalString.write(value.`language`, buf)
+        FfiConverterOptionalFloat.write(value.`speed`, buf)
+        FfiConverterOptionalString.write(value.`model`, buf)
+        FfiConverterString.write(value.`parameters`, buf)
     }
 }
 
@@ -9512,6 +14175,128 @@ public object FfiConverterTypeSttResult : FfiConverterRustBuffer<SttResult> {
         FfiConverterString.write(value.`transcript`, buf)
         FfiConverterString.write(value.`language`, buf)
         FfiConverterULong.write(value.`durationMs`, buf)
+    }
+}
+
+data class ThreeDProviderDefaults(
+    var `base`: BaseProviderDefaults? = null,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeThreeDProviderDefaults : FfiConverterRustBuffer<ThreeDProviderDefaults> {
+    override fun read(buf: ByteBuffer): ThreeDProviderDefaults =
+        ThreeDProviderDefaults(
+            FfiConverterOptionalTypeBaseProviderDefaults.read(buf),
+        )
+
+    override fun allocationSize(value: ThreeDProviderDefaults) =
+        (
+            FfiConverterOptionalTypeBaseProviderDefaults.allocationSize(value.`base`)
+        )
+
+    override fun write(
+        value: ThreeDProviderDefaults,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterOptionalTypeBaseProviderDefaults.write(value.`base`, buf)
+    }
+}
+
+/**
+ * Request to generate a 3D model.
+ */
+data class ThreeDRequest(
+    var `prompt`: kotlin.String,
+    var `imageUrl`: kotlin.String?,
+    var `format`: kotlin.String?,
+    var `model`: kotlin.String?,
+    var `parameters`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeThreeDRequest : FfiConverterRustBuffer<ThreeDRequest> {
+    override fun read(buf: ByteBuffer): ThreeDRequest =
+        ThreeDRequest(
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: ThreeDRequest) =
+        (
+            FfiConverterString.allocationSize(value.`prompt`) +
+                FfiConverterOptionalString.allocationSize(value.`imageUrl`) +
+                FfiConverterOptionalString.allocationSize(value.`format`) +
+                FfiConverterOptionalString.allocationSize(value.`model`) +
+                FfiConverterString.allocationSize(value.`parameters`)
+        )
+
+    override fun write(
+        value: ThreeDRequest,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`prompt`, buf)
+        FfiConverterOptionalString.write(value.`imageUrl`, buf)
+        FfiConverterOptionalString.write(value.`format`, buf)
+        FfiConverterOptionalString.write(value.`model`, buf)
+        FfiConverterString.write(value.`parameters`, buf)
+    }
+}
+
+/**
+ * Result of a 3D model generation operation.
+ */
+data class ThreeDResult(
+    var `models`: List<Generated3DModel>,
+    var `timing`: RequestTiming,
+    var `cost`: kotlin.Double?,
+    var `usage`: TokenUsage?,
+    var `metadata`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeThreeDResult : FfiConverterRustBuffer<ThreeDResult> {
+    override fun read(buf: ByteBuffer): ThreeDResult =
+        ThreeDResult(
+            FfiConverterSequenceTypeGenerated3DModel.read(buf),
+            FfiConverterTypeRequestTiming.read(buf),
+            FfiConverterOptionalDouble.read(buf),
+            FfiConverterOptionalTypeTokenUsage.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: ThreeDResult) =
+        (
+            FfiConverterSequenceTypeGenerated3DModel.allocationSize(value.`models`) +
+                FfiConverterTypeRequestTiming.allocationSize(value.`timing`) +
+                FfiConverterOptionalDouble.allocationSize(value.`cost`) +
+                FfiConverterOptionalTypeTokenUsage.allocationSize(value.`usage`) +
+                FfiConverterString.allocationSize(value.`metadata`)
+        )
+
+    override fun write(
+        value: ThreeDResult,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterSequenceTypeGenerated3DModel.write(value.`models`, buf)
+        FfiConverterTypeRequestTiming.write(value.`timing`, buf)
+        FfiConverterOptionalDouble.write(value.`cost`, buf)
+        FfiConverterOptionalTypeTokenUsage.write(value.`usage`, buf)
+        FfiConverterString.write(value.`metadata`, buf)
     }
 }
 
@@ -9653,6 +14438,197 @@ public object FfiConverterTypeToolCall : FfiConverterRustBuffer<ToolCall> {
     }
 }
 
+data class TranscriptionProviderDefaults(
+    var `base`: BaseProviderDefaults? = null,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTranscriptionProviderDefaults : FfiConverterRustBuffer<TranscriptionProviderDefaults> {
+    override fun read(buf: ByteBuffer): TranscriptionProviderDefaults =
+        TranscriptionProviderDefaults(
+            FfiConverterOptionalTypeBaseProviderDefaults.read(buf),
+        )
+
+    override fun allocationSize(value: TranscriptionProviderDefaults) =
+        (
+            FfiConverterOptionalTypeBaseProviderDefaults.allocationSize(value.`base`)
+        )
+
+    override fun write(
+        value: TranscriptionProviderDefaults,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterOptionalTypeBaseProviderDefaults.write(value.`base`, buf)
+    }
+}
+
+/**
+ * Request to transcribe audio to text.
+ *
+ * `audio_source_json` carries the full upstream
+ * [`MediaSource`](blazen_llm::types::MediaSource) as a JSON-encoded string
+ * (one of `{"type":"url","url":"..."}`, `{"type":"base64","data":"..."}`,
+ * `{"type":"file","path":"..."}`, `{"type":"provider_file",...}`,
+ * `{"type":"handle",...}`). `None` falls back to using `audio_url`.
+ */
+data class TranscriptionRequest(
+    var `audioUrl`: kotlin.String,
+    /**
+     * JSON-encoded `MediaSource`. When `Some`, takes precedence over
+     * `audio_url`. See module docs for the wire shape.
+     */
+    var `audioSourceJson`: kotlin.String?,
+    var `language`: kotlin.String?,
+    var `diarize`: kotlin.Boolean,
+    var `model`: kotlin.String?,
+    var `parameters`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTranscriptionRequest : FfiConverterRustBuffer<TranscriptionRequest> {
+    override fun read(buf: ByteBuffer): TranscriptionRequest =
+        TranscriptionRequest(
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: TranscriptionRequest) =
+        (
+            FfiConverterString.allocationSize(value.`audioUrl`) +
+                FfiConverterOptionalString.allocationSize(value.`audioSourceJson`) +
+                FfiConverterOptionalString.allocationSize(value.`language`) +
+                FfiConverterBoolean.allocationSize(value.`diarize`) +
+                FfiConverterOptionalString.allocationSize(value.`model`) +
+                FfiConverterString.allocationSize(value.`parameters`)
+        )
+
+    override fun write(
+        value: TranscriptionRequest,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`audioUrl`, buf)
+        FfiConverterOptionalString.write(value.`audioSourceJson`, buf)
+        FfiConverterOptionalString.write(value.`language`, buf)
+        FfiConverterBoolean.write(value.`diarize`, buf)
+        FfiConverterOptionalString.write(value.`model`, buf)
+        FfiConverterString.write(value.`parameters`, buf)
+    }
+}
+
+/**
+ * Result of a transcription operation.
+ */
+data class TranscriptionResult(
+    var `text`: kotlin.String,
+    var `segments`: List<TranscriptionSegment>,
+    var `language`: kotlin.String?,
+    var `timing`: RequestTiming,
+    var `cost`: kotlin.Double?,
+    var `usage`: TokenUsage?,
+    var `audioSeconds`: kotlin.Double,
+    var `metadata`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTranscriptionResult : FfiConverterRustBuffer<TranscriptionResult> {
+    override fun read(buf: ByteBuffer): TranscriptionResult =
+        TranscriptionResult(
+            FfiConverterString.read(buf),
+            FfiConverterSequenceTypeTranscriptionSegment.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterTypeRequestTiming.read(buf),
+            FfiConverterOptionalDouble.read(buf),
+            FfiConverterOptionalTypeTokenUsage.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: TranscriptionResult) =
+        (
+            FfiConverterString.allocationSize(value.`text`) +
+                FfiConverterSequenceTypeTranscriptionSegment.allocationSize(value.`segments`) +
+                FfiConverterOptionalString.allocationSize(value.`language`) +
+                FfiConverterTypeRequestTiming.allocationSize(value.`timing`) +
+                FfiConverterOptionalDouble.allocationSize(value.`cost`) +
+                FfiConverterOptionalTypeTokenUsage.allocationSize(value.`usage`) +
+                FfiConverterDouble.allocationSize(value.`audioSeconds`) +
+                FfiConverterString.allocationSize(value.`metadata`)
+        )
+
+    override fun write(
+        value: TranscriptionResult,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`text`, buf)
+        FfiConverterSequenceTypeTranscriptionSegment.write(value.`segments`, buf)
+        FfiConverterOptionalString.write(value.`language`, buf)
+        FfiConverterTypeRequestTiming.write(value.`timing`, buf)
+        FfiConverterOptionalDouble.write(value.`cost`, buf)
+        FfiConverterOptionalTypeTokenUsage.write(value.`usage`, buf)
+        FfiConverterDouble.write(value.`audioSeconds`, buf)
+        FfiConverterString.write(value.`metadata`, buf)
+    }
+}
+
+/**
+ * A single segment within a transcription.
+ */
+data class TranscriptionSegment(
+    var `text`: kotlin.String,
+    var `start`: kotlin.Double,
+    var `end`: kotlin.Double,
+    var `speaker`: kotlin.String?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTranscriptionSegment : FfiConverterRustBuffer<TranscriptionSegment> {
+    override fun read(buf: ByteBuffer): TranscriptionSegment =
+        TranscriptionSegment(
+            FfiConverterString.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+
+    override fun allocationSize(value: TranscriptionSegment) =
+        (
+            FfiConverterString.allocationSize(value.`text`) +
+                FfiConverterDouble.allocationSize(value.`start`) +
+                FfiConverterDouble.allocationSize(value.`end`) +
+                FfiConverterOptionalString.allocationSize(value.`speaker`)
+        )
+
+    override fun write(
+        value: TranscriptionSegment,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`text`, buf)
+        FfiConverterDouble.write(value.`start`, buf)
+        FfiConverterDouble.write(value.`end`, buf)
+        FfiConverterOptionalString.write(value.`speaker`, buf)
+    }
+}
+
 /**
  * The result of a text-to-speech synthesis call.
  *
@@ -9697,6 +14673,313 @@ public object FfiConverterTypeTtsResult : FfiConverterRustBuffer<TtsResult> {
         FfiConverterString.write(value.`audioBase64`, buf)
         FfiConverterString.write(value.`mimeType`, buf)
         FfiConverterULong.write(value.`durationMs`, buf)
+    }
+}
+
+/**
+ * Request to upscale an image.
+ */
+data class UpscaleRequest(
+    var `imageUrl`: kotlin.String,
+    var `scale`: kotlin.Float,
+    var `model`: kotlin.String?,
+    var `parameters`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeUpscaleRequest : FfiConverterRustBuffer<UpscaleRequest> {
+    override fun read(buf: ByteBuffer): UpscaleRequest =
+        UpscaleRequest(
+            FfiConverterString.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: UpscaleRequest) =
+        (
+            FfiConverterString.allocationSize(value.`imageUrl`) +
+                FfiConverterFloat.allocationSize(value.`scale`) +
+                FfiConverterOptionalString.allocationSize(value.`model`) +
+                FfiConverterString.allocationSize(value.`parameters`)
+        )
+
+    override fun write(
+        value: UpscaleRequest,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`imageUrl`, buf)
+        FfiConverterFloat.write(value.`scale`, buf)
+        FfiConverterOptionalString.write(value.`model`, buf)
+        FfiConverterString.write(value.`parameters`, buf)
+    }
+}
+
+data class VideoProviderDefaults(
+    var `base`: BaseProviderDefaults? = null,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeVideoProviderDefaults : FfiConverterRustBuffer<VideoProviderDefaults> {
+    override fun read(buf: ByteBuffer): VideoProviderDefaults =
+        VideoProviderDefaults(
+            FfiConverterOptionalTypeBaseProviderDefaults.read(buf),
+        )
+
+    override fun allocationSize(value: VideoProviderDefaults) =
+        (
+            FfiConverterOptionalTypeBaseProviderDefaults.allocationSize(value.`base`)
+        )
+
+    override fun write(
+        value: VideoProviderDefaults,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterOptionalTypeBaseProviderDefaults.write(value.`base`, buf)
+    }
+}
+
+/**
+ * Request to generate a video.
+ */
+data class VideoRequest(
+    var `prompt`: kotlin.String,
+    var `imageUrl`: kotlin.String?,
+    var `durationSeconds`: kotlin.Float?,
+    var `negativePrompt`: kotlin.String?,
+    var `width`: kotlin.UInt?,
+    var `height`: kotlin.UInt?,
+    var `model`: kotlin.String?,
+    var `parameters`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeVideoRequest : FfiConverterRustBuffer<VideoRequest> {
+    override fun read(buf: ByteBuffer): VideoRequest =
+        VideoRequest(
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalFloat.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: VideoRequest) =
+        (
+            FfiConverterString.allocationSize(value.`prompt`) +
+                FfiConverterOptionalString.allocationSize(value.`imageUrl`) +
+                FfiConverterOptionalFloat.allocationSize(value.`durationSeconds`) +
+                FfiConverterOptionalString.allocationSize(value.`negativePrompt`) +
+                FfiConverterOptionalUInt.allocationSize(value.`width`) +
+                FfiConverterOptionalUInt.allocationSize(value.`height`) +
+                FfiConverterOptionalString.allocationSize(value.`model`) +
+                FfiConverterString.allocationSize(value.`parameters`)
+        )
+
+    override fun write(
+        value: VideoRequest,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`prompt`, buf)
+        FfiConverterOptionalString.write(value.`imageUrl`, buf)
+        FfiConverterOptionalFloat.write(value.`durationSeconds`, buf)
+        FfiConverterOptionalString.write(value.`negativePrompt`, buf)
+        FfiConverterOptionalUInt.write(value.`width`, buf)
+        FfiConverterOptionalUInt.write(value.`height`, buf)
+        FfiConverterOptionalString.write(value.`model`, buf)
+        FfiConverterString.write(value.`parameters`, buf)
+    }
+}
+
+/**
+ * Result of a video generation operation.
+ */
+data class VideoResult(
+    var `videos`: List<GeneratedVideo>,
+    var `timing`: RequestTiming,
+    var `cost`: kotlin.Double?,
+    var `usage`: TokenUsage?,
+    var `videoSeconds`: kotlin.Double,
+    var `metadata`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeVideoResult : FfiConverterRustBuffer<VideoResult> {
+    override fun read(buf: ByteBuffer): VideoResult =
+        VideoResult(
+            FfiConverterSequenceTypeGeneratedVideo.read(buf),
+            FfiConverterTypeRequestTiming.read(buf),
+            FfiConverterOptionalDouble.read(buf),
+            FfiConverterOptionalTypeTokenUsage.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: VideoResult) =
+        (
+            FfiConverterSequenceTypeGeneratedVideo.allocationSize(value.`videos`) +
+                FfiConverterTypeRequestTiming.allocationSize(value.`timing`) +
+                FfiConverterOptionalDouble.allocationSize(value.`cost`) +
+                FfiConverterOptionalTypeTokenUsage.allocationSize(value.`usage`) +
+                FfiConverterDouble.allocationSize(value.`videoSeconds`) +
+                FfiConverterString.allocationSize(value.`metadata`)
+        )
+
+    override fun write(
+        value: VideoResult,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterSequenceTypeGeneratedVideo.write(value.`videos`, buf)
+        FfiConverterTypeRequestTiming.write(value.`timing`, buf)
+        FfiConverterOptionalDouble.write(value.`cost`, buf)
+        FfiConverterOptionalTypeTokenUsage.write(value.`usage`, buf)
+        FfiConverterDouble.write(value.`videoSeconds`, buf)
+        FfiConverterString.write(value.`metadata`, buf)
+    }
+}
+
+/**
+ * Request to clone a voice from one or more reference audio clips.
+ */
+data class VoiceCloneRequest(
+    var `name`: kotlin.String,
+    var `referenceUrls`: List<kotlin.String>,
+    var `language`: kotlin.String?,
+    var `description`: kotlin.String?,
+    var `parameters`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeVoiceCloneRequest : FfiConverterRustBuffer<VoiceCloneRequest> {
+    override fun read(buf: ByteBuffer): VoiceCloneRequest =
+        VoiceCloneRequest(
+            FfiConverterString.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: VoiceCloneRequest) =
+        (
+            FfiConverterString.allocationSize(value.`name`) +
+                FfiConverterSequenceString.allocationSize(value.`referenceUrls`) +
+                FfiConverterOptionalString.allocationSize(value.`language`) +
+                FfiConverterOptionalString.allocationSize(value.`description`) +
+                FfiConverterString.allocationSize(value.`parameters`)
+        )
+
+    override fun write(
+        value: VoiceCloneRequest,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`name`, buf)
+        FfiConverterSequenceString.write(value.`referenceUrls`, buf)
+        FfiConverterOptionalString.write(value.`language`, buf)
+        FfiConverterOptionalString.write(value.`description`, buf)
+        FfiConverterString.write(value.`parameters`, buf)
+    }
+}
+
+data class VoiceCloningProviderDefaults(
+    var `base`: BaseProviderDefaults? = null,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeVoiceCloningProviderDefaults : FfiConverterRustBuffer<VoiceCloningProviderDefaults> {
+    override fun read(buf: ByteBuffer): VoiceCloningProviderDefaults =
+        VoiceCloningProviderDefaults(
+            FfiConverterOptionalTypeBaseProviderDefaults.read(buf),
+        )
+
+    override fun allocationSize(value: VoiceCloningProviderDefaults) =
+        (
+            FfiConverterOptionalTypeBaseProviderDefaults.allocationSize(value.`base`)
+        )
+
+    override fun write(
+        value: VoiceCloningProviderDefaults,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterOptionalTypeBaseProviderDefaults.write(value.`base`, buf)
+    }
+}
+
+/**
+ * A persisted voice identifier returned by a `VoiceCloning` provider.
+ */
+data class VoiceHandle(
+    var `id`: kotlin.String,
+    var `name`: kotlin.String,
+    var `provider`: kotlin.String,
+    var `language`: kotlin.String?,
+    var `description`: kotlin.String?,
+    var `metadata`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeVoiceHandle : FfiConverterRustBuffer<VoiceHandle> {
+    override fun read(buf: ByteBuffer): VoiceHandle =
+        VoiceHandle(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: VoiceHandle) =
+        (
+            FfiConverterString.allocationSize(value.`id`) +
+                FfiConverterString.allocationSize(value.`name`) +
+                FfiConverterString.allocationSize(value.`provider`) +
+                FfiConverterOptionalString.allocationSize(value.`language`) +
+                FfiConverterOptionalString.allocationSize(value.`description`) +
+                FfiConverterString.allocationSize(value.`metadata`)
+        )
+
+    override fun write(
+        value: VoiceHandle,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`id`, buf)
+        FfiConverterString.write(value.`name`, buf)
+        FfiConverterString.write(value.`provider`, buf)
+        FfiConverterOptionalString.write(value.`language`, buf)
+        FfiConverterOptionalString.write(value.`description`, buf)
+        FfiConverterString.write(value.`metadata`, buf)
     }
 }
 
@@ -9917,6 +15200,219 @@ public object FfiConverterTypeWorkflowResult : FfiConverterRustBuffer<WorkflowRe
         FfiConverterULong.write(value.`totalInputTokens`, buf)
         FfiConverterULong.write(value.`totalOutputTokens`, buf)
         FfiConverterDouble.write(value.`totalCostUsd`, buf)
+    }
+}
+
+/**
+ * Selects how a [`CustomProvider`] talks to its backend for completion
+ * calls.
+ *
+ * - [`ApiProtocol::OpenAi`]: framework handles HTTP, SSE parsing, tool
+ * calls, retries. The wrapped `OpenAiCompatConfig` supplies the base
+ * URL, model, optional API key, headers, and query parameters.
+ * - [`ApiProtocol::Custom`]: framework dispatches every completion
+ * method to a foreign-implemented [`crate::provider_custom::CustomProvider`]
+ * trait object. No additional configuration here — the foreign impl owns
+ * the wire format.
+ *
+ * Media-generation calls always go through the foreign-implemented
+ * `CustomProvider` regardless of which protocol is selected here.
+ */
+sealed class ApiProtocol {
+    /**
+     * OpenAI Chat Completions wire format.
+     */
+    data class OpenAi(
+        val `config`: dev.zorpx.blazen.uniffi.OpenAiCompatConfig,
+    ) : ApiProtocol() {
+        companion object
+    }
+
+    /**
+     * User-defined protocol — handled by a foreign-implemented
+     * [`crate::provider_custom::CustomProvider`] trait object.
+     */
+    object Custom : ApiProtocol()
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeApiProtocol : FfiConverterRustBuffer<ApiProtocol> {
+    override fun read(buf: ByteBuffer): ApiProtocol =
+        when (buf.getInt()) {
+            1 -> {
+                ApiProtocol.OpenAi(
+                    FfiConverterTypeOpenAiCompatConfig.read(buf),
+                )
+            }
+
+            2 -> {
+                ApiProtocol.Custom
+            }
+
+            else -> {
+                throw RuntimeException("invalid enum value, something is very wrong!!")
+            }
+        }
+
+    override fun allocationSize(value: ApiProtocol) =
+        when (value) {
+            is ApiProtocol.OpenAi -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterTypeOpenAiCompatConfig.allocationSize(value.`config`)
+                )
+            }
+
+            is ApiProtocol.Custom -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL
+                )
+            }
+        }
+
+    override fun write(
+        value: ApiProtocol,
+        buf: ByteBuffer,
+    ) {
+        when (value) {
+            is ApiProtocol.OpenAi -> {
+                buf.putInt(1)
+                FfiConverterTypeOpenAiCompatConfig.write(value.`config`, buf)
+                Unit
+            }
+
+            is ApiProtocol.Custom -> {
+                buf.putInt(2)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+/**
+ * How a [`CustomProvider`] authenticates with an OpenAI-compatible backend.
+ */
+sealed class AuthMethod {
+    /**
+     * `Authorization: Bearer <key>` (OpenAI, OpenRouter, Groq, etc.).
+     */
+    object Bearer : AuthMethod()
+
+    /**
+     * A custom header name for the API key (e.g. `x-api-key`).
+     */
+    data class ApiKeyHeader(
+        val `headerName`: kotlin.String,
+    ) : AuthMethod() {
+        companion object
+    }
+
+    /**
+     * `api-key: <key>` (Azure OpenAI).
+     */
+    object AzureApiKey : AuthMethod()
+
+    /**
+     * `Authorization: Key <key>` (fal.ai).
+     */
+    object KeyPrefix : AuthMethod()
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAuthMethod : FfiConverterRustBuffer<AuthMethod> {
+    override fun read(buf: ByteBuffer): AuthMethod =
+        when (buf.getInt()) {
+            1 -> {
+                AuthMethod.Bearer
+            }
+
+            2 -> {
+                AuthMethod.ApiKeyHeader(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            3 -> {
+                AuthMethod.AzureApiKey
+            }
+
+            4 -> {
+                AuthMethod.KeyPrefix
+            }
+
+            else -> {
+                throw RuntimeException("invalid enum value, something is very wrong!!")
+            }
+        }
+
+    override fun allocationSize(value: AuthMethod) =
+        when (value) {
+            is AuthMethod.Bearer -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL
+                )
+            }
+
+            is AuthMethod.ApiKeyHeader -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`headerName`)
+                )
+            }
+
+            is AuthMethod.AzureApiKey -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL
+                )
+            }
+
+            is AuthMethod.KeyPrefix -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL
+                )
+            }
+        }
+
+    override fun write(
+        value: AuthMethod,
+        buf: ByteBuffer,
+    ) {
+        when (value) {
+            is AuthMethod.Bearer -> {
+                buf.putInt(1)
+                Unit
+            }
+
+            is AuthMethod.ApiKeyHeader -> {
+                buf.putInt(2)
+                FfiConverterString.write(value.`headerName`, buf)
+                Unit
+            }
+
+            is AuthMethod.AzureApiKey -> {
+                buf.putInt(3)
+                Unit
+            }
+
+            is AuthMethod.KeyPrefix -> {
+                buf.putInt(4)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
     }
 }
 
@@ -10670,6 +16166,38 @@ public object FfiConverterTypeStepOutput : FfiConverterRustBuffer<StepOutput> {
 /**
  * @suppress
  */
+public object FfiConverterOptionalUShort : FfiConverterRustBuffer<kotlin.UShort?> {
+    override fun read(buf: ByteBuffer): kotlin.UShort? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterUShort.read(buf)
+    }
+
+    override fun allocationSize(value: kotlin.UShort?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterUShort.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: kotlin.UShort?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterUShort.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalUInt : FfiConverterRustBuffer<kotlin.UInt?> {
     override fun read(buf: ByteBuffer): kotlin.UInt? {
         if (buf.get().toInt() == 0) {
@@ -10855,6 +16383,70 @@ public object FfiConverterOptionalString : FfiConverterRustBuffer<kotlin.String?
         } else {
             buf.put(1)
             FfiConverterString.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeBaseProviderDefaults : FfiConverterRustBuffer<BaseProviderDefaults?> {
+    override fun read(buf: ByteBuffer): BaseProviderDefaults? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeBaseProviderDefaults.read(buf)
+    }
+
+    override fun allocationSize(value: BaseProviderDefaults?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeBaseProviderDefaults.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: BaseProviderDefaults?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeBaseProviderDefaults.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeTokenUsage : FfiConverterRustBuffer<TokenUsage?> {
+    override fun read(buf: ByteBuffer): TokenUsage? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeTokenUsage.read(buf)
+    }
+
+    override fun allocationSize(value: TokenUsage?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeTokenUsage.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: TokenUsage?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeTokenUsage.write(value, buf)
         }
     }
 }
@@ -11062,6 +16654,146 @@ public object FfiConverterSequenceTypeEvent : FfiConverterRustBuffer<List<Event>
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeGenerated3DModel : FfiConverterRustBuffer<List<Generated3DModel>> {
+    override fun read(buf: ByteBuffer): List<Generated3DModel> {
+        val len = buf.getInt()
+        return List<Generated3DModel>(len) {
+            FfiConverterTypeGenerated3DModel.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<Generated3DModel>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeGenerated3DModel.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<Generated3DModel>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeGenerated3DModel.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeGeneratedAudio : FfiConverterRustBuffer<List<GeneratedAudio>> {
+    override fun read(buf: ByteBuffer): List<GeneratedAudio> {
+        val len = buf.getInt()
+        return List<GeneratedAudio>(len) {
+            FfiConverterTypeGeneratedAudio.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<GeneratedAudio>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeGeneratedAudio.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<GeneratedAudio>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeGeneratedAudio.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeGeneratedImage : FfiConverterRustBuffer<List<GeneratedImage>> {
+    override fun read(buf: ByteBuffer): List<GeneratedImage> {
+        val len = buf.getInt()
+        return List<GeneratedImage>(len) {
+            FfiConverterTypeGeneratedImage.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<GeneratedImage>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeGeneratedImage.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<GeneratedImage>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeGeneratedImage.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeGeneratedVideo : FfiConverterRustBuffer<List<GeneratedVideo>> {
+    override fun read(buf: ByteBuffer): List<GeneratedVideo> {
+        val len = buf.getInt()
+        return List<GeneratedVideo>(len) {
+            FfiConverterTypeGeneratedVideo.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<GeneratedVideo>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeGeneratedVideo.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<GeneratedVideo>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeGeneratedVideo.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeKeyValue : FfiConverterRustBuffer<List<KeyValue>> {
+    override fun read(buf: ByteBuffer): List<KeyValue> {
+        val len = buf.getInt()
+        return List<KeyValue>(len) {
+            FfiConverterTypeKeyValue.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<KeyValue>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeKeyValue.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<KeyValue>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeKeyValue.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeMedia : FfiConverterRustBuffer<List<Media>> {
     override fun read(buf: ByteBuffer): List<Media> {
         val len = buf.getInt()
@@ -11167,6 +16899,62 @@ public object FfiConverterSequenceTypeToolCall : FfiConverterRustBuffer<List<Too
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeToolCall.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeTranscriptionSegment : FfiConverterRustBuffer<List<TranscriptionSegment>> {
+    override fun read(buf: ByteBuffer): List<TranscriptionSegment> {
+        val len = buf.getInt()
+        return List<TranscriptionSegment>(len) {
+            FfiConverterTypeTranscriptionSegment.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<TranscriptionSegment>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeTranscriptionSegment.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<TranscriptionSegment>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeTranscriptionSegment.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeVoiceHandle : FfiConverterRustBuffer<List<VoiceHandle>> {
+    override fun read(buf: ByteBuffer): List<VoiceHandle> {
+        val len = buf.getInt()
+        return List<VoiceHandle>(len) {
+            FfiConverterTypeVoiceHandle.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<VoiceHandle>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeVoiceHandle.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<VoiceHandle>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeVoiceHandle.write(it, buf)
         }
     }
 }
@@ -11571,6 +17359,125 @@ fun `newValkeyCheckpointStore`(
     )
 
 /**
+ * Build a [`CustomProviderHandle`] from a foreign-implemented
+ * [`CustomProvider`].
+ *
+ * This is the factory foreign users invoke after implementing the
+ * `CustomProvider` protocol/interface/trait on their own type:
+ *
+ * ```kotlin
+ * class MyProvider : CustomProvider { /* ... 16 methods ... */ }
+ * val handle = customProviderFromForeign(MyProvider())
+ * val resp = handle.complete(request)
+ * ```
+ *
+ * The handle holds an internal adapter that converts UniFFI records to
+ * upstream `blazen_llm::compute` types on each call.
+ */
+fun `customProviderFromForeign`(`provider`: CustomProvider): CustomProviderHandle =
+    FfiConverterTypeCustomProviderHandle.lift(
+        uniffiRustCall { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_custom_provider_from_foreign(FfiConverterTypeCustomProvider.lower(`provider`), _status)
+        },
+    )
+
+/**
+ * Convenience: build a [`CustomProviderHandle`] for an LM Studio server.
+ *
+ * Equivalent to [`openai_compat`] with `base_url = http://{host}:{port}/v1`
+ * and no API key. Defaults: `host = "localhost"`, `port = 1234`.
+ */
+fun `lmStudio`(
+    `model`: kotlin.String,
+    `host`: kotlin.String?,
+    `port`: kotlin.UShort?,
+): CustomProviderHandle =
+    FfiConverterTypeCustomProviderHandle.lift(
+        uniffiRustCall { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_lm_studio(
+                FfiConverterString.lower(`model`),
+                FfiConverterOptionalString.lower(`host`),
+                FfiConverterOptionalUShort.lower(`port`),
+                _status,
+            )
+        },
+    )
+
+/**
+ * Build a fully-specified [`OpenAiCompatConfig`] from positional arguments.
+ *
+ * Convenience for foreign callers that don't want to construct the
+ * [`OpenAiCompatConfig`] record by hand. Mirrors the
+ * [`openai_compat`] factory's shape.
+ */
+fun `newOpenaiCompatConfig`(
+    `providerName`: kotlin.String,
+    `baseUrl`: kotlin.String,
+    `apiKey`: kotlin.String,
+    `defaultModel`: kotlin.String,
+    `authMethod`: AuthMethod,
+    `supportsModelListing`: kotlin.Boolean,
+): OpenAiCompatConfig =
+    FfiConverterTypeOpenAiCompatConfig.lift(
+        uniffiRustCall { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_openai_compat_config(
+                FfiConverterString.lower(`providerName`),
+                FfiConverterString.lower(`baseUrl`),
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterString.lower(`defaultModel`),
+                FfiConverterTypeAuthMethod.lower(`authMethod`),
+                FfiConverterBoolean.lower(`supportsModelListing`),
+                _status,
+            )
+        },
+    )
+
+/**
+ * Convenience: build a [`CustomProviderHandle`] for a local Ollama server.
+ *
+ * Equivalent to [`openai_compat`] with `base_url = http://{host}:{port}/v1`
+ * and no API key. Defaults: `host = "localhost"`, `port = 11434`.
+ */
+fun `ollama`(
+    `model`: kotlin.String,
+    `host`: kotlin.String?,
+    `port`: kotlin.UShort?,
+): CustomProviderHandle =
+    FfiConverterTypeCustomProviderHandle.lift(
+        uniffiRustCall { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_ollama(
+                FfiConverterString.lower(`model`),
+                FfiConverterOptionalString.lower(`host`),
+                FfiConverterOptionalUShort.lower(`port`),
+                _status,
+            )
+        },
+    )
+
+/**
+ * Build a [`CustomProviderHandle`] for an arbitrary OpenAI-compatible
+ * backend.
+ *
+ * Use for vLLM, llama.cpp's server, TGI, hosted OpenAI-compat services —
+ * anything that speaks the official OpenAI chat-completions wire format. The
+ * supplied [`OpenAiCompatConfig`] selects base URL, model, auth method,
+ * headers, and query parameters.
+ */
+fun `openaiCompat`(
+    `providerId`: kotlin.String,
+    `config`: OpenAiCompatConfig,
+): CustomProviderHandle =
+    FfiConverterTypeCustomProviderHandle.lift(
+        uniffiRustCall { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_openai_compat(
+                FfiConverterString.lower(`providerId`),
+                FfiConverterTypeOpenAiCompatConfig.lower(`config`),
+                _status,
+            )
+        },
+    )
+
+/**
  * Build an Anthropic Messages-API chat-completion model.
  */
 @Throws(BlazenException::class)
@@ -11721,7 +17628,7 @@ fun `newCohereCompletionModel`(
  *
  * This is the same wire format as
  * [`new_openai_compat_completion_model`], but wrapped in a
- * [`blazen_llm::CustomProvider`] for consistent ergonomics with the
+ * [`blazen_llm::CustomProviderHandle`] for consistent ergonomics with the
  * `new_ollama_completion_model` / `new_lm_studio_completion_model`
  * factories. `api_key` is optional: passing `None` (or an empty `Some`)
  * omits the `Authorization` header entirely.
@@ -11938,9 +17845,8 @@ fun `newLlamacppCompletionModel`(
 /**
  * Construct a [`CompletionModel`] for an LM Studio server.
  *
- * Convenience wrapper around [`blazen_llm::CustomProvider::lm_studio`] —
- * targets LM Studio's local `OpenAI`-compatible endpoint on
- * `http://{host}:{port}/v1`.
+ * Convenience wrapper around [`blazen_llm::lm_studio`] — targets LM Studio's
+ * local `OpenAI`-compatible endpoint on `http://{host}:{port}/v1`.
  */
 @Throws(BlazenException::class)
 fun `newLmStudioCompletionModel`(
@@ -12014,8 +17920,8 @@ fun `newMistralrsCompletionModel`(
  *
  * Convenience for [`new_custom_completion_model_with_openai_protocol`] with
  * `base_url = format!("http://{host}:{port}/v1")` and no API key. Delegates
- * to [`blazen_llm::CustomProvider::ollama`], which knows how to speak
- * Ollama's flavour of the `OpenAI` chat-completions protocol.
+ * to [`blazen_llm::ollama`], which knows how to speak Ollama's flavour of
+ * the `OpenAI` chat-completions protocol.
  */
 @Throws(BlazenException::class)
 fun `newOllamaCompletionModel`(

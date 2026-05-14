@@ -256,7 +256,6 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::PyStructuredResponse>()?;
     m.add_class::<types::PyModelRegistry>()?;
     m.add_class::<types::PyImageModel>()?;
-    m.add_class::<types::PyHostDispatchAbc>()?;
     m.add_class::<types::PyMemoryEntry>()?;
 
     // Completion model (provider)
@@ -526,6 +525,30 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Custom provider (user-defined Python class wrapped as a Blazen provider).
     m.add_class::<providers::custom::PyCustomProvider>()?;
+
+    // ApiProtocol selector for CustomProvider (Phase A surface; Phase B
+    // wires it into the constructor).
+    m.add_class::<providers::api_protocol::PyApiProtocol>()?;
+
+    // Provider-defaults hierarchy (universal `BaseProviderDefaults` plus
+    // role-specific defaults). Phase A exposes the structural surface;
+    // Phase B wires the before-hooks into actual dispatch.
+    m.add_class::<providers::defaults::PyBaseProviderDefaults>()?;
+    m.add_class::<providers::defaults::PyCompletionProviderDefaults>()?;
+    m.add_class::<providers::defaults::PyEmbeddingProviderDefaults>()?;
+    m.add_class::<providers::defaults::AudioSpeechProviderDefaults>()?;
+    m.add_class::<providers::defaults::AudioMusicProviderDefaults>()?;
+    m.add_class::<providers::defaults::VoiceCloningProviderDefaults>()?;
+    m.add_class::<providers::defaults::ImageGenerationProviderDefaults>()?;
+    m.add_class::<providers::defaults::ImageUpscaleProviderDefaults>()?;
+    m.add_class::<providers::defaults::VideoProviderDefaults>()?;
+    m.add_class::<providers::defaults::TranscriptionProviderDefaults>()?;
+    m.add_class::<providers::defaults::ThreeDProviderDefaults>()?;
+    m.add_class::<providers::defaults::BackgroundRemovalProviderDefaults>()?;
+
+    // BaseProvider -- wraps any CompletionModel with defaults applied
+    // before delegation.
+    m.add_class::<providers::base::PyBaseProvider>()?;
 
     // Capability providers (subclassable)
     m.add_class::<providers::capability_providers::TTSProvider>()?;

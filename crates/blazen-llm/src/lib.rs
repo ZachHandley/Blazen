@@ -113,7 +113,24 @@ pub mod typed_tool;
 pub mod types;
 pub mod usage_recording;
 
-pub use providers::custom::{ApiProtocol, CustomProvider, HostDispatch};
+pub use providers::base::BaseProvider;
+pub use providers::custom::{ApiProtocol, CustomProvider, CustomProviderHandle};
+#[cfg(any(
+    all(target_arch = "wasm32", not(target_os = "wasi")),
+    feature = "reqwest",
+    target_os = "wasi"
+))]
+pub use providers::custom::{lm_studio, ollama, openai_compat};
+pub use providers::defaults::{
+    AudioMusicProviderDefaults, AudioSpeechProviderDefaults, BackgroundRemovalProviderDefaults,
+    BaseProviderDefaults, BeforeBackgroundRemovalRequestHook, BeforeCompletionRequestHook,
+    BeforeImageRequestHook, BeforeMusicRequestHook, BeforeRequestHook, BeforeSpeechRequestHook,
+    BeforeThreeDRequestHook, BeforeTranscriptionRequestHook, BeforeUpscaleRequestHook,
+    BeforeVideoRequestHook, BeforeVoiceCloneRequestHook, CompletionProviderDefaults,
+    EmbeddingProviderDefaults, ImageGenerationProviderDefaults, ImageUpscaleProviderDefaults,
+    ThreeDProviderDefaults, TranscriptionProviderDefaults, VideoProviderDefaults,
+    VoiceCloningProviderDefaults,
+};
 
 // Re-export primary types at crate root for ergonomic imports.
 pub use agent::{

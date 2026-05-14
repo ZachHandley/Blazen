@@ -22,6 +22,7 @@ blazen-macros.workspace = true
 tokio = { version = "1", default-features = false, features = ["sync", "macros"] }
 tokio-stream = { version = "0.1", default-features = false, features = ["sync"] }
 futures-util.workspace = true
+futures-core.workspace = true
 dashmap.workspace = true
 tracing.workspace = true
 thiserror.workspace = true

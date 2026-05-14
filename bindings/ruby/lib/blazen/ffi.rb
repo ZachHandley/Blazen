@@ -126,6 +126,62 @@ module Blazen
              [:pointer, :pointer, :pointer],
              :int32
 
+    # CustomProvider vtable callbacks — 16 typed-method fn-pointers + 2 lifecycle.
+    # Every typed callback receives a request pointer (caller-owned, the callback
+    # must free or consume it before returning) and writes either a success
+    # result pointer into +out_*+ or a +BlazenError *+ into +out_err+. Returning
+    # +-1+ without writing +out_err+ surfaces upstream as a synthetic
+    # +InternalError+ (see the cabi adapter docs).
+    callback :custom_provider_drop_user_data, [:pointer], :void
+    callback :custom_provider_complete,
+             [:pointer, :pointer, :pointer, :pointer],
+             :int32
+    callback :custom_provider_stream,
+             [:pointer, :pointer, :pointer, :pointer],
+             :int32
+    callback :custom_provider_embed,
+             [:pointer, :pointer, :size_t, :pointer, :pointer],
+             :int32
+    callback :custom_provider_text_to_speech,
+             [:pointer, :pointer, :pointer, :pointer],
+             :int32
+    callback :custom_provider_generate_music,
+             [:pointer, :pointer, :pointer, :pointer],
+             :int32
+    callback :custom_provider_generate_sfx,
+             [:pointer, :pointer, :pointer, :pointer],
+             :int32
+    callback :custom_provider_clone_voice,
+             [:pointer, :pointer, :pointer, :pointer],
+             :int32
+    callback :custom_provider_list_voices,
+             [:pointer, :pointer, :pointer, :pointer],
+             :int32
+    callback :custom_provider_delete_voice,
+             [:pointer, :pointer, :pointer],
+             :int32
+    callback :custom_provider_generate_image,
+             [:pointer, :pointer, :pointer, :pointer],
+             :int32
+    callback :custom_provider_upscale_image,
+             [:pointer, :pointer, :pointer, :pointer],
+             :int32
+    callback :custom_provider_text_to_video,
+             [:pointer, :pointer, :pointer, :pointer],
+             :int32
+    callback :custom_provider_image_to_video,
+             [:pointer, :pointer, :pointer, :pointer],
+             :int32
+    callback :custom_provider_transcribe,
+             [:pointer, :pointer, :pointer, :pointer],
+             :int32
+    callback :custom_provider_generate_3d,
+             [:pointer, :pointer, :pointer, :pointer],
+             :int32
+    callback :custom_provider_remove_background,
+             [:pointer, :pointer, :pointer, :pointer],
+             :int32
+
     # -------------------------------------------------------------------
     # By-value vtable structs (mirror layouts in blazen.h)
     # -------------------------------------------------------------------
@@ -151,6 +207,33 @@ module Blazen
              :on_chunk,        :stream_sink_on_chunk,
              :on_done,         :stream_sink_on_done,
              :on_error,        :stream_sink_on_error
+    end
+
+    # Vtable a foreign caller fills in to implement a custom provider.
+    # 18 fields: opaque +user_data+, +drop_user_data+ callback, two C-string
+    # metadata pointers (+provider_id+, +model_id+) owned by the vtable, and
+    # 16 typed-method fn-pointers (one per +InnerCustomProviderTrait+ method).
+    class BlazenCustomProviderVTable < ::FFI::Struct
+      layout :user_data,         :pointer,
+             :drop_user_data,    :custom_provider_drop_user_data,
+             :provider_id,       :pointer,
+             :model_id,          :pointer,
+             :complete,          :custom_provider_complete,
+             :stream,            :custom_provider_stream,
+             :embed,             :custom_provider_embed,
+             :text_to_speech,    :custom_provider_text_to_speech,
+             :generate_music,    :custom_provider_generate_music,
+             :generate_sfx,      :custom_provider_generate_sfx,
+             :clone_voice,       :custom_provider_clone_voice,
+             :list_voices,       :custom_provider_list_voices,
+             :delete_voice,      :custom_provider_delete_voice,
+             :generate_image,    :custom_provider_generate_image,
+             :upscale_image,     :custom_provider_upscale_image,
+             :text_to_video,     :custom_provider_text_to_video,
+             :image_to_video,    :custom_provider_image_to_video,
+             :transcribe,        :custom_provider_transcribe,
+             :generate_3d,       :custom_provider_generate_3d,
+             :remove_background, :custom_provider_remove_background
     end
 
     # -------------------------------------------------------------------
@@ -501,6 +584,220 @@ module Blazen
                     [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
     attach_function :blazen_embedding_model_new_tract,
                     [:pointer, :int32, :bool, :pointer, :pointer], :int32
+
+    # -------------------------------------------------------------------
+    # ApiProtocol — OpenAI vs custom selector for CustomProvider transport
+    # -------------------------------------------------------------------
+    attach_function :blazen_api_protocol_openai, [:pointer], :pointer
+    attach_function :blazen_api_protocol_custom, [],         :pointer
+    attach_function :blazen_api_protocol_kind,   [:pointer], :pointer
+    attach_function :blazen_api_protocol_config, [:pointer], :pointer
+    attach_function :blazen_api_protocol_free,   [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # OpenAiCompatConfig — config bundle for OpenAI-protocol custom providers
+    # -------------------------------------------------------------------
+    attach_function :blazen_openai_compat_config_new,
+                    [:pointer, :pointer, :pointer, :pointer, :uint32, :pointer, :bool],
+                    :pointer
+    attach_function :blazen_openai_compat_config_push_extra_header,
+                    [:pointer, :pointer, :pointer], :void
+    attach_function :blazen_openai_compat_config_push_query_param,
+                    [:pointer, :pointer, :pointer], :void
+    attach_function :blazen_openai_compat_config_provider_name, [:pointer], :pointer
+    attach_function :blazen_openai_compat_config_base_url,      [:pointer], :pointer
+    attach_function :blazen_openai_compat_config_api_key,       [:pointer], :pointer
+    attach_function :blazen_openai_compat_config_default_model, [:pointer], :pointer
+    attach_function :blazen_openai_compat_config_auth_code,     [:pointer], :uint32
+    attach_function :blazen_openai_compat_config_free,          [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # CustomProvider — provider-of-providers handle, optionally backed by a
+    # foreign vtable (host-implemented in Ruby) or by one of the cabi's
+    # built-in OpenAI-protocol presets (ollama / lm_studio / openai_compat).
+    # -------------------------------------------------------------------
+    attach_function :blazen_custom_provider_from_vtable,
+                    [BlazenCustomProviderVTable.by_value], :pointer
+    attach_function :blazen_custom_provider_ollama,
+                    [:pointer, :pointer, :uint16], :pointer
+    attach_function :blazen_custom_provider_lm_studio,
+                    [:pointer, :pointer, :uint16], :pointer
+    attach_function :blazen_custom_provider_openai_compat,
+                    [:pointer, :pointer], :pointer
+    attach_function :blazen_custom_provider_provider_id, [:pointer], :pointer
+    attach_function :blazen_custom_provider_model_id,    [:pointer], :pointer
+    attach_function :blazen_custom_provider_as_base_provider, [:pointer], :pointer
+    attach_function :blazen_custom_provider_free,        [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # BaseProviderDefaults — provider-role-agnostic defaults handle
+    # -------------------------------------------------------------------
+    attach_function :blazen_base_provider_defaults_new, [], :pointer
+    attach_function :blazen_base_provider_defaults_has_before_request,
+                    [:pointer], :bool
+    attach_function :blazen_base_provider_defaults_free, [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # CompletionProviderDefaults
+    # -------------------------------------------------------------------
+    attach_function :blazen_completion_provider_defaults_new, [], :pointer
+    attach_function :blazen_completion_provider_defaults_set_system_prompt,
+                    [:pointer, :pointer], :void
+    attach_function :blazen_completion_provider_defaults_system_prompt,
+                    [:pointer], :pointer
+    attach_function :blazen_completion_provider_defaults_set_tools_json,
+                    [:pointer, :pointer], :void
+    attach_function :blazen_completion_provider_defaults_tools_json,
+                    [:pointer], :pointer
+    attach_function :blazen_completion_provider_defaults_set_response_format_json,
+                    [:pointer, :pointer], :void
+    attach_function :blazen_completion_provider_defaults_response_format_json,
+                    [:pointer], :pointer
+    attach_function :blazen_completion_provider_defaults_set_base,
+                    [:pointer, :pointer], :void
+    attach_function :blazen_completion_provider_defaults_base,
+                    [:pointer], :pointer
+    attach_function :blazen_completion_provider_defaults_has_before_completion,
+                    [:pointer], :bool
+    attach_function :blazen_completion_provider_defaults_free, [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # EmbeddingProviderDefaults
+    # -------------------------------------------------------------------
+    attach_function :blazen_embedding_provider_defaults_new, [], :pointer
+    attach_function :blazen_embedding_provider_defaults_set_base,
+                    [:pointer, :pointer], :void
+    attach_function :blazen_embedding_provider_defaults_base,
+                    [:pointer], :pointer
+    attach_function :blazen_embedding_provider_defaults_free, [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # AudioSpeechProviderDefaults (TTS)
+    # -------------------------------------------------------------------
+    attach_function :blazen_audio_speech_provider_defaults_new, [], :pointer
+    attach_function :blazen_audio_speech_provider_defaults_set_base,
+                    [:pointer, :pointer], :void
+    attach_function :blazen_audio_speech_provider_defaults_base,
+                    [:pointer], :pointer
+    attach_function :blazen_audio_speech_provider_defaults_has_before,
+                    [:pointer], :bool
+    attach_function :blazen_audio_speech_provider_defaults_free, [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # AudioMusicProviderDefaults
+    # -------------------------------------------------------------------
+    attach_function :blazen_audio_music_provider_defaults_new, [], :pointer
+    attach_function :blazen_audio_music_provider_defaults_set_base,
+                    [:pointer, :pointer], :void
+    attach_function :blazen_audio_music_provider_defaults_base,
+                    [:pointer], :pointer
+    attach_function :blazen_audio_music_provider_defaults_has_before,
+                    [:pointer], :bool
+    attach_function :blazen_audio_music_provider_defaults_free, [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # VoiceCloningProviderDefaults
+    # -------------------------------------------------------------------
+    attach_function :blazen_voice_cloning_provider_defaults_new, [], :pointer
+    attach_function :blazen_voice_cloning_provider_defaults_set_base,
+                    [:pointer, :pointer], :void
+    attach_function :blazen_voice_cloning_provider_defaults_base,
+                    [:pointer], :pointer
+    attach_function :blazen_voice_cloning_provider_defaults_has_before,
+                    [:pointer], :bool
+    attach_function :blazen_voice_cloning_provider_defaults_free, [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # ImageGenerationProviderDefaults
+    # -------------------------------------------------------------------
+    attach_function :blazen_image_generation_provider_defaults_new, [], :pointer
+    attach_function :blazen_image_generation_provider_defaults_set_base,
+                    [:pointer, :pointer], :void
+    attach_function :blazen_image_generation_provider_defaults_base,
+                    [:pointer], :pointer
+    attach_function :blazen_image_generation_provider_defaults_has_before,
+                    [:pointer], :bool
+    attach_function :blazen_image_generation_provider_defaults_free, [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # ImageUpscaleProviderDefaults
+    # -------------------------------------------------------------------
+    attach_function :blazen_image_upscale_provider_defaults_new, [], :pointer
+    attach_function :blazen_image_upscale_provider_defaults_set_base,
+                    [:pointer, :pointer], :void
+    attach_function :blazen_image_upscale_provider_defaults_base,
+                    [:pointer], :pointer
+    attach_function :blazen_image_upscale_provider_defaults_has_before,
+                    [:pointer], :bool
+    attach_function :blazen_image_upscale_provider_defaults_free, [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # VideoProviderDefaults
+    # -------------------------------------------------------------------
+    attach_function :blazen_video_provider_defaults_new, [], :pointer
+    attach_function :blazen_video_provider_defaults_set_base,
+                    [:pointer, :pointer], :void
+    attach_function :blazen_video_provider_defaults_base,
+                    [:pointer], :pointer
+    attach_function :blazen_video_provider_defaults_has_before,
+                    [:pointer], :bool
+    attach_function :blazen_video_provider_defaults_free, [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # TranscriptionProviderDefaults (STT)
+    # -------------------------------------------------------------------
+    attach_function :blazen_transcription_provider_defaults_new, [], :pointer
+    attach_function :blazen_transcription_provider_defaults_set_base,
+                    [:pointer, :pointer], :void
+    attach_function :blazen_transcription_provider_defaults_base,
+                    [:pointer], :pointer
+    attach_function :blazen_transcription_provider_defaults_has_before,
+                    [:pointer], :bool
+    attach_function :blazen_transcription_provider_defaults_free, [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # ThreeDProviderDefaults
+    # -------------------------------------------------------------------
+    attach_function :blazen_three_d_provider_defaults_new, [], :pointer
+    attach_function :blazen_three_d_provider_defaults_set_base,
+                    [:pointer, :pointer], :void
+    attach_function :blazen_three_d_provider_defaults_base,
+                    [:pointer], :pointer
+    attach_function :blazen_three_d_provider_defaults_has_before,
+                    [:pointer], :bool
+    attach_function :blazen_three_d_provider_defaults_free, [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # BackgroundRemovalProviderDefaults
+    # -------------------------------------------------------------------
+    attach_function :blazen_background_removal_provider_defaults_new, [], :pointer
+    attach_function :blazen_background_removal_provider_defaults_set_base,
+                    [:pointer, :pointer], :void
+    attach_function :blazen_background_removal_provider_defaults_base,
+                    [:pointer], :pointer
+    attach_function :blazen_background_removal_provider_defaults_has_before,
+                    [:pointer], :bool
+    attach_function :blazen_background_removal_provider_defaults_free,
+                    [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # BaseProvider — completion model with instance-level defaults
+    # -------------------------------------------------------------------
+    attach_function :blazen_base_provider_with_system_prompt,
+                    [:pointer, :pointer], :void
+    attach_function :blazen_base_provider_with_tools_json,
+                    [:pointer, :pointer], :void
+    attach_function :blazen_base_provider_with_response_format_json,
+                    [:pointer, :pointer], :void
+    attach_function :blazen_base_provider_with_defaults,
+                    [:pointer, :pointer], :void
+    attach_function :blazen_base_provider_defaults,
+                    [:pointer], :pointer
+    attach_function :blazen_base_provider_model_id,
+                    [:pointer], :pointer
+    attach_function :blazen_base_provider_provider_id,
+                    [:pointer], :pointer
+    attach_function :blazen_base_provider_free, [:pointer], :void
 
     # -------------------------------------------------------------------
     # Streaming

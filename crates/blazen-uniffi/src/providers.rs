@@ -367,31 +367,30 @@ pub fn new_openai_compat_completion_model(
 ///
 /// Convenience for [`new_custom_completion_model_with_openai_protocol`] with
 /// `base_url = format!("http://{host}:{port}/v1")` and no API key. Delegates
-/// to [`blazen_llm::CustomProvider::ollama`], which knows how to speak
-/// Ollama's flavour of the `OpenAI` chat-completions protocol.
+/// to [`blazen_llm::ollama`], which knows how to speak Ollama's flavour of
+/// the `OpenAI` chat-completions protocol.
 #[uniffi::export]
 pub fn new_ollama_completion_model(
     host: String,
     port: u16,
     model: String,
 ) -> BlazenResult<Arc<CompletionModel>> {
-    let provider = blazen_llm::CustomProvider::ollama(host, port, model);
+    let provider = blazen_llm::ollama(host, port, model);
     let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
     Ok(CompletionModel::from_arc(inner))
 }
 
 /// Construct a [`CompletionModel`] for an LM Studio server.
 ///
-/// Convenience wrapper around [`blazen_llm::CustomProvider::lm_studio`] —
-/// targets LM Studio's local `OpenAI`-compatible endpoint on
-/// `http://{host}:{port}/v1`.
+/// Convenience wrapper around [`blazen_llm::lm_studio`] — targets LM Studio's
+/// local `OpenAI`-compatible endpoint on `http://{host}:{port}/v1`.
 #[uniffi::export]
 pub fn new_lm_studio_completion_model(
     host: String,
     port: u16,
     model: String,
 ) -> BlazenResult<Arc<CompletionModel>> {
-    let provider = blazen_llm::CustomProvider::lm_studio(host, port, model);
+    let provider = blazen_llm::lm_studio(host, port, model);
     let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
     Ok(CompletionModel::from_arc(inner))
 }
@@ -401,7 +400,7 @@ pub fn new_lm_studio_completion_model(
 ///
 /// This is the same wire format as
 /// [`new_openai_compat_completion_model`], but wrapped in a
-/// [`blazen_llm::CustomProvider`] for consistent ergonomics with the
+/// [`blazen_llm::CustomProviderHandle`] for consistent ergonomics with the
 /// `new_ollama_completion_model` / `new_lm_studio_completion_model`
 /// factories. `api_key` is optional: passing `None` (or an empty `Some`)
 /// omits the `Authorization` header entirely.
@@ -422,7 +421,7 @@ pub fn new_custom_completion_model_with_openai_protocol(
         query_params: Vec::new(),
         supports_model_listing: true,
     };
-    let provider = blazen_llm::CustomProvider::openai_compat(provider_id, cfg);
+    let provider = blazen_llm::openai_compat(provider_id, cfg);
     let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
     Ok(CompletionModel::from_arc(inner))
 }

@@ -950,6 +950,11 @@ impl OpenAiCompatEmbeddingModel {
 }
 
 /// Default embedding configurations for known providers.
+#[cfg(any(
+    all(target_arch = "wasm32", not(target_os = "wasi")),
+    feature = "reqwest",
+    target_os = "wasi"
+))]
 const EMBEDDING_DEFAULTS: &[(&str, &str, &str, usize)] = &[
     // (provider_name, base_url, default_model, dimensions)
     (

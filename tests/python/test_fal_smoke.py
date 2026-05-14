@@ -126,7 +126,7 @@ async def test_fal_vision_auto_routes_when_anyllm_and_image_present():
     ).with_retry(RetryConfig(max_retries=2))
     msg = ChatMessage.user_image_url(
         text="What is in this image? One word.",
-        url="https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png",
+        url="https://blazen.dev/test-fixtures/transparency.png",
         media_type="image/png",
     )
     response = await model.complete([msg], CompletionOptions(max_tokens=20))
@@ -148,7 +148,7 @@ async def test_fal_audio_auto_routes_when_openrouter_and_audio_present():
     )
     msg = ChatMessage.user_audio(
         text="What does this clip say?",
-        url="https://upload.wikimedia.org/wikipedia/commons/c/c8/Example.ogg",
+        url="https://blazen.dev/test-fixtures/example.ogg",
     )
     try:
         response = await model.complete([msg], CompletionOptions(max_tokens=30))

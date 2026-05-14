@@ -430,10 +430,13 @@ checksum = "8b52af3cb4058c895d37317bb27508dccc8e5f2d39454016b297bf4a400597b8"
 dependencies = [
  "axum-core",
  "bytes",
+ "form_urlencoded",
  "futures-util",
  "http",
  "http-body",
  "http-body-util",
+ "hyper",
+ "hyper-util",
  "itoa",
  "matchit",
  "memchr",
@@ -441,10 +444,15 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "serde_core",
+ "serde_json",
+ "serde_path_to_error",
+ "serde_urlencoded",
  "sync_wrapper",
+ "tokio",
  "tower",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -463,6 +471,7 @@ dependencies = [
  "sync_wrapper",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -642,6 +651,7 @@ name = "blazen-cabi"
 version = "0.0.0-dev"
 dependencies = [
  "async-trait",
+ "blazen-llm",
  "blazen-uniffi",
  "cbindgen 0.29.2",
  "futures-util",
@@ -662,6 +672,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "blazen-controlplane"
+version = "0.0.0-dev"
+dependencies = [
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "blazen-core",
+ "blazen-llm",
+ "blazen-peer",
+ "dashmap",
+ "futures-core",
+ "futures-util",
+ "postcard",
+ "prost 0.14.3",
+ "reqwest 0.13.2",
+ "rustls",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-rustls",
+ "tokio-stream",
+ "tonic",
+ "tonic-prost",
+ "tonic-prost-build",
+ "tower",
+ "tower-http",
+ "tracing",
+ "uuid 1.22.0",
+]
+
+[[package]]
 name = "blazen-core"
 version = "0.0.0-dev"
 dependencies = [
@@ -674,6 +718,7 @@ dependencies = [
  "blazen-telemetry",
  "chrono",
  "dashmap",
+ "futures-core",
  "futures-executor",
  "futures-util",
  "js-sys",
@@ -7319,6 +7364,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_path_to_error"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10a9ff822e371bb5403e391ecd83e182e0e77ba7f6fe0160b795797109d1b457"
+dependencies = [
+ "itoa",
+ "serde",
+ "serde_core",
+]
+
+[[package]]
 name = "serde_plain"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8548,6 +8604,7 @@ dependencies = [
  "tower",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -8579,6 +8636,7 @@ version = "0.1.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100"
 dependencies = [
+ "log",
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
