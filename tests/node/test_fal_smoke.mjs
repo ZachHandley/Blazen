@@ -148,9 +148,13 @@ TRoute("fal.ai modality auto-routing tests · auto-routes to audio when OpenRout
     autoRouteModality: true,
   });
   const msg = ChatMessage.userAudio("Transcribe or describe this audio briefly.", AUDIO_URL);
+  // "No endpoints found that support input audio" proves routing landed at
+  // openrouter/router/audio — only the audio router enumerates audio-capable
+  // models from OpenRouter's catalog. The other markers cover the happy path
+  // and fal-side file fetch failures.
   const response = await expectFalRoutingError(
     model.complete([msg]),
-    ["Failed to download audio", "audio_url", "file_download_error"],
+    ["Failed to download audio", "audio_url", "file_download_error", "No endpoints found that support input audio"],
   );
   if (response !== undefined) {
     t.truthy(response.content, "expected content from audio auto-route");

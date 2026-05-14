@@ -110,7 +110,7 @@ CFG="crates/blazen-uniffi/uniffi.toml"
 regen_go() {
     if ! command -v uniffi-bindgen-go >/dev/null 2>&1; then
         echo "ERROR: uniffi-bindgen-go not installed."
-        echo "  Install with: cargo install uniffi-bindgen-go --tag v$UNIFFI_VERSION.0+v$UNIFFI_VERSION.0 --git https://github.com/NordSecurity/uniffi-bindgen-go"
+        echo "  Install with: cargo install uniffi-bindgen-go --tag v0.7.1+v$UNIFFI_VERSION.0 --git https://github.com/NordSecurity/uniffi-bindgen-go"
         return 1
     fi
     mkdir -p bindings/go/internal/uniffi

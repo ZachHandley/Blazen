@@ -155,13 +155,17 @@ async def test_fal_audio_auto_routes_when_openrouter_and_audio_present():
         assert response.content is not None
     except Exception as e:
         err = str(e)
-        # Routing succeeded if fal accepted the request and tried to fetch the audio.
+        # Routing succeeded if fal accepted the request and tried to fetch the audio,
+        # OR if fal's audio router enumerated its OpenRouter catalog and found no
+        # audio-capable models (only the audio router emits that error — proves routing
+        # landed at openrouter/router/audio).
         assert any(
             marker in err
             for marker in (
                 "Failed to download audio",
                 "audio_url",
                 "file_download_error",
+                "No endpoints found that support input audio",
             )
         ), f"unexpected error (routing may have failed): {err}"
 
