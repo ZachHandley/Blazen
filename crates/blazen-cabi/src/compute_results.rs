@@ -32,7 +32,7 @@
 
 #![allow(dead_code)]
 
-use std::ffi::c_char;
+use std::ffi::{CStr, c_char};
 
 use blazen_llm::compute::{
     AudioResult as InnerAudioResult, ImageResult as InnerImageResult,
@@ -40,8 +40,65 @@ use blazen_llm::compute::{
     TranscriptionSegment as InnerTranscriptionSegment, VideoResult as InnerVideoResult,
     VoiceHandle as InnerVoiceHandle,
 };
+use blazen_uniffi::errors::BlazenError as InnerError;
 
+use crate::error::BlazenError;
 use crate::string::alloc_cstring;
+
+// ---------------------------------------------------------------------------
+// Shared JSON-constructor helpers (Wave 3a)
+//
+// The Ruby binding (via `CustomProvider` trampolines) needs to materialise a
+// typed result handle from a JSON-encoded Rust struct. Each `_from_json`
+// constructor below shares the same plumbing: read a NUL-terminated UTF-8 C
+// string, deserialize it as the inner `blazen_llm::compute::*` type, box it
+// into the opaque wrapper. Errors funnel through `write_internal_err` which
+// writes a fresh `BlazenError::Internal { message }` into the out-param.
+// ---------------------------------------------------------------------------
+
+/// Writes a fresh `BlazenError::Internal { message }` through `out_err` if
+/// `out_err` is non-null. Mirrors the `write_error` / `write_internal_error`
+/// helpers used in `llm.rs` / `compute.rs`; duplicated here to keep this
+/// module self-contained (matches the cabi convention of per-module helpers).
+fn write_internal_err(out_err: *mut *mut BlazenError, message: String) {
+    if out_err.is_null() {
+        return;
+    }
+    // SAFETY: `out_err` is non-null per the branch above; the caller has
+    // guaranteed it points to a writable `*mut BlazenError` slot.
+    unsafe {
+        *out_err = BlazenError::from(InnerError::Internal { message }).into_ptr();
+    }
+}
+
+/// Reads `json` (a NUL-terminated UTF-8 C string) as `&str`, writing an
+/// `Internal` error through `out_err` on null or non-UTF-8 input. Returns
+/// `None` in those cases so the caller can early-return with a null result
+/// pointer.
+///
+/// # Safety
+///
+/// `json` must be null OR point to a NUL-terminated buffer that remains valid
+/// for the duration of this call.
+unsafe fn read_json_input<'a>(
+    json: *const c_char,
+    fn_name: &str,
+    out_err: *mut *mut BlazenError,
+) -> Option<&'a str> {
+    if json.is_null() {
+        write_internal_err(out_err, format!("{fn_name}: json pointer is null"));
+        return None;
+    }
+    // SAFETY: per the contract, `json` points to a NUL-terminated buffer.
+    let cstr = unsafe { CStr::from_ptr(json) };
+    match cstr.to_str() {
+        Ok(s) => Some(s),
+        Err(e) => {
+            write_internal_err(out_err, format!("{fn_name}: input is not valid UTF-8: {e}"));
+            None
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -1251,6 +1308,369 @@ pub unsafe extern "C" fn blazen_voice_handle_metadata_json(
 /// `handle` must be null OR a pointer produced by the cabi surface.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_voice_handle_free(handle: *mut BlazenVoiceHandle) {
+    if handle.is_null() {
+        return;
+    }
+    // SAFETY: per the contract, `handle` came from `Box::into_raw`.
+    drop(unsafe { Box::from_raw(handle) });
+}
+
+// ===========================================================================
+// JSON-shim constructors (Wave 3a)
+//
+// Each `_from_json` parses a NUL-terminated UTF-8 JSON string as the inner
+// `blazen_llm::compute::*` record (which derives `serde::Deserialize`) and
+// returns a freshly-boxed opaque handle. On any failure — null pointer,
+// non-UTF-8, malformed JSON, or deserialization error — writes a fresh
+// `BlazenError::Internal { message }` through `out_err` (if non-null) and
+// returns null. The returned handle is owned by the caller; release it with
+// the matching `*_free`.
+// ===========================================================================
+
+/// Constructs a [`BlazenAudioResult`] handle from a JSON-encoded
+/// [`blazen_llm::compute::AudioResult`].
+///
+/// # Ownership
+///
+/// On success returns a non-null handle owned by the caller — release with
+/// [`blazen_audio_result_free`]. On failure returns null and writes a fresh
+/// `BlazenError::Internal { message }` into `*out_err` when `out_err` is
+/// non-null (caller frees with [`crate::error::blazen_error_free`]).
+///
+/// # Safety
+///
+/// `json` must be null OR point to a NUL-terminated UTF-8 buffer valid for
+/// the duration of this call. `out_err` must be null OR point to a writable
+/// `*mut BlazenError` slot.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_audio_result_from_json(
+    json: *const c_char,
+    out_err: *mut *mut BlazenError,
+) -> *mut BlazenAudioResult {
+    // SAFETY: forwarded to `read_json_input`; caller upholds the contract.
+    let Some(s) = (unsafe { read_json_input(json, "blazen_audio_result_from_json", out_err) })
+    else {
+        return std::ptr::null_mut();
+    };
+    match serde_json::from_str::<InnerAudioResult>(s) {
+        Ok(inner) => BlazenAudioResult(inner).into_ptr(),
+        Err(e) => {
+            write_internal_err(
+                out_err,
+                format!("blazen_audio_result_from_json: deserialize failed: {e}"),
+            );
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Constructs a [`BlazenImageResult`] handle from a JSON-encoded
+/// [`blazen_llm::compute::ImageResult`].
+///
+/// # Ownership
+///
+/// On success returns a non-null handle owned by the caller — release with
+/// [`blazen_image_result_free`]. On failure returns null and writes a fresh
+/// `BlazenError::Internal { message }` into `*out_err` when `out_err` is
+/// non-null (caller frees with [`crate::error::blazen_error_free`]).
+///
+/// # Safety
+///
+/// `json` must be null OR point to a NUL-terminated UTF-8 buffer valid for
+/// the duration of this call. `out_err` must be null OR point to a writable
+/// `*mut BlazenError` slot.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_image_result_from_json(
+    json: *const c_char,
+    out_err: *mut *mut BlazenError,
+) -> *mut BlazenImageResult {
+    // SAFETY: forwarded to `read_json_input`; caller upholds the contract.
+    let Some(s) = (unsafe { read_json_input(json, "blazen_image_result_from_json", out_err) })
+    else {
+        return std::ptr::null_mut();
+    };
+    match serde_json::from_str::<InnerImageResult>(s) {
+        Ok(inner) => BlazenImageResult(inner).into_ptr(),
+        Err(e) => {
+            write_internal_err(
+                out_err,
+                format!("blazen_image_result_from_json: deserialize failed: {e}"),
+            );
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Constructs a [`BlazenVideoResult`] handle from a JSON-encoded
+/// [`blazen_llm::compute::VideoResult`].
+///
+/// # Ownership
+///
+/// On success returns a non-null handle owned by the caller — release with
+/// [`blazen_video_result_free`]. On failure returns null and writes a fresh
+/// `BlazenError::Internal { message }` into `*out_err` when `out_err` is
+/// non-null (caller frees with [`crate::error::blazen_error_free`]).
+///
+/// # Safety
+///
+/// `json` must be null OR point to a NUL-terminated UTF-8 buffer valid for
+/// the duration of this call. `out_err` must be null OR point to a writable
+/// `*mut BlazenError` slot.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_video_result_from_json(
+    json: *const c_char,
+    out_err: *mut *mut BlazenError,
+) -> *mut BlazenVideoResult {
+    // SAFETY: forwarded to `read_json_input`; caller upholds the contract.
+    let Some(s) = (unsafe { read_json_input(json, "blazen_video_result_from_json", out_err) })
+    else {
+        return std::ptr::null_mut();
+    };
+    match serde_json::from_str::<InnerVideoResult>(s) {
+        Ok(inner) => BlazenVideoResult(inner).into_ptr(),
+        Err(e) => {
+            write_internal_err(
+                out_err,
+                format!("blazen_video_result_from_json: deserialize failed: {e}"),
+            );
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Constructs a [`BlazenThreeDResult`] handle from a JSON-encoded
+/// [`blazen_llm::compute::ThreeDResult`].
+///
+/// # Ownership
+///
+/// On success returns a non-null handle owned by the caller — release with
+/// [`blazen_three_d_result_free`]. On failure returns null and writes a fresh
+/// `BlazenError::Internal { message }` into `*out_err` when `out_err` is
+/// non-null (caller frees with [`crate::error::blazen_error_free`]).
+///
+/// # Safety
+///
+/// `json` must be null OR point to a NUL-terminated UTF-8 buffer valid for
+/// the duration of this call. `out_err` must be null OR point to a writable
+/// `*mut BlazenError` slot.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_three_d_result_from_json(
+    json: *const c_char,
+    out_err: *mut *mut BlazenError,
+) -> *mut BlazenThreeDResult {
+    // SAFETY: forwarded to `read_json_input`; caller upholds the contract.
+    let Some(s) = (unsafe { read_json_input(json, "blazen_three_d_result_from_json", out_err) })
+    else {
+        return std::ptr::null_mut();
+    };
+    match serde_json::from_str::<InnerThreeDResult>(s) {
+        Ok(inner) => BlazenThreeDResult(inner).into_ptr(),
+        Err(e) => {
+            write_internal_err(
+                out_err,
+                format!("blazen_three_d_result_from_json: deserialize failed: {e}"),
+            );
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Constructs a [`BlazenTranscriptionResult`] handle from a JSON-encoded
+/// [`blazen_llm::compute::TranscriptionResult`].
+///
+/// # Ownership
+///
+/// On success returns a non-null handle owned by the caller — release with
+/// [`blazen_transcription_result_free`]. On failure returns null and writes a
+/// fresh `BlazenError::Internal { message }` into `*out_err` when `out_err`
+/// is non-null (caller frees with [`crate::error::blazen_error_free`]).
+///
+/// # Safety
+///
+/// `json` must be null OR point to a NUL-terminated UTF-8 buffer valid for
+/// the duration of this call. `out_err` must be null OR point to a writable
+/// `*mut BlazenError` slot.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_transcription_result_from_json(
+    json: *const c_char,
+    out_err: *mut *mut BlazenError,
+) -> *mut BlazenTranscriptionResult {
+    // SAFETY: forwarded to `read_json_input`; caller upholds the contract.
+    let Some(s) =
+        (unsafe { read_json_input(json, "blazen_transcription_result_from_json", out_err) })
+    else {
+        return std::ptr::null_mut();
+    };
+    match serde_json::from_str::<InnerTranscriptionResult>(s) {
+        Ok(inner) => BlazenTranscriptionResult(inner).into_ptr(),
+        Err(e) => {
+            write_internal_err(
+                out_err,
+                format!("blazen_transcription_result_from_json: deserialize failed: {e}"),
+            );
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Constructs a [`BlazenVoiceHandle`] handle from a JSON-encoded
+/// [`blazen_llm::compute::VoiceHandle`].
+///
+/// # Ownership
+///
+/// On success returns a non-null handle owned by the caller — release with
+/// [`blazen_voice_handle_free`]. On failure returns null and writes a fresh
+/// `BlazenError::Internal { message }` into `*out_err` when `out_err` is
+/// non-null (caller frees with [`crate::error::blazen_error_free`]).
+///
+/// # Safety
+///
+/// `json` must be null OR point to a NUL-terminated UTF-8 buffer valid for
+/// the duration of this call. `out_err` must be null OR point to a writable
+/// `*mut BlazenError` slot.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_voice_handle_from_json(
+    json: *const c_char,
+    out_err: *mut *mut BlazenError,
+) -> *mut BlazenVoiceHandle {
+    // SAFETY: forwarded to `read_json_input`; caller upholds the contract.
+    let Some(s) = (unsafe { read_json_input(json, "blazen_voice_handle_from_json", out_err) })
+    else {
+        return std::ptr::null_mut();
+    };
+    match serde_json::from_str::<InnerVoiceHandle>(s) {
+        Ok(inner) => BlazenVoiceHandle(inner).into_ptr(),
+        Err(e) => {
+            write_internal_err(
+                out_err,
+                format!("blazen_voice_handle_from_json: deserialize failed: {e}"),
+            );
+            std::ptr::null_mut()
+        }
+    }
+}
+
+// ===========================================================================
+// BlazenVoiceHandleArray (Wave 3a)
+//
+// `list_voices` in the `CustomProvider` vtable yields a `Vec<VoiceHandle>`.
+// To bridge a Ruby `list_voices` override (which may return any iterable of
+// `VoiceHandle` JSON blobs) into the vtable's `out_array: *mut *mut *mut
+// BlazenVoiceHandle` slot, this opaque array type lets the Ruby trampoline
+// parse a JSON array once and then pop entries one-by-one with `_take`.
+//
+// The vtable's signature is unchanged (Wave 3a is constrained to
+// `_from_json` constructors); the Ruby side uses these helpers to construct
+// the contiguous pointer block the vtable expects.
+// ===========================================================================
+
+/// Opaque wrapper around `Vec<blazen_llm::compute::VoiceHandle>`. Produced by
+/// [`blazen_voice_handle_array_from_json`]; entries are removed one-at-a-time
+/// with [`blazen_voice_handle_array_take`]. Released with
+/// [`blazen_voice_handle_array_free`] (which drops any remaining entries).
+#[repr(C)]
+pub struct BlazenVoiceHandleArray {
+    pub(crate) inner: Vec<InnerVoiceHandle>,
+}
+
+/// Parses a JSON array of [`blazen_llm::compute::VoiceHandle`] records into a
+/// freshly-boxed [`BlazenVoiceHandleArray`].
+///
+/// # Ownership
+///
+/// On success returns a non-null handle owned by the caller — release with
+/// [`blazen_voice_handle_array_free`]. On failure returns null and writes a
+/// fresh `BlazenError::Internal { message }` into `*out_err` when `out_err`
+/// is non-null (caller frees with [`crate::error::blazen_error_free`]).
+///
+/// # Safety
+///
+/// `json` must be null OR point to a NUL-terminated UTF-8 buffer valid for
+/// the duration of this call. `out_err` must be null OR point to a writable
+/// `*mut BlazenError` slot.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_voice_handle_array_from_json(
+    json: *const c_char,
+    out_err: *mut *mut BlazenError,
+) -> *mut BlazenVoiceHandleArray {
+    // SAFETY: forwarded to `read_json_input`; caller upholds the contract.
+    let Some(s) =
+        (unsafe { read_json_input(json, "blazen_voice_handle_array_from_json", out_err) })
+    else {
+        return std::ptr::null_mut();
+    };
+    match serde_json::from_str::<Vec<InnerVoiceHandle>>(s) {
+        Ok(inner) => Box::into_raw(Box::new(BlazenVoiceHandleArray { inner })),
+        Err(e) => {
+            write_internal_err(
+                out_err,
+                format!("blazen_voice_handle_array_from_json: deserialize failed: {e}"),
+            );
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Returns the current length of the array. Returns `0` on a null handle.
+///
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenVoiceHandleArray`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_voice_handle_array_len(
+    handle: *const BlazenVoiceHandleArray,
+) -> usize {
+    if handle.is_null() {
+        return 0;
+    }
+    // SAFETY: caller has guaranteed `handle` is a live `BlazenVoiceHandleArray`.
+    let a = unsafe { &*handle };
+    a.inner.len()
+}
+
+/// Pops the `idx`-th entry from the array and returns it as a freshly-boxed
+/// [`BlazenVoiceHandle`] handle owned by the caller (release with
+/// [`blazen_voice_handle_free`]). Returns null if `handle` is null or `idx`
+/// is out of range.
+///
+/// Note: `idx` is interpreted against the array's current length, which
+/// shrinks by one after every successful call. Callers should typically iterate
+/// from index `0` until [`blazen_voice_handle_array_len`] returns `0`. Calling
+/// `_take(0)` repeatedly is the canonical drain pattern; `Vec::remove`
+/// semantics apply, so out-of-bounds indices are rejected with null rather
+/// than aborting.
+///
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenVoiceHandleArray` (and not freed
+/// concurrently from another thread).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_voice_handle_array_take(
+    handle: *mut BlazenVoiceHandleArray,
+    idx: usize,
+) -> *mut BlazenVoiceHandle {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live `BlazenVoiceHandleArray`.
+    let a = unsafe { &mut *handle };
+    if idx >= a.inner.len() {
+        return std::ptr::null_mut();
+    }
+    let inner = a.inner.remove(idx);
+    BlazenVoiceHandle(inner).into_ptr()
+}
+
+/// Frees a `BlazenVoiceHandleArray` handle, dropping any remaining entries.
+/// No-op on a null pointer.
+///
+/// # Safety
+///
+/// `handle` must be null OR a pointer previously produced by
+/// [`blazen_voice_handle_array_from_json`]. Calling this twice on the same
+/// non-null pointer is a double-free.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_voice_handle_array_free(handle: *mut BlazenVoiceHandleArray) {
     if handle.is_null() {
         return;
     }

@@ -747,46 +747,53 @@ test("pricing registration and lookup · registerPricing overwrites previous reg
 });
 
 // ===========================================================================
-// CustomProvider (host-dispatch wrapper)
+// CustomProvider (typed-subclass surface)
 // ===========================================================================
 
-test("CustomProvider · can wrap a host object with textToSpeech", (t) => {
-  const host = {
-    async textToSpeech(request) {
+test("CustomProvider · subclass with textToSpeech override constructs with providerId", (t) => {
+  class StubTts extends CustomProvider {
+    constructor() {
+      super({ providerId: "test-tts" });
+    }
+    async textToSpeech(_request) {
       return { audio: [], timing: {}, metadata: {} };
-    },
-  };
-  const provider = new CustomProvider(host, { providerId: "test-tts" });
+    }
+  }
+  const provider = new StubTts();
   t.is(provider.providerId, "test-tts");
 });
 
-test("CustomProvider · defaults providerId to 'custom' when not specified", (t) => {
-  const host = {};
-  const provider = new CustomProvider(host);
+test("CustomProvider · constructs directly with a providerId (no subclass)", (t) => {
+  const provider = new CustomProvider({ providerId: "custom" });
   t.is(provider.providerId, "custom");
 });
 
-test("CustomProvider · can wrap a host object with multiple capabilities", (t) => {
-  const host = {
-    async textToSpeech(request) {
+test("CustomProvider · subclass with multiple capability overrides constructs with providerId", (t) => {
+  class MultiCap extends CustomProvider {
+    constructor() {
+      super({ providerId: "multi-cap" });
+    }
+    async textToSpeech(_request) {
       return {};
-    },
-    async generateImage(request) {
+    }
+    async generateImage(_request) {
       return {};
-    },
-    async textToVideo(request) {
+    }
+    async textToVideo(_request) {
       return {};
-    },
-  };
-  const provider = new CustomProvider(host, {
-    providerId: "multi-cap",
-  });
+    }
+  }
+  const provider = new MultiCap();
   t.is(provider.providerId, "multi-cap");
 });
 
-test("CustomProvider · can wrap an empty host object (no capabilities)", (t) => {
-  const host = {};
-  const provider = new CustomProvider(host, { providerId: "empty" });
+test("CustomProvider · subclass without capability overrides constructs with providerId", (t) => {
+  class Empty extends CustomProvider {
+    constructor() {
+      super({ providerId: "empty" });
+    }
+  }
+  const provider = new Empty();
   t.is(provider.providerId, "empty");
 });
 

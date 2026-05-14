@@ -45,7 +45,7 @@ test("CustomProvider subclass · textToSpeech override fires", async (t) => {
 
   class StubTts extends CustomProvider {
     constructor() {
-      super("stub-tts");
+      super({ providerId: "stub-tts" });
     }
     async textToSpeech(request) {
       receivedText = request.text;
@@ -80,7 +80,7 @@ test("CustomProvider subclass · complete override returns stubbed CompletionRes
 
   class StubLlm extends CustomProvider {
     constructor() {
-      super("stub-llm");
+      super({ providerId: "stub-llm" });
     }
     async complete(request) {
       completeCalls += 1;
@@ -127,7 +127,7 @@ test("CustomProvider · unimplemented method rejects with Unsupported", async (t
   // binding issue is fixed; the subclass-routing semantics are still
   // covered by the `textToSpeech override fires` and `complete override
   // returns stubbed CompletionResponse` tests above.
-  const provider = new CustomProvider("plain-custom");
+  const provider = new CustomProvider({ providerId: "plain-custom" });
   const err = await t.throwsAsync(
     () => provider.generateImage({ prompt: "an unused capability" }),
   );
@@ -159,7 +159,64 @@ test("CustomProvider · ollama factory constructs provider", (t) => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. `extract` returns a parsed object via JSON Schema
+// 5. Prototype walk skips napi-installed methods (HalfImpl regression)
+// ---------------------------------------------------------------------------
+//
+// Regression test for the `from_host_object` prototype-walk bug. Before
+// the fix, `has_named_property` would report typed compute methods like
+// `textToSpeech` as "overridden" on a subclass instance even when the
+// subclass did NOT override them — because the `#[napi]` macro installs
+// those methods on `CustomProvider.prototype`. Dispatching the phantom
+// override then re-entered the napi binding and looped until the stack
+// overflowed (RangeError).
+//
+// `HalfImpl` overrides ONLY `generateImage`. `textToSpeech` must report
+// as Unsupported instead of recursing.
+
+test("CustomProvider subclass · prototype walk skips napi-installed methods", async (t) => {
+  class HalfImpl extends CustomProvider {
+    constructor() {
+      super({ providerId: "half-impl" });
+    }
+    async generateImage(_request) {
+      return {
+        images: [],
+        timing: { totalMs: 0, queueMs: null, executionMs: null },
+        metadata: { stub: true },
+      };
+    }
+    // textToSpeech intentionally NOT overridden.
+  }
+
+  const provider = new HalfImpl();
+
+  // generateImage should resolve via the user override.
+  const imageResult = await provider.generateImage({ prompt: "a cat" });
+  t.truthy(imageResult, "generateImage override should resolve");
+  t.deepEqual(imageResult.images, [], "stubbed images round-trip back to JS");
+
+  // textToSpeech should reject with Unsupported — NOT infinite-loop /
+  // RangeError / stack overflow.
+  const err = await t.throwsAsync(
+    () => provider.textToSpeech({ text: "hello" }),
+  );
+  t.truthy(err, "expected textToSpeech to reject");
+
+  const isTypedClass =
+    UnsupportedError !== null && err instanceof UnsupportedError;
+  const carriesTag =
+    /Unsupported/i.test(err.name ?? "") ||
+    /Unsupported/i.test(err.message ?? "") ||
+    /not implemented/i.test(err.message ?? "") ||
+    /does not override/i.test(err.message ?? "");
+  t.true(
+    isTypedClass || carriesTag,
+    `expected an Unsupported-flavoured error, got ${err.name}: ${err.message}`,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 6. `extract` returns a parsed object via JSON Schema
 // ---------------------------------------------------------------------------
 //
 // Stub `complete` on a CustomProvider subclass so it returns a JSON
@@ -169,7 +226,7 @@ test("CustomProvider · ollama factory constructs provider", (t) => {
 test("BaseProvider.extract · parses object via JSON Schema with subclass complete", async (t) => {
   class StubLlm extends CustomProvider {
     constructor() {
-      super("stub-extract");
+      super({ providerId: "stub-extract" });
     }
     async complete(_request) {
       return {

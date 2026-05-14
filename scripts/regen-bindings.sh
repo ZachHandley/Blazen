@@ -145,6 +145,65 @@ if n:
     print(f"  ↳ patched OnError parameter shadowing ({n} site)")
 PY
     fi
+    # Patch upstream uniffi-bindgen-go's misleading "TODO: this is bad" and
+    # "TODO: Remove this" comments. The audit (2026-05-13) showed that the
+    # incrementPointer / decrementPointer pair is safe: incrementPointer calls
+    # the Rust cloneFunction which Arc::clones on the Rust side, so the handle
+    # passed to C survives independently of the Go-side callCounter. The
+    # LiftFromRustBuffer panic is a defensive guard against Rust↔Go bindgen
+    # protocol desync and should stay. Replace the comments inline so future
+    # reviewers see the reasoning without redoing the analysis.
+    if [[ -f bindings/go/internal/uniffi/blazen/blazen.go ]]; then
+        python3 - <<'PY'
+import sys
+from pathlib import Path
+p = Path("bindings/go/internal/uniffi/blazen/blazen.go")
+src = p.read_text()
+old_a = (
+    "\t// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,\n"
+    "\t// because the handle will be decremented immediately after this function returns,\n"
+    "\t// and someone will be left holding onto a non-locked handle.\n"
+)
+new_a = (
+    "\t// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction\n"
+    "\t// which does Arc::clone on the Rust side, bumping the Rust refcount\n"
+    "\t// independently of the Go-side callCounter. The defer below only\n"
+    "\t// decrements the (redundant) Go counter; the returned handle survives\n"
+    "\t// because the C caller owns its own Arc refcount via Arc::from_raw.\n"
+)
+old_b = (
+    "\t\t// TODO: Remove this\n"
+    "\t\tleftover, _ := io.ReadAll(reader)\n"
+    "\t\tpanic(fmt.Errorf(\"Junk remaining in buffer after lifting: %s\", string(leftover)))\n"
+)
+new_b = (
+    "\t\t// Defensive: protocol desync between Rust/Go bindgen would leave\n"
+    "\t\t// bytes here. Panicking surfaces it immediately rather than silently\n"
+    "\t\t// dropping data on the floor; keep this guard even though codegen\n"
+    "\t\t// is expected to keep buffers balanced.\n"
+    "\t\tleftover, _ := io.ReadAll(reader)\n"
+    "\t\tpanic(fmt.Errorf(\"Junk remaining in buffer after lifting: %s\", string(leftover)))\n"
+)
+count_a = src.count(old_a)
+count_b = src.count(old_b)
+if count_a != 19:
+    sys.exit(
+        f"ERROR: expected 19 'TODO: this is bad' blocks in blazen.go, found {count_a}. "
+        "Upstream uniffi-bindgen-go codegen likely changed — re-audit and update "
+        "the patch in scripts/regen-bindings.sh."
+    )
+if count_b != 1:
+    sys.exit(
+        f"ERROR: expected 1 'TODO: Remove this' block in blazen.go, found {count_b}. "
+        "Upstream uniffi-bindgen-go codegen likely changed — re-audit and update "
+        "the patch in scripts/regen-bindings.sh."
+    )
+src = src.replace(old_a, new_a)
+src = src.replace(old_b, new_b)
+p.write_text(src)
+print(f"  ↳ patched {count_a} TODO-is-bad blocks and {count_b} TODO-Remove-this blocks")
+PY
+    fi
     echo "  ✓ Go bindings → bindings/go/internal/uniffi/"
 }
 

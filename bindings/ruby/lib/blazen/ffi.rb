@@ -521,6 +521,56 @@ module Blazen
     attach_function :blazen_embedding_response_free,  [:pointer], :void
 
     # -------------------------------------------------------------------
+    # Typed-result _from_json constructors (sub-wave 3a)
+    #
+    # These are the entry points the V2 +CustomProvider+ trampolines use to
+    # materialise a cabi-side handle from a Ruby Hash. The Ruby override
+    # serialises its return value to JSON; the trampoline calls one of these
+    # to produce an owned +*mut Blazen<X>+ and writes it through the cabi
+    # vtable's +out_response+ slot. On parse / shape failure the cabi side
+    # populates +*out_err+ with a fresh +BlazenError+ which the trampoline
+    # propagates through to the cabi vtable's +out_err+ slot.
+    #
+    # +blazen_error_from_json+ is the inverse path: when a Ruby override
+    # raises, the trampoline encodes a small JSON sentinel
+    # (+{ "kind": "...", "message": "..." }+) and asks the cabi to build a
+    # matching +BlazenError+ handle (never null for non-null input — falls
+    # back to +Internal+ on malformed JSON).
+    #
+    # The voice-handle array helpers exist because +list_voices+ returns a
+    # variable-length array via +out_array+/+out_count+; the cabi exposes
+    # +_array_from_json+ to parse a JSON array, +_array_len+ to query its
+    # length, +_array_take(idx)+ to pop entries one-at-a-time (canonical
+    # drain pattern is +_take(0)+ until +_len+ returns 0), and +_array_free+
+    # to release the remaining array.
+    # -------------------------------------------------------------------
+    attach_function :blazen_audio_result_from_json,         [:pointer, :pointer], :pointer
+    attach_function :blazen_image_result_from_json,         [:pointer, :pointer], :pointer
+    attach_function :blazen_video_result_from_json,         [:pointer, :pointer], :pointer
+    attach_function :blazen_three_d_result_from_json,       [:pointer, :pointer], :pointer
+    attach_function :blazen_transcription_result_from_json, [:pointer, :pointer], :pointer
+    attach_function :blazen_voice_handle_from_json,         [:pointer, :pointer], :pointer
+    attach_function :blazen_voice_handle_array_from_json,   [:pointer, :pointer], :pointer
+    attach_function :blazen_voice_handle_array_len,         [:pointer],           :size_t
+    attach_function :blazen_voice_handle_array_take,        [:pointer, :size_t],  :pointer
+    attach_function :blazen_voice_handle_array_free,        [:pointer],           :void
+    attach_function :blazen_completion_response_from_json,  [:pointer, :pointer], :pointer
+    attach_function :blazen_embedding_response_from_json,   [:pointer, :pointer], :pointer
+    attach_function :blazen_error_from_json,                [:pointer],           :pointer
+
+    # Companion +_free+ functions for the typed result handles. These are
+    # the same functions the rest of the cabi already uses internally, but
+    # we need them attached here so the Ruby +Blazen::*Result+ finalizers
+    # (in +providers/results.rb+) can release handles the user constructs
+    # for testing but never hands across the FFI.
+    attach_function :blazen_audio_result_free,              [:pointer], :void
+    attach_function :blazen_image_result_free,              [:pointer], :void
+    attach_function :blazen_video_result_free,              [:pointer], :void
+    attach_function :blazen_three_d_result_free,            [:pointer], :void
+    attach_function :blazen_transcription_result_free,      [:pointer], :void
+    attach_function :blazen_voice_handle_free,              [:pointer], :void
+
+    # -------------------------------------------------------------------
     # CompletionModel provider factories
     # -------------------------------------------------------------------
     attach_function :blazen_completion_model_new_openai,

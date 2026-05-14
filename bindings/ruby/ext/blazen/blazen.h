@@ -436,6 +436,8 @@ typedef struct BlazenWorkflowHistoryEntry BlazenWorkflowHistoryEntry;
  */
 typedef struct BlazenWorkflowResult BlazenWorkflowResult;
 
+typedef struct Vec_InnerVoiceHandle Vec_InnerVoiceHandle;
+
 /**
  * Opaque wrapper around [`blazen_llm::compute::ImageRequest`].
  */
@@ -547,6 +549,16 @@ typedef struct {
 typedef struct {
     InnerVoiceHandle _0;
 } BlazenVoiceHandle;
+
+/**
+ * Opaque wrapper around `Vec<blazen_llm::compute::VoiceHandle>`. Produced by
+ * [`blazen_voice_handle_array_from_json`]; entries are removed one-at-a-time
+ * with [`blazen_voice_handle_array_take`]. Released with
+ * [`blazen_voice_handle_array_free`] (which drops any remaining entries).
+ */
+typedef struct {
+    Vec_InnerVoiceHandle inner;
+} BlazenVoiceHandleArray;
 
 /**
  * Opaque wrapper around [`blazen_llm::providers::openai_compat::OpenAiCompatConfig`].
@@ -3268,6 +3280,184 @@ BlazenTranscriptionSegment *blazen_transcription_result_segments_get(const Blaze
  void blazen_voice_handle_free(BlazenVoiceHandle *handle);
 
 /**
+ * Constructs a [`BlazenAudioResult`] handle from a JSON-encoded
+ * [`blazen_llm::compute::AudioResult`].
+ *
+ * # Ownership
+ *
+ * On success returns a non-null handle owned by the caller — release with
+ * [`blazen_audio_result_free`]. On failure returns null and writes a fresh
+ * `BlazenError::Internal { message }` into `*out_err` when `out_err` is
+ * non-null (caller frees with [`crate::error::blazen_error_free`]).
+ *
+ * # Safety
+ *
+ * `json` must be null OR point to a NUL-terminated UTF-8 buffer valid for
+ * the duration of this call. `out_err` must be null OR point to a writable
+ * `*mut BlazenError` slot.
+ */
+ BlazenAudioResult *blazen_audio_result_from_json(const char *json, BlazenError **out_err);
+
+/**
+ * Constructs a [`BlazenImageResult`] handle from a JSON-encoded
+ * [`blazen_llm::compute::ImageResult`].
+ *
+ * # Ownership
+ *
+ * On success returns a non-null handle owned by the caller — release with
+ * [`blazen_image_result_free`]. On failure returns null and writes a fresh
+ * `BlazenError::Internal { message }` into `*out_err` when `out_err` is
+ * non-null (caller frees with [`crate::error::blazen_error_free`]).
+ *
+ * # Safety
+ *
+ * `json` must be null OR point to a NUL-terminated UTF-8 buffer valid for
+ * the duration of this call. `out_err` must be null OR point to a writable
+ * `*mut BlazenError` slot.
+ */
+ BlazenImageResult *blazen_image_result_from_json(const char *json, BlazenError **out_err);
+
+/**
+ * Constructs a [`BlazenVideoResult`] handle from a JSON-encoded
+ * [`blazen_llm::compute::VideoResult`].
+ *
+ * # Ownership
+ *
+ * On success returns a non-null handle owned by the caller — release with
+ * [`blazen_video_result_free`]. On failure returns null and writes a fresh
+ * `BlazenError::Internal { message }` into `*out_err` when `out_err` is
+ * non-null (caller frees with [`crate::error::blazen_error_free`]).
+ *
+ * # Safety
+ *
+ * `json` must be null OR point to a NUL-terminated UTF-8 buffer valid for
+ * the duration of this call. `out_err` must be null OR point to a writable
+ * `*mut BlazenError` slot.
+ */
+ BlazenVideoResult *blazen_video_result_from_json(const char *json, BlazenError **out_err);
+
+/**
+ * Constructs a [`BlazenThreeDResult`] handle from a JSON-encoded
+ * [`blazen_llm::compute::ThreeDResult`].
+ *
+ * # Ownership
+ *
+ * On success returns a non-null handle owned by the caller — release with
+ * [`blazen_three_d_result_free`]. On failure returns null and writes a fresh
+ * `BlazenError::Internal { message }` into `*out_err` when `out_err` is
+ * non-null (caller frees with [`crate::error::blazen_error_free`]).
+ *
+ * # Safety
+ *
+ * `json` must be null OR point to a NUL-terminated UTF-8 buffer valid for
+ * the duration of this call. `out_err` must be null OR point to a writable
+ * `*mut BlazenError` slot.
+ */
+ BlazenThreeDResult *blazen_three_d_result_from_json(const char *json, BlazenError **out_err);
+
+/**
+ * Constructs a [`BlazenTranscriptionResult`] handle from a JSON-encoded
+ * [`blazen_llm::compute::TranscriptionResult`].
+ *
+ * # Ownership
+ *
+ * On success returns a non-null handle owned by the caller — release with
+ * [`blazen_transcription_result_free`]. On failure returns null and writes a
+ * fresh `BlazenError::Internal { message }` into `*out_err` when `out_err`
+ * is non-null (caller frees with [`crate::error::blazen_error_free`]).
+ *
+ * # Safety
+ *
+ * `json` must be null OR point to a NUL-terminated UTF-8 buffer valid for
+ * the duration of this call. `out_err` must be null OR point to a writable
+ * `*mut BlazenError` slot.
+ */
+
+BlazenTranscriptionResult *blazen_transcription_result_from_json(const char *json,
+                                                                 BlazenError **out_err);
+
+/**
+ * Constructs a [`BlazenVoiceHandle`] handle from a JSON-encoded
+ * [`blazen_llm::compute::VoiceHandle`].
+ *
+ * # Ownership
+ *
+ * On success returns a non-null handle owned by the caller — release with
+ * [`blazen_voice_handle_free`]. On failure returns null and writes a fresh
+ * `BlazenError::Internal { message }` into `*out_err` when `out_err` is
+ * non-null (caller frees with [`crate::error::blazen_error_free`]).
+ *
+ * # Safety
+ *
+ * `json` must be null OR point to a NUL-terminated UTF-8 buffer valid for
+ * the duration of this call. `out_err` must be null OR point to a writable
+ * `*mut BlazenError` slot.
+ */
+ BlazenVoiceHandle *blazen_voice_handle_from_json(const char *json, BlazenError **out_err);
+
+/**
+ * Parses a JSON array of [`blazen_llm::compute::VoiceHandle`] records into a
+ * freshly-boxed [`BlazenVoiceHandleArray`].
+ *
+ * # Ownership
+ *
+ * On success returns a non-null handle owned by the caller — release with
+ * [`blazen_voice_handle_array_free`]. On failure returns null and writes a
+ * fresh `BlazenError::Internal { message }` into `*out_err` when `out_err`
+ * is non-null (caller frees with [`crate::error::blazen_error_free`]).
+ *
+ * # Safety
+ *
+ * `json` must be null OR point to a NUL-terminated UTF-8 buffer valid for
+ * the duration of this call. `out_err` must be null OR point to a writable
+ * `*mut BlazenError` slot.
+ */
+
+BlazenVoiceHandleArray *blazen_voice_handle_array_from_json(const char *json,
+                                                            BlazenError **out_err);
+
+/**
+ * Returns the current length of the array. Returns `0` on a null handle.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVoiceHandleArray`.
+ */
+ uintptr_t blazen_voice_handle_array_len(const BlazenVoiceHandleArray *handle);
+
+/**
+ * Pops the `idx`-th entry from the array and returns it as a freshly-boxed
+ * [`BlazenVoiceHandle`] handle owned by the caller (release with
+ * [`blazen_voice_handle_free`]). Returns null if `handle` is null or `idx`
+ * is out of range.
+ *
+ * Note: `idx` is interpreted against the array's current length, which
+ * shrinks by one after every successful call. Callers should typically iterate
+ * from index `0` until [`blazen_voice_handle_array_len`] returns `0`. Calling
+ * `_take(0)` repeatedly is the canonical drain pattern; `Vec::remove`
+ * semantics apply, so out-of-bounds indices are rejected with null rather
+ * than aborting.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenVoiceHandleArray` (and not freed
+ * concurrently from another thread).
+ */
+ BlazenVoiceHandle *blazen_voice_handle_array_take(BlazenVoiceHandleArray *handle, uintptr_t idx);
+
+/**
+ * Frees a `BlazenVoiceHandleArray` handle, dropping any remaining entries.
+ * No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer previously produced by
+ * [`blazen_voice_handle_array_from_json`]. Calling this twice on the same
+ * non-null pointer is a double-free.
+ */
+ void blazen_voice_handle_array_free(BlazenVoiceHandleArray *handle);
+
+/**
  * Returns the variant tag for `err` — one of the `BLAZEN_ERROR_KIND_*`
  * constants. Returns `0` if `err` is null (which is otherwise an invalid
  * state — successful calls never produce an error handle).
@@ -3412,6 +3602,43 @@ BlazenTranscriptionSegment *blazen_transcription_result_segments_get(const Blaze
  * a use-after-free.
  */
  void blazen_error_free(BlazenError *err);
+
+/**
+ * Constructs a fresh `BlazenError` handle from a JSON object describing the
+ * variant and its message. Used by FFI hosts (notably the Ruby binding) to
+ * materialise a typed error from a foreign-language exception so it can be
+ * handed back through a fallible cabi callback.
+ *
+ * The JSON must be an object of shape `{ "kind": "<Variant>", "message": "..." }`
+ * where `<Variant>` is one of (case-sensitive, mirroring the
+ * `blazen_uniffi::errors::BlazenError` variants):
+ * `Auth`, `RateLimit`, `Timeout`, `Validation`, `ContentPolicy`,
+ * `Unsupported`, `Compute`, `Media`, `Provider`, `Workflow`, `Tool`, `Peer`,
+ * `Persist`, `Prompt`, `Memory`, `Cache`, `Cancelled`, `Internal`.
+ *
+ * Variants that carry extra structured fields (`Provider`, `Peer`, `Prompt`,
+ * `Memory`, `Cache`, `RateLimit`, `Timeout`) accept the same field names as
+ * their Rust counterparts; missing optional fields default sensibly
+ * (`Provider.kind` defaults to `"Other"`, all optional fields default to
+ * `None`/`0`).
+ *
+ * On any failure — null input, non-UTF-8 input, missing `kind`, unknown
+ * `kind`, or malformed JSON — falls back to `BlazenError::Internal` with a
+ * best-effort message and returns a non-null handle. This function never
+ * returns null for a non-null input pointer.
+ *
+ * # Ownership
+ *
+ * The returned handle is owned by the caller and must be released with
+ * [`blazen_error_free`]. Returns null only if `json` is null.
+ *
+ * # Safety
+ *
+ * `json` must be null OR point to a NUL-terminated byte buffer (any
+ * encoding — non-UTF-8 input is handled gracefully) that remains valid for
+ * the duration of this call.
+ */
+ BlazenError *blazen_error_from_json(const char *json);
 
 /**
  * Returns a read-only file descriptor that becomes readable once the future
@@ -4368,6 +4595,48 @@ uintptr_t blazen_embedding_response_embedding_to_buffer(const BlazenEmbeddingRes
  * surface.
  */
  void blazen_embedding_response_free(BlazenEmbeddingResponse *handle);
+
+/**
+ * Constructs a [`BlazenCompletionResponse`] handle from a JSON-encoded
+ * [`blazen_llm::CompletionResponse`].
+ *
+ * # Ownership
+ *
+ * On success returns a non-null handle owned by the caller — release with
+ * [`blazen_completion_response_free`]. On failure returns null and writes a
+ * fresh `BlazenError::Internal { message }` into `*out_err` when `out_err`
+ * is non-null (caller frees with [`crate::error::blazen_error_free`]).
+ *
+ * # Safety
+ *
+ * `json` must be null OR point to a NUL-terminated UTF-8 buffer valid for
+ * the duration of this call. `out_err` must be null OR point to a writable
+ * `*mut BlazenError` slot.
+ */
+
+BlazenCompletionResponse *blazen_completion_response_from_json(const char *json,
+                                                               BlazenError **out_err);
+
+/**
+ * Constructs a [`BlazenEmbeddingResponse`] handle from a JSON-encoded
+ * [`blazen_llm::EmbeddingResponse`].
+ *
+ * # Ownership
+ *
+ * On success returns a non-null handle owned by the caller — release with
+ * [`blazen_embedding_response_free`]. On failure returns null and writes a
+ * fresh `BlazenError::Internal { message }` into `*out_err` when `out_err`
+ * is non-null (caller frees with [`crate::error::blazen_error_free`]).
+ *
+ * # Safety
+ *
+ * `json` must be null OR point to a NUL-terminated UTF-8 buffer valid for
+ * the duration of this call. `out_err` must be null OR point to a writable
+ * `*mut BlazenError` slot.
+ */
+
+BlazenEmbeddingResponse *blazen_embedding_response_from_json(const char *json,
+                                                             BlazenError **out_err);
 
 /**
  * Construct a new peer server with the given UTF-8 `node_id`. Returns null

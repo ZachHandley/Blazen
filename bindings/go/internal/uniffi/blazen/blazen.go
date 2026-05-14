@@ -148,7 +148,10 @@ func LiftFromRustBuffer[GoType any](bufReader BufReader[GoType], rbuf RustBuffer
 	reader := rbuf.AsReader()
 	item := bufReader.Read(reader)
 	if reader.Len() > 0 {
-		// TODO: Remove this
+		// Defensive: protocol desync between Rust/Go bindgen would leave
+		// bytes here. Panicking surfaces it immediately rather than silently
+		// dropping data on the floor; keep this guard even though codegen
+		// is expected to keep buffers balanced.
 		leftover, _ := io.ReadAll(reader)
 		panic(fmt.Errorf("Junk remaining in buffer after lifting: %s", string(leftover)))
 	}
@@ -2185,9 +2188,11 @@ func (c FfiConverterAgent) Read(reader io.Reader) *Agent {
 }
 
 func (c FfiConverterAgent) Lower(value *Agent) C.uint64_t {
-	// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,
-	// because the handle will be decremented immediately after this function returns,
-	// and someone will be left holding onto a non-locked handle.
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
 	handle := value.ffiObject.incrementPointer("*Agent")
 	defer value.ffiObject.decrementPointer()
 	return handle
@@ -2461,9 +2466,11 @@ func (c FfiConverterBaseProvider) Read(reader io.Reader) *BaseProvider {
 }
 
 func (c FfiConverterBaseProvider) Lower(value *BaseProvider) C.uint64_t {
-	// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,
-	// because the handle will be decremented immediately after this function returns,
-	// and someone will be left holding onto a non-locked handle.
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
 	handle := value.ffiObject.incrementPointer("*BaseProvider")
 	defer value.ffiObject.decrementPointer()
 	return handle
@@ -2837,9 +2844,11 @@ func (c FfiConverterCheckpointStore) Read(reader io.Reader) *CheckpointStore {
 }
 
 func (c FfiConverterCheckpointStore) Lower(value *CheckpointStore) C.uint64_t {
-	// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,
-	// because the handle will be decremented immediately after this function returns,
-	// and someone will be left holding onto a non-locked handle.
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
 	handle := value.ffiObject.incrementPointer("*CheckpointStore")
 	defer value.ffiObject.decrementPointer()
 	return handle
@@ -2993,9 +3002,11 @@ func (c FfiConverterCompletionModel) Read(reader io.Reader) *CompletionModel {
 }
 
 func (c FfiConverterCompletionModel) Lower(value *CompletionModel) C.uint64_t {
-	// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,
-	// because the handle will be decremented immediately after this function returns,
-	// and someone will be left holding onto a non-locked handle.
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
 	handle := value.ffiObject.incrementPointer("*CompletionModel")
 	defer value.ffiObject.decrementPointer()
 	return handle
@@ -3228,9 +3239,11 @@ func (c FfiConverterCompletionStreamSink) Read(reader io.Reader) CompletionStrea
 }
 
 func (c FfiConverterCompletionStreamSink) Lower(value CompletionStreamSink) C.uint64_t {
-	// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,
-	// because the handle will be decremented immediately after this function returns,
-	// and someone will be left holding onto a non-locked handle.
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
 	if val, ok := value.(*CompletionStreamSinkImpl); ok {
 		// Rust-backed object, clone the handle
 		handle := val.ffiObject.incrementPointer("CompletionStreamSink")
@@ -4248,9 +4261,11 @@ func (c FfiConverterCustomProvider) Read(reader io.Reader) CustomProvider {
 }
 
 func (c FfiConverterCustomProvider) Lower(value CustomProvider) C.uint64_t {
-	// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,
-	// because the handle will be decremented immediately after this function returns,
-	// and someone will be left holding onto a non-locked handle.
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
 	if val, ok := value.(*CustomProviderImpl); ok {
 		// Rust-backed object, clone the handle
 		handle := val.ffiObject.incrementPointer("CustomProvider")
@@ -6059,9 +6074,11 @@ func (c FfiConverterCustomProviderHandle) Read(reader io.Reader) *CustomProvider
 }
 
 func (c FfiConverterCustomProviderHandle) Lower(value *CustomProviderHandle) C.uint64_t {
-	// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,
-	// because the handle will be decremented immediately after this function returns,
-	// and someone will be left holding onto a non-locked handle.
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
 	handle := value.ffiObject.incrementPointer("*CustomProviderHandle")
 	defer value.ffiObject.decrementPointer()
 	return handle
@@ -6211,9 +6228,11 @@ func (c FfiConverterEmbeddingModel) Read(reader io.Reader) *EmbeddingModel {
 }
 
 func (c FfiConverterEmbeddingModel) Lower(value *EmbeddingModel) C.uint64_t {
-	// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,
-	// because the handle will be decremented immediately after this function returns,
-	// and someone will be left holding onto a non-locked handle.
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
 	handle := value.ffiObject.incrementPointer("*EmbeddingModel")
 	defer value.ffiObject.decrementPointer()
 	return handle
@@ -6351,9 +6370,11 @@ func (c FfiConverterImageGenModel) Read(reader io.Reader) *ImageGenModel {
 }
 
 func (c FfiConverterImageGenModel) Lower(value *ImageGenModel) C.uint64_t {
-	// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,
-	// because the handle will be decremented immediately after this function returns,
-	// and someone will be left holding onto a non-locked handle.
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
 	handle := value.ffiObject.incrementPointer("*ImageGenModel")
 	defer value.ffiObject.decrementPointer()
 	return handle
@@ -6585,9 +6606,11 @@ func (c FfiConverterPeerClient) Read(reader io.Reader) *PeerClient {
 }
 
 func (c FfiConverterPeerClient) Lower(value *PeerClient) C.uint64_t {
-	// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,
-	// because the handle will be decremented immediately after this function returns,
-	// and someone will be left holding onto a non-locked handle.
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
 	handle := value.ffiObject.incrementPointer("*PeerClient")
 	defer value.ffiObject.decrementPointer()
 	return handle
@@ -6766,9 +6789,11 @@ func (c FfiConverterPeerServer) Read(reader io.Reader) *PeerServer {
 }
 
 func (c FfiConverterPeerServer) Lower(value *PeerServer) C.uint64_t {
-	// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,
-	// because the handle will be decremented immediately after this function returns,
-	// and someone will be left holding onto a non-locked handle.
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
 	handle := value.ffiObject.incrementPointer("*PeerServer")
 	defer value.ffiObject.decrementPointer()
 	return handle
@@ -6934,9 +6959,11 @@ func (c FfiConverterPipeline) Read(reader io.Reader) *Pipeline {
 }
 
 func (c FfiConverterPipeline) Lower(value *Pipeline) C.uint64_t {
-	// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,
-	// because the handle will be decremented immediately after this function returns,
-	// and someone will be left holding onto a non-locked handle.
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
 	handle := value.ffiObject.incrementPointer("*Pipeline")
 	defer value.ffiObject.decrementPointer()
 	return handle
@@ -7165,9 +7192,11 @@ func (c FfiConverterPipelineBuilder) Read(reader io.Reader) *PipelineBuilder {
 }
 
 func (c FfiConverterPipelineBuilder) Lower(value *PipelineBuilder) C.uint64_t {
-	// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,
-	// because the handle will be decremented immediately after this function returns,
-	// and someone will be left holding onto a non-locked handle.
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
 	handle := value.ffiObject.incrementPointer("*PipelineBuilder")
 	defer value.ffiObject.decrementPointer()
 	return handle
@@ -7304,9 +7333,11 @@ func (c FfiConverterStepHandler) Read(reader io.Reader) StepHandler {
 }
 
 func (c FfiConverterStepHandler) Lower(value StepHandler) C.uint64_t {
-	// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,
-	// because the handle will be decremented immediately after this function returns,
-	// and someone will be left holding onto a non-locked handle.
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
 	if val, ok := value.(*StepHandlerImpl); ok {
 		// Rust-backed object, clone the handle
 		handle := val.ffiObject.incrementPointer("StepHandler")
@@ -7542,9 +7573,11 @@ func (c FfiConverterSttModel) Read(reader io.Reader) *SttModel {
 }
 
 func (c FfiConverterSttModel) Lower(value *SttModel) C.uint64_t {
-	// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,
-	// because the handle will be decremented immediately after this function returns,
-	// and someone will be left holding onto a non-locked handle.
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
 	handle := value.ffiObject.incrementPointer("*SttModel")
 	defer value.ffiObject.decrementPointer()
 	return handle
@@ -7687,9 +7720,11 @@ func (c FfiConverterToolHandler) Read(reader io.Reader) ToolHandler {
 }
 
 func (c FfiConverterToolHandler) Lower(value ToolHandler) C.uint64_t {
-	// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,
-	// because the handle will be decremented immediately after this function returns,
-	// and someone will be left holding onto a non-locked handle.
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
 	if val, ok := value.(*ToolHandlerImpl); ok {
 		// Rust-backed object, clone the handle
 		handle := val.ffiObject.incrementPointer("ToolHandler")
@@ -7926,9 +7961,11 @@ func (c FfiConverterTtsModel) Read(reader io.Reader) *TtsModel {
 }
 
 func (c FfiConverterTtsModel) Lower(value *TtsModel) C.uint64_t {
-	// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,
-	// because the handle will be decremented immediately after this function returns,
-	// and someone will be left holding onto a non-locked handle.
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
 	handle := value.ffiObject.incrementPointer("*TtsModel")
 	defer value.ffiObject.decrementPointer()
 	return handle
@@ -8074,9 +8111,11 @@ func (c FfiConverterWorkflow) Read(reader io.Reader) *Workflow {
 }
 
 func (c FfiConverterWorkflow) Lower(value *Workflow) C.uint64_t {
-	// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,
-	// because the handle will be decremented immediately after this function returns,
-	// and someone will be left holding onto a non-locked handle.
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
 	handle := value.ffiObject.incrementPointer("*Workflow")
 	defer value.ffiObject.decrementPointer()
 	return handle
@@ -8235,9 +8274,11 @@ func (c FfiConverterWorkflowBuilder) Read(reader io.Reader) *WorkflowBuilder {
 }
 
 func (c FfiConverterWorkflowBuilder) Lower(value *WorkflowBuilder) C.uint64_t {
-	// TODO: this is bad - all synchronization from ObjectRuntime.go is discarded here,
-	// because the handle will be decremented immediately after this function returns,
-	// and someone will be left holding onto a non-locked handle.
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
 	handle := value.ffiObject.incrementPointer("*WorkflowBuilder")
 	defer value.ffiObject.decrementPointer()
 	return handle

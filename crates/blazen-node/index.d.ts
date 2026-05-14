@@ -1483,11 +1483,27 @@ export declare class CustomProvider {
   /**
    * Construct a `CustomProvider`.
    *
-   * - `providerId` — short identifier used for logging
-   *   (e.g. `"elevenlabs"`, `"my-ollama"`).
-   * - `protocol` — optional [`ApiProtocol`]; defaults to
-   *   [`ApiProtocol.custom`]. Subclasses that override capability
-   *   methods typically leave this at the default.
+   * Takes an options object:
+   *
+   * ```typescript
+   * interface CustomProviderOptions {
+   *   providerId: string;        // required: short identifier for logging
+   *   protocol?: ApiProtocol;    // optional: defaults to ApiProtocol.custom()
+   * }
+   * ```
+   *
+   * ```javascript
+   * // Direct construction (every typed method reports Unsupported).
+   * const provider = new CustomProvider({ providerId: "my-provider" });
+   *
+   * // Subclass with capability overrides.
+   * class MyTts extends CustomProvider {
+   *   constructor() {
+   *     super({ providerId: "my-tts" });
+   *   }
+   *   async textToSpeech(request) { ... }
+   * }
+   * ```
    *
    * When the constructor is invoked via `new (class extends
    * CustomProvider) { … }`, the prototype of the JS instance
@@ -1497,12 +1513,12 @@ export declare class CustomProvider {
    * through the JS side.
    *
    * When the constructor is invoked directly as
-   * `new CustomProvider(…)` (no subclass), the resulting handle
-   * reports every typed method as `Unsupported` unless built via
-   * one of the static factories
+   * `new CustomProvider({ providerId })` (no subclass), the
+   * resulting handle reports every typed method as `Unsupported`
+   * unless built via one of the static factories
    * ([`Self::ollama`] / [`Self::lm_studio`] / [`Self::openai_compat`]).
    */
-  constructor(providerId: string, protocol?: ApiProtocol | undefined | null)
+  constructor(options: { providerId: string; protocol?: ApiProtocol })
   /**
    * Convenience constructor for a local Ollama server.
    *

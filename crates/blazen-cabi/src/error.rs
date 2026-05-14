@@ -23,7 +23,7 @@
 // fire on the helpers.
 #![allow(dead_code)]
 
-use std::ffi::c_char;
+use std::ffi::{CStr, c_char};
 
 use blazen_uniffi::errors::BlazenError as InnerError;
 
@@ -407,4 +407,161 @@ pub unsafe extern "C" fn blazen_error_free(err: *mut BlazenError) {
     // `Box::into_raw` over a `BlazenError`, so reconstructing the `Box`
     // here is sound and `drop` releases the original allocation.
     drop(unsafe { Box::from_raw(err) });
+}
+
+/// Constructs a fresh `BlazenError` handle from a JSON object describing the
+/// variant and its message. Used by FFI hosts (notably the Ruby binding) to
+/// materialise a typed error from a foreign-language exception so it can be
+/// handed back through a fallible cabi callback.
+///
+/// The JSON must be an object of shape `{ "kind": "<Variant>", "message": "..." }`
+/// where `<Variant>` is one of (case-sensitive, mirroring the
+/// `blazen_uniffi::errors::BlazenError` variants):
+/// `Auth`, `RateLimit`, `Timeout`, `Validation`, `ContentPolicy`,
+/// `Unsupported`, `Compute`, `Media`, `Provider`, `Workflow`, `Tool`, `Peer`,
+/// `Persist`, `Prompt`, `Memory`, `Cache`, `Cancelled`, `Internal`.
+///
+/// Variants that carry extra structured fields (`Provider`, `Peer`, `Prompt`,
+/// `Memory`, `Cache`, `RateLimit`, `Timeout`) accept the same field names as
+/// their Rust counterparts; missing optional fields default sensibly
+/// (`Provider.kind` defaults to `"Other"`, all optional fields default to
+/// `None`/`0`).
+///
+/// On any failure — null input, non-UTF-8 input, missing `kind`, unknown
+/// `kind`, or malformed JSON — falls back to `BlazenError::Internal` with a
+/// best-effort message and returns a non-null handle. This function never
+/// returns null for a non-null input pointer.
+///
+/// # Ownership
+///
+/// The returned handle is owned by the caller and must be released with
+/// [`blazen_error_free`]. Returns null only if `json` is null.
+///
+/// # Safety
+///
+/// `json` must be null OR point to a NUL-terminated byte buffer (any
+/// encoding — non-UTF-8 input is handled gracefully) that remains valid for
+/// the duration of this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_error_from_json(json: *const c_char) -> *mut BlazenError {
+    if json.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: per the contract, `json` is a live NUL-terminated buffer.
+    let cstr = unsafe { CStr::from_ptr(json) };
+    let Ok(s) = cstr.to_str() else {
+        return BlazenError::from(InnerError::Internal {
+            message: "blazen_error_from_json: input is not valid UTF-8".to_string(),
+        })
+        .into_ptr();
+    };
+    let inner = parse_error_json(s);
+    BlazenError::from(inner).into_ptr()
+}
+
+/// Parses a `{kind, message, ...}` JSON object into the matching
+/// [`InnerError`] variant. Any failure (malformed JSON, missing/unknown
+/// `kind`, missing required field on a structured variant) collapses to
+/// `InnerError::Internal { message }` where `message` is a best-effort
+/// description.
+fn parse_error_json(s: &str) -> InnerError {
+    let value: serde_json::Value = match serde_json::from_str(s) {
+        Ok(v) => v,
+        Err(e) => {
+            return InnerError::Internal {
+                message: format!("blazen_error_from_json: malformed JSON: {e}"),
+            };
+        }
+    };
+    let Some(obj) = value.as_object() else {
+        return InnerError::Internal {
+            message: format!("blazen_error_from_json: expected JSON object, got {value}"),
+        };
+    };
+    let kind = obj.get("kind").and_then(serde_json::Value::as_str);
+    let message = obj
+        .get("message")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("")
+        .to_string();
+
+    let get_str = |key: &str| -> Option<String> {
+        obj.get(key)
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+    };
+    let get_u32 = |key: &str| -> Option<u32> {
+        obj.get(key)
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|v| u32::try_from(v).ok())
+    };
+    let get_u64 = |key: &str| -> Option<u64> { obj.get(key).and_then(serde_json::Value::as_u64) };
+
+    match kind {
+        Some("Auth") => InnerError::Auth { message },
+        Some("RateLimit") => InnerError::RateLimit {
+            message,
+            retry_after_ms: get_u64("retry_after_ms"),
+        },
+        Some("Timeout") => InnerError::Timeout {
+            message,
+            elapsed_ms: get_u64("elapsed_ms").unwrap_or(0),
+        },
+        Some("Validation") => InnerError::Validation { message },
+        Some("ContentPolicy") => InnerError::ContentPolicy { message },
+        Some("Unsupported") => InnerError::Unsupported { message },
+        Some("Compute") => InnerError::Compute { message },
+        Some("Media") => InnerError::Media { message },
+        Some("Provider") => InnerError::Provider {
+            kind: get_str("subkind")
+                .or_else(|| get_str("provider_kind"))
+                .unwrap_or_else(|| "Other".to_string()),
+            message,
+            provider: get_str("provider"),
+            status: get_u32("status"),
+            endpoint: get_str("endpoint"),
+            request_id: get_str("request_id"),
+            detail: get_str("detail"),
+            retry_after_ms: get_u64("retry_after_ms"),
+        },
+        Some("Workflow") => InnerError::Workflow { message },
+        Some("Tool") => InnerError::Tool { message },
+        Some("Peer") => InnerError::Peer {
+            kind: get_str("subkind")
+                .or_else(|| get_str("peer_kind"))
+                .unwrap_or_else(|| "Transport".to_string()),
+            message,
+        },
+        Some("Persist") => InnerError::Persist { message },
+        Some("Prompt") => InnerError::Prompt {
+            kind: get_str("subkind")
+                .or_else(|| get_str("prompt_kind"))
+                .unwrap_or_else(|| "Validation".to_string()),
+            message,
+        },
+        Some("Memory") => InnerError::Memory {
+            kind: get_str("subkind")
+                .or_else(|| get_str("memory_kind"))
+                .unwrap_or_else(|| "Backend".to_string()),
+            message,
+        },
+        Some("Cache") => InnerError::Cache {
+            kind: get_str("subkind")
+                .or_else(|| get_str("cache_kind"))
+                .unwrap_or_else(|| "Io".to_string()),
+            message,
+        },
+        Some("Cancelled") => InnerError::Cancelled,
+        Some("Internal") => InnerError::Internal { message },
+        Some(other) => InnerError::Internal {
+            message: format!(
+                "blazen_error_from_json: unknown error kind {other:?}; original message: {message}"
+            ),
+        },
+        None => InnerError::Internal {
+            message: format!(
+                "blazen_error_from_json: missing 'kind' field; original message: {message}"
+            ),
+        },
+    }
 }

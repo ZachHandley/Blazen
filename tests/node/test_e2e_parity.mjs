@@ -72,16 +72,17 @@ test("e2e parity (shape) · Pipeline + CustomProvider + InMemoryBackend + Prompt
   t.is(rendered.role, "user");
   t.truthy(rendered.content && rendered.content.includes("hello world"));
 
-  // 2. CustomProvider -- wrap a host object exposing a TTS-shaped method.
-  // No method is invoked here; we only verify the wrapper constructs.
-  const host = {
+  // 2. CustomProvider -- subclass exposing a TTS-shaped method override.
+  // No method is invoked here; we only verify the subclass constructs.
+  class StubCustom extends CustomProvider {
+    constructor() {
+      super({ providerId: "stub-custom" });
+    }
     async textToSpeech(_request) {
       return { audio: [], timing: {}, metadata: {} };
-    },
-  };
-  const customProvider = new CustomProvider(host, {
-    providerId: "stub-custom",
-  });
+    }
+  }
+  const customProvider = new StubCustom();
   t.is(customProvider.providerId, "stub-custom");
 
   // 3. InMemoryBackend wrapped in a Memory (local-only mode -- no
@@ -154,9 +155,9 @@ test("e2e parity (shape) · PipelineBuilder rejects empty pipelines (parity with
   );
 });
 
-test("e2e parity (shape) · CustomProvider providerId defaults to 'custom' when omitted", (t) => {
-  // Mirrors the Python parity expectation that an unspecified provider id
-  // falls back to a stable default.
-  const provider = new CustomProvider({});
+test("e2e parity (shape) · CustomProvider providerId is set from the positional argument", (t) => {
+  // Mirrors the Python parity expectation: providerId comes from the
+  // constructor's positional `provider_id` / first argument.
+  const provider = new CustomProvider({ providerId: "custom" });
   t.is(provider.providerId, "custom");
 });

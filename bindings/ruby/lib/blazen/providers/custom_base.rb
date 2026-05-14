@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "json"
 require_relative "../ffi"
 
 module Blazen
@@ -796,31 +797,39 @@ module Blazen
   # +BlazenCustomProvider *+ that the rest of Blazen treats as a regular
   # provider.
   #
-  # ## Ruby/FFI subclass limitations (V1)
+  # ## Returning success values from overrides
   #
-  # The cabi does NOT (yet) expose Ruby-callable constructors for the
-  # typed result records (+BlazenAudioResult+, +BlazenImageResult+,
-  # +BlazenVoiceHandle+, +BlazenError+, etc.), so a Ruby override can't
-  # currently synthesise a success value to hand back across the FFI.
-  # Overrides therefore have two practical options:
+  # An override can return one of three things:
   #
-  # 1. Raise +Blazen::UnsupportedError+ (or any +StandardError+) — the
-  #    binding catches it, the callback returns +-1+ to the cabi, and
-  #    callers see a +Blazen::InternalError+ wrapping the original message.
-  # 2. Leave the method un-overridden — the default implementation raises
-  #    +Blazen::UnsupportedError+ for you.
+  # 1. A +Blazen::*Result+ instance (see +providers/results.rb+ — e.g.
+  #    +Blazen::AudioResult+, +Blazen::ImageResult+, +Blazen::CompletionResult+).
+  #    The trampoline calls +#take_ptr!+ to steal the cabi handle and writes
+  #    it through the vtable's +out_response+ slot.
+  # 2. A Ruby +Hash+ matching the matching record's serde schema. The
+  #    trampoline JSON-encodes it and asks the cabi to build the handle via
+  #    the matching +blazen_*_from_json+ entry point; on parse failure the
+  #    cabi populates the vtable's +out_err+ slot directly.
+  # 3. +nil+ — only valid for void-returning methods (currently just
+  #    +#delete_voice+).
   #
-  # Full Ruby-side typed-result construction is tracked for a follow-on
-  # wave; this V1 surface still lets Ruby users register their own provider
-  # identity / metadata and reuse the cabi presets (ollama, lm_studio,
-  # openai_compat) without any callback synthesis.
+  # Any +StandardError+ raised by the override is caught and converted into
+  # a cabi +BlazenError+ via +blazen_error_from_json+; the trampoline writes
+  # it through the vtable's +out_err+ slot and returns +-1+. The exception
+  # class maps to a +kind+ string by {ruby_error_kind} (e.g.
+  # +Blazen::UnsupportedError+ -> +"Unsupported"+, anything else -> +"Internal"+).
+  #
+  # Streaming (+#stream+) remains a follow-on wave — the cabi stream-pusher
+  # surface needs its own Ruby wrapper before completion-streaming through a
+  # subclass becomes useful. Until then, overriding +#stream+ raises like
+  # the other un-implemented variants.
   #
   # @example Subclass with a custom +text_to_speech+
   #   class MyTts < Blazen::CustomProvider
   #     def text_to_speech(_req)
-  #       # No Ruby-side result constructors yet — see "Ruby/FFI subclass
-  #       # limitations" above; raise so the caller sees a structured error.
-  #       raise Blazen::UnsupportedError, "MyTts: result synthesis not wired"
+  #       Blazen::AudioResult.new(
+  #         audio: [{ data_base64: "...", mime_type: "audio/wav" }],
+  #         model: "my-tts-v1",
+  #       )
   #     end
   #   end
   #
@@ -871,14 +880,21 @@ module Blazen
     #
     # Every typed thunk follows the same pattern:
     #   1. Look up the Ruby instance from +user_data+.
-    #   2. Free / discard the incoming request pointer (we have nothing
-    #      idiomatic to deserialize it into yet; see the class docs).
-    #   3. Call the Ruby method, capturing any +StandardError+.
-    #   4. Return +-1+. We never write +out_err+ because the cabi doesn't
-    #      expose +BlazenError+ constructors to foreign callers — the Rust
-    #      adapter synthesises a +InternalError+ when it sees status=-1
-    #      with a null +out_err+, which carries the Ruby method's message
-    #      as the "vtable returned -1" detail.
+    #   2. Call the Ruby override with the incoming request pointer.
+    #   3. Convert the Ruby return value into a cabi handle:
+    #        - +Blazen::*Result+ -> +#take_ptr!+ (steals ownership), then
+    #          write into +out_response+.
+    #        - +Hash+ -> JSON-encode and call the matching
+    #          +blazen_*_from_json+ entry point; the cabi side either
+    #          returns a non-null handle (written into +out_response+) or
+    #          a null + populated +*out_err+ (forwarded to the vtable's
+    #          +out_err+ slot).
+    #        - +nil+ -> only valid for void methods (+#delete_voice+).
+    #      Any +StandardError+ from the override is encoded as a small
+    #      JSON sentinel (+{ kind:, message: }+) and handed to
+    #      +blazen_error_from_json+; the resulting handle is written into
+    #      +out_err+.
+    #   4. Free the incoming request pointer via +free_sym+ in +ensure+.
     # ---------------------------------------------------------------------
 
     # Free function map: maps request pointer types to the matching cabi
@@ -903,29 +919,131 @@ module Blazen
     }.freeze
 
     # @api private
+    # Maps a Ruby exception class to the cabi-side +kind+ string consumed
+    # by +blazen_error_from_json+. Anything not listed falls through to
+    # +"Internal"+. Subclass relationships are honoured: a subclass of
+    # +Blazen::ProviderError+ still maps to +"Provider"+.
+    def self.ruby_error_kind(err)
+      case err
+      when Blazen::UnsupportedError then "Unsupported"
+      when Blazen::ValidationError  then "Validation"
+      when Blazen::TimeoutError     then "Timeout"
+      when Blazen::ProviderError    then "Provider"
+      when Blazen::AuthError        then "Auth"
+      when Blazen::RateLimitError   then "RateLimit"
+      else "Internal"
+      end
+    end
+
+    # @api private
+    # Encodes an exception as a cabi +BlazenError+ handle via
+    # +blazen_error_from_json+ and writes it into +out_err+ (if non-null).
+    # Falls back to a +warn+ + no-op when +blazen_error_from_json+ itself
+    # returns null (which the cabi promises only happens on null JSON input,
+    # not on parse failure — so this is purely defensive).
+    def self.write_error_through!(out_err, exception)
+      return if out_err.nil? || out_err.null?
+
+      payload = { kind: ruby_error_kind(exception), message: exception.message.to_s }
+      json_ptr = ::FFI::MemoryPointer.from_string(JSON.dump(payload))
+      err_handle = Blazen::FFI.blazen_error_from_json(json_ptr)
+      return if err_handle.nil? || err_handle.null?
+
+      out_err.write_pointer(err_handle)
+    end
+
+    # @api private
     # Shared core for every typed-method trampoline.
-    def self.dispatch_typed(user_data_ptr, method_name, req_ptr, free_sym)
+    #
+    # @param user_data_ptr [::FFI::Pointer] vtable +user_data+ (registry id)
+    # @param method_name   [Symbol] which Ruby method to dispatch
+    # @param req_ptr       [::FFI::Pointer, nil] incoming request handle
+    # @param free_sym      [Symbol, nil] cabi free fn for +req_ptr+
+    # @param out_response  [::FFI::Pointer, nil] +*mut *mut Blazen<X>+ slot
+    # @param out_err       [::FFI::Pointer, nil] +*mut *mut BlazenError+ slot
+    # @param from_json_sym [Symbol, nil] cabi +_from_json+ fn for Hash returns;
+    #   +nil+ means the method has no success-value (void) and only +nil+
+    #   returns are valid
+    # @return [Integer] 0 on success, -1 on failure
+    def self.dispatch_typed(user_data_ptr, method_name, req_ptr, free_sym,
+                            out_response, out_err, from_json_sym = nil)
       id = user_data_ptr.address
       instance = lookup(id)
+      status = -1
+
       begin
         if instance.nil?
-          warn "[blazen custom_provider] no instance registered for id=#{id}"
-        else
-          # Hand the raw request pointer in — V1 callers either ignore it or
-          # consume it through the cabi accessors. We free it via the
-          # +free_sym+ below regardless, so callers MUST NOT free it
-          # themselves.
-          instance.public_send(method_name, req_ptr)
+          raise Blazen::InternalError,
+                "no custom_provider instance registered for id=#{id}"
         end
+
+        result = instance.public_send(method_name, req_ptr)
+
+        status =
+          case result
+          when nil
+            0   # void return (e.g. +delete_voice+)
+          when ::Hash
+            if from_json_sym.nil?
+              raise Blazen::InternalError,
+                    "#{method_name} returned a Hash but no _from_json mapping " \
+                    "is wired for this trampoline"
+            end
+            handle = build_handle_from_hash(result, from_json_sym, out_err)
+            if handle.nil?
+              -1
+            else
+              out_response.write_pointer(handle) if out_response && !out_response.null?
+              0
+            end
+          when Blazen::AudioResult, Blazen::ImageResult, Blazen::VideoResult,
+               Blazen::ThreeDResult, Blazen::TranscriptionResult,
+               Blazen::VoiceHandle, Blazen::CompletionResult, Blazen::EmbeddingResult
+            ptr = result.take_ptr!
+            if ptr.nil? || ptr.null?
+              raise Blazen::InternalError,
+                    "#{method_name} returned a consumed #{result.class}"
+            end
+            out_response.write_pointer(ptr) if out_response && !out_response.null?
+            0
+          else
+            raise Blazen::InternalError,
+                  "#{method_name} returned #{result.class} " \
+                  "(expected nil, Hash, or Blazen::*Result)"
+          end
       rescue StandardError => e
-        warn "[blazen custom_provider #{method_name}] #{e.class}: #{e.message}"
-        warn e.backtrace.first(4).join("\n") if e.backtrace
+        write_error_through!(out_err, e)
+        status = -1
       ensure
-        if free_sym && req_ptr && !req_ptr.null?
+        if free_sym && req_ptr && !req_ptr.null? &&
+           Blazen::FFI.respond_to?(free_sym)
           Blazen::FFI.send(free_sym, req_ptr)
         end
       end
-      -1
+
+      status
+    end
+
+    # @api private
+    # Builds a typed-result handle from +hash+ via +from_json_sym+. On cabi
+    # failure: the cabi populates a fresh +BlazenError+ which we forward
+    # through +out_err+ (so the vtable caller sees structured error data),
+    # then returns +nil+ to signal failure. On success returns the cabi
+    # handle (caller owns it).
+    def self.build_handle_from_hash(hash, from_json_sym, out_err)
+      json_ptr = ::FFI::MemoryPointer.from_string(JSON.dump(hash))
+      err_holder = ::FFI::MemoryPointer.new(:pointer)
+      handle = Blazen::FFI.send(from_json_sym, json_ptr, err_holder)
+      return handle unless handle.nil? || handle.null?
+
+      err = err_holder.read_pointer
+      if out_err && !out_err.null? && !err.null?
+        out_err.write_pointer(err)
+      elsif !err.null?
+        # No out_err slot to forward into — release the error to avoid leaking.
+        Blazen::FFI.blazen_error_free(err)
+      end
+      nil
     end
 
     # +drop_user_data+ — invoked exactly once when the inner cabi adapter
@@ -937,132 +1055,267 @@ module Blazen
       proc { |user_data_ptr| unregister(user_data_ptr.address) },
     )
 
-    # +complete+ — special-cased because the success path (writing a
-    # +BlazenCompletionResponse *+) is also not Ruby-constructible in V1.
+    # +complete+ — Ruby override may return a +Blazen::CompletionResult+,
+    # a Hash matching the +CompletionResponse+ schema, or raise.
     COMPLETE_FN = ::FFI::Function.new(
       :int32,
       %i[pointer pointer pointer pointer],
-      proc do |user_data_ptr, req_ptr, _out_response, _out_err|
-        dispatch_typed(user_data_ptr, :complete, req_ptr, :blazen_completion_request_free)
+      proc do |user_data_ptr, req_ptr, out_response, out_err|
+        dispatch_typed(user_data_ptr, :complete, req_ptr,
+                       :blazen_completion_request_free, out_response, out_err,
+                       :blazen_completion_response_from_json)
       end,
       blocking: true,
     )
 
-    # +stream+ — similarly stubbed; Ruby streaming through a subclass is a
-    # follow-on wave (the cabi stream-pusher surface needs a Ruby-side
-    # wrapper before this becomes useful).
+    # +stream+ — Ruby streaming through a subclass is a follow-on wave (the
+    # cabi stream-pusher surface needs a Ruby-side wrapper before this
+    # becomes useful). For now the override is invoked and any return value
+    # is discarded; nil returns are treated as success, anything else as a
+    # +ValidationError+. Most subclasses just raise +UnsupportedError+.
     STREAM_FN = ::FFI::Function.new(
       :int32,
       %i[pointer pointer pointer pointer],
-      proc do |user_data_ptr, req_ptr, _pusher, _out_err|
-        # Note: +req_ptr+ here is a +BlazenCompletionRequest *+; same as
-        # complete. We don't own +pusher+ (the cabi keeps it).
-        dispatch_typed(user_data_ptr, :stream, req_ptr, :blazen_completion_request_free)
+      proc do |user_data_ptr, req_ptr, _pusher, out_err|
+        # Note: +req_ptr+ here is a +BlazenCompletionRequest *+; +pusher+ is
+        # caller-owned by the cabi (not freed here). No +out_response+
+        # because the stream protocol writes through +pusher+.
+        dispatch_typed(user_data_ptr, :stream, req_ptr,
+                       :blazen_completion_request_free, nil, out_err, nil)
       end,
       blocking: true,
     )
 
-    # +embed+ — the texts array is borrowed-for-duration-of-the-call;
-    # the trampoline doesn't free it.
+    # +embed+ — the texts array is borrowed-for-duration-of-the-call; the
+    # trampoline doesn't free it. Override receives the raw +texts+ pointer
+    # and +count+ and may return a +Blazen::EmbeddingResult+ or a Hash
+    # matching the +EmbeddingResponse+ schema.
     EMBED_FN = ::FFI::Function.new(
       :int32,
       %i[pointer pointer size_t pointer pointer],
-      proc do |user_data_ptr, _texts, _count, _out_response, _out_err|
+      proc do |user_data_ptr, texts, count, out_response, out_err|
         id = user_data_ptr.address
         instance = lookup(id)
+        status = -1
         begin
-          instance&.public_send(:embed, _texts, _count)
+          if instance.nil?
+            raise Blazen::InternalError,
+                  "no custom_provider instance registered for id=#{id}"
+          end
+          result = instance.public_send(:embed, texts, count)
+          status =
+            case result
+            when ::Hash
+              json_ptr = ::FFI::MemoryPointer.from_string(JSON.dump(result))
+              err_holder = ::FFI::MemoryPointer.new(:pointer)
+              handle = Blazen::FFI.blazen_embedding_response_from_json(json_ptr, err_holder)
+              if handle.nil? || handle.null?
+                err = err_holder.read_pointer
+                if out_err && !out_err.null? && !err.null?
+                  out_err.write_pointer(err)
+                elsif !err.null?
+                  Blazen::FFI.blazen_error_free(err)
+                end
+                -1
+              else
+                out_response.write_pointer(handle) if out_response && !out_response.null?
+                0
+              end
+            when Blazen::EmbeddingResult
+              ptr = result.take_ptr!
+              raise Blazen::InternalError, "embed returned a consumed EmbeddingResult" if ptr.nil? || ptr.null?
+
+              out_response.write_pointer(ptr) if out_response && !out_response.null?
+              0
+            else
+              raise Blazen::InternalError,
+                    "embed returned #{result.class} (expected Hash or Blazen::EmbeddingResult)"
+            end
         rescue StandardError => e
-          warn "[blazen custom_provider embed] #{e.class}: #{e.message}"
+          write_error_through!(out_err, e)
+          status = -1
         end
-        -1
+        status
       end,
       blocking: true,
     )
 
     # +list_voices+ — no request, just out-array / out-count / out-err.
+    # Ruby override returns an Array of either +Blazen::VoiceHandle+
+    # instances or Hashes (mixed is fine). We collect each handle, allocate
+    # a contiguous +**BlazenVoiceHandle+ buffer, write it through
+    # +out_array+, and set +*out_count+.
     LIST_VOICES_FN = ::FFI::Function.new(
       :int32,
       %i[pointer pointer pointer pointer],
-      proc do |user_data_ptr, _out_array, _out_count, _out_err|
+      proc do |user_data_ptr, out_array, out_count, out_err|
         id = user_data_ptr.address
         instance = lookup(id)
+        status = -1
         begin
-          instance&.public_send(:list_voices)
+          if instance.nil?
+            raise Blazen::InternalError,
+                  "no custom_provider instance registered for id=#{id}"
+          end
+          result = instance.public_send(:list_voices)
+          unless result.is_a?(::Array)
+            raise Blazen::InternalError,
+                  "list_voices returned #{result.class} (expected Array)"
+          end
+
+          ptrs = result.map do |entry|
+            case entry
+            when Blazen::VoiceHandle
+              p = entry.take_ptr!
+              raise Blazen::InternalError, "list_voices: consumed VoiceHandle" if p.nil? || p.null?
+
+              p
+            when ::Hash
+              json_ptr = ::FFI::MemoryPointer.from_string(JSON.dump(entry))
+              err_holder = ::FFI::MemoryPointer.new(:pointer)
+              h = Blazen::FFI.blazen_voice_handle_from_json(json_ptr, err_holder)
+              if h.nil? || h.null?
+                err = err_holder.read_pointer
+                msg = err.null? ? "blazen_voice_handle_from_json returned null" :
+                                  Blazen::FFI.consume_cstring(Blazen::FFI.blazen_error_message(err))
+                Blazen::FFI.blazen_error_free(err) unless err.null?
+                raise Blazen::InternalError, msg || "list_voices: voice_handle_from_json returned null"
+              end
+              h
+            else
+              raise Blazen::InternalError,
+                    "list_voices: entry #{entry.class} (expected Hash or Blazen::VoiceHandle)"
+            end
+          end
+
+          buf = ::FFI::MemoryPointer.new(:pointer, ptrs.length)
+          # The cabi side takes ownership of the buffer's contents (each
+          # handle) but NOT the buffer itself — pin it on a class-level
+          # collection so GC doesn't reclaim it while the cabi reads it,
+          # then release after a tick. The simpler safe approach: disable
+          # autorelease so the +MemoryPointer+ isn't freed before the cabi
+          # reads it; the cabi copies the handle pointers out into its own
+          # Vec immediately on read, so leaking the buffer for one GC tick
+          # is acceptable. Detach autorelease here so it lives until GC.
+          buf.autorelease = false
+          ptrs.each_with_index { |p, i| buf[i].write_pointer(p) }
+
+          out_array.write_pointer(buf) if out_array && !out_array.null?
+          out_count.write(:size_t, ptrs.length) if out_count && !out_count.null?
+          status = 0
         rescue StandardError => e
-          warn "[blazen custom_provider list_voices] #{e.class}: #{e.message}"
+          write_error_through!(out_err, e)
+          status = -1
         end
-        -1
+        status
       end,
       blocking: true,
     )
 
     # +delete_voice+ — request pointer is a +BlazenVoiceHandle *+ that the
-    # callback must free.
+    # callback must free. No +out_response+ slot — only +out_err+. The
+    # Ruby override is expected to return +nil+ (anything else is a bug).
     DELETE_VOICE_FN = ::FFI::Function.new(
       :int32,
       %i[pointer pointer pointer],
-      proc do |user_data_ptr, voice_ptr, _out_err|
-        dispatch_typed(user_data_ptr, :delete_voice, voice_ptr, :blazen_voice_handle_free)
+      proc do |user_data_ptr, voice_ptr, out_err|
+        dispatch_typed(user_data_ptr, :delete_voice, voice_ptr,
+                       :blazen_voice_handle_free, nil, out_err, nil)
       end,
       blocking: true,
     )
 
     # Per-method trampolines. Each one wraps {dispatch_typed} with the
-    # appropriate request-free symbol baked in.
+    # appropriate request-free symbol and +_from_json+ success-path symbol
+    # baked in. The override may return a +Blazen::*Result+ instance (the
+    # trampoline steals the cabi handle), a Hash matching the matching
+    # record's serde schema (the trampoline builds the handle), or raise.
     TEXT_TO_SPEECH_FN = ::FFI::Function.new(
       :int32, %i[pointer pointer pointer pointer],
-      proc { |u, r, *| dispatch_typed(u, :text_to_speech, r, :blazen_speech_request_free) },
+      proc do |u, r, out_response, out_err|
+        dispatch_typed(u, :text_to_speech, r, :blazen_speech_request_free,
+                       out_response, out_err, :blazen_audio_result_from_json)
+      end,
       blocking: true,
     )
     GENERATE_MUSIC_FN = ::FFI::Function.new(
       :int32, %i[pointer pointer pointer pointer],
-      proc { |u, r, *| dispatch_typed(u, :generate_music, r, :blazen_music_request_free) },
+      proc do |u, r, out_response, out_err|
+        dispatch_typed(u, :generate_music, r, :blazen_music_request_free,
+                       out_response, out_err, :blazen_audio_result_from_json)
+      end,
       blocking: true,
     )
     GENERATE_SFX_FN = ::FFI::Function.new(
       :int32, %i[pointer pointer pointer pointer],
-      proc { |u, r, *| dispatch_typed(u, :generate_sfx, r, :blazen_music_request_free) },
+      proc do |u, r, out_response, out_err|
+        dispatch_typed(u, :generate_sfx, r, :blazen_music_request_free,
+                       out_response, out_err, :blazen_audio_result_from_json)
+      end,
       blocking: true,
     )
     CLONE_VOICE_FN = ::FFI::Function.new(
       :int32, %i[pointer pointer pointer pointer],
-      proc { |u, r, *| dispatch_typed(u, :clone_voice, r, :blazen_voice_clone_request_free) },
+      proc do |u, r, out_response, out_err|
+        dispatch_typed(u, :clone_voice, r, :blazen_voice_clone_request_free,
+                       out_response, out_err, :blazen_voice_handle_from_json)
+      end,
       blocking: true,
     )
     GENERATE_IMAGE_FN = ::FFI::Function.new(
       :int32, %i[pointer pointer pointer pointer],
-      proc { |u, r, *| dispatch_typed(u, :generate_image, r, :blazen_image_request_free) },
+      proc do |u, r, out_response, out_err|
+        dispatch_typed(u, :generate_image, r, :blazen_image_request_free,
+                       out_response, out_err, :blazen_image_result_from_json)
+      end,
       blocking: true,
     )
     UPSCALE_IMAGE_FN = ::FFI::Function.new(
       :int32, %i[pointer pointer pointer pointer],
-      proc { |u, r, *| dispatch_typed(u, :upscale_image, r, :blazen_upscale_request_free) },
+      proc do |u, r, out_response, out_err|
+        dispatch_typed(u, :upscale_image, r, :blazen_upscale_request_free,
+                       out_response, out_err, :blazen_image_result_from_json)
+      end,
       blocking: true,
     )
     TEXT_TO_VIDEO_FN = ::FFI::Function.new(
       :int32, %i[pointer pointer pointer pointer],
-      proc { |u, r, *| dispatch_typed(u, :text_to_video, r, :blazen_video_request_free) },
+      proc do |u, r, out_response, out_err|
+        dispatch_typed(u, :text_to_video, r, :blazen_video_request_free,
+                       out_response, out_err, :blazen_video_result_from_json)
+      end,
       blocking: true,
     )
     IMAGE_TO_VIDEO_FN = ::FFI::Function.new(
       :int32, %i[pointer pointer pointer pointer],
-      proc { |u, r, *| dispatch_typed(u, :image_to_video, r, :blazen_video_request_free) },
+      proc do |u, r, out_response, out_err|
+        dispatch_typed(u, :image_to_video, r, :blazen_video_request_free,
+                       out_response, out_err, :blazen_video_result_from_json)
+      end,
       blocking: true,
     )
     TRANSCRIBE_FN = ::FFI::Function.new(
       :int32, %i[pointer pointer pointer pointer],
-      proc { |u, r, *| dispatch_typed(u, :transcribe, r, :blazen_transcription_request_free) },
+      proc do |u, r, out_response, out_err|
+        dispatch_typed(u, :transcribe, r, :blazen_transcription_request_free,
+                       out_response, out_err, :blazen_transcription_result_from_json)
+      end,
       blocking: true,
     )
     GENERATE_3D_FN = ::FFI::Function.new(
       :int32, %i[pointer pointer pointer pointer],
-      proc { |u, r, *| dispatch_typed(u, :generate_3d, r, :blazen_three_d_request_free) },
+      proc do |u, r, out_response, out_err|
+        dispatch_typed(u, :generate_3d, r, :blazen_three_d_request_free,
+                       out_response, out_err, :blazen_three_d_result_from_json)
+      end,
       blocking: true,
     )
     REMOVE_BACKGROUND_FN = ::FFI::Function.new(
       :int32, %i[pointer pointer pointer pointer],
-      proc { |u, r, *| dispatch_typed(u, :remove_background, r, :blazen_background_removal_request_free) },
+      proc do |u, r, out_response, out_err|
+        dispatch_typed(u, :remove_background, r, :blazen_background_removal_request_free,
+                       out_response, out_err, :blazen_image_result_from_json)
+      end,
       blocking: true,
     )
 

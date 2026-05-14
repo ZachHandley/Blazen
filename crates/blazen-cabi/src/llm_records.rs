@@ -34,8 +34,12 @@
 // shrink.
 #![allow(dead_code)]
 
-use std::ffi::c_char;
+use std::ffi::{CStr, c_char};
 
+use blazen_llm::{
+    CompletionResponse as CoreCompletionResponse, EmbeddingResponse as CoreEmbeddingResponse,
+};
+use blazen_uniffi::errors::BlazenError as InnerError;
 use blazen_uniffi::llm::{
     ChatMessage as InnerChatMessage, CompletionRequest as InnerCompletionRequest,
     CompletionResponse as InnerCompletionResponse, EmbeddingResponse as InnerEmbeddingResponse,
@@ -43,7 +47,55 @@ use blazen_uniffi::llm::{
     ToolCall as InnerToolCall,
 };
 
+use crate::error::BlazenError;
 use crate::string::{alloc_cstring, cstr_to_opt_string, cstr_to_str};
+
+// ---------------------------------------------------------------------------
+// Wave 3a: JSON-shim constructor helpers
+//
+// Mirror of the `read_json_input` / `write_internal_err` pattern in
+// `compute_results.rs`. Kept module-private and duplicated rather than shared
+// so each `*_records.rs` module stays self-contained (matches the cabi
+// convention).
+// ---------------------------------------------------------------------------
+
+fn write_internal_err(out_err: *mut *mut BlazenError, message: String) {
+    if out_err.is_null() {
+        return;
+    }
+    // SAFETY: `out_err` is non-null per the branch above; the caller has
+    // guaranteed it points to a writable `*mut BlazenError` slot.
+    unsafe {
+        *out_err = BlazenError::from(InnerError::Internal { message }).into_ptr();
+    }
+}
+
+/// Reads `json` as UTF-8 `&str`, writing an `Internal` error through
+/// `out_err` on null or non-UTF-8 input.
+///
+/// # Safety
+///
+/// `json` must be null OR point to a NUL-terminated buffer that remains valid
+/// for the duration of this call.
+unsafe fn read_json_input<'a>(
+    json: *const c_char,
+    fn_name: &str,
+    out_err: *mut *mut BlazenError,
+) -> Option<&'a str> {
+    if json.is_null() {
+        write_internal_err(out_err, format!("{fn_name}: json pointer is null"));
+        return None;
+    }
+    // SAFETY: per the contract, `json` is a live NUL-terminated buffer.
+    let cstr = unsafe { CStr::from_ptr(json) };
+    match cstr.to_str() {
+        Ok(s) => Some(s),
+        Err(e) => {
+            write_internal_err(out_err, format!("{fn_name}: input is not valid UTF-8: {e}"));
+            None
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // BlazenMedia
@@ -1446,4 +1498,94 @@ pub unsafe extern "C" fn blazen_embedding_response_free(handle: *mut BlazenEmbed
     }
     // SAFETY: per the contract, `handle` came from `Box::into_raw`.
     drop(unsafe { Box::from_raw(handle) });
+}
+
+// ===========================================================================
+// JSON-shim constructors (Wave 3a)
+//
+// `BlazenCompletionResponse` and `BlazenEmbeddingResponse` wrap UniFFI
+// `Record` types in `blazen_uniffi::llm`, which intentionally do NOT derive
+// `serde::Deserialize` (UniFFI's record macro doesn't emit it). To accept
+// JSON from FFI hosts, we parse against the underlying `blazen_llm` native
+// types (which DO derive `Serialize` / `Deserialize`) and convert via the
+// existing `From<CoreCompletionResponse> for CompletionResponse` /
+// `From<CoreEmbeddingResponse> for EmbeddingResponse` impls in
+// `blazen_uniffi::llm`. Round-trip fidelity matches the existing
+// future-take path used by `blazen_future_take_completion_response`.
+// ===========================================================================
+
+/// Constructs a [`BlazenCompletionResponse`] handle from a JSON-encoded
+/// [`blazen_llm::CompletionResponse`].
+///
+/// # Ownership
+///
+/// On success returns a non-null handle owned by the caller — release with
+/// [`blazen_completion_response_free`]. On failure returns null and writes a
+/// fresh `BlazenError::Internal { message }` into `*out_err` when `out_err`
+/// is non-null (caller frees with [`crate::error::blazen_error_free`]).
+///
+/// # Safety
+///
+/// `json` must be null OR point to a NUL-terminated UTF-8 buffer valid for
+/// the duration of this call. `out_err` must be null OR point to a writable
+/// `*mut BlazenError` slot.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_completion_response_from_json(
+    json: *const c_char,
+    out_err: *mut *mut BlazenError,
+) -> *mut BlazenCompletionResponse {
+    // SAFETY: forwarded to `read_json_input`; caller upholds the contract.
+    let Some(s) =
+        (unsafe { read_json_input(json, "blazen_completion_response_from_json", out_err) })
+    else {
+        return std::ptr::null_mut();
+    };
+    match serde_json::from_str::<CoreCompletionResponse>(s) {
+        Ok(core) => BlazenCompletionResponse(InnerCompletionResponse::from(core)).into_ptr(),
+        Err(e) => {
+            write_internal_err(
+                out_err,
+                format!("blazen_completion_response_from_json: deserialize failed: {e}"),
+            );
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Constructs a [`BlazenEmbeddingResponse`] handle from a JSON-encoded
+/// [`blazen_llm::EmbeddingResponse`].
+///
+/// # Ownership
+///
+/// On success returns a non-null handle owned by the caller — release with
+/// [`blazen_embedding_response_free`]. On failure returns null and writes a
+/// fresh `BlazenError::Internal { message }` into `*out_err` when `out_err`
+/// is non-null (caller frees with [`crate::error::blazen_error_free`]).
+///
+/// # Safety
+///
+/// `json` must be null OR point to a NUL-terminated UTF-8 buffer valid for
+/// the duration of this call. `out_err` must be null OR point to a writable
+/// `*mut BlazenError` slot.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_embedding_response_from_json(
+    json: *const c_char,
+    out_err: *mut *mut BlazenError,
+) -> *mut BlazenEmbeddingResponse {
+    // SAFETY: forwarded to `read_json_input`; caller upholds the contract.
+    let Some(s) =
+        (unsafe { read_json_input(json, "blazen_embedding_response_from_json", out_err) })
+    else {
+        return std::ptr::null_mut();
+    };
+    match serde_json::from_str::<CoreEmbeddingResponse>(s) {
+        Ok(core) => BlazenEmbeddingResponse(InnerEmbeddingResponse::from(core)).into_ptr(),
+        Err(e) => {
+            write_internal_err(
+                out_err,
+                format!("blazen_embedding_response_from_json: deserialize failed: {e}"),
+            );
+            std::ptr::null_mut()
+        }
+    }
 }

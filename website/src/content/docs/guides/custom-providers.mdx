@@ -75,7 +75,7 @@ import { ApiProtocol, CustomProvider } from "blazen";
 
 class ElevenLabsTTS extends CustomProvider {
   constructor(private apiKey: string) {
-    super("elevenlabs", ApiProtocol.custom());
+    super({ providerId: "elevenlabs", protocol: ApiProtocol.custom() });
   }
 
   async textToSpeech(request) {
@@ -195,9 +195,11 @@ val result = handle.textToSpeech(SpeechRequest(text = "hi", voice = "rachel"))
 ```
 
 ```ruby
-# Ruby — subclass Blazen::CustomProvider; every non-overridden method
-# raises Blazen::UnsupportedError. Use Blazen::CustomProvider.from_subclass
-# to obtain a handle that links to the cabi vtable.
+# Ruby — subclass Blazen::CustomProvider and override any of 16 typed
+# methods. Returning a Hash matching the result-record's serde schema, a
+# Blazen::*Result wrapper, or raising a Blazen::*Error all round-trip back
+# through the cabi vtable as typed values.
+require "base64"
 require "blazen"
 
 class ElevenLabsTts < Blazen::CustomProvider
@@ -206,19 +208,33 @@ class ElevenLabsTts < Blazen::CustomProvider
     @api_key = api_key
   end
 
-  def provider_id
-    "elevenlabs"
-  end
+  def provider_id = "elevenlabs"
 
   def text_to_speech(_request)
-    # V1 limitation: Ruby subclasses can raise UnsupportedError back through
-    # the cabi vtable, but cannot yet return a typed AudioResult record
-    # across the FFI boundary. Raise for now, or use a factory below.
-    raise Blazen::UnsupportedError, "ElevenLabsTts: result records pending"
+    audio = elevenlabs_call(@api_key, "hello", "rachel")
+    {
+      "audio" => [
+        {
+          "media" => {
+            "base64"     => Base64.strict_encode64(audio),
+            "media_type" => { "type" => "mp3" },
+            "metadata"   => {},
+          },
+        },
+      ],
+      "timing"   => { "total_ms" => 0 },
+      "metadata" => {},
+    }
+    # Equivalently: Blazen::AudioResult.new(<same hash>) — the trampoline
+    # accepts either a Hash (it JSON-encodes and asks the cabi to build
+    # the handle) or a pre-constructed Blazen::*Result wrapper (it steals
+    # the cabi handle via #take_ptr!).
   end
 end
 
 handle = Blazen::CustomProvider.from_subclass(ElevenLabsTts.new("sk-..."))
+# `handle` is a Blazen::CustomProviderHandle the rest of Blazen treats as
+# a regular provider.
 ```
 
 ## Quick start — factory for OpenAI-compatible servers
@@ -524,18 +540,7 @@ case.
 
 ## Limitations
 
-Two limitations to flag for V1:
-
-- **Ruby V1 — typed return values across the FFI vtable.** A Ruby
-  subclass can `raise Blazen::UnsupportedError` from any method and the
-  cabi adapter surfaces it correctly back to Rust as a typed
-  `BlazenError`. However, Ruby cannot yet construct and return success
-  records (`AudioResult`, `ImageResult`, etc.) across the cabi vtable —
-  the response-side serializers are pending. Subclasses are useful for
-  raising structured errors, custom routing, and as the host for
-  factory-built providers (`Blazen.ollama` etc.), but for the moment
-  Ruby cannot directly return compute results from an overridden
-  method. The factory-built handles work end-to-end.
+One limitation to flag for V1:
 
 - **Node prototype-walk re-entrance.** When the Node `CustomProvider`
   base constructor detects subclassing it walks the prototype chain to

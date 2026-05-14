@@ -198,18 +198,37 @@ impl JsCustomProviderAdapter {
     pub(crate) fn from_host_object(provider_id: String, host_object: &Object<'_>) -> Result<Self> {
         let mut methods: HashMap<&'static str, Arc<HostMethodTsfn>> = HashMap::new();
 
+        // Collect the prototypes that belong to user code (the JS
+        // subclass's own `prototype`, plus any intermediate user
+        // prototypes), stopping BEFORE the napi-installed
+        // `CustomProvider.prototype`. Without this, `has_named_property`
+        // would report typed compute methods like `textToSpeech` as
+        // "overridden" even when the subclass did not override them --
+        // because the `#[napi]` macro installs those methods on
+        // `CustomProvider.prototype`. Dispatching such a "phantom"
+        // override would re-enter the napi binding and loop until the
+        // stack overflows.
+        let user_protos = user_prototype_chain(host_object);
+
         for &(rust_name, js_name) in TRAIT_METHODS {
-            // Skip if the JS prototype chain has no property by this
-            // name. `has_named_property` includes prototype-inherited
-            // methods, which is what we want for class instances.
-            if !host_object.has_named_property(js_name).unwrap_or(false) {
+            // The subclass overrides `js_name` iff the host object
+            // itself or one of the user-level prototypes (i.e. those
+            // strictly below the napi-installed `CustomProvider.prototype`)
+            // carries it as an own property.
+            let has_override = host_object.has_own_property(js_name).unwrap_or(false)
+                || user_protos
+                    .iter()
+                    .any(|p| p.has_own_property(js_name).unwrap_or(false));
+            if !has_override {
                 continue;
             }
 
-            // Extract the property as a typed `Function`. If the
-            // extraction fails (the property exists but isn't a
-            // function), we silently skip it -- the user's intent is
-            // clearly that this capability is unsupported.
+            // Extract the property as a typed `Function`. `get_named_property`
+            // walks the prototype chain and returns the first hit, which is
+            // the user override we just confirmed sits below the napi
+            // prototype. If the extraction fails (the property exists but
+            // isn't a function), we silently skip it -- the user's intent
+            // is clearly that this capability is unsupported.
             let js_function: Function<'_, serde_json::Value, Promise<Option<serde_json::Value>>> =
                 match host_object.get_named_property(js_name) {
                     Ok(f) => f,
@@ -509,11 +528,27 @@ impl JsCustomProvider {
 
     /// Construct a `CustomProvider`.
     ///
-    /// - `providerId` — short identifier used for logging
-    ///   (e.g. `"elevenlabs"`, `"my-ollama"`).
-    /// - `protocol` — optional [`ApiProtocol`]; defaults to
-    ///   [`ApiProtocol.custom`]. Subclasses that override capability
-    ///   methods typically leave this at the default.
+    /// Takes an options object:
+    ///
+    /// ```typescript
+    /// interface CustomProviderOptions {
+    ///   providerId: string;        // required: short identifier for logging
+    ///   protocol?: ApiProtocol;    // optional: defaults to ApiProtocol.custom()
+    /// }
+    /// ```
+    ///
+    /// ```javascript
+    /// // Direct construction (every typed method reports Unsupported).
+    /// const provider = new CustomProvider({ providerId: "my-provider" });
+    ///
+    /// // Subclass with capability overrides.
+    /// class MyTts extends CustomProvider {
+    ///   constructor() {
+    ///     super({ providerId: "my-tts" });
+    ///   }
+    ///   async textToSpeech(request) { ... }
+    /// }
+    /// ```
     ///
     /// When the constructor is invoked via `new (class extends
     /// CustomProvider) { … }`, the prototype of the JS instance
@@ -523,17 +558,24 @@ impl JsCustomProvider {
     /// through the JS side.
     ///
     /// When the constructor is invoked directly as
-    /// `new CustomProvider(…)` (no subclass), the resulting handle
-    /// reports every typed method as `Unsupported` unless built via
-    /// one of the static factories
+    /// `new CustomProvider({ providerId })` (no subclass), the
+    /// resulting handle reports every typed method as `Unsupported`
+    /// unless built via one of the static factories
     /// ([`Self::ollama`] / [`Self::lm_studio`] / [`Self::openai_compat`]).
-    #[napi(constructor)]
-    pub fn new(
-        provider_id: String,
-        protocol: Option<&JsApiProtocol>,
-        this: This<'_>,
-    ) -> Result<Self> {
-        let protocol_inner = protocol.map_or(ApiProtocol::Custom, |p| p.inner().clone());
+    #[napi(
+        constructor,
+        ts_args_type = "options: { providerId: string; protocol?: ApiProtocol }"
+    )]
+    pub fn new(options: Object<'_>, this: This<'_>) -> Result<Self> {
+        let provider_id: String = options.get_named_property("providerId").map_err(|e| {
+            napi::Error::from_reason(format!(
+                "CustomProvider: `options.providerId` is required and must be a string ({e})"
+            ))
+        })?;
+        let protocol_inner = match options.get_named_property::<&JsApiProtocol>("protocol") {
+            Ok(p) => p.inner().clone(),
+            Err(_) => ApiProtocol::Custom,
+        };
 
         // Determine whether this instance is a JS subclass of
         // CustomProvider. If `Object.getPrototypeOf(this) ===
@@ -844,6 +886,89 @@ impl JsCustomProvider {
 /// "napi-rs put `textToSpeech` on the prototype", we walk up to the
 /// immediate prototype and inspect its prototype: if that grandparent
 /// is not `Object.prototype`, we are looking at a subclass.
+/// Walk the prototype chain starting from `host_object` and return all
+/// **user-level** prototypes — i.e. every prototype strictly between
+/// `host_object` (exclusive) and the napi-installed
+/// `CustomProvider.prototype` (also exclusive).
+///
+/// For direct construction (`new CustomProvider(...)`) the chain is
+/// `host_object → napi_proto → Object.prototype → null` and this
+/// helper returns an empty vec — no user prototypes exist, so no
+/// methods get bound by [`JsCustomProviderAdapter::from_host_object`].
+///
+/// For a JS subclass (`class Foo extends CustomProvider`) the chain is
+/// `host_object → Foo.prototype → napi_proto → Object.prototype → null`
+/// and this helper returns `[Foo.prototype]`. Deeper subclassing
+/// (`class Bar extends Foo`) returns `[Bar.prototype, Foo.prototype]`.
+///
+/// The napi-installed prototype is identified structurally: it is the
+/// chain entry whose parent prototype's parent is `null` (i.e. its
+/// parent is `Object.prototype`, the chain terminator). We use
+/// [`Object::get_prototype`] (which returns an [`Unknown`] and can
+/// distinguish a `null` prototype from an object prototype via
+/// [`Unknown::get_type`]) — [`Object::get_prototype_unchecked`] cannot
+/// be used because [`Object::from_napi_value`] doesn't validate the
+/// returned napi value, so wrapping `null` in an `Object` succeeds and
+/// the subsequent test would silently treat `Object.prototype` as a
+/// further user level.
+fn user_prototype_chain<'env>(host_object: &Object<'env>) -> Vec<Object<'env>> {
+    let mut chain: Vec<Object<'env>> = Vec::new();
+
+    // Step from `host_object` to the first prototype candidate. On a
+    // subclass that's the subclass's own `.prototype`; on a direct
+    // construction it's already the napi-installed prototype.
+    let Some(mut current) = prototype_as_object(host_object) else {
+        return chain;
+    };
+
+    // Bound the walk to avoid pathological cycles (none expected in
+    // practice — JS prototype chains terminate at `null`).
+    for _ in 0..32 {
+        // Look up one level. If `current` has no prototype (i.e. it is
+        // itself the terminator, e.g. an exotic null-prototype object),
+        // then anything previously pushed was the napi prototype, not
+        // a user level — drop it and stop.
+        let Some(parent) = prototype_as_object(&current) else {
+            chain.pop();
+            return chain;
+        };
+        // If `parent` has no further prototype, then `parent` is
+        // `Object.prototype` and `current` is the napi-installed
+        // `CustomProvider.prototype`. Do NOT push `current`; stop here.
+        if prototype_as_object(&parent).is_none() {
+            return chain;
+        }
+        // Otherwise `current` is a genuine user prototype (a subclass's
+        // own `.prototype` or an intermediate one in a multi-level
+        // `extends` chain). Record it and advance.
+        chain.push(current);
+        current = parent;
+    }
+
+    chain
+}
+
+/// Return `obj`'s prototype as an [`Object`] when it exists and is an
+/// object, or `None` when it is `null` / `undefined` / cannot be
+/// inspected. This is the strict alternative to
+/// [`Object::get_prototype_unchecked`], which wraps `null` in an
+/// `Object` without validation and would silently misclassify the
+/// chain terminator.
+#[allow(unsafe_code)]
+fn prototype_as_object<'env>(obj: &Object<'env>) -> Option<Object<'env>> {
+    let unknown = obj.get_prototype().ok()?;
+    match unknown.get_type().ok()? {
+        ValueType::Object | ValueType::Function => {
+            // Safety: `get_type` confirmed the underlying napi_value is
+            // an object (or callable object), so it's safe to reinterpret
+            // it as an `Object`. `cast` itself is `unsafe` purely as a
+            // marker — it performs no work beyond the type-system change.
+            unsafe { unknown.cast::<Object<'env>>() }.ok()
+        }
+        _ => None,
+    }
+}
+
 fn is_js_subclass(this_obj: &Object<'_>) -> bool {
     // `Object.getPrototypeOf(thisObj)` -> the napi-generated class
     // prototype on direct construction; the JS subclass prototype on

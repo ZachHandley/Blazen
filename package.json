@@ -13,7 +13,7 @@
     "test:smoke:full": "BLAZEN_TEST_FAL_COMPUTE=1 BLAZEN_TEST_FAL_VIDEO=1 ava --timeout=2100s"
   },
   "devDependencies": {
-    "ava": "^6.4.1"
+    "ava": "^8.0.0"
   },
   "ava": {
     "files": [
