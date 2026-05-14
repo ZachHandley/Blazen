@@ -25,19 +25,35 @@ if has '\.rs$|(^|/)Cargo\.(toml|lock)$'; then
   cargo clippy --workspace --all-features --tests -- -D warnings
 fi
 
+# Each binding's regen runs ONCE if its source is staged. Build output is left
+# on stdout so a silent failure (missing feature, wrong toolchain) is visible —
+# previously these all ran with `>/dev/null` and the user wouldn't see the
+# build truncating the typegen. After all regens, we run a second pass that
+# re-invokes each regen command and diffs the result; if the working tree
+# disagrees with the staged content, the build is non-deterministic OR the
+# local env doesn't match CI, and the commit is aborted.
+
+did_py=0
+did_node=0
+did_uniffi=0
+did_cabi=0
+did_wasm=0
+
 # Python stub (.pyi)
 if has '^crates/blazen-py/src/'; then
   echo "[pre-commit] regenerating crates/blazen-py/blazen.pyi"
   cargo run --example stub_gen -p blazen-py \
-    --features langfuse,otlp,prometheus,tract,distributed >/dev/null
+    --features langfuse,otlp,prometheus,tract,distributed
   REGEN+=("crates/blazen-py/blazen.pyi")
+  did_py=1
 fi
 
 # Node typegen (index.d.ts)
 if has '^crates/blazen-node/src/'; then
   echo "[pre-commit] regenerating crates/blazen-node/index.d.ts"
-  pnpm --filter blazen run build >/dev/null
+  pnpm --filter blazen run build
   REGEN+=("crates/blazen-node/index.d.ts")
+  did_node=1
 fi
 
 # UniFFI bindings (Go/Swift/Kotlin)
@@ -46,6 +62,7 @@ if has '^crates/blazen-uniffi/'; then
   cargo build -p blazen-uniffi --release
   ./scripts/regen-bindings.sh
   REGEN+=("bindings/go" "bindings/swift" "bindings/kotlin")
+  did_uniffi=1
 fi
 
 # Ruby C ABI header (cbindgen runs via blazen-cabi/build.rs)
@@ -53,6 +70,7 @@ if has '^crates/blazen-cabi/'; then
   echo "[pre-commit] regenerating bindings/ruby/ext/blazen/blazen.h"
   cargo build -p blazen-cabi --release
   REGEN+=("bindings/ruby/ext/blazen/blazen.h")
+  did_cabi=1
 fi
 
 # WASM SDK pkg/ (wasm-bindgen output)
@@ -65,8 +83,43 @@ if has '^crates/blazen-wasm-sdk/src/'; then
   echo "[pre-commit] regenerating crates/blazen-wasm-sdk/pkg"
   wasm-pack build crates/blazen-wasm-sdk --target web --out-dir pkg --release
   REGEN+=("crates/blazen-wasm-sdk/pkg")
+  did_wasm=1
 fi
 
 if (( ${#REGEN[@]} > 0 )); then
   git add -- "${REGEN[@]}"
+
+  echo "[pre-commit] verifying regen output is stable (second pass)"
+  # Re-run every regen we triggered; subsequent runs are warm-cache cheap.
+  # If a second pass produces different output, the build is non-deterministic
+  # or the local env disagrees with CI — fail loudly here so it doesn't reach
+  # the audit-bindings CI job (which is much more expensive to wait on).
+  if (( did_py )); then
+    cargo run --example stub_gen -p blazen-py \
+      --features langfuse,otlp,prometheus,tract,distributed
+  fi
+  if (( did_node )); then
+    pnpm --filter blazen run build
+  fi
+  if (( did_uniffi )); then
+    cargo build -p blazen-uniffi --release
+    ./scripts/regen-bindings.sh
+  fi
+  if (( did_cabi )); then
+    cargo build -p blazen-cabi --release
+  fi
+  if (( did_wasm )); then
+    wasm-pack build crates/blazen-wasm-sdk --target web --out-dir pkg --release
+  fi
+
+  # If the second pass produced a different output, fold those changes into
+  # the in-progress commit too. This is the auto-amend behaviour the user
+  # wants: rather than failing the commit and forcing them to re-run regen
+  # manually, we stage whatever regen actually produced so the commit ships
+  # with consistent bindings.
+  if ! git diff --quiet -- "${REGEN[@]}"; then
+    echo "[pre-commit] second pass produced different output — staging the corrected version"
+    git --no-pager diff --stat -- "${REGEN[@]}"
+    git add -- "${REGEN[@]}"
+  fi
 fi
