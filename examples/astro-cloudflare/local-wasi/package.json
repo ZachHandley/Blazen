@@ -1,0 +1,29 @@
+{
+  "name": "@blazen-dev/blazen-wasm32-wasi",
+  "version": "0.1.999-local",
+  "type": "module",
+  "main": "./blazen.wasi.cjs",
+  "module": "./blazen.wasi-browser.js",
+  "dependencies": {
+    "@emnapi/core": "^1.10.0",
+    "@emnapi/runtime": "^1.10.0",
+    "@napi-rs/wasm-runtime": "^1.1.4",
+    "@tybys/wasm-util": "^0.10.2"
+  },
+  "files": [
+    "blazen.wasi.cjs",
+    "blazen.wasi-browser.js",
+    "blazen.wasm32-wasi.wasm"
+  ],
+  "exports": {
+    ".": {
+      "browser": "./blazen.wasi-browser.js",
+      "module":  "./blazen.wasi-browser.js",
+      "import":  "./blazen.wasi-browser.js",
+      "require": "./blazen.wasi.cjs",
+      "default": "./blazen.wasi.cjs"
+    },
+    "./blazen.wasm32-wasi.wasm": "./blazen.wasm32-wasi.wasm",
+    "./package.json": "./package.json"
+  }
+}
