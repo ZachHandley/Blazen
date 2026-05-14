@@ -1,27 +1,72 @@
 #!/usr/bin/env bash
+# Pre-commit hook for Blazen.
+#
+# - Runs cargo fmt + clippy ONLY when Rust sources or Cargo manifests are
+#   staged (keeps doc/CI/test-only commits fast).
+# - Regenerates each binding's generated artefact when that binding's source
+#   is staged, and stages the resulting diff back into the commit so drift
+#   never reaches CI.
 set -euo pipefail
 
-echo "Running cargo fmt check..."
-cargo fmt --all -- --check
+STAGED="$(git diff --cached --name-only)"
+[[ -z "$STAGED" ]] && exit 0
 
-echo "Running cargo clippy (workspace, all features, deny warnings)..."
-cargo clippy --workspace --all-features -- -D warnings
+has() { echo "$STAGED" | grep -qE "$1"; }
 
-# Check that generated type stubs are up to date when binding source changes.
-if git diff --cached --name-only | grep -q '^crates/blazen-py/src/'; then
-  echo "Checking blazen.pyi is up to date..."
-  cargo run --example stub_gen -p blazen-py --features langfuse,otlp,prometheus,tract,distributed
-  git diff --exit-code crates/blazen-py/blazen.pyi || {
-    echo "ERROR: blazen.pyi is stale. Run 'cargo run --example stub_gen -p blazen-py --features langfuse,otlp,prometheus,tract,distributed' and stage the result."
-    exit 1
-  }
+REGEN=()
+
+# Rust lint — both clippy invocations match CI (with and without --tests).
+if has '\.rs$|(^|/)Cargo\.(toml|lock)$'; then
+  echo "[pre-commit] cargo fmt --all -- --check"
+  cargo fmt --all -- --check
+  echo "[pre-commit] cargo clippy --workspace --all-features"
+  cargo clippy --workspace --all-features -- -D warnings
+  echo "[pre-commit] cargo clippy --workspace --all-features --tests"
+  cargo clippy --workspace --all-features --tests -- -D warnings
 fi
 
-if git diff --cached --name-only | grep -q '^crates/blazen-node/src/'; then
-  echo "Checking index.d.ts is up to date..."
-  (cd crates/blazen-node && npm run build)
-  git diff --exit-code crates/blazen-node/index.d.ts || {
-    echo "ERROR: index.d.ts is stale. Run 'cd crates/blazen-node && npm run build' and stage the result."
+# Python stub (.pyi)
+if has '^crates/blazen-py/src/'; then
+  echo "[pre-commit] regenerating crates/blazen-py/blazen.pyi"
+  cargo run --example stub_gen -p blazen-py \
+    --features langfuse,otlp,prometheus,tract,distributed >/dev/null
+  REGEN+=("crates/blazen-py/blazen.pyi")
+fi
+
+# Node typegen (index.d.ts)
+if has '^crates/blazen-node/src/'; then
+  echo "[pre-commit] regenerating crates/blazen-node/index.d.ts"
+  pnpm --filter blazen run build >/dev/null
+  REGEN+=("crates/blazen-node/index.d.ts")
+fi
+
+# UniFFI bindings (Go/Swift/Kotlin)
+if has '^crates/blazen-uniffi/'; then
+  echo "[pre-commit] regenerating UniFFI bindings (Go/Swift/Kotlin)"
+  cargo build -p blazen-uniffi --release
+  ./scripts/regen-bindings.sh
+  REGEN+=("bindings/go" "bindings/swift" "bindings/kotlin")
+fi
+
+# Ruby C ABI header (cbindgen runs via blazen-cabi/build.rs)
+if has '^crates/blazen-cabi/'; then
+  echo "[pre-commit] regenerating bindings/ruby/ext/blazen/blazen.h"
+  cargo build -p blazen-cabi --release
+  REGEN+=("bindings/ruby/ext/blazen/blazen.h")
+fi
+
+# WASM SDK pkg/ (wasm-bindgen output)
+if has '^crates/blazen-wasm-sdk/src/'; then
+  if ! command -v wasm-pack >/dev/null; then
+    echo "[pre-commit] ERROR: wasm-pack not installed but crates/blazen-wasm-sdk/src/ is staged."
+    echo "  Install: cargo install wasm-pack --locked"
     exit 1
-  }
+  fi
+  echo "[pre-commit] regenerating crates/blazen-wasm-sdk/pkg"
+  wasm-pack build crates/blazen-wasm-sdk --target web --out-dir pkg --release
+  REGEN+=("crates/blazen-wasm-sdk/pkg")
+fi
+
+if (( ${#REGEN[@]} > 0 )); then
+  git add -- "${REGEN[@]}"
 fi
