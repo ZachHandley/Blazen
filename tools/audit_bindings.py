@@ -139,6 +139,12 @@ WHITELIST: frozenset[str] = frozenset(
         "SessionRefDeserializerFn",
         "StepBuilderFn",
         "InputHandlerFn",
+        # --- Functions taking Arc<dyn HttpClient> trait object -- cannot bind
+        # across FFI. The four `*_default*` convenience wrappers in
+        # `blazen-llm::pricing_fetcher` use the platform-default client and ARE
+        # exposed in Python/Node/WASM; the raw client-taking variants are not.
+        "refresh_from_url",
+        "fetch_one_from_url",
         # `pub use submod::{SubWorkflowInputMapper, SubWorkflowOutputMapper}`
         # in `crates/blazen-core/src/lib.rs` re-exports lose the
         # KIND_TYPE_ALIAS auto-skip (the auditor tags re-exports as
@@ -285,6 +291,13 @@ WHITELIST: frozenset[str] = frozenset(
         # auditor's `class X:` / `export declare class X` regex doesn't
         # see module-attribute literals.
         "FINISH_WORKFLOW_TOOL_NAME",
+        # Pricing-fetcher module-level `&'static str` constants -- same
+        # visibility story as FINISH_WORKFLOW_TOOL_NAME. Python binds them
+        # via `m.add(...)`; Node via `#[napi] pub const`; WASM via getter
+        # functions named via `#[wasm_bindgen(js_name = "...")]` because
+        # wasm-bindgen rejects `#[wasm_bindgen]` on constants directly.
+        "DEFAULT_PRICING_URL",
+        "DEFAULT_MODEL_PRICING_URL_BASE",
         # `StepDeserializerRegistry` is a Rust runtime registry parameterised
         # by raw `fn` pointers (typed-step builders); function pointers cannot
         # round-trip through PyO3 / napi-rs / wasm-bindgen, so the registry
@@ -589,6 +602,18 @@ WHITELIST_REASONS: dict[str, str] = {
             "BeforeBackgroundRemovalRequestHook",
         )
     },
+    # Pricing-fetcher base functions that take Arc<dyn HttpClient>
+    **{
+        n: (
+            "takes Arc<dyn HttpClient> trait object -- cannot bind across FFI; "
+            "bindings expose the *_default* convenience wrappers which use the "
+            "platform-default client (reqwest on native, fetch on wasm32)"
+        )
+        for n in (
+            "refresh_from_url",
+            "fetch_one_from_url",
+        )
+    },
     # Pure-Rust traits
     **{
         n: "trait used only as Rust ergonomics -- not surfaced to bindings"
@@ -673,6 +698,18 @@ WHITELIST_REASONS: dict[str, str] = {
     "FINISH_WORKFLOW_TOOL_NAME": (
         "module-level &'static str constant; bound via PyModule::add() / "
         "napi const re-export, not visible in the auditor's class-regex"
+    ),
+    "DEFAULT_PRICING_URL": (
+        "module-level &'static str constant; bound via PyModule::add() / "
+        "#[napi] pub const / wasm-bindgen getter function "
+        "(wasm-bindgen rejects #[wasm_bindgen] on `pub const`). Not visible "
+        "in the auditor's class-regex."
+    ),
+    "DEFAULT_MODEL_PRICING_URL_BASE": (
+        "module-level &'static str constant; bound via PyModule::add() / "
+        "#[napi] pub const / wasm-bindgen getter function "
+        "(wasm-bindgen rejects #[wasm_bindgen] on `pub const`). Not visible "
+        "in the auditor's class-regex."
     ),
     "MediaType": "bound as JsMediaType in napi (string enum)",
     "Quantization": "bound as JsQuantization in napi (string enum)",

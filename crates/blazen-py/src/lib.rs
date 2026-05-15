@@ -597,6 +597,21 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(types::pricing::compute_audio_cost, m)?)?;
     m.add_function(wrap_pyfunction!(types::pricing::compute_video_cost, m)?)?;
     m.add_function(wrap_pyfunction!(types::pricing::refresh_pricing, m)?)?;
+    m.add_function(wrap_pyfunction!(types::pricing::refresh_default, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        types::pricing::refresh_default_with_url,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(types::pricing::fetch_one_default, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        types::pricing::fetch_one_default_with_url_base,
+        m
+    )?)?;
+    m.add("DEFAULT_PRICING_URL", blazen_llm::DEFAULT_PRICING_URL)?;
+    m.add(
+        "DEFAULT_MODEL_PRICING_URL_BASE",
+        blazen_llm::DEFAULT_MODEL_PRICING_URL_BASE,
+    )?;
 
     // Prompts
     m.add_class::<types::PyTemplateRole>()?;

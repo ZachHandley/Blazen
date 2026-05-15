@@ -136,3 +136,97 @@ pub async fn refresh_pricing(url: Option<String>) -> napi::Result<u32> {
         .map(|n| u32::try_from(n).unwrap_or(u32::MAX))
         .map_err(|e| napi::Error::from_reason(e.to_string()))
 }
+
+// ---------------------------------------------------------------------------
+// Rust-name parity exports for the pricing_fetcher convenience functions.
+// ---------------------------------------------------------------------------
+
+/// Bulk endpoint URL for the default pricing catalog (mirrors
+/// [`blazen_llm::DEFAULT_PRICING_URL`]).
+#[napi]
+pub const DEFAULT_PRICING_URL: &str = blazen_llm::DEFAULT_PRICING_URL;
+
+/// Per-model endpoint base URL (mirrors
+/// [`blazen_llm::DEFAULT_MODEL_PRICING_URL_BASE`]). Append a normalized model
+/// ID to fetch a single entry.
+#[napi]
+pub const DEFAULT_MODEL_PRICING_URL_BASE: &str = blazen_llm::DEFAULT_MODEL_PRICING_URL_BASE;
+
+/// Bulk refresh the pricing registry from `DEFAULT_PRICING_URL` using the
+/// platform-default HTTP client. Resolves to the number of entries registered.
+/// Direct parity with [`blazen_llm::refresh_default`].
+///
+/// # Errors
+/// Returns a JS error if the HTTP fetch fails, returns a non-2xx status, or
+/// the response body cannot be parsed as the expected pricing schema.
+#[napi(js_name = "refreshDefault", catch_unwind)]
+pub async fn refresh_default() -> napi::Result<u32> {
+    blazen_llm::refresh_default()
+        .await
+        .map(|n| u32::try_from(n).unwrap_or(u32::MAX))
+        .map_err(|e| napi::Error::from_reason(e.to_string()))
+}
+
+/// Bulk refresh the pricing registry from `url` using the platform-default
+/// HTTP client. Resolves to the number of entries registered. Direct parity
+/// with [`blazen_llm::refresh_default_with_url`].
+///
+/// # Errors
+/// Returns a JS error if the HTTP fetch fails, returns a non-2xx status, or
+/// the response body cannot be parsed as the expected pricing schema.
+#[napi(js_name = "refreshDefaultWithUrl", catch_unwind)]
+pub async fn refresh_default_with_url(url: String) -> napi::Result<u32> {
+    blazen_llm::refresh_default_with_url(&url)
+        .await
+        .map(|n| u32::try_from(n).unwrap_or(u32::MAX))
+        .map_err(|e| napi::Error::from_reason(e.to_string()))
+}
+
+/// Fetch a single model's pricing from `DEFAULT_MODEL_PRICING_URL_BASE` using
+/// the platform-default HTTP client and register it. Resolves to the registered
+/// pricing entry, or `null` on a 404 (so callers can distinguish "no such
+/// model" from a transport failure). Direct parity with
+/// [`blazen_llm::fetch_one_default`].
+///
+/// # Errors
+/// Returns a JS error if the HTTP fetch fails, returns a non-(2xx|404)
+/// status, or the response body cannot be parsed as a `PricingEntry`.
+#[napi(js_name = "fetchOneDefault", catch_unwind)]
+pub async fn fetch_one_default(model_id: String) -> napi::Result<Option<JsModelPricing>> {
+    blazen_llm::fetch_one_default(&model_id)
+        .await
+        .map(|opt| {
+            opt.map(|e| JsModelPricing {
+                input_per_million: Some(e.input_per_million),
+                output_per_million: Some(e.output_per_million),
+                per_image: e.per_image,
+                per_second: e.per_second,
+            })
+        })
+        .map_err(|e| napi::Error::from_reason(e.to_string()))
+}
+
+/// Fetch a single model's pricing from `{urlBase}{modelId}` using the
+/// platform-default HTTP client and register it. Resolves to `null` on a 404.
+/// Direct parity with [`blazen_llm::fetch_one_default_with_url_base`].
+///
+/// # Errors
+/// Returns a JS error if the HTTP fetch fails, returns a non-(2xx|404)
+/// status, or the response body cannot be parsed as a `PricingEntry`.
+#[napi(js_name = "fetchOneDefaultWithUrlBase", catch_unwind)]
+pub async fn fetch_one_default_with_url_base(
+    url_base: String,
+    model_id: String,
+) -> napi::Result<Option<JsModelPricing>> {
+    blazen_llm::fetch_one_default_with_url_base(&url_base, &model_id)
+        .await
+        .map(|opt| {
+            opt.map(|e| JsModelPricing {
+                input_per_million: Some(e.input_per_million),
+                output_per_million: Some(e.output_per_million),
+                per_image: e.per_image,
+                per_second: e.per_second,
+            })
+        })
+        .map_err(|e| napi::Error::from_reason(e.to_string()))
+}

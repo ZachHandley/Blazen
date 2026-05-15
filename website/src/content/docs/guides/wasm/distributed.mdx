@@ -1,0 +1,176 @@
+---
+title: "Distributed Workflows"
+description: "Talk to a remote blazen-peer over HTTP/JSON from the browser or an edge runtime"
+language: "wasm"
+section: "guides"
+order: 9
+---
+
+## Overview
+
+The WASM SDK ships an HTTP/JSON peer client that lets a browser or edge-runtime workflow delegate a sub-workflow to a remote `blazen-peer` server. The remote peer runs the registered steps on its own hardware and returns the terminal result plus any session-ref descriptors that stayed behind.
+
+The browser **cannot host a peer server**: tonic gRPC requires HTTP/2 binary-frame access that JavaScript runtimes do not expose, so `HttpPeerClient` is client-only. The remote peer can be a Rust `BlazenPeerServer` or any service that speaks the HTTP/JSON shim protocol; the WASM SDK posts JSON wire envelopes through the browser `fetch()` API.
+
+## When to use it
+
+- **Keep secrets off the client.** Run steps that need provider API keys, vector indexes, or private datasets on a remote peer; the browser only sees the workflow result.
+- **Offload heavy compute.** Embedding generation, image diffusion, and large-context LLM calls run on a GPU peer while the orchestrating workflow stays in the user's tab or an edge worker.
+- **Reach hardware the browser cannot.** Local SSD, TPUs, custom inference servers — expose them as `blazen-peer` step IDs and call them by name.
+- **Centralized policy.** Auth, rate limiting, and audit logging live on the peer server; the WASM caller is just a thin client.
+
+## How it works
+
+1. The WASM caller builds a `WasmSubWorkflowRequest` containing a workflow name, an ordered list of step IDs, a JSON input, and an optional timeout.
+2. `HttpPeerClient.invokeSubWorkflow(request)` serializes the envelope, posts it through `fetch()` to the peer's HTTP root, and awaits the JSON response.
+3. The peer resolves each step ID against its local step registry, runs the workflow, and returns a `WasmSubWorkflowResponse` carrying the terminal result, exported state values, and `WasmPeerRemoteRefDescriptor` handles for any session refs that could not be inlined.
+4. The caller can lazily dereference those refs with `derefSessionRef` and release them with `releaseSessionRef` over the same HTTP root.
+
+Every request carries the caller's `nodeId` in the `X-Blazen-Peer-Node-Id` header so the peer can route traces and per-caller policy.
+
+## Connecting
+
+```typescript
+import init, { HttpPeerClient } from '@blazen-dev/wasm';
+
+await init();
+
+const client = HttpPeerClient.newHttp(
+  'https://peer.example.com',
+  'browser-tab-7f3c', // nodeId — appears in peer trace logs
+);
+```
+
+`newHttp(baseUrl, nodeId)` is the only constructor. A trailing slash on `baseUrl` is tolerated and trimmed before each request. The underlying HTTP client is the SDK's stock `FetchHttpClient`, so every request routes through `globalThis.fetch`.
+
+## Invoking a sub-workflow
+
+```typescript
+const response = await client.invokeSubWorkflow({
+  workflowName: 'analyze-pipeline',
+  stepIds: ['my_app::analyze', 'my_app::summarize'],
+  input: { document: 'https://example.com/article' },
+  timeoutSecs: 60,
+});
+
+if (response.error) {
+  console.error('remote workflow failed:', response.error);
+} else {
+  console.log('result:', response.result);
+  console.log('state:', response.stateJson);
+}
+```
+
+`stepIds` is an ordered list — the peer runs them in sequence after resolving each ID against its local step registry. Passing an empty array tells the peer to use the workflow's default step set. `input` is any JSON-serializable value; the binding posts it as-is.
+
+### Response shape
+
+| Field | Type | Description |
+|---|---|---|
+| `envelopeVersion` | `number` | Wire envelope version (currently `1`). |
+| `result` | `Value \| undefined` | Terminal result of the sub-workflow, or `undefined` if it produced none. |
+| `stateJson` | `Map<string, Value>` | Public state values exported by the sub-workflow, decoded from JSON. |
+| `remoteRefs` | `Map<string, WasmPeerRemoteRefDescriptor>` | Descriptors for session refs that stayed on the peer. Keyed by UUID string. |
+| `error` | `string \| undefined` | Workflow-level error message. When set, ignore `result` and `stateJson`. |
+
+## Session refs across machines
+
+When a step on the peer creates a session ref — a model weight cache, a GPU-resident tensor, a large dataset handle — the value stays on the peer. The browser receives a `WasmPeerRemoteRefDescriptor` for each ref the parent should be able to fetch later:
+
+| Field | Type | Description |
+|---|---|---|
+| `originNodeId` | `string` | Stable identifier of the node that owns the value. |
+| `typeTag` | `string` | Type tag mirroring the Rust `SessionRefSerializable::blazen_type_tag`. The caller uses it to pick a deserializer for the bytes. |
+| `createdAtEpochMs` | `number` | Wall-clock creation time on the origin node, milliseconds since the Unix epoch. |
+
+### Lazy dereference
+
+Fetch the raw bytes for a remote ref with `derefSessionRef`. The request carries the envelope version and the UUID string straight from `response.remoteRefs`:
+
+```typescript
+for (const [uuid, descriptor] of response.remoteRefs) {
+  const deref = await client.derefSessionRef({
+    envelopeVersion: response.envelopeVersion,
+    refUuid: uuid,
+  });
+  // `deref.payload` is a Uint8Array-shaped byte array. Pick a
+  // deserializer based on descriptor.typeTag.
+  const value = decodeByTypeTag(descriptor.typeTag, deref.payload);
+}
+```
+
+### Release
+
+When the browser is finished with a remote ref, release it so the peer can free the memory:
+
+```typescript
+const ack = await client.releaseSessionRef({
+  envelopeVersion: response.envelopeVersion,
+  refUuid: uuid,
+});
+
+if (!ack.released) {
+  // Already expired by lifetime policy or released by another caller.
+}
+```
+
+`ack.released` is `true` when the registry entry was found and dropped, `false` if it was already gone. The recommended `RefLifetime` for refs that should survive the sub-workflow and wait for an explicit release is `UntilParentFinish`, set on the peer side when the ref is inserted.
+
+## Authentication
+
+The browser cannot load local PEM files or read process environment variables, so all of the Rust guide's mTLS / `BLAZEN_PEER_TOKEN` setup happens on the peer side, not the client. The browser authenticates the way every other `fetch()` call does:
+
+- **Cookies.** If the peer is on the same site (or accepts `credentials: 'include'`), session cookies flow automatically. The peer enforces the auth policy.
+- **`Authorization` header.** Mint a short-lived bearer token on your backend and have the page or worker include it. Today the WASM `HttpPeerClient` does not expose a per-call header hook, so put auth behind a proxy that injects the token before forwarding to the peer.
+- **mTLS at the edge.** The peer can still require client certificates from an upstream reverse proxy — the browser talks to the proxy over normal HTTPS, the proxy presents its own client cert to the peer.
+
+Never bake a long-lived peer token into client-side JavaScript. Treat the browser-to-peer hop the same as any other authenticated API call: short-lived credentials, scoped to the user, validated server-side.
+
+## Error handling
+
+All three methods return a `Promise` that rejects with a string message on failure. Wrap calls in `try`/`catch` and inspect `error.message`:
+
+```typescript
+try {
+  const response = await client.invokeSubWorkflow(request);
+  if (response.error) {
+    // Workflow ran but errored — `response.error` is the message.
+    handleWorkflowError(response.error);
+  } else {
+    handleResult(response.result);
+  }
+} catch (err) {
+  // Transport, serialization, envelope-version, or peer-side protocol error.
+  console.error('peer call failed:', err);
+}
+```
+
+Two failure surfaces to distinguish:
+
+- **Rejected promise.** Network failure, CORS rejection, JSON parse error, envelope-version mismatch, or any other transport/protocol error. The string message comes straight from the binding.
+- **Resolved promise with `response.error` set.** The remote workflow ran but a step returned an error. `response.result` and `response.stateJson` should be ignored.
+
+## Envelope versioning
+
+Every request and response carries an `envelopeVersion` field. The current version is `1`. Adding optional fields at the end of an envelope is forward-compatible; renaming, reordering, or removing fields requires bumping the constant on both sides. The peer rejects requests with a version newer than it supports, surfacing as a rejected promise on the client.
+
+When you pass `envelopeVersion` to `derefSessionRef` or `releaseSessionRef`, echo back the value you received in the matching `invokeSubWorkflow` response — that keeps the conversation pinned to the version both sides already agreed on.
+
+## CORS and deployment
+
+Because the WASM caller runs inside a browser origin, the peer must serve permissive CORS headers for the request to succeed:
+
+```bash
+# On the peer side (or its reverse proxy):
+Access-Control-Allow-Origin: https://your-app.example.com
+Access-Control-Allow-Headers: Content-Type, X-Blazen-Peer-Node-Id, Authorization
+Access-Control-Allow-Methods: POST, OPTIONS
+```
+
+In an edge runtime (Cloudflare Workers, Vercel Edge, Deno Deploy) there is no browser origin, so CORS does not apply — but the runtime still needs network egress to the peer's HTTP root, which most platforms gate behind allowlists or fetch-binding configuration. See the [Edge Deployment](/docs/guides/wasm/deployment) guide for platform-specific notes.
+
+## Next steps
+
+- For server setup, mTLS configuration, and the gRPC wire protocol, see the Rust-side [Distributed Workflows](/docs/guides/distributed) guide.
+- Build the workflow that fans out to a peer with [WASM Workflows](/docs/guides/wasm/workflows).
+- Deploy the orchestrating workflow to the edge with the [Edge Deployment](/docs/guides/wasm/deployment) guide.

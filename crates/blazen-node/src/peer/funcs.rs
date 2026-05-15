@@ -43,9 +43,9 @@ pub fn peer_token_env() -> String {
 ///
 /// Returns `null` when the env var (see [`peer_token_env`]) is unset
 /// or empty.
-#[napi(js_name = "resolveBeerToken")]
+#[napi(js_name = "resolvePeerToken")]
 #[must_use]
-pub fn resolve_beer_token() -> Option<String> {
+pub fn resolve_peer_token() -> Option<String> {
     auth::resolve_peer_token()
 }
 

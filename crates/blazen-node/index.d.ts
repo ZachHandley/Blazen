@@ -6085,6 +6085,19 @@ export interface CustomContentStoreOptions {
   name?: string
 }
 
+/**
+ * Per-model endpoint base URL (mirrors
+ * [`blazen_llm::DEFAULT_MODEL_PRICING_URL_BASE`]). Append a normalized model
+ * ID to fetch a single entry.
+ */
+export const DEFAULT_MODEL_PRICING_URL_BASE: string
+
+/**
+ * Bulk endpoint URL for the default pricing catalog (mirrors
+ * [`blazen_llm::DEFAULT_PRICING_URL`]).
+ */
+export const DEFAULT_PRICING_URL: string
+
 /** Build a default [`JsHttpClientConfig`] (60s request, 10s connect, no UA). */
 export declare function defaultHttpClientConfig(): HttpClientConfig
 
@@ -6172,6 +6185,30 @@ export interface EventEnvelope {
  * LLM-generated text. Returns the artifacts in source order.
  */
 export declare function extractInlineArtifacts(content: string): Array<JsArtifact>
+
+/**
+ * Fetch a single model's pricing from `DEFAULT_MODEL_PRICING_URL_BASE` using
+ * the platform-default HTTP client and register it. Resolves to the registered
+ * pricing entry, or `null` on a 404 (so callers can distinguish "no such
+ * model" from a transport failure). Direct parity with
+ * [`blazen_llm::fetch_one_default`].
+ *
+ * # Errors
+ * Returns a JS error if the HTTP fetch fails, returns a non-(2xx|404)
+ * status, or the response body cannot be parsed as a `PricingEntry`.
+ */
+export declare function fetchOneDefault(modelId: string): Promise<JsModelPricing | null>
+
+/**
+ * Fetch a single model's pricing from `{urlBase}{modelId}` using the
+ * platform-default HTTP client and register it. Resolves to `null` on a 404.
+ * Direct parity with [`blazen_llm::fetch_one_default_with_url_base`].
+ *
+ * # Errors
+ * Returns a JS error if the HTTP fetch fails, returns a non-(2xx|404)
+ * status, or the response body cannot be parsed as a `PricingEntry`.
+ */
+export declare function fetchOneDefaultWithUrlBase(urlBase: string, modelId: string): Promise<JsModelPricing | null>
 
 /**
  * File / document content (PDF, generic file, etc.) for multimodal
@@ -8284,6 +8321,28 @@ export declare const enum RefLifetime {
 }
 
 /**
+ * Bulk refresh the pricing registry from `DEFAULT_PRICING_URL` using the
+ * platform-default HTTP client. Resolves to the number of entries registered.
+ * Direct parity with [`blazen_llm::refresh_default`].
+ *
+ * # Errors
+ * Returns a JS error if the HTTP fetch fails, returns a non-2xx status, or
+ * the response body cannot be parsed as the expected pricing schema.
+ */
+export declare function refreshDefault(): Promise<number>
+
+/**
+ * Bulk refresh the pricing registry from `url` using the platform-default
+ * HTTP client. Resolves to the number of entries registered. Direct parity
+ * with [`blazen_llm::refresh_default_with_url`].
+ *
+ * # Errors
+ * Returns a JS error if the HTTP fetch fails, returns a non-2xx status, or
+ * the response body cannot be parsed as the expected pricing schema.
+ */
+export declare function refreshDefaultWithUrl(url: string): Promise<number>
+
+/**
  * Refresh the pricing registry from a remote catalog (defaults to the
  * blazen.dev Cloudflare Worker, which mirrors models.dev plus live
  * `OpenRouter` / Together pricing on a daily cron).
@@ -8418,7 +8477,7 @@ export declare function resolveApiKey(provider: string, explicit?: string | unde
  * Returns `null` when the env var (see [`peer_token_env`]) is unset
  * or empty.
  */
-export declare function resolveBeerToken(): string | null
+export declare function resolvePeerToken(): string | null
 
 /**
  * Resolve the effective [`JsRetryConfig`] for the given stack and an

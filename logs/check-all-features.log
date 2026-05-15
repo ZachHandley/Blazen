@@ -25,3 +25,22 @@
     Checking pyo3-stub-gen v0.22.0
     Checking llama-cpp-2 v0.1.143
     Checking blazen-llm-llamacpp v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-llm-llamacpp)
+    Checking blazen-embed-candle v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-embed-candle)
+    Checking mistralrs v0.8.1
+    Checking blazen-llm-mistralrs v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-llm-mistralrs)
+    Checking blazen-llm v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-llm)
+    Checking blazen-telemetry v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-telemetry)
+    Checking blazen-prompts v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-prompts)
+    Checking blazen-memory v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-memory)
+    Checking blazen-manager v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-manager)
+    Checking blazen-memory-valkey v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-memory-valkey)
+    Checking blazen-core v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-core)
+    Checking blazen-pipeline v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-pipeline)
+    Checking blazen-peer v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-peer)
+    Checking blazen v0.0.0-dev (/home/zach/github/Blazen/crates/blazen)
+    Checking blazen-uniffi v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-uniffi)
+    Checking blazen-controlplane v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-controlplane)
+    Checking blazen-py v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-py)
+    Checking blazen-node v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-node)
+    Checking blazen-cabi v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-cabi)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 39.66s

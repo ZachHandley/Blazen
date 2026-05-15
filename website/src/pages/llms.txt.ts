@@ -27,7 +27,7 @@ export const GET: APIRoute = async ({ site }) => {
   const lines: string[] = [
     "# Blazen",
     "",
-    "> Rust-first LLM orchestration framework with Python, Node, and WASM bindings. Composable workflows, typed events, durable pause/resume, distributed sub-workflows, and a unified provider layer.",
+    "> Rust-first LLM orchestration framework with native bindings for Python, Node.js/TypeScript, WASM, Go, Swift, Kotlin, and Ruby. Composable workflows, typed events, durable pause/resume, distributed sub-workflows via gRPC control plane, and a unified provider layer.",
     "",
     "Companion files for LLMs:",
     "",

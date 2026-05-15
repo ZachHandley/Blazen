@@ -194,3 +194,86 @@ pub fn refresh_pricing(py: Python<'_>, url: Option<String>) -> PyResult<Bound<'_
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     })
 }
+
+/// Bulk refresh the pricing registry from ``DEFAULT_PRICING_URL`` using the
+/// platform-default HTTP client. Direct parity with
+/// :func:`blazen_llm::refresh_default`.
+///
+/// Returns the number of pricing entries registered.
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn refresh_default(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
+        blazen_llm::refresh_default()
+            .await
+            .map(|n| n as u64)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    })
+}
+
+/// Bulk refresh the pricing registry from ``url`` using the platform-default
+/// HTTP client. Direct parity with :func:`blazen_llm::refresh_default_with_url`.
+///
+/// Returns the number of pricing entries registered.
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn refresh_default_with_url(py: Python<'_>, url: String) -> PyResult<Bound<'_, PyAny>> {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
+        blazen_llm::refresh_default_with_url(&url)
+            .await
+            .map(|n| n as u64)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    })
+}
+
+/// Fetch a single model's pricing from ``DEFAULT_MODEL_PRICING_URL_BASE``
+/// using the platform-default HTTP client and register it. Returns the
+/// registered :class:`ModelPricing` or ``None`` on a 404 (so callers can
+/// distinguish "no such model" from a transport failure). Direct parity with
+/// :func:`blazen_llm::fetch_one_default`.
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn fetch_one_default(py: Python<'_>, model_id: String) -> PyResult<Bound<'_, PyAny>> {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
+        blazen_llm::fetch_one_default(&model_id)
+            .await
+            .map(|opt| {
+                opt.map(|e| PyModelPricing {
+                    inner: ModelPricing {
+                        input_per_million: Some(e.input_per_million),
+                        output_per_million: Some(e.output_per_million),
+                        per_image: e.per_image,
+                        per_second: e.per_second,
+                    },
+                })
+            })
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    })
+}
+
+/// Fetch a single model's pricing from ``{url_base}{model_id}`` using the
+/// platform-default HTTP client and register it. Returns ``None`` on a 404.
+/// Direct parity with :func:`blazen_llm::fetch_one_default_with_url_base`.
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn fetch_one_default_with_url_base(
+    py: Python<'_>,
+    url_base: String,
+    model_id: String,
+) -> PyResult<Bound<'_, PyAny>> {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
+        blazen_llm::fetch_one_default_with_url_base(&url_base, &model_id)
+            .await
+            .map(|opt| {
+                opt.map(|e| PyModelPricing {
+                    inner: ModelPricing {
+                        input_per_million: Some(e.input_per_million),
+                        output_per_million: Some(e.output_per_million),
+                        per_image: e.per_image,
+                        per_second: e.per_second,
+                    },
+                })
+            })
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    })
+}

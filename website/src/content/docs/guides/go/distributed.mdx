@@ -1,0 +1,254 @@
+---
+title: "Distributed Workflows"
+description: "Run workflows across machines with the blazen-peer gRPC layer in Go"
+language: "go"
+section: "guides"
+order: 9
+---
+
+Blazen workflows normally run inside a single process. The peer layer extends that to multiple machines: a parent program on machine A can hand a workflow off to machine B over gRPC, wait for the terminal result, and route the payload back to the caller. The Go binding exposes this through two handles -- `blazen.PeerServer` and `blazen.PeerClient` -- both wired to the upstream `blazen-peer` crate via UniFFI.
+
+## When to use distributed workflows
+
+- **Privacy boundaries.** Keep sensitive data on one machine and run the steps that touch it there, while the orchestrating program lives elsewhere.
+- **Cost optimization.** Route GPU-heavy steps (embedding generation, image diffusion) to machines with the right hardware instead of paying for GPU on every node.
+- **Hardware-specific steps.** TPUs, large-memory instances, local NVMe SSDs -- pin the workflow to the host that has the resource.
+- **Regulatory compliance.** Data residency rules may mandate that certain processing stays in a specific region or on specific infrastructure.
+
+## How it works
+
+1. The parent picks a workflow name and an ordered list of step IDs that name the steps to run.
+2. The parent calls `PeerClient.RunRemoteWorkflow`, which serialises the input to JSON and sends a request over a multiplexed HTTP/2 channel to the peer.
+3. The peer resolves each step ID against its process-wide step registry, assembles a workflow, runs it, and returns the terminal `StopEvent` payload.
+4. The parent receives the result as a `*blazen.WorkflowResult` -- the same type returned by the in-process `Workflow.Run`.
+
+Multiple concurrent calls on the same `PeerClient` are safe and share the underlying connection.
+
+## Setup
+
+The peer dispatches workflows by step ID through the process-wide step registry on the remote side. The Go binding registers steps when you build workflows with `WorkflowBuilder.Step(...)`, so on the peer host you set up the same workflow code you would for a local run, then call `Serve` instead of `Run`.
+
+### Start a peer server
+
+On the host that will execute the workflow:
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+    "os"
+    "os/signal"
+
+    blazen "github.com/zachhandley/Blazen/bindings/go"
+)
+
+func main() {
+    blazen.Init()
+    defer blazen.Shutdown()
+
+    // Build and register any workflows / steps this peer should serve. The
+    // step registry is process-wide; constructing the Workflow is enough to
+    // register its steps.
+    builder, err := blazen.NewWorkflowBuilder("analyze-pipeline").Step(
+        "my_app::analyze",
+        []string{"blazen::StartEvent"},
+        []string{"blazen::StopEvent"},
+        AnalyzeHandler{},
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+    wf, err := builder.Build()
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer wf.Close()
+
+    server := blazen.NewPeerServer("node-b")
+    defer server.Close()
+
+    // Run the server until the caller's context fires (Ctrl-C below).
+    ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+    defer stop()
+
+    if err := server.Serve(ctx, "0.0.0.0:50051"); err != nil {
+        log.Fatalf("peer server exited: %v", err)
+    }
+}
+```
+
+`NewPeerServer(nodeID)` returns immediately; the listener is not bound until `Serve` is called. The `nodeID` is the stable identifier the server stamps onto outgoing remote-ref descriptors -- the hostname or a process-startup UUID work well.
+
+`Serve(ctx, address)` blocks until the listener fails, the underlying socket errors, or `ctx` is cancelled. The Go binding consumes the inner server on the first call; invoking `Serve` (or `ServeBlocking`) a second time on the same `PeerServer` returns a `*blazen.ValidationError`. A bind failure surfaces as a `*blazen.PeerError` with `Kind == "Transport"`.
+
+For a one-shot script that does not need a `context.Context`, use the synchronous form:
+
+```go
+if err := server.ServeBlocking(":50051"); err != nil {
+    log.Fatalf("peer server exited: %v", err)
+}
+```
+
+### Connect a client and run a remote workflow
+
+On the host that orchestrates the call:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "time"
+
+    blazen "github.com/zachhandley/Blazen/bindings/go"
+)
+
+func main() {
+    blazen.Init()
+    defer blazen.Shutdown()
+
+    client, err := blazen.ConnectPeerClient("http://peer-b.local:50051", "node-a")
+    if err != nil {
+        log.Fatalf("connect: %v", err)
+    }
+    defer client.Close()
+
+    ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+    defer cancel()
+
+    input := map[string]string{"document": "..."}
+    result, err := client.RunRemoteWorkflow(
+        ctx,
+        "analyze-pipeline",            // workflow name registered on the peer
+        []string{"my_app::analyze"},   // ordered step IDs to execute
+        input,
+        60*time.Second,                // remote wall-clock timeout
+    )
+    if err != nil {
+        log.Fatalf("remote workflow: %v", err)
+    }
+    fmt.Println(result.Event.DataJSON)
+}
+```
+
+`ConnectPeerClient(address, clientNodeID)` blocks while the TCP / HTTP-2 handshake completes. The `clientNodeID` is stamped into outgoing requests for trace correlation on both sides -- pick the local hostname or a UUID picked at process startup.
+
+The `RunRemoteWorkflow` arguments:
+
+- `workflowName` -- the symbolic name the peer's step registry knows the workflow as.
+- `stepIDs` -- ordered list of step identifiers to execute. Every entry must be registered on the peer or the call fails with a `*blazen.PeerError` of `Kind == "UnknownStep"`.
+- `input` -- JSON-marshalled into the workflow's entry payload. Passing `nil` sends the JSON literal `null`.
+- `timeout` -- remote wall-clock bound. Pass `0` to defer to the peer's default deadline; sub-second positive durations round up to the next whole second.
+
+The returned `*blazen.WorkflowResult` carries the terminal `StopEvent` payload in `result.Event.DataJSON`. Per-run LLM token usage and cost are not propagated over the wire and are reported as zero -- query the remote peer's telemetry directly if you need those numbers.
+
+### JSON-in / JSON-out
+
+When the caller already has a JSON document, skip the extra marshal/unmarshal hop with `RunRemoteWorkflowJSON`:
+
+```go
+result, err := client.RunRemoteWorkflowJSON(
+    ctx,
+    "analyze-pipeline",
+    []string{"my_app::analyze"},
+    `{"document":"..."}`,
+    60*time.Second,
+)
+```
+
+The cancellation, timeout, and error semantics match `RunRemoteWorkflow`.
+
+## Cancellation
+
+Both `PeerClient.RunRemoteWorkflow` and `PeerServer.Serve` honour `context.Context` the same way every other blocking entry point in the Go binding does: the FFI call runs on a background goroutine, and the function selects on `ctx.Done()`. When `ctx` fires first, the function returns `ctx.Err()` immediately.
+
+The Rust-side work keeps running until it finishes naturally -- cancellation propagation across the wire and into the native runtime is a known gap pending an upstream UniFFI feature. See the [Context guide](/guides/go/context/) for the broader story and the workaround pattern (an `atomic.Bool` consulted from the handler).
+
+## Authentication
+
+The upstream `blazen-peer` crate authenticates peers with a shared secret token read from the `BLAZEN_PEER_TOKEN` environment variable. When set to a non-empty value on both sides, the peer server requires every inbound request to carry the matching token in the gRPC metadata. The Go binding inherits this transparently -- just export the variable before starting the server or the client:
+
+```bash
+export BLAZEN_PEER_TOKEN="$(openssl rand -hex 32)"
+```
+
+```go
+// Read once at startup to fail fast on misconfigured deployments.
+if os.Getenv("BLAZEN_PEER_TOKEN") == "" {
+    log.Fatal("BLAZEN_PEER_TOKEN must be set in production")
+}
+```
+
+In production you should always front the gRPC listener with mTLS as well -- terminate at a sidecar (Envoy, Linkerd) or behind a service mesh that provisions and rotates certificates per peer. The Go binding's `PeerServer` does not expose PEM-file knobs directly; the address you pass to `ConnectPeerClient` may be an `https://` URI for plaintext-over-TLS, but inline mTLS configuration is not yet wired through UniFFI.
+
+## Error handling
+
+Every typed error this package returns satisfies the `blazen.Error` interface. The peer surface produces three error types in practice:
+
+| Error type | When it fires |
+|---|---|
+| `*blazen.PeerError` | Transport, encoding, envelope-version, TLS, or "unknown step" failures. `Kind` is one of `"Transport"`, `"Encode"`, `"EnvelopeVersion"`, `"Tls"`, `"UnknownStep"`, or `"Workflow"`. |
+| `*blazen.WorkflowError` | The remote workflow ran to completion but returned an error from inside a step. |
+| `*blazen.ValidationError` | Local-side argument validation (bad listen address, server already consumed, client already closed). |
+
+Recover the concrete variant with `errors.As`:
+
+```go
+result, err := client.RunRemoteWorkflow(ctx, "analyze-pipeline", []string{"my_app::analyze"}, input, 60*time.Second)
+if err != nil {
+    var peerErr *blazen.PeerError
+    if errors.As(err, &peerErr) {
+        switch peerErr.Kind {
+        case "Transport":
+            log.Printf("network issue talking to peer: %s", peerErr.Message)
+        case "UnknownStep":
+            log.Printf("peer is missing a step we requested: %s", peerErr.Message)
+        case "EnvelopeVersion":
+            log.Printf("client/server envelope version mismatch -- upgrade one side")
+        default:
+            log.Printf("peer error %s: %s", peerErr.Kind, peerErr.Message)
+        }
+        return
+    }
+
+    var wfErr *blazen.WorkflowError
+    if errors.As(err, &wfErr) {
+        log.Printf("remote workflow failed: %s", wfErr.Message)
+        return
+    }
+    log.Printf("unexpected error: %v", err)
+}
+```
+
+A `context.DeadlineExceeded` or `context.Canceled` propagates from `ctx.Err()` unchanged -- handle those before the typed-error branches if you care to distinguish a local timeout from a transport failure.
+
+## Envelope versioning
+
+Every wire payload carries an envelope version field. Adding optional fields at the end of a struct is forward-compatible; renaming, reordering, or removing fields is a breaking change that bumps the version. The server rejects payloads with a version newer than it supports and the client surfaces this as a `*blazen.PeerError` with `Kind == "EnvelopeVersion"`. When you see this error, upgrade the older side -- both peers should be running the same `blazen-peer` major version in production.
+
+## Lifecycle
+
+- `PeerServer.Close()` releases the underlying native handle. Idempotent and goroutine-safe; a `runtime.SetFinalizer` is attached as a safety net, but explicit `defer server.Close()` is preferred.
+- `PeerClient.Close()` releases the gRPC channel and the native client handle. Same idempotent / finalizer-as-safety-net guarantees as the server.
+- A closed client or server returns `*blazen.ValidationError` from subsequent method calls instead of panicking.
+
+## What's not exposed
+
+The Go binding's peer surface today is fire-and-forget remote execution with a JSON result. The following upstream features are not yet wired through UniFFI for any of the foreign bindings (Python is the only one that surfaces them directly):
+
+- **Session-ref descriptors.** Remote refs created on the peer are not returned to Go callers, and the lazy `DerefSessionRef` / `ReleaseSessionRef` round-trips are unavailable. Workflows that need to hand large opaque values back to the parent should serialise them into the `StopEvent` payload instead.
+- **Streaming events.** Per-step `Event` streams from the remote workflow are not surfaced -- only the terminal result is returned.
+- **Inline mTLS configuration.** PEM loading happens at the upstream Rust layer; the Go binding does not yet expose helpers to set client/server certificates from Go.
+
+If you need any of these, file an issue or use the Rust API directly -- the [Rust distributed guide](/guides/distributed/) covers the full surface.
+
+## See also
+
+- [Rust distributed guide](/guides/distributed/) -- the full peer surface including session refs and mTLS PEM helpers.
+- [Quickstart](/guides/go/quickstart/) -- workflow basics that the peer dispatches.
+- [Context](/guides/go/context/) -- cancellation semantics across every blocking entry point.
+- [Events](/guides/go/events/) -- the `Event` envelope your remote `StopEvent` payload travels in.

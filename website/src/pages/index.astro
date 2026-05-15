@@ -10,7 +10,7 @@ const knownRoutes = ["/", ...docs.map((entry) => `/docs/${entry.id}`)];
 
 const title = "Blazen";
 const description =
-  "Event-driven AI workflow engine with first-class LLM integration, written in Rust. Open source, MPL-2.0 licensed, with native Python and Node.js/TypeScript bindings.";
+  "Event-driven AI workflow engine with first-class LLM integration, written in Rust. Open source, MPL-2.0 licensed, with native bindings for Python, Node.js/TypeScript, WASM, Go, Swift, Kotlin, and Ruby.";
 
 const features = [
   {
@@ -53,7 +53,7 @@ const features = [
     icon: "\uD83D\uDC0D",
     title: "Polyglot",
     description:
-      "Native Rust performance with Python (PyO3) and Node.js/TypeScript (napi-rs) bindings. Use your preferred language.",
+      "Native Rust performance with bindings for Python (PyO3), Node.js/TypeScript (napi-rs), WASM (wasm-bindgen), Go / Swift / Kotlin (UniFFI), and Ruby (C ABI). Use your preferred language.",
   },
   {
     icon: "\uD83D\uDEE0\uFE0F",
@@ -220,6 +220,23 @@ const crates = [
   { name: "blazen-py", description: "Python bindings via PyO3" },
   { name: "blazen-node", description: "Node.js/TypeScript bindings via napi-rs" },
   {
+    name: "blazen-wasm-sdk",
+    description: "WASM bindings for browsers via wasm-bindgen + web fetch",
+  },
+  {
+    name: "blazen-uniffi",
+    description: "Go, Swift, and Kotlin bindings via UniFFI",
+  },
+  {
+    name: "blazen-cabi",
+    description: "C ABI shared lib + Ruby FFI gem (Fiber.scheduler aware)",
+  },
+  {
+    name: "blazen-peer",
+    description:
+      "Distributed sub-workflow gRPC control plane (server + worker mode)",
+  },
+  {
     name: "blazen-cli",
     description: "CLI tool for scaffolding workflows and pipelines",
   },
@@ -250,7 +267,7 @@ const crates = [
         Event-driven AI workflow engine with first-class LLM integration, written in Rust.
       </p>
       <p class="mx-auto mb-10 max-w-xl text-sm leading-relaxed text-gray-500">
-        Type-safe events &middot; 15+ LLM providers &middot; Multi-workflow pipelines &middot; Python & TypeScript bindings
+        Type-safe events &middot; 15+ LLM providers &middot; Multi-workflow pipelines &middot; Bindings for 7 languages
       </p>
       <div class="flex flex-col items-center justify-center gap-4 sm:flex-row">
         <a
@@ -325,8 +342,8 @@ const crates = [
         Write workflows in your language
       </h2>
       <p class="mx-auto max-w-2xl text-gray-400">
-        Native bindings for Rust, Python, and TypeScript. Same concepts,
-        idiomatic APIs.
+        Native bindings for Rust, Python, TypeScript / Node.js, WASM, Go,
+        Swift, Kotlin, and Ruby. Same concepts, idiomatic APIs.
       </p>
     </div>
     <div class="mb-16">

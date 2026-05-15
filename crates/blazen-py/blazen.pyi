@@ -329,6 +329,8 @@ __all__ = [
     "env_var_for_provider",
     "estimate_tokens",
     "extract_inline_artifacts",
+    "fetch_one_default",
+    "fetch_one_default_with_url_base",
     "file_input",
     "finish_workflow_tool",
     "format_provider_http_tail",
@@ -342,6 +344,8 @@ __all__ = [
     "load_server_tls",
     "lookup_pricing",
     "lookup_step_builder",
+    "refresh_default",
+    "refresh_default_with_url",
     "refresh_pricing",
     "register_event_deserializer",
     "register_from_model_info",
@@ -12714,6 +12718,22 @@ def extract_inline_artifacts(content: builtins.str) -> builtins.list[Artifact]:
         A list of [`Artifact`] objects.
     """
 
+def fetch_one_default(model_id: builtins.str) -> typing.Any:
+    r"""
+    Fetch a single model's pricing from ``DEFAULT_MODEL_PRICING_URL_BASE``
+    using the platform-default HTTP client and register it. Returns the
+    registered :class:`ModelPricing` or ``None`` on a 404 (so callers can
+    distinguish "no such model" from a transport failure). Direct parity with
+    :func:`blazen_llm::fetch_one_default`.
+    """
+
+def fetch_one_default_with_url_base(url_base: builtins.str, model_id: builtins.str) -> typing.Any:
+    r"""
+    Fetch a single model's pricing from ``{url_base}{model_id}`` using the
+    platform-default HTTP client and register it. Returns ``None`` on a 404.
+    Direct parity with :func:`blazen_llm::fetch_one_default_with_url_base`.
+    """
+
 def file_input(name: builtins.str, description: builtins.str) -> typing.Any:
     r"""
     Schema declaring a single required generic-file / document input.
@@ -12862,6 +12882,23 @@ def lookup_step_builder(step_id: builtins.str) -> builtins.bool:
     which is not exposed to Python. This binding therefore reports
     presence only -- callers that need to *use* the registration must do
     so on the Rust side.
+    """
+
+def refresh_default() -> typing.Any:
+    r"""
+    Bulk refresh the pricing registry from ``DEFAULT_PRICING_URL`` using the
+    platform-default HTTP client. Direct parity with
+    :func:`blazen_llm::refresh_default`.
+    
+    Returns the number of pricing entries registered.
+    """
+
+def refresh_default_with_url(url: builtins.str) -> typing.Any:
+    r"""
+    Bulk refresh the pricing registry from ``url`` using the platform-default
+    HTTP client. Direct parity with :func:`blazen_llm::refresh_default_with_url`.
+    
+    Returns the number of pricing entries registered.
     """
 
 def refresh_pricing(url: typing.Optional[builtins.str] = None) -> typing.Any:

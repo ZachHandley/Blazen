@@ -20,7 +20,7 @@
 - **Content handles for tools** -- Tools accept multimodal inputs (image, audio, video, document, 3D, CAD) via typed content handles backed by a pluggable `ContentStore` (in-memory, local-file, OpenAI Files, Anthropic Files, Gemini Files, fal.ai storage, or your own). Tool *results* now carry multimodal payloads on every provider, not just Anthropic
 - **Multi-workflow pipelines** -- Orchestrate sequential and parallel stages with pause/resume and per-workflow streaming
 - **Branching and fan-out** -- Conditional branching, parallel fan-out, and real-time streaming within workflows
-- **Native Python and TypeScript bindings** -- Python via PyO3/maturin, Node.js/TypeScript via napi-rs. Not wrappers around HTTP -- actual compiled Rust running in-process
+- **Native bindings for seven languages** -- Python via PyO3/maturin, Node.js/TypeScript via napi-rs, Go/Swift/Kotlin via UniFFI, Ruby via a cbindgen C ABI + the `ffi` gem, and a wasm-bindgen browser SDK. Not wrappers around HTTP -- actual compiled Rust running in-process (or in the host VM via FFI / cgo / JNA)
 - **WebAssembly SDK** -- Run Blazen in the browser, edge workers, Deno, and embedded runtimes via `@blazen-dev/wasm`. Same Rust core compiled to WASM
 - **Prompt management** -- Versioned prompt templates with `{{variable}}` interpolation, YAML/JSON registries, and multimodal attachments
 - **Persistence** -- Embedded persistence via redb, or bring-your-own via callbacks. Pause a workflow, serialize state to JSON, resume later
@@ -556,7 +556,7 @@ All OpenAI-compatible providers are accessible through `OpenAiCompatProvider` in
 
 ## Typed Errors
 
-Every error the engine, the LLM layer, or a backend can raise has a dedicated subclass in both Python and Node, so callers branch on type instead of parsing strings. The hierarchy is rooted at `BlazenError` (extending the host language's base `Error` / `Exception`) and fans out to ~87 leaves covering provider failures (`RateLimitError`, `AuthError`, `ContextLengthError`), local-inference backends (`LlamaCppError`, `MistralRsError`, `CandleLlmError`, `WhisperCppError`, `PiperError`, `DiffusionError`), persistence (`PersistError`, `SnapshotError`), and workflow control flow (`StepNotFoundError`, `EventTypeMismatchError`, `WorkflowAbortedError`).
+Every error the engine, the LLM layer, or a backend can raise has a dedicated subclass in Python, Node/TypeScript, WASM, Go, Swift, Kotlin, and Ruby, so callers branch on type instead of parsing strings. The hierarchy is rooted at `BlazenError` (extending the host language's base `Error` / `Exception`) and fans out to ~87 leaves covering provider failures (`RateLimitError`, `AuthError`, `ContextLengthError`), local-inference backends (`LlamaCppError`, `MistralRsError`, `CandleLlmError`, `WhisperCppError`, `PiperError`, `DiffusionError`), persistence (`PersistError`, `SnapshotError`), and workflow control flow (`StepNotFoundError`, `EventTypeMismatchError`, `WorkflowAbortedError`).
 
 ```python
 from blazen import CompletionModel, RateLimitError, AuthError, BlazenError

@@ -25,7 +25,7 @@ pub mod types;
 pub use client::JsBlazenPeerClient;
 #[cfg(not(target_os = "wasi"))]
 pub use funcs::{
-    load_client_tls, load_server_tls, peer_envelope_version, peer_token_env, resolve_beer_token,
+    load_client_tls, load_server_tls, peer_envelope_version, peer_token_env, resolve_peer_token,
 };
 #[cfg(not(target_os = "wasi"))]
 pub use server::JsBlazenPeerServer;
