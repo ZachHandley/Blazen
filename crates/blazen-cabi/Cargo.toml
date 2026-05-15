@@ -17,7 +17,7 @@ crate-type = ["cdylib", "staticlib"]
 [dependencies]
 async-trait.workspace = true
 blazen-llm = { workspace = true }
-blazen-uniffi = { path = "../blazen-uniffi", default-features = false }
+blazen-uniffi = { version = "0.0.0-dev", path = "../blazen-uniffi", default-features = false }
 futures-util.workspace = true
 libc = "0.2"
 parking_lot = "0.12"
