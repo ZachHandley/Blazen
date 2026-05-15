@@ -1,0 +1,27 @@
+   Compiling esaxx-rs v0.1.10
+   Compiling pyo3-build-config v0.28.2
+   Compiling llama-cpp-sys-2 v0.1.143
+    Checking tokenizers v0.22.2
+    Checking tokenizers v0.21.4
+   Compiling pyo3-ffi v0.28.2
+   Compiling pyo3-macros-backend v0.28.2
+   Compiling pyo3 v0.28.2
+   Compiling numpy v0.28.0
+    Checking toktrie_hf_tokenizers v1.7.0
+    Checking blazen-llm-candle v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-llm-candle)
+    Checking blazen-embed-tract v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-embed-tract)
+    Checking candle-core v0.10.2
+    Checking fastembed v5.13.1
+    Checking blazen-embed-fastembed v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-embed-fastembed)
+    Checking blazen-embed v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-embed)
+    Checking candle-nn v0.10.2
+    Checking mistralrs-vision v0.8.1
+   Compiling pyo3-macros v0.28.2
+    Checking mistralrs-quant v0.8.1
+    Checking candle-transformers v0.10.2
+    Checking mistralrs-core v0.8.1
+    Checking pythonize v0.28.0
+    Checking pyo3-async-runtimes v0.28.0
+    Checking pyo3-stub-gen v0.22.0
+    Checking llama-cpp-2 v0.1.143
+    Checking blazen-llm-llamacpp v0.0.0-dev (/home/zach/github/Blazen/crates/blazen-llm-llamacpp)

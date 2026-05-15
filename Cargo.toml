@@ -166,7 +166,13 @@ hf-hub = { version = "0.4", default-features = false }
 candle-core = "0.8"
 candle-nn = "0.8"
 candle-transformers = "0.8"
-tokenizers = "0.21"
+# default-features = false disables `esaxx_fast`, which pulls esaxx-rs/cpp.
+# esaxx-rs's build.rs hardcodes `.static_crt(true)` → /MT objects that clash
+# with the rest of the build graph (cc-rs default /MD, pyke ort-sys prebuilt
+# /MD). Strict linkers (lld-link) hard-error on the mismatch; real link.exe
+# tolerates it but mixing CRTs in one DLL is fragile. The pure-Rust fallback
+# only affects Unigram tokenizer init perf, not tokenization runtime.
+tokenizers = { version = "0.21", default-features = false, features = ["onig", "progressbar"] }
 
 # Local embedding via ONNX Runtime
 fastembed = "5"
