@@ -109,3 +109,30 @@ pub fn compute_audio_cost(model_id: String, seconds: f64) -> Option<f64> {
 pub fn compute_video_cost(model_id: String, seconds: f64) -> Option<f64> {
     blazen_llm::pricing::compute_video_cost(&model_id, seconds)
 }
+
+/// Refresh the pricing registry from a remote catalog (defaults to the
+/// blazen.dev Cloudflare Worker, which mirrors models.dev plus live
+/// `OpenRouter` / Together pricing on a daily cron).
+///
+/// Resolves to the number of entries registered. Call once at app startup
+/// to populate pricing for the ~1600+ models the build-time baked baseline
+/// doesn't carry. Misses still resolve to `null` from the cost lookups;
+/// no automatic retry / cache layer beyond the global registry.
+///
+/// ```javascript
+/// const count = await refreshPricing();   // bulk fetch
+/// // or:
+/// await refreshPricing("https://my-mirror.example/pricing.json");
+/// ```
+///
+/// # Errors
+/// Returns a JS error if the HTTP fetch fails, returns a non-2xx status,
+/// or the response body cannot be parsed as the expected pricing schema.
+#[napi(js_name = "refreshPricing", catch_unwind)]
+pub async fn refresh_pricing(url: Option<String>) -> napi::Result<u32> {
+    let target = url.unwrap_or_else(|| blazen_llm::DEFAULT_PRICING_URL.to_owned());
+    blazen_llm::refresh_default_with_url(&target)
+        .await
+        .map(|n| u32::try_from(n).unwrap_or(u32::MAX))
+        .map_err(|e| napi::Error::from_reason(e.to_string()))
+}

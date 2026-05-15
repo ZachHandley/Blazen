@@ -481,6 +481,15 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_func_refresh_pricing()
+		})
+		if checksum != 62705 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_func_refresh_pricing: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_func_custom_provider_from_foreign()
 		})
 		if checksum != 38880 {
@@ -14346,6 +14355,43 @@ func NewValkeyCheckpointStore(url string, ttlSeconds *uint64) (*CheckpointStore,
 	} else {
 		return FfiConverterCheckpointStoreINSTANCE.Lift(_uniffiRV), nil
 	}
+}
+
+// Refresh the pricing registry from a remote catalog. `url` defaults to
+// the blazen.dev Cloudflare Worker, which mirrors models.dev plus live
+// OpenRouter / Together pricing on a daily cron.
+//
+// Returns the number of entries registered. Misses still return `null`
+// from `compute_cost`; no automatic retry / cache layer beyond the
+// global registry.
+func RefreshPricing(url *string) (uint32, error) {
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) C.uint32_t {
+			res := C.ffi_blazen_uniffi_rust_future_complete_u32(handle, status)
+			return res
+		},
+		// liftFn
+		func(ffi C.uint32_t) uint32 {
+			return FfiConverterUint32INSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_func_refresh_pricing(FfiConverterOptionalStringINSTANCE.Lower(url)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_u32(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_u32(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
 }
 
 // Build a [`CustomProviderHandle`] from a foreign-implemented

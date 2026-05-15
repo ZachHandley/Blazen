@@ -950,6 +950,7 @@ module.exports.ProviderId = nativeBinding.ProviderId
 module.exports.JsProviderId = nativeBinding.JsProviderId
 module.exports.RefLifetime = nativeBinding.RefLifetime
 module.exports.JsRefLifetime = nativeBinding.JsRefLifetime
+module.exports.refreshPricing = nativeBinding.refreshPricing
 module.exports.registeredStepIds = nativeBinding.registeredStepIds
 module.exports.registerEventDeserializer = nativeBinding.registerEventDeserializer
 module.exports.registerFromModelInfo = nativeBinding.registerFromModelInfo

@@ -36,6 +36,7 @@ pub mod llm;
 pub mod peer;
 pub mod persist;
 pub mod pipeline;
+pub mod pricing;
 pub mod provider_api_protocol;
 pub mod provider_base;
 pub mod provider_custom;

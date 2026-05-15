@@ -8,10 +8,13 @@ rust-version.workspace = true
 repository.workspace = true
 description = "Embedding backend facade for Blazen: picks fastembed (ORT) or tract (pure Rust) per target"
 
-[target.'cfg(not(target_env = "musl"))'.dependencies]
+# Use fastembed (ORT) everywhere EXCEPT musl-Linux and Intel macOS.
+# - musl: ort-sys can't link against musl libc
+# - x86_64-apple-darwin: pyke does not ship prebuilt ORT binaries for Intel Mac
+[target.'cfg(not(any(target_env = "musl", all(target_os = "macos", target_arch = "x86_64"))))'.dependencies]
 blazen-embed-fastembed = { workspace = true }
 
-[target.'cfg(target_env = "musl")'.dependencies]
+[target.'cfg(any(target_env = "musl", all(target_os = "macos", target_arch = "x86_64")))'.dependencies]
 blazen-embed-tract = { workspace = true }
 
 [lints]

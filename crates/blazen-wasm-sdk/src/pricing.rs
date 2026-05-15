@@ -81,3 +81,25 @@ pub fn compute_cost(model_id: &str, prompt_tokens: u32, completion_tokens: u32) 
         None => JsValue::NULL,
     }
 }
+
+/// Refresh the pricing registry from the blazen.dev Cloudflare Worker
+/// (or any compatible mirror). Goes out via `fetch()`, parses the bulk
+/// catalog, and registers every entry. Resolves to the count.
+///
+/// Call once at app startup to populate pricing for models the built-in
+/// baseline doesn't carry. Misses still return `null` from `computeCost`;
+/// no auto-refresh or retry beyond the global registry.
+///
+/// ```js
+/// const count = await refreshPricing();
+/// // or:
+/// await refreshPricing("https://my-mirror.example/pricing.json");
+/// ```
+#[wasm_bindgen(js_name = "refreshPricing")]
+pub async fn refresh_pricing(url: Option<String>) -> Result<u32, JsValue> {
+    let target = url.unwrap_or_else(|| blazen_llm::DEFAULT_PRICING_URL.to_owned());
+    blazen_llm::refresh_default_with_url(&target)
+        .await
+        .map(|n| u32::try_from(n).unwrap_or(u32::MAX))
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}

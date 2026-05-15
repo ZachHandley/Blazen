@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Blazen pricing.json",
+  "description": "Per-model pricing data baked into blazen-llm at build time and served live via https://blazen.dev/api/pricing.json. Keys in `models` MUST be normalized model ids: lowercase, with provider prefix and date suffix already stripped (matches crates/blazen-llm/src/pricing.rs::normalize_model_id rules). All `$`-prefixed top-level keys are metadata and ignored by the build script.",
+  "type": "object",
+  "required": ["models"],
+  "properties": {
+    "$schema_version": { "type": "integer", "const": 1 },
+    "$generated_at":   { "type": "string", "format": "date-time" },
+    "$source":         { "type": "string" },
+    "models": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "input_per_million":  { "type": "number", "minimum": 0 },
+          "output_per_million": { "type": "number", "minimum": 0 },
+          "per_image":          { "type": "number", "minimum": 0 },
+          "per_second":         { "type": "number", "minimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

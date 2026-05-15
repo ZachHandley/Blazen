@@ -104,6 +104,7 @@ pub(crate) fn default_http_client() -> std::sync::Arc<dyn http::HttpClient> {
 pub mod media;
 pub mod middleware;
 pub mod pricing;
+pub mod pricing_fetcher;
 pub mod providers;
 pub mod quantization;
 pub mod retry;
@@ -187,6 +188,16 @@ pub use media::{
 };
 pub use middleware::{CacheMiddleware, Middleware, MiddlewareStack, RetryMiddleware};
 pub use pricing::{PricingEntry, compute_cost, lookup_pricing, register_pricing};
+pub use pricing_fetcher::{
+    DEFAULT_MODEL_PRICING_URL_BASE, DEFAULT_PRICING_URL, fetch_one_from_url, refresh_from_url,
+};
+#[cfg(any(
+    all(not(target_arch = "wasm32"), feature = "reqwest"),
+    target_arch = "wasm32"
+))]
+pub use pricing_fetcher::{
+    fetch_one_default, fetch_one_default_with_url_base, refresh_default, refresh_default_with_url,
+};
 pub use quantization::Quantization;
 pub use retry::{RetryCompletionModel, RetryConfig};
 #[cfg(feature = "tiktoken")]

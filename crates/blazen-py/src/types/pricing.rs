@@ -165,3 +165,32 @@ pub fn compute_audio_cost(model_id: &str, seconds: f64) -> Option<f64> {
 pub fn compute_video_cost(model_id: &str, seconds: f64) -> Option<f64> {
     blazen_llm::pricing::compute_video_cost(model_id, seconds)
 }
+
+/// Refresh the pricing registry from a remote catalog (defaults to the
+/// blazen.dev Cloudflare Worker, which serves a daily-updated mirror of
+/// models.dev and live OpenRouter / Together pricing).
+///
+/// Call once at app startup to populate pricing for the ~1600+ models the
+/// build-time baked baseline doesn't carry. Returns the number of entries
+/// registered. Misses still return ``None`` from ``compute_cost``; this
+/// function does not retry or cache beyond the global registry.
+///
+/// Args:
+///     url: Optional override for the bulk endpoint. Defaults to
+///         ``https://blazen.dev/api/pricing.json``.
+///
+/// Example:
+///     >>> count = await refresh_pricing()
+///     >>> print(f"loaded {count} pricing entries")
+#[gen_stub_pyfunction]
+#[pyfunction]
+#[pyo3(signature = (url=None))]
+pub fn refresh_pricing(py: Python<'_>, url: Option<String>) -> PyResult<Bound<'_, PyAny>> {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
+        let target = url.unwrap_or_else(|| blazen_llm::DEFAULT_PRICING_URL.to_owned());
+        blazen_llm::refresh_default_with_url(&target)
+            .await
+            .map(|n| n as u64)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    })
+}

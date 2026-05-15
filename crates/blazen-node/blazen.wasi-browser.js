@@ -430,6 +430,7 @@ export const ProviderId = __napiModule.exports.ProviderId
 export const JsProviderId = __napiModule.exports.JsProviderId
 export const RefLifetime = __napiModule.exports.RefLifetime
 export const JsRefLifetime = __napiModule.exports.JsRefLifetime
+export const refreshPricing = __napiModule.exports.refreshPricing
 export const registeredStepIds = __napiModule.exports.registeredStepIds
 export const registerEventDeserializer = __napiModule.exports.registerEventDeserializer
 export const registerFromModelInfo = __napiModule.exports.registerFromModelInfo

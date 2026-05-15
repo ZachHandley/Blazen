@@ -1,2 +1,16 @@
 [registries.forgejo]
 index = "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/"
+
+# Windows MSVC: force static CRT (/MT) across the entire build graph.
+# `esaxx-rs` (transitive via `tokenizers`) hardcodes `.static_crt(true)` in
+# its build.rs, so every other C/C++ object in the binary must also use /MT
+# or the MSVC linker fails with LNK2038 (RuntimeLibrary mismatch).
+# This rustflag propagates to cc-rs via CARGO_CFG_TARGET_FEATURE.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+# `llama-cpp-sys-2`'s cmake build keys off its own env var (it doesn't read
+# the rustflag), so we have to flip it explicitly. No-op on non-MSVC targets
+# — cmake-rs's `static_crt()` only affects MSVC.
+[env]
+LLAMA_STATIC_CRT = "1"

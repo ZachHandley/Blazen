@@ -1,6 +1,21 @@
 name = "blazen-dev"
+main = "src/worker.ts"
 compatibility_date = "2026-03-17"
 
 [assets]
 directory = "dist"
 not_found_handling = "single-page-application"
+# Without this, the Worker entry never runs — static-asset matches short-circuit.
+# We need every request to hit the Worker so /api/* routes can be served before
+# falling through to env.ASSETS.fetch(request) for the static site.
+run_worker_first = ["/api/*"]
+
+# Production namespace created 2026-05-15 via `wrangler kv namespace create PRICING_KV`.
+# `preview_id` is only needed for `wrangler dev`; create it on demand with
+# `wrangler kv namespace create PRICING_KV --preview` and add the returned id below.
+[[kv_namespaces]]
+binding = "PRICING_KV"
+id = "8e5aa542d7064232a297d67d122828a8"
+
+# PRICING_UPLOAD_TOKEN is provisioned via `wrangler secret put PRICING_UPLOAD_TOKEN`
+# and is NOT declared here so it stays out of source control.

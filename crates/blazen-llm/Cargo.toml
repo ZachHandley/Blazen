@@ -7,6 +7,11 @@ authors.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 description = "LLM provider abstraction layer for the Blazen workflow engine"
+build = "build.rs"
+
+[build-dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 
 [features]
 default = ["content-detect"]

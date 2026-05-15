@@ -342,6 +342,7 @@ __all__ = [
     "load_server_tls",
     "lookup_pricing",
     "lookup_step_builder",
+    "refresh_pricing",
     "register_event_deserializer",
     "register_from_model_info",
     "register_pricing",
@@ -12861,6 +12862,26 @@ def lookup_step_builder(step_id: builtins.str) -> builtins.bool:
     which is not exposed to Python. This binding therefore reports
     presence only -- callers that need to *use* the registration must do
     so on the Rust side.
+    """
+
+def refresh_pricing(url: typing.Optional[builtins.str] = None) -> typing.Any:
+    r"""
+    Refresh the pricing registry from a remote catalog (defaults to the
+    blazen.dev Cloudflare Worker, which serves a daily-updated mirror of
+    models.dev and live OpenRouter / Together pricing).
+    
+    Call once at app startup to populate pricing for the ~1600+ models the
+    build-time baked baseline doesn't carry. Returns the number of entries
+    registered. Misses still return ``None`` from ``compute_cost``; this
+    function does not retry or cache beyond the global registry.
+    
+    Args:
+        url: Optional override for the bulk endpoint. Defaults to
+            ``https://blazen.dev/api/pricing.json``.
+    
+    Example:
+        >>> count = await refresh_pricing()
+        >>> print(f"loaded {count} pricing entries")
     """
 
 def register_event_deserializer(name: builtins.str, deserializer: typing.Any) -> None:

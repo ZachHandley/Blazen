@@ -1,0 +1,114 @@
+name: Check Pricing
+
+# Daily pull from models.dev (+ live OpenRouter / Together) into the
+# `models-data` branch and the blazen.dev Cloudflare Worker's KV-backed
+# /api/pricing.json endpoint. The seed file on `main` (used as the build-time
+# baked baseline) is intentionally NOT touched here -- it stays small and
+# rarely-edited; live data flows through the runtime refresh path
+# (blazen_llm::refresh_default()) and the website API.
+on:
+  schedule:
+    # 04:17 UTC daily. Off-the-hour to avoid runner contention.
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: check-pricing
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync pricing data
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install jq
+        shell: bash
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq jq
+          fi
+
+      - name: Fetch + merge pricing catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/sync-pricing.sh
+          # Move the generated file out of the working tree so it survives
+          # the upcoming `git checkout` to models-data. Stay inside
+          # $RUNNER_TEMP (workflow-scoped scratch) per memory rule "no /tmp
+          # scratch".
+          mkdir -p "${RUNNER_TEMP}/pricing"
+          cp crates/blazen-llm/data/pricing.json "${RUNNER_TEMP}/pricing/fresh.json"
+          # Restore the seed so subsequent steps see a clean main tree.
+          git checkout -- crates/blazen-llm/data/pricing.json
+
+      - name: Push pricing.json to models-data branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name  "Zach Handley"
+          git config user.email "zachhandley@gmail.com"
+
+          # Fetch existing models-data branch (if any) so we can compare
+          # against its tip and avoid a redundant force-push when nothing
+          # changed.
+          if git ls-remote --exit-code --heads origin models-data >/dev/null 2>&1; then
+            git fetch origin models-data:models-data
+            git checkout models-data
+          else
+            # First run: orphan branch (no main history -- pricing.json is
+            # the only file that should ever live here, so we don't carry
+            # main's commits along).
+            git checkout --orphan models-data
+            git rm -rf . >/dev/null 2>&1 || true
+            mkdir -p crates/blazen-llm/data
+          fi
+
+          cp "${RUNNER_TEMP}/pricing/fresh.json" crates/blazen-llm/data/pricing.json
+
+          if git diff --quiet -- crates/blazen-llm/data/pricing.json && \
+             [ -z "$(git status --porcelain)" ]; then
+            echo "pricing.json unchanged; nothing to commit"
+            exit 0
+          fi
+
+          git add crates/blazen-llm/data/pricing.json
+          git commit -m "Daily pricing refresh"
+          git push origin HEAD:refs/heads/models-data --force-with-lease
+
+      - name: Upload to Cloudflare Worker (KV)
+        env:
+          PRICING_UPLOAD_TOKEN: ${{ secrets.PRICING_UPLOAD_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${PRICING_UPLOAD_TOKEN:-}" ]; then
+            echo "PRICING_UPLOAD_TOKEN not set; skipping Worker upload."
+            echo "Provision via:"
+            echo "  Forgejo:   add PRICING_UPLOAD_TOKEN to repo secrets"
+            echo "  Worker:    cd website && wrangler secret put PRICING_UPLOAD_TOKEN"
+            exit 0
+          fi
+
+          status=$(curl -fsSL --max-time 30 \
+            -o "${RUNNER_TEMP}/upload-response.txt" \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer ${PRICING_UPLOAD_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data-binary @"${RUNNER_TEMP}/pricing/fresh.json" \
+            https://blazen.dev/api/pricing/upload)
+          echo "Upload responded ${status}: $(cat "${RUNNER_TEMP}/upload-response.txt")"
+          if [ "${status}" != "200" ]; then
+            echo "Worker upload failed with HTTP ${status}" >&2
+            exit 1
+          fi

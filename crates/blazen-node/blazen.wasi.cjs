@@ -482,6 +482,7 @@ module.exports.ProviderId = __napiModule.exports.ProviderId
 module.exports.JsProviderId = __napiModule.exports.JsProviderId
 module.exports.RefLifetime = __napiModule.exports.RefLifetime
 module.exports.JsRefLifetime = __napiModule.exports.JsRefLifetime
+module.exports.refreshPricing = __napiModule.exports.refreshPricing
 module.exports.registeredStepIds = __napiModule.exports.registeredStepIds
 module.exports.registerEventDeserializer = __napiModule.exports.registerEventDeserializer
 module.exports.registerFromModelInfo = __napiModule.exports.registerFromModelInfo

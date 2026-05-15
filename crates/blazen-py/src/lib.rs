@@ -596,6 +596,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(types::pricing::compute_image_cost, m)?)?;
     m.add_function(wrap_pyfunction!(types::pricing::compute_audio_cost, m)?)?;
     m.add_function(wrap_pyfunction!(types::pricing::compute_video_cost, m)?)?;
+    m.add_function(wrap_pyfunction!(types::pricing::refresh_pricing, m)?)?;
 
     // Prompts
     m.add_class::<types::PyTemplateRole>()?;

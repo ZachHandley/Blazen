@@ -1518,6 +1518,11 @@ uint64_t uniffi_blazen_uniffi_fn_func_new_redb_checkpoint_store(RustBuffer path,
 uint64_t uniffi_blazen_uniffi_fn_func_new_valkey_checkpoint_store(RustBuffer url, RustBuffer ttl_seconds, RustCallStatus *out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_REFRESH_PRICING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_REFRESH_PRICING
+uint64_t uniffi_blazen_uniffi_fn_func_refresh_pricing(RustBuffer url
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_CUSTOM_PROVIDER_FROM_FOREIGN
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_CUSTOM_PROVIDER_FROM_FOREIGN
 uint64_t uniffi_blazen_uniffi_fn_func_custom_provider_from_foreign(uint64_t provider, RustCallStatus *out_status
@@ -2043,6 +2048,12 @@ uint16_t uniffi_blazen_uniffi_checksum_func_new_redb_checkpoint_store(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_FUNC_NEW_VALKEY_CHECKPOINT_STORE
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_FUNC_NEW_VALKEY_CHECKPOINT_STORE
 uint16_t uniffi_blazen_uniffi_checksum_func_new_valkey_checkpoint_store(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_FUNC_REFRESH_PRICING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_FUNC_REFRESH_PRICING
+uint16_t uniffi_blazen_uniffi_checksum_func_refresh_pricing(void
     
 );
 #endif

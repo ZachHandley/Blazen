@@ -5655,6 +5655,31 @@ int32_t blazen_pipeline_run_blocking(const BlazenPipeline *pipe,
  void blazen_pipeline_free(BlazenPipeline *pipe);
 
 /**
+ * Refresh the pricing registry from a remote catalog. `url` may be null
+ * to use the default (`https://blazen.dev/api/pricing.json`); otherwise it
+ * must be a NUL-terminated UTF-8 string.
+ *
+ * On success returns `0` and writes the number of registered entries into
+ * `*out_count` (when non-null). On failure returns `-1` and writes a
+ * `BlazenError*` into `*out_err` (when non-null) — the caller owns the
+ * returned error and must free it via `blazen_error_free`.
+ *
+ * Blocks the calling thread until the HTTP fetch completes; intended to
+ * be called once at application startup.
+ *
+ * # Safety
+ *
+ * - `url` must be null OR a NUL-terminated UTF-8 buffer valid for the
+ *   duration of this call.
+ * - `out_count` must be null OR point to a writable `u32` slot.
+ * - `out_err` must be null OR point to a writable `*mut BlazenError` slot.
+ */
+
+int32_t blazen_refresh_pricing_blocking(const char *url,
+                                        uint32_t *out_count,
+                                        BlazenError **out_err);
+
+/**
  * Constructs a new `OpenAiCompatConfig` with the four required string fields.
  * `auth_code` selects the [`AuthMethod`] variant (see the module docs); for
  * `auth_code == 1` (`ApiKeyHeader`) the supplied `auth_header_name` becomes

@@ -29,6 +29,7 @@ pub mod persist;
 pub mod persist_factories;
 pub mod persist_records;
 pub mod pipeline;
+pub mod pricing;
 pub mod provider_api_protocol;
 pub mod provider_base;
 pub mod provider_custom;

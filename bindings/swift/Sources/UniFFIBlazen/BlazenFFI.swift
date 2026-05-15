@@ -12550,6 +12550,29 @@ public func newValkeyCheckpointStore(url: String, ttlSeconds: UInt64?)throws  ->
 })
 }
 /**
+ * Refresh the pricing registry from a remote catalog. `url` defaults to
+ * the blazen.dev Cloudflare Worker, which mirrors models.dev plus live
+ * OpenRouter / Together pricing on a daily cron.
+ *
+ * Returns the number of entries registered. Misses still return `null`
+ * from `compute_cost`; no automatic retry / cache layer beyond the
+ * global registry.
+ */
+public func refreshPricing(url: String?)async throws  -> UInt32  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_func_refresh_pricing(FfiConverterOptionString.lower(url)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_u32,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_u32,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_u32,
+            liftFunc: FfiConverterUInt32.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+/**
  * Build a [`CustomProviderHandle`] from a foreign-implemented
  * [`CustomProvider`].
  *
@@ -13294,6 +13317,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_func_new_valkey_checkpoint_store() != 24389) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_func_refresh_pricing() != 62705) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_func_custom_provider_from_foreign() != 38880) {

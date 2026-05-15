@@ -8284,6 +8284,28 @@ export declare const enum RefLifetime {
 }
 
 /**
+ * Refresh the pricing registry from a remote catalog (defaults to the
+ * blazen.dev Cloudflare Worker, which mirrors models.dev plus live
+ * `OpenRouter` / Together pricing on a daily cron).
+ *
+ * Resolves to the number of entries registered. Call once at app startup
+ * to populate pricing for the ~1600+ models the build-time baked baseline
+ * doesn't carry. Misses still resolve to `null` from the cost lookups;
+ * no automatic retry / cache layer beyond the global registry.
+ *
+ * ```javascript
+ * const count = await refreshPricing();   // bulk fetch
+ * // or:
+ * await refreshPricing("https://my-mirror.example/pricing.json");
+ * ```
+ *
+ * # Errors
+ * Returns a JS error if the HTTP fetch fails, returns a non-2xx status,
+ * or the response body cannot be parsed as the expected pricing schema.
+ */
+export declare function refreshPricing(url?: string | undefined | null): Promise<number>
+
+/**
  * All step IDs registered in the process-global registry. Order is
  * unspecified.
  */

@@ -1165,6 +1165,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_func_new_valkey_checkpoint_store(): Short
 
+    external fun uniffi_blazen_uniffi_checksum_func_refresh_pricing(): Short
+
     external fun uniffi_blazen_uniffi_checksum_func_custom_provider_from_foreign(): Short
 
     external fun uniffi_blazen_uniffi_checksum_func_lm_studio(): Short
@@ -2314,6 +2316,8 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
+    external fun uniffi_blazen_uniffi_fn_func_refresh_pricing(`url`: RustBuffer.ByValue): Long
+
     external fun uniffi_blazen_uniffi_fn_func_custom_provider_from_foreign(
         `provider`: Long,
         uniffi_out_err: UniffiRustCallStatus,
@@ -2836,6 +2840,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_func_new_valkey_checkpoint_store() != 24389.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_refresh_pricing() != 62705.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_func_custom_provider_from_foreign() != 38880.toShort()) {
@@ -17356,6 +17363,29 @@ fun `newValkeyCheckpointStore`(
                 _status,
             )
         },
+    )
+
+/**
+ * Refresh the pricing registry from a remote catalog. `url` defaults to
+ * the blazen.dev Cloudflare Worker, which mirrors models.dev plus live
+ * OpenRouter / Together pricing on a daily cron.
+ *
+ * Returns the number of entries registered. Misses still return `null`
+ * from `compute_cost`; no automatic retry / cache layer beyond the
+ * global registry.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `refreshPricing`(`url`: kotlin.String?): kotlin.UInt =
+    uniffiRustCallAsync(
+        UniffiLib.uniffi_blazen_uniffi_fn_func_refresh_pricing(FfiConverterOptionalString.lower(`url`)),
+        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_u32(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_u32(future, continuation) },
+        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_u32(future) },
+        // lift function
+        { FfiConverterUInt.lift(it) },
+        // Error FFI converter
+        BlazenException.ErrorHandler,
     )
 
 /**
