@@ -94,7 +94,7 @@ base64 = "0.22"
 infer = { version = "0.16", default-features = false }
 
 # Python bindings
-pyo3 = { version = "0.28", features = ["multiple-pymethods"] }
+pyo3 = { version = "0.28", features = ["multiple-pymethods", "abi3-py310"] }
 pyo3-async-runtimes = { version = "0.28", features = ["tokio-runtime"] }
 
 # Node.js bindings

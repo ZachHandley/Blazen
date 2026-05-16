@@ -378,30 +378,14 @@ jobs:
           "$WRAPPER" --version
 
       - name: Setup Python 3.10
+        # Only 3.10 is needed: pyo3 abi3-py310 produces a single forward-compatible
+        # wheel that installs on cp310, cp311, cp312, cp313, cp314, and future
+        # cp3.x >= 3.10. Building per-version wheels was the legacy non-abi3
+        # path; collapsing the matrix is what drops per-release size 5x.
         if: steps.verify.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
         with:
           python-version: '3.10'
-      - name: Setup Python 3.11
-        if: steps.verify.outputs.completed != 'true'
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
-        with:
-          python-version: '3.11'
-      - name: Setup Python 3.12
-        if: steps.verify.outputs.completed != 'true'
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
-        with:
-          python-version: '3.12'
-      - name: Setup Python 3.13
-        if: steps.verify.outputs.completed != 'true'
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
-        with:
-          python-version: '3.13'
-      - name: Setup Python 3.14
-        if: steps.verify.outputs.completed != 'true'
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
-        with:
-          python-version: '3.14'
 
       - name: Stamp version
         if: steps.verify.outputs.completed != 'true'
@@ -453,10 +437,13 @@ jobs:
             fi
           fi
 
-          INTERPRETERS=""
-          for V in 3.10 3.11 3.12 3.13 3.14; do
-            INTERP=$(uv python find "$V" 2>/dev/null) && INTERPRETERS="$INTERPRETERS -i $INTERP" || echo "Python $V unavailable, skipping"
-          done
+          # Single 3.10 interpreter -- pyo3 abi3-py310 means the resulting
+          # wheel installs on every cp3.x >= 3.10 without needing per-version
+          # rebuilds. Previously we looped through 3.10/3.11/3.12/3.13/3.14
+          # and produced 5 wheels per platform; the abi3 feature collapses
+          # that to 1.
+          INTERP=$(uv python find 3.10)
+          INTERPRETERS="-i $INTERP"
           echo "Building for ${{ matrix.target }} with: $INTERPRETERS"
           MANYLINUX_FLAG=""
           if [ -n "${{ matrix.manylinux }}" ]; then
@@ -511,15 +498,17 @@ jobs:
             $maturinArgs += '--manylinux'
             $maturinArgs += '${{ matrix.manylinux }}'
           }
-          foreach ($V in '3.10','3.11','3.12','3.13','3.14') {
-            $p = & uv python find $V 2>$null
-            if ($LASTEXITCODE -eq 0 -and $p) {
-              $maturinArgs += '-i'
-              $maturinArgs += $p
-            } else {
-              Write-Host "Python $V unavailable, skipping"
-            }
+          # Single 3.10 interpreter -- pyo3 abi3-py310 emits a single
+          # forward-compatible wheel that installs on cp310+. The legacy
+          # per-version loop produced 5 wheels per platform; the abi3 feature
+          # collapses that to 1.
+          $p = & uv python find 3.10
+          if ($LASTEXITCODE -ne 0 -or -not $p) {
+            Write-Host "ERROR: Python 3.10 not found"
+            exit 1
           }
+          $maturinArgs += '-i'
+          $maturinArgs += $p
           Write-Host "Running: uvx maturin $($maturinArgs -join ' ')"
           & uvx maturin @maturinArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
