@@ -112,23 +112,9 @@ jobs:
       OPENSSL_STATIC: ${{ matrix.openssl-vendored }}
       OPENSSL_VENDORED: ${{ matrix.openssl-vendored }}
     steps:
-      - name: Bootstrap Node.js for actions (manylinux)
-        if: matrix.container-kind == 'manylinux'
-        run: |
-          curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-          yum install -y nodejs
-
-      - name: Bootstrap Node.js for actions (musl)
-        if: matrix.container-kind == 'musl'
-        run: |
-          apt-get update -qq
-          apt-get install -y -qq curl
-          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-          apt-get install -y -qq nodejs
-
-      - name: Bootstrap Node.js for actions (alpine)
-        if: matrix.container-kind == 'alpine'
-        run: apk add --no-cache nodejs
+      - name: Setup container runtime
+        if: matrix.container-kind
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-container-runtime@main
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -155,28 +141,12 @@ jobs:
       # `steps.verify.outputs.completed` instead of `steps.check.outputs.completed`.
       - name: Verify artifact present
         id: verify
-        shell: bash
-        env:
-          MARKER_COMPLETE: ${{ steps.check.outputs.completed }}
-          AUTH: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
-          VERSION: ${{ needs.version.outputs.version }}
-          TARGET: ${{ matrix.target }}
-        run: |
-          set -u
-          if [ "$MARKER_COMPLETE" != "true" ]; then
-            echo "Marker not set; will build."
-            echo "completed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          URL="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/wheels-${TARGET}.tar.gz"
-          code=$(curl -sS -o /dev/null -w "%{http_code}" --head -u "$AUTH" "$URL" || echo "000")
-          if [ "$code" = "200" ]; then
-            echo "Marker + artifact both present (HTTP 200); skipping build."
-            echo "completed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::Marker says complete but artifact missing (HTTP $code at $URL); will rebuild."
-            echo "completed=false" >> "$GITHUB_OUTPUT"
-          fi
+        uses: https://forge.blackleafdigital.com/Public/actions/verify-artifact@main
+        with:
+          marker-complete: ${{ steps.check.outputs.completed }}
+          version: ${{ needs.version.outputs.version }}
+          filename: wheels-${{ matrix.target }}.tar.gz
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
       - name: Diagnose inherited env (Windows)
         if: steps.verify.outputs.completed != 'true' && runner.os == 'Windows'
@@ -615,27 +585,12 @@ jobs:
 
       - name: Verify artifact present
         id: verify
-        shell: bash
-        env:
-          MARKER_COMPLETE: ${{ steps.check.outputs.completed }}
-          AUTH: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
-          VERSION: ${{ needs.version.outputs.version }}
-        run: |
-          set -u
-          if [ "$MARKER_COMPLETE" != "true" ]; then
-            echo "Marker not set; will build."
-            echo "completed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          URL="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/sdist.tar.gz"
-          code=$(curl -sS -o /dev/null -w "%{http_code}" --head -u "$AUTH" "$URL" || echo "000")
-          if [ "$code" = "200" ]; then
-            echo "Marker + artifact both present (HTTP 200); skipping build."
-            echo "completed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::Marker says complete but artifact missing (HTTP $code at $URL); will rebuild."
-            echo "completed=false" >> "$GITHUB_OUTPUT"
-          fi
+        uses: https://forge.blackleafdigital.com/Public/actions/verify-artifact@main
+        with:
+          marker-complete: ${{ steps.check.outputs.completed }}
+          version: ${{ needs.version.outputs.version }}
+          filename: sdist.tar.gz
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
       - name: Install uv
         if: steps.verify.outputs.completed != 'true'
@@ -745,23 +700,9 @@ jobs:
       OPENSSL_STATIC: ${{ matrix.openssl-vendored }}
       OPENSSL_VENDORED: ${{ matrix.openssl-vendored }}
     steps:
-      - name: Bootstrap Node.js for actions (manylinux)
-        if: matrix.container-kind == 'manylinux'
-        run: |
-          curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-          yum install -y nodejs
-
-      - name: Bootstrap Node.js for actions (musl)
-        if: matrix.container-kind == 'musl'
-        run: |
-          apt-get update -qq
-          apt-get install -y -qq curl
-          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-          apt-get install -y -qq nodejs
-
-      - name: Bootstrap Node.js for actions (alpine)
-        if: matrix.container-kind == 'alpine'
-        run: apk add --no-cache nodejs
+      - name: Setup container runtime
+        if: matrix.container-kind
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-container-runtime@main
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -781,28 +722,12 @@ jobs:
 
       - name: Verify artifact present
         id: verify
-        shell: bash
-        env:
-          MARKER_COMPLETE: ${{ steps.check.outputs.completed }}
-          AUTH: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
-          VERSION: ${{ needs.version.outputs.version }}
-          TARGET: ${{ matrix.target }}
-        run: |
-          set -u
-          if [ "$MARKER_COMPLETE" != "true" ]; then
-            echo "Marker not set; will build."
-            echo "completed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          URL="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/napi-${TARGET}.tar.gz"
-          code=$(curl -sS -o /dev/null -w "%{http_code}" --head -u "$AUTH" "$URL" || echo "000")
-          if [ "$code" = "200" ]; then
-            echo "Marker + artifact both present (HTTP 200); skipping build."
-            echo "completed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::Marker says complete but artifact missing (HTTP $code at $URL); will rebuild."
-            echo "completed=false" >> "$GITHUB_OUTPUT"
-          fi
+        uses: https://forge.blackleafdigital.com/Public/actions/verify-artifact@main
+        with:
+          marker-complete: ${{ steps.check.outputs.completed }}
+          version: ${{ needs.version.outputs.version }}
+          filename: napi-${{ matrix.target }}.tar.gz
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
       - name: Diagnose inherited env (Windows)
         if: steps.verify.outputs.completed != 'true' && runner.os == 'Windows'
@@ -1228,27 +1153,12 @@ jobs:
 
       - name: Verify artifact present
         id: verify
-        shell: bash
-        env:
-          MARKER_COMPLETE: ${{ steps.check.outputs.completed }}
-          AUTH: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
-          VERSION: ${{ needs.version.outputs.version }}
-        run: |
-          set -u
-          if [ "$MARKER_COMPLETE" != "true" ]; then
-            echo "Marker not set; will build."
-            echo "completed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          URL="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/wasm.tar.gz"
-          code=$(curl -sS -o /dev/null -w "%{http_code}" --head -u "$AUTH" "$URL" || echo "000")
-          if [ "$code" = "200" ]; then
-            echo "Marker + artifact both present (HTTP 200); skipping build."
-            echo "completed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::Marker says complete but artifact missing (HTTP $code at $URL); will rebuild."
-            echo "completed=false" >> "$GITHUB_OUTPUT"
-          fi
+        uses: https://forge.blackleafdigital.com/Public/actions/verify-artifact@main
+        with:
+          marker-complete: ${{ steps.check.outputs.completed }}
+          version: ${{ needs.version.outputs.version }}
+          filename: wasm.tar.gz
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
       - name: Setup Rust
         if: steps.verify.outputs.completed != 'true'
@@ -1351,26 +1261,36 @@ jobs:
             container-kind: manylinux
             artifact-os: linux
             artifact-arch: x86_64
+            dyn-ext: so
+            static-ext: a
           - target: aarch64-unknown-linux-gnu
             runs-on: arm64
             container: forge.blackleafdigital.com/blackleafdigital/blazen-ci-base:aarch64-unknown-linux-gnu
             container-kind: manylinux
             artifact-os: linux
             artifact-arch: aarch64
+            dyn-ext: so
+            static-ext: a
           - target: aarch64-apple-darwin
             runs-on: macos-latest
             deployment-target: "14.0"
             artifact-os: darwin
             artifact-arch: aarch64
+            dyn-ext: dylib
+            static-ext: a
           - target: x86_64-apple-darwin
             runs-on: macos-latest
             deployment-target: "14.0"
             artifact-os: darwin
             artifact-arch: x86_64
+            dyn-ext: dylib
+            static-ext: a
           - target: x86_64-pc-windows-msvc
             runs-on: windows-latest
             artifact-os: windows
             artifact-arch: x86_64
+            dyn-ext: dll
+            static-ext: lib
     runs-on: ${{ matrix.runs-on }}
     container:
       image: ${{ matrix.container }}
@@ -1382,11 +1302,9 @@ jobs:
       CARGO_INCREMENTAL: "0"
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
     steps:
-      - name: Bootstrap Node.js for actions (manylinux)
-        if: matrix.container-kind == 'manylinux'
-        run: |
-          curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-          yum install -y nodejs
+      - name: Setup container runtime
+        if: matrix.container-kind
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-container-runtime@main
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -1410,46 +1328,14 @@ jobs:
       # registry for the release pipeline to succeed, so verify both.
       - name: Verify artifact present
         id: verify
-        shell: bash
-        env:
-          MARKER_COMPLETE: ${{ steps.check.outputs.completed }}
-          AUTH: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
-          VERSION: ${{ needs.version.outputs.version }}
-          ARTIFACT_OS: ${{ matrix.artifact-os }}
-          ARTIFACT_ARCH: ${{ matrix.artifact-arch }}
-        run: |
-          set -u
-          if [ "$MARKER_COMPLETE" != "true" ]; then
-            echo "Marker not set; will build."
-            echo "completed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          case "$ARTIFACT_OS" in
-            linux)   DYN_EXT=so;  STATIC_EXT=a   ;;
-            darwin)  DYN_EXT=dylib; STATIC_EXT=a ;;
-            windows) DYN_EXT=dll; STATIC_EXT=lib ;;
-            *) echo "::error::Unknown artifact-os: $ARTIFACT_OS"; exit 1 ;;
-          esac
-          BASE="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}"
-          STATIC="libblazen_uniffi-${ARTIFACT_OS}-${ARTIFACT_ARCH}.${STATIC_EXT}"
-          DYN="libblazen_uniffi-${ARTIFACT_OS}-${ARTIFACT_ARCH}.${DYN_EXT}"
-          missing=0
-          for F in "$STATIC" "$DYN"; do
-            code=$(curl -sS -o /dev/null -w "%{http_code}" --head -u "$AUTH" "${BASE}/${F}" || echo "000")
-            if [ "$code" = "200" ]; then
-              echo "[ok] ${F} present (HTTP 200)"
-            else
-              echo "::warning::${F} missing (HTTP $code at ${BASE}/${F})"
-              missing=1
-            fi
-          done
-          if [ "$missing" -eq 0 ]; then
-            echo "Marker + all artifacts present; skipping build."
-            echo "completed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::Marker says complete but at least one artifact missing; will rebuild."
-            echo "completed=false" >> "$GITHUB_OUTPUT"
-          fi
+        uses: https://forge.blackleafdigital.com/Public/actions/verify-artifact@main
+        with:
+          marker-complete: ${{ steps.check.outputs.completed }}
+          version: ${{ needs.version.outputs.version }}
+          filename: |
+            libblazen_uniffi-${{ matrix.artifact-os }}-${{ matrix.artifact-arch }}.${{ matrix.static-ext }}
+            libblazen_uniffi-${{ matrix.artifact-os }}-${{ matrix.artifact-arch }}.${{ matrix.dyn-ext }}
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
       - name: Install system deps (manylinux)
         if: steps.verify.outputs.completed != 'true' && matrix.container-kind == 'manylinux'
@@ -1684,6 +1570,7 @@ jobs:
             container-kind: manylinux
             artifact-os: linux
             artifact-arch: x86_64
+            dyn-ext: so
             ruby-arch-dir: linux_amd64
           - target: aarch64-unknown-linux-gnu
             runs-on: arm64
@@ -1691,23 +1578,27 @@ jobs:
             container-kind: manylinux
             artifact-os: linux
             artifact-arch: aarch64
+            dyn-ext: so
             ruby-arch-dir: linux_arm64
           - target: aarch64-apple-darwin
             runs-on: macos-latest
             deployment-target: "14.0"
             artifact-os: darwin
             artifact-arch: aarch64
+            dyn-ext: dylib
             ruby-arch-dir: darwin_arm64
           - target: x86_64-apple-darwin
             runs-on: macos-latest
             deployment-target: "14.0"
             artifact-os: darwin
             artifact-arch: x86_64
+            dyn-ext: dylib
             ruby-arch-dir: darwin_amd64
           - target: x86_64-pc-windows-msvc
             runs-on: windows-latest
             artifact-os: windows
             artifact-arch: x86_64
+            dyn-ext: dll
             ruby-arch-dir: windows_amd64
     runs-on: ${{ matrix.runs-on }}
     container:
@@ -1720,11 +1611,9 @@ jobs:
       CARGO_INCREMENTAL: "0"
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
     steps:
-      - name: Bootstrap Node.js for actions (manylinux)
-        if: matrix.container-kind == 'manylinux'
-        run: |
-          curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-          yum install -y nodejs
+      - name: Setup container runtime
+        if: matrix.container-kind
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-container-runtime@main
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -1747,35 +1636,12 @@ jobs:
       # registry before short-circuiting.
       - name: Verify artifact present
         id: verify
-        shell: bash
-        env:
-          MARKER_COMPLETE: ${{ steps.check.outputs.completed }}
-          AUTH: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
-          VERSION: ${{ needs.version.outputs.version }}
-          ARTIFACT_OS: ${{ matrix.artifact-os }}
-          ARTIFACT_ARCH: ${{ matrix.artifact-arch }}
-        run: |
-          set -u
-          if [ "$MARKER_COMPLETE" != "true" ]; then
-            echo "Marker not set; will build."
-            echo "completed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          case "$ARTIFACT_OS" in
-            linux)   DYN_EXT=so    ;;
-            darwin)  DYN_EXT=dylib ;;
-            windows) DYN_EXT=dll   ;;
-            *) echo "::error::Unknown artifact-os: $ARTIFACT_OS"; exit 1 ;;
-          esac
-          URL="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/libblazen_cabi-${ARTIFACT_OS}-${ARTIFACT_ARCH}.${DYN_EXT}"
-          code=$(curl -sS -o /dev/null -w "%{http_code}" --head -u "$AUTH" "$URL" || echo "000")
-          if [ "$code" = "200" ]; then
-            echo "Marker + artifact both present (HTTP 200); skipping build."
-            echo "completed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::Marker says complete but artifact missing (HTTP $code at $URL); will rebuild."
-            echo "completed=false" >> "$GITHUB_OUTPUT"
-          fi
+        uses: https://forge.blackleafdigital.com/Public/actions/verify-artifact@main
+        with:
+          marker-complete: ${{ steps.check.outputs.completed }}
+          version: ${{ needs.version.outputs.version }}
+          filename: libblazen_cabi-${{ matrix.artifact-os }}-${{ matrix.artifact-arch }}.${{ matrix.dyn-ext }}
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
       - name: Install system deps (manylinux)
         if: steps.verify.outputs.completed != 'true' && matrix.container-kind == 'manylinux'
@@ -1999,27 +1865,12 @@ jobs:
 
       - name: Verify artifact present
         id: verify
-        shell: bash
-        env:
-          MARKER_COMPLETE: ${{ steps.check.outputs.completed }}
-          AUTH: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
-          VERSION: ${{ needs.version.outputs.version }}
-        run: |
-          set -u
-          if [ "$MARKER_COMPLETE" != "true" ]; then
-            echo "Marker not set; will build."
-            echo "completed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          URL="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/BlazenFFI.xcframework.zip"
-          code=$(curl -sS -o /dev/null -w "%{http_code}" --head -u "$AUTH" "$URL" || echo "000")
-          if [ "$code" = "200" ]; then
-            echo "Marker + artifact both present (HTTP 200); skipping build."
-            echo "completed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::Marker says complete but artifact missing (HTTP $code at $URL); will rebuild."
-            echo "completed=false" >> "$GITHUB_OUTPUT"
-          fi
+        uses: https://forge.blackleafdigital.com/Public/actions/verify-artifact@main
+        with:
+          marker-complete: ${{ steps.check.outputs.completed }}
+          version: ${{ needs.version.outputs.version }}
+          filename: BlazenFFI.xcframework.zip
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
       - name: Setup Rust
         if: steps.verify.outputs.completed != 'true'
