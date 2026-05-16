@@ -200,6 +200,12 @@ impl crate::traits::LocalModel for LlamaCppProvider {
     async fn is_loaded(&self) -> bool {
         LlamaCppProvider::is_loaded(self).await
     }
+
+    fn device(&self) -> crate::device::Device {
+        LlamaCppProvider::device_str(self)
+            .and_then(|s| crate::device::Device::parse(s).ok())
+            .unwrap_or(crate::device::Device::Cpu)
+    }
 }
 
 // ---------------------------------------------------------------------------

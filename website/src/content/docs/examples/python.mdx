@@ -254,9 +254,9 @@ python examples/custom_memory_backend.py
 
 ---
 
-## Example 9: ModelManager with VRAM Budget
+## Example 9: ModelManager with Memory Budgets
 
-Track VRAM across multiple local models. Register each model with an estimated footprint; when loading a new one would exceed the budget, the least-recently-used model is automatically unloaded.
+Track memory budgets across multiple local models, with separate pools for CPU RAM and GPU VRAM. Register each model with an estimated footprint; when loading a new one would exceed its pool's budget, the least-recently-used model **in the same pool** is automatically unloaded.
 
 ```python
 import asyncio
@@ -265,8 +265,8 @@ from blazen import CompletionModel, MistralRsOptions, ModelManager
 
 
 async def main():
-    # 24 GB budget (GPU-typical for a consumer card).
-    manager = ModelManager(budget_gb=24)
+    # 64 GB of CPU RAM, 24 GB of GPU VRAM (GPU-typical for a consumer card).
+    manager = ModelManager(cpu_ram_gb=64, gpu_vram_gb=24)
 
     llama_8b = CompletionModel.mistralrs(
         options=MistralRsOptions("meta-llama/Llama-3.1-8B-Instruct"),
@@ -278,19 +278,23 @@ async def main():
         options=MistralRsOptions("mistralai/Mistral-Small-24B"),
     )
 
-    await manager.register("llama-8b", llama_8b, vram_estimate_bytes=8 * 1024**3)
-    await manager.register("qwen-14b", qwen_14b, vram_estimate_bytes=14 * 1024**3)
-    await manager.register("mistral-24b", mistral_24b, vram_estimate_bytes=20 * 1024**3)
+    await manager.register("llama-8b", llama_8b, memory_estimate_bytes=8 * 1024**3)
+    await manager.register("qwen-14b", qwen_14b, memory_estimate_bytes=14 * 1024**3)
+    await manager.register("mistral-24b", mistral_24b, memory_estimate_bytes=20 * 1024**3)
 
-    # Fits alongside qwen-14b (8 + 14 = 22 GB).
+    # Fits alongside qwen-14b in the GPU pool (8 + 14 = 22 GB).
     await manager.load("llama-8b")
     await manager.load("qwen-14b")
 
-    # 20 GB does not fit next to 8 + 14 = 22 GB -- LRU (llama-8b) is evicted.
+    # 20 GB does not fit next to 8 + 14 = 22 GB in the GPU pool -- LRU
+    # same-pool model (llama-8b) is evicted.
     await manager.load("mistral-24b")
 
     for s in await manager.status():
-        print(f"{s.id}: loaded={s.loaded}, vram={s.vram_estimate:,} bytes")
+        print(
+            f"{s.id}: loaded={s.loaded}, pool={s.pool}, "
+            f"memory={s.memory_estimate_bytes:,} bytes"
+        )
 
 
 asyncio.run(main())

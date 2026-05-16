@@ -237,17 +237,17 @@ npx tsx examples/custom_memory_backend.ts
 
 ---
 
-## Example 9: ModelManager with VRAM Budget
+## Example 9: ModelManager with Memory Budgets
 
-Track VRAM across multiple local models. Register each model with an estimated footprint; when loading a new one would exceed the budget, the least-recently-used model is automatically unloaded.
+Track memory across multiple local models. Each model is charged to a pool (CPU RAM vs GPU VRAM) based on its device; LRU eviction is per-pool, so a GPU LLM never evicts a CPU embedder. Register each model with an estimated footprint; when loading a new one would exceed its pool's budget, the least-recently-used model **within the same pool** is automatically unloaded.
 
-> **Note:** `budgetBytes`, `vramEstimateBytes`, `usedBytes`, `availableBytes`, and `vramEstimate` are JS `bigint`s (since the Rust side uses `u64` and `>4 GiB` budgets used to silently truncate). `budgetGb` is still a regular `number`.
+> **Note:** `poolBudgets` values, `memoryEstimateBytes`, `usedBytes`, `availableBytes`, and the `memoryEstimateBytes` field on `ModelStatus` are JS `bigint`s (since the Rust side uses `u64` and `>4 GiB` budgets used to silently truncate). `cpuRamGb` / `gpuVramGb` are still regular `number`s. `pool` is a plain string (`"cpu"`, `"gpu:0"`, ...).
 
 ```typescript
 import { CompletionModel, ModelManager } from "blazen";
 
-// 24 GB budget (GPU-typical for a consumer card).
-const manager = new ModelManager({ budgetGb: 24 });
+// 64 GB host RAM pool + 24 GB GPU pool (GPU-typical for a consumer card).
+const manager = new ModelManager({ cpuRamGb: 64, gpuVramGb: 24 });
 
 const llama8b = CompletionModel.mistralrs({
   modelId: "meta-llama/Llama-3.1-8B-Instruct",
@@ -259,7 +259,7 @@ const mistral24b = CompletionModel.mistralrs({
   modelId: "mistralai/Mistral-Small-24B",
 });
 
-// vramEstimateBytes is a bigint -- use bigint literal arithmetic.
+// memoryEstimateBytes is a bigint -- use bigint literal arithmetic.
 await manager.register("llama-8b", llama8b, 8n * 1024n ** 3n);
 await manager.register("qwen-14b", qwen14b, 14n * 1024n ** 3n);
 await manager.register("mistral-24b", mistral24b, 20n * 1024n ** 3n);
@@ -268,18 +268,18 @@ await manager.register("mistral-24b", mistral24b, 20n * 1024n ** 3n);
 await manager.load("llama-8b");
 await manager.load("qwen-14b");
 
-// 20 GB does not fit next to 8 + 14 = 22 GB -- LRU (llama-8b) is evicted.
+// 20 GB does not fit next to 8 + 14 = 22 GB in the same pool -- LRU (llama-8b) is evicted.
 await manager.load("mistral-24b");
 
 for (const s of await manager.status()) {
-  // s.vramEstimate is a bigint; toLocaleString() works directly on bigints.
-  console.log(`${s.id}: loaded=${s.loaded}, vram=${s.vramEstimate.toLocaleString()} bytes`);
+  // s.memoryEstimateBytes is a bigint; toLocaleString() works directly on bigints.
+  console.log(`${s.id}: loaded=${s.loaded}, pool=${s.pool}, memory=${s.memoryEstimateBytes.toLocaleString()} bytes`);
 }
 
-// usedBytes() and availableBytes() resolve to bigint -- divide by a bigint to get GB.
-const used = await manager.usedBytes();
-const available = await manager.availableBytes();
-console.log(`used=${used / (1024n ** 3n)} GB, available=${available / (1024n ** 3n)} GB`);
+// usedBytes() / availableBytes() take an optional pool string (default "cpu"); divide by a bigint to get GB.
+const usedGpu = await manager.usedBytes("gpu:0");
+const availableGpu = await manager.availableBytes("gpu:0");
+console.log(`gpu:0 used=${usedGpu / (1024n ** 3n)} GB, available=${availableGpu / (1024n ** 3n)} GB`);
 ```
 
 ```sh

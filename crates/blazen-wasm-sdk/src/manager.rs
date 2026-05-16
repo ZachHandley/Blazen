@@ -2,18 +2,19 @@
 //!
 //! This wraps the upstream [`blazen_manager::ModelManager`] directly via a
 //! JS-callback `LocalModel` adapter, so the WASM SDK shares the same
-//! VRAM budget tracking and LRU eviction logic used by the native engine.
+//! memory-budget tracking and LRU eviction logic used by the native engine.
 //!
 //! ```js
-//! const manager = new ModelManager(8); // 8 GB budget
+//! const manager = new ModelManager(8); // 8 GB CPU memory budget
 //!
 //! const model = CompletionModel.webLlm('Llama-3.1-8B-Instruct-q4f32_1-MLC');
 //! let loaded = false;
 //! await manager.register('llama-8b', model, 4_000_000_000, {
 //!   load: async () => { loaded = true; /* load model */ },
 //!   unload: async () => { loaded = false; /* unload model */ },
-//!   isLoaded: () => loaded,           // optional: sync or async, returns bool
-//!   vramBytes: async () => 4_000_000_000, // optional: sync or async, returns number
+//!   isLoaded: () => loaded,                       // optional
+//!   memoryBytes: async () => 4_000_000_000,       // optional
+//!   device: () => 'cpu',                          // optional, defaults to 'cpu'
 //! });
 //!
 //! // The `model` argument is also optional -- pass `null` if you don't have one:
@@ -23,7 +24,7 @@
 //! });
 //!
 //! await manager.load('llama-8b');
-//! const status = manager.status();
+//! const status = await manager.status();
 //! ```
 
 use std::pin::Pin;
@@ -34,7 +35,7 @@ use js_sys::{Function, Object, Promise, Reflect};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
-use blazen_llm::{BlazenError, LocalModel};
+use blazen_llm::{BlazenError, Device, LocalModel, Pool};
 use blazen_manager::ModelManager;
 
 // ---------------------------------------------------------------------------
@@ -73,22 +74,49 @@ unsafe impl Send for JsClosure {}
 unsafe impl Sync for JsClosure {}
 
 // ---------------------------------------------------------------------------
+// Pool label parsing
+// ---------------------------------------------------------------------------
+
+/// Parse a pool label like `"cpu"`, `"gpu"`, or `"gpu:N"` into a [`Pool`].
+fn parse_pool_label(label: &str) -> Result<Pool, JsValue> {
+    match label {
+        "cpu" => Ok(Pool::Cpu),
+        "gpu" => Ok(Pool::Gpu(0)),
+        s if s.starts_with("gpu:") => s
+            .strip_prefix("gpu:")
+            .and_then(|n| n.parse::<usize>().ok())
+            .map(Pool::Gpu)
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "invalid pool label '{label}': expected 'cpu', 'gpu', or 'gpu:N' \
+                     where N is a non-negative integer"
+                ))
+            }),
+        _ => Err(JsValue::from_str(&format!(
+            "invalid pool label '{label}': expected 'cpu', 'gpu', or 'gpu:N' \
+             where N is a non-negative integer"
+        ))),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // JsLocalModelAdapter -- bridges JS lifecycle callbacks to LocalModel
 // ---------------------------------------------------------------------------
 
 /// Adapter that implements [`LocalModel`] by invoking JS callbacks.
 ///
 /// `load` and `unload` call the corresponding JS functions and await the
-/// returned `Promise`. `is_loaded` and `vram_bytes` invoke their optional
+/// returned `Promise`. `is_loaded` and `memory_bytes` invoke their optional
 /// JS callbacks if provided; otherwise they fall back to conservative
-/// defaults (`false` and `Some(vram_estimate)` respectively).
+/// defaults (`false` and `Some(memory_estimate_bytes)` respectively).
 struct JsLocalModelAdapter {
     id: String,
     load_fn: Arc<JsClosure>,
     unload_fn: Arc<JsClosure>,
     is_loaded_fn: Option<Arc<JsClosure>>,
-    vram_bytes_fn: Option<Arc<JsClosure>>,
-    vram_estimate: u64,
+    memory_bytes_fn: Option<Arc<JsClosure>>,
+    memory_estimate_bytes: u64,
+    device: Device,
 }
 
 impl JsLocalModelAdapter {
@@ -162,11 +190,11 @@ impl JsLocalModelAdapter {
         }
     }
 
-    async fn vram_bytes_impl(&self) -> Option<u64> {
-        let Some(cb) = self.vram_bytes_fn.as_ref() else {
-            return Some(self.vram_estimate);
+    async fn memory_bytes_impl(&self) -> Option<u64> {
+        let Some(cb) = self.memory_bytes_fn.as_ref() else {
+            return Some(self.memory_estimate_bytes);
         };
-        match Self::invoke_with_result(&cb.0, "vramBytes", &self.id).await {
+        match Self::invoke_with_result(&cb.0, "memoryBytes", &self.id).await {
             Ok(val) => {
                 if val.is_null() || val.is_undefined() {
                     return None;
@@ -178,10 +206,10 @@ impl JsLocalModelAdapter {
                         clippy::cast_precision_loss
                     )]
                     Some(n) if n.is_finite() && n >= 0.0 => Some(n as u64),
-                    _ => Some(self.vram_estimate),
+                    _ => Some(self.memory_estimate_bytes),
                 }
             }
-            Err(_) => Some(self.vram_estimate),
+            Err(_) => Some(self.memory_estimate_bytes),
         }
     }
 }
@@ -203,9 +231,13 @@ impl LocalModel for JsLocalModelAdapter {
         SendFuture(self.is_loaded_impl()).await
     }
 
-    async fn vram_bytes(&self) -> Option<u64> {
+    fn device(&self) -> Device {
+        self.device
+    }
+
+    async fn memory_bytes(&self) -> Option<u64> {
         // SAFETY: WASM is single-threaded; the future is vacuously Send.
-        SendFuture(self.vram_bytes_impl()).await
+        SendFuture(self.memory_bytes_impl()).await
     }
 }
 
@@ -213,14 +245,19 @@ impl LocalModel for JsLocalModelAdapter {
 // WasmModelManager
 // ---------------------------------------------------------------------------
 
-/// VRAM budget-aware model manager exposed to JS / TS.
+/// Memory-budget-aware model manager exposed to JS / TS.
 ///
 /// Wraps [`blazen_manager::ModelManager`] and bridges JS lifecycle callbacks
 /// (`load`, `unload`) to Rust via [`JsLocalModelAdapter`]. All async methods
 /// return a `Promise<void>` (or the appropriate resolved value).
 ///
+/// The WASM SDK's single-argument constructor sizes the CPU memory pool —
+/// WebGPU/WASM workloads almost always run on the host. To configure a GPU
+/// pool too, supply both `cpuRamGb` and `gpuVramGb` to the constructor
+/// (advanced).
+///
 /// ```js
-/// const manager = new ModelManager(8); // 8 GB budget
+/// const manager = new ModelManager(8); // 8 GB CPU pool
 /// await manager.register('my-model', model, 5_000_000_000, {
 ///   load: async () => console.log('loading...'),
 ///   unload: async () => console.log('unloading...'),
@@ -230,10 +267,8 @@ impl LocalModel for JsLocalModelAdapter {
 #[wasm_bindgen(js_name = "ModelManager")]
 pub struct WasmModelManager {
     inner: Arc<ModelManager>,
-    /// Cached budget (bytes) -- the upstream manager stores its budget
-    /// privately, so we keep a copy here to expose `budgetBytes`
-    /// synchronously without an async round-trip.
-    budget_cache: f64,
+    /// Cached CPU pool budget in bytes for synchronous `budgetBytes` access.
+    cpu_budget_cache: f64,
 }
 
 // SAFETY: WASM is single-threaded.
@@ -242,14 +277,23 @@ unsafe impl Sync for WasmModelManager {}
 
 /// Extract the lifecycle callbacks from a `lifecycle` JS object.
 ///
-/// Returns a tuple of `(load, unload, isLoaded, vramBytes)`:
+/// Returns a tuple of `(load, unload, isLoaded, memoryBytes, device)`:
 /// - `load` and `unload` are required and must be functions.
-/// - `isLoaded` and `vramBytes` are optional. If absent (or `undefined`/`null`)
-///   they are returned as `None`. If present but not a function, an error is
-///   returned.
+/// - `isLoaded`, `memoryBytes`, and `device` are optional. If absent (or
+///   `undefined`/`null`) they are returned as `None`. If present but not a
+///   function, an error is returned.
 fn extract_lifecycle(
     lifecycle: &JsValue,
-) -> Result<(Function, Function, Option<Function>, Option<Function>), JsValue> {
+) -> Result<
+    (
+        Function,
+        Function,
+        Option<Function>,
+        Option<Function>,
+        Option<Function>,
+    ),
+    JsValue,
+> {
     if !lifecycle.is_object() {
         return Err(JsValue::from_str("lifecycle must be an object"));
     }
@@ -267,9 +311,10 @@ fn extract_lifecycle(
         .map_err(|_| JsValue::from_str("lifecycle.unload must be a function"))?;
 
     let is_loaded = extract_optional_fn(lifecycle, "isLoaded")?;
-    let vram_bytes = extract_optional_fn(lifecycle, "vramBytes")?;
+    let memory_bytes = extract_optional_fn(lifecycle, "memoryBytes")?;
+    let device = extract_optional_fn(lifecycle, "device")?;
 
-    Ok((load, unload, is_loaded, vram_bytes))
+    Ok((load, unload, is_loaded, memory_bytes, device))
 }
 
 /// Read an optional function-valued key from a JS object.
@@ -289,58 +334,81 @@ fn extract_optional_fn(obj: &JsValue, key: &str) -> Result<Option<Function>, JsV
     Ok(Some(func))
 }
 
+/// Invoke the optional `device` callback to resolve the model's target device.
+/// Returns [`Device::Cpu`] if no callback was supplied or the call fails.
+fn resolve_device_from_callback(device_fn: Option<&Function>) -> Device {
+    let Some(func) = device_fn else {
+        return Device::Cpu;
+    };
+    match func.call0(&JsValue::NULL) {
+        Ok(val) => val
+            .as_string()
+            .as_deref()
+            .and_then(|s| Device::parse(s).ok())
+            .unwrap_or(Device::Cpu),
+        Err(_) => Device::Cpu,
+    }
+}
+
 #[wasm_bindgen(js_class = "ModelManager")]
 impl WasmModelManager {
-    /// Create a new model manager with the given VRAM budget in gigabytes.
+    /// Create a new model manager with the given per-pool memory budgets in
+    /// gigabytes.
     ///
-    /// @param budgetGb - Total VRAM budget in gigabytes (e.g. `8` for 8 GB).
+    /// @param cpuRamGb - Host RAM budget in gigabytes for `Pool::Cpu`.
+    /// @param gpuVramGb - Optional GPU VRAM budget in gigabytes for
+    ///                    `Pool::Gpu(0)`. Defaults to `0` (no GPU pool).
     #[wasm_bindgen(constructor)]
     #[must_use]
-    pub fn new(budget_gb: f64) -> Self {
+    pub fn new(cpu_ram_gb: f64, gpu_vram_gb: Option<f64>) -> Self {
+        let gpu_gb = gpu_vram_gb.unwrap_or(0.0);
         Self {
-            inner: Arc::new(ModelManager::with_budget_gb(budget_gb)),
-            budget_cache: budget_gb * 1_073_741_824.0,
+            inner: Arc::new(ModelManager::with_budgets_gb(cpu_ram_gb, gpu_gb)),
+            cpu_budget_cache: cpu_ram_gb * 1_073_741_824.0,
         }
     }
 
-    /// Register a model with its estimated VRAM footprint.
+    /// Register a model with its estimated memory footprint.
     ///
     /// The model starts in the unloaded state. The `lifecycle` object must
     /// implement `load()` and `unload()` async methods that are called when
     /// the manager needs to load or unload the model. It may also provide
-    /// optional `isLoaded()` and `vramBytes()` callbacks (sync or async) which
-    /// are forwarded to the underlying [`LocalModel`] trait methods.
+    /// optional `isLoaded()`, `memoryBytes()`, and `device()` callbacks
+    /// (sync or async) which are forwarded to the underlying [`LocalModel`]
+    /// trait methods.
     ///
     /// Returns a `Promise<void>` that resolves once registration completes.
     ///
-    /// @param id            - Unique identifier for this model.
-    /// @param model         - The model value (`CompletionModel`, etc.) or `null`. Reserved for future use; optional.
-    /// @param vramEstimate  - Estimated VRAM footprint in bytes.
-    /// @param lifecycle     - Object with `load()` and `unload()` async methods,
-    ///                        plus optional `isLoaded()` and `vramBytes()` callbacks.
+    /// @param id                  - Unique identifier for this model.
+    /// @param model               - The model value (`CompletionModel`, etc.) or `null`.
+    /// @param memoryEstimateBytes - Estimated memory footprint in bytes.
+    /// @param lifecycle           - Object with `load()` and `unload()` async methods,
+    ///                              plus optional `isLoaded()`, `memoryBytes()`, and
+    ///                              `device()` callbacks.
     ///
     /// ```js
-    /// // Minimal: only required callbacks.
+    /// // Minimal: only required callbacks (defaults to Pool::Cpu).
     /// await manager.register('m1', null, 5e9, {
     ///   load: async () => {},
     ///   unload: async () => {},
     /// });
     ///
-    /// // Full: opt into runtime is_loaded / vram queries from JS.
+    /// // Full: opt into runtime isLoaded / memoryBytes / device queries.
     /// let loaded = false;
     /// await manager.register('m2', null, 5e9, {
     ///   load: async () => { loaded = true; },
     ///   unload: async () => { loaded = false; },
-    ///   isLoaded: () => loaded,           // sync return
-    ///   vramBytes: async () => 5e9,       // async return
+    ///   isLoaded: () => loaded,
+    ///   memoryBytes: async () => 5e9,
+    ///   device: () => 'cuda:0',
     /// });
     /// ```
     ///
     /// # Errors
     ///
     /// Rejects if `lifecycle` is not an object, its `load`/`unload` keys are
-    /// not functions, or its optional `isLoaded`/`vramBytes` keys are present
-    /// but not functions.
+    /// not functions, or its optional callback keys are present but not
+    /// functions.
     #[wasm_bindgen]
     #[allow(
         clippy::needless_pass_by_value,
@@ -351,24 +419,29 @@ impl WasmModelManager {
         &self,
         id: String,
         _model: Option<JsValue>,
-        vram_estimate: f64,
+        memory_estimate_bytes: f64,
         lifecycle: Object,
     ) -> Result<Promise, JsValue> {
-        let (load_fn, unload_fn, is_loaded_fn, vram_bytes_fn) =
+        let (load_fn, unload_fn, is_loaded_fn, memory_bytes_fn, device_fn) =
             extract_lifecycle(lifecycle.as_ref())?;
+
+        let device = resolve_device_from_callback(device_fn.as_ref());
 
         let adapter: Arc<dyn LocalModel> = Arc::new(JsLocalModelAdapter {
             id: id.clone(),
             load_fn: Arc::new(JsClosure(load_fn)),
             unload_fn: Arc::new(JsClosure(unload_fn)),
             is_loaded_fn: is_loaded_fn.map(|f| Arc::new(JsClosure(f))),
-            vram_bytes_fn: vram_bytes_fn.map(|f| Arc::new(JsClosure(f))),
-            vram_estimate: vram_estimate as u64,
+            memory_bytes_fn: memory_bytes_fn.map(|f| Arc::new(JsClosure(f))),
+            memory_estimate_bytes: memory_estimate_bytes as u64,
+            device,
         });
 
         let inner = Arc::clone(&self.inner);
         Ok(future_to_promise(SendFuture(async move {
-            inner.register(&id, adapter, vram_estimate as u64).await;
+            inner
+                .register(&id, adapter, memory_estimate_bytes as u64)
+                .await;
             Ok(JsValue::UNDEFINED)
         })))
     }
@@ -387,7 +460,7 @@ impl WasmModelManager {
         // Callers should `unload` before discarding the manager.
     }
 
-    /// Load a model, evicting LRU models if the budget would be exceeded.
+    /// Load a model, evicting LRU models in the same pool if needed.
     ///
     /// Returns a `Promise<void>` that resolves when the model is loaded.
     #[wasm_bindgen]
@@ -402,7 +475,7 @@ impl WasmModelManager {
         }))
     }
 
-    /// Unload a model, freeing its VRAM budget.
+    /// Unload a model, freeing its memory budget.
     ///
     /// Returns a `Promise<void>` that resolves when the model is unloaded.
     /// Idempotent -- unloading an already-unloaded model is a no-op.
@@ -419,9 +492,6 @@ impl WasmModelManager {
     }
 
     /// Check whether a model is currently loaded.
-    ///
-    /// Returns a `Promise<boolean>` because the upstream manager's
-    /// `is_loaded` is async (it acquires the internal mutex).
     #[wasm_bindgen(js_name = "isLoaded")]
     pub fn is_loaded(&self, id: String) -> Promise {
         let inner = Arc::clone(&self.inner);
@@ -431,42 +501,69 @@ impl WasmModelManager {
         }))
     }
 
-    /// Total VRAM currently used by loaded models (in bytes).
+    /// Total memory currently used by loaded models in the given pool.
     ///
-    /// Returns a `Promise<number>`.
-    #[wasm_bindgen(getter, js_name = "usedBytes")]
-    pub fn used_bytes(&self) -> Promise {
+    /// @param pool - Pool label like `"cpu"` or `"gpu:0"`. Defaults to `"cpu"`.
+    #[wasm_bindgen(js_name = "usedBytes")]
+    pub fn used_bytes(&self, pool: Option<String>) -> Result<Promise, JsValue> {
+        let pool = parse_pool_label(pool.as_deref().unwrap_or("cpu"))?;
         let inner = Arc::clone(&self.inner);
-        future_to_promise(SendFuture(async move {
-            let used = inner.used_bytes().await;
+        Ok(future_to_promise(SendFuture(async move {
+            let used = inner.used_bytes(pool).await;
             #[allow(clippy::cast_precision_loss)]
             Ok(JsValue::from_f64(used as f64))
-        }))
+        })))
     }
 
-    /// Available VRAM within the budget (in bytes).
+    /// Available memory within the given pool's budget.
     ///
-    /// Returns a `Promise<number>`.
-    #[wasm_bindgen(getter, js_name = "availableBytes")]
-    pub fn available_bytes(&self) -> Promise {
+    /// @param pool - Pool label like `"cpu"` or `"gpu:0"`. Defaults to `"cpu"`.
+    #[wasm_bindgen(js_name = "availableBytes")]
+    pub fn available_bytes(&self, pool: Option<String>) -> Result<Promise, JsValue> {
+        let pool = parse_pool_label(pool.as_deref().unwrap_or("cpu"))?;
         let inner = Arc::clone(&self.inner);
-        future_to_promise(SendFuture(async move {
-            let available = inner.available_bytes().await;
+        Ok(future_to_promise(SendFuture(async move {
+            let available = inner.available_bytes(pool).await;
             #[allow(clippy::cast_precision_loss)]
             Ok(JsValue::from_f64(available as f64))
-        }))
+        })))
     }
 
-    /// The total VRAM budget in bytes.
+    /// The total CPU pool budget in bytes.
     #[wasm_bindgen(getter, js_name = "budgetBytes")]
     #[must_use]
     pub fn budget_bytes(&self) -> f64 {
-        self.budget_cache
+        self.cpu_budget_cache
+    }
+
+    /// All configured pools and their budgets in bytes.
+    ///
+    /// Returns `Array<{ pool: string, budgetBytes: number }>`.
+    #[wasm_bindgen]
+    pub fn pools(&self) -> Result<JsValue, JsValue> {
+        let pools = self.inner.pools();
+        // Sort for deterministic ordering across calls (HashMap iteration is not stable).
+        let mut entries: Vec<(Pool, u64)> = pools;
+        entries.sort_by_key(|(p, _)| match p {
+            Pool::Cpu => (0, 0),
+            Pool::Gpu(n) => (1, *n),
+        });
+
+        let arr = js_sys::Array::new();
+        for (p, b) in entries {
+            let obj = Object::new();
+            let _ = Reflect::set(&obj, &"pool".into(), &JsValue::from_str(&format!("{p}")));
+            #[allow(clippy::cast_precision_loss)]
+            let budget = JsValue::from_f64(b as f64);
+            let _ = Reflect::set(&obj, &"budgetBytes".into(), &budget);
+            arr.push(&obj);
+        }
+        Ok(arr.into())
     }
 
     /// Status of all registered models.
     ///
-    /// Returns a `Promise<Array<{ id: string, loaded: boolean, vramEstimate: number }>>`.
+    /// Returns a `Promise<Array<{ id: string, loaded: boolean, memoryEstimateBytes: number, pool: string }>>`.
     #[wasm_bindgen]
     pub fn status(&self) -> Promise {
         let inner = Arc::clone(&self.inner);
@@ -478,8 +575,13 @@ impl WasmModelManager {
                 let _ = Reflect::set(&obj, &"id".into(), &JsValue::from_str(&s.id));
                 let _ = Reflect::set(&obj, &"loaded".into(), &JsValue::from_bool(s.loaded));
                 #[allow(clippy::cast_precision_loss)]
-                let vram = JsValue::from_f64(s.vram_estimate as f64);
-                let _ = Reflect::set(&obj, &"vramEstimate".into(), &vram);
+                let mem = JsValue::from_f64(s.memory_estimate_bytes as f64);
+                let _ = Reflect::set(&obj, &"memoryEstimateBytes".into(), &mem);
+                let _ = Reflect::set(
+                    &obj,
+                    &"pool".into(),
+                    &JsValue::from_str(&format!("{}", s.pool)),
+                );
                 arr.push(&obj);
             }
             Ok(arr.into())

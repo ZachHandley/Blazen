@@ -150,7 +150,7 @@ test("LlamaCpp typed bindings · LlamaCppProvider class shape (static create + i
     "load",
     "unload",
     "isLoaded",
-    "vramBytes",
+    "memoryBytes",
   ]) {
     t.is(
       typeof proto[method],

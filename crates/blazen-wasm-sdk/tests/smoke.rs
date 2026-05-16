@@ -40,16 +40,16 @@ async fn js_api_model_manager_registers_with_lifecycle() {
     use js_sys::{Function, Object, Reflect};
     use wasm_bindgen::prelude::*;
 
-    let mgr = WasmModelManager::new(8.0); // 8 GB budget
+    let mgr = WasmModelManager::new(8.0, None); // 8 GB CPU pool, no GPU pool
 
     // Lifecycle object carrying the required `load` / `unload` plus the
-    // optional `isLoaded` / `vramBytes` callbacks. Bodies are no-ops; we
+    // optional `isLoaded` / `memoryBytes` callbacks. Bodies are no-ops; we
     // only care that registration accepts the shape.
     let lifecycle = Object::new();
     let load = Function::new_no_args("return Promise.resolve();");
     let unload = Function::new_no_args("return Promise.resolve();");
     let is_loaded = Function::new_no_args("return false;");
-    let vram_bytes = Function::new_no_args("return 1000000000;");
+    let memory_bytes = Function::new_no_args("return 1000000000;");
     Reflect::set(&lifecycle, &JsValue::from_str("load"), load.as_ref()).unwrap();
     Reflect::set(&lifecycle, &JsValue::from_str("unload"), unload.as_ref()).unwrap();
     Reflect::set(
@@ -60,12 +60,12 @@ async fn js_api_model_manager_registers_with_lifecycle() {
     .unwrap();
     Reflect::set(
         &lifecycle,
-        &JsValue::from_str("vramBytes"),
-        vram_bytes.as_ref(),
+        &JsValue::from_str("memoryBytes"),
+        memory_bytes.as_ref(),
     )
     .unwrap();
 
-    // The new register signature: (id, model: Option<JsValue>, vram_estimate, lifecycle).
+    // The new register signature: (id, model: Option<JsValue>, memory_estimate_bytes, lifecycle).
     // Pass `None` for the model to exercise the `Option<JsValue>` arm.
     let promise = mgr
         .register("smoke-full".to_string(), None, 1_000_000_000.0, lifecycle)
@@ -105,7 +105,7 @@ async fn js_api_model_manager_register_minimal_lifecycle() {
     use js_sys::{Function, Object, Reflect};
     use wasm_bindgen::prelude::*;
 
-    let mgr = WasmModelManager::new(4.0); // 4 GB budget
+    let mgr = WasmModelManager::new(4.0, None); // 4 GB CPU pool
 
     // Minimal lifecycle: only the required `load` / `unload`. No
     // `isLoaded` / `vramBytes` -- the adapter must fall back to its

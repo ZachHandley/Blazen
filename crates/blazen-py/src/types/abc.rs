@@ -99,10 +99,19 @@ impl PyLocalModel {
         ))
     }
 
-    /// Approximate VRAM footprint in bytes, if available.
-    fn vram_bytes(&self) -> PyResult<Py<PyAny>> {
+    /// Approximate memory footprint in bytes (host RAM if `device()` is
+    /// `'cpu'`, GPU VRAM otherwise).
+    fn memory_bytes(&self) -> PyResult<Py<PyAny>> {
         Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "subclass must override vram_bytes()",
+            "subclass must override memory_bytes()",
+        ))
+    }
+
+    /// Return the device this model targets as a string: `'cpu'`, `'cuda:0'`,
+    /// `'metal'`, etc.
+    fn device(&self) -> PyResult<Py<PyAny>> {
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "subclass must override device()",
         ))
     }
 }

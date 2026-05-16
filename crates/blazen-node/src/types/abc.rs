@@ -83,14 +83,15 @@ impl JsTool {
 /// memory / VRAM.
 ///
 /// Mirrors [`blazen_llm::traits::LocalModel`]. Subclasses must override
-/// `load`, `unload`, and `isLoaded` (and may optionally override
-/// `vramBytes`).
+/// `load`, `unload`, `isLoaded`, and `device` (and may optionally
+/// override `memoryBytes`).
 ///
 /// ```javascript
 /// class MyLocalModel extends LocalModel {
 ///   async load() { /* ... */ }
 ///   async unload() { /* ... */ }
 ///   async isLoaded() { return false; }
+///   device() { return "cpu"; }
 /// }
 /// ```
 #[napi(js_name = "LocalModel")]
@@ -131,10 +132,17 @@ impl JsLocalModel {
         ))
     }
 
-    /// Approximate memory footprint in bytes. Default implementation
-    /// returns `null`.
-    #[napi(js_name = "vramBytes")]
-    pub async fn vram_bytes(&self) -> Option<i64> {
+    /// Return the device this model targets: `'cpu'`, `'cuda:0'`,
+    /// `'metal'`, etc.
+    #[napi]
+    pub fn device(&self) -> Result<String> {
+        Err(napi::Error::from_reason("subclass must override device()"))
+    }
+
+    /// Approximate memory footprint in bytes (host RAM if `device()`
+    /// returns `'cpu'`, GPU VRAM otherwise). Default returns `null`.
+    #[napi(js_name = "memoryBytes")]
+    pub async fn memory_bytes(&self) -> Option<i64> {
         None
     }
 }

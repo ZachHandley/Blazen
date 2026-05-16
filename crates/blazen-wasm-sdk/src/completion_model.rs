@@ -416,7 +416,7 @@ impl WasmCompletionModel {
     /// - `config` (optional) is a plain JS object with provider configuration:
     ///   - `contextLength` (number) -- context window size in tokens
     ///   - `maxOutputTokens` (number) -- max output tokens
-    ///   - `vramEstimateBytes` (number) -- estimated VRAM footprint in bytes
+    ///   - `memoryEstimateBytes` (number) -- estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise)
     ///   - `pricing` (object) -- `{ inputPerMillion, outputPerMillion }` in USD
     ///
     ///   When `pricing` is provided, it is automatically registered in the

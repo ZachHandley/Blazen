@@ -1,0 +1,117 @@
+---
+title: "Cloudflare Workers"
+description: "Deploy Blazen to Cloudflare Workers, Deno Deploy, and other WASI edge runtimes"
+language: "node"
+section: "guides"
+order: 11
+---
+
+## Overview
+
+Blazen ships a wasm32-wasi build of the Node binding so the same `blazen` API works on Cloudflare Workers (workerd), Deno Deploy, Fastly Compute, and any other WASI-capable JS runtime. There are two install paths — pick the one that fits your dependency graph.
+
+## Two install paths
+
+Both paths are zero-config — no Vite/Rollup plugins, no `ssr.external` lists, no `manualChunks`, no `patch-package`. Both work out of the box with wrangler ≥ 3.15 and `@cloudflare/vite-plugin`.
+
+| Path | Install | Import from | Notes |
+|------|---------|-------------|-------|
+| **Alias (recommended)** | `pnpm add @blazen-dev/wasi` | `@blazen-dev/wasi` | Single install. The alias lists the wasm sidecar as a regular dependency, so it's pulled in transitively. |
+| **Subpath** | `pnpm add blazen @blazen-dev/blazen-wasm32-wasi` | `blazen/workers` | Two installs. The wasm sidecar is an optional peer-dep on the umbrella `blazen` package, intentionally kept out of Node-only consumer installs. |
+
+The export surface is identical on both paths. Use the alias if you want a single `pnpm add` line for your Workers project. Use the subpath if you'd rather list `blazen` directly (mirroring a Node deployment) and explicitly pin the wasm sidecar.
+
+## Why the umbrella `blazen` package doesn't auto-pull the wasm sidecar
+
+Node servers receive a per-platform `.node` binary and never load the wasm shim. Forcing the wasm sidecar (a few MB compressed) into every Node consumer's `node_modules` would tax installs and CI caches for no runtime benefit. The optional-peer-dep + alias-package split is what keeps both deployments tidy.
+
+## Quick start (alias path)
+
+```bash
+pnpm add @blazen-dev/wasi
+```
+
+```ts
+// src/index.ts — a minimal Cloudflare Worker
+import {
+  CompletionModel,
+  ChatMessage,
+  AnthropicProvider,
+  setDefaultHttpClient,
+  HttpClient,
+} from '@blazen-dev/wasi';
+
+// Workerd has no `node:net` — register an HttpClient backed by global fetch
+// at module load. (Same wiring as the subpath path.)
+setDefaultHttpClient(
+  HttpClient.fromCallback(async (req) => {
+    const res = await fetch(req.url, {
+      method: req.method,
+      headers: req.headers,
+      body: req.body,
+    });
+    const body = new Uint8Array(await res.arrayBuffer());
+    return {
+      status: res.status,
+      headers: [...res.headers.entries()],
+      body,
+    };
+  }),
+);
+
+export default {
+  async fetch(req: Request, env: Env): Promise<Response> {
+    const provider = await AnthropicProvider.create({ apiKey: env.ANTHROPIC_API_KEY });
+    const model = CompletionModel.fromProvider(provider, 'claude-3-5-sonnet-latest');
+    const result = await model.complete([ChatMessage.user('say hi')], {});
+    return Response.json({ content: result.content });
+  },
+};
+
+interface Env { ANTHROPIC_API_KEY: string; }
+```
+
+```jsonc
+// wrangler.json
+{
+  "name": "my-blazen-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-13",
+  "compatibility_flags": ["nodejs_compat"]
+}
+```
+
+`nodejs_compat` is a standard Cloudflare flag (not Blazen-specific) needed for the napi-rs runtime helpers the wasm shim depends on.
+
+## Quick start (subpath path)
+
+```bash
+pnpm add blazen @blazen-dev/blazen-wasm32-wasi
+```
+
+```ts
+import { CompletionModel, ChatMessage, AnthropicProvider } from 'blazen/workers';
+// ... rest is identical to the alias path
+```
+
+The only difference is the import specifier. Under the hood both paths use the same `blazen.workers.js` loader, which uses wrangler's static wasm import (`import wasm from '@blazen-dev/blazen-wasm32-wasi/blazen.wasm32-wasi.wasm'`) — no `import.meta.url`, no `fetch`, no top-level `new URL`.
+
+## What you do NOT need
+
+If you see any of these in a Workers project that imports Blazen, the fix has regressed — file a Blazen issue, do not work around it in your project:
+
+- No Vite `resolveId` plugin to externalize `@blazen-dev/blazen-*` subpackages.
+- No `ssr.external` / `ssr.noExternal` lists for `blazen`.
+- No `optimizeDeps.exclude`.
+- No `manualChunks` for Blazen.
+- No `patch-package` patches.
+- No `@cloudflare/vinext`-style auto-stubbing.
+
+## Working example
+
+See [`examples/astro-cloudflare/`](https://github.com/zachhandley/Blazen/tree/main/examples/astro-cloudflare) in the repo for an Astro 6 + `@astrojs/cloudflare` smoke test that exercises the subpath path end-to-end. The example's README documents what it deliberately does NOT include — that list is the contract.
+
+## See also
+
+- [Quickstart](/docs/guides/node/quickstart) for the standard Node installation.
+- [Edge Deployment](/docs/guides/wasm/deployment) for the WASM SDK (`@blazen/sdk`) — a separate build for browser/edge use that does not use napi-rs.

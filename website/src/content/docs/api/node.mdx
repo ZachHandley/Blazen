@@ -1753,7 +1753,7 @@ new TTSProvider({
   providerId: string,
   baseUrl?: string,
   pricing?: ModelPricing,
-  vramEstimateBytes?: number,
+  memoryEstimateBytes?: number,
 })
 ```
 
@@ -1762,7 +1762,7 @@ new TTSProvider({
 | `providerId` | `string` | Identifier for the provider instance. |
 | `baseUrl` | `string?` | Optional base URL for the provider API. |
 | `pricing` | `ModelPricing?` | Optional pricing info for cost tracking. |
-| `vramEstimateBytes` | `number?` | Optional VRAM estimate for `ModelManager` integration. |
+| `memoryEstimateBytes` | `number?` | Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise). Used by `ModelManager` to charge the appropriate pool. |
 
 ### Example
 
@@ -1868,47 +1868,64 @@ The base `onProgress` always throws — overriding it is mandatory. `super()` mu
 
 ## ModelManager
 
-VRAM budget-aware model manager with LRU eviction. Tracks registered local models and their estimated VRAM footprint. When loading a model that would exceed the budget, the least-recently-used loaded model is unloaded first.
+Per-pool memory budget-aware model manager with LRU eviction. Tracks registered local models and their estimated memory footprint (host RAM if the model runs on CPU, GPU VRAM otherwise). Models live in distinct pools (CPU RAM vs per-GPU VRAM); when loading a model that would exceed its pool's budget, the least-recently-used loaded model **within that same pool** is unloaded first. A CPU embedder never evicts a GPU LLM, and vice versa.
+
+> `ModelManager` is a **memory budget bookkeeper**, not a performance scheduler. It answers "will this fit?" — not "will this run fast?". Whether a 70B model loaded on CPU is *useful* at 1–3 tok/s is a workload-choice question the manager intentionally does not answer.
 
 ### Constructor
 
 ```typescript
 import { ModelManager } from "blazen";
 
-const manager = new ModelManager({ budgetGb: 24 });
-// or — bigint is required so budgets above 4 GiB don't silently truncate
-const manager = new ModelManager({ budgetBytes: 24n * 1_073_741_824n });
+// Common case: separate CPU and GPU budgets, in gigabytes.
+const manager = new ModelManager({ cpuRamGb: 100, gpuVramGb: 24 });
+
+// Explicit per-pool budgets in bytes (BigInt). Pool labels: "cpu", "gpu", "gpu:N".
+const manager = new ModelManager({
+  poolBudgets: {
+    "cpu": 100_000_000_000n,
+    "gpu:0": 24_000_000_000n,
+  },
+});
+
+// No-arg / empty-object: BOTH the "cpu" and "gpu:0" pools default to
+// u64::MAX (unlimited-budget sentinel). Useful for tests and ad-hoc scripts.
+const manager = new ModelManager();
 ```
 
 | Field | Type | Description |
 |---|---|---|
-| `budgetGb` | `number?` | VRAM budget in gigabytes. Provide exactly one of `budgetGb` or `budgetBytes`. |
-| `budgetBytes` | `bigint?` | VRAM budget in bytes. Use `bigint` literals (e.g. `24n * 1_073_741_824n`) so budgets above 4 GiB don't truncate. |
+| `cpuRamGb` | `number?` | Host RAM budget in gigabytes for the `"cpu"` pool. |
+| `gpuVramGb` | `number?` | VRAM budget in gigabytes for the `"gpu:0"` pool. Omit if you don't load GPU models. |
+| `poolBudgets` | `Record<string, bigint>?` | Explicit per-pool byte budgets. Keys are pool labels (`"cpu"`, `"gpu"`, `"gpu:N"`); values are `bigint` byte budgets. Use this when you need budgets above 4 GiB on a per-pool basis or multi-GPU setups. |
 
 ### Methods
 
 | Method | Signature | Description |
 |---|---|---|
-| `register` | `await manager.register(id, model, vramEstimate?: bigint)` | Register a model with its estimated VRAM footprint (in bytes, as a `bigint`). Starts unloaded. |
-| `load` | `await manager.load(id)` | Load a model, evicting LRU models if needed. |
-| `unload` | `await manager.unload(id)` | Unload a model and free its VRAM. |
+| `register` | `await manager.register(id, model, memoryEstimateBytes?: bigint)` | Register a model with its estimated memory footprint (in bytes, as a `bigint`). Starts unloaded. The pool charged is determined by the model's `device()` (defaults to `"cpu"`). |
+| `registerLocalModel` | `await manager.registerLocalModel(id, load, unload, isLoaded, memoryEstimateBytes?: bigint, device?: string)` | Register a model from raw closures. The optional `device` string (default `"cpu"`) selects which pool to charge — e.g. `"cuda:0"` charges `"gpu:0"`. |
+| `load` | `await manager.load(id)` | Load a model, evicting LRU models in the same pool if needed. |
+| `unload` | `await manager.unload(id)` | Unload a model and free its memory. |
 | `isLoaded` | `await manager.isLoaded(id): boolean` | Check if a model is currently loaded. |
 | `ensureLoaded` | `await manager.ensureLoaded(id)` | Alias for `load()`. |
-| `usedBytes` | `await manager.usedBytes(): bigint` | Total VRAM currently used by loaded models, in bytes. |
-| `availableBytes` | `await manager.availableBytes(): bigint` | Available VRAM within the budget, in bytes. |
+| `usedBytes` | `await manager.usedBytes(pool?: string): bigint` | Bytes currently used by loaded models in the given pool. `pool` defaults to `"cpu"`. Invalid pool labels reject with `invalid pool label '<x>': expected 'cpu', 'gpu', or 'gpu:N' where N is a non-negative integer`. |
+| `availableBytes` | `await manager.availableBytes(pool?: string): bigint` | Bytes still available within the given pool's budget. Same default and validation rules as `usedBytes`. |
+| `pools` | `manager.pools(): Array<{ pool: string; budgetBytes: bigint }>` | Sync. List every configured pool and its byte budget. |
 | `status` | `await manager.status(): ModelStatus[]` | Status of all registered models. |
 
 ### ModelStatus
 
 ```typescript
 interface ModelStatus {
-  id: string;                // Model identifier
-  loaded: boolean;           // Whether the model is currently loaded
-  vramEstimate: bigint;      // Estimated VRAM footprint in bytes
+  id: string;                    // Model identifier
+  loaded: boolean;               // Whether the model is currently loaded
+  memoryEstimateBytes: bigint;   // Estimated memory footprint in bytes
+  pool: string;                  // Pool label this model is charged to ("cpu", "gpu:0", ...)
 }
 ```
 
-> **Why `bigint`?** The byte-budget surface (`budgetBytes`, `register`'s `vramEstimate`, `usedBytes()`, `availableBytes()`, `ModelStatus.vramEstimate`) used to be `number` (`u32` on the Rust side), which capped budgets at ~4 GiB and silently truncated larger inputs — a real footgun for 7B+ local models that need 8 GiB+ of VRAM. Pass values as `BigInt` literals (`8n * 1_073_741_824n`) or via `BigInt(8 * 1024 ** 3)`. The `budgetGb: number` constructor path is unchanged for users who prefer plain numbers and gigabyte granularity.
+> **Why `bigint`?** The byte-budget surface (`poolBudgets` values, `register`'s `memoryEstimateBytes`, `usedBytes()`, `availableBytes()`, `ModelStatus.memoryEstimateBytes`) used to be `number` (`u32` on the Rust side), which capped budgets at ~4 GiB and silently truncated larger inputs — a real footgun for 7B+ local models that need 8 GiB+ of memory. Pass values as `BigInt` literals (`8n * 1_073_741_824n`) or via `BigInt(8 * 1024 ** 3)`. The `cpuRamGb` / `gpuVramGb: number` constructor path is unchanged for users who prefer plain numbers and gigabyte granularity.
 
 ---
 
@@ -2001,16 +2018,18 @@ if (pricing) {
 
 | Method | Signature | Description |
 |---|---|---|
-| `load` | `await model.load(): void` | Load the model into memory/VRAM. Idempotent. |
-| `unload` | `await model.unload(): void` | Free the model's memory/VRAM. Idempotent. |
+| `load` | `await model.load(): void` | Load the model into memory (host RAM if on CPU, GPU VRAM otherwise). Idempotent. |
+| `unload` | `await model.unload(): void` | Free the model's memory. Idempotent. |
 | `isLoaded` | `await model.isLoaded(): boolean` | Whether the model is currently loaded. |
-| `vramBytes` | `await model.vramBytes(): number \| null` | Approximate memory footprint in bytes, or `null` if unknown. |
+| `memoryBytes` | `await model.memoryBytes(): number \| null` | Approximate memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise), or `null` if unknown. |
+| `device` | `await model.device(): string` | Return the device string this model targets (`'cpu'`, `'cuda:0'`, `'metal'`, etc.). Determines which pool the manager charges. Subclasses must override — the base implementation throws. |
 
 ```typescript
 // For a local model:
 await model.load();
 console.log(await model.isLoaded());    // true
-console.log(await model.vramBytes());   // e.g. 4000000000
+console.log(await model.memoryBytes()); // e.g. 4000000000
+console.log(await model.device());      // e.g. "cuda:0"
 await model.unload();
 ```
 

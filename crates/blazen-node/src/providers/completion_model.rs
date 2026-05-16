@@ -132,9 +132,10 @@ pub struct CompletionModelConfig {
     /// Base URL for HTTP-based providers.
     #[napi(js_name = "baseUrl")]
     pub base_url: Option<String>,
-    /// Estimated VRAM footprint in bytes when loaded.
-    #[napi(js_name = "vramEstimateBytes")]
-    pub vram_estimate_bytes: Option<u32>,
+    /// Estimated memory footprint in bytes when loaded (host RAM if
+    /// the provider targets the CPU, GPU VRAM otherwise).
+    #[napi(js_name = "memoryEstimateBytes")]
+    pub memory_estimate_bytes: Option<u32>,
     /// Maximum output tokens the model supports.
     #[napi(js_name = "maxOutputTokens")]
     pub max_output_tokens: Option<u32>,
@@ -202,7 +203,7 @@ impl JsCompletionModel {
                 model_id: c.model_id,
                 context_length: c.context_length.map(u64::from),
                 base_url: c.base_url,
-                vram_estimate_bytes: c.vram_estimate_bytes.map(u64::from),
+                memory_estimate_bytes: c.memory_estimate_bytes.map(u64::from),
                 max_output_tokens: c.max_output_tokens.map(u64::from),
                 ..Default::default()
             }),
@@ -895,20 +896,23 @@ impl JsCompletionModel {
         })
     }
 
-    /// Approximate `VRAM` footprint in bytes, if the implementation can
-    /// report it. Returns `null` for remote providers or for local
-    /// providers that do not expose memory usage.
+    /// Approximate memory footprint in bytes (host RAM if the
+    /// provider targets the CPU, GPU VRAM otherwise), if the
+    /// implementation can report it. Returns `null` for remote
+    /// providers or for local providers that do not expose memory
+    /// usage.
     ///
     /// Note: napi-rs exposes this as a JS `number`. The underlying
-    /// [`blazen_llm::LocalModel::vram_bytes`] returns `u64`; we clamp to
-    /// `i64::MAX` (~9.2 exabytes) when surfacing through `JSON`-compatible
-    /// types, which is effectively lossless for any realistic `VRAM` size.
-    #[napi(js_name = "vramBytes")]
+    /// [`blazen_llm::LocalModel::memory_bytes`] returns `u64`; we clamp
+    /// to `i64::MAX` (~9.2 exabytes) when surfacing through
+    /// `JSON`-compatible types, which is effectively lossless for any
+    /// realistic footprint.
+    #[napi(js_name = "memoryBytes")]
     #[allow(clippy::cast_possible_wrap)]
-    pub async fn vram_bytes(&self) -> Result<Option<i64>> {
+    pub async fn memory_bytes(&self) -> Result<Option<i64>> {
         Ok(match &self.local_model {
             Some(lm) => lm
-                .vram_bytes()
+                .memory_bytes()
                 .await
                 .map(|b| i64::try_from(b).unwrap_or(i64::MAX)),
             None => None,

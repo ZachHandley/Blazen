@@ -244,15 +244,15 @@ cargo run -p blazen --example custom_memory_backend
 
 ---
 
-## ModelManager with VRAM Budget
+## ModelManager with Memory Budgets
 
-The `blazen-manager` crate tracks VRAM across multiple local models and runs LRU eviction when loading would exceed the budget.
+The `blazen-manager` crate tracks per-pool memory budgets across multiple local models and runs LRU eviction **within each pool** when loading would exceed that pool's budget.
 
 ```rust
 use std::sync::Arc;
 
 use blazen_manager::ModelManager;
-use blazen_llm::LocalModel;
+use blazen_llm::{LocalModel, Pool};
 
 // Replace with your local model constructors (mistral.rs, llama.cpp, candle).
 async fn load_local_model(_id: &str) -> Arc<dyn LocalModel> {
@@ -261,8 +261,8 @@ async fn load_local_model(_id: &str) -> Arc<dyn LocalModel> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // 24 GB budget (GPU-typical for a consumer card).
-    let manager = ModelManager::with_budget_gb(24.0);
+    // CPU RAM + GPU VRAM (GPU-typical for a consumer card with a roomy host).
+    let manager = ModelManager::with_budgets_gb(64.0, 24.0);
 
     let llama_8b = load_local_model("llama-8b").await;
     let qwen_14b = load_local_model("qwen-14b").await;
@@ -276,13 +276,13 @@ async fn main() -> anyhow::Result<()> {
     manager.load("llama-8b").await?;
     manager.load("qwen-14b").await?;
 
-    // 20 GB does not fit next to 8 + 14 = 22 GB -- LRU (llama-8b) is evicted.
+    // 20 GB does not fit next to 8 + 14 = 22 GB -- LRU (llama-8b) is evicted from its pool.
     manager.load("mistral-24b").await?;
 
     for s in manager.status().await {
         println!(
-            "{}: loaded={}, vram={} bytes",
-            s.id, s.loaded, s.vram_estimate
+            "{}: loaded={}, pool={}, memory={} bytes",
+            s.id, s.loaded, s.pool, s.memory_estimate_bytes
         );
     }
     Ok(())

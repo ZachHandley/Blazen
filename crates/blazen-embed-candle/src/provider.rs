@@ -166,6 +166,13 @@ mod engine {
             &self.model_id
         }
 
+        /// The configured device string (e.g. `"cpu"`, `"cuda:0"`, `"metal"`), or
+        /// `None` if no device was specified.
+        #[must_use]
+        pub fn device_str(&self) -> Option<&str> {
+            self.options.device.as_deref()
+        }
+
         /// Embedding vector dimensionality for this model.
         #[must_use]
         pub fn dimensions(&self) -> usize {
@@ -665,6 +672,13 @@ mod stub {
         #[must_use]
         pub fn model_id(&self) -> &str {
             &self.model_id
+        }
+
+        /// The configured device string (e.g. `"cpu"`, `"cuda:0"`, `"metal"`), or
+        /// `None` if no device was specified.
+        #[must_use]
+        pub fn device_str(&self) -> Option<&str> {
+            self.options.device.as_deref()
         }
 
         /// Embedding vector dimensionality for this model.

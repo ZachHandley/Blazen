@@ -158,7 +158,7 @@ def test_subclass_embedding_model_with_all_params():
                 dimensions=768,
                 base_url="http://localhost:9090",
                 pricing=ModelPricing(input_per_million=0.1),
-                vram_estimate_bytes=2_000_000_000,
+                memory_estimate_bytes=2_000_000_000,
             )
 
     model = DetailedEmbedder()
@@ -209,7 +209,7 @@ def test_subclass_transcription_with_all_params():
                 provider_id="detailed-stt",
                 base_url="http://localhost:7070",
                 pricing=ModelPricing(per_second=0.001),
-                vram_estimate_bytes=1_000_000_000,
+                memory_estimate_bytes=1_000_000_000,
             )
 
     t = DetailedTranscriber()
@@ -258,13 +258,13 @@ def test_subclass_tts_with_all_params():
                 provider_id="detailed-tts",
                 base_url="http://localhost:6060",
                 pricing=ModelPricing(per_second=0.002),
-                vram_estimate_bytes=500_000_000,
+                memory_estimate_bytes=500_000_000,
             )
 
     tts = DetailedTTS()
     assert tts.provider_id == "detailed-tts"
     assert tts.base_url == "http://localhost:6060"
-    assert tts.vram_estimate_bytes == 500_000_000
+    assert tts.memory_estimate_bytes == 500_000_000
 
 
 # ---------------------------------------------------------------------------
@@ -627,13 +627,13 @@ def test_pricing_register_overwrite():
 
 def test_model_manager_creation_gb():
     """ModelManager can be created with a GB budget."""
-    manager = ModelManager(budget_gb=24.0)
+    manager = ModelManager(cpu_ram_gb=24.0)
     assert isinstance(manager, ModelManager)
 
 
 def test_model_manager_creation_bytes():
-    """ModelManager can be created with a byte budget."""
-    manager = ModelManager(budget_bytes=24 * 1024 * 1024 * 1024)
+    """ModelManager can be created with an explicit per-pool budget dict."""
+    manager = ModelManager(pool_budgets={"cpu": 24 * 1024 * 1024 * 1024})
     assert isinstance(manager, ModelManager)
 
 
@@ -646,7 +646,7 @@ def test_model_manager_creation_no_budget():
 @pytest.mark.asyncio
 async def test_model_manager_status_empty():
     """A fresh ModelManager has no registered models."""
-    manager = ModelManager(budget_gb=8.0)
+    manager = ModelManager(cpu_ram_gb=8.0)
     status = await manager.status()
     assert isinstance(status, list)
     assert len(status) == 0
@@ -655,7 +655,7 @@ async def test_model_manager_status_empty():
 @pytest.mark.asyncio
 async def test_model_manager_used_bytes_empty():
     """A fresh ModelManager uses 0 bytes."""
-    manager = ModelManager(budget_gb=8.0)
+    manager = ModelManager(cpu_ram_gb=8.0)
     used = await manager.used_bytes()
     assert used == 0
 
@@ -664,7 +664,7 @@ async def test_model_manager_used_bytes_empty():
 async def test_model_manager_available_bytes():
     """available_bytes equals the full budget when nothing is loaded."""
     budget_bytes = 8 * 1024 * 1024 * 1024
-    manager = ModelManager(budget_bytes=budget_bytes)
+    manager = ModelManager(pool_budgets={"cpu": budget_bytes})
     available = await manager.available_bytes()
     assert available == budget_bytes
 
@@ -672,7 +672,7 @@ async def test_model_manager_available_bytes():
 @pytest.mark.asyncio
 async def test_model_manager_is_loaded_nonexistent():
     """is_loaded returns False for an unregistered model."""
-    manager = ModelManager(budget_gb=8.0)
+    manager = ModelManager(cpu_ram_gb=8.0)
     loaded = await manager.is_loaded("nonexistent-model")
     assert loaded is False
 
@@ -705,10 +705,10 @@ async def test_model_manager_register_custom_async_class():
             return self.loaded
 
     vram = 2 * 1024 * 1024 * 1024  # 2 GiB, well under 8 GB budget
-    mgr = ModelManager(budget_gb=8.0)
+    mgr = ModelManager(cpu_ram_gb=8.0)
     instance = AsyncLocal()
 
-    await mgr.register("async-local", instance, vram_estimate_bytes=vram)
+    await mgr.register("async-local", instance, memory_estimate_bytes=vram)
 
     # Before load: manager reports not loaded; instance flag is False.
     assert await mgr.is_loaded("async-local") is False
@@ -720,7 +720,7 @@ async def test_model_manager_register_custom_async_class():
     assert len(pre_status) == 1
     assert pre_status[0].id == "async-local"
     assert pre_status[0].loaded is False
-    assert pre_status[0].vram_estimate == vram
+    assert pre_status[0].memory_estimate_bytes == vram
 
     # Load: drives the user's async load(), updates manager state.
     await mgr.load("async-local")
@@ -731,7 +731,7 @@ async def test_model_manager_register_custom_async_class():
     # status reflects loaded state.
     loaded_status = await mgr.status()
     assert loaded_status[0].loaded is True
-    assert loaded_status[0].vram_estimate == vram
+    assert loaded_status[0].memory_estimate_bytes == vram
 
     # Unload: drives the user's async unload(), clears manager state.
     await mgr.unload("async-local")
@@ -767,10 +767,10 @@ async def test_model_manager_register_custom_sync_class():
             return self.loaded
 
     vram = 1 * 1024 * 1024 * 1024  # 1 GiB
-    mgr = ModelManager(budget_gb=8.0)
+    mgr = ModelManager(cpu_ram_gb=8.0)
     instance = SyncLocal()
 
-    await mgr.register("sync-local", instance, vram_estimate_bytes=vram)
+    await mgr.register("sync-local", instance, memory_estimate_bytes=vram)
 
     assert await mgr.is_loaded("sync-local") is False
     await mgr.load("sync-local")
@@ -790,7 +790,7 @@ async def test_model_manager_register_duck_typed_no_subclass():
 
     The wrapper should duck-type purely on ``load`` / ``unload`` callability.
     ``is_loaded`` and ``vram_bytes`` are absent, so the manager's internal
-    flag and the registered ``vram_estimate_bytes`` are the source of truth.
+    flag and the registered ``memory_estimate_bytes`` are the source of truth.
     """
 
     class DuckLocal:  # NOTE: no inheritance from LocalModel
@@ -805,16 +805,16 @@ async def test_model_manager_register_duck_typed_no_subclass():
             self.unload_calls += 1
 
     vram = 512 * 1024 * 1024  # 512 MiB
-    mgr = ModelManager(budget_gb=8.0)
+    mgr = ModelManager(cpu_ram_gb=8.0)
     instance = DuckLocal()
 
-    await mgr.register("duck-local", instance, vram_estimate_bytes=vram)
+    await mgr.register("duck-local", instance, memory_estimate_bytes=vram)
 
     statuses = await mgr.status()
     assert len(statuses) == 1
     assert statuses[0].id == "duck-local"
     assert statuses[0].loaded is False
-    assert statuses[0].vram_estimate == vram
+    assert statuses[0].memory_estimate_bytes == vram
 
     await mgr.load("duck-local")
     assert instance.load_calls == 1
@@ -836,9 +836,9 @@ async def test_model_manager_register_rejects_non_callable_load():
         async def unload(self):
             pass
 
-    mgr = ModelManager(budget_gb=8.0)
+    mgr = ModelManager(cpu_ram_gb=8.0)
     with pytest.raises(TypeError):
-        await mgr.register("bad-local", BadLocal(), vram_estimate_bytes=1_000_000)
+        await mgr.register("bad-local", BadLocal(), memory_estimate_bytes=1_000_000)
 
 
 @pytest.mark.asyncio
@@ -860,9 +860,9 @@ async def test_model_manager_register_propagates_load_errors():
         async def unload(self):
             pass
 
-    mgr = ModelManager(budget_gb=8.0)
+    mgr = ModelManager(cpu_ram_gb=8.0)
     instance = ExplodingLocal()
-    await mgr.register("exploding", instance, vram_estimate_bytes=1_000_000)
+    await mgr.register("exploding", instance, memory_estimate_bytes=1_000_000)
 
     with pytest.raises(Exception, match="boom|python_local_model"):
         await mgr.load("exploding")
@@ -895,9 +895,9 @@ async def test_model_manager_register_existing_completion_model_path_still_works
     except Exception:
         pytest.skip("local CompletionModel cannot be constructed without weights")
 
-    mgr = ModelManager(budget_gb=8.0)
+    mgr = ModelManager(cpu_ram_gb=8.0)
     # Registration itself should succeed (it does not load the model).
-    await mgr.register("local-smoke", model, vram_estimate_bytes=1_000_000_000)
+    await mgr.register("local-smoke", model, memory_estimate_bytes=1_000_000_000)
 
     statuses = await mgr.status()
     assert any(s.id == "local-smoke" for s in statuses)
@@ -906,7 +906,7 @@ async def test_model_manager_register_existing_completion_model_path_still_works
 @pytest.mark.asyncio
 async def test_model_manager_register_vram_estimate_fallback():
     """When the user does not supply ``vram_bytes()``, ``status()`` reports
-    the ``vram_estimate_bytes`` passed to ``register``."""
+    the ``memory_estimate_bytes`` passed to ``register``."""
 
     class NoVramLocal:
         async def load(self):
@@ -916,14 +916,14 @@ async def test_model_manager_register_vram_estimate_fallback():
             pass
 
     vram = 1_000_000_000  # 1 GB, fits in 8 GB budget
-    mgr = ModelManager(budget_gb=8.0)
+    mgr = ModelManager(cpu_ram_gb=8.0)
 
-    await mgr.register("no-vram", NoVramLocal(), vram_estimate_bytes=vram)
+    await mgr.register("no-vram", NoVramLocal(), memory_estimate_bytes=vram)
 
     statuses = await mgr.status()
     matching = [s for s in statuses if s.id == "no-vram"]
     assert len(matching) == 1
-    assert matching[0].vram_estimate == vram
+    assert matching[0].memory_estimate_bytes == vram
     assert matching[0].loaded is False
 
 
@@ -952,8 +952,8 @@ def test_model_manager_register_works_across_event_loops():
     instance = CrossLoopLocal()
 
     async def register_phase():
-        mgr = ModelManager(budget_gb=8.0)
-        await mgr.register("cross-loop", instance, vram_estimate_bytes=1_000_000_000)
+        mgr = ModelManager(cpu_ram_gb=8.0)
+        await mgr.register("cross-loop", instance, memory_estimate_bytes=1_000_000_000)
         return mgr
 
     # Loop A: build the manager and register the model.

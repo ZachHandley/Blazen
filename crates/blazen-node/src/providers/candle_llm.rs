@@ -2,7 +2,7 @@
 //!
 //! Exposes [`JsCandleLlmProvider`] as a NAPI class with a factory
 //! constructor, async completion / streaming methods, and `LocalModel`
-//! lifecycle controls (`load`, `unload`, `isLoaded`, `vramBytes`).
+//! lifecycle controls (`load`, `unload`, `isLoaded`, `memoryBytes`).
 //!
 //! Runs LLM inference entirely on-device using the candle engine.
 //! No API key is required.
@@ -257,11 +257,12 @@ impl JsCandleLlmProvider {
         self.lifecycle.is_loaded().await
     }
 
-    /// Approximate `VRAM` footprint in bytes.
-    #[napi(js_name = "vramBytes")]
-    pub async fn vram_bytes(&self) -> Option<i64> {
+    /// Approximate memory footprint in bytes (host RAM if the model
+    /// targets the CPU, GPU VRAM otherwise).
+    #[napi(js_name = "memoryBytes")]
+    pub async fn memory_bytes(&self) -> Option<i64> {
         self.lifecycle
-            .vram_bytes()
+            .memory_bytes()
             .await
             .map(|b| i64::try_from(b).unwrap_or(i64::MAX))
     }

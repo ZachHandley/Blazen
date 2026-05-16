@@ -131,7 +131,7 @@ impl PyCompletionModel {
     ///     context_length: Maximum context window in tokens.
     ///     base_url: Base URL for HTTP-based providers.
     ///     pricing: Optional pricing information.
-    ///     vram_estimate_bytes: Estimated VRAM footprint in bytes.
+    ///     memory_estimate_bytes: Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise).
     ///     max_output_tokens: Maximum output tokens the model supports.
     /// `__new__` for `CompletionModel`. PyO3's `#[new]` is the `__new__`
     /// slot; when a Python subclass like
@@ -160,14 +160,14 @@ impl PyCompletionModel {
     /// `object.__init__` and raises ``TypeError``. We accept the same typed
     /// keyword arguments the constructor documents and re-populate
     /// ``self.config`` so subclasses see the values they passed.
-    #[pyo3(signature = (*, model_id=None, context_length=None, base_url=None, pricing=None, vram_estimate_bytes=None, max_output_tokens=None))]
+    #[pyo3(signature = (*, model_id=None, context_length=None, base_url=None, pricing=None, memory_estimate_bytes=None, max_output_tokens=None))]
     fn __init__(
         &mut self,
         model_id: Option<String>,
         context_length: Option<u64>,
         base_url: Option<String>,
         pricing: Option<PyRef<'_, crate::types::pricing::PyModelPricing>>,
-        vram_estimate_bytes: Option<u64>,
+        memory_estimate_bytes: Option<u64>,
         max_output_tokens: Option<u64>,
     ) {
         // Only mutate config when this instance was constructed via the
@@ -179,7 +179,7 @@ impl PyCompletionModel {
                 model_id,
                 context_length,
                 base_url,
-                vram_estimate_bytes,
+                memory_estimate_bytes,
                 max_output_tokens,
                 pricing: pricing.map(|p| p.inner.clone()),
                 ..Default::default()
@@ -886,15 +886,15 @@ impl PyCompletionModel {
         })
     }
 
-    /// Approximate VRAM footprint in bytes, if the implementation can
-    /// report it. Returns ``None`` for remote providers or for local
-    /// providers that do not expose memory usage.
+    /// Approximate memory footprint in bytes (host RAM if running on CPU,
+    /// GPU VRAM otherwise). Returns ``None`` for remote providers or for
+    /// local providers that do not expose memory usage.
     #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, typing.Optional[builtins.int]]", imports = ("typing", "builtins")))]
-    fn vram_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    fn memory_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let local = self.local_model.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             match local {
-                Some(lm) => Ok(lm.vram_bytes().await),
+                Some(lm) => Ok(lm.memory_bytes().await),
                 None => Ok(None),
             }
         })

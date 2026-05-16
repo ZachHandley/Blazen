@@ -265,6 +265,12 @@ impl LocalModel for WhisperCppProvider {
     async fn is_loaded(&self) -> bool {
         WhisperCppProvider::is_loaded(self).await
     }
+
+    fn device(&self) -> crate::device::Device {
+        WhisperCppProvider::device_str(self)
+            .and_then(|s| crate::device::Device::parse(s).ok())
+            .unwrap_or(crate::device::Device::Cpu)
+    }
 }
 
 // ---------------------------------------------------------------------------

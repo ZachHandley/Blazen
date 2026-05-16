@@ -248,6 +248,12 @@ impl crate::traits::LocalModel for CandleLlmProvider {
     async fn is_loaded(&self) -> bool {
         CandleLlmProvider::is_loaded(self).await
     }
+
+    fn device(&self) -> crate::device::Device {
+        CandleLlmProvider::device_str(self)
+            .and_then(|s| crate::device::Device::parse(s).ok())
+            .unwrap_or(crate::device::Device::Cpu)
+    }
 }
 
 // ---------------------------------------------------------------------------

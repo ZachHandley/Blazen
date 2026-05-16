@@ -151,39 +151,44 @@ print(result.text)
 
 See the dedicated [Transcription guide](/guides/transcription/) for audio format requirements and model-size tradeoffs.
 
-## VRAM budgeting with ModelManager
+## Memory budgeting with ModelManager (CPU RAM + GPU VRAM)
 
-When running several local models side by side, the `ModelManager` tracks VRAM estimates and evicts the least-recently-used model when a new load would exceed the budget.
+When running several local models side by side, the `ModelManager` tracks per-pool memory budgets (host RAM and GPU VRAM as separate buckets) and evicts the least-recently-used model **in the same pool** when a new load would exceed that pool's budget. Models in different pools never evict each other.
 
 ```python
 from blazen import ModelManager, CompletionModel, EmbeddingModel, MistralRsOptions
 
-manager = ModelManager(budget_gb=24)
+# 64 GB of CPU RAM, 24 GB of GPU VRAM (RTX 4090).
+manager = ModelManager(cpu_ram_gb=64, gpu_vram_gb=24)
 
 llm = CompletionModel.mistralrs(options=MistralRsOptions(
     model_id="mistralai/Mistral-7B-Instruct-v0.3",
+    device="cuda:0",
 ))
-embedder = EmbeddingModel.local()
+embedder = EmbeddingModel.local()  # runs on CPU
 
-await manager.register("llm", llm, vram_estimate_bytes=6 * 1024**3)
-await manager.register("embed", embedder, vram_estimate_bytes=100 * 1024**2)
+await manager.register("llm", llm, memory_estimate_bytes=6 * 1024**3)
+await manager.register("embed", embedder, memory_estimate_bytes=100 * 1024**2)
 
 await manager.load("llm")
-await manager.ensure_loaded("embed")   # fits, no eviction
+await manager.ensure_loaded("embed")   # different pool, no eviction
 
-print(await manager.used_bytes())       # bytes currently loaded
-print(await manager.available_bytes())  # room left in the budget
+print(await manager.used_bytes(pool="gpu:0"))       # bytes on the GPU pool
+print(await manager.available_bytes(pool="gpu:0"))  # room left on the GPU pool
+print(await manager.used_bytes(pool="cpu"))         # bytes on the CPU pool
 ```
 
 ```rust
 use blazen_manager::ModelManager;
+use blazen_llm::Pool;
 
-let manager = ModelManager::new(24 * 1024 * 1024 * 1024); // 24 GB
-manager.register("llm", llm, Some(6 * 1024 * 1024 * 1024)).await?;
+// 64 GB of CPU RAM, 24 GB of GPU VRAM -- pools are tracked independently.
+let manager = ModelManager::with_budgets_gb(64.0, 24.0);
+manager.register("llm", llm, 6 * 1024 * 1024 * 1024).await;
 manager.load("llm").await?;
 ```
 
-If a `register` + `load` call would blow the budget, the manager first unloads the least-recently-used model whose removal creates enough headroom. This lets you register far more models than fit in VRAM and rely on the LRU policy to keep the hot set resident.
+If a `register` + `load` call would blow the budget, the manager first unloads the least-recently-used model **in the same pool** whose removal creates enough headroom. This lets you register far more models than fit in any one pool and rely on the LRU policy to keep the hot set resident.
 
 ## Model cache and downloads
 

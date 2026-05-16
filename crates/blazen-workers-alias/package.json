@@ -1,7 +1,7 @@
 {
   "name": "@blazen-dev/wasi",
   "version": "0.0.0-dev",
-  "description": "Blazen wasi build of the Node binding — thin re-export of @blazen-dev/blazen-wasm32-wasi for explicit installs in Cloudflare Workers / Deno / any WASI host. The umbrella `blazen` package auto-resolves the wasi sidecar without this alias; install this only if you want an explicit pin.",
+  "description": "Single-install Blazen package for Cloudflare Workers, Deno, and any WASI host. Re-exports @blazen-dev/blazen-wasm32-wasi and lists the wasm sidecar as a regular dependency, so `pnpm add @blazen-dev/wasi` is all that's needed. The umbrella `blazen` package targets Node servers and keeps the wasm sidecar out of the default install footprint.",
   "license": "MPL-2.0",
   "type": "module",
   "main": "index.cjs",

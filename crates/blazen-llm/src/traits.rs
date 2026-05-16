@@ -370,8 +370,9 @@ pub struct ProviderConfig {
     pub context_length: Option<u64>,
     /// Maximum output tokens the model supports.
     pub max_output_tokens: Option<u64>,
-    /// Estimated VRAM footprint in bytes when loaded.
-    pub vram_estimate_bytes: Option<u64>,
+    /// Estimated memory footprint in bytes when loaded (host RAM if the model
+    /// runs on CPU, GPU VRAM otherwise).
+    pub memory_estimate_bytes: Option<u64>,
     /// Pricing information for automatic cost tracking.
     pub pricing: Option<ModelPricing>,
     /// Capability flags.
@@ -409,7 +410,7 @@ pub trait ProviderInfo {
 /// 2. Explicitly free `GPU` memory (`unload`) -- letting a single Blazen
 ///    process swap models in and out, or release `VRAM` when idle.
 /// 3. Query load state (`is_loaded`) and an approximate `VRAM` footprint
-///    (`vram_bytes`) for monitoring or budget-aware scheduling.
+///    (`memory_bytes`) for monitoring or budget-aware scheduling.
 ///
 /// Remote providers (`OpenAI`, Anthropic, Gemini, fal.ai, etc.) do NOT
 /// implement this trait -- there is no local model to load or unload.
@@ -434,31 +435,37 @@ pub trait ProviderInfo {
 ///     model_a: &impl LocalModel,
 ///     model_b: &impl LocalModel,
 /// ) -> Result<(), blazen_llm::BlazenError> {
-///     model_a.unload().await?;  // free VRAM
+///     model_a.unload().await?;  // free memory
 ///     model_b.load().await?;    // load the other one
 ///     Ok(())
 /// }
 /// ```
 #[async_trait]
 pub trait LocalModel: Send + Sync {
-    /// Load the model into memory / `VRAM`. Idempotent -- if the model is
-    /// already loaded, this is a no-op that returns `Ok(())`.
+    /// Load the model into memory. Idempotent -- if the model is already
+    /// loaded, this is a no-op that returns `Ok(())`.
     async fn load(&self) -> Result<(), crate::error::BlazenError>;
 
-    /// Drop the loaded model and free its memory / `VRAM`. Idempotent --
-    /// if the model is already unloaded, this is a no-op that returns
-    /// `Ok(())`.
+    /// Drop the loaded model and free its memory. Idempotent -- if the model
+    /// is already unloaded, this is a no-op that returns `Ok(())`.
     async fn unload(&self) -> Result<(), crate::error::BlazenError>;
 
-    /// Whether the model is currently loaded in memory / `VRAM`.
+    /// Whether the model is currently loaded in memory.
     async fn is_loaded(&self) -> bool;
 
-    /// Approximate memory footprint in bytes, if the implementation can
-    /// report it. Returns `None` for implementations that have no way to
-    /// measure (e.g. because the underlying runtime does not expose it).
-    ///
-    /// The default implementation returns `None`.
-    async fn vram_bytes(&self) -> Option<u64> {
+    /// Which device the model is configured to run on. Determines which
+    /// memory pool the [`ModelManager`](../../blazen_manager/struct.ModelManager.html)
+    /// charges this model against. Defaults to [`Device::Cpu`](crate::device::Device::Cpu)
+    /// for backwards compatibility with implementors that have not yet
+    /// declared a target.
+    fn device(&self) -> crate::device::Device {
+        crate::device::Device::Cpu
+    }
+
+    /// Approximate memory footprint in bytes (host RAM if [`Self::device`]
+    /// returns [`Device::Cpu`](crate::device::Device::Cpu), GPU VRAM
+    /// otherwise). Returns `None` for implementations that can't measure.
+    async fn memory_bytes(&self) -> Option<u64> {
         None
     }
 }

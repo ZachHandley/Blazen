@@ -177,7 +177,7 @@ pub use compute::{
     VideoRequest,
     VideoResult,
 };
-pub use device::Device;
+pub use device::{Device, Pool};
 #[allow(deprecated)]
 pub use error::LlmError;
 pub use error::{BlazenError, CompletionErrorKind, ComputeErrorKind, MediaErrorKind};

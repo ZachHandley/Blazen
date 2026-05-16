@@ -70,7 +70,7 @@ impl PyEmbeddingModel {
     ///     dimensions: Output dimensionality of the embedding vectors.
     ///     base_url: Base URL for HTTP-based providers.
     ///     pricing: Optional pricing information.
-    ///     vram_estimate_bytes: Estimated VRAM footprint in bytes.
+    ///     memory_estimate_bytes: Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise).
     /// `__new__` for `EmbeddingModel`. Accepts arbitrary positional and
     /// keyword arguments so Python subclasses can use any `__init__`
     /// signature; the real configuration happens in `__init__` below.
@@ -91,21 +91,21 @@ impl PyEmbeddingModel {
     /// keyword signature and re-populates ``self.config`` so a Python
     /// subclass that calls `super().__init__(model_id=..., dimensions=...)`
     /// sees the values it passed.
-    #[pyo3(signature = (*, model_id=None, dimensions=None, base_url=None, pricing=None, vram_estimate_bytes=None))]
+    #[pyo3(signature = (*, model_id=None, dimensions=None, base_url=None, pricing=None, memory_estimate_bytes=None))]
     fn __init__(
         &mut self,
         model_id: Option<String>,
         dimensions: Option<usize>,
         base_url: Option<String>,
         pricing: Option<PyRef<'_, crate::types::pricing::PyModelPricing>>,
-        vram_estimate_bytes: Option<u64>,
+        memory_estimate_bytes: Option<u64>,
     ) {
         if self.inner.is_none() {
             self.config = Some(blazen_llm::ProviderConfig {
                 model_id,
                 context_length: dimensions.map(|d| d as u64),
                 base_url,
-                vram_estimate_bytes,
+                memory_estimate_bytes,
                 pricing: pricing.map(|p| p.inner.clone()),
                 ..Default::default()
             });

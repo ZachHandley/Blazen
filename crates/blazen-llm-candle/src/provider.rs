@@ -558,6 +558,13 @@ impl CandleLlmProvider {
         self.model_id.as_deref()
     }
 
+    /// The configured device string (e.g. `"cpu"`, `"cuda:0"`, `"metal"`), or
+    /// `None` if no device was specified (which defaults to CPU at inference time).
+    #[must_use]
+    pub fn device_str(&self) -> Option<&str> {
+        self.options.device.as_deref()
+    }
+
     /// Whether the engine feature is compiled in.
     #[must_use]
     pub fn engine_available(&self) -> bool {

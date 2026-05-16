@@ -57,18 +57,18 @@ macro_rules! capability_provider {
             /// subclass that calls `super().__init__(provider_id=...)` sees the
             /// values it passed (without falling through to `object.__init__`,
             /// which would raise ``TypeError``).
-            #[pyo3(signature = (*, provider_id=None, base_url=None, pricing=None, vram_estimate_bytes=None))]
+            #[pyo3(signature = (*, provider_id=None, base_url=None, pricing=None, memory_estimate_bytes=None))]
             fn __init__(
                 &mut self,
                 provider_id: Option<String>,
                 base_url: Option<String>,
                 pricing: Option<PyRef<'_, crate::types::pricing::PyModelPricing>>,
-                vram_estimate_bytes: Option<u64>,
+                memory_estimate_bytes: Option<u64>,
             ) {
                 self.config = blazen_llm::ProviderConfig {
                     provider_id,
                     base_url,
-                    vram_estimate_bytes,
+                    memory_estimate_bytes,
                     pricing: pricing.map(|p| p.inner.clone()),
                     ..Default::default()
                 };
@@ -88,10 +88,10 @@ macro_rules! capability_provider {
                 self.config.base_url.as_deref()
             }
 
-            /// Estimated VRAM footprint in bytes, if set.
+            /// Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise), if set.
             #[getter]
-            fn vram_estimate_bytes(&self) -> Option<u64> {
-                self.config.vram_estimate_bytes
+            fn memory_estimate_bytes(&self) -> Option<u64> {
+                self.config.memory_estimate_bytes
             }
 
             // -- capability-specific methods ----------------------------------

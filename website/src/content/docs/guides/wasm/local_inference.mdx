@@ -354,35 +354,47 @@ The JS-facing API matches the native one:
 
 | Method | Purpose |
 |---|---|
-| `register(id, model, vramEstimateBytes, lifecycle)` | Declare a model with `{ load, unload }` lifecycle hooks |
+| `register(id, model, memoryEstimateBytes, lifecycle)` | Declare a model with `{ load, unload }` lifecycle hooks (plus optional `memoryBytes()` and `device()` for pool routing) |
 | `unregister(id)` | Drop a registration (and any loaded weights) |
-| `load(id)` | Load (or reuse) and mark as MRU |
+| `load(id)` | Load (or reuse) and mark as MRU within its pool |
 | `unload(id)` | Free without unregistering |
 | `isLoaded(id)` | Check whether weights are currently resident |
-| `usedBytes` / `availableBytes` / `budgetBytes` | Budget telemetry (getters, no parens) |
-| `status()` | Snapshot of every registration |
+| `usedBytes(pool?)` / `availableBytes(pool?)` | Per-pool budget telemetry. `pool` defaults to `"cpu"`; pass `"gpu:0"` etc. for GPU pools |
+| `pools()` | List every configured pool and its byte budget |
+| `budgetBytes` | Read-only getter for the CPU pool budget (use `pools()` for other pools) |
+| `status()` | Snapshot of every registration (each entry carries `memoryEstimateBytes` and `pool`) |
 
 ```typescript
 import init, { ModelManager, TractEmbedModel } from '@blazen/sdk';
 
 await init();
 
-const manager = new ModelManager(0.5); // 0.5 GB (512 MB) budget -- constructor takes gigabytes
+const manager = new ModelManager(0.5); // 0.5 GB (512 MB) CPU pool budget -- constructor takes gigabytes
 
 manager.register('mini-lm', null, 90 * 1024 * 1024, {
   load: async () => TractEmbedModel.create(miniLmOnnx, miniLmTokenizer),
   unload: async () => {},
+  isLoaded: () => false,
+  memoryBytes: async () => 90 * 1024 * 1024,
+  device: () => 'cpu',
 });
 manager.register('bge-small', null, 130 * 1024 * 1024, {
   load: async () => TractEmbedModel.create(bgeOnnx, bgeTokenizer),
   unload: async () => {},
+  isLoaded: () => false,
+  memoryBytes: async () => 130 * 1024 * 1024,
+  device: () => 'cpu',
 });
 
 const embedder = await manager.load('mini-lm');  // loads + marks MRU
-console.log(manager.usedBytes, '/', manager.budgetBytes); // getters, no parens
+console.log(await manager.usedBytes(), '/', manager.budgetBytes); // usedBytes is a method; budgetBytes is the CPU pool getter
+
+for (const s of await manager.status()) {
+  console.log(`${s.id}: loaded=${s.loaded}, pool=${s.pool}, memory=${s.memoryEstimateBytes}`);
+}
 ```
 
-When a `load()` call would push `usedBytes()` past `budgetBytes()`, the manager evicts the LRU entry first. Use it whenever your app might keep more than one Tract model alive at a time.
+When a `load()` call would push `usedBytes(pool)` past that pool's budget, the manager evicts the LRU entry **from the same pool** first. A GPU model never evicts a CPU model and vice versa. Use it whenever your app might keep more than one Tract model alive at a time.
 
 ## COOP/COEP trap
 

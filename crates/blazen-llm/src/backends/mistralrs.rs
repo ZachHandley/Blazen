@@ -321,6 +321,14 @@ impl crate::traits::LocalModel for MistralRsProvider {
     async fn is_loaded(&self) -> bool {
         MistralRsProvider::is_loaded(self).await
     }
+
+    fn device(&self) -> crate::device::Device {
+        self.options()
+            .device
+            .as_deref()
+            .and_then(|s| crate::device::Device::parse(s).ok())
+            .unwrap_or(crate::device::Device::Cpu)
+    }
 }
 
 // ---------------------------------------------------------------------------

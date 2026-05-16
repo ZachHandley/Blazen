@@ -1,12 +1,13 @@
-//! Node.js binding for the VRAM-aware model manager.
+//! Node.js binding for the memory-budget-aware model manager.
 
 use napi::Status;
 use napi::bindgen_prelude::{BigInt, Promise};
 use napi::threadsafe_function::ThreadsafeFunction;
 use napi_derive::napi;
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use blazen_llm::{BlazenError, LocalModel};
+use blazen_llm::{BlazenError, Device, LocalModel, Pool};
 use blazen_manager::ModelManager;
 
 use crate::providers::completion_model::JsCompletionModel;
@@ -21,15 +22,55 @@ type LifecycleTsfn = ThreadsafeFunction<(), Promise<()>, (), Status, false, true
 /// Optional `isLoaded()` predicate returning `Promise<boolean>`.
 type IsLoadedTsfn = ThreadsafeFunction<(), Promise<bool>, (), Status, false, true>;
 
+// ---------------------------------------------------------------------------
+// Pool label parsing
+// ---------------------------------------------------------------------------
+
+/// Parse a pool label string into a [`Pool`].
+///
+/// Accepted forms (case-sensitive):
+///
+/// | Input        | Result            |
+/// |--------------|-------------------|
+/// | `"cpu"`      | `Pool::Cpu`       |
+/// | `"gpu"`      | `Pool::Gpu(0)`    |
+/// | `"gpu:N"`    | `Pool::Gpu(N)`    |
+fn parse_pool_label(label: &str) -> napi::Result<Pool> {
+    if label == "cpu" {
+        return Ok(Pool::Cpu);
+    }
+    if label == "gpu" {
+        return Ok(Pool::Gpu(0));
+    }
+    if let Some(idx_str) = label.strip_prefix("gpu:")
+        && let Ok(idx) = idx_str.parse::<usize>()
+    {
+        return Ok(Pool::Gpu(idx));
+    }
+    Err(napi::Error::from_reason(format!(
+        "invalid pool label '{label}': expected 'cpu', 'gpu', or 'gpu:N' where N is a non-negative integer"
+    )))
+}
+
 /// Configuration for creating a [`JsModelManager`].
 ///
-/// Exactly one of `budgetGb` or `budgetBytes` must be provided.
+/// Pass either the convenience pair (`cpuRamGb` / `gpuVramGb`) for the
+/// common single-GPU desktop layout, or a fully explicit `poolBudgets`
+/// map for multi-GPU or custom topologies. Omit everything to receive
+/// the unlimited-budget defaults (useful for tests).
 #[napi(object)]
 pub struct ModelManagerConfig {
-    /// VRAM budget in gigabytes (e.g. `8.0` for 8 GiB).
-    pub budget_gb: Option<f64>,
-    /// VRAM budget in bytes (pass as JS `BigInt` to support values >4 GiB).
-    pub budget_bytes: Option<BigInt>,
+    /// Host RAM budget in gigabytes for `Pool::Cpu`.
+    #[napi(js_name = "cpuRamGb")]
+    pub cpu_ram_gb: Option<f64>,
+    /// GPU VRAM budget in gigabytes for `Pool::Gpu(0)`.
+    #[napi(js_name = "gpuVramGb")]
+    pub gpu_vram_gb: Option<f64>,
+    /// Explicit per-pool budget map. Keys: `"cpu"`, `"gpu"`, `"gpu:N"`.
+    /// Values: bytes as `BigInt`. When provided, overrides
+    /// `cpuRamGb` / `gpuVramGb`.
+    #[napi(js_name = "poolBudgets")]
+    pub pool_budgets: Option<HashMap<String, BigInt>>,
 }
 
 /// Status snapshot for a single registered model.
@@ -37,21 +78,45 @@ pub struct ModelManagerConfig {
 pub struct JsModelStatus {
     /// Model identifier.
     pub id: String,
-    /// Whether the model is currently loaded into VRAM.
+    /// Whether the model is currently loaded into its pool.
     pub loaded: bool,
-    /// Estimated VRAM footprint in bytes.
-    pub vram_estimate: BigInt,
+    /// Estimated memory footprint in bytes (host RAM if `pool` is
+    /// `"cpu"`, GPU VRAM otherwise).
+    #[napi(js_name = "memoryEstimateBytes")]
+    pub memory_estimate_bytes: BigInt,
+    /// Pool label this model targets (`"cpu"` or `"gpu:N"`).
+    pub pool: String,
 }
 
-/// VRAM budget-aware model manager with LRU eviction.
+/// Reported per-pool budget pair returned by [`JsModelManager::pools`].
+#[napi(object)]
+pub struct JsPoolBudget {
+    /// Pool label (`"cpu"` or `"gpu:N"`).
+    pub pool: String,
+    /// Configured budget for the pool in bytes.
+    #[napi(js_name = "budgetBytes")]
+    pub budget_bytes: BigInt,
+}
+
+/// Memory-budget-aware model manager with per-pool LRU eviction.
 ///
-/// Tracks registered local models and their estimated VRAM footprint.
-/// When loading a model that would exceed the budget, the least-recently-used
-/// loaded model is unloaded first.
+/// Tracks registered local models and their estimated memory footprint.
+/// When loading a model that would exceed its pool's budget, the
+/// least-recently-used loaded model in the same pool is unloaded first.
 ///
 /// ```javascript
-/// const manager = new ModelManager({ budgetGb: 8.0 });
-/// await manager.register("llama-7b", model, 4_000_000_000n);  // BigInt
+/// // Single-GPU desktop layout:
+/// const manager = new ModelManager({ cpuRamGb: 100, gpuVramGb: 24 });
+///
+/// // Multi-pool layout via explicit BigInt budgets:
+/// const manager = new ModelManager({
+///   poolBudgets: { "cpu": 100_000_000_000n, "gpu:0": 24_000_000_000n },
+/// });
+///
+/// // No arguments: both `cpu` and `gpu:0` default to the unlimited sentinel.
+/// const manager = new ModelManager();
+///
+/// await manager.register("llama-7b", model, 4_000_000_000n);
 /// await manager.load("llama-7b");
 /// ```
 #[napi(js_name = "ModelManager")]
@@ -62,72 +127,106 @@ pub struct JsModelManager {
 #[napi]
 #[allow(clippy::missing_errors_doc, clippy::needless_pass_by_value)]
 impl JsModelManager {
-    /// Create a new model manager with the given VRAM budget.
+    /// Create a new model manager with per-pool memory budgets.
     ///
-    /// Provide either `budgetGb` (gigabytes as a float) or `budgetBytes`
-    /// (exact byte count). If both are given, `budgetGb` takes precedence.
+    /// If `poolBudgets` is provided, it is used verbatim (pool labels are
+    /// parsed by [`parse_pool_label`]). Otherwise the manager uses
+    /// `cpuRamGb` (default `0`) for `Pool::Cpu` and `gpuVramGb`
+    /// (default `0`) for `Pool::Gpu(0)`.
+    ///
+    /// When **all** fields are omitted, both `Pool::Cpu` and
+    /// `Pool::Gpu(0)` default to `u64::MAX` — the unlimited-budget
+    /// sentinel used by integration tests that don't want to think
+    /// about capacity.
     #[napi(constructor)]
-    pub fn new(config: ModelManagerConfig) -> napi::Result<Self> {
-        let bytes = match (config.budget_gb, config.budget_bytes) {
-            (Some(gb), _) => {
-                #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                {
-                    (gb * 1_073_741_824.0) as u64
+    pub fn new(config: Option<ModelManagerConfig>) -> napi::Result<Self> {
+        let inner = match config {
+            Some(ModelManagerConfig {
+                pool_budgets: Some(map),
+                ..
+            }) => {
+                let mut budgets: HashMap<Pool, u64> = HashMap::with_capacity(map.len());
+                for (label, value) in map {
+                    let pool = parse_pool_label(&label)?;
+                    budgets.insert(pool, value.get_u64().1);
+                }
+                ModelManager::new(budgets)
+            }
+            Some(ModelManagerConfig {
+                cpu_ram_gb,
+                gpu_vram_gb,
+                pool_budgets: None,
+            }) => {
+                if cpu_ram_gb.is_none() && gpu_vram_gb.is_none() {
+                    let mut budgets: HashMap<Pool, u64> = HashMap::with_capacity(2);
+                    budgets.insert(Pool::Cpu, u64::MAX);
+                    budgets.insert(Pool::Gpu(0), u64::MAX);
+                    ModelManager::new(budgets)
+                } else {
+                    ModelManager::with_budgets_gb(
+                        cpu_ram_gb.unwrap_or(0.0),
+                        gpu_vram_gb.unwrap_or(0.0),
+                    )
                 }
             }
-            (_, Some(b)) => b.get_u64().1,
-            (None, None) => {
-                return Err(napi::Error::from_reason(
-                    "must provide either budgetGb or budgetBytes",
-                ));
+            None => {
+                let mut budgets: HashMap<Pool, u64> = HashMap::with_capacity(2);
+                budgets.insert(Pool::Cpu, u64::MAX);
+                budgets.insert(Pool::Gpu(0), u64::MAX);
+                ModelManager::new(budgets)
             }
         };
         Ok(Self {
-            inner: Arc::new(ModelManager::new(bytes)),
+            inner: Arc::new(inner),
         })
     }
 
     /// Register a `CompletionModel`-backed local model with the manager.
     ///
-    /// The model starts in the unloaded state.  An optional
-    /// `vramEstimateBytes` overrides the model's self-reported estimate.
+    /// The model starts in the unloaded state. An optional
+    /// `memoryEstimateBytes` overrides the model's self-reported
+    /// estimate.
     ///
-    /// Only local in-process providers (mistral.rs, llama.cpp, candle) can be
-    /// registered -- remote HTTP providers will throw. To register an
-    /// arbitrary JS-managed resource (embedding model, tokenizer, custom
-    /// runtime, …), use [`Self::register_local_model`] instead.
+    /// Only local in-process providers (mistral.rs, llama.cpp, candle)
+    /// can be registered — remote HTTP providers will throw. To
+    /// register an arbitrary JS-managed resource (embedding model,
+    /// tokenizer, custom runtime, …), use
+    /// [`Self::register_local_model`] instead.
     #[napi]
     pub async fn register(
         &self,
         id: String,
         model: &JsCompletionModel,
-        vram_estimate_bytes: Option<BigInt>,
+        memory_estimate_bytes: Option<BigInt>,
     ) -> napi::Result<()> {
         let local_model = model
             .local_model
             .clone()
             .ok_or_else(|| napi::Error::from_reason("model does not support local loading"))?;
-        let vram = vram_estimate_bytes.map_or(0, |b| b.get_u64().1);
-        self.inner.register(&id, local_model, vram).await;
+        let memory = memory_estimate_bytes.map_or(0, |b| b.get_u64().1);
+        self.inner.register(&id, local_model, memory).await;
         Ok(())
     }
 
     /// Register an arbitrary JS-managed local model with the manager.
     ///
-    /// Unlike [`Self::register`] -- which expects a [`JsCompletionModel`]
-    /// backed by an in-process provider -- this entrypoint takes raw
-    /// lifecycle callbacks. The manager will invoke `load()` when the model
-    /// is brought into VRAM (potentially after evicting an LRU peer) and
-    /// `unload()` when it is evicted or explicitly released.
+    /// Unlike [`Self::register`] — which expects a [`JsCompletionModel`]
+    /// backed by an in-process provider — this entrypoint takes raw
+    /// lifecycle callbacks. The manager will invoke `load()` when the
+    /// model is brought into memory (potentially after evicting an LRU
+    /// peer) and `unload()` when it is evicted or explicitly released.
     ///
-    /// Both callbacks must return a `Promise<void>` (or be `async`). A
-    /// rejection from `load()` aborts the load operation; a rejection from
-    /// `unload()` is propagated as a manager error.
+    /// Both callbacks must return a `Promise<void>` (or be `async`).
+    /// A rejection from `load()` aborts the load operation; a rejection
+    /// from `unload()` is propagated as a manager error.
     ///
     /// `isLoaded()` is optional: when omitted, the manager's own
     /// loaded-flag bookkeeping is the source of truth.
-    /// `vramEstimateBytes` reports the model's footprint so the manager
-    /// can enforce the global budget; defaults to `0` when not provided.
+    /// `memoryEstimateBytes` reports the model's footprint so the
+    /// manager can enforce the per-pool budget; defaults to `0` when
+    /// not provided. `device` selects which pool the model targets
+    /// (`"cpu"`, `"cuda:0"`, `"metal"`, …); defaults to `"cpu"` when
+    /// omitted.
     ///
     /// ```javascript
     /// let loaded = false;
@@ -137,11 +236,12 @@ impl JsModelManager {
     ///   async () => { /* release */    loaded = false; },
     ///   async () => loaded,
     ///   2_000_000_000n,
+    ///   "cuda:0",
     /// );
     /// ```
     ///
-    /// `isLoaded` is `null`-able (pass `null` or `undefined` to omit) and
-    /// `vramEstimateBytes` may also be omitted.
+    /// `isLoaded`, `memoryEstimateBytes`, and `device` are all
+    /// nullable / optional (pass `null` or `undefined` to omit).
     #[napi(js_name = "registerLocalModel")]
     pub async fn register_local_model(
         &self,
@@ -149,25 +249,31 @@ impl JsModelManager {
         load: LifecycleTsfn,
         unload: LifecycleTsfn,
         is_loaded: Option<IsLoadedTsfn>,
-        vram_estimate_bytes: Option<BigInt>,
+        memory_estimate_bytes: Option<BigInt>,
+        device: Option<String>,
     ) -> napi::Result<()> {
-        let vram = vram_estimate_bytes.map_or(0, |b| b.get_u64().1);
+        let memory = memory_estimate_bytes.map_or(0, |b| b.get_u64().1);
+        let parsed_device = device
+            .as_deref()
+            .map_or(Device::Cpu, |s| Device::parse(s).unwrap_or(Device::Cpu));
         let adapter = JsLocalModelAdapter {
             id: id.clone(),
             load: Arc::new(load),
             unload: Arc::new(unload),
             is_loaded_fn: is_loaded.map(Arc::new),
-            vram_estimate: vram,
+            memory_estimate_bytes: memory,
+            device: parsed_device,
         };
         let local_model: Arc<dyn LocalModel> = Arc::new(adapter);
-        self.inner.register(&id, local_model, vram).await;
+        self.inner.register(&id, local_model, memory).await;
         Ok(())
     }
 
-    /// Load a model, evicting LRU models if the budget would be exceeded.
+    /// Load a model, evicting LRU peers in the same pool if the budget
+    /// would be exceeded.
     ///
-    /// Throws if the model is not registered or its VRAM estimate exceeds the
-    /// total budget.
+    /// Throws if the model is not registered or its memory estimate
+    /// exceeds the pool's total budget.
     #[napi]
     pub async fn load(&self, id: String) -> napi::Result<()> {
         self.inner
@@ -176,7 +282,7 @@ impl JsModelManager {
             .map_err(|e| napi::Error::from_reason(e.to_string()))
     }
 
-    /// Unload a model, freeing its VRAM budget.
+    /// Unload a model, freeing its slice of the pool budget.
     ///
     /// Idempotent: unloading an already-unloaded model is a no-op.
     #[napi]
@@ -195,8 +301,8 @@ impl JsModelManager {
 
     /// Ensure a model is loaded.
     ///
-    /// If already loaded, updates the LRU timestamp. If not loaded, loads it
-    /// (potentially evicting other models).
+    /// If already loaded, updates the LRU timestamp. If not loaded,
+    /// loads it (potentially evicting other models in the same pool).
     #[napi(js_name = "ensureLoaded")]
     pub async fn ensure_loaded(&self, id: String) -> napi::Result<()> {
         self.inner
@@ -205,16 +311,38 @@ impl JsModelManager {
             .map_err(|e| napi::Error::from_reason(e.to_string()))
     }
 
-    /// Total VRAM currently used by loaded models (in bytes).
+    /// Total memory currently used by loaded models in the given pool,
+    /// in bytes. Defaults to `"cpu"` when no pool label is provided.
     #[napi(js_name = "usedBytes")]
-    pub async fn used_bytes(&self) -> BigInt {
-        BigInt::from(self.inner.used_bytes().await)
+    pub async fn used_bytes(&self, pool: Option<String>) -> napi::Result<BigInt> {
+        let pool = parse_pool_label(pool.as_deref().unwrap_or("cpu"))?;
+        Ok(BigInt::from(self.inner.used_bytes(pool).await))
     }
 
-    /// Available VRAM within the budget (in bytes).
+    /// Available memory within the given pool's budget, in bytes.
+    /// Defaults to `"cpu"` when no pool label is provided.
     #[napi(js_name = "availableBytes")]
-    pub async fn available_bytes(&self) -> BigInt {
-        BigInt::from(self.inner.available_bytes().await)
+    pub async fn available_bytes(&self, pool: Option<String>) -> napi::Result<BigInt> {
+        let pool = parse_pool_label(pool.as_deref().unwrap_or("cpu"))?;
+        Ok(BigInt::from(self.inner.available_bytes(pool).await))
+    }
+
+    /// Snapshot of the configured per-pool budgets.
+    ///
+    /// Returns one entry per pool the manager knows about; each entry
+    /// carries the pool label (`"cpu"` or `"gpu:N"`) and its budget in
+    /// bytes.
+    #[napi]
+    #[must_use]
+    pub fn pools(&self) -> Vec<JsPoolBudget> {
+        self.inner
+            .pools()
+            .into_iter()
+            .map(|(p, b)| JsPoolBudget {
+                pool: format!("{p}"),
+                budget_bytes: BigInt::from(b),
+            })
+            .collect()
     }
 
     /// Status of all registered models.
@@ -227,7 +355,8 @@ impl JsModelManager {
             .map(|s| JsModelStatus {
                 id: s.id,
                 loaded: s.loaded,
-                vram_estimate: BigInt::from(s.vram_estimate),
+                memory_estimate_bytes: BigInt::from(s.memory_estimate_bytes),
+                pool: format!("{}", s.pool),
             })
             .collect()
     }
@@ -237,24 +366,28 @@ impl JsModelManager {
 // JsLocalModelAdapter: bridges JS lifecycle callbacks to `LocalModel`.
 // ---------------------------------------------------------------------------
 
-/// Internal adapter that implements [`LocalModel`] by dispatching into the
-/// `load` / `unload` / `isLoaded` JS callbacks captured at registration time.
+/// Internal adapter that implements [`LocalModel`] by dispatching into
+/// the `load` / `unload` / `isLoaded` JS callbacks captured at
+/// registration time.
 ///
-/// Mirrors `crates/blazen-wasm-sdk/src/manager.rs::JsLocalModelAdapter`, but
-/// uses napi-rs `ThreadsafeFunction`s instead of raw `js_sys::Function`s.
+/// Mirrors `crates/blazen-wasm-sdk/src/manager.rs::JsLocalModelAdapter`,
+/// but uses napi-rs `ThreadsafeFunction`s instead of raw
+/// `js_sys::Function`s.
 struct JsLocalModelAdapter {
     id: String,
     load: Arc<LifecycleTsfn>,
     unload: Arc<LifecycleTsfn>,
     is_loaded_fn: Option<Arc<IsLoadedTsfn>>,
-    vram_estimate: u64,
+    memory_estimate_bytes: u64,
+    device: Device,
 }
 
 impl std::fmt::Debug for JsLocalModelAdapter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("JsLocalModelAdapter")
             .field("id", &self.id)
-            .field("vram_estimate", &self.vram_estimate)
+            .field("memory_estimate_bytes", &self.memory_estimate_bytes)
+            .field("device", &self.device)
             .finish_non_exhaustive()
     }
 }
@@ -294,11 +427,12 @@ impl LocalModel for JsLocalModelAdapter {
     }
 
     async fn is_loaded(&self) -> bool {
-        // Without a JS-side `isLoaded()` callback we have no separate state
-        // to query: defer to the upstream `ModelManager`'s loaded-flag
-        // bookkeeping by conservatively reporting `false`. (Callers should
-        // use `JsModelManager::is_loaded`, which queries the manager
-        // directly.) Mirrors the WASM adapter's behaviour.
+        // Without a JS-side `isLoaded()` callback we have no separate
+        // state to query: defer to the upstream `ModelManager`'s
+        // loaded-flag bookkeeping by conservatively reporting `false`.
+        // (Callers should use `JsModelManager::is_loaded`, which
+        // queries the manager directly.) Mirrors the WASM adapter's
+        // behaviour.
         let Some(ref is_loaded) = self.is_loaded_fn else {
             return false;
         };
@@ -308,7 +442,11 @@ impl LocalModel for JsLocalModelAdapter {
         promise.await.unwrap_or(false)
     }
 
-    async fn vram_bytes(&self) -> Option<u64> {
-        Some(self.vram_estimate)
+    fn device(&self) -> Device {
+        self.device
+    }
+
+    async fn memory_bytes(&self) -> Option<u64> {
+        Some(self.memory_estimate_bytes)
     }
 }

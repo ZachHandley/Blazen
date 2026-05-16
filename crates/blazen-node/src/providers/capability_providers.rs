@@ -23,8 +23,9 @@ pub struct CapabilityProviderConfig {
     pub provider_id: String,
     /// Optional base URL for HTTP-based providers.
     pub base_url: Option<String>,
-    /// Optional estimated VRAM footprint in bytes when loaded.
-    pub vram_estimate_bytes: Option<u32>,
+    /// Optional estimated memory footprint in bytes when loaded
+    /// (host RAM if the provider targets the CPU, GPU VRAM otherwise).
+    pub memory_estimate_bytes: Option<u32>,
 }
 
 // ---------------------------------------------------------------------------
@@ -66,7 +67,7 @@ macro_rules! capability_provider {
                     config: blazen_llm::ProviderConfig {
                         provider_id: Some(config.provider_id),
                         base_url: config.base_url,
-                        vram_estimate_bytes: config.vram_estimate_bytes.map(u64::from),
+                        memory_estimate_bytes: config.memory_estimate_bytes.map(u64::from),
                         ..Default::default()
                     },
                 }
@@ -86,11 +87,12 @@ macro_rules! capability_provider {
                 self.config.base_url.clone()
             }
 
-            /// Estimated VRAM footprint in bytes, if set.
+            /// Estimated memory footprint in bytes (host RAM if the
+            /// provider targets the CPU, GPU VRAM otherwise), if set.
             #[napi(getter)]
-            pub fn vram_estimate_bytes(&self) -> Option<u32> {
+            pub fn memory_estimate_bytes(&self) -> Option<u32> {
                 self.config
-                    .vram_estimate_bytes
+                    .memory_estimate_bytes
                     .map(|v| u32::try_from(v).unwrap_or(u32::MAX))
             }
 

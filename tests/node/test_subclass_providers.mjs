@@ -66,7 +66,7 @@ test("CompletionModel subclassing · can be subclassed with all config fields", 
         modelId: "full-model",
         contextLength: 8192,
         baseUrl: "https://example.com/v1",
-        vramEstimateBytes: 4_000_000_000,
+        memoryEstimateBytes: 4_000_000_000,
         maxOutputTokens: 2048,
       });
     }
@@ -141,14 +141,14 @@ test("CompletionModel subclassing · isLoaded() returns false for subclassed ins
   t.is(loaded, false);
 });
 
-test("CompletionModel subclassing · vramBytes() returns null for subclassed instances", async (t) => {
+test("CompletionModel subclassing · memoryBytes() returns null for subclassed instances", async (t) => {
   class SubLLM extends CompletionModel {
     constructor() {
       super({ modelId: "sub" });
     }
   }
   const model = new SubLLM();
-  const bytes = await model.vramBytes();
+  const bytes = await model.memoryBytes();
   t.is(bytes, null);
 });
 
@@ -215,15 +215,15 @@ test("TTSProvider subclassing · can be constructed with providerId", (t) => {
   t.is(provider.providerId, "mock-tts");
 });
 
-test("TTSProvider subclassing · can be constructed with baseUrl and vramEstimateBytes", (t) => {
+test("TTSProvider subclassing · can be constructed with baseUrl and memoryEstimateBytes", (t) => {
   const provider = new TTSProvider({
     providerId: "local-tts",
     baseUrl: "http://localhost:5000",
-    vramEstimateBytes: 2_000_000_000,
+    memoryEstimateBytes: 2_000_000_000,
   });
   t.is(provider.providerId, "local-tts");
   t.is(provider.baseUrl, "http://localhost:5000");
-  t.is(provider.vramEstimateBytes, 2_000_000_000);
+  t.is(provider.memoryEstimateBytes, 2_000_000_000);
 });
 
 test("TTSProvider subclassing · textToSpeech() throws 'subclass must override' by default", async (t) => {
@@ -389,9 +389,9 @@ test("capability provider common getters · baseUrl returns null when not set", 
   t.is(provider.baseUrl, null);
 });
 
-test("capability provider common getters · vramEstimateBytes returns null when not set", (t) => {
+test("capability provider common getters · memoryEstimateBytes returns null when not set", (t) => {
   const provider = new ImageProvider({ providerId: "no-vram" });
-  t.is(provider.vramEstimateBytes, null);
+  t.is(provider.memoryEstimateBytes, null);
 });
 
 // ===========================================================================
@@ -467,43 +467,44 @@ test("MemoryBackend subclassing · searchByBands() throws 'subclass must overrid
 // ModelManager
 // ===========================================================================
 
-test("ModelManager · can be created with budgetGb", (t) => {
-  const manager = new ModelManager({ budgetGb: 24 });
+test("ModelManager · can be created with cpuRamGb", (t) => {
+  const manager = new ModelManager({ cpuRamGb: 24 });
   t.truthy(manager);
 });
 
-test("ModelManager · can be created with budgetBytes", (t) => {
-  const manager = new ModelManager({ budgetBytes: 8_000_000_000n });
+test("ModelManager · can be created with poolBudgets", (t) => {
+  const manager = new ModelManager({
+    poolBudgets: { cpu: 8_000_000_000n },
+  });
   t.truthy(manager);
 });
 
-test("ModelManager · throws when neither budgetGb nor budgetBytes is given", (t) => {
-  t.throws(
-    () => new ModelManager({}),
-    { message: /must provide either budgetGb or budgetBytes/ }
-  );
+test("ModelManager · empty config defaults to unlimited CPU + GPU pools", (t) => {
+  // No-arg / empty-object form is the unlimited-budget sentinel for tests.
+  const manager = new ModelManager({});
+  t.truthy(manager);
 });
 
 test("ModelManager · reports zero usedBytes when empty", async (t) => {
-  const manager = new ModelManager({ budgetGb: 8 });
+  const manager = new ModelManager({ cpuRamGb: 8 });
   const used = await manager.usedBytes();
   t.is(used, 0n);
 });
 
 test("ModelManager · reports full budget as availableBytes when empty", async (t) => {
-  const manager = new ModelManager({ budgetGb: 8 });
+  const manager = new ModelManager({ cpuRamGb: 8 });
   const available = await manager.availableBytes();
   t.truthy(available > 0n);
 });
 
 test("ModelManager · status() returns empty array when no models registered", async (t) => {
-  const manager = new ModelManager({ budgetGb: 8 });
+  const manager = new ModelManager({ cpuRamGb: 8 });
   const statuses = await manager.status();
   t.deepEqual(statuses, []);
 });
 
 test("ModelManager · register() throws for remote (non-local) models", async (t) => {
-  const manager = new ModelManager({ budgetGb: 8 });
+  const manager = new ModelManager({ cpuRamGb: 8 });
   const model = CompletionModel.openai({ apiKey: "fake-key" });
   await t.throwsAsync(
     () => manager.register("gpt-4", model),
@@ -516,7 +517,7 @@ test("ModelManager · register() throws for remote (non-local) models", async (t
 // ---------------------------------------------------------------------------
 
 test("registerLocalModel · roundtrips load/unload via async JS callbacks", async (t) => {
-  const manager = new ModelManager({ budgetGb: 8 });
+  const manager = new ModelManager({ cpuRamGb: 8 });
   let loaded = false;
 
   await manager.registerLocalModel(
@@ -541,7 +542,7 @@ test("registerLocalModel · roundtrips load/unload via async JS callbacks", asyn
 });
 
 test("registerLocalModel · isLoaded callback is invoked when present", async (t) => {
-  const manager = new ModelManager({ budgetGb: 8 });
+  const manager = new ModelManager({ cpuRamGb: 8 });
   let isLoadedCalls = 0;
   let internalState = false;
 
@@ -573,8 +574,8 @@ test("registerLocalModel · isLoaded callback is invoked when present", async (t
   t.true(isLoadedCalls >= 0);
 });
 
-test("registerLocalModel · accepts null isLoaded and undefined vramEstimateBytes", async (t) => {
-  const manager = new ModelManager({ budgetGb: 8 });
+test("registerLocalModel · accepts null isLoaded and undefined memoryEstimateBytes", async (t) => {
+  const manager = new ModelManager({ cpuRamGb: 8 });
 
   await t.notThrowsAsync(() =>
     manager.registerLocalModel(
@@ -582,18 +583,18 @@ test("registerLocalModel · accepts null isLoaded and undefined vramEstimateByte
       async () => {},
       async () => {},
       null
-      // vramEstimateBytes intentionally omitted
+      // memoryEstimateBytes intentionally omitted
     )
   );
 
   const statuses = await manager.status();
   const entry = statuses.find((s) => s.id === "nullish-1");
   t.truthy(entry, "expected status entry for nullish-1");
-  t.is(entry.vramEstimate, 0n);
+  t.is(entry.memoryEstimateBytes, 0n);
 });
 
-test("registerLocalModel · vramEstimateBytes is reflected in status", async (t) => {
-  const manager = new ModelManager({ budgetGb: 8 });
+test("registerLocalModel · memoryEstimateBytes is reflected in status", async (t) => {
+  const manager = new ModelManager({ cpuRamGb: 8 });
 
   await manager.registerLocalModel(
     "vram-1",
@@ -606,11 +607,11 @@ test("registerLocalModel · vramEstimateBytes is reflected in status", async (t)
   const statuses = await manager.status();
   const entry = statuses.find((s) => s.id === "vram-1");
   t.truthy(entry, "expected status entry for vram-1");
-  t.is(entry.vramEstimate, 5_000_000_000n);
+  t.is(entry.memoryEstimateBytes, 5_000_000_000n);
 });
 
 test("registerLocalModel · LRU eviction works with custom models", async (t) => {
-  const manager = new ModelManager({ budgetGb: 8 });
+  const manager = new ModelManager({ cpuRamGb: 8 });
   const fiveGb = 5n * 1_073_741_824n;
 
   let model1Loaded = false;
@@ -662,7 +663,7 @@ test("registerLocalModel · LRU eviction works with custom models", async (t) =>
 });
 
 test("registerLocalModel · propagates load() rejection", async (t) => {
-  const manager = new ModelManager({ budgetGb: 8 });
+  const manager = new ModelManager({ cpuRamGb: 8 });
 
   await manager.registerLocalModel(
     "boom-1",
@@ -691,7 +692,7 @@ test("register (CompletionModel path) · still works", async (t) => {
   // factory (`openai`) must still be rejected with the documented error.
   // This confirms the legacy entrypoint is wired up and validating its
   // input — registerLocalModel's addition didn't shadow or break it.
-  const manager = new ModelManager({ budgetGb: 8 });
+  const manager = new ModelManager({ cpuRamGb: 8 });
   const model = CompletionModel.openai({ apiKey: "fake-key" });
   await t.throwsAsync(() => manager.register("legacy-openai", model), {
     message: /does not support local loading/,

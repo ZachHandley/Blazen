@@ -153,8 +153,11 @@ export declare class BackgroundRemovalProvider {
   get providerId(): string | null
   /** The base URL, if set. */
   get baseUrl(): string | null
-  /** Estimated VRAM footprint in bytes, if set. */
-  get vramEstimateBytes(): number | null
+  /**
+   * Estimated memory footprint in bytes (host RAM if the
+   * provider targets the CPU, GPU VRAM otherwise), if set.
+   */
+  get memoryEstimateBytes(): number | null
   /** r" Remove the background from an image. */
   removeBackground(request: any): Promise<any>
 }
@@ -647,8 +650,11 @@ export declare class CandleLlmProvider {
   unload(): Promise<void>
   /** Whether the model is currently loaded in memory / `VRAM`. */
   isLoaded(): Promise<boolean>
-  /** Approximate `VRAM` footprint in bytes. */
-  vramBytes(): Promise<number | null>
+  /**
+   * Approximate memory footprint in bytes (host RAM if the model
+   * targets the CPU, GPU VRAM otherwise).
+   */
+  memoryBytes(): Promise<number | null>
 }
 export type JsCandleLlmProvider = CandleLlmProvider
 
@@ -1126,16 +1132,19 @@ export declare class CompletionModel {
    */
   isLoaded(): Promise<boolean>
   /**
-   * Approximate `VRAM` footprint in bytes, if the implementation can
-   * report it. Returns `null` for remote providers or for local
-   * providers that do not expose memory usage.
+   * Approximate memory footprint in bytes (host RAM if the
+   * provider targets the CPU, GPU VRAM otherwise), if the
+   * implementation can report it. Returns `null` for remote
+   * providers or for local providers that do not expose memory
+   * usage.
    *
    * Note: napi-rs exposes this as a JS `number`. The underlying
-   * [`blazen_llm::LocalModel::vram_bytes`] returns `u64`; we clamp to
-   * `i64::MAX` (~9.2 exabytes) when surfacing through `JSON`-compatible
-   * types, which is effectively lossless for any realistic `VRAM` size.
+   * [`blazen_llm::LocalModel::memory_bytes`] returns `u64`; we clamp
+   * to `i64::MAX` (~9.2 exabytes) when surfacing through
+   * `JSON`-compatible types, which is effectively lossless for any
+   * realistic footprint.
    */
-  vramBytes(): Promise<number | null>
+  memoryBytes(): Promise<number | null>
   /**
    * Create a local mistral.rs completion model.
    *
@@ -2311,8 +2320,11 @@ export declare class ImageProvider {
   get providerId(): string | null
   /** The base URL, if set. */
   get baseUrl(): string | null
-  /** Estimated VRAM footprint in bytes, if set. */
-  get vramEstimateBytes(): number | null
+  /**
+   * Estimated memory footprint in bytes (host RAM if the
+   * provider targets the CPU, GPU VRAM otherwise), if set.
+   */
+  get memoryEstimateBytes(): number | null
   /** r" Generate an image from a prompt. */
   generateImage(request: any): Promise<any>
   /** r" Upscale an existing image. */
@@ -2685,8 +2697,11 @@ export declare class LlamaCppProvider {
   unload(): Promise<void>
   /** Whether the model is currently loaded in memory / `VRAM`. */
   isLoaded(): Promise<boolean>
-  /** Approximate `VRAM` footprint in bytes. */
-  vramBytes(): Promise<number | null>
+  /**
+   * Approximate memory footprint in bytes (host RAM if the model
+   * targets the CPU, GPU VRAM otherwise).
+   */
+  memoryBytes(): Promise<number | null>
 }
 export type JsLlamaCppProvider = LlamaCppProvider
 
@@ -2695,14 +2710,15 @@ export type JsLlamaCppProvider = LlamaCppProvider
  * memory / VRAM.
  *
  * Mirrors [`blazen_llm::traits::LocalModel`]. Subclasses must override
- * `load`, `unload`, and `isLoaded` (and may optionally override
- * `vramBytes`).
+ * `load`, `unload`, `isLoaded`, and `device` (and may optionally
+ * override `memoryBytes`).
  *
  * ```javascript
  * class MyLocalModel extends LocalModel {
  *   async load() { /* ... *\/ }
  *   async unload() { /* ... *\/ }
  *   async isLoaded() { return false; }
+ *   device() { return "cpu"; }
  * }
  * ```
  */
@@ -2719,10 +2735,15 @@ export declare class LocalModel {
   /** Whether the model is currently loaded. Subclasses **must** override. */
   isLoaded(): Promise<boolean>
   /**
-   * Approximate memory footprint in bytes. Default implementation
-   * returns `null`.
+   * Return the device this model targets: `'cpu'`, `'cuda:0'`,
+   * `'metal'`, etc.
    */
-  vramBytes(): Promise<number | null>
+  device(): string
+  /**
+   * Approximate memory footprint in bytes (host RAM if `device()`
+   * returns `'cpu'`, GPU VRAM otherwise). Default returns `null`.
+   */
+  memoryBytes(): Promise<number | null>
 }
 export type JsLocalModel = LocalModel
 
@@ -3061,8 +3082,11 @@ export declare class MistralRsProvider {
   unload(): Promise<void>
   /** Whether the model is currently loaded in memory / `VRAM`. */
   isLoaded(): Promise<boolean>
-  /** Approximate `VRAM` footprint in bytes. */
-  vramBytes(): Promise<number | null>
+  /**
+   * Approximate memory footprint in bytes (host RAM if the model
+   * targets the CPU, GPU VRAM otherwise).
+   */
+  memoryBytes(): Promise<number | null>
 }
 export type JsMistralRsProvider = MistralRsProvider
 
@@ -3124,55 +3148,77 @@ export declare class ModelCache {
 export type JsModelCache = ModelCache
 
 /**
- * VRAM budget-aware model manager with LRU eviction.
+ * Memory-budget-aware model manager with per-pool LRU eviction.
  *
- * Tracks registered local models and their estimated VRAM footprint.
- * When loading a model that would exceed the budget, the least-recently-used
- * loaded model is unloaded first.
+ * Tracks registered local models and their estimated memory footprint.
+ * When loading a model that would exceed its pool's budget, the
+ * least-recently-used loaded model in the same pool is unloaded first.
  *
  * ```javascript
- * const manager = new ModelManager({ budgetGb: 8.0 });
- * await manager.register("llama-7b", model, 4_000_000_000n);  // BigInt
+ * // Single-GPU desktop layout:
+ * const manager = new ModelManager({ cpuRamGb: 100, gpuVramGb: 24 });
+ *
+ * // Multi-pool layout via explicit BigInt budgets:
+ * const manager = new ModelManager({
+ *   poolBudgets: { "cpu": 100_000_000_000n, "gpu:0": 24_000_000_000n },
+ * });
+ *
+ * // No arguments: both `cpu` and `gpu:0` default to the unlimited sentinel.
+ * const manager = new ModelManager();
+ *
+ * await manager.register("llama-7b", model, 4_000_000_000n);
  * await manager.load("llama-7b");
  * ```
  */
 export declare class ModelManager {
   /**
-   * Create a new model manager with the given VRAM budget.
+   * Create a new model manager with per-pool memory budgets.
    *
-   * Provide either `budgetGb` (gigabytes as a float) or `budgetBytes`
-   * (exact byte count). If both are given, `budgetGb` takes precedence.
+   * If `poolBudgets` is provided, it is used verbatim (pool labels are
+   * parsed by [`parse_pool_label`]). Otherwise the manager uses
+   * `cpuRamGb` (default `0`) for `Pool::Cpu` and `gpuVramGb`
+   * (default `0`) for `Pool::Gpu(0)`.
+   *
+   * When **all** fields are omitted, both `Pool::Cpu` and
+   * `Pool::Gpu(0)` default to `u64::MAX` — the unlimited-budget
+   * sentinel used by integration tests that don't want to think
+   * about capacity.
    */
-  constructor(config: ModelManagerConfig)
+  constructor(config?: ModelManagerConfig | undefined | null)
   /**
    * Register a `CompletionModel`-backed local model with the manager.
    *
-   * The model starts in the unloaded state.  An optional
-   * `vramEstimateBytes` overrides the model's self-reported estimate.
+   * The model starts in the unloaded state. An optional
+   * `memoryEstimateBytes` overrides the model's self-reported
+   * estimate.
    *
-   * Only local in-process providers (mistral.rs, llama.cpp, candle) can be
-   * registered -- remote HTTP providers will throw. To register an
-   * arbitrary JS-managed resource (embedding model, tokenizer, custom
-   * runtime, …), use [`Self::register_local_model`] instead.
+   * Only local in-process providers (mistral.rs, llama.cpp, candle)
+   * can be registered — remote HTTP providers will throw. To
+   * register an arbitrary JS-managed resource (embedding model,
+   * tokenizer, custom runtime, …), use
+   * [`Self::register_local_model`] instead.
    */
-  register(id: string, model: JsCompletionModel, vramEstimateBytes?: bigint | undefined | null): Promise<void>
+  register(id: string, model: JsCompletionModel, memoryEstimateBytes?: bigint | undefined | null): Promise<void>
   /**
    * Register an arbitrary JS-managed local model with the manager.
    *
-   * Unlike [`Self::register`] -- which expects a [`JsCompletionModel`]
-   * backed by an in-process provider -- this entrypoint takes raw
-   * lifecycle callbacks. The manager will invoke `load()` when the model
-   * is brought into VRAM (potentially after evicting an LRU peer) and
-   * `unload()` when it is evicted or explicitly released.
+   * Unlike [`Self::register`] — which expects a [`JsCompletionModel`]
+   * backed by an in-process provider — this entrypoint takes raw
+   * lifecycle callbacks. The manager will invoke `load()` when the
+   * model is brought into memory (potentially after evicting an LRU
+   * peer) and `unload()` when it is evicted or explicitly released.
    *
-   * Both callbacks must return a `Promise<void>` (or be `async`). A
-   * rejection from `load()` aborts the load operation; a rejection from
-   * `unload()` is propagated as a manager error.
+   * Both callbacks must return a `Promise<void>` (or be `async`).
+   * A rejection from `load()` aborts the load operation; a rejection
+   * from `unload()` is propagated as a manager error.
    *
    * `isLoaded()` is optional: when omitted, the manager's own
    * loaded-flag bookkeeping is the source of truth.
-   * `vramEstimateBytes` reports the model's footprint so the manager
-   * can enforce the global budget; defaults to `0` when not provided.
+   * `memoryEstimateBytes` reports the model's footprint so the
+   * manager can enforce the per-pool budget; defaults to `0` when
+   * not provided. `device` selects which pool the model targets
+   * (`"cpu"`, `"cuda:0"`, `"metal"`, …); defaults to `"cpu"` when
+   * omitted.
    *
    * ```javascript
    * let loaded = false;
@@ -3182,22 +3228,24 @@ export declare class ModelManager {
    *   async () => { /* release *\/    loaded = false; },
    *   async () => loaded,
    *   2_000_000_000n,
+   *   "cuda:0",
    * );
    * ```
    *
-   * `isLoaded` is `null`-able (pass `null` or `undefined` to omit) and
-   * `vramEstimateBytes` may also be omitted.
+   * `isLoaded`, `memoryEstimateBytes`, and `device` are all
+   * nullable / optional (pass `null` or `undefined` to omit).
    */
-  registerLocalModel(id: string, load: LifecycleTsfn, unload: LifecycleTsfn, isLoaded?: IsLoadedTsfn | undefined | null, vramEstimateBytes?: bigint | undefined | null): Promise<void>
+  registerLocalModel(id: string, load: LifecycleTsfn, unload: LifecycleTsfn, isLoaded?: IsLoadedTsfn | undefined | null, memoryEstimateBytes?: bigint | undefined | null, device?: string | undefined | null): Promise<void>
   /**
-   * Load a model, evicting LRU models if the budget would be exceeded.
+   * Load a model, evicting LRU peers in the same pool if the budget
+   * would be exceeded.
    *
-   * Throws if the model is not registered or its VRAM estimate exceeds the
-   * total budget.
+   * Throws if the model is not registered or its memory estimate
+   * exceeds the pool's total budget.
    */
   load(id: string): Promise<void>
   /**
-   * Unload a model, freeing its VRAM budget.
+   * Unload a model, freeing its slice of the pool budget.
    *
    * Idempotent: unloading an already-unloaded model is a no-op.
    */
@@ -3207,14 +3255,28 @@ export declare class ModelManager {
   /**
    * Ensure a model is loaded.
    *
-   * If already loaded, updates the LRU timestamp. If not loaded, loads it
-   * (potentially evicting other models).
+   * If already loaded, updates the LRU timestamp. If not loaded,
+   * loads it (potentially evicting other models in the same pool).
    */
   ensureLoaded(id: string): Promise<void>
-  /** Total VRAM currently used by loaded models (in bytes). */
-  usedBytes(): Promise<bigint>
-  /** Available VRAM within the budget (in bytes). */
-  availableBytes(): Promise<bigint>
+  /**
+   * Total memory currently used by loaded models in the given pool,
+   * in bytes. Defaults to `"cpu"` when no pool label is provided.
+   */
+  usedBytes(pool?: string | undefined | null): Promise<bigint>
+  /**
+   * Available memory within the given pool's budget, in bytes.
+   * Defaults to `"cpu"` when no pool label is provided.
+   */
+  availableBytes(pool?: string | undefined | null): Promise<bigint>
+  /**
+   * Snapshot of the configured per-pool budgets.
+   *
+   * Returns one entry per pool the manager knows about; each entry
+   * carries the pool label (`"cpu"` or `"gpu:N"`) and its budget in
+   * bytes.
+   */
+  pools(): Array<JsPoolBudget>
   /** Status of all registered models. */
   status(): Promise<Array<JsModelStatus>>
 }
@@ -3265,8 +3327,11 @@ export declare class MusicProvider {
   get providerId(): string | null
   /** The base URL, if set. */
   get baseUrl(): string | null
-  /** Estimated VRAM footprint in bytes, if set. */
-  get vramEstimateBytes(): number | null
+  /**
+   * Estimated memory footprint in bytes (host RAM if the
+   * provider targets the CPU, GPU VRAM otherwise), if set.
+   */
+  get memoryEstimateBytes(): number | null
   /** r" Generate music from a prompt. */
   generateMusic(request: any): Promise<any>
   /** r" Generate a sound effect from a prompt. */
@@ -4553,8 +4618,11 @@ export declare class ThreeDProvider {
   get providerId(): string | null
   /** The base URL, if set. */
   get baseUrl(): string | null
-  /** Estimated VRAM footprint in bytes, if set. */
-  get vramEstimateBytes(): number | null
+  /**
+   * Estimated memory footprint in bytes (host RAM if the
+   * provider targets the CPU, GPU VRAM otherwise), if set.
+   */
+  get memoryEstimateBytes(): number | null
   /** r" Generate a 3D model from a prompt or image. */
   generate3d(request: any): Promise<any>
 }
@@ -4898,8 +4966,11 @@ export declare class TTSProvider {
   get providerId(): string | null
   /** The base URL, if set. */
   get baseUrl(): string | null
-  /** Estimated VRAM footprint in bytes, if set. */
-  get vramEstimateBytes(): number | null
+  /**
+   * Estimated memory footprint in bytes (host RAM if the
+   * provider targets the CPU, GPU VRAM otherwise), if set.
+   */
+  get memoryEstimateBytes(): number | null
   /** r" Synthesize speech from text. */
   textToSpeech(request: any): Promise<any>
 }
@@ -5115,8 +5186,11 @@ export declare class VideoProvider {
   get providerId(): string | null
   /** The base URL, if set. */
   get baseUrl(): string | null
-  /** Estimated VRAM footprint in bytes, if set. */
-  get vramEstimateBytes(): number | null
+  /**
+   * Estimated memory footprint in bytes (host RAM if the
+   * provider targets the CPU, GPU VRAM otherwise), if set.
+   */
+  get memoryEstimateBytes(): number | null
   /** r" Generate a video from a text prompt. */
   textToVideo(request: any): Promise<any>
   /** r" Generate a video from an image (image-to-video). */
@@ -5156,8 +5230,11 @@ export declare class VoiceProvider {
   get providerId(): string | null
   /** The base URL, if set. */
   get baseUrl(): string | null
-  /** Estimated VRAM footprint in bytes, if set. */
-  get vramEstimateBytes(): number | null
+  /**
+   * Estimated memory footprint in bytes (host RAM if the
+   * provider targets the CPU, GPU VRAM otherwise), if set.
+   */
+  get memoryEstimateBytes(): number | null
   /** r" Clone a voice from audio samples. */
   cloneVoice(request: any): Promise<any>
   /** r" List all available voices. */
@@ -5823,8 +5900,11 @@ export interface CapabilityProviderConfig {
   providerId: string
   /** Optional base URL for HTTP-based providers. */
   baseUrl?: string
-  /** Optional estimated VRAM footprint in bytes when loaded. */
-  vramEstimateBytes?: number
+  /**
+   * Optional estimated memory footprint in bytes when loaded
+   * (host RAM if the provider targets the CPU, GPU VRAM otherwise).
+   */
+  memoryEstimateBytes?: number
 }
 
 /** Options for creating a `ChatMessage`. */
@@ -5929,8 +6009,11 @@ export interface CompletionModelConfig {
   contextLength?: number
   /** Base URL for HTTP-based providers. */
   baseUrl?: string
-  /** Estimated VRAM footprint in bytes when loaded. */
-  vramEstimateBytes?: number
+  /**
+   * Estimated memory footprint in bytes when loaded (host RAM if
+   * the provider targets the CPU, GPU VRAM otherwise).
+   */
+  memoryEstimateBytes?: number
   /** Maximum output tokens the model supports. */
   maxOutputTokens?: number
 }
@@ -7237,10 +7320,15 @@ export interface JsModelPricing {
 export interface JsModelStatus {
   /** Model identifier. */
   id: string
-  /** Whether the model is currently loaded into VRAM. */
+  /** Whether the model is currently loaded into its pool. */
   loaded: boolean
-  /** Estimated VRAM footprint in bytes. */
-  vramEstimate: bigint
+  /**
+   * Estimated memory footprint in bytes (host RAM if `pool` is
+   * `"cpu"`, GPU VRAM otherwise).
+   */
+  memoryEstimateBytes: bigint
+  /** Pool label this model targets (`"cpu"` or `"gpu:N"`). */
+  pool: string
 }
 
 export interface JsMusicRequest {
@@ -7324,6 +7412,14 @@ export interface JsPiperOptions {
   sampleRate?: number
   /** Path to cache downloaded voice models. */
   cacheDir?: string
+}
+
+/** Reported per-pool budget pair returned by [`JsModelManager::pools`]. */
+export interface JsPoolBudget {
+  /** Pool label (`"cpu"` or `"gpu:N"`). */
+  pool: string
+  /** Configured budget for the pool in bytes. */
+  budgetBytes: bigint
 }
 
 /** A single `(provider, envVar)` pair returned by [`provider_env_vars`]. */
@@ -8041,13 +8137,22 @@ export interface ModelInfo {
 /**
  * Configuration for creating a [`JsModelManager`].
  *
- * Exactly one of `budgetGb` or `budgetBytes` must be provided.
+ * Pass either the convenience pair (`cpuRamGb` / `gpuVramGb`) for the
+ * common single-GPU desktop layout, or a fully explicit `poolBudgets`
+ * map for multi-GPU or custom topologies. Omit everything to receive
+ * the unlimited-budget defaults (useful for tests).
  */
 export interface ModelManagerConfig {
-  /** VRAM budget in gigabytes (e.g. `8.0` for 8 GiB). */
-  budgetGb?: number
-  /** VRAM budget in bytes (pass as JS `BigInt` to support values >4 GiB). */
-  budgetBytes?: bigint
+  /** Host RAM budget in gigabytes for `Pool::Cpu`. */
+  cpuRamGb?: number
+  /** GPU VRAM budget in gigabytes for `Pool::Gpu(0)`. */
+  gpuVramGb?: number
+  /**
+   * Explicit per-pool budget map. Keys: `"cpu"`, `"gpu"`, `"gpu:N"`.
+   * Values: bytes as `BigInt`. When provided, overrides
+   * `cpuRamGb` / `gpuVramGb`.
+   */
+  poolBudgets?: Record<string, bigint>
 }
 
 /** Build an empty [`JsRetryStack`] with every scope set to `null`. */
@@ -8241,8 +8346,11 @@ export interface ProviderConfig {
   contextLength?: number
   /** Maximum output tokens the model supports. */
   maxOutputTokens?: number
-  /** Estimated VRAM footprint in bytes when loaded. */
-  vramEstimateBytes?: number
+  /**
+   * Estimated memory footprint in bytes when loaded (host RAM if on CPU,
+   * GPU VRAM otherwise).
+   */
+  memoryEstimateBytes?: number
   /** Pricing information for automatic cost tracking. */
   pricing?: JsModelPricing
   /** Capability flags. */

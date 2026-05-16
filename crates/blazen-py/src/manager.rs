@@ -1,11 +1,59 @@
-//! Python binding for the VRAM-aware model manager.
+//! Python binding for the memory-budget-aware model manager.
 
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::error::BlazenPyError;
+use blazen_llm::Pool;
 use blazen_manager::ModelManager;
+
+// ---------------------------------------------------------------------------
+// Pool label parsing
+// ---------------------------------------------------------------------------
+
+/// Parse a pool label string into a [`Pool`].
+///
+/// Accepted forms (case-insensitive):
+///
+/// | Input        | Result          |
+/// |--------------|-----------------|
+/// | `"cpu"`      | `Pool::Cpu`     |
+/// | `"gpu"`      | `Pool::Gpu(0)`  |
+/// | `"gpu:0"`    | `Pool::Gpu(0)`  |
+/// | `"gpu:3"`    | `Pool::Gpu(3)`  |
+///
+/// Anything else raises ``ValueError``.
+fn parse_pool_label(s: &str) -> PyResult<Pool> {
+    let trimmed = s.trim();
+    let lower = trimmed.to_ascii_lowercase();
+
+    if let Some((name, idx)) = lower.split_once(':') {
+        match name {
+            "gpu" => {
+                let index = idx.parse::<usize>().map_err(|_| {
+                    pyo3::exceptions::PyValueError::new_err(format!(
+                        "invalid pool label {trimmed:?}: expected 'cpu', 'gpu', or 'gpu:N' where N is a non-negative integer"
+                    ))
+                })?;
+                Ok(Pool::Gpu(index))
+            }
+            _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "invalid pool label {trimmed:?}: expected 'cpu', 'gpu', or 'gpu:N' where N is a non-negative integer"
+            ))),
+        }
+    } else {
+        match lower.as_str() {
+            "cpu" => Ok(Pool::Cpu),
+            "gpu" => Ok(Pool::Gpu(0)),
+            _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "invalid pool label {trimmed:?}: expected 'cpu', 'gpu', or 'gpu:N' where N is a non-negative integer"
+            ))),
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // PyLocalModelWrapper -- bridges a duck-typed Python object into LocalModel
@@ -16,8 +64,9 @@ use blazen_manager::ModelManager;
 ///
 /// The wrapped object must have callable `load` and `unload` attributes
 /// (either synchronous functions or async coroutine functions). It MAY also
-/// have `is_loaded` and `vram_bytes` methods. Async methods are detected at
-/// wrap construction time and awaited via the `pyo3-async-runtimes` bridge.
+/// have `is_loaded` and `memory_bytes` methods, and a (sync) `device` method
+/// returning a string like `"cpu"` or `"cuda:0"`. Async methods are detected
+/// at wrap construction time and awaited via the `pyo3-async-runtimes` bridge.
 ///
 /// [`LocalModel`]: blazen_llm::LocalModel
 #[allow(clippy::struct_excessive_bools)]
@@ -26,10 +75,11 @@ struct PyLocalModelWrapper {
     load_is_async: bool,
     unload_is_async: bool,
     is_loaded_is_async: bool,
-    vram_bytes_is_async: bool,
+    memory_bytes_is_async: bool,
     has_is_loaded: bool,
-    has_vram_bytes: bool,
-    vram_estimate: u64,
+    has_memory_bytes: bool,
+    memory_estimate_bytes: u64,
+    device: blazen_llm::Device,
 }
 
 impl PyLocalModelWrapper {
@@ -105,20 +155,24 @@ impl blazen_llm::LocalModel for PyLocalModelWrapper {
         }
     }
 
-    async fn vram_bytes(&self) -> Option<u64> {
-        if !self.has_vram_bytes {
-            return Some(self.vram_estimate);
+    fn device(&self) -> blazen_llm::Device {
+        self.device
+    }
+
+    async fn memory_bytes(&self) -> Option<u64> {
+        if !self.has_memory_bytes {
+            return Some(self.memory_estimate_bytes);
         }
         match self
-            .call_method("vram_bytes", self.vram_bytes_is_async)
+            .call_method("memory_bytes", self.memory_bytes_is_async)
             .await
         {
             Ok(result) => Python::attach(|py| result.extract::<Option<u64>>(py)).unwrap_or_else(
                 |e| {
                     tracing::warn!(
-                        "PyLocalModelWrapper: vram_bytes() returned non-int / non-None or raised: {e}"
+                        "PyLocalModelWrapper: memory_bytes() returned non-int / non-None or raised: {e}"
                     );
-                    Some(self.vram_estimate)
+                    Some(self.memory_estimate_bytes)
                 },
             ),
             Err(e) => {
@@ -127,9 +181,9 @@ impl blazen_llm::LocalModel for PyLocalModelWrapper {
                         || e.is_instance_of::<pyo3::exceptions::PyAttributeError>(py)
                 });
                 if !downgraded {
-                    tracing::warn!("PyLocalModelWrapper: vram_bytes() raised: {e}");
+                    tracing::warn!("PyLocalModelWrapper: memory_bytes() raised: {e}");
                 }
-                Some(self.vram_estimate)
+                Some(self.memory_estimate_bytes)
             }
         }
     }
@@ -139,14 +193,20 @@ impl blazen_llm::LocalModel for PyLocalModelWrapper {
 /// `load` and `unload` are present and callable, and detecting async-ness for
 /// each method up front.
 ///
-/// `is_loaded` and `vram_bytes` are optional; their presence is detected by
-/// trying `getattr` *and* (for ABC subclasses) checking that the method has
-/// been overridden relative to `blazen.LocalModel`'s stubs. Final fallback is
-/// catching `NotImplementedError` / `AttributeError` at call time.
+/// `is_loaded`, `memory_bytes`, and `device` are optional; their presence is
+/// detected by trying `getattr` *and* (for ABC subclasses) checking that the
+/// method has been overridden relative to `blazen.LocalModel`'s stubs. Final
+/// fallback is catching `NotImplementedError` / `AttributeError` at call time.
+///
+/// `device` is probed synchronously at construction time: if the Python object
+/// exposes a callable `device()` returning a parseable device string, that
+/// device is stored; otherwise we fall back to the explicit `device` argument
+/// (typically `Device::Cpu`).
 fn build_local_model_wrapper(
     py: Python<'_>,
     obj: &Bound<'_, PyAny>,
-    vram_estimate: u64,
+    memory_estimate_bytes: u64,
+    device: blazen_llm::Device,
 ) -> PyResult<PyLocalModelWrapper> {
     let inspect = py.import("inspect")?;
 
@@ -181,7 +241,8 @@ fn build_local_model_wrapper(
     let load_is_async = detect_async(&load_attr);
     let unload_is_async = detect_async(&unload_attr);
 
-    // Determine whether the user overrode `is_loaded` / `vram_bytes`.
+    // Determine whether the user overrode `is_loaded` / `memory_bytes` /
+    // `device`.
     //
     // For plain duck-typed objects (no inheritance from `blazen.LocalModel`),
     // we treat the attribute's presence as "overridden". For ABC subclasses,
@@ -221,17 +282,35 @@ fn build_local_model_wrapper(
     };
 
     let (has_is_loaded, is_loaded_is_async) = is_user_override("is_loaded");
-    let (has_vram_bytes, vram_bytes_is_async) = is_user_override("vram_bytes");
+    let (has_memory_bytes, memory_bytes_is_async) = is_user_override("memory_bytes");
+
+    // Probe the Python object for a callable `device()` returning a string.
+    // Sync-only call by design -- keeps the LocalModel::device() impl sync.
+    // Any failure (missing, raised NotImplementedError/AttributeError, junk
+    // return value) falls back to the explicit `device` argument.
+    let (has_device, _device_is_async) = is_user_override("device");
+    let device = if has_device {
+        match obj.call_method0("device") {
+            Ok(result) => match result.extract::<String>() {
+                Ok(s) => blazen_llm::Device::parse(&s).unwrap_or(device),
+                Err(_) => device,
+            },
+            Err(_) => device,
+        }
+    } else {
+        device
+    };
 
     Ok(PyLocalModelWrapper {
         obj: obj.clone().unbind(),
         load_is_async,
         unload_is_async,
         is_loaded_is_async,
-        vram_bytes_is_async,
+        memory_bytes_is_async,
         has_is_loaded,
-        has_vram_bytes,
-        vram_estimate,
+        has_memory_bytes,
+        memory_estimate_bytes,
+        device,
     })
 }
 
@@ -244,31 +323,45 @@ pub struct PyModelStatus {
     #[pyo3(get)]
     loaded: bool,
     #[pyo3(get)]
-    vram_estimate: u64,
+    memory_estimate_bytes: u64,
+    pool: Pool,
 }
 
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyModelStatus {
+    /// The memory pool this model targets.
+    ///
+    /// Returned as a string label: ``"cpu"`` for host RAM, ``"gpu:N"`` for
+    /// the GPU at device index ``N``.
+    #[getter]
+    fn pool(&self) -> String {
+        format!("{}", self.pool)
+    }
+
     fn __repr__(&self) -> String {
         format!(
-            "ModelStatus(id={:?}, loaded={}, vram_estimate={})",
-            self.id, self.loaded, self.vram_estimate
+            "ModelStatus(id={:?}, loaded={}, memory_estimate_bytes={}, pool={:?})",
+            self.id,
+            self.loaded,
+            self.memory_estimate_bytes,
+            format!("{}", self.pool)
         )
     }
 }
 
-/// VRAM budget-aware model manager with LRU eviction.
+/// Memory-budget-aware model manager with LRU eviction.
 ///
-/// Tracks registered local models and their estimated VRAM footprint.
-/// When loading a model that would exceed the budget, the
-/// least-recently-used loaded model is unloaded first.
+/// Tracks registered local models and their estimated memory footprint per
+/// pool (host RAM or per-GPU VRAM). When loading a model that would exceed
+/// the pool's budget, the least-recently-used loaded model in the same pool
+/// is unloaded first.
 ///
 /// Example:
-///     >>> manager = ModelManager(budget_gb=24)
-///     >>> manager.register("llm", my_local_model)
+///     >>> manager = ModelManager(cpu_ram_gb=64, gpu_vram_gb=24)
+///     >>> await manager.register("llm", my_local_model)
 ///     >>> await manager.load("llm")
-///     >>> manager.is_loaded("llm")
+///     >>> await manager.is_loaded("llm")
 ///     True
 #[gen_stub_pyclass]
 #[pyclass(name = "ModelManager")]
@@ -282,30 +375,59 @@ impl PyModelManager {
     /// Create a new model manager.
     ///
     /// Args:
-    ///     budget_gb: VRAM budget in gigabytes.
-    ///     budget_bytes: VRAM budget in bytes (alternative to budget_gb).
+    ///     cpu_ram_gb: Host RAM budget for the CPU pool in gigabytes.
+    ///     gpu_vram_gb: VRAM budget for the GPU pool (device 0) in gigabytes.
+    ///     pool_budgets: Explicit per-pool budgets as a dict mapping pool
+    ///         labels (``"cpu"``, ``"gpu"``, ``"gpu:0"``, ``"gpu:1"``, ...)
+    ///         to budget sizes in bytes. Takes precedence over
+    ///         ``cpu_ram_gb`` / ``gpu_vram_gb`` when provided.
     ///
-    /// When neither is provided, the budget is unlimited (`u64::MAX` bytes),
-    /// useful for tests and runtime-unconstrained environments.
+    /// When all three arguments are ``None``, the manager is seeded with
+    /// ``Pool::Cpu`` and ``Pool::Gpu(0)`` BOTH set to ``u64::MAX``, which
+    /// matches the "no budget enforcement" intent used by tests and
+    /// runtime-unconstrained environments.
     #[new]
-    #[pyo3(signature = (*, budget_gb=None, budget_bytes=None))]
-    fn new(budget_gb: Option<f64>, budget_bytes: Option<u64>) -> Self {
-        let bytes = match (budget_gb, budget_bytes) {
-            (Some(gb), _) => {
-                #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                {
-                    (gb * 1_073_741_824.0) as u64
-                }
+    #[pyo3(signature = (*, cpu_ram_gb=None, gpu_vram_gb=None, pool_budgets=None))]
+    fn new(
+        cpu_ram_gb: Option<f64>,
+        gpu_vram_gb: Option<f64>,
+        pool_budgets: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Self> {
+        let inner = if let Some(budgets) = pool_budgets {
+            let mut map: HashMap<Pool, u64> = HashMap::new();
+            for (key, value) in budgets.iter() {
+                let label: String = key.extract().map_err(|_| {
+                    pyo3::exceptions::PyTypeError::new_err(
+                        "pool_budgets keys must be strings (pool labels like 'cpu', 'gpu', 'gpu:0')",
+                    )
+                })?;
+                let bytes: u64 = value.extract().map_err(|_| {
+                    pyo3::exceptions::PyTypeError::new_err(
+                        "pool_budgets values must be non-negative integers (budgets in bytes)",
+                    )
+                })?;
+                let pool = parse_pool_label(&label)?;
+                map.insert(pool, bytes);
             }
-            (_, Some(b)) => b,
-            (None, None) => u64::MAX,
+            ModelManager::new(map)
+        } else if cpu_ram_gb.is_none() && gpu_vram_gb.is_none() {
+            // Sentinel "unlimited" mode: seed both Cpu and Gpu(0) with u64::MAX
+            // so tests that don't care about budget enforcement can construct
+            // `ModelManager()` and freely register/load on either pool.
+            let mut map: HashMap<Pool, u64> = HashMap::new();
+            map.insert(Pool::Cpu, u64::MAX);
+            map.insert(Pool::Gpu(0), u64::MAX);
+            ModelManager::new(map)
+        } else {
+            ModelManager::with_budgets_gb(cpu_ram_gb.unwrap_or(0.0), gpu_vram_gb.unwrap_or(0.0))
         };
-        Self {
-            inner: Arc::new(ModelManager::new(bytes)),
-        }
+
+        Ok(Self {
+            inner: Arc::new(inner),
+        })
     }
 
-    /// Register a model with its estimated VRAM footprint.
+    /// Register a model with its estimated memory footprint.
     ///
     /// The `model` argument can be either:
     ///
@@ -314,28 +436,31 @@ impl PyModelManager {
     ///   ``LocalModel`` implementation is used.
     /// * Any Python object exposing callable ``load`` and ``unload``
     ///   attributes (sync or async). It does *not* need to subclass
-    ///   :class:`blazen.LocalModel`. ``is_loaded`` and ``vram_bytes`` are
-    ///   optional; if absent or unimplemented the manager falls back to
-    ///   ``False`` and ``vram_estimate_bytes`` respectively.
+    ///   :class:`blazen.LocalModel`. ``is_loaded``, ``memory_bytes``, and
+    ///   ``device`` are optional; if absent or unimplemented the manager
+    ///   falls back to ``False``, ``memory_estimate_bytes``, and ``Cpu``
+    ///   respectively.
     ///
     /// Args:
     ///     id: A unique identifier for this model.
     ///     model: A CompletionModel with local model support, or a duck-typed
     ///         object with ``load`` and ``unload`` methods.
-    ///     vram_estimate_bytes: Estimated VRAM footprint in bytes.
+    ///     memory_estimate_bytes: Estimated memory footprint in bytes (host
+    ///         RAM if the model targets CPU, GPU VRAM otherwise).
     #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, None]", imports = ("typing",)))]
-    #[pyo3(signature = (id, model, vram_estimate_bytes=None))]
+    #[pyo3(signature = (id, model, *, memory_estimate_bytes=None))]
     fn register<'py>(
         &self,
         py: Python<'py>,
         id: String,
         model: &Bound<'py, PyAny>,
-        vram_estimate_bytes: Option<u64>,
+        memory_estimate_bytes: Option<u64>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let vram = vram_estimate_bytes.unwrap_or(0);
+        let memory_estimate = memory_estimate_bytes.unwrap_or(0);
 
         // First, see if the user passed a CompletionModel that already carries
-        // a LocalModel impl. If so, use it directly.
+        // a LocalModel impl. If so, use it directly (its device() is already
+        // implemented in Rust).
         let local_model: Arc<dyn blazen_llm::LocalModel> =
             if let Ok(cm) = model.extract::<PyRef<'_, crate::providers::PyCompletionModel>>() {
                 if let Some(lm) = cm.local_model.clone() {
@@ -344,21 +469,32 @@ impl PyModelManager {
                     // CompletionModel without local support -- fall back to duck
                     // typing on the same object (rare, but harmless).
                     drop(cm);
-                    Arc::new(build_local_model_wrapper(py, model, vram)?)
+                    Arc::new(build_local_model_wrapper(
+                        py,
+                        model,
+                        memory_estimate,
+                        blazen_llm::Device::Cpu,
+                    )?)
                 }
             } else {
-                // Arbitrary Python object: duck-type via load/unload.
-                Arc::new(build_local_model_wrapper(py, model, vram)?)
+                // Arbitrary Python object: duck-type via load/unload, probe
+                // device() for an explicit target.
+                Arc::new(build_local_model_wrapper(
+                    py,
+                    model,
+                    memory_estimate,
+                    blazen_llm::Device::Cpu,
+                )?)
             };
 
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            inner.register(&id, local_model, vram).await;
+            inner.register(&id, local_model, memory_estimate).await;
             Ok(())
         })
     }
 
-    /// Load a model, evicting LRU models if needed.
+    /// Load a model, evicting LRU models in the same pool if needed.
     #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, None]", imports = ("typing",)))]
     fn load<'py>(&self, py: Python<'py>, id: String) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
@@ -368,7 +504,7 @@ impl PyModelManager {
         })
     }
 
-    /// Unload a model, freeing its VRAM budget.
+    /// Unload a model, freeing its memory budget.
     #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, None]", imports = ("typing",)))]
     fn unload<'py>(&self, py: Python<'py>, id: String) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
@@ -401,21 +537,56 @@ impl PyModelManager {
         })
     }
 
-    /// Total VRAM currently used by loaded models.
+    /// Total memory currently used by loaded models in the given pool.
+    ///
+    /// Args:
+    ///     pool: Pool label (``"cpu"``, ``"gpu"``, or ``"gpu:N"``).
+    ///         Defaults to ``"cpu"``.
     #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, int]", imports = ("typing",)))]
-    fn used_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let inner = self.inner.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move { Ok(inner.used_bytes().await) })
-    }
-
-    /// Available VRAM within the budget.
-    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, int]", imports = ("typing",)))]
-    fn available_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    #[pyo3(signature = (pool=None))]
+    fn used_bytes<'py>(
+        &self,
+        py: Python<'py>,
+        pool: Option<String>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let pool = parse_pool_label(pool.as_deref().unwrap_or("cpu"))?;
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(
             py,
-            async move { Ok(inner.available_bytes().await) },
+            async move { Ok(inner.used_bytes(pool).await) },
         )
+    }
+
+    /// Available memory within the given pool's budget.
+    ///
+    /// Args:
+    ///     pool: Pool label (``"cpu"``, ``"gpu"``, or ``"gpu:N"``).
+    ///         Defaults to ``"cpu"``.
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, int]", imports = ("typing",)))]
+    #[pyo3(signature = (pool=None))]
+    fn available_bytes<'py>(
+        &self,
+        py: Python<'py>,
+        pool: Option<String>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let pool = parse_pool_label(pool.as_deref().unwrap_or("cpu"))?;
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            Ok(inner.available_bytes(pool).await)
+        })
+    }
+
+    /// List configured pools and their budgets.
+    ///
+    /// Returns:
+    ///     A list of ``(pool_label, budget_bytes)`` tuples, one per
+    ///     configured pool.
+    fn pools(&self) -> Vec<(String, u64)> {
+        self.inner
+            .pools()
+            .into_iter()
+            .map(|(pool, budget)| (format!("{pool}"), budget))
+            .collect()
     }
 
     /// Status of all registered models.
@@ -429,7 +600,8 @@ impl PyModelManager {
                 .map(|s| PyModelStatus {
                     id: s.id,
                     loaded: s.loaded,
-                    vram_estimate: s.vram_estimate,
+                    memory_estimate_bytes: s.memory_estimate_bytes,
+                    pool: s.pool,
                 })
                 .collect::<Vec<_>>())
         })

@@ -283,9 +283,10 @@ pub struct JsProviderConfig {
     /// Maximum output tokens the model supports.
     #[napi(js_name = "maxOutputTokens")]
     pub max_output_tokens: Option<u32>,
-    /// Estimated VRAM footprint in bytes when loaded.
-    #[napi(js_name = "vramEstimateBytes")]
-    pub vram_estimate_bytes: Option<f64>,
+    /// Estimated memory footprint in bytes when loaded (host RAM if on CPU,
+    /// GPU VRAM otherwise).
+    #[napi(js_name = "memoryEstimateBytes")]
+    pub memory_estimate_bytes: Option<f64>,
     /// Pricing information for automatic cost tracking.
     pub pricing: Option<JsModelPricing>,
     /// Capability flags.
@@ -325,7 +326,7 @@ impl From<RustProviderConfig> for JsProviderConfig {
             context_length: c.context_length.map(|v| v as u32),
             max_output_tokens: c.max_output_tokens.map(|v| v as u32),
             #[allow(clippy::cast_precision_loss)]
-            vram_estimate_bytes: c.vram_estimate_bytes.map(|v| v as f64),
+            memory_estimate_bytes: c.memory_estimate_bytes.map(|v| v as f64),
             pricing: c.pricing.map(rust_to_js_pricing),
             capabilities: c.capabilities.map(Into::into),
         }
@@ -342,7 +343,7 @@ impl From<JsProviderConfig> for RustProviderConfig {
             context_length: c.context_length.map(u64::from),
             max_output_tokens: c.max_output_tokens.map(u64::from),
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            vram_estimate_bytes: c.vram_estimate_bytes.map(|v| v as u64),
+            memory_estimate_bytes: c.memory_estimate_bytes.map(|v| v as u64),
             pricing: c.pricing.map(js_to_rust_pricing),
             capabilities: c.capabilities.map(Into::into),
         }

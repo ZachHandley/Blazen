@@ -495,6 +495,13 @@ impl WhisperCppProvider {
     pub const fn model_filename(&self) -> &'static str {
         self.model.as_ggml_filename()
     }
+
+    /// The configured device string (e.g. `"cpu"`, `"cuda:0"`, `"metal"`), or
+    /// `None` if no device was specified.
+    #[must_use]
+    pub fn device_str(&self) -> Option<&str> {
+        self.options.device.as_deref()
+    }
 }
 
 // ---------------------------------------------------------------------------

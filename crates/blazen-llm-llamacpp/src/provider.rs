@@ -217,6 +217,13 @@ impl LlamaCppProvider {
         self.model_path.as_deref().unwrap_or("llamacpp")
     }
 
+    /// The configured device string (e.g. `"cpu"`, `"cuda:0"`, `"metal"`), or
+    /// `None` if no device was specified.
+    #[must_use]
+    pub fn device_str(&self) -> Option<&str> {
+        self.options.device.as_deref()
+    }
+
     // -----------------------------------------------------------------------
     // Inference methods (always available in the public API)
     // -----------------------------------------------------------------------

@@ -101,6 +101,47 @@ impl fmt::Display for Device {
     }
 }
 
+/// Memory pool identifier used by the model manager for per-device budgeting.
+///
+/// Collapses the finer-grained [`Device`] enum (which distinguishes `CUDA` from
+/// `Vulkan` from `ROCm`) into the two memory regions that actually matter for a
+/// budget: host RAM and GPU VRAM (indexed when there are multiple GPUs).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
+#[serde(rename_all = "snake_case")]
+pub enum Pool {
+    /// Host RAM pool.
+    Cpu,
+    /// GPU VRAM pool at the given device index. Metal collapses to `Gpu(0)`.
+    Gpu(usize),
+}
+
+impl From<&Device> for Pool {
+    fn from(d: &Device) -> Self {
+        match d {
+            Device::Cpu => Self::Cpu,
+            Device::Cuda(n) | Device::Vulkan(n) | Device::Rocm(n) => Self::Gpu(*n),
+            Device::Metal => Self::Gpu(0),
+        }
+    }
+}
+
+impl From<Device> for Pool {
+    fn from(d: Device) -> Self {
+        Self::from(&d)
+    }
+}
+
+impl fmt::Display for Pool {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Cpu => f.write_str("cpu"),
+            Self::Gpu(idx) => write!(f, "gpu:{idx}"),
+        }
+    }
+}
+
 #[cfg(test)]
 // The env-var tests below wrap `std::env::{set_var, remove_var}` in
 // `unsafe` blocks (required since Rust 2024). The workspace-wide
@@ -267,5 +308,57 @@ mod tests {
         unsafe { std::env::set_var("BLAZEN_DEVICE", "bad_device") };
         assert!(Device::from_env().is_err());
         unsafe { std::env::remove_var("BLAZEN_DEVICE") };
+    }
+
+    // -- Pool ----------------------------------------------------------------
+
+    #[test]
+    fn pool_from_cpu_device() {
+        assert_eq!(Pool::from(&Device::Cpu), Pool::Cpu);
+    }
+
+    #[test]
+    fn pool_from_cuda_device_preserves_index() {
+        assert_eq!(Pool::from(&Device::Cuda(3)), Pool::Gpu(3));
+    }
+
+    #[test]
+    fn pool_from_metal_device() {
+        assert_eq!(Pool::from(&Device::Metal), Pool::Gpu(0));
+    }
+
+    #[test]
+    fn pool_from_vulkan_device_preserves_index() {
+        assert_eq!(Pool::from(&Device::Vulkan(2)), Pool::Gpu(2));
+    }
+
+    #[test]
+    fn pool_from_rocm_device_preserves_index() {
+        assert_eq!(Pool::from(&Device::Rocm(1)), Pool::Gpu(1));
+    }
+
+    #[test]
+    fn pool_display_cpu() {
+        assert_eq!(Pool::Cpu.to_string(), "cpu");
+    }
+
+    #[test]
+    fn pool_display_gpu() {
+        assert_eq!(Pool::Gpu(2).to_string(), "gpu:2");
+    }
+
+    #[test]
+    fn pool_serde_roundtrip_cpu() {
+        let p = Pool::Cpu;
+        let json = serde_json::to_string(&p).unwrap();
+        assert_eq!(json, "\"cpu\"");
+        assert_eq!(serde_json::from_str::<Pool>(&json).unwrap(), p);
+    }
+
+    #[test]
+    fn pool_serde_roundtrip_gpu() {
+        let p = Pool::Gpu(2);
+        let json = serde_json::to_string(&p).unwrap();
+        assert_eq!(serde_json::from_str::<Pool>(&json).unwrap(), p);
     }
 }

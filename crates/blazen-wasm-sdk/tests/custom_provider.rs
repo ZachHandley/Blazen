@@ -97,7 +97,12 @@ async fn from_js_object_routes_text_to_speech_to_js_method() {
 
     // Build the SpeechRequest JS object (matches the serde shape).
     let req = Object::new();
-    Reflect::set(&req, &JsValue::from_str("text"), &JsValue::from_str("hello")).unwrap();
+    Reflect::set(
+        &req,
+        &JsValue::from_str("text"),
+        &JsValue::from_str("hello"),
+    )
+    .unwrap();
     Reflect::set(
         &req,
         &JsValue::from_str("parameters"),

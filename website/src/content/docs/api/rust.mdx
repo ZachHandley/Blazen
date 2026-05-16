@@ -2352,7 +2352,8 @@ pub trait LocalModel: Send + Sync {
     async fn load(&self) -> Result<(), BlazenError>;
     async fn unload(&self) -> Result<(), BlazenError>;
     async fn is_loaded(&self) -> bool;
-    async fn vram_bytes(&self) -> Option<u64>;
+    fn device(&self) -> blazen_llm::Device { Device::Cpu }
+    async fn memory_bytes(&self) -> Option<u64>;
 }
 ```
 
@@ -2361,7 +2362,8 @@ pub trait LocalModel: Send + Sync {
 | `load()` | Load the model into memory/VRAM. Idempotent. |
 | `unload()` | Free the model's memory/VRAM. Idempotent. |
 | `is_loaded()` | Whether the model is currently loaded. |
-| `vram_bytes()` | Approximate memory footprint in bytes, or `None` if unknown. |
+| `device()` | Which device the model targets. Determines which pool the `ModelManager` charges this model against. Defaults to `Device::Cpu`. |
+| `memory_bytes()` | Approximate memory footprint in bytes (host RAM if `device()` is `Device::Cpu`, GPU VRAM otherwise), or `None` if unknown. |
 
 A type can implement both `CompletionModel` and `LocalModel`:
 
@@ -2386,7 +2388,8 @@ impl LocalModel for MyLocalLLM {
     async fn load(&self) -> Result<(), BlazenError> { /* load weights */ Ok(()) }
     async fn unload(&self) -> Result<(), BlazenError> { /* free VRAM */ Ok(()) }
     async fn is_loaded(&self) -> bool { true }
-    async fn vram_bytes(&self) -> Option<u64> { Some(4_000_000_000) }
+    fn device(&self) -> Device { Device::Cuda(0) }
+    async fn memory_bytes(&self) -> Option<u64> { Some(4_000_000_000) }
 }
 ```
 
@@ -2394,55 +2397,79 @@ impl LocalModel for MyLocalLLM {
 
 ## ModelManager
 
-VRAM budget-aware model manager with LRU eviction. Tracks registered `LocalModel` instances and their estimated VRAM footprint. When loading a model that would exceed the budget, the least-recently-used loaded model is unloaded first.
+:::caution[Capacity, not performance]
+`ModelManager` is a **memory budget bookkeeper**, not a performance scheduler. It answers "will this fit?" — not "will this run fast?". Whether a 70B model loaded on CPU is *useful* at 1–3 tok/s is a workload-choice question the manager intentionally does not answer.
+:::
+
+Per-pool memory budget-aware model manager with LRU eviction. Tracks registered `LocalModel` instances and their estimated memory footprint, indexed by the `Pool` each model targets (`Pool::Cpu` or `Pool::Gpu(index)`). When loading a model would exceed that pool's budget, the least-recently-used loaded model **in the same pool** is unloaded first. Models in different pools never evict each other.
 
 ```rust
+use std::collections::HashMap;
+use std::sync::Arc;
+use blazen_llm::Pool;
 use blazen_manager::ModelManager;
 
-let manager = ModelManager::new(24 * 1_073_741_824); // 24 GiB
-// or
-let manager = ModelManager::with_budget_gb(24.0);
+// Common case: CPU RAM + GPU(0) VRAM budgets in GB.
+let manager = ModelManager::with_budgets_gb(64.0, 24.0);
+
+// Explicit per-pool budgets in bytes.
+let manager = ModelManager::new(HashMap::from([
+    (Pool::Cpu, 64 * 1024 * 1024 * 1024),
+    (Pool::Gpu(0), 24 * 1024 * 1024 * 1024),
+]));
 ```
 
 ### Methods
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `new` | `fn(budget_bytes: u64) -> Self` | Create a manager with a byte budget. |
-| `with_budget_gb` | `fn(gb: f64) -> Self` | Create a manager with a GiB budget. |
-| `register` | `async fn(&self, id, model: Arc<dyn LocalModel>, vram_estimate: u64)` | Register a model. Starts unloaded. |
-| `load` | `async fn(&self, id: &str) -> Result<()>` | Load a model, evicting LRU models if needed. |
-| `unload` | `async fn(&self, id: &str) -> Result<()>` | Unload a model and free its VRAM. |
+| `new` | `fn(pool_budgets: HashMap<Pool, u64>) -> Self` | Create a manager with explicit per-pool byte budgets. |
+| `with_budgets_gb` | `fn(cpu_ram_gb: f64, gpu_vram_gb: f64) -> Self` | Convenience constructor for `Pool::Cpu` + `Pool::Gpu(0)` budgets in GB. |
+| `register` | `async fn(&self, id: &str, model: Arc<dyn LocalModel>, memory_estimate_bytes: u64)` | Register a model. Starts unloaded. The model's `device()` selects the pool. |
+| `load` | `async fn(&self, id: &str) -> Result<()>` | Load a model, evicting LRU models **within the same pool** if needed. |
+| `unload` | `async fn(&self, id: &str) -> Result<()>` | Unload a model and free its memory. |
 | `is_loaded` | `async fn(&self, id: &str) -> bool` | Check if a model is currently loaded. |
 | `ensure_loaded` | `async fn(&self, id: &str) -> Result<()>` | Alias for `load()`. |
-| `used_bytes` | `async fn(&self) -> u64` | Total VRAM used by loaded models. |
-| `available_bytes` | `async fn(&self) -> u64` | Available VRAM within the budget. |
+| `used_bytes` | `async fn(&self, pool: Pool) -> u64` | Bytes currently used by loaded models in the given pool. |
+| `available_bytes` | `async fn(&self, pool: Pool) -> u64` | Bytes available within the given pool's budget. |
+| `pools` | `fn(&self) -> Vec<(Pool, u64)>` | All configured pools and their budgets. |
 | `status` | `async fn(&self) -> Vec<ModelStatus>` | Status of all registered models. |
 
 ### ModelStatus
+
+```rust
+pub struct ModelStatus {
+    pub id: String,
+    pub loaded: bool,
+    pub memory_estimate_bytes: u64,
+    pub pool: Pool,
+}
+```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | `String` | Model identifier. |
 | `loaded` | `bool` | Whether the model is currently loaded. |
-| `vram_estimate` | `u64` | Estimated VRAM footprint in bytes. |
+| `memory_estimate_bytes` | `u64` | Estimated memory footprint in bytes (interpreted against `pool`). |
+| `pool` | `Pool` | Which pool this model is charged against (`Pool::Cpu` or `Pool::Gpu(N)`). |
 
 **Usage:**
 
 ```rust
 use std::sync::Arc;
+use blazen_llm::Pool;
 use blazen_manager::ModelManager;
 
-let manager = ModelManager::with_budget_gb(24.0);
+let manager = ModelManager::with_budgets_gb(64.0, 24.0);
 manager.register("llama", Arc::new(my_llama_model), 8 * 1_073_741_824).await;
 manager.register("whisper", Arc::new(my_whisper_model), 2 * 1_073_741_824).await;
 
 manager.load("llama").await?;
 assert!(manager.is_loaded("llama").await);
-println!("Used: {} bytes", manager.used_bytes().await);
-println!("Available: {} bytes", manager.available_bytes().await);
+println!("GPU used:      {} bytes", manager.used_bytes(Pool::Gpu(0)).await);
+println!("GPU available: {} bytes", manager.available_bytes(Pool::Gpu(0)).await);
 
-// Loading whisper may evict llama if budget is tight
+// Loading whisper may evict llama if the GPU pool is tight (only if both target Gpu(0))
 manager.load("whisper").await?;
 manager.unload("llama").await?;
 ```

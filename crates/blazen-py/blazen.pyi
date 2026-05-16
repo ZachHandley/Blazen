@@ -939,9 +939,9 @@ class BackgroundRemovalProvider:
         The base URL, if set.
         """
     @property
-    def vram_estimate_bytes(self) -> typing.Optional[builtins.int]:
+    def memory_estimate_bytes(self) -> typing.Optional[builtins.int]:
         r"""
-        Estimated VRAM footprint in bytes, if set.
+        Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise), if set.
         """
     def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> BackgroundRemovalProvider:
         r"""
@@ -949,7 +949,7 @@ class BackgroundRemovalProvider:
         subclasses can use any `__init__` signature. Real configuration
         happens in `__init__` below.
         """
-    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, memory_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
         r"""
         Subclass-friendly `__init__`. Mirrors the documented constructor
         keyword signature and populates ``self.config`` so a Python
@@ -2201,7 +2201,7 @@ class CompletionModel:
             context_length: Maximum context window in tokens.
             base_url: Base URL for HTTP-based providers.
             pricing: Optional pricing information.
-            vram_estimate_bytes: Estimated VRAM footprint in bytes.
+            memory_estimate_bytes: Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise).
             max_output_tokens: Maximum output tokens the model supports.
         `__new__` for `CompletionModel`. PyO3's `#[new]` is the `__new__`
         slot; when a Python subclass like
@@ -2212,7 +2212,7 @@ class CompletionModel:
         **kwargs` here and ignore them -- the real configuration work happens
         in `__init__` below.
         """
-    def __init__(self, *, model_id: typing.Optional[builtins.str] = None, context_length: typing.Optional[builtins.int] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None, max_output_tokens: typing.Optional[builtins.int] = None) -> None:
+    def __init__(self, *, model_id: typing.Optional[builtins.str] = None, context_length: typing.Optional[builtins.int] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, memory_estimate_bytes: typing.Optional[builtins.int] = None, max_output_tokens: typing.Optional[builtins.int] = None) -> None:
         r"""
         Subclass-friendly `__init__`. PyO3's `#[new]` only implements
         `__new__`; without an `__init__` here, a Python subclass that calls
@@ -2527,11 +2527,11 @@ class CompletionModel:
         Always returns ``False`` for remote providers (they have no local
         model to load). Returns the real state for local providers.
         """
-    async def vram_bytes(self) -> typing.Optional[builtins.int]:
+    async def memory_bytes(self) -> typing.Optional[builtins.int]:
         r"""
-        Approximate VRAM footprint in bytes, if the implementation can
-        report it. Returns ``None`` for remote providers or for local
-        providers that do not expose memory usage.
+        Approximate memory footprint in bytes (host RAM if running on CPU,
+        GPU VRAM otherwise). Returns ``None`` for remote providers or for
+        local providers that do not expose memory usage.
         """
     @staticmethod
     def mistralrs(*, options: MistralRsOptions) -> CompletionModel:
@@ -3789,12 +3789,12 @@ class EmbeddingModel:
             dimensions: Output dimensionality of the embedding vectors.
             base_url: Base URL for HTTP-based providers.
             pricing: Optional pricing information.
-            vram_estimate_bytes: Estimated VRAM footprint in bytes.
+            memory_estimate_bytes: Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise).
         `__new__` for `EmbeddingModel`. Accepts arbitrary positional and
         keyword arguments so Python subclasses can use any `__init__`
         signature; the real configuration happens in `__init__` below.
         """
-    def __init__(self, *, model_id: typing.Optional[builtins.str] = None, dimensions: typing.Optional[builtins.int] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+    def __init__(self, *, model_id: typing.Optional[builtins.str] = None, dimensions: typing.Optional[builtins.int] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, memory_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
         r"""
         Subclass-friendly `__init__`. Mirrors the documented constructor
         keyword signature and re-populates ``self.config`` so a Python
@@ -5024,9 +5024,9 @@ class ImageProvider:
         The base URL, if set.
         """
     @property
-    def vram_estimate_bytes(self) -> typing.Optional[builtins.int]:
+    def memory_estimate_bytes(self) -> typing.Optional[builtins.int]:
         r"""
-        Estimated VRAM footprint in bytes, if set.
+        Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise), if set.
         """
     def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> ImageProvider:
         r"""
@@ -5034,7 +5034,7 @@ class ImageProvider:
         subclasses can use any `__init__` signature. Real configuration
         happens in `__init__` below.
         """
-    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, memory_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
         r"""
         Subclass-friendly `__init__`. Mirrors the documented constructor
         keyword signature and populates ``self.config`` so a Python
@@ -5889,9 +5889,15 @@ class LocalModel:
         r"""
         Whether the model is currently loaded.
         """
-    def vram_bytes(self) -> typing.Any:
+    def memory_bytes(self) -> typing.Any:
         r"""
-        Approximate VRAM footprint in bytes, if available.
+        Approximate memory footprint in bytes (host RAM if `device()` is
+        `'cpu'`, GPU VRAM otherwise).
+        """
+    def device(self) -> typing.Any:
+        r"""
+        Return the device this model targets as a string: `'cpu'`, `'cuda:0'`,
+        `'metal'`, etc.
         """
 
 @typing.final
@@ -6779,33 +6785,40 @@ class ModelInfo:
 @typing.final
 class ModelManager:
     r"""
-    VRAM budget-aware model manager with LRU eviction.
+    Memory-budget-aware model manager with LRU eviction.
     
-    Tracks registered local models and their estimated VRAM footprint.
-    When loading a model that would exceed the budget, the
-    least-recently-used loaded model is unloaded first.
+    Tracks registered local models and their estimated memory footprint per
+    pool (host RAM or per-GPU VRAM). When loading a model that would exceed
+    the pool's budget, the least-recently-used loaded model in the same pool
+    is unloaded first.
     
     Example:
-        >>> manager = ModelManager(budget_gb=24)
-        >>> manager.register("llm", my_local_model)
+        >>> manager = ModelManager(cpu_ram_gb=64, gpu_vram_gb=24)
+        >>> await manager.register("llm", my_local_model)
         >>> await manager.load("llm")
-        >>> manager.is_loaded("llm")
+        >>> await manager.is_loaded("llm")
         True
     """
-    def __new__(cls, *, budget_gb: typing.Optional[builtins.float] = None, budget_bytes: typing.Optional[builtins.int] = None) -> ModelManager:
+    def __new__(cls, *, cpu_ram_gb: typing.Optional[builtins.float] = None, gpu_vram_gb: typing.Optional[builtins.float] = None, pool_budgets: typing.Optional[dict] = None) -> ModelManager:
         r"""
         Create a new model manager.
         
         Args:
-            budget_gb: VRAM budget in gigabytes.
-            budget_bytes: VRAM budget in bytes (alternative to budget_gb).
+            cpu_ram_gb: Host RAM budget for the CPU pool in gigabytes.
+            gpu_vram_gb: VRAM budget for the GPU pool (device 0) in gigabytes.
+            pool_budgets: Explicit per-pool budgets as a dict mapping pool
+                labels (``"cpu"``, ``"gpu"``, ``"gpu:0"``, ``"gpu:1"``, ...)
+                to budget sizes in bytes. Takes precedence over
+                ``cpu_ram_gb`` / ``gpu_vram_gb`` when provided.
         
-        When neither is provided, the budget is unlimited (`u64::MAX` bytes),
-        useful for tests and runtime-unconstrained environments.
+        When all three arguments are ``None``, the manager is seeded with
+        ``Pool::Cpu`` and ``Pool::Gpu(0)`` BOTH set to ``u64::MAX``, which
+        matches the "no budget enforcement" intent used by tests and
+        runtime-unconstrained environments.
         """
-    async def register(self, id: builtins.str, model: typing.Any, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+    async def register(self, id: builtins.str, model: typing.Any, *, memory_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
         r"""
-        Register a model with its estimated VRAM footprint.
+        Register a model with its estimated memory footprint.
         
         The `model` argument can be either:
         
@@ -6814,23 +6827,25 @@ class ModelManager:
           ``LocalModel`` implementation is used.
         * Any Python object exposing callable ``load`` and ``unload``
           attributes (sync or async). It does *not* need to subclass
-          :class:`blazen.LocalModel`. ``is_loaded`` and ``vram_bytes`` are
-          optional; if absent or unimplemented the manager falls back to
-          ``False`` and ``vram_estimate_bytes`` respectively.
+          :class:`blazen.LocalModel`. ``is_loaded``, ``memory_bytes``, and
+          ``device`` are optional; if absent or unimplemented the manager
+          falls back to ``False``, ``memory_estimate_bytes``, and ``Cpu``
+          respectively.
         
         Args:
             id: A unique identifier for this model.
             model: A CompletionModel with local model support, or a duck-typed
                 object with ``load`` and ``unload`` methods.
-            vram_estimate_bytes: Estimated VRAM footprint in bytes.
+            memory_estimate_bytes: Estimated memory footprint in bytes (host
+                RAM if the model targets CPU, GPU VRAM otherwise).
         """
     async def load(self, id: builtins.str) -> None:
         r"""
-        Load a model, evicting LRU models if needed.
+        Load a model, evicting LRU models in the same pool if needed.
         """
     async def unload(self, id: builtins.str) -> None:
         r"""
-        Unload a model, freeing its VRAM budget.
+        Unload a model, freeing its memory budget.
         """
     async def is_loaded(self, id: builtins.str) -> bool:
         r"""
@@ -6840,13 +6855,29 @@ class ModelManager:
         r"""
         Ensure a model is loaded (load if not, update LRU if already loaded).
         """
-    async def used_bytes(self) -> int:
+    async def used_bytes(self, pool: typing.Optional[builtins.str] = None) -> int:
         r"""
-        Total VRAM currently used by loaded models.
+        Total memory currently used by loaded models in the given pool.
+        
+        Args:
+            pool: Pool label (``"cpu"``, ``"gpu"``, or ``"gpu:N"``).
+                Defaults to ``"cpu"``.
         """
-    async def available_bytes(self) -> int:
+    async def available_bytes(self, pool: typing.Optional[builtins.str] = None) -> int:
         r"""
-        Available VRAM within the budget.
+        Available memory within the given pool's budget.
+        
+        Args:
+            pool: Pool label (``"cpu"``, ``"gpu"``, or ``"gpu:N"``).
+                Defaults to ``"cpu"``.
+        """
+    def pools(self) -> builtins.list[tuple[builtins.str, builtins.int]]:
+        r"""
+        List configured pools and their budgets.
+        
+        Returns:
+            A list of ``(pool_label, budget_bytes)`` tuples, one per
+            configured pool.
         """
     async def status(self) -> list[ModelStatus]:
         r"""
@@ -6916,7 +6947,15 @@ class ModelStatus:
     @property
     def loaded(self) -> builtins.bool: ...
     @property
-    def vram_estimate(self) -> builtins.int: ...
+    def memory_estimate_bytes(self) -> builtins.int: ...
+    @property
+    def pool(self) -> builtins.str:
+        r"""
+        The memory pool this model targets.
+        
+        Returned as a string label: ``"cpu"`` for host RAM, ``"gpu:N"`` for
+        the GPU at device index ``N``.
+        """
     def __repr__(self) -> builtins.str: ...
 
 class MusicProvider:
@@ -6937,9 +6976,9 @@ class MusicProvider:
         The base URL, if set.
         """
     @property
-    def vram_estimate_bytes(self) -> typing.Optional[builtins.int]:
+    def memory_estimate_bytes(self) -> typing.Optional[builtins.int]:
         r"""
-        Estimated VRAM footprint in bytes, if set.
+        Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise), if set.
         """
     def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> MusicProvider:
         r"""
@@ -6947,7 +6986,7 @@ class MusicProvider:
         subclasses can use any `__init__` signature. Real configuration
         happens in `__init__` below.
         """
-    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, memory_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
         r"""
         Subclass-friendly `__init__`. Mirrors the documented constructor
         keyword signature and populates ``self.config`` so a Python
@@ -8277,12 +8316,12 @@ class ProviderConfig:
     @property
     def max_output_tokens(self) -> typing.Optional[builtins.int]: ...
     @property
-    def vram_estimate_bytes(self) -> typing.Optional[builtins.int]: ...
+    def memory_estimate_bytes(self) -> typing.Optional[builtins.int]: ...
     @property
     def pricing(self) -> typing.Optional[ModelPricing]: ...
     @property
     def capabilities(self) -> typing.Optional[ModelCapabilities]: ...
-    def __new__(cls, *, name: typing.Optional[builtins.str] = None, model_id: typing.Optional[builtins.str] = None, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, context_length: typing.Optional[builtins.int] = None, max_output_tokens: typing.Optional[builtins.int] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None, pricing: typing.Optional[ModelPricing] = None, capabilities: typing.Optional[ModelCapabilities] = None) -> ProviderConfig: ...
+    def __new__(cls, *, name: typing.Optional[builtins.str] = None, model_id: typing.Optional[builtins.str] = None, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, context_length: typing.Optional[builtins.int] = None, max_output_tokens: typing.Optional[builtins.int] = None, memory_estimate_bytes: typing.Optional[builtins.int] = None, pricing: typing.Optional[ModelPricing] = None, capabilities: typing.Optional[ModelCapabilities] = None) -> ProviderConfig: ...
     def __repr__(self) -> builtins.str: ...
 
 class ProviderInfo:
@@ -10038,9 +10077,9 @@ class TTSProvider:
         The base URL, if set.
         """
     @property
-    def vram_estimate_bytes(self) -> typing.Optional[builtins.int]:
+    def memory_estimate_bytes(self) -> typing.Optional[builtins.int]:
         r"""
-        Estimated VRAM footprint in bytes, if set.
+        Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise), if set.
         """
     def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> TTSProvider:
         r"""
@@ -10048,7 +10087,7 @@ class TTSProvider:
         subclasses can use any `__init__` signature. Real configuration
         happens in `__init__` below.
         """
-    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, memory_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
         r"""
         Subclass-friendly `__init__`. Mirrors the documented constructor
         keyword signature and populates ``self.config`` so a Python
@@ -10078,9 +10117,9 @@ class ThreeDProvider:
         The base URL, if set.
         """
     @property
-    def vram_estimate_bytes(self) -> typing.Optional[builtins.int]:
+    def memory_estimate_bytes(self) -> typing.Optional[builtins.int]:
         r"""
-        Estimated VRAM footprint in bytes, if set.
+        Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise), if set.
         """
     def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> ThreeDProvider:
         r"""
@@ -10088,7 +10127,7 @@ class ThreeDProvider:
         subclasses can use any `__init__` signature. Real configuration
         happens in `__init__` below.
         """
-    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, memory_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
         r"""
         Subclass-friendly `__init__`. Mirrors the documented constructor
         keyword signature and populates ``self.config`` so a Python
@@ -10612,12 +10651,12 @@ class Transcription:
             provider_id: A provider identifier (e.g. ``"my-stt"``).
             base_url: Base URL for HTTP-based providers.
             pricing: Optional pricing information.
-            vram_estimate_bytes: Estimated VRAM footprint in bytes.
+            memory_estimate_bytes: Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise).
         `__new__` for `Transcription`. Accepts arbitrary positional and
         keyword arguments so Python subclasses can use any `__init__`
         signature; the real configuration happens in `__init__` below.
         """
-    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, memory_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
         r"""
         Subclass-friendly `__init__`. Mirrors the documented constructor
         keyword signature and re-populates ``self.config`` so a Python
@@ -11131,9 +11170,9 @@ class VideoProvider:
         The base URL, if set.
         """
     @property
-    def vram_estimate_bytes(self) -> typing.Optional[builtins.int]:
+    def memory_estimate_bytes(self) -> typing.Optional[builtins.int]:
         r"""
-        Estimated VRAM footprint in bytes, if set.
+        Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise), if set.
         """
     def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> VideoProvider:
         r"""
@@ -11141,7 +11180,7 @@ class VideoProvider:
         subclasses can use any `__init__` signature. Real configuration
         happens in `__init__` below.
         """
-    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, memory_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
         r"""
         Subclass-friendly `__init__`. Mirrors the documented constructor
         keyword signature and populates ``self.config`` so a Python
@@ -11308,9 +11347,9 @@ class VoiceProvider:
         The base URL, if set.
         """
     @property
-    def vram_estimate_bytes(self) -> typing.Optional[builtins.int]:
+    def memory_estimate_bytes(self) -> typing.Optional[builtins.int]:
         r"""
-        Estimated VRAM footprint in bytes, if set.
+        Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise), if set.
         """
     def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> VoiceProvider:
         r"""
@@ -11318,7 +11357,7 @@ class VoiceProvider:
         subclasses can use any `__init__` signature. Real configuration
         happens in `__init__` below.
         """
-    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, vram_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, memory_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
         r"""
         Subclass-friendly `__init__`. Mirrors the documented constructor
         keyword signature and populates ``self.config`` so a Python

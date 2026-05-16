@@ -327,14 +327,15 @@ const music = new MusicProvider("local-musicgen", {
 
 ## ModelManager (WASM)
 
-The WASM `ModelManager` tracks VRAM across registered models and evicts the least-recently-used one when the budget would be exceeded. Because WASM classes cannot be subclassed, the manager takes an explicit `lifecycle` object with `load()` and `unload()` async methods.
+The WASM `ModelManager` tracks per-pool memory budgets and evicts the least-recently-used model within the same pool when its budget would be exceeded. Because WASM classes cannot be subclassed, the manager takes an explicit `lifecycle` object with `load()` and `unload()` async methods (plus optional `memoryBytes()` and `device()` callbacks for pool routing).
 
 ```typescript
 import init, { CompletionModel, ModelManager } from "@blazen/sdk";
 
 await init();
 
-// 8 GB VRAM budget (conservative for a laptop GPU).
+// 8 GB CPU pool budget (conservative for a laptop). Pass a second
+// argument like `new ModelManager(8, 4)` to add a GPU pool too.
 const manager = new ModelManager(8);
 
 // Construct models backed by @mlc-ai/web-llm (lazy-loaded at complete-time).
@@ -346,19 +347,25 @@ const qwen = CompletionModel.webLlm("Qwen2.5-7B-Instruct-q4f32_1-MLC");
 manager.register("llama-8b", llama, 4_500_000_000, {
   load: async () => { console.log("loading llama..."); },
   unload: async () => { console.log("unloading llama..."); },
+  isLoaded: () => false,
+  memoryBytes: async () => 4_500_000_000,
+  device: () => "cpu",   // optional -- defaults to "cpu"
 });
 manager.register("qwen-7b", qwen, 4_200_000_000, {
   load: async () => { console.log("loading qwen..."); },
   unload: async () => { console.log("unloading qwen..."); },
+  isLoaded: () => false,
+  memoryBytes: async () => 4_200_000_000,
+  device: () => "cpu",
 });
 
 await manager.load("llama-8b");
-await manager.load("qwen-7b"); // evicts llama-8b (4.5 + 4.2 > 8 GB budget)
+await manager.load("qwen-7b"); // evicts llama-8b (4.5 + 4.2 > 8 GB CPU pool budget)
 
 for (const s of manager.status()) {
-  console.log(`${s.id}: loaded=${s.loaded}, vram=${s.vramEstimate}`);
+  console.log(`${s.id}: loaded=${s.loaded}, pool=${s.pool}, memory=${s.memoryEstimateBytes}`);
 }
-console.log(`used=${manager.usedBytes}, available=${manager.availableBytes}`);
+console.log(`used=${await manager.usedBytes()}, available=${await manager.availableBytes()}`);
 ```
 
 ---

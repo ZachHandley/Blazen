@@ -1389,38 +1389,43 @@ new MemoryResult(id: string, text: string, score: number, metadata: any);
 
 ## ModelManager
 
-VRAM budget-aware model manager with LRU eviction. Not typically used in WASM (where GPU model loading is uncommon), but available for tracking model state.
+Per-pool memory budget-aware model manager with LRU eviction. Not typically used in WASM (where GPU model loading is uncommon), but available for tracking model state across CPU and GPU pools.
 
-> **Backed by the real `blazen_manager::ModelManager`.** Method names match the native and Node bindings; the WASM constructor takes a single `number` of gigabytes as a positional argument (no options object). Unlike the Node binding, WASM byte-quantity getters return plain `number` (`f64`) — JS doubles carry 53 bits of mantissa, more than enough for any realistic VRAM budget — so there is no BigInt migration on this surface.
+> `ModelManager` is a **memory budget bookkeeper**, not a performance scheduler. It answers "will this fit?" — not "will this run fast?". Whether a 70B model loaded on CPU is *useful* at 1–3 tok/s is a workload-choice question the manager intentionally does not answer.
+
+> **Backed by the real `blazen_manager::ModelManager`.** Method names match the native and Node bindings; the WASM constructor takes one or two positional `number` arguments in gigabytes (no options object). Unlike the Node binding, WASM byte-quantity getters return plain `number` (`f64`) — JS doubles carry 53 bits of mantissa, more than enough for any realistic memory budget — so there is no BigInt migration on this surface.
 
 ### Constructor
 
 ```typescript
-const manager = new ModelManager(8);   // 8 GB budget
+const manager = new ModelManager(8);       // 8 GB CPU pool budget; no GPU pool
+const manager = new ModelManager(8, 24);   // 8 GB CPU pool + 24 GB GPU pool (rare for WASM, but supported)
 ```
 
 | Argument | Type | Description |
 |---|---|---|
-| `budgetGb` | `number` | VRAM budget in gigabytes. Converted to bytes internally (`budgetGb * 1_073_741_824`). |
+| `cpuRamGb` | `number` | Host RAM budget in gigabytes for the `"cpu"` pool. Converted to bytes internally (`cpuRamGb * 1_073_741_824`). |
+| `gpuVramGb` | `number?` | Optional VRAM budget in gigabytes for the `"gpu:0"` pool. Omit if your app only loads CPU models (the common case in browsers). |
 
 ### Methods
 
 | Method | Signature | Description |
 |---|---|---|
-| `register` | `await manager.register(id, model, vramEstimate, lifecycle)` | Register a model with its estimated VRAM footprint (`vramEstimate: number` bytes) and a JS lifecycle object exposing async `load()` / `unload()` methods. |
-| `load` | `await manager.load(id)` | Load a model, evicting LRU models if needed. |
-| `unload` | `await manager.unload(id)` | Unload a model and free its VRAM. |
+| `register` | `await manager.register(id, model, memoryEstimateBytes, lifecycle)` | Register a model with its estimated memory footprint (`memoryEstimateBytes: number` bytes — host RAM if on CPU, GPU VRAM otherwise) and a JS lifecycle object. The lifecycle accepts async `load()` / `unload()` / `isLoaded()` plus optional `memoryBytes()` (async) and `device()` (sync — returns the pool string, defaults to `"cpu"`). |
+| `load` | `await manager.load(id)` | Load a model, evicting LRU models in the same pool if needed. |
+| `unload` | `await manager.unload(id)` | Unload a model and free its memory. |
 | `isLoaded` | `await manager.isLoaded(id): boolean` | Check if a model is currently loaded. |
 | `ensureLoaded` | `await manager.ensureLoaded(id)` | Alias for `load()`. |
-| `usedBytes` | `await manager.usedBytes(): number` | Total VRAM currently used by loaded models, in bytes. |
-| `availableBytes` | `await manager.availableBytes(): number` | Available VRAM within the budget, in bytes. |
-| `status` | `await manager.status(): { id: string; loaded: boolean; vramEstimate: number }[]` | Status of all registered models. |
+| `usedBytes` | `await manager.usedBytes(pool?: string): number` | Bytes currently used by loaded models in the given pool. `pool` defaults to `"cpu"`. Invalid pool labels reject with `invalid pool label '<x>': expected 'cpu', 'gpu', or 'gpu:N' where N is a non-negative integer`. |
+| `availableBytes` | `await manager.availableBytes(pool?: string): number` | Bytes still available within the given pool's budget. Same default and validation as `usedBytes`. |
+| `pools` | `manager.pools(): Array<{ pool: string; budgetBytes: number }>` | Sync. List every configured pool and its byte budget. |
+| `status` | `await manager.status(): { id: string; loaded: boolean; memoryEstimateBytes: number; pool: string }[]` | Status of all registered models. |
 
 ### Properties
 
 | Property | Type | Description |
 |---|---|---|
-| `.budgetBytes` | `number` | Read-only getter returning the configured budget in bytes (`budgetGb * 1_073_741_824`). |
+| `.budgetBytes` | `number` | Read-only getter returning the configured **CPU pool** budget in bytes (`cpuRamGb * 1_073_741_824`). For GPU pool budgets, use `pools()`. |
 
 ---
 

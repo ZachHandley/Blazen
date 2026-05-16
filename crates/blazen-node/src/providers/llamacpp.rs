@@ -2,7 +2,7 @@
 //!
 //! Exposes [`JsLlamaCppProvider`] as a NAPI class with an async factory
 //! constructor, async completion / streaming methods, and `LocalModel`
-//! lifecycle controls (`load`, `unload`, `isLoaded`, `vramBytes`).
+//! lifecycle controls (`load`, `unload`, `isLoaded`, `memoryBytes`).
 //!
 //! Runs LLM inference entirely on-device using the llama.cpp engine.
 //! No API key is required.
@@ -254,11 +254,12 @@ impl JsLlamaCppProvider {
         self.inner.is_loaded().await
     }
 
-    /// Approximate `VRAM` footprint in bytes.
-    #[napi(js_name = "vramBytes")]
-    pub async fn vram_bytes(&self) -> Option<i64> {
+    /// Approximate memory footprint in bytes (host RAM if the model
+    /// targets the CPU, GPU VRAM otherwise).
+    #[napi(js_name = "memoryBytes")]
+    pub async fn memory_bytes(&self) -> Option<i64> {
         self.inner
-            .vram_bytes()
+            .memory_bytes()
             .await
             .map(|b| i64::try_from(b).unwrap_or(i64::MAX))
     }

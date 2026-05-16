@@ -1055,13 +1055,15 @@ jobs:
 
           **Cloudflare Workers / Deno (wasi):**
           \`\`\`bash
-          pnpm add blazen   # auto-resolves the wasi sidecar
-          # or pin explicitly:
+          # Single-install path (recommended for Workers / edge):
           pnpm add @blazen-dev/wasi
+          # Alternative — explicit two-install path with the umbrella package:
+          pnpm add blazen @blazen-dev/blazen-wasm32-wasi
+          # ... then `import { ... } from 'blazen/workers'`
           \`\`\`
           Workers users must register an HttpClient at module load:
           \`\`\`javascript
-          import { HttpClient, setDefaultHttpClient } from 'blazen';
+          import { HttpClient, setDefaultHttpClient } from '@blazen-dev/wasi';
           const client = HttpClient.fromCallback(async (req) => {
             const res = await fetch(req.url, { method: req.method, headers: req.headers, body: req.body });
             const body = new Uint8Array(await res.arrayBuffer());

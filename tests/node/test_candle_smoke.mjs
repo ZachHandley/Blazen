@@ -134,7 +134,7 @@ test("candle local LLM + embed typed bindings · CandleLlmProvider exposes the d
   t.is(typeof provider.load, "function");
   t.is(typeof provider.unload, "function");
   t.is(typeof provider.isLoaded, "function");
-  t.is(typeof provider.vramBytes, "function");
+  t.is(typeof provider.memoryBytes, "function");
 
   // Instance getter on the prototype.
   const descriptors = Object.getOwnPropertyDescriptors(

@@ -1554,7 +1554,7 @@ TTSProvider(
     provider_id: str,
     base_url: str | None = None,
     pricing: ModelPricing | None = None,
-    vram_estimate_bytes: int | None = None,
+    memory_estimate_bytes: int | None = None,
 )
 ```
 
@@ -1563,7 +1563,7 @@ TTSProvider(
 | `provider_id` | `str` | Identifier for the provider instance. |
 | `base_url` | `str \| None` | Optional base URL for the provider API. |
 | `pricing` | `ModelPricing \| None` | Optional pricing info for cost tracking. |
-| `vram_estimate_bytes` | `int \| None` | Optional VRAM estimate for `ModelManager` integration. |
+| `memory_estimate_bytes` | `int \| None` | Estimated memory footprint (host RAM if on CPU, GPU VRAM otherwise) for `ModelManager` integration. |
 
 ### Example
 
@@ -1633,35 +1633,50 @@ class PostgresBackend(MemoryBackend):
 
 ## ModelManager
 
-VRAM budget-aware model manager with LRU eviction. Tracks registered local models and their estimated VRAM footprint. When loading a model that would exceed the budget, the least-recently-used loaded model is unloaded first.
+Per-pool memory budget-aware model manager with LRU eviction. Tracks registered local models and their estimated memory footprint (host RAM if the model runs on CPU, GPU VRAM otherwise) in distinct pools -- one for CPU RAM and one per GPU device. When loading a model that would exceed its pool's budget, the least-recently-used loaded model **in the same pool** is unloaded first; models in different pools never evict each other.
+
+`ModelManager` is a **memory budget bookkeeper**, not a performance scheduler. It answers "will this fit?" -- not "will this run fast?". Whether a 70B model loaded on CPU is *useful* at 1-3 tok/s is a workload-choice question the manager intentionally does not answer.
 
 ### Constructor
 
 ```python
 from blazen import ModelManager
 
-manager = ModelManager(budget_gb=24)
-# or
-manager = ModelManager(budget_bytes=24 * 1_073_741_824)
+# Common case: separate CPU RAM and GPU VRAM budgets in GB.
+manager = ModelManager(cpu_ram_gb=100, gpu_vram_gb=24)
+
+# Explicit per-pool budgets (bytes). Pool labels: "cpu", "gpu", or "gpu:N".
+manager = ModelManager(pool_budgets={
+    "cpu": 100 * 1024**3,
+    "gpu:0": 24 * 1024**3,
+})
+
+# Zero-arg: defaults both the CPU pool and GPU 0 pool to "unlimited"
+# (u64::MAX) -- the no-budget-enforcement sentinel for tests.
+manager = ModelManager()
 ```
 
 | Parameter | Type | Description |
 |---|---|---|
-| `budget_gb` | `float \| None` | VRAM budget in gigabytes. Provide exactly one of `budget_gb` or `budget_bytes`. |
-| `budget_bytes` | `int \| None` | VRAM budget in bytes. |
+| `cpu_ram_gb` | `float \| None` | Budget for the `"cpu"` pool in gigabytes. |
+| `gpu_vram_gb` | `float \| None` | Budget for the `"gpu:0"` pool in gigabytes. |
+| `pool_budgets` | `dict[str, int] \| None` | Explicit per-pool budgets in bytes, keyed by pool label (`"cpu"`, `"gpu"`, or `"gpu:N"`). |
 
 ### Methods
 
 | Method | Signature | Description |
 |---|---|---|
-| `register` | `await manager.register(id, model, vram_estimate)` | Register a model with its estimated VRAM footprint. Starts unloaded. |
-| `load` | `await manager.load(id)` | Load a model, evicting LRU models if needed. |
-| `unload` | `await manager.unload(id)` | Unload a model and free its VRAM. |
+| `register` | `await manager.register(id, model, memory_estimate_bytes=...)` | Register a model with its estimated memory footprint. Memory is charged to the pool returned by `model.device()`. Starts unloaded. |
+| `load` | `await manager.load(id)` | Load a model, evicting LRU same-pool models if needed. |
+| `unload` | `await manager.unload(id)` | Unload a model and free its memory. |
 | `is_loaded` | `await manager.is_loaded(id) -> bool` | Check if a model is currently loaded. |
 | `ensure_loaded` | `await manager.ensure_loaded(id)` | Alias for `load()`. |
-| `used_bytes` | `await manager.used_bytes() -> int` | Total VRAM currently used by loaded models. |
-| `available_bytes` | `await manager.available_bytes() -> int` | Available VRAM within the budget. |
+| `used_bytes` | `await manager.used_bytes(pool="cpu") -> int` | Total memory currently used by loaded models in the given pool. Default `"cpu"`. |
+| `available_bytes` | `await manager.available_bytes(pool="cpu") -> int` | Available memory within the given pool's budget. Default `"cpu"`. |
+| `pools` | `manager.pools() -> list[tuple[str, int]]` | Sync. Return `[(label, budget_bytes), ...]` for all configured pools. |
 | `status` | `await manager.status() -> list[ModelStatus]` | Status of all registered models. |
+
+Invalid pool labels passed to `used_bytes` / `available_bytes` raise `ValueError("invalid pool label '<x>': expected 'cpu', 'gpu', or 'gpu:N' where N is a non-negative integer")`.
 
 ### ModelStatus
 
@@ -1669,7 +1684,8 @@ manager = ModelManager(budget_bytes=24 * 1_073_741_824)
 |---|---|---|
 | `.id` | `str` | Model identifier. |
 | `.loaded` | `bool` | Whether the model is currently loaded. |
-| `.vram_estimate` | `int` | Estimated VRAM footprint in bytes. |
+| `.memory_estimate_bytes` | `int` | Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise). |
+| `.pool` | `str` | Pool label the model is charged against (e.g. `"cpu"` or `"gpu:0"`). |
 
 ---
 
@@ -1770,14 +1786,15 @@ if pricing:
 | `load` | `await model.load()` | Load the model into memory/VRAM. Idempotent. |
 | `unload` | `await model.unload()` | Free the model's memory/VRAM. Idempotent. |
 | `is_loaded` | `await model.is_loaded() -> bool` | Whether the model is currently loaded. |
-| `vram_bytes` | `await model.vram_bytes() -> int \| None` | Approximate memory footprint in bytes, or `None` if unknown. |
+| `memory_bytes` | `await model.memory_bytes() -> int \| None` | Approximate memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise), or `None` if unknown. Default returns `None`. |
+| `device` | `model.device() -> str` | Return device string (`'cpu'`, `'cuda:0'`, `'metal'`, etc.). Determines which pool the manager charges. Default implementation raises `NotImplementedError` -- subclasses should override. |
 
 ```python
 model = CompletionModel.openai()  # Remote -- these methods are no-ops
 # For a local model:
 await model.load()
 print(await model.is_loaded())    # True
-print(await model.vram_bytes())   # e.g. 4_000_000_000
+print(await model.memory_bytes()) # e.g. 4_000_000_000
 await model.unload()
 ```
 

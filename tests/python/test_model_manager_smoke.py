@@ -47,10 +47,10 @@ class _TractAdapter:
 @pytest.mark.timeout(120)
 async def test_model_manager_local_tract_embedder() -> None:
     em = TractEmbedModel(options=TractOptions())
-    manager = ModelManager(budget_gb=1.0)
+    manager = ModelManager(cpu_ram_gb=1.0)
 
     adapter = _TractAdapter()
-    await manager.register("local-bge", adapter, vram_estimate_bytes=200_000_000)
+    await manager.register("local-bge", adapter, memory_estimate_bytes=200_000_000)
 
     assert not await manager.is_loaded("local-bge")
     await manager.ensure_loaded("local-bge")

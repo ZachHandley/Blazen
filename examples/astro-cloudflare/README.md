@@ -1,8 +1,28 @@
 # Blazen ⨯ Astro 6 ⨯ Cloudflare Workers smoke test
 
-End-to-end harness that proves `import { CompletionModel } from 'blazen'` works in
-an `@astrojs/cloudflare` (workerd) build **without any consumer-side Vite/Rollup
-workaround plugins**.
+End-to-end harness that proves Blazen runs in an `@astrojs/cloudflare` (workerd)
+build **without any consumer-side Vite/Rollup workaround plugins**.
+
+## Two consumer install paths (both verified by this example)
+
+Workers consumers have two ways to bring Blazen in. Both are zero-config in
+wrangler / `@cloudflare/vite-plugin`.
+
+| Path | Install | Import from | Notes |
+|------|---------|-------------|-------|
+| **Alias (single install, recommended)** | `pnpm add @blazen-dev/wasi` | `@blazen-dev/wasi` | The alias's `dependencies` block lists `@blazen-dev/blazen-wasm32-wasi`, so the wasm sidecar is pulled transitively. |
+| **Subpath (umbrella package)** | `pnpm add blazen @blazen-dev/blazen-wasm32-wasi` | `blazen/workers` | Two installs are required because the wasm sidecar is an *optional* peer-dep on `blazen` — intentionally kept out of Node-only consumer installs. |
+
+Why the optional peer-dep on `blazen`: Node servers receive a per-platform
+`.node` binary and never use the wasm sidecar. Making the wasm sidecar a hard
+dependency on the umbrella `blazen` package would saddle every Node consumer
+with the wasm bytes for no benefit. The `@blazen-dev/wasi` alias exists so
+Workers consumers still get the single-install ergonomics.
+
+This example currently demonstrates the `blazen/workers` subpath path (via a
+workspace-linked `blazen` + a `file:./local-wasi` stage of the wasm sidecar)
+because the example pre-dates the `@blazen-dev/wasi` alias. Both paths use the
+same `blazen.workers.js` loader under the hood, so the smoke result is the same.
 
 ## What this exercises
 
@@ -23,17 +43,17 @@ Two longstanding pain points when bundling napi-rs packages for edge runtimes:
 The fix in Blazen:
 
 - An `exports` map in `crates/blazen-node/package.json` routes the `workerd`
-  and `browser` conditions to `blazen.workers.js`, a hand-written one-line
-  re-export that has zero platform-detection code. Edge bundlers stop parsing
-  `index.js` entirely.
+  and `browser` conditions to `blazen.workers.js`, a hand-written entry that
+  has zero platform-detection code. Edge bundlers stop parsing `index.js`
+  entirely.
 - A post-build patch makes `blazen.wasi-browser.js` lazy: top-level wasm
   instantiation is deferred until first export access. Importing types/classes
   no longer trips the broken `new URL`.
-- A workerd-specific entry (`blazen.workerd.js`) uses wrangler's static
-  `import wasm from './foo.wasm'` to load the wasm `Module` without any URL or
-  fetch at all.
+- `blazen.workers.js` uses wrangler's static
+  `import wasm from '@blazen-dev/blazen-wasm32-wasi/blazen.wasm32-wasi.wasm'`
+  to load the wasm `Module` without any URL or fetch at all.
 
-If `astro build` succeeds AND `wrangler dev` returns `{"ok":"function"}` on
+If `astro build` succeeds AND `wrangler dev` returns the expected JSON on
 `/api/blazen-check.json`, every layer of the fix is working.
 
 ## Running
@@ -48,17 +68,17 @@ pnpm build          # astro build → dist/_worker.js
 pnpm preview        # wrangler dev on localhost:8787
 # In another terminal:
 curl http://localhost:8787/api/blazen-check.json
-# Expected: {"ok":"function"}
+# Expected: JSON with every export resolved as "function"
 ```
 
 ## Why a local-wasi staging directory?
 
-`scripts/stage-local-blazen.sh` copies the freshly-built `crates/blazen-node/blazen.wasi-*`
-files into `local-wasi/` and writes a minimal `package.json` with the inner
-`exports` map. The example then depends on `@blazen-dev/blazen-wasm32-wasi`
-via `file:./local-wasi` so it picks up local changes to the wasi shims
-without needing to publish a release. `pnpm install` and `pnpm build` both
-re-run the stage script.
+`scripts/stage-local-blazen.sh` copies the freshly-built
+`crates/blazen-node/blazen.wasi-*` files into `local-wasi/` and writes a minimal
+`package.json` with the inner `exports` map. The example then depends on
+`@blazen-dev/blazen-wasm32-wasi` via `file:./local-wasi` so it picks up local
+changes to the wasi shims without needing to publish a release. `pnpm install`
+and `pnpm build` both re-run the stage script.
 
 The released `@blazen-dev/blazen-wasm32-wasi` package goes through the same
 shape via `.forgejo/workflows/release.yaml` at publish time.

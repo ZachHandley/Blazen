@@ -80,4 +80,10 @@ impl crate::traits::LocalModel for CandleEmbedModel {
     async fn is_loaded(&self) -> bool {
         CandleEmbedModel::is_loaded(self).await
     }
+
+    fn device(&self) -> crate::device::Device {
+        CandleEmbedModel::device_str(self)
+            .and_then(|s| crate::device::Device::parse(s).ok())
+            .unwrap_or(crate::device::Device::Cpu)
+    }
 }

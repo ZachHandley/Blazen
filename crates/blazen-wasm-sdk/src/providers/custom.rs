@@ -49,10 +49,6 @@ use js_sys::Reflect;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
-use blazen_llm::compute::{
-    AudioGeneration, BackgroundRemoval, ImageGeneration, ThreeDGeneration, Transcription,
-    VideoGeneration, VoiceCloning,
-};
 use blazen_llm::compute::requests::{
     BackgroundRemovalRequest, ImageRequest, MusicRequest, SpeechRequest, ThreeDRequest,
     TranscriptionRequest, UpscaleRequest, VideoRequest, VoiceCloneRequest,
@@ -60,14 +56,14 @@ use blazen_llm::compute::requests::{
 use blazen_llm::compute::results::{
     AudioResult, ImageResult, ThreeDResult, TranscriptionResult, VideoResult, VoiceHandle,
 };
+use blazen_llm::compute::{
+    AudioGeneration, BackgroundRemoval, ImageGeneration, ThreeDGeneration, Transcription,
+    VideoGeneration, VoiceCloning,
+};
 use blazen_llm::error::BlazenError;
-use blazen_llm::providers::custom::{
-    self as core_custom, CustomProvider, CustomProviderHandle,
-};
+use blazen_llm::providers::custom::{self as core_custom, CustomProvider, CustomProviderHandle};
 use blazen_llm::traits::CompletionModel;
-use blazen_llm::types::{
-    CompletionRequest, CompletionResponse, EmbeddingResponse, StreamChunk,
-};
+use blazen_llm::types::{CompletionRequest, CompletionResponse, EmbeddingResponse, StreamChunk};
 
 use super::base::WasmBaseProvider;
 use super::defaults::WasmCompletionProviderDefaults;
@@ -175,10 +171,7 @@ impl WasmCustomProviderAdapter {
         if raw.has_type::<js_sys::Promise>() {
             let promise: js_sys::Promise = raw.unchecked_into();
             JsFuture::from(promise).await.map_err(|e| {
-                BlazenError::provider(
-                    "custom",
-                    format!("host method `{method}` rejected: {e:?}"),
-                )
+                BlazenError::provider("custom", format!("host method `{method}` rejected: {e:?}"))
             })
         } else {
             Ok(raw)
@@ -199,10 +192,7 @@ impl WasmCustomProviderAdapter {
         if raw.has_type::<js_sys::Promise>() {
             let promise: js_sys::Promise = raw.unchecked_into();
             JsFuture::from(promise).await.map_err(|e| {
-                BlazenError::provider(
-                    "custom",
-                    format!("host method `{method}` rejected: {e:?}"),
-                )
+                BlazenError::provider("custom", format!("host method `{method}` rejected: {e:?}"))
             })
         } else {
             Ok(raw)
@@ -475,11 +465,7 @@ impl WasmCustomProvider {
     /// [`CustomProviderHandle`], wiring it into a new [`WasmBaseProvider`]
     /// handle so that [`WasmBaseProvider::extract`] works on the composed
     /// `base` field.
-    fn from_handle(
-        provider_id: String,
-        model_id: String,
-        handle: CustomProviderHandle,
-    ) -> Self {
+    fn from_handle(provider_id: String, model_id: String, handle: CustomProviderHandle) -> Self {
         let inner_rc = Rc::new(handle);
         // `CustomProviderHandle` implements `CompletionModel`. Clone it
         // (cheap — internal Arcs) and box it as a trait object so the base
@@ -521,11 +507,7 @@ impl WasmCustomProvider {
     /// `model` is required and becomes the default completion model.
     #[wasm_bindgen(js_name = "lmStudio")]
     #[must_use]
-    pub fn lm_studio(
-        model: String,
-        host: Option<String>,
-        port: Option<u16>,
-    ) -> WasmCustomProvider {
+    pub fn lm_studio(model: String, host: Option<String>, port: Option<u16>) -> WasmCustomProvider {
         let host_str = host.unwrap_or_else(|| "localhost".to_owned());
         let port_num = port.unwrap_or(1234);
         let handle = core_custom::lm_studio(host_str, port_num, model.clone());
@@ -569,12 +551,11 @@ impl WasmCustomProvider {
     /// used for logs and routing.
     #[wasm_bindgen(js_name = "fromJsObject")]
     #[must_use]
-    pub fn from_js_object(
-        provider_id: String,
-        js_instance: js_sys::Object,
-    ) -> WasmCustomProvider {
-        let adapter: Arc<dyn CustomProvider> =
-            Arc::new(WasmCustomProviderAdapter::new(provider_id.clone(), js_instance));
+    pub fn from_js_object(provider_id: String, js_instance: js_sys::Object) -> WasmCustomProvider {
+        let adapter: Arc<dyn CustomProvider> = Arc::new(WasmCustomProviderAdapter::new(
+            provider_id.clone(),
+            js_instance,
+        ));
         let handle = CustomProviderHandle::new(adapter);
         // Use provider_id as a sensible default model_id — the JS side has
         // no reliable model identifier for arbitrary user-extended objects.
@@ -793,11 +774,12 @@ impl WasmCustomProvider {
         let req: BackgroundRemovalRequest = serde_wasm_bindgen::from_value(request)
             .map_err(|e| JsValue::from_str(&format!("invalid BackgroundRemovalRequest: {e}")))?;
         let inner = Rc::clone(&self.inner);
-        let result = SendFuture(async move {
-            BackgroundRemoval::remove_background(inner.as_ref(), req).await
-        })
-        .await
-        .map_err(|e: BlazenError| JsValue::from_str(&e.to_string()))?;
+        let result =
+            SendFuture(
+                async move { BackgroundRemoval::remove_background(inner.as_ref(), req).await },
+            )
+            .await
+            .map_err(|e: BlazenError| JsValue::from_str(&e.to_string()))?;
         serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 }

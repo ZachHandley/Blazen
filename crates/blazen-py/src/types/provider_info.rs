@@ -259,7 +259,7 @@ impl PyProviderConfig {
         base_url=None,
         context_length=None,
         max_output_tokens=None,
-        vram_estimate_bytes=None,
+        memory_estimate_bytes=None,
         pricing=None,
         capabilities=None,
     ))]
@@ -271,7 +271,7 @@ impl PyProviderConfig {
         base_url: Option<String>,
         context_length: Option<u64>,
         max_output_tokens: Option<u64>,
-        vram_estimate_bytes: Option<u64>,
+        memory_estimate_bytes: Option<u64>,
         pricing: Option<PyModelPricing>,
         capabilities: Option<PyModelCapabilities>,
     ) -> Self {
@@ -285,7 +285,7 @@ impl PyProviderConfig {
                 base_url,
                 context_length,
                 max_output_tokens,
-                vram_estimate_bytes,
+                memory_estimate_bytes,
                 pricing: pricing_inner,
                 capabilities: caps_inner,
             },
@@ -317,8 +317,8 @@ impl PyProviderConfig {
         self.inner.max_output_tokens
     }
     #[getter]
-    fn vram_estimate_bytes(&self) -> Option<u64> {
-        self.inner.vram_estimate_bytes
+    fn memory_estimate_bytes(&self) -> Option<u64> {
+        self.inner.memory_estimate_bytes
     }
     #[getter]
     fn pricing(&self) -> Option<PyModelPricing> {
