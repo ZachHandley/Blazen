@@ -141,7 +141,7 @@ pub async fn handle_cancel_workflow(
         };
         let _ = handle.outbound.send(ServerToWorker::Cancel(cancel)).await;
     }
-    shared.queue.mark_cancelled(req.run_id);
+    shared.queue.mark_cancelled(req.run_id).await;
 
     let snap = shared
         .queue

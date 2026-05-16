@@ -39,6 +39,8 @@ pub mod agent;
 pub mod batch;
 pub mod compute;
 pub mod content;
+#[cfg(feature = "distributed")]
+pub mod controlplane;
 pub mod core_types;
 pub mod error;
 pub mod events;
@@ -167,6 +169,19 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<core_types::PyRemoteWorkflowRequest>()?;
         m.add_class::<core_types::PyRemoteWorkflowResponse>()?;
         m.add_class::<core_types::PyPeerClient>()?;
+
+        // Control-plane orchestrator + worker bindings.
+        m.add_class::<controlplane::PyControlPlaneWorkerCapability>()?;
+        m.add_class::<controlplane::PyAdmissionMode>()?;
+        m.add_class::<controlplane::PyControlPlaneResourceHint>()?;
+        m.add_class::<controlplane::PyControlPlaneRunStatus>()?;
+        m.add_class::<controlplane::PyControlPlaneWorkerConfig>()?;
+        m.add_class::<controlplane::PyAssignmentContext>()?;
+        m.add_class::<controlplane::PyAssignmentHandler>()?;
+        m.add_class::<controlplane::PyControlPlaneWorker>()?;
+        m.add_class::<controlplane::PyControlPlaneClient>()?;
+        m.add_class::<controlplane::PyRunEventStream>()?;
+        controlplane::worker::register_exceptions(m)?;
     }
 
     // Pipeline (multi-workflow orchestrator)

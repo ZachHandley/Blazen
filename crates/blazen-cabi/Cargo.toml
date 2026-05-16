@@ -18,6 +18,14 @@ crate-type = ["cdylib", "staticlib"]
 async-trait.workspace = true
 blazen-llm = { workspace = true }
 blazen-uniffi = { version = "0.0.0-dev", path = "../blazen-uniffi", default-features = false }
+# Control-plane crate is only used by the optional `distributed` feature; gate
+# it so non-distributed builds don't pull in the full tonic/rustls stack.
+blazen-core = { workspace = true, features = ["distributed"], optional = true }
+blazen-controlplane = { workspace = true, optional = true }
+# `tokio-util` is only used by the optional `distributed` feature to obtain
+# `CancellationToken` for subscription handles. Gated to keep the non-
+# distributed build slim. The `rt` feature carries the cancellation token.
+tokio-util = { workspace = true, features = ["rt"], optional = true }
 futures-util.workspace = true
 libc = "0.2"
 parking_lot = "0.12"
@@ -26,6 +34,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true }
 tracing.workspace = true
+uuid = { workspace = true }
 
 [build-dependencies]
 cbindgen = "0.29"
@@ -67,7 +76,12 @@ otlp = ["blazen-uniffi/otlp"]
 prometheus = ["blazen-uniffi/prometheus"]
 langfuse = ["blazen-uniffi/langfuse"]
 
-distributed = ["blazen-uniffi/distributed"]
+distributed = [
+    "blazen-uniffi/distributed",
+    "dep:blazen-core",
+    "dep:blazen-controlplane",
+    "dep:tokio-util",
+]
 
 [lints]
 workspace = true

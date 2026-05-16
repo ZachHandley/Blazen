@@ -24,6 +24,40 @@ pub(crate) fn alloc_cstring(s: &str) -> *mut c_char {
     }
 }
 
+/// Heap-allocates a fresh NUL-terminated UTF-8 C string from a borrowed
+/// caller-supplied C string. The returned pointer is owned by the
+/// caller (and the cabi runtime, when handed back across a vtable
+/// boundary) and must eventually be released with
+/// [`blazen_string_free`].
+///
+/// FFI-host vtables that report string output via an out-param (e.g.
+/// the control-plane `AssignmentHandler`'s `handle` callback) MUST use
+/// this helper to mint the output buffer so the cabi can free it on
+/// the matching allocator. Foreign-allocated buffers (Ruby
+/// `MemoryPointer.from_string`, etc.) are not wire-compatible with the
+/// cabi's allocator and would invoke undefined behaviour if reclaimed
+/// via `CString::from_raw` on the Rust side.
+///
+/// Returns `std::ptr::null_mut()` if `input` is null, contains non-
+/// UTF-8 bytes, or has an interior NUL byte.
+///
+/// # Safety
+///
+/// `input` must be null OR a NUL-terminated buffer that remains valid
+/// for the duration of this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_string_alloc(input: *const c_char) -> *mut c_char {
+    if input.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the NUL + lifetime contract.
+    let cstr = unsafe { CStr::from_ptr(input) };
+    let Ok(s) = cstr.to_str() else {
+        return std::ptr::null_mut();
+    };
+    alloc_cstring(s)
+}
+
 /// Frees a heap-allocated C string produced by any `blazen_*` function that
 /// returns `*mut c_char`. Passing a null pointer is a no-op.
 ///

@@ -35,6 +35,20 @@ const workersDtsPath = new URL('../blazen.workers.d.ts', import.meta.url)
     'export type ContentHandle = JsContentHandle',
     'export type ContentMetadata = JsContentMetadata',
     'export type ContentKind = JsContentKind',
+    // Control-plane: napi-rs emits `Js*`-prefixed names for `#[napi(object)]`
+    // shapes; mirror them under their unprefixed equivalents so consumers
+    // can write `Assignment`, `RunEvent`, etc. directly.
+    'export type WorkerCapability = JsWorkerCapability',
+    'export type AdmissionMode = JsAdmissionMode',
+    'export type Assignment = JsAssignment',
+    'export type RunStatus = JsRunStatus',
+    'export type RunStateSnapshot = JsRunStateSnapshot',
+    'export type RunEvent = JsRunEvent',
+    'export type WorkerInfo = JsWorkerInfo',
+    'export type MtlsOptions = JsMtlsOptions',
+    'export type ClientConnectOptions = JsClientConnectOptions',
+    'export type SubmitWorkflowOptions = JsSubmitWorkflowOptions',
+    'export type SubscribeAllOptions = JsSubscribeAllOptions',
   ]
   const banner = '\n// --- post-build: type aliases mirroring blazen-llm ---\n'
   const missing = aliases.filter((line) => !current.includes(line))

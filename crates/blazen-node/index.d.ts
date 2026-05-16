@@ -93,6 +93,26 @@ export declare class ApiProtocol {
 }
 export type JsApiProtocol = ApiProtocol
 
+/**
+ * Per-assignment context handed to the JS handler. Mirrors
+ * [`blazen_controlplane::AssignmentContext`].
+ *
+ * Carries the run id and a sink for emitting non-terminal events back
+ * to the control plane.
+ */
+export declare class AssignmentContext {
+  /** Run identifier this context belongs to (UUID string). */
+  get runId(): string
+  /**
+   * Emit a non-terminal event back to the control plane.
+   *
+   * `data` must be a JSON-serializable JS value (object, array,
+   * string, number, boolean, null).
+   */
+  emitEvent(eventType: string, data: any): Promise<void>
+}
+export type JsAssignmentContext = AssignmentContext
+
 export declare class AudioMusicProviderDefaults {
   /** Construct role-specific defaults. */
   constructor(base?: BaseProviderDefaults | undefined | null, before?: BeforeRoleTsfn | undefined | null)
@@ -1438,6 +1458,131 @@ export declare class Context {
   get session(): JsSessionNamespace
 }
 export type JsContext = Context
+
+/**
+ * Orchestrator-side client for the control plane. Submit / cancel /
+ * describe runs, list workers, drain workers, subscribe to events.
+ *
+ * ```typescript
+ * const client = await ControlPlaneClient.connect("http://cp:7445");
+ * const snap = await client.submitWorkflow({
+ *   workflowName: "summarize",
+ *   input: { url: "https://example.com" },
+ *   waitForWorker: true,
+ * });
+ * for await (const event of client.subscribeRunEvents(snap.runId)) {
+ *   console.log(event.eventType, event.data);
+ * }
+ * ```
+ */
+export declare class ControlPlaneClient {
+  /**
+   * Open a connection to the control plane at `endpoint`. Pass
+   * `{ mtls: { cert, key, ca } }` to use mTLS.
+   */
+  static connect(endpoint: string, opts?: JsClientConnectOptions | undefined | null): Promise<ControlPlaneClient>
+  /** Submit a workflow run. */
+  submitWorkflow(opts: JsSubmitWorkflowOptions): Promise<JsRunStateSnapshot>
+  /** Cancel an in-flight workflow run. */
+  cancelWorkflow(runId: string): Promise<JsRunStateSnapshot>
+  /** Describe the current state of a workflow run. */
+  describeWorkflow(runId: string): Promise<JsRunStateSnapshot>
+  /** List currently-connected workers. */
+  listWorkers(): Promise<Array<JsWorkerInfo>>
+  /**
+   * Drain a worker. Pass `immediate = true` to refuse new work right
+   * away; otherwise let in-flight runs finish first.
+   */
+  drainWorker(nodeId: string, immediate: boolean): Promise<void>
+  /**
+   * Subscribe to events for a specific run. The returned stream is
+   * a JS `AsyncIterableIterator<RunEvent>` (object with both `next`
+   * and `[Symbol.asyncIterator]`).
+   */
+  subscribeRunEvents(runId: string): AsyncIterableIterator<RunEvent>
+  /**
+   * Subscribe to events across all runs, optionally filtered by tag
+   * predicates. Returns an `AsyncIterableIterator<RunEvent>`.
+   */
+  subscribeAll(opts?: JsSubscribeAllOptions | undefined | null): AsyncIterableIterator<RunEvent>
+}
+export type JsControlPlaneClient = ControlPlaneClient
+
+/**
+ * Worker connection to a control-plane server. Construct via
+ * [`Self::connect`] (which validates the endpoint URI), then call
+ * [`Self::run`] with a JS handler to drive the worker forever.
+ *
+ * ```typescript
+ * const config = new ControlPlaneWorkerConfig("http://cp:7445", "node-a")
+ *   .withCapability({ kind: "workflow:summarize", version: 1 });
+ * const worker = ControlPlaneWorker.connect(config);
+ * await worker.run(async (assignment, ctx) => {
+ *   await ctx.emitEvent("started", { runId: assignment.runId });
+ *   return { ok: true };
+ * });
+ * ```
+ */
+export declare class ControlPlaneWorker {
+  /**
+   * Validate the configured endpoint URI and prepare a worker that's
+   * ready to call [`Self::run`]. Does NOT open a network connection
+   * yet — that happens on the first iteration of `run`.
+   */
+  static connect(config: ControlPlaneWorkerConfig): ControlPlaneWorker
+  /**
+   * Drive the worker forever, dispatching each assignment to the JS
+   * handler. Resolves on graceful drain or [`Self::shutdown`].
+   *
+   * The JS handler is invoked with two arguments: the assignment
+   * itself and a [`JsAssignmentContext`] that exposes the run id and
+   * an `emitEvent` method. Its return value (JSON-serialized) becomes
+   * the assignment output reported back to the server.
+   */
+  run(handler: (assignment: Assignment, ctx: AssignmentContext) => Promise<unknown>): Promise<void>
+  /**
+   * Signal the worker to stop. Idempotent.
+   *
+   * This drops the cancellation token tied to [`Self::run`]; the
+   * `run` future resolves at the next await point.
+   */
+  shutdown(): void
+}
+export type JsControlPlaneWorker = ControlPlaneWorker
+
+/**
+ * Fluent builder for a worker connection. Mirrors
+ * [`blazen_controlplane::WorkerConfig`].
+ *
+ * ```typescript
+ * const config = new ControlPlaneWorkerConfig("http://cp:7445", "node-a")
+ *   .withCapability({ kind: "workflow:summarize", version: 1 })
+ *   .withTag("region", "us-west")
+ *   .withAdmission({ type: "Fixed", maxInFlight: 4 });
+ * ```
+ */
+export declare class ControlPlaneWorkerConfig {
+  /**
+   * Build a config with the required `endpoint` URI and stable
+   * `nodeId`. Defaults: no capabilities, no tags, `Fixed { maxInFlight: 1 }`,
+   * 5s heartbeat, plaintext transport.
+   */
+  constructor(endpoint: string, nodeId: string)
+  /** Append a capability advertised at handshake. */
+  withCapability(cap: JsWorkerCapability): this
+  /**
+   * Insert a free-form `key=value` tag used by submission-time tag
+   * predicates.
+   */
+  withTag(key: string, value: string): this
+  /** Override the admission mode declared at handshake. */
+  withAdmission(mode: JsAdmissionMode): this
+  /** Override the heartbeat cadence (milliseconds). */
+  withHeartbeatIntervalMs(ms: number): this
+  /** Load a client identity + CA from PEM files and use them for mTLS. */
+  withMtls(certPath: string, keyPath: string, caPath: string): this
+}
+export type JsControlPlaneWorkerConfig = ControlPlaneWorkerConfig
 
 /**
  * A user-defined Blazen provider exposed to JavaScript.
@@ -6543,6 +6688,35 @@ export interface JsAddEntry {
   metadata?: any
 }
 
+/**
+ * JS-facing admission mode. The `type` field discriminates the variant:
+ * `'Fixed'` requires `maxInFlight`, `'VramBudget'` requires `totalMb`,
+ * and `'Reactive'` has no payload fields.
+ */
+export interface JsAdmissionMode {
+  /** Discriminator: `'Fixed'`, `'Reactive'`, or `'VramBudget'`. */
+  type: JsAdmissionModeTag
+  /** In-flight cap for `Fixed`. `None` for the other variants. */
+  maxInFlight?: number
+  /**
+   * VRAM budget in megabytes for `VramBudget`. `None` for the other
+   * variants.
+   */
+  totalMb?: bigint
+}
+
+/**
+ * JS-facing label that drives [`JsAdmissionMode::r#type`]. Carries the
+ * same three variants as [`AdmissionMode`] but as a plain string union
+ * rather than a tagged enum (napi-rs `#[napi(object)]` does not yet
+ * support discriminated-union codegen for enums with associated data).
+ */
+export declare const enum JsAdmissionModeTag {
+  Fixed = 'Fixed',
+  Reactive = 'Reactive',
+  VramBudget = 'VramBudget'
+}
+
 /** Options for configuring an agent run. */
 export interface JsAgentRunOptions {
   /**
@@ -6623,6 +6797,29 @@ export interface JsArtifact {
    * `kind` field (which equals `"custom"` for this variant).
    */
   customKind?: string
+}
+
+/**
+ * Worker-facing view of an assignment dispatched by the control plane.
+ * JSON input is surfaced as a [`Buffer`] so handlers can decide whether
+ * to decode (single-shot) or stream the bytes onward.
+ */
+export interface JsAssignment {
+  /** Run identifier, rendered as a UUID string. */
+  runId: string
+  /** Symbolic workflow name. */
+  workflowName: string
+  /**
+   * Optional workflow version. `None` lets the worker use whichever
+   * version it has registered.
+   */
+  workflowVersion?: number
+  /** JSON-encoded initial input as raw bytes. */
+  inputJson: Buffer
+  /** Optional deadline in milliseconds. `None` = no timeout. */
+  deadlineMs?: bigint
+  /** 1-indexed attempt counter. Incremented on re-dispatch. */
+  attempt: number
 }
 
 /** Audio content for multimodal messages. */
@@ -6765,6 +6962,15 @@ export interface JsCitation {
   documentId?: string
   /** Provider-specific extra fields preserved as JSON. */
   metadata: any
+}
+
+/**
+ * Options bag passed to `ControlPlaneClient.connect`. The `mtls`
+ * field, when present, swaps the connection into mTLS mode.
+ */
+export interface JsClientConnectOptions {
+  /** mTLS configuration. `None` = plaintext. */
+  mtls?: JsMtlsOptions
 }
 
 /** Options for a chat completion request. */
@@ -7331,6 +7537,19 @@ export interface JsModelStatus {
   pool: string
 }
 
+/**
+ * PEM file paths for mTLS configuration. Used by
+ * [`crate::controlplane::client::JsControlPlaneClient::connect`].
+ */
+export interface JsMtlsOptions {
+  /** Path to the client certificate PEM file. */
+  cert: string
+  /** Path to the client private-key PEM file. */
+  key: string
+  /** Path to the CA PEM file used to authenticate the server. */
+  ca: string
+}
+
 export interface JsMusicRequest {
   prompt: string
   durationSeconds?: number
@@ -7564,6 +7783,47 @@ export declare const enum JsRole {
   Tool = 'tool'
 }
 
+/** Event emitted during a run. Mirrors [`RunEvent`]. */
+export interface JsRunEvent {
+  /** Run identifier, rendered as a UUID string. */
+  runId: string
+  /** Caller-supplied event type tag (e.g. `"step.completed"`). */
+  eventType: string
+  /** Free-form JSON payload. */
+  data: any
+  /** Wall-clock emission time in epoch milliseconds. */
+  timestampMs: bigint
+}
+
+/** Snapshot of a workflow run's state. Mirrors [`RunStateSnapshot`]. */
+export interface JsRunStateSnapshot {
+  /** Run identifier, rendered as a UUID string. */
+  runId: string
+  /** Current status. */
+  status: JsRunStatus
+  /** Wall-clock submission time in epoch milliseconds. */
+  startedAtMs: bigint
+  /** Wall-clock completion time, `None` until terminal. */
+  completedAtMs?: bigint
+  /** `Some(node_id)` once the run has been routed to a worker. */
+  assignedTo?: string
+  /** Wall-clock of the most recent event for this run, if any. */
+  lastEventAtMs?: bigint
+  /** Terminal output JSON value if `status == 'Completed'`. */
+  output?: any
+  /** Error message if `status == 'Failed'`. */
+  error?: string
+}
+
+/** JS-facing run status. Mirrors [`RunStatus`]. */
+export declare const enum JsRunStatus {
+  Pending = 'Pending',
+  Running = 'Running',
+  Completed = 'Completed',
+  Failed = 'Failed',
+  Cancelled = 'Cancelled'
+}
+
 export interface JsSpeechRequest {
   text: string
   voice?: string
@@ -7640,6 +7900,42 @@ export interface JsStreamChunk {
   citations: Array<JsCitation>
   /** Artifacts completed in this chunk. */
   artifacts: Array<JsArtifact>
+}
+
+/**
+ * Options bag for
+ * [`crate::controlplane::client::JsControlPlaneClient::submit_workflow`].
+ */
+export interface JsSubmitWorkflowOptions {
+  /** Symbolic name of the workflow to run. */
+  workflowName: string
+  /** JSON-serializable initial input. */
+  input: any
+  /** Optional workflow version. `None` = latest. */
+  workflowVersion?: number
+  /**
+   * Required tags. Each `key=value` (or `key=*`) is AND'd. `None`
+   * means no tag predicate.
+   */
+  requiredTags?: Array<string>
+  /** Optional dedupe key for at-most-one-run-per-window semantics. */
+  idempotencyKey?: string
+  /** Optional deadline in milliseconds from submission. */
+  deadlineMs?: bigint
+  /**
+   * If `true`, queue the submission until a matching worker appears.
+   * Defaults to `false`.
+   */
+  waitForWorker?: boolean
+}
+
+/**
+ * Options bag for
+ * [`crate::controlplane::client::JsControlPlaneClient::subscribe_all`].
+ */
+export interface JsSubscribeAllOptions {
+  /** Tag predicates the events must match. */
+  requiredTags?: Array<string>
 }
 
 /** Request to invoke a sub-workflow on a remote peer. */
@@ -7916,6 +8212,37 @@ export interface JsWhisperOptions {
    * `$BLAZEN_CACHE_DIR` or `~/.cache/blazen/models`.
    */
   cacheDir?: string
+}
+
+/**
+ * Capability advertised by a worker at handshake time. Mirrors
+ * [`blazen_core::distributed::WorkerCapability`].
+ */
+export interface JsWorkerCapability {
+  /** Capability tag, e.g. `"workflow:summarize"`. */
+  kind: string
+  /**
+   * Capability version. Workers and orchestrators only match when both
+   * values agree.
+   */
+  version: number
+}
+
+/**
+ * Summary of a connected worker returned by
+ * [`crate::controlplane::client::JsControlPlaneClient::list_workers`].
+ */
+export interface JsWorkerInfo {
+  /** Stable identifier of the worker. */
+  nodeId: string
+  /** Capabilities advertised by this worker at handshake. */
+  capabilities: Array<JsWorkerCapability>
+  /** Free-form `key=value` tags this worker advertised. */
+  tags: Record<string, string>
+  /** Last reported in-flight assignment count. */
+  inFlight: number
+  /** Wall-clock connection time in epoch milliseconds. */
+  connectedAtMs: bigint
 }
 
 /**
@@ -9055,6 +9382,17 @@ export type ImageSource = JsImageSource
 export type ContentHandle = JsContentHandle
 export type ContentMetadata = JsContentMetadata
 export type ContentKind = JsContentKind
+export type WorkerCapability = JsWorkerCapability
+export type AdmissionMode = JsAdmissionMode
+export type Assignment = JsAssignment
+export type RunStatus = JsRunStatus
+export type RunStateSnapshot = JsRunStateSnapshot
+export type RunEvent = JsRunEvent
+export type WorkerInfo = JsWorkerInfo
+export type MtlsOptions = JsMtlsOptions
+export type ClientConnectOptions = JsClientConnectOptions
+export type SubmitWorkflowOptions = JsSubmitWorkflowOptions
+export type SubscribeAllOptions = JsSubscribeAllOptions
 
 // --- post-build: ContentBody / ContentHint helper types ---
 /**

@@ -247,6 +247,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "blazen-controlplane"
+version = "0.0.0-dev"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "blazen-core",
+ "blazen-peer",
+ "dashmap",
+ "futures-core",
+ "futures-util",
+ "postcard",
+ "prost 0.14.3",
+ "rustls",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-rustls",
+ "tokio-stream",
+ "tokio-util",
+ "tonic",
+ "tonic-prost",
+ "tonic-prost-build",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "blazen-core"
 version = "0.0.0-dev"
 dependencies = [
@@ -492,6 +521,8 @@ name = "blazen-wasm-sdk"
 version = "0.0.0-dev"
 dependencies = [
  "async-trait",
+ "base64 0.22.1",
+ "blazen-controlplane",
  "blazen-core",
  "blazen-embed-tract",
  "blazen-events",
@@ -510,6 +541,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.2.17",
  "js-sys",
+ "postcard",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
@@ -3888,6 +3920,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
+ "futures-util",
  "pin-project-lite",
  "tokio",
 ]

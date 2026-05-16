@@ -18,18 +18,22 @@
 //! worker channel or stashes the assignment until a worker frees up.
 
 use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
 
 use dashmap::DashMap;
-use tokio::sync::{Notify, RwLock};
+use tokio::sync::{Notify, RwLock, broadcast};
 use uuid::Uuid;
 
-use blazen_core::distributed::{ResourceHint, RunStateSnapshot, RunStatus, WorkerCapability};
+use blazen_core::distributed::{
+    ResourceHint, RunEvent, RunStateSnapshot, RunStatus, WorkerCapability,
+};
 
 use crate::error::ControlPlaneError;
 use crate::protocol::{Assignment, Offer, ServerToWorker};
 
 use super::admission::{Admission, Decision, NoCandidateReason, RouteRequest};
 use super::registry::WorkerRegistry;
+use super::store::{AssignmentStore, MemoryAssignmentStore};
 
 /// One queued (or in-flight) assignment plus the routing inputs the queue
 /// will need if it has to re-route on a worker disconnect.
@@ -67,6 +71,15 @@ pub struct AssignmentQueue {
     /// Signaled whenever a new pending assignment is enqueued or a
     /// worker disconnects (so re-route loops can wake).
     pub wake: Notify,
+    /// Broadcast bus for synthesized `status.*` events. Populated by
+    /// [`AssignmentQueue::with_events`] when the queue is wired into a
+    /// `ControlPlaneServer`. `None` for standalone queues used in unit
+    /// tests — those calls compile to no-ops.
+    events: Option<broadcast::Sender<RunEvent>>,
+    /// Persistence seam. Every mutator writes through here. Reads
+    /// hit the in-memory caches above; the store backfills on
+    /// cold-start via `ControlPlaneServer::serve`.
+    store: Arc<dyn AssignmentStore>,
 }
 
 /// Outcome of a [`AssignmentQueue::submit`] attempt.
@@ -104,14 +117,43 @@ pub enum SubmitOutcome {
 }
 
 impl AssignmentQueue {
-    /// Construct an empty queue.
+    /// Construct an empty queue with no event bus. Status transitions
+    /// emit nothing — used by unit tests that don't care about
+    /// fan-out.
     #[must_use]
     pub fn new() -> Self {
+        Self::build(Arc::new(MemoryAssignmentStore::default()), None)
+    }
+
+    /// Construct a queue wired into a [`broadcast::Sender<RunEvent>`].
+    /// Every state transition (`status.running`, `status.completed`,
+    /// `status.failed`, `status.cancelled`) emits onto this channel
+    /// for `SubscribeRunEvents` / `SubscribeAll` subscribers.
+    #[must_use]
+    pub fn with_events(events: broadcast::Sender<RunEvent>) -> Self {
+        Self::build(Arc::new(MemoryAssignmentStore::default()), Some(events))
+    }
+
+    /// Construct a queue wired into both a broadcast event bus AND a
+    /// caller-supplied [`AssignmentStore`]. Use this constructor to
+    /// swap in a durable backing store (e.g. Valkey) so queue
+    /// mutations survive a control-plane restart.
+    #[must_use]
+    pub fn with_events_and_store(
+        events: broadcast::Sender<RunEvent>,
+        store: Arc<dyn AssignmentStore>,
+    ) -> Self {
+        Self::build(store, Some(events))
+    }
+
+    fn build(store: Arc<dyn AssignmentStore>, events: Option<broadcast::Sender<RunEvent>>) -> Self {
         Self {
             pending: RwLock::new(HashMap::new()),
             in_flight: DashMap::new(),
             runs: DashMap::new(),
             wake: Notify::new(),
+            events,
+            store,
         }
     }
 
@@ -140,19 +182,23 @@ impl AssignmentQueue {
         };
 
         // Record the run as Pending until a worker accepts it.
-        self.runs.insert(
+        let pending_snapshot = RunStateSnapshot {
             run_id,
-            RunStateSnapshot {
-                run_id,
-                status: RunStatus::Pending,
-                started_at_ms: now_ms(),
-                completed_at_ms: None,
-                assigned_to: None,
-                last_event_at_ms: None,
-                output: None,
-                error: None,
-            },
-        );
+            status: RunStatus::Pending,
+            started_at_ms: now_ms(),
+            completed_at_ms: None,
+            assigned_to: None,
+            last_event_at_ms: None,
+            output: None,
+            error: None,
+        };
+        self.runs.insert(run_id, pending_snapshot.clone());
+        if let Err(e) = self.store.put_state(run_id, &pending_snapshot, None).await {
+            tracing::warn!(%run_id, error = %e, "store.put_state(Pending) failed");
+        }
+        if let Err(e) = self.store.put_assignment(run_id, &queued.assignment).await {
+            tracing::warn!(%run_id, error = %e, "store.put_assignment failed");
+        }
 
         // Build the routing inputs. `hint_owned` keeps the converted
         // ResourceHint alive for the duration of the borrow inside
@@ -180,9 +226,8 @@ impl AssignmentQueue {
                     .await
                     .is_ok()
                 {
-                    self.in_flight
-                        .insert(run_id, InFlight { queued, session_id });
-                    self.update_run_to_running(run_id, &node_id);
+                    self.record_routed(run_id, session_id, &node_id, queued)
+                        .await;
                     SubmitOutcome::Pushed {
                         run_id,
                         session_id,
@@ -204,9 +249,8 @@ impl AssignmentQueue {
                     .await
                     .is_ok()
                 {
-                    self.in_flight
-                        .insert(run_id, InFlight { queued, session_id });
-                    self.update_run_to_running(run_id, &node_id);
+                    self.record_routed(run_id, session_id, &node_id, queued)
+                        .await;
                     SubmitOutcome::Offered {
                         run_id,
                         session_id,
@@ -287,9 +331,8 @@ impl AssignmentQueue {
                             self.enqueue_pending(queued).await;
                             break;
                         }
-                        self.in_flight
-                            .insert(run_id, InFlight { queued, session_id });
-                        self.update_run_to_running(run_id, &node_id);
+                        self.record_routed(run_id, session_id, &node_id, queued)
+                            .await;
                     }
                     Decision::Offer {
                         session_id,
@@ -303,9 +346,8 @@ impl AssignmentQueue {
                             self.enqueue_pending(queued).await;
                             break;
                         }
-                        self.in_flight
-                            .insert(run_id, InFlight { queued, session_id });
-                        self.update_run_to_running(run_id, &node_id);
+                        self.record_routed(run_id, session_id, &node_id, queued)
+                            .await;
                     }
                     Decision::NoCandidate { .. } => {
                         // Still no worker — re-queue and stop draining this cap.
@@ -328,13 +370,29 @@ impl AssignmentQueue {
             .map(|r| r.value().queued.clone())
             .collect();
 
+        // Mirror the release into the store so its in-flight view
+        // matches the in-memory cache. The returned Vec<Uuid> is
+        // intentionally ignored — the cache-side iteration above is
+        // already authoritative for the runtime path.
+        if let Err(e) = self.store.release_inflight(session_id).await {
+            tracing::warn!(%session_id, error = %e, "store.release_inflight failed");
+        }
+
         // Remove the in-flight entries and reset their run state.
         let surrendered_ids: Vec<Uuid> = surrendered.iter().map(|q| q.assignment.run_id).collect();
         for id in surrendered_ids {
             self.in_flight.remove(&id);
-            if let Some(mut snap) = self.runs.get_mut(&id) {
+            let mirrored = if let Some(mut snap) = self.runs.get_mut(&id) {
                 snap.status = RunStatus::Pending;
                 snap.assigned_to = None;
+                Some(snap.clone())
+            } else {
+                None
+            };
+            if let Some(snapshot) = mirrored
+                && let Err(e) = self.store.put_state(id, &snapshot, None).await
+            {
+                tracing::warn!(run_id = %id, error = %e, "store.put_state(Pending) failed");
             }
         }
 
@@ -345,39 +403,76 @@ impl AssignmentQueue {
     }
 
     /// Mark a run as completed with the given output.
-    pub fn mark_completed(&self, run_id: Uuid, output: serde_json::Value) {
+    pub async fn mark_completed(&self, run_id: Uuid, output: serde_json::Value) {
         if let Some(mut snap) = self.runs.get_mut(&run_id) {
+            let data = serde_json::json!({ "output": output.clone() });
             snap.status = RunStatus::Completed;
             snap.completed_at_ms = Some(now_ms());
             snap.output = Some(output);
+            let snapshot = snap.clone();
+            drop(snap);
+            if let Err(e) = self.store.put_state(run_id, &snapshot, None).await {
+                tracing::warn!(%run_id, error = %e, "store.put_state(Completed) failed");
+            }
+            if let Err(e) = self.store.delete_assignment(run_id).await {
+                tracing::warn!(%run_id, error = %e, "store.delete_assignment failed");
+            }
+            self.emit_status(run_id, "status.completed", data);
         }
         self.in_flight.remove(&run_id);
     }
 
     /// Mark a run as failed with the given error message.
-    pub fn mark_failed(&self, run_id: Uuid, error: String) {
+    pub async fn mark_failed(&self, run_id: Uuid, error: String) {
         if let Some(mut snap) = self.runs.get_mut(&run_id) {
+            let data = serde_json::json!({ "error": error.clone() });
             snap.status = RunStatus::Failed;
             snap.completed_at_ms = Some(now_ms());
             snap.error = Some(error);
+            let snapshot = snap.clone();
+            drop(snap);
+            if let Err(e) = self.store.put_state(run_id, &snapshot, None).await {
+                tracing::warn!(%run_id, error = %e, "store.put_state(Failed) failed");
+            }
+            if let Err(e) = self.store.delete_assignment(run_id).await {
+                tracing::warn!(%run_id, error = %e, "store.delete_assignment failed");
+            }
+            self.emit_status(run_id, "status.failed", data);
         }
         self.in_flight.remove(&run_id);
     }
 
     /// Mark a run as cancelled.
-    pub fn mark_cancelled(&self, run_id: Uuid) {
+    pub async fn mark_cancelled(&self, run_id: Uuid) {
         if let Some(mut snap) = self.runs.get_mut(&run_id) {
             snap.status = RunStatus::Cancelled;
             snap.completed_at_ms = Some(now_ms());
+            let snapshot = snap.clone();
+            drop(snap);
+            if let Err(e) = self.store.put_state(run_id, &snapshot, None).await {
+                tracing::warn!(%run_id, error = %e, "store.put_state(Cancelled) failed");
+            }
+            if let Err(e) = self.store.delete_assignment(run_id).await {
+                tracing::warn!(%run_id, error = %e, "store.delete_assignment failed");
+            }
+            self.emit_status(run_id, "status.cancelled", serde_json::json!({}));
         }
         self.in_flight.remove(&run_id);
     }
 
     /// Record an event timestamp for a run. Used to populate
     /// `RunStateSnapshot.last_event_at_ms`.
-    pub fn record_event(&self, run_id: Uuid) {
-        if let Some(mut snap) = self.runs.get_mut(&run_id) {
+    pub async fn record_event(&self, run_id: Uuid) {
+        let mirrored = if let Some(mut snap) = self.runs.get_mut(&run_id) {
             snap.last_event_at_ms = Some(now_ms());
+            Some(snap.clone())
+        } else {
+            None
+        };
+        if let Some(snapshot) = mirrored
+            && let Err(e) = self.store.put_state(run_id, &snapshot, None).await
+        {
+            tracing::warn!(%run_id, error = %e, "store.put_state(event) failed");
         }
     }
 
@@ -387,12 +482,166 @@ impl AssignmentQueue {
         self.runs.get(&run_id).map(|r| r.clone())
     }
 
+    /// Re-hydrate the in-memory cache from the persisted
+    /// [`AssignmentStore`]. Called by [`super::ControlPlaneServer::serve`]
+    /// at cold-start so a freshly-booted control plane starts with the
+    /// same view of work-in-progress that the previous instance held.
+    ///
+    /// On cold start no sessions are alive — every persisted in-flight
+    /// run is treated as orphaned and re-queued into the pending pool;
+    /// every persisted pending entry is read back into the in-memory
+    /// FIFO. The run-state snapshot is reset to
+    /// [`RunStatus::Pending`] so a re-routed worker can claim the run
+    /// cleanly via the normal admission path.
+    ///
+    /// # Known limitations
+    /// - The [`AssignmentStore`] trait does not expose a
+    ///   `delete_inflight(run_id)` operation, so orphaned in-flight
+    ///   rows persist in the store until the next normal claim from a
+    ///   resuming worker overwrites them. This is harmless: the next
+    ///   `list_orphaned_inflight` call still classifies the row as
+    ///   orphaned (and idempotently re-queues), and the run-state
+    ///   snapshot accurately reflects `Pending`.
+    /// - Per-entry `required_tags` are recovered for pending entries
+    ///   (the store records them) but not for in-flight entries (the
+    ///   store doesn't record them alongside the in-flight claim).
+    ///   Recovered in-flight entries are re-queued with an empty tag
+    ///   predicate; a re-routing worker that matches the capability
+    ///   picks them up.
+    ///
+    /// # Errors
+    /// Propagates any [`ControlPlaneError`] returned by the underlying
+    /// [`AssignmentStore`] reads. Per-entry write failures are logged
+    /// and swallowed so a single bad record cannot abort the whole
+    /// recovery pass.
+    pub async fn recover_from_store(&self) -> Result<(), ControlPlaneError> {
+        use std::collections::HashSet;
+
+        // Re-queue every orphaned in-flight run. Cold start: the
+        // alive-session set is empty, so every claim in the store is
+        // by definition orphaned.
+        let orphaned = self.store.list_orphaned_inflight(&HashSet::new()).await?;
+        for run_id in orphaned {
+            let Some(assignment) = self.store.get_assignment(run_id).await? else {
+                // Inconsistent persisted state: the in-flight set
+                // claims this run is ours but no assignment record
+                // exists. Skip; nothing routable to recover.
+                continue;
+            };
+            let cap = WorkerCapability {
+                kind: format!("workflow:{}", assignment.workflow_name),
+                version: assignment.workflow_version.unwrap_or(0),
+            };
+            let queued = QueuedAssignment {
+                assignment,
+                required_capability: cap.clone(),
+                required_tags: Vec::new(),
+            };
+
+            // Populate the in-memory FIFO; admission will pick this
+            // up on the next drain. We do NOT mirror the orphan into
+            // the store's pending FIFO — the orphan record lives in
+            // the inflight set, and if THIS process also crashes
+            // before routing the run, the next recovery will
+            // re-discover the same orphan and re-queue it again.
+            // Mirroring here would double-count and create a hot loop
+            // in pass 2 below.
+            {
+                let mut pending = self.pending.write().await;
+                pending.entry(cap.clone()).or_default().push_back(queued);
+            }
+
+            // Reset the run-state snapshot to Pending so the next
+            // worker claim transitions through Running cleanly.
+            if let Some(state) = self.store.get_state(run_id).await? {
+                let mut next = state;
+                next.status = RunStatus::Pending;
+                next.assigned_to = None;
+                self.runs.insert(run_id, next.clone());
+                if let Err(e) = self.store.put_state(run_id, &next, None).await {
+                    tracing::warn!(%run_id, error = %e, "store.put_state during recovery");
+                }
+            }
+        }
+
+        // Re-hydrate the pending FIFOs from the store. We drain each
+        // capability bucket fully into a local Vec, populate the
+        // in-memory cache, then re-enqueue each entry exactly once
+        // back onto the store FIFO so subsequent crashes preserve the
+        // pending state. The drain-into-vec step is essential: a
+        // dequeue + re-enqueue inside a single `loop` would re-pop
+        // the just-re-enqueued entry on the next iteration and never
+        // terminate.
+        let caps = self.store.list_pending_capabilities().await?;
+        for cap in caps {
+            // Drain the store FIFO into a buffer.
+            let mut drained: Vec<(Uuid, Vec<String>)> = Vec::new();
+            while let Some(entry) = self.store.dequeue_pending(&cap).await? {
+                drained.push(entry);
+            }
+            // Populate the in-memory cache + re-mirror to the store
+            // FIFO. Each entry passes through the store exactly once.
+            for (run_id, tags) in drained {
+                let Some(assignment) = self.store.get_assignment(run_id).await? else {
+                    // Pending FIFO references a run with no assignment
+                    // record; persisted state is inconsistent. Drop
+                    // the orphan entry — not re-enqueued.
+                    continue;
+                };
+                let queued = QueuedAssignment {
+                    assignment,
+                    required_capability: cap.clone(),
+                    required_tags: tags.clone(),
+                };
+                {
+                    let mut pending = self.pending.write().await;
+                    pending.entry(cap.clone()).or_default().push_back(queued);
+                }
+                if let Err(e) = self.store.enqueue_pending(&cap, run_id, &tags).await {
+                    tracing::warn!(%run_id, error = %e, "re-enqueue during recovery");
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Common tail for a successful Push/Offer routing decision: stash
+    /// the in-flight entry, mirror the claim into the store, and flip
+    /// the run state to `Running`.
+    async fn record_routed(
+        &self,
+        run_id: Uuid,
+        session_id: Uuid,
+        node_id: &str,
+        queued: QueuedAssignment,
+    ) {
+        self.in_flight
+            .insert(run_id, InFlight { queued, session_id });
+        if let Err(e) = self.store.claim_inflight(run_id, session_id).await {
+            tracing::warn!(%run_id, %session_id, error = %e, "store.claim_inflight failed");
+        }
+        self.update_run_to_running(run_id, node_id).await;
+    }
+
     async fn enqueue_pending(&self, queued: QueuedAssignment) {
-        let mut pending = self.pending.write().await;
-        pending
-            .entry(queued.required_capability.clone())
-            .or_default()
-            .push_back(queued);
+        let run_id = queued.assignment.run_id;
+        let capability = queued.required_capability.clone();
+        let required_tags = queued.required_tags.clone();
+        {
+            let mut pending = self.pending.write().await;
+            pending
+                .entry(queued.required_capability.clone())
+                .or_default()
+                .push_back(queued);
+        }
+        if let Err(e) = self
+            .store
+            .enqueue_pending(&capability, run_id, &required_tags)
+            .await
+        {
+            tracing::warn!(%run_id, error = %e, "store.enqueue_pending failed");
+        }
     }
 
     async fn push_to_session(
@@ -431,10 +680,37 @@ impl AssignmentQueue {
             .map_err(|e| ControlPlaneError::Transport(format!("worker channel closed: {e}")))
     }
 
-    fn update_run_to_running(&self, run_id: Uuid, node_id: &str) {
-        if let Some(mut snap) = self.runs.get_mut(&run_id) {
+    async fn update_run_to_running(&self, run_id: Uuid, node_id: &str) {
+        let mirrored = if let Some(mut snap) = self.runs.get_mut(&run_id) {
             snap.status = RunStatus::Running;
             snap.assigned_to = Some(node_id.to_string());
+            Some(snap.clone())
+        } else {
+            None
+        };
+        if let Some(snapshot) = mirrored {
+            if let Err(e) = self.store.put_state(run_id, &snapshot, None).await {
+                tracing::warn!(%run_id, error = %e, "store.put_state(Running) failed");
+            }
+            self.emit_status(
+                run_id,
+                "status.running",
+                serde_json::json!({ "node_id": node_id }),
+            );
+        }
+    }
+
+    fn emit_status(&self, run_id: Uuid, event_type: &str, data: serde_json::Value) {
+        if let Some(tx) = &self.events {
+            let event = RunEvent {
+                run_id,
+                event_type: event_type.to_string(),
+                data,
+                timestamp_ms: now_ms(),
+            };
+            // `send` returns Err when there are zero live subscribers; that's
+            // expected and harmless (events for unwatched runs are dropped).
+            let _ = tx.send(event);
         }
     }
 }
@@ -665,7 +941,9 @@ mod tests {
             },
         );
 
-        queue.mark_completed(run_id, serde_json::json!({"ok": true}));
+        queue
+            .mark_completed(run_id, serde_json::json!({"ok": true}))
+            .await;
         let snap = queue.describe(run_id).unwrap();
         assert_eq!(snap.status, RunStatus::Completed);
         assert!(snap.output.is_some());
@@ -686,7 +964,7 @@ mod tests {
                 error: None,
             },
         );
-        queue.mark_failed(id2, "boom".into());
+        queue.mark_failed(id2, "boom".into()).await;
         let s2 = queue.describe(id2).unwrap();
         assert_eq!(s2.status, RunStatus::Failed);
         assert_eq!(s2.error.as_deref(), Some("boom"));

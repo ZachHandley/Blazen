@@ -651,6 +651,8 @@ name = "blazen-cabi"
 version = "0.0.0-dev"
 dependencies = [
  "async-trait",
+ "blazen-controlplane",
+ "blazen-core",
  "blazen-llm",
  "blazen-uniffi",
  "cbindgen 0.29.2",
@@ -661,7 +663,9 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
  "tracing",
+ "uuid 1.22.0",
 ]
 
 [[package]]
@@ -675,6 +679,7 @@ dependencies = [
 name = "blazen-controlplane"
 version = "0.0.0-dev"
 dependencies = [
+ "anyhow",
  "async-trait",
  "axum",
  "base64 0.22.1",
@@ -686,6 +691,7 @@ dependencies = [
  "futures-util",
  "postcard",
  "prost 0.14.3",
+ "redis",
  "reqwest 0.13.2",
  "rustls",
  "serde",
@@ -696,6 +702,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-stream",
+ "tokio-util",
  "tonic",
  "tonic-prost",
  "tonic-prost-build",
@@ -987,6 +994,7 @@ version = "0.0.0-dev"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
+ "blazen-controlplane",
  "blazen-core",
  "blazen-embed-fastembed",
  "blazen-embed-tract",
@@ -1017,6 +1025,7 @@ dependencies = [
  "syn 2.0.117",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
  "uuid 1.22.0",
@@ -1104,8 +1113,10 @@ dependencies = [
 name = "blazen-py"
 version = "0.0.0-dev"
 dependencies = [
+ "anyhow",
  "async-trait",
  "base64 0.22.1",
+ "blazen-controlplane",
  "blazen-core",
  "blazen-embed-tract",
  "blazen-events",
@@ -1121,6 +1132,7 @@ dependencies = [
  "blazen-telemetry",
  "bytes",
  "chrono",
+ "futures-core",
  "futures-util",
  "openssl-sys",
  "pyo3",
@@ -1175,6 +1187,7 @@ name = "blazen-uniffi"
 version = "0.0.0-dev"
 dependencies = [
  "async-trait",
+ "blazen-controlplane",
  "blazen-core",
  "blazen-embed-tract",
  "blazen-events",
@@ -1198,6 +1211,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
  "uniffi",
@@ -8382,6 +8396,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
+ "futures-util",
  "pin-project-lite",
  "tokio",
 ]

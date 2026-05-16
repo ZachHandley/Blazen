@@ -88,8 +88,16 @@ pub enum BlazenError {
     #[error("tool: {message}")]
     Tool { message: String },
 
-    /// Distributed peer-to-peer error. `kind` is one of: `"Encode"`, `"Transport"`,
-    /// `"EnvelopeVersion"`, `"Workflow"`, `"Tls"`, `"UnknownStep"`.
+    /// Distributed peer-to-peer error and (folded in) distributed
+    /// control-plane error. For peer-mesh failures `kind` is one of
+    /// `"Encode"`, `"Transport"`, `"EnvelopeVersion"`, `"Workflow"`,
+    /// `"Tls"`, `"UnknownStep"`. For control-plane failures `kind` is
+    /// prefixed `"ControlPlane"` (e.g. `"ControlPlaneTransport"`,
+    /// `"ControlPlaneEncode"`, `"ControlPlaneTls"`,
+    /// `"ControlPlaneEnvelopeVersion"`, `"ControlPlaneNoMatchingWorker"`,
+    /// `"ControlPlaneMissingVramHint"`, `"ControlPlaneUnknownRun"`,
+    /// `"ControlPlaneUnknownWorker"`) so foreign consumers can discriminate
+    /// without juggling a second top-level variant.
     #[error("peer {kind}: {message}")]
     Peer { kind: String, message: String },
 
@@ -217,6 +225,37 @@ impl From<blazen_peer::PeerError> for BlazenError {
         Self::Peer {
             kind: kind.into(),
             message,
+        }
+    }
+}
+
+#[cfg(feature = "distributed")]
+impl From<blazen_controlplane::ControlPlaneError> for BlazenError {
+    fn from(err: blazen_controlplane::ControlPlaneError) -> Self {
+        use blazen_controlplane::ControlPlaneError as C;
+        // Why fold into `Peer`: keeping a single transport-error variant
+        // across peer-mesh and control-plane callers means foreign
+        // bindings get a stable error surface to switch on, and the
+        // workspace's other consumers of `BlazenError` (blazen-cabi)
+        // don't have to grow a parallel variant for every new
+        // distributed-transport error type. The `kind` discriminator
+        // namespaces control-plane errors with the `ControlPlane` prefix.
+        let kind = match &err {
+            C::Encode(_) => "ControlPlaneEncode",
+            C::Json(_) => "ControlPlaneJson",
+            C::Transport(_) => "ControlPlaneTransport",
+            C::EnvelopeVersion { .. } => "ControlPlaneEnvelopeVersion",
+            C::Tls(_) => "ControlPlaneTls",
+            C::Unauthenticated(_) => "ControlPlaneUnauthenticated",
+            C::NoMatchingWorker { .. } => "ControlPlaneNoMatchingWorker",
+            C::MissingVramHint => "ControlPlaneMissingVramHint",
+            C::UnknownRun(_) => "ControlPlaneUnknownRun",
+            C::UnknownWorker(_) => "ControlPlaneUnknownWorker",
+            C::Workflow(_) => "ControlPlaneWorkflow",
+        };
+        Self::Peer {
+            kind: kind.into(),
+            message: err.to_string(),
         }
     }
 }

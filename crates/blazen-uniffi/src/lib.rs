@@ -30,6 +30,8 @@ pub mod agent;
 pub mod batch;
 pub mod compute;
 pub mod compute_types;
+#[cfg(feature = "distributed")]
+pub mod controlplane;
 pub mod errors;
 pub mod llm;
 #[cfg(feature = "distributed")]
@@ -56,6 +58,14 @@ pub use compute_types::{
     SpeechRequest, ThreeDRequest, ThreeDResult, TranscriptionRequest, TranscriptionResult,
     TranscriptionSegment, UpscaleRequest, VideoRequest, VideoResult, VoiceCloneRequest,
     VoiceHandle,
+};
+#[cfg(feature = "distributed")]
+pub use controlplane::{
+    ControlPlaneAdmission, ControlPlaneAdmissionMode, ControlPlaneAssignmentHandler,
+    ControlPlaneClient, ControlPlaneRunEvent, ControlPlaneRunEventSubscriber,
+    ControlPlaneRunStateSnapshot, ControlPlaneRunStatus, ControlPlaneSubmitRequest,
+    ControlPlaneSubscription, ControlPlaneWorker, ControlPlaneWorkerCapability,
+    ControlPlaneWorkerInfo,
 };
 pub use errors::{BlazenError, BlazenResult};
 pub use llm::{

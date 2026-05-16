@@ -14,6 +14,8 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Response, Status, Streaming};
 use uuid::Uuid;
 
+use blazen_core::distributed::RunEvent;
+
 use crate::pb::{PostcardRequest, PostcardResponse};
 use crate::protocol::{
     ENVELOPE_VERSION, ServerToWorker, Welcome, WorkerToServer, validate_envelope_version,
@@ -141,7 +143,6 @@ pub async fn handle_worker_session(
 /// Dispatch a single inbound `WorkerToServer` frame into the
 /// registry / queue. Frames whose handler is not yet wired up are
 /// logged at debug level and dropped.
-#[allow(clippy::unused_async)] // becomes properly async when the offer/claim retry loop and event-bus land.
 async fn handle_worker_frame(shared: &Arc<SharedState>, session_id: Uuid, frame: WorkerToServer) {
     match frame {
         WorkerToServer::Hello(_) => {
@@ -157,22 +158,30 @@ async fn handle_worker_frame(shared: &Arc<SharedState>, session_id: Uuid, frame:
             crate::protocol::AssignmentStatus::Completed => {
                 let output =
                     serde_json::from_slice(&r.output_json).unwrap_or(serde_json::Value::Null);
-                shared.queue.mark_completed(r.run_id, output);
+                shared.queue.mark_completed(r.run_id, output).await;
             }
             crate::protocol::AssignmentStatus::Failed => {
                 shared
                     .queue
-                    .mark_failed(r.run_id, r.error.unwrap_or_else(|| "unknown".into()));
+                    .mark_failed(r.run_id, r.error.unwrap_or_else(|| "unknown".into()))
+                    .await;
             }
             crate::protocol::AssignmentStatus::Cancelled => {
-                shared.queue.mark_cancelled(r.run_id);
+                shared.queue.mark_cancelled(r.run_id).await;
             }
         },
         WorkerToServer::Event(e) => {
-            shared.queue.record_event(e.run_id);
-            // TODO Phase 1e: forward to SubscribeRunEvents / SubscribeAll
-            // subscribers. For now the queue just tracks the timestamp so
-            // `describe()` can surface `last_event_at_ms`.
+            shared.queue.record_event(e.run_id).await;
+            let data = serde_json::from_slice(&e.data_json).unwrap_or(serde_json::Value::Null);
+            let event = RunEvent {
+                run_id: e.run_id,
+                event_type: e.event_type,
+                data,
+                timestamp_ms: e.timestamp_ms,
+            };
+            // `broadcast::Sender::send` returns Err when there are zero live
+            // subscribers — expected and harmless; discard.
+            let _ = shared.events.send(event);
         }
         WorkerToServer::OfferDecision(_) => {
             // TODO Phase 1b retry loop: tie into the offer/claim/decline

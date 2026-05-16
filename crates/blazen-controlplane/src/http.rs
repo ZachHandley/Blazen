@@ -32,8 +32,8 @@
 //! - `GET  /v1/cp/describe/{run_id}` — JSON response with
 //!   [`crate::protocol::RunStateSnapshotWire`].
 //! - `GET  /v1/cp/events/{run_id}` — SSE stream of events for a run
-//!   (placeholder — empty until Phase 10 event bus).
-//! - `GET  /v1/cp/events` — SSE stream of all runs (placeholder).
+//!   (wired in Phase 3 via the shared broadcast bus).
+//! - `GET  /v1/cp/events` — SSE stream of every run.
 //!
 //! ## Authentication
 //!
@@ -42,7 +42,7 @@
 //! disabled.
 
 use std::convert::Infallible;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Json;
@@ -54,12 +54,11 @@ use axum::response::sse::{Event as SseEvent, KeepAlive, Sse};
 use axum::routing::{get, post};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
-use dashmap::DashMap;
 use futures_core::Stream;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 use uuid::Uuid;
 
 use blazen_core::distributed::{RunStatus, WorkerCapability};
@@ -174,27 +173,19 @@ fn check_auth(headers: &HeaderMap) -> Result<(), HttpError> {
 /// State held per-session for the SSE worker tier. The outbound channel
 /// receives [`ServerToWorker`] frames just like a bidi session would; the
 /// SSE handler reads from it.
-struct HttpWorkerState {
+///
+/// Stored in [`SharedState::http_sessions`](crate::server::SharedState::http_sessions);
+/// entries have the same lifetime as a bidi session in
+/// [`crate::server::registry::WorkerRegistry`]: created by
+/// `worker_register`, consumed by `worker_stream`, removed by
+/// `worker_release` (or implicitly when the bidi-tier evicts the node id).
+pub struct HttpWorkerState {
     /// Wrapped in a `Mutex<Option<...>>` because the SSE handler takes
     /// the receiver exactly once on first GET — any subsequent stream
     /// open against the same session must return
     /// [`HttpError::FailedPrecondition`] rather than steal frames from
     /// the existing reader.
     outbound_rx: tokio::sync::Mutex<Option<mpsc::Receiver<ServerToWorker>>>,
-}
-
-// HACK: rather than threading another field through `SharedState` (and
-// keeping its constructor stable across phases), we use a
-// process-global `DashMap` initialised via `OnceLock`. This keeps the
-// http tier self-contained until Phase 1h figures out a cleaner
-// state-sharing pattern. Entries here have the same lifetime as a bidi
-// session in [`crate::server::registry::WorkerRegistry`]: created by
-// `worker_register`, consumed by `worker_stream`, removed by
-// `worker_release` (or implicitly when the bidi-tier evicts the node id).
-static HTTP_SESSIONS: OnceLock<DashMap<Uuid, Arc<HttpWorkerState>>> = OnceLock::new();
-
-fn http_sessions() -> &'static DashMap<Uuid, Arc<HttpWorkerState>> {
-    HTTP_SESSIONS.get_or_init(DashMap::new)
 }
 
 // ===== Worker tier =====
@@ -221,7 +212,7 @@ async fn worker_register(
 
     // Stash the receiver so the SSE handler can pick it up on the
     // subsequent GET /stream.
-    http_sessions().insert(
+    shared.http_sessions.insert(
         session_id,
         Arc::new(HttpWorkerState {
             outbound_rx: tokio::sync::Mutex::new(Some(rx)),
@@ -262,13 +253,14 @@ async fn worker_register(
 }
 
 async fn worker_stream(
-    State(_shared): State<Arc<SharedState>>,
+    State(shared): State<Arc<SharedState>>,
     Path(session_id): Path<Uuid>,
     headers: HeaderMap,
 ) -> Result<Sse<impl Stream<Item = Result<SseEvent, Infallible>>>, HttpError> {
     check_auth(&headers)?;
 
-    let entry = http_sessions()
+    let entry = shared
+        .http_sessions
         .get(&session_id)
         .ok_or_else(|| HttpError::NotFound(format!("unknown session {session_id}")))?
         .clone();
@@ -306,13 +298,18 @@ async fn worker_result(
         AssignmentStatus::Completed => {
             let output: serde_json::Value =
                 serde_json::from_slice(&result.output_json).unwrap_or(serde_json::Value::Null);
-            shared.queue.mark_completed(result.run_id, output);
+            shared.queue.mark_completed(result.run_id, output).await;
         }
-        AssignmentStatus::Failed => shared.queue.mark_failed(
-            result.run_id,
-            result.error.unwrap_or_else(|| "unknown".into()),
-        ),
-        AssignmentStatus::Cancelled => shared.queue.mark_cancelled(result.run_id),
+        AssignmentStatus::Failed => {
+            shared
+                .queue
+                .mark_failed(
+                    result.run_id,
+                    result.error.unwrap_or_else(|| "unknown".into()),
+                )
+                .await;
+        }
+        AssignmentStatus::Cancelled => shared.queue.mark_cancelled(result.run_id).await,
     }
     Ok(StatusCode::NO_CONTENT)
 }
@@ -328,7 +325,7 @@ async fn worker_event(
     let event: AssignmentEvent = envelope.decode()?;
     validate_envelope_version(event.envelope_version)
         .map_err(|e| HttpError::FailedPrecondition(e.to_string()))?;
-    shared.queue.record_event(event.run_id);
+    shared.queue.record_event(event.run_id).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -357,7 +354,7 @@ async fn worker_release(
     check_auth(&headers)?;
     shared.registry.unregister(session_id);
     shared.queue.surrender_session(session_id).await;
-    http_sessions().remove(&session_id);
+    shared.http_sessions.remove(&session_id);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -453,7 +450,7 @@ async fn orchestrator_cancel(
         };
         let _ = handle.outbound.send(ServerToWorker::Cancel(cancel)).await;
     }
-    shared.queue.mark_cancelled(req.run_id);
+    shared.queue.mark_cancelled(req.run_id).await;
 
     let snap = shared
         .queue
@@ -483,24 +480,43 @@ async fn orchestrator_describe(
 }
 
 async fn orchestrator_events_one(
-    State(_shared): State<Arc<SharedState>>,
-    Path(_run_id): Path<Uuid>,
+    State(shared): State<Arc<SharedState>>,
+    Path(run_id): Path<Uuid>,
     headers: HeaderMap,
 ) -> Result<Sse<impl Stream<Item = Result<SseEvent, Infallible>>>, HttpError> {
     check_auth(&headers)?;
-    // Placeholder — empty stream until the Phase 10 event bus lands.
-    // Clients can poll `GET /describe/{run_id}` in the meantime.
-    let s = futures_util::stream::empty();
-    Ok(Sse::new(s).keep_alive(KeepAlive::new().interval(Duration::from_secs(15))))
+
+    let rx = shared.events.subscribe();
+    let stream = BroadcastStream::new(rx).filter_map(move |res| async move {
+        let event = res.ok()?;
+        if event.run_id != run_id {
+            return None;
+        }
+        let wire = protocol::RunEventWire::from_core(&event).ok()?;
+        let envelope = PostcardEnvelope::encode(&wire).ok()?;
+        let body = serde_json::to_string(&envelope).ok()?;
+        Some(Ok::<SseEvent, Infallible>(SseEvent::default().data(body)))
+    });
+
+    Ok(Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15))))
 }
 
 async fn orchestrator_events_all(
-    State(_shared): State<Arc<SharedState>>,
+    State(shared): State<Arc<SharedState>>,
     headers: HeaderMap,
 ) -> Result<Sse<impl Stream<Item = Result<SseEvent, Infallible>>>, HttpError> {
     check_auth(&headers)?;
-    let s = futures_util::stream::empty();
-    Ok(Sse::new(s).keep_alive(KeepAlive::new().interval(Duration::from_secs(15))))
+
+    let rx = shared.events.subscribe();
+    let stream = BroadcastStream::new(rx).filter_map(|res| async move {
+        let event = res.ok()?;
+        let wire = protocol::RunEventWire::from_core(&event).ok()?;
+        let envelope = PostcardEnvelope::encode(&wire).ok()?;
+        let body = serde_json::to_string(&envelope).ok()?;
+        Some(Ok::<SseEvent, Infallible>(SseEvent::default().data(body)))
+    });
+
+    Ok(Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15))))
 }
 
 fn run_state_to_wire(

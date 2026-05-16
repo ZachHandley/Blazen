@@ -32,6 +32,7 @@ pub mod compute;
 pub mod compute_provider;
 pub mod content;
 pub mod context;
+pub mod controlplane;
 pub mod core_types;
 pub mod decorators;
 pub mod embed_tract;

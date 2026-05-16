@@ -25,6 +25,7 @@ blazen-manager.workspace = true
 blazen-memory.workspace = true
 blazen-memory-valkey = { workspace = true, features = ["redis-tcp", "upstash"] }
 blazen-model-cache.workspace = true
+blazen-controlplane = { workspace = true, optional = true, features = ["client"] }
 blazen-peer = { workspace = true, features = ["server", "client", "http-transport"] }
 blazen-persist = { workspace = true, features = ["redb", "valkey"] }
 blazen-pipeline.workspace = true
@@ -39,6 +40,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
+tokio-util.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 uniffi = { workspace = true, features = ["cli"] }
@@ -87,7 +89,13 @@ prometheus = ["blazen-telemetry/prometheus"]
 langfuse = ["blazen-telemetry/langfuse"]
 
 # Distributed peer types (RemoteWorkflowRequest/Response, PeerClient, PeerServer)
-distributed = ["blazen-core/distributed", "blazen-peer/server", "blazen-peer/client"]
+# plus control-plane orchestrator/worker types (ControlPlaneClient, ControlPlaneWorker).
+distributed = [
+    "blazen-core/distributed",
+    "blazen-peer/server",
+    "blazen-peer/client",
+    "dep:blazen-controlplane",
+]
 
 [lints]
 workspace = true

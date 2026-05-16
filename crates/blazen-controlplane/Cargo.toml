@@ -38,8 +38,11 @@ rustls = { workspace = true, features = ["aws-lc-rs"] }
 tokio-rustls = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
 futures-util = { workspace = true }
 futures-core = { workspace = true }
+anyhow = { workspace = true }
+redis = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
@@ -61,6 +64,7 @@ default = ["server", "client"]
 server = []
 client = []
 http-transport = ["dep:axum", "dep:tower", "dep:tower-http", "dep:blazen-llm", "dep:base64"]
+valkey-store = ["dep:redis"]
 
 [lints]
 workspace = true

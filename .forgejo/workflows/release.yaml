@@ -68,10 +68,95 @@ jobs:
             exit 1
           fi
 
+  wait-for-build-artifacts:
+    name: Wait for Build Artifacts
+    runs-on: ubuntu-latest
+    needs: version
+    # workflow_dispatch only — binding tag pushes (bindings/go/v*,
+    # bindings/swift/v*) flow into release-go / release-swift below and don't
+    # consume the blazen-build generic package, so they have nothing to wait on.
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Poll Forgejo generic package until build-artifacts.yaml uploads are complete
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          AUTH: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+        # Mirrors build-artifacts.yaml's `dispatch-release` `needs:` list
+        # (build-wheels, build-sdist, build-napi, build-wasm, build-uniffi,
+        # build-cabi). When build-artifacts is dispatched from ci.yaml it
+        # fires release.yaml itself, so in practice these are already present
+        # by the time we run — but a manual `release.yaml` dispatch could
+        # race ahead and we'd fail in fetch-artifacts with a confusing 404.
+        # Polling the generic package directly is the simplest gate: it
+        # doesn't deadlock on the in-flight build-artifacts run that
+        # dispatched us (its own dispatch-release job is still in_progress
+        # while we run), and it's the same surface fetch-artifacts uses
+        # below so any missing file here would fail there too.
+        #
+        # build-swift-xcframework IS in this gate — a real macOS runner is
+        # configured on the Forgejo deployment, so the XCFramework is always
+        # expected to be present. release-swift treats a missing XCFramework
+        # as a hard failure (see release-swift#xcf step).
+        run: |
+          set -euo pipefail
+          BASE="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}"
+
+          FILES=(
+            wheels-x86_64-unknown-linux-gnu.tar.gz
+            wheels-aarch64-unknown-linux-gnu.tar.gz
+            wheels-x86_64-unknown-linux-musl.tar.gz
+            wheels-aarch64-unknown-linux-musl.tar.gz
+            wheels-aarch64-apple-darwin.tar.gz
+            wheels-x86_64-pc-windows-msvc.tar.gz
+            sdist.tar.gz
+            napi-x86_64-unknown-linux-gnu.tar.gz
+            napi-aarch64-unknown-linux-gnu.tar.gz
+            napi-x86_64-unknown-linux-musl.tar.gz
+            napi-aarch64-unknown-linux-musl.tar.gz
+            napi-aarch64-apple-darwin.tar.gz
+            napi-x86_64-pc-windows-msvc.tar.gz
+            napi-wasm32-wasi.tar.gz
+            wasm.tar.gz
+            libblazen_cabi-linux-x86_64.so
+            libblazen_cabi-linux-aarch64.so
+            libblazen_cabi-darwin-x86_64.dylib
+            libblazen_cabi-darwin-aarch64.dylib
+            libblazen_cabi-windows-x86_64.dll
+            BlazenFFI.xcframework.zip
+          )
+
+          # 2h cap accommodates the slowest matrix entries (macOS aarch64
+          # wheel + napi). Poll cadence is 30s — the macOS build dominates
+          # so faster polling buys nothing.
+          DEADLINE=$(( $(date +%s) + 7200 ))
+          while :; do
+            MISSING=()
+            for F in "${FILES[@]}"; do
+              CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+                --head -u "$AUTH" "${BASE}/${F}")
+              if [ "$CODE" != "200" ]; then
+                MISSING+=("${F} (HTTP ${CODE})")
+              fi
+            done
+            if [ ${#MISSING[@]} -eq 0 ]; then
+              echo "All build-artifacts uploads present for v${VERSION}."
+              exit 0
+            fi
+            NOW=$(date +%s)
+            if [ "${NOW}" -ge "${DEADLINE}" ]; then
+              echo "::error::Timed out waiting for build-artifacts.yaml uploads for v${VERSION}."
+              for M in "${MISSING[@]}"; do echo "  missing: ${M}"; done
+              exit 1
+            fi
+            echo "[$(date -u +%H:%M:%S)] waiting on ${#MISSING[@]}/${#FILES[@]} artefact(s); next check in 30s"
+            sleep 30
+          done
+
   fetch-artifacts:
     name: Fetch Build Artifacts
     runs-on: ubuntu-latest
-    needs: version
+    needs: [version, wait-for-build-artifacts]
     outputs:
       version: ${{ needs.version.outputs.version }}
     steps:
@@ -153,7 +238,10 @@ jobs:
   publish-rust:
     name: Publish Rust Crates
     runs-on: ubuntu-latest
-    needs: version
+    # wait-for-build-artifacts isn't strictly required for crates.io
+    # (publish-rust builds from source), but gating here prevents poisoning
+    # the public registry when build-artifacts has failed upstream.
+    needs: [version, wait-for-build-artifacts]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -710,9 +798,9 @@ jobs:
     # Fires only on a `bindings/swift/v*` tag push. The XCFramework is built
     # by build-artifacts.yaml's build-swift-xcframework job on macOS and
     # uploaded to the Forgejo generic blazen-build package. We download it
-    # here and attach to the release as an asset. If the XCFramework is
-    # missing (no macOS runner available at build time) the release is
-    # still cut, with a warning in the notes and no binary asset.
+    # here and attach to the release as an asset. A missing XCFramework is
+    # a hard failure — a real macOS runner is configured on the Forgejo
+    # deployment, so it must always be present.
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/bindings/swift/v')
     steps:
       - name: Checkout
@@ -731,28 +819,26 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Download XCFramework from Forgejo generic package
-        id: xcf
         shell: bash
         # The XCFramework lives under the BlazenFFI-xcframework artefact
         # produced by build-artifacts.yaml#build-swift-xcframework. Look it
         # up by the binding version (which the build pipeline used as the
-        # generic-package version). If the runner that produced it never
-        # ran (no macOS available) the fetch returns non-200 and we
-        # continue without an asset.
+        # generic-package version). Hard-fail on non-200 — the macOS runner
+        # is reliable and a missing XCFramework means the build pipeline
+        # broke, which should block the release rather than silently ship
+        # an asset-less Swift binding.
         run: |
-          set +e
+          set -euo pipefail
           VERSION="${{ steps.tag.outputs.version }}"
           AUTH="zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}"
           URL="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/BlazenFFI.xcframework.zip"
           CODE=$(curl --silent --output BlazenFFI.xcframework.zip --write-out '%{http_code}' -u "$AUTH" "$URL")
-          if [ "$CODE" = "200" ]; then
-            echo "have_xcf=true" >> "$GITHUB_OUTPUT"
-            ls -lh BlazenFFI.xcframework.zip
-          else
-            echo "have_xcf=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::XCFramework not available for v${VERSION} (HTTP ${CODE}). Release will be cut without a binary asset."
+          if [ "$CODE" != "200" ]; then
+            echo "::error::XCFramework not available for v${VERSION} (HTTP ${CODE}). build-artifacts.yaml#build-swift-xcframework did not produce the artefact."
             rm -f BlazenFFI.xcframework.zip
+            exit 1
           fi
+          ls -lh BlazenFFI.xcframework.zip
 
       - name: Install git-cliff
         run: |
@@ -784,10 +870,9 @@ jobs:
           .package(url: "https://github.com/zachhandley/Blazen", from: "${{ steps.tag.outputs.version }}")
           \`\`\`
 
-          The \`BlazenFFI.xcframework.zip\` asset (when present) bundles the
-          UniFFI static library as a universal macOS XCFramework. SwiftPM
-          consumers resolve \`BlazenSwift\` directly from the repo subtree
-          at \`bindings/swift/\`.
+          The \`BlazenFFI.xcframework.zip\` asset bundles the UniFFI static
+          library as a universal macOS XCFramework. SwiftPM consumers resolve
+          \`BlazenSwift\` directly from the repo subtree at \`bindings/swift/\`.
           NOTES_EOF
 
       - name: Create Forgejo release for Swift tag
@@ -823,7 +908,6 @@ jobs:
           echo "release_id=${RELEASE_ID}" >> "$GITHUB_OUTPUT"
 
       - name: Attach XCFramework to release
-        if: steps.xcf.outputs.have_xcf == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -837,7 +921,9 @@ jobs:
   release-ruby:
     name: Release Ruby gem
     runs-on: ubuntu-latest
-    needs: version
+    # release-ruby downloads libblazen_cabi-* directly (not via fetch-artifacts),
+    # so it needs the same wait gate.
+    needs: [version, wait-for-build-artifacts]
     # Fires from workflow_dispatch only. Skipped if RUBYGEMS_API_KEY isn't set
     # in repo secrets (a missing key shows up as an empty string after env
     # interpolation, so the gate is on the env var, not `secrets.*` directly

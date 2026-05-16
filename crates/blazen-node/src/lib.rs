@@ -12,12 +12,15 @@
 //! - [`agent`] -- Agentic tool execution loop bindings.
 //! - [`peer`] -- Distributed peer gRPC server and client bindings (native targets only).
 //! - [`peer_http`] -- Wasi-compatible HTTP/JSON peer client (and native fallback). Available on every target.
+//! - [`controlplane`] -- Control-plane orchestrator client and worker bindings (native targets only).
 //! - [`workflow`] -- Workflow builder, runner, context, handler, and events.
 
 pub mod agent;
 pub mod batch;
 pub mod compute;
 pub mod content;
+#[cfg(not(target_os = "wasi"))]
+pub mod controlplane;
 pub mod core;
 pub mod error;
 pub mod generated;

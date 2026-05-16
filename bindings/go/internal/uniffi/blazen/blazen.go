@@ -363,6 +363,8 @@ func readFloat64(reader io.Reader) float64 {
 func init() {
 
 	FfiConverterCompletionStreamSinkINSTANCE.register()
+	FfiConverterControlPlaneAssignmentHandlerINSTANCE.register()
+	FfiConverterControlPlaneRunEventSubscriberINSTANCE.register()
 	FfiConverterCustomProviderINSTANCE.register()
 	FfiConverterStepHandlerINSTANCE.register()
 	FfiConverterToolHandlerINSTANCE.register()
@@ -927,6 +929,141 @@ func uniffiCheckChecksums() {
 		if checksum != 50217 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_ttsmodel_synthesize_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_handle()
+		})
+		if checksum != 640 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_handle: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_on_cancel()
+		})
+		if checksum != 36399 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_on_cancel: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_on_drain()
+		})
+		if checksum != 63250 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_on_drain: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_controlplaneclient_cancel_workflow()
+		})
+		if checksum != 39238 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_controlplaneclient_cancel_workflow: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_controlplaneclient_describe_workflow()
+		})
+		if checksum != 8003 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_controlplaneclient_describe_workflow: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_controlplaneclient_drain_worker()
+		})
+		if checksum != 17174 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_controlplaneclient_drain_worker: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_controlplaneclient_list_workers()
+		})
+		if checksum != 315 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_controlplaneclient_list_workers: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_controlplaneclient_submit_workflow()
+		})
+		if checksum != 23792 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_controlplaneclient_submit_workflow: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_controlplaneclient_subscribe_run_events()
+		})
+		if checksum != 40711 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_controlplaneclient_subscribe_run_events: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_controlplaneruneventsubscriber_on_event()
+		})
+		if checksum != 3038 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_controlplaneruneventsubscriber_on_event: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_controlplaneruneventsubscriber_on_close()
+		})
+		if checksum != 46575 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_controlplaneruneventsubscriber_on_close: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_controlplaneruneventsubscriber_on_error()
+		})
+		if checksum != 32772 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_controlplaneruneventsubscriber_on_error: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_controlplanesubscription_cancel()
+		})
+		if checksum != 27973 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_controlplanesubscription_cancel: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_controlplaneworker_run()
+		})
+		if checksum != 52241 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_controlplaneworker_run: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_controlplaneworker_shutdown()
+		})
+		if checksum != 13840 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_controlplaneworker_shutdown: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -1728,6 +1865,33 @@ func uniffiCheckChecksums() {
 		if checksum != 30307 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_agent_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_controlplaneclient_connect()
+		})
+		if checksum != 13355 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_controlplaneclient_connect: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_controlplaneclient_connect_blocking()
+		})
+		if checksum != 65181 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_controlplaneclient_connect_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_controlplaneworker_new_blocking()
+		})
+		if checksum != 22162 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_controlplaneworker_new_blocking: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -3533,6 +3697,1202 @@ func blazen_uniffi_streaming_cgo_dispatchCallbackInterfaceCompletionStreamSinkCl
 
 func (c FfiConverterCompletionStreamSink) register() {
 	C.uniffi_blazen_uniffi_fn_init_callback_vtable_completionstreamsink(&UniffiVTableCallbackInterfaceCompletionStreamSinkINSTANCE)
+}
+
+// Foreign-implementable handler invoked once per assignment a worker
+// receives.
+//
+// `handle` is synchronous on the foreign side — foreign code that needs
+// to drive its own async work must spawn a goroutine / coroutine /
+// fiber inside the callback and return when that work resolves. The
+// returned `Ok(String)` is interpreted as the assignment output's JSON
+// representation; the returned `Err(String)` is surfaced to the control
+// plane as an assignment failure.
+//
+// `on_cancel` and `on_drain` are best-effort notifications. The
+// underlying Rust worker has already fired the per-run cancellation
+// token / queue gate before invoking these; the foreign handler should
+// use them only to release external resources (open file handles,
+// network sockets, etc.).
+type ControlPlaneAssignmentHandler interface {
+	// Handle one assignment. Return `Ok(json)` for success or any
+	// [`BlazenError`] for failure — the error's `Display`
+	// representation is forwarded to the control plane as the
+	// assignment failure message.
+	//
+	// Use [`BlazenError::Tool`] for handler-side errors, or
+	// [`BlazenError::Workflow`] for workflow-level failures.
+	Handle(runId string, workflowName string, inputJson string) (string, error)
+	// Called when the server cancels an in-flight run. Foreign code
+	// should treat this as a notification; the underlying Rust worker
+	// has already fired the per-run cancellation token.
+	OnCancel(runId string)
+	// Called when the server initiates a drain. `immediate = true`
+	// means the worker must stop now; `false` means graceful drain.
+	OnDrain(immediate bool)
+}
+
+// Foreign-implementable handler invoked once per assignment a worker
+// receives.
+//
+// `handle` is synchronous on the foreign side — foreign code that needs
+// to drive its own async work must spawn a goroutine / coroutine /
+// fiber inside the callback and return when that work resolves. The
+// returned `Ok(String)` is interpreted as the assignment output's JSON
+// representation; the returned `Err(String)` is surfaced to the control
+// plane as an assignment failure.
+//
+// `on_cancel` and `on_drain` are best-effort notifications. The
+// underlying Rust worker has already fired the per-run cancellation
+// token / queue gate before invoking these; the foreign handler should
+// use them only to release external resources (open file handles,
+// network sockets, etc.).
+type ControlPlaneAssignmentHandlerImpl struct {
+	ffiObject FfiObject
+}
+
+// Handle one assignment. Return `Ok(json)` for success or any
+// [`BlazenError`] for failure — the error's `Display`
+// representation is forwarded to the control plane as the
+// assignment failure message.
+//
+// Use [`BlazenError::Tool`] for handler-side errors, or
+// [`BlazenError::Workflow`] for workflow-level failures.
+func (_self *ControlPlaneAssignmentHandlerImpl) Handle(runId string, workflowName string, inputJson string) (string, error) {
+	_pointer := _self.ffiObject.incrementPointer("ControlPlaneAssignmentHandler")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_controlplaneassignmenthandler_handle(
+				_pointer, FfiConverterStringINSTANCE.Lower(runId), FfiConverterStringINSTANCE.Lower(workflowName), FfiConverterStringINSTANCE.Lower(inputJson), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue string
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterStringINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Called when the server cancels an in-flight run. Foreign code
+// should treat this as a notification; the underlying Rust worker
+// has already fired the per-run cancellation token.
+func (_self *ControlPlaneAssignmentHandlerImpl) OnCancel(runId string) {
+	_pointer := _self.ffiObject.incrementPointer("ControlPlaneAssignmentHandler")
+	defer _self.ffiObject.decrementPointer()
+	rustCall(func(_uniffiStatus *C.RustCallStatus) bool {
+		C.uniffi_blazen_uniffi_fn_method_controlplaneassignmenthandler_on_cancel(
+			_pointer, FfiConverterStringINSTANCE.Lower(runId), _uniffiStatus)
+		return false
+	})
+}
+
+// Called when the server initiates a drain. `immediate = true`
+// means the worker must stop now; `false` means graceful drain.
+func (_self *ControlPlaneAssignmentHandlerImpl) OnDrain(immediate bool) {
+	_pointer := _self.ffiObject.incrementPointer("ControlPlaneAssignmentHandler")
+	defer _self.ffiObject.decrementPointer()
+	rustCall(func(_uniffiStatus *C.RustCallStatus) bool {
+		C.uniffi_blazen_uniffi_fn_method_controlplaneassignmenthandler_on_drain(
+			_pointer, FfiConverterBoolINSTANCE.Lower(immediate), _uniffiStatus)
+		return false
+	})
+}
+func (object *ControlPlaneAssignmentHandlerImpl) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterControlPlaneAssignmentHandler struct {
+	handleMap *concurrentHandleMap[ControlPlaneAssignmentHandler]
+}
+
+var FfiConverterControlPlaneAssignmentHandlerINSTANCE = FfiConverterControlPlaneAssignmentHandler{
+	handleMap: newConcurrentHandleMap[ControlPlaneAssignmentHandler](),
+}
+
+func (c FfiConverterControlPlaneAssignmentHandler) Lift(handle C.uint64_t) ControlPlaneAssignmentHandler {
+	if uint64(handle)&1 == 0 {
+		// Rust-generated handle (even), construct a new object wrapping the handle
+		result := &ControlPlaneAssignmentHandlerImpl{
+			newFfiObject(
+				handle,
+				func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+					return C.uniffi_blazen_uniffi_fn_clone_controlplaneassignmenthandler(handle, status)
+				},
+				func(handle C.uint64_t, status *C.RustCallStatus) {
+					C.uniffi_blazen_uniffi_fn_free_controlplaneassignmenthandler(handle, status)
+				},
+			),
+		}
+		runtime.SetFinalizer(result, (*ControlPlaneAssignmentHandlerImpl).Destroy)
+		return result
+	} else {
+		// Go-generated handle (odd), retrieve from the handle map
+		val, ok := c.handleMap.tryGet(uint64(handle))
+		if !ok {
+			panic(fmt.Errorf("no callback in handle map: %d", handle))
+		}
+		c.handleMap.remove(uint64(handle))
+		return val
+	}
+}
+
+func (c FfiConverterControlPlaneAssignmentHandler) Read(reader io.Reader) ControlPlaneAssignmentHandler {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterControlPlaneAssignmentHandler) Lower(value ControlPlaneAssignmentHandler) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	if val, ok := value.(*ControlPlaneAssignmentHandlerImpl); ok {
+		// Rust-backed object, clone the handle
+		handle := val.ffiObject.incrementPointer("ControlPlaneAssignmentHandler")
+		defer val.ffiObject.decrementPointer()
+		return handle
+	} else {
+		// Go-backed object, insert into handle map
+		return C.uint64_t(c.handleMap.insert(value))
+	}
+}
+
+func (c FfiConverterControlPlaneAssignmentHandler) Write(writer io.Writer, value ControlPlaneAssignmentHandler) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalControlPlaneAssignmentHandler(handle uint64) ControlPlaneAssignmentHandler {
+	return FfiConverterControlPlaneAssignmentHandlerINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalControlPlaneAssignmentHandler(value ControlPlaneAssignmentHandler) uint64 {
+	return uint64(FfiConverterControlPlaneAssignmentHandlerINSTANCE.Lower(value))
+}
+
+type FfiDestroyerControlPlaneAssignmentHandler struct{}
+
+func (_ FfiDestroyerControlPlaneAssignmentHandler) Destroy(value ControlPlaneAssignmentHandler) {
+	if val, ok := value.(*ControlPlaneAssignmentHandlerImpl); ok {
+		val.Destroy()
+	}
+}
+
+//export blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneAssignmentHandlerMethod0
+func blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneAssignmentHandlerMethod0(uniffiHandle C.uint64_t, runId C.RustBuffer, workflowName C.RustBuffer, inputJson C.RustBuffer, uniffiOutReturn *C.RustBuffer, callStatus *C.RustCallStatus) {
+	handle := uint64(uniffiHandle)
+	uniffiObj, ok := FfiConverterControlPlaneAssignmentHandlerINSTANCE.handleMap.tryGet(handle)
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+
+	res, err :=
+		uniffiObj.Handle(
+			FfiConverterStringINSTANCE.Lift(GoRustBuffer{
+				inner: runId,
+			}),
+			FfiConverterStringINSTANCE.Lift(GoRustBuffer{
+				inner: workflowName,
+			}),
+			FfiConverterStringINSTANCE.Lift(GoRustBuffer{
+				inner: inputJson,
+			}),
+		)
+
+	if err != nil {
+		var actualError *BlazenError
+		if errors.As(err, &actualError) {
+			*callStatus = C.RustCallStatus{
+				code:     C.int8_t(uniffiCallbackResultError),
+				errorBuf: FfiConverterBlazenErrorINSTANCE.Lower(actualError),
+			}
+		} else {
+			*callStatus = C.RustCallStatus{
+				code: C.int8_t(uniffiCallbackUnexpectedResultError),
+			}
+		}
+		return
+	}
+
+	*uniffiOutReturn = FfiConverterStringINSTANCE.Lower(res)
+}
+
+//export blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneAssignmentHandlerMethod1
+func blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneAssignmentHandlerMethod1(uniffiHandle C.uint64_t, runId C.RustBuffer, uniffiOutReturn *C.void, callStatus *C.RustCallStatus) {
+	handle := uint64(uniffiHandle)
+	uniffiObj, ok := FfiConverterControlPlaneAssignmentHandlerINSTANCE.handleMap.tryGet(handle)
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+
+	uniffiObj.OnCancel(
+		FfiConverterStringINSTANCE.Lift(GoRustBuffer{
+			inner: runId,
+		}),
+	)
+
+}
+
+//export blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneAssignmentHandlerMethod2
+func blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneAssignmentHandlerMethod2(uniffiHandle C.uint64_t, immediate C.int8_t, uniffiOutReturn *C.void, callStatus *C.RustCallStatus) {
+	handle := uint64(uniffiHandle)
+	uniffiObj, ok := FfiConverterControlPlaneAssignmentHandlerINSTANCE.handleMap.tryGet(handle)
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+
+	uniffiObj.OnDrain(
+		FfiConverterBoolINSTANCE.Lift(immediate),
+	)
+
+}
+
+var UniffiVTableCallbackInterfaceControlPlaneAssignmentHandlerINSTANCE = C.UniffiVTableCallbackInterfaceControlPlaneAssignmentHandler{
+	uniffiFree:  (C.UniffiCallbackInterfaceFree)(C.blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneAssignmentHandlerFree),
+	uniffiClone: (C.UniffiCallbackInterfaceClone)(C.blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneAssignmentHandlerClone),
+	handle:      (C.UniffiCallbackInterfaceControlPlaneAssignmentHandlerMethod0)(C.blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneAssignmentHandlerMethod0),
+	onCancel:    (C.UniffiCallbackInterfaceControlPlaneAssignmentHandlerMethod1)(C.blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneAssignmentHandlerMethod1),
+	onDrain:     (C.UniffiCallbackInterfaceControlPlaneAssignmentHandlerMethod2)(C.blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneAssignmentHandlerMethod2),
+}
+
+//export blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneAssignmentHandlerFree
+func blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneAssignmentHandlerFree(handle C.uint64_t) {
+	FfiConverterControlPlaneAssignmentHandlerINSTANCE.handleMap.remove(uint64(handle))
+}
+
+//export blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneAssignmentHandlerClone
+func blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneAssignmentHandlerClone(handle C.uint64_t) C.uint64_t {
+	val, ok := FfiConverterControlPlaneAssignmentHandlerINSTANCE.handleMap.tryGet(uint64(handle))
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+	return C.uint64_t(FfiConverterControlPlaneAssignmentHandlerINSTANCE.handleMap.insert(val))
+}
+
+func (c FfiConverterControlPlaneAssignmentHandler) register() {
+	C.uniffi_blazen_uniffi_fn_init_callback_vtable_controlplaneassignmenthandler(&UniffiVTableCallbackInterfaceControlPlaneAssignmentHandlerINSTANCE)
+}
+
+// gRPC client for the orchestrator side of the control plane.
+//
+// Construct with [`ControlPlaneClient::connect`] (async) or
+// [`ControlPlaneClient::connect_blocking`] (sync). All RPCs are
+// serialised behind an inner [`tokio::sync::Mutex`] held inside the
+// upstream [`CoreClient`]; concurrent calls on the same handle are safe
+// but each method holds the mutex for the duration of its RPC.
+type ControlPlaneClientInterface interface {
+	// Cancel an in-flight run.
+	//
+	// # Errors
+	//
+	// Returns [`BlazenError::Validation`] if `run_id` is not a valid
+	// UUID; [`BlazenError::Workflow`] for server-side errors.
+	CancelWorkflow(runId string) (ControlPlaneRunStateSnapshot, error)
+	// Look up the current state of a run.
+	//
+	// # Errors
+	//
+	// Returns [`BlazenError::Validation`] if `run_id` is not a valid
+	// UUID; [`BlazenError::Workflow`] for server-side errors.
+	DescribeWorkflow(runId string) (ControlPlaneRunStateSnapshot, error)
+	// Tell the control plane to drain `node_id`.
+	//
+	// `immediate = true` asks the worker to stop now; `false` lets
+	// it finish in-flight assignments before disconnecting.
+	//
+	// # Errors
+	//
+	// Returns [`BlazenError::ControlPlane`] for RPC failures.
+	DrainWorker(nodeId string, immediate bool) error
+	// List currently-connected workers.
+	//
+	// # Errors
+	//
+	// Returns [`BlazenError::Workflow`] for server-side errors.
+	ListWorkers() ([]ControlPlaneWorkerInfo, error)
+	// Submit a workflow to the control plane.
+	//
+	// Returns the initial [`ControlPlaneRunStateSnapshot`] (status will
+	// usually be `Pending` or `Running` immediately after submission).
+	//
+	// # Errors
+	//
+	// Returns [`BlazenError::Validation`] if `request.input_json` is
+	// not valid JSON; [`BlazenError::Workflow`] for server-side errors.
+	SubmitWorkflow(request ControlPlaneSubmitRequest) (ControlPlaneRunStateSnapshot, error)
+	// Subscribe to events for `run_id`, forwarding each event to
+	// `subscriber` until the stream terminates.
+	//
+	// Returns a [`ControlPlaneSubscription`] handle; call
+	// [`ControlPlaneSubscription::cancel`] to stop pumping events
+	// before the run completes. The pump task always invokes either
+	// `on_close` or `on_error` exactly once before exiting.
+	//
+	// # Errors
+	//
+	// Returns [`BlazenError::Validation`] if `run_id` is not a valid
+	// UUID; [`BlazenError::Workflow`] if the server rejects the
+	// subscription request itself.
+	SubscribeRunEvents(runId string, subscriber ControlPlaneRunEventSubscriber) (*ControlPlaneSubscription, error)
+}
+
+// gRPC client for the orchestrator side of the control plane.
+//
+// Construct with [`ControlPlaneClient::connect`] (async) or
+// [`ControlPlaneClient::connect_blocking`] (sync). All RPCs are
+// serialised behind an inner [`tokio::sync::Mutex`] held inside the
+// upstream [`CoreClient`]; concurrent calls on the same handle are safe
+// but each method holds the mutex for the duration of its RPC.
+type ControlPlaneClient struct {
+	ffiObject FfiObject
+}
+
+// Async constructor. Use from Swift `async` / Kotlin `suspend`
+// callers.
+//
+// # Errors
+//
+// Same as [`ControlPlaneClient::connect_blocking`].
+func ControlPlaneClientConnect(endpoint string) (*ControlPlaneClient, error) {
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+			res := C.ffi_blazen_uniffi_rust_future_complete_u64(handle, status)
+			return res
+		},
+		// liftFn
+		func(ffi C.uint64_t) *ControlPlaneClient {
+			return FfiConverterControlPlaneClientINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_constructor_controlplaneclient_connect(FfiConverterStringINSTANCE.Lower(endpoint)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_u64(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_u64(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous constructor. Blocks the current thread on the shared
+// Tokio runtime while the TCP/HTTP-2 handshake completes.
+//
+// # Errors
+//
+// Returns [`BlazenError::ControlPlane`] (`kind = "Transport"`) if
+// the endpoint URI is invalid or the handshake fails.
+func ControlPlaneClientConnectBlocking(endpoint string) (*ControlPlaneClient, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_controlplaneclient_connect_blocking(FfiConverterStringINSTANCE.Lower(endpoint), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *ControlPlaneClient
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterControlPlaneClientINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Cancel an in-flight run.
+//
+// # Errors
+//
+// Returns [`BlazenError::Validation`] if `run_id` is not a valid
+// UUID; [`BlazenError::Workflow`] for server-side errors.
+func (_self *ControlPlaneClient) CancelWorkflow(runId string) (ControlPlaneRunStateSnapshot, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ControlPlaneClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) ControlPlaneRunStateSnapshot {
+			return FfiConverterControlPlaneRunStateSnapshotINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_controlplaneclient_cancel_workflow(
+			_pointer, FfiConverterStringINSTANCE.Lower(runId)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Look up the current state of a run.
+//
+// # Errors
+//
+// Returns [`BlazenError::Validation`] if `run_id` is not a valid
+// UUID; [`BlazenError::Workflow`] for server-side errors.
+func (_self *ControlPlaneClient) DescribeWorkflow(runId string) (ControlPlaneRunStateSnapshot, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ControlPlaneClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) ControlPlaneRunStateSnapshot {
+			return FfiConverterControlPlaneRunStateSnapshotINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_controlplaneclient_describe_workflow(
+			_pointer, FfiConverterStringINSTANCE.Lower(runId)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Tell the control plane to drain `node_id`.
+//
+// `immediate = true` asks the worker to stop now; `false` lets
+// it finish in-flight assignments before disconnecting.
+//
+// # Errors
+//
+// Returns [`BlazenError::ControlPlane`] for RPC failures.
+func (_self *ControlPlaneClient) DrainWorker(nodeId string, immediate bool) error {
+	_pointer := _self.ffiObject.incrementPointer("*ControlPlaneClient")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_controlplaneclient_drain_worker(
+			_pointer, FfiConverterStringINSTANCE.Lower(nodeId), FfiConverterBoolINSTANCE.Lower(immediate)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+// List currently-connected workers.
+//
+// # Errors
+//
+// Returns [`BlazenError::Workflow`] for server-side errors.
+func (_self *ControlPlaneClient) ListWorkers() ([]ControlPlaneWorkerInfo, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ControlPlaneClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) []ControlPlaneWorkerInfo {
+			return FfiConverterSequenceControlPlaneWorkerInfoINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_controlplaneclient_list_workers(
+			_pointer),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Submit a workflow to the control plane.
+//
+// Returns the initial [`ControlPlaneRunStateSnapshot`] (status will
+// usually be `Pending` or `Running` immediately after submission).
+//
+// # Errors
+//
+// Returns [`BlazenError::Validation`] if `request.input_json` is
+// not valid JSON; [`BlazenError::Workflow`] for server-side errors.
+func (_self *ControlPlaneClient) SubmitWorkflow(request ControlPlaneSubmitRequest) (ControlPlaneRunStateSnapshot, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ControlPlaneClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) ControlPlaneRunStateSnapshot {
+			return FfiConverterControlPlaneRunStateSnapshotINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_controlplaneclient_submit_workflow(
+			_pointer, FfiConverterControlPlaneSubmitRequestINSTANCE.Lower(request)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Subscribe to events for `run_id`, forwarding each event to
+// `subscriber` until the stream terminates.
+//
+// Returns a [`ControlPlaneSubscription`] handle; call
+// [`ControlPlaneSubscription::cancel`] to stop pumping events
+// before the run completes. The pump task always invokes either
+// `on_close` or `on_error` exactly once before exiting.
+//
+// # Errors
+//
+// Returns [`BlazenError::Validation`] if `run_id` is not a valid
+// UUID; [`BlazenError::Workflow`] if the server rejects the
+// subscription request itself.
+func (_self *ControlPlaneClient) SubscribeRunEvents(runId string, subscriber ControlPlaneRunEventSubscriber) (*ControlPlaneSubscription, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ControlPlaneClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+			res := C.ffi_blazen_uniffi_rust_future_complete_u64(handle, status)
+			return res
+		},
+		// liftFn
+		func(ffi C.uint64_t) *ControlPlaneSubscription {
+			return FfiConverterControlPlaneSubscriptionINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_controlplaneclient_subscribe_run_events(
+			_pointer, FfiConverterStringINSTANCE.Lower(runId), FfiConverterControlPlaneRunEventSubscriberINSTANCE.Lower(subscriber)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_u64(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_u64(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+func (object *ControlPlaneClient) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterControlPlaneClient struct{}
+
+var FfiConverterControlPlaneClientINSTANCE = FfiConverterControlPlaneClient{}
+
+func (c FfiConverterControlPlaneClient) Lift(handle C.uint64_t) *ControlPlaneClient {
+	result := &ControlPlaneClient{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_controlplaneclient(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_controlplaneclient(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*ControlPlaneClient).Destroy)
+	return result
+}
+
+func (c FfiConverterControlPlaneClient) Read(reader io.Reader) *ControlPlaneClient {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterControlPlaneClient) Lower(value *ControlPlaneClient) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*ControlPlaneClient")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterControlPlaneClient) Write(writer io.Writer, value *ControlPlaneClient) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalControlPlaneClient(handle uint64) *ControlPlaneClient {
+	return FfiConverterControlPlaneClientINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalControlPlaneClient(value *ControlPlaneClient) uint64 {
+	return uint64(FfiConverterControlPlaneClientINSTANCE.Lower(value))
+}
+
+type FfiDestroyerControlPlaneClient struct{}
+
+func (_ FfiDestroyerControlPlaneClient) Destroy(value *ControlPlaneClient) {
+	value.Destroy()
+}
+
+// Foreign-implementable subscriber that observes a per-run event stream
+// opened by [`ControlPlaneClient::subscribe_run_events`].
+//
+// Like [`ControlPlaneAssignmentHandler`], every method is synchronous
+// on the foreign side. The subscription pumps inbound events on the
+// shared Tokio runtime and invokes the callbacks in the order they
+// arrive; foreign callers wanting concurrent processing should spawn
+// from inside `on_event`.
+type ControlPlaneRunEventSubscriber interface {
+	// One event arrived from the run.
+	OnEvent(event ControlPlaneRunEvent)
+	// Stream ended cleanly (the run reached a terminal state).
+	OnClose()
+	// Stream errored. `error` is best-effort and may not survive a
+	// reconnect-then-retry cycle.
+	OnError(error string)
+}
+
+// Foreign-implementable subscriber that observes a per-run event stream
+// opened by [`ControlPlaneClient::subscribe_run_events`].
+//
+// Like [`ControlPlaneAssignmentHandler`], every method is synchronous
+// on the foreign side. The subscription pumps inbound events on the
+// shared Tokio runtime and invokes the callbacks in the order they
+// arrive; foreign callers wanting concurrent processing should spawn
+// from inside `on_event`.
+type ControlPlaneRunEventSubscriberImpl struct {
+	ffiObject FfiObject
+}
+
+// One event arrived from the run.
+func (_self *ControlPlaneRunEventSubscriberImpl) OnEvent(event ControlPlaneRunEvent) {
+	_pointer := _self.ffiObject.incrementPointer("ControlPlaneRunEventSubscriber")
+	defer _self.ffiObject.decrementPointer()
+	rustCall(func(_uniffiStatus *C.RustCallStatus) bool {
+		C.uniffi_blazen_uniffi_fn_method_controlplaneruneventsubscriber_on_event(
+			_pointer, FfiConverterControlPlaneRunEventINSTANCE.Lower(event), _uniffiStatus)
+		return false
+	})
+}
+
+// Stream ended cleanly (the run reached a terminal state).
+func (_self *ControlPlaneRunEventSubscriberImpl) OnClose() {
+	_pointer := _self.ffiObject.incrementPointer("ControlPlaneRunEventSubscriber")
+	defer _self.ffiObject.decrementPointer()
+	rustCall(func(_uniffiStatus *C.RustCallStatus) bool {
+		C.uniffi_blazen_uniffi_fn_method_controlplaneruneventsubscriber_on_close(
+			_pointer, _uniffiStatus)
+		return false
+	})
+}
+
+// Stream errored. `error` is best-effort and may not survive a
+// reconnect-then-retry cycle.
+func (_self *ControlPlaneRunEventSubscriberImpl) OnError(error string) {
+	_pointer := _self.ffiObject.incrementPointer("ControlPlaneRunEventSubscriber")
+	defer _self.ffiObject.decrementPointer()
+	rustCall(func(_uniffiStatus *C.RustCallStatus) bool {
+		C.uniffi_blazen_uniffi_fn_method_controlplaneruneventsubscriber_on_error(
+			_pointer, FfiConverterStringINSTANCE.Lower(error), _uniffiStatus)
+		return false
+	})
+}
+func (object *ControlPlaneRunEventSubscriberImpl) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterControlPlaneRunEventSubscriber struct {
+	handleMap *concurrentHandleMap[ControlPlaneRunEventSubscriber]
+}
+
+var FfiConverterControlPlaneRunEventSubscriberINSTANCE = FfiConverterControlPlaneRunEventSubscriber{
+	handleMap: newConcurrentHandleMap[ControlPlaneRunEventSubscriber](),
+}
+
+func (c FfiConverterControlPlaneRunEventSubscriber) Lift(handle C.uint64_t) ControlPlaneRunEventSubscriber {
+	if uint64(handle)&1 == 0 {
+		// Rust-generated handle (even), construct a new object wrapping the handle
+		result := &ControlPlaneRunEventSubscriberImpl{
+			newFfiObject(
+				handle,
+				func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+					return C.uniffi_blazen_uniffi_fn_clone_controlplaneruneventsubscriber(handle, status)
+				},
+				func(handle C.uint64_t, status *C.RustCallStatus) {
+					C.uniffi_blazen_uniffi_fn_free_controlplaneruneventsubscriber(handle, status)
+				},
+			),
+		}
+		runtime.SetFinalizer(result, (*ControlPlaneRunEventSubscriberImpl).Destroy)
+		return result
+	} else {
+		// Go-generated handle (odd), retrieve from the handle map
+		val, ok := c.handleMap.tryGet(uint64(handle))
+		if !ok {
+			panic(fmt.Errorf("no callback in handle map: %d", handle))
+		}
+		c.handleMap.remove(uint64(handle))
+		return val
+	}
+}
+
+func (c FfiConverterControlPlaneRunEventSubscriber) Read(reader io.Reader) ControlPlaneRunEventSubscriber {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterControlPlaneRunEventSubscriber) Lower(value ControlPlaneRunEventSubscriber) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	if val, ok := value.(*ControlPlaneRunEventSubscriberImpl); ok {
+		// Rust-backed object, clone the handle
+		handle := val.ffiObject.incrementPointer("ControlPlaneRunEventSubscriber")
+		defer val.ffiObject.decrementPointer()
+		return handle
+	} else {
+		// Go-backed object, insert into handle map
+		return C.uint64_t(c.handleMap.insert(value))
+	}
+}
+
+func (c FfiConverterControlPlaneRunEventSubscriber) Write(writer io.Writer, value ControlPlaneRunEventSubscriber) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalControlPlaneRunEventSubscriber(handle uint64) ControlPlaneRunEventSubscriber {
+	return FfiConverterControlPlaneRunEventSubscriberINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalControlPlaneRunEventSubscriber(value ControlPlaneRunEventSubscriber) uint64 {
+	return uint64(FfiConverterControlPlaneRunEventSubscriberINSTANCE.Lower(value))
+}
+
+type FfiDestroyerControlPlaneRunEventSubscriber struct{}
+
+func (_ FfiDestroyerControlPlaneRunEventSubscriber) Destroy(value ControlPlaneRunEventSubscriber) {
+	if val, ok := value.(*ControlPlaneRunEventSubscriberImpl); ok {
+		val.Destroy()
+	}
+}
+
+//export blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneRunEventSubscriberMethod0
+func blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneRunEventSubscriberMethod0(uniffiHandle C.uint64_t, event C.RustBuffer, uniffiOutReturn *C.void, callStatus *C.RustCallStatus) {
+	handle := uint64(uniffiHandle)
+	uniffiObj, ok := FfiConverterControlPlaneRunEventSubscriberINSTANCE.handleMap.tryGet(handle)
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+
+	uniffiObj.OnEvent(
+		FfiConverterControlPlaneRunEventINSTANCE.Lift(GoRustBuffer{
+			inner: event,
+		}),
+	)
+
+}
+
+//export blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneRunEventSubscriberMethod1
+func blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneRunEventSubscriberMethod1(uniffiHandle C.uint64_t, uniffiOutReturn *C.void, callStatus *C.RustCallStatus) {
+	handle := uint64(uniffiHandle)
+	uniffiObj, ok := FfiConverterControlPlaneRunEventSubscriberINSTANCE.handleMap.tryGet(handle)
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+
+	uniffiObj.OnClose()
+
+}
+
+//export blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneRunEventSubscriberMethod2
+func blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneRunEventSubscriberMethod2(uniffiHandle C.uint64_t, error C.RustBuffer, uniffiOutReturn *C.void, callStatus *C.RustCallStatus) {
+	handle := uint64(uniffiHandle)
+	uniffiObj, ok := FfiConverterControlPlaneRunEventSubscriberINSTANCE.handleMap.tryGet(handle)
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+
+	uniffiObj.OnError(
+		FfiConverterStringINSTANCE.Lift(GoRustBuffer{
+			inner: error,
+		}),
+	)
+
+}
+
+var UniffiVTableCallbackInterfaceControlPlaneRunEventSubscriberINSTANCE = C.UniffiVTableCallbackInterfaceControlPlaneRunEventSubscriber{
+	uniffiFree:  (C.UniffiCallbackInterfaceFree)(C.blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneRunEventSubscriberFree),
+	uniffiClone: (C.UniffiCallbackInterfaceClone)(C.blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneRunEventSubscriberClone),
+	onEvent:     (C.UniffiCallbackInterfaceControlPlaneRunEventSubscriberMethod0)(C.blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneRunEventSubscriberMethod0),
+	onClose:     (C.UniffiCallbackInterfaceControlPlaneRunEventSubscriberMethod1)(C.blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneRunEventSubscriberMethod1),
+	onError:     (C.UniffiCallbackInterfaceControlPlaneRunEventSubscriberMethod2)(C.blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneRunEventSubscriberMethod2),
+}
+
+//export blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneRunEventSubscriberFree
+func blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneRunEventSubscriberFree(handle C.uint64_t) {
+	FfiConverterControlPlaneRunEventSubscriberINSTANCE.handleMap.remove(uint64(handle))
+}
+
+//export blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneRunEventSubscriberClone
+func blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneRunEventSubscriberClone(handle C.uint64_t) C.uint64_t {
+	val, ok := FfiConverterControlPlaneRunEventSubscriberINSTANCE.handleMap.tryGet(uint64(handle))
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+	return C.uint64_t(FfiConverterControlPlaneRunEventSubscriberINSTANCE.handleMap.insert(val))
+}
+
+func (c FfiConverterControlPlaneRunEventSubscriber) register() {
+	C.uniffi_blazen_uniffi_fn_init_callback_vtable_controlplaneruneventsubscriber(&UniffiVTableCallbackInterfaceControlPlaneRunEventSubscriberINSTANCE)
+}
+
+// Handle to an active run-event subscription. Drop the handle or call
+// [`ControlPlaneSubscription::cancel`] to stop pumping events.
+type ControlPlaneSubscriptionInterface interface {
+	// Cancel the subscription. Idempotent. After cancellation, the
+	// subscriber's `on_close` fires (best-effort) before the pump task
+	// exits.
+	Cancel()
+}
+
+// Handle to an active run-event subscription. Drop the handle or call
+// [`ControlPlaneSubscription::cancel`] to stop pumping events.
+type ControlPlaneSubscription struct {
+	ffiObject FfiObject
+}
+
+// Cancel the subscription. Idempotent. After cancellation, the
+// subscriber's `on_close` fires (best-effort) before the pump task
+// exits.
+func (_self *ControlPlaneSubscription) Cancel() {
+	_pointer := _self.ffiObject.incrementPointer("*ControlPlaneSubscription")
+	defer _self.ffiObject.decrementPointer()
+	rustCall(func(_uniffiStatus *C.RustCallStatus) bool {
+		C.uniffi_blazen_uniffi_fn_method_controlplanesubscription_cancel(
+			_pointer, _uniffiStatus)
+		return false
+	})
+}
+func (object *ControlPlaneSubscription) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterControlPlaneSubscription struct{}
+
+var FfiConverterControlPlaneSubscriptionINSTANCE = FfiConverterControlPlaneSubscription{}
+
+func (c FfiConverterControlPlaneSubscription) Lift(handle C.uint64_t) *ControlPlaneSubscription {
+	result := &ControlPlaneSubscription{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_controlplanesubscription(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_controlplanesubscription(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*ControlPlaneSubscription).Destroy)
+	return result
+}
+
+func (c FfiConverterControlPlaneSubscription) Read(reader io.Reader) *ControlPlaneSubscription {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterControlPlaneSubscription) Lower(value *ControlPlaneSubscription) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*ControlPlaneSubscription")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterControlPlaneSubscription) Write(writer io.Writer, value *ControlPlaneSubscription) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalControlPlaneSubscription(handle uint64) *ControlPlaneSubscription {
+	return FfiConverterControlPlaneSubscriptionINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalControlPlaneSubscription(value *ControlPlaneSubscription) uint64 {
+	return uint64(FfiConverterControlPlaneSubscriptionINSTANCE.Lower(value))
+}
+
+type FfiDestroyerControlPlaneSubscription struct{}
+
+func (_ FfiDestroyerControlPlaneSubscription) Destroy(value *ControlPlaneSubscription) {
+	value.Destroy()
+}
+
+// gRPC worker-side handle for the control plane.
+//
+// Wraps [`CoreWorker`] behind an `Arc<Mutex<Option<...>>>` because
+// upstream [`CoreWorker::run`] consumes `self` by value. The first
+// successful call to [`ControlPlaneWorker::run`] takes the worker out
+// of the mutex; subsequent calls fail with [`BlazenError::Validation`].
+// [`ControlPlaneWorker::shutdown`] is exposed separately because it
+// needs to fire even while `run` is in flight.
+type ControlPlaneWorkerInterface interface {
+	// Drive the worker session forever (or until shutdown / drain /
+	// retry exhaustion).
+	//
+	// Adapts `handler` to the upstream
+	// [`blazen_controlplane::AssignmentHandler`] trait and hands it to
+	// [`CoreWorker::run`]. Consumes the underlying worker — calling
+	// `run` twice on the same handle returns
+	// [`BlazenError::Validation`].
+	//
+	// # Errors
+	//
+	// Returns [`BlazenError::ControlPlane`] for transport / retry
+	// failures, or [`BlazenError::Validation`] if `run` is called more
+	// than once.
+	Run(handler ControlPlaneAssignmentHandler) error
+	// Signal the worker to stop. Returns immediately; any in-flight
+	// [`ControlPlaneWorker::run`] call will return cleanly once the
+	// in-flight assignments have been told to cancel.
+	//
+	// Idempotent.
+	Shutdown()
+}
+
+// gRPC worker-side handle for the control plane.
+//
+// Wraps [`CoreWorker`] behind an `Arc<Mutex<Option<...>>>` because
+// upstream [`CoreWorker::run`] consumes `self` by value. The first
+// successful call to [`ControlPlaneWorker::run`] takes the worker out
+// of the mutex; subsequent calls fail with [`BlazenError::Validation`].
+// [`ControlPlaneWorker::shutdown`] is exposed separately because it
+// needs to fire even while `run` is in flight.
+type ControlPlaneWorker struct {
+	ffiObject FfiObject
+}
+
+// Synchronous constructor.
+//
+// Builds a [`WorkerConfig`] with `Fixed { max_in_flight: 1 }`
+// admission and the supplied `capabilities`, validates the endpoint
+// URI, and returns a worker that has *not* yet opened the bidi
+// stream — call [`ControlPlaneWorker::run`] to do that.
+//
+// # Errors
+//
+// Returns [`BlazenError::ControlPlane`] (`kind = "Transport"`) if
+// `endpoint` cannot be parsed as a URI.
+func ControlPlaneWorkerNewBlocking(endpoint string, nodeId string, capabilities []ControlPlaneWorkerCapability) (*ControlPlaneWorker, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_controlplaneworker_new_blocking(FfiConverterStringINSTANCE.Lower(endpoint), FfiConverterStringINSTANCE.Lower(nodeId), FfiConverterSequenceControlPlaneWorkerCapabilityINSTANCE.Lower(capabilities), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *ControlPlaneWorker
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterControlPlaneWorkerINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Drive the worker session forever (or until shutdown / drain /
+// retry exhaustion).
+//
+// Adapts `handler` to the upstream
+// [`blazen_controlplane::AssignmentHandler`] trait and hands it to
+// [`CoreWorker::run`]. Consumes the underlying worker — calling
+// `run` twice on the same handle returns
+// [`BlazenError::Validation`].
+//
+// # Errors
+//
+// Returns [`BlazenError::ControlPlane`] for transport / retry
+// failures, or [`BlazenError::Validation`] if `run` is called more
+// than once.
+func (_self *ControlPlaneWorker) Run(handler ControlPlaneAssignmentHandler) error {
+	_pointer := _self.ffiObject.incrementPointer("*ControlPlaneWorker")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_controlplaneworker_run(
+			_pointer, FfiConverterControlPlaneAssignmentHandlerINSTANCE.Lower(handler)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+// Signal the worker to stop. Returns immediately; any in-flight
+// [`ControlPlaneWorker::run`] call will return cleanly once the
+// in-flight assignments have been told to cancel.
+//
+// Idempotent.
+func (_self *ControlPlaneWorker) Shutdown() {
+	_pointer := _self.ffiObject.incrementPointer("*ControlPlaneWorker")
+	defer _self.ffiObject.decrementPointer()
+	rustCall(func(_uniffiStatus *C.RustCallStatus) bool {
+		C.uniffi_blazen_uniffi_fn_method_controlplaneworker_shutdown(
+			_pointer, _uniffiStatus)
+		return false
+	})
+}
+func (object *ControlPlaneWorker) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterControlPlaneWorker struct{}
+
+var FfiConverterControlPlaneWorkerINSTANCE = FfiConverterControlPlaneWorker{}
+
+func (c FfiConverterControlPlaneWorker) Lift(handle C.uint64_t) *ControlPlaneWorker {
+	result := &ControlPlaneWorker{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_controlplaneworker(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_controlplaneworker(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*ControlPlaneWorker).Destroy)
+	return result
+}
+
+func (c FfiConverterControlPlaneWorker) Read(reader io.Reader) *ControlPlaneWorker {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterControlPlaneWorker) Lower(value *ControlPlaneWorker) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*ControlPlaneWorker")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterControlPlaneWorker) Write(writer io.Writer, value *ControlPlaneWorker) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalControlPlaneWorker(handle uint64) *ControlPlaneWorker {
+	return FfiConverterControlPlaneWorkerINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalControlPlaneWorker(value *ControlPlaneWorker) uint64 {
+	return uint64(FfiConverterControlPlaneWorkerINSTANCE.Lower(value))
+}
+
+type FfiDestroyerControlPlaneWorker struct{}
+
+func (_ FfiDestroyerControlPlaneWorker) Destroy(value *ControlPlaneWorker) {
+	value.Destroy()
 }
 
 // User-extensible provider trait the foreign side implements directly.
@@ -8978,6 +10338,370 @@ func (_ FfiDestroyerCompletionResponse) Destroy(value CompletionResponse) {
 	value.Destroy()
 }
 
+// Bundle of admission-policy fields for a worker.
+//
+// `max_in_flight` is meaningful when `mode == Fixed`, `total_mb` when
+// `mode == VramBudget`; both fields are ignored when `mode == Reactive`.
+// Either may be omitted to fall back to upstream defaults
+// (`Fixed { max_in_flight: 1 }`, `VramBudget { max_vram_mb: 0 }`).
+type ControlPlaneAdmission struct {
+	Mode        ControlPlaneAdmissionMode
+	MaxInFlight *uint32
+	TotalMb     *uint32
+}
+
+func (r *ControlPlaneAdmission) Destroy() {
+	FfiDestroyerControlPlaneAdmissionMode{}.Destroy(r.Mode)
+	FfiDestroyerOptionalUint32{}.Destroy(r.MaxInFlight)
+	FfiDestroyerOptionalUint32{}.Destroy(r.TotalMb)
+}
+
+type FfiConverterControlPlaneAdmission struct{}
+
+var FfiConverterControlPlaneAdmissionINSTANCE = FfiConverterControlPlaneAdmission{}
+
+func (c FfiConverterControlPlaneAdmission) Lift(rb RustBufferI) ControlPlaneAdmission {
+	return LiftFromRustBuffer[ControlPlaneAdmission](c, rb)
+}
+
+func (c FfiConverterControlPlaneAdmission) Read(reader io.Reader) ControlPlaneAdmission {
+	return ControlPlaneAdmission{
+		FfiConverterControlPlaneAdmissionModeINSTANCE.Read(reader),
+		FfiConverterOptionalUint32INSTANCE.Read(reader),
+		FfiConverterOptionalUint32INSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterControlPlaneAdmission) Lower(value ControlPlaneAdmission) C.RustBuffer {
+	return LowerIntoRustBuffer[ControlPlaneAdmission](c, value)
+}
+
+func (c FfiConverterControlPlaneAdmission) LowerExternal(value ControlPlaneAdmission) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[ControlPlaneAdmission](c, value))
+}
+
+func (c FfiConverterControlPlaneAdmission) Write(writer io.Writer, value ControlPlaneAdmission) {
+	FfiConverterControlPlaneAdmissionModeINSTANCE.Write(writer, value.Mode)
+	FfiConverterOptionalUint32INSTANCE.Write(writer, value.MaxInFlight)
+	FfiConverterOptionalUint32INSTANCE.Write(writer, value.TotalMb)
+}
+
+type FfiDestroyerControlPlaneAdmission struct{}
+
+func (_ FfiDestroyerControlPlaneAdmission) Destroy(value ControlPlaneAdmission) {
+	value.Destroy()
+}
+
+// Foreign-facing run event.
+//
+// `data_json` is the upstream `data: serde_json::Value` serialized to a
+// JSON string for transport across the UniFFI boundary.
+type ControlPlaneRunEvent struct {
+	RunId       string
+	EventType   string
+	DataJson    string
+	TimestampMs uint64
+}
+
+func (r *ControlPlaneRunEvent) Destroy() {
+	FfiDestroyerString{}.Destroy(r.RunId)
+	FfiDestroyerString{}.Destroy(r.EventType)
+	FfiDestroyerString{}.Destroy(r.DataJson)
+	FfiDestroyerUint64{}.Destroy(r.TimestampMs)
+}
+
+type FfiConverterControlPlaneRunEvent struct{}
+
+var FfiConverterControlPlaneRunEventINSTANCE = FfiConverterControlPlaneRunEvent{}
+
+func (c FfiConverterControlPlaneRunEvent) Lift(rb RustBufferI) ControlPlaneRunEvent {
+	return LiftFromRustBuffer[ControlPlaneRunEvent](c, rb)
+}
+
+func (c FfiConverterControlPlaneRunEvent) Read(reader io.Reader) ControlPlaneRunEvent {
+	return ControlPlaneRunEvent{
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterUint64INSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterControlPlaneRunEvent) Lower(value ControlPlaneRunEvent) C.RustBuffer {
+	return LowerIntoRustBuffer[ControlPlaneRunEvent](c, value)
+}
+
+func (c FfiConverterControlPlaneRunEvent) LowerExternal(value ControlPlaneRunEvent) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[ControlPlaneRunEvent](c, value))
+}
+
+func (c FfiConverterControlPlaneRunEvent) Write(writer io.Writer, value ControlPlaneRunEvent) {
+	FfiConverterStringINSTANCE.Write(writer, value.RunId)
+	FfiConverterStringINSTANCE.Write(writer, value.EventType)
+	FfiConverterStringINSTANCE.Write(writer, value.DataJson)
+	FfiConverterUint64INSTANCE.Write(writer, value.TimestampMs)
+}
+
+type FfiDestroyerControlPlaneRunEvent struct{}
+
+func (_ FfiDestroyerControlPlaneRunEvent) Destroy(value ControlPlaneRunEvent) {
+	value.Destroy()
+}
+
+// Foreign-facing snapshot of a workflow run.
+//
+// `run_id` is the canonical UUID string (`"550e8400-e29b-41d4-a716-446655440000"`);
+// `output_json` and `error` are flattened from the upstream snapshot's
+// `output: Option<serde_json::Value>` / `error: Option<String>` fields.
+type ControlPlaneRunStateSnapshot struct {
+	RunId         string
+	Status        ControlPlaneRunStatus
+	StartedAtMs   uint64
+	CompletedAtMs *uint64
+	AssignedTo    *string
+	LastEventAtMs *uint64
+	OutputJson    *string
+	Error         *string
+}
+
+func (r *ControlPlaneRunStateSnapshot) Destroy() {
+	FfiDestroyerString{}.Destroy(r.RunId)
+	FfiDestroyerControlPlaneRunStatus{}.Destroy(r.Status)
+	FfiDestroyerUint64{}.Destroy(r.StartedAtMs)
+	FfiDestroyerOptionalUint64{}.Destroy(r.CompletedAtMs)
+	FfiDestroyerOptionalString{}.Destroy(r.AssignedTo)
+	FfiDestroyerOptionalUint64{}.Destroy(r.LastEventAtMs)
+	FfiDestroyerOptionalString{}.Destroy(r.OutputJson)
+	FfiDestroyerOptionalString{}.Destroy(r.Error)
+}
+
+type FfiConverterControlPlaneRunStateSnapshot struct{}
+
+var FfiConverterControlPlaneRunStateSnapshotINSTANCE = FfiConverterControlPlaneRunStateSnapshot{}
+
+func (c FfiConverterControlPlaneRunStateSnapshot) Lift(rb RustBufferI) ControlPlaneRunStateSnapshot {
+	return LiftFromRustBuffer[ControlPlaneRunStateSnapshot](c, rb)
+}
+
+func (c FfiConverterControlPlaneRunStateSnapshot) Read(reader io.Reader) ControlPlaneRunStateSnapshot {
+	return ControlPlaneRunStateSnapshot{
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterControlPlaneRunStatusINSTANCE.Read(reader),
+		FfiConverterUint64INSTANCE.Read(reader),
+		FfiConverterOptionalUint64INSTANCE.Read(reader),
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+		FfiConverterOptionalUint64INSTANCE.Read(reader),
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterControlPlaneRunStateSnapshot) Lower(value ControlPlaneRunStateSnapshot) C.RustBuffer {
+	return LowerIntoRustBuffer[ControlPlaneRunStateSnapshot](c, value)
+}
+
+func (c FfiConverterControlPlaneRunStateSnapshot) LowerExternal(value ControlPlaneRunStateSnapshot) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[ControlPlaneRunStateSnapshot](c, value))
+}
+
+func (c FfiConverterControlPlaneRunStateSnapshot) Write(writer io.Writer, value ControlPlaneRunStateSnapshot) {
+	FfiConverterStringINSTANCE.Write(writer, value.RunId)
+	FfiConverterControlPlaneRunStatusINSTANCE.Write(writer, value.Status)
+	FfiConverterUint64INSTANCE.Write(writer, value.StartedAtMs)
+	FfiConverterOptionalUint64INSTANCE.Write(writer, value.CompletedAtMs)
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.AssignedTo)
+	FfiConverterOptionalUint64INSTANCE.Write(writer, value.LastEventAtMs)
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.OutputJson)
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.Error)
+}
+
+type FfiDestroyerControlPlaneRunStateSnapshot struct{}
+
+func (_ FfiDestroyerControlPlaneRunStateSnapshot) Destroy(value ControlPlaneRunStateSnapshot) {
+	value.Destroy()
+}
+
+// Foreign-facing workflow submission request.
+//
+// Mirrors [`CoreSubmitWorkflowRequest`] except `input_json` carries the
+// initial input as a JSON-encoded string and `resource_hint` is omitted
+// (the UniFFI surface today targets Fixed/Reactive admission only;
+// VramBudget callers should target the native crate directly).
+type ControlPlaneSubmitRequest struct {
+	WorkflowName    string
+	InputJson       string
+	WorkflowVersion *uint32
+	RequiredTags    []string
+	IdempotencyKey  *string
+	DeadlineMs      *uint64
+	WaitForWorker   bool
+}
+
+func (r *ControlPlaneSubmitRequest) Destroy() {
+	FfiDestroyerString{}.Destroy(r.WorkflowName)
+	FfiDestroyerString{}.Destroy(r.InputJson)
+	FfiDestroyerOptionalUint32{}.Destroy(r.WorkflowVersion)
+	FfiDestroyerSequenceString{}.Destroy(r.RequiredTags)
+	FfiDestroyerOptionalString{}.Destroy(r.IdempotencyKey)
+	FfiDestroyerOptionalUint64{}.Destroy(r.DeadlineMs)
+	FfiDestroyerBool{}.Destroy(r.WaitForWorker)
+}
+
+type FfiConverterControlPlaneSubmitRequest struct{}
+
+var FfiConverterControlPlaneSubmitRequestINSTANCE = FfiConverterControlPlaneSubmitRequest{}
+
+func (c FfiConverterControlPlaneSubmitRequest) Lift(rb RustBufferI) ControlPlaneSubmitRequest {
+	return LiftFromRustBuffer[ControlPlaneSubmitRequest](c, rb)
+}
+
+func (c FfiConverterControlPlaneSubmitRequest) Read(reader io.Reader) ControlPlaneSubmitRequest {
+	return ControlPlaneSubmitRequest{
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterOptionalUint32INSTANCE.Read(reader),
+		FfiConverterSequenceStringINSTANCE.Read(reader),
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+		FfiConverterOptionalUint64INSTANCE.Read(reader),
+		FfiConverterBoolINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterControlPlaneSubmitRequest) Lower(value ControlPlaneSubmitRequest) C.RustBuffer {
+	return LowerIntoRustBuffer[ControlPlaneSubmitRequest](c, value)
+}
+
+func (c FfiConverterControlPlaneSubmitRequest) LowerExternal(value ControlPlaneSubmitRequest) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[ControlPlaneSubmitRequest](c, value))
+}
+
+func (c FfiConverterControlPlaneSubmitRequest) Write(writer io.Writer, value ControlPlaneSubmitRequest) {
+	FfiConverterStringINSTANCE.Write(writer, value.WorkflowName)
+	FfiConverterStringINSTANCE.Write(writer, value.InputJson)
+	FfiConverterOptionalUint32INSTANCE.Write(writer, value.WorkflowVersion)
+	FfiConverterSequenceStringINSTANCE.Write(writer, value.RequiredTags)
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.IdempotencyKey)
+	FfiConverterOptionalUint64INSTANCE.Write(writer, value.DeadlineMs)
+	FfiConverterBoolINSTANCE.Write(writer, value.WaitForWorker)
+}
+
+type FfiDestroyerControlPlaneSubmitRequest struct{}
+
+func (_ FfiDestroyerControlPlaneSubmitRequest) Destroy(value ControlPlaneSubmitRequest) {
+	value.Destroy()
+}
+
+// Typed capability a worker advertises to the control plane.
+//
+// `kind` follows the convention `"workflow:<name>"` /
+// `"step:<name>"` / `"provider:<id>"` / `"tag:<key>=<value>"`.
+// `version` lets the control plane gate routing on schema changes.
+type ControlPlaneWorkerCapability struct {
+	Kind    string
+	Version uint32
+}
+
+func (r *ControlPlaneWorkerCapability) Destroy() {
+	FfiDestroyerString{}.Destroy(r.Kind)
+	FfiDestroyerUint32{}.Destroy(r.Version)
+}
+
+type FfiConverterControlPlaneWorkerCapability struct{}
+
+var FfiConverterControlPlaneWorkerCapabilityINSTANCE = FfiConverterControlPlaneWorkerCapability{}
+
+func (c FfiConverterControlPlaneWorkerCapability) Lift(rb RustBufferI) ControlPlaneWorkerCapability {
+	return LiftFromRustBuffer[ControlPlaneWorkerCapability](c, rb)
+}
+
+func (c FfiConverterControlPlaneWorkerCapability) Read(reader io.Reader) ControlPlaneWorkerCapability {
+	return ControlPlaneWorkerCapability{
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterUint32INSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterControlPlaneWorkerCapability) Lower(value ControlPlaneWorkerCapability) C.RustBuffer {
+	return LowerIntoRustBuffer[ControlPlaneWorkerCapability](c, value)
+}
+
+func (c FfiConverterControlPlaneWorkerCapability) LowerExternal(value ControlPlaneWorkerCapability) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[ControlPlaneWorkerCapability](c, value))
+}
+
+func (c FfiConverterControlPlaneWorkerCapability) Write(writer io.Writer, value ControlPlaneWorkerCapability) {
+	FfiConverterStringINSTANCE.Write(writer, value.Kind)
+	FfiConverterUint32INSTANCE.Write(writer, value.Version)
+}
+
+type FfiDestroyerControlPlaneWorkerCapability struct{}
+
+func (_ FfiDestroyerControlPlaneWorkerCapability) Destroy(value ControlPlaneWorkerCapability) {
+	value.Destroy()
+}
+
+// Foreign-facing summary of a connected worker.
+//
+// Upstream [`CoreWorkerInfo`] carries an `admission_snapshot` and an
+// `admission` field; this surface omits the snapshot (foreign callers
+// who need it should query the control plane directly) and flattens
+// `tags` from a `BTreeMap` to a [`HashMap`] for UniFFI compatibility.
+type ControlPlaneWorkerInfo struct {
+	NodeId        string
+	Capabilities  []ControlPlaneWorkerCapability
+	Tags          map[string]string
+	InFlight      uint32
+	ConnectedAtMs uint64
+}
+
+func (r *ControlPlaneWorkerInfo) Destroy() {
+	FfiDestroyerString{}.Destroy(r.NodeId)
+	FfiDestroyerSequenceControlPlaneWorkerCapability{}.Destroy(r.Capabilities)
+	FfiDestroyerMapStringString{}.Destroy(r.Tags)
+	FfiDestroyerUint32{}.Destroy(r.InFlight)
+	FfiDestroyerUint64{}.Destroy(r.ConnectedAtMs)
+}
+
+type FfiConverterControlPlaneWorkerInfo struct{}
+
+var FfiConverterControlPlaneWorkerInfoINSTANCE = FfiConverterControlPlaneWorkerInfo{}
+
+func (c FfiConverterControlPlaneWorkerInfo) Lift(rb RustBufferI) ControlPlaneWorkerInfo {
+	return LiftFromRustBuffer[ControlPlaneWorkerInfo](c, rb)
+}
+
+func (c FfiConverterControlPlaneWorkerInfo) Read(reader io.Reader) ControlPlaneWorkerInfo {
+	return ControlPlaneWorkerInfo{
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterSequenceControlPlaneWorkerCapabilityINSTANCE.Read(reader),
+		FfiConverterMapStringStringINSTANCE.Read(reader),
+		FfiConverterUint32INSTANCE.Read(reader),
+		FfiConverterUint64INSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterControlPlaneWorkerInfo) Lower(value ControlPlaneWorkerInfo) C.RustBuffer {
+	return LowerIntoRustBuffer[ControlPlaneWorkerInfo](c, value)
+}
+
+func (c FfiConverterControlPlaneWorkerInfo) LowerExternal(value ControlPlaneWorkerInfo) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[ControlPlaneWorkerInfo](c, value))
+}
+
+func (c FfiConverterControlPlaneWorkerInfo) Write(writer io.Writer, value ControlPlaneWorkerInfo) {
+	FfiConverterStringINSTANCE.Write(writer, value.NodeId)
+	FfiConverterSequenceControlPlaneWorkerCapabilityINSTANCE.Write(writer, value.Capabilities)
+	FfiConverterMapStringStringINSTANCE.Write(writer, value.Tags)
+	FfiConverterUint32INSTANCE.Write(writer, value.InFlight)
+	FfiConverterUint64INSTANCE.Write(writer, value.ConnectedAtMs)
+}
+
+type FfiDestroyerControlPlaneWorkerInfo struct{}
+
+func (_ FfiDestroyerControlPlaneWorkerInfo) Destroy(value ControlPlaneWorkerInfo) {
+	value.Destroy()
+}
+
 // Embedding-role defaults. V1 composes only `base`.
 type EmbeddingProviderDefaults struct {
 	Base *BaseProviderDefaults
@@ -12101,15 +13825,31 @@ func (self BlazenErrorTool) Is(target error) bool {
 	return target == ErrBlazenErrorTool
 }
 
-// Distributed peer-to-peer error. `kind` is one of: `"Encode"`, `"Transport"`,
-// `"EnvelopeVersion"`, `"Workflow"`, `"Tls"`, `"UnknownStep"`.
+// Distributed peer-to-peer error and (folded in) distributed
+// control-plane error. For peer-mesh failures `kind` is one of
+// `"Encode"`, `"Transport"`, `"EnvelopeVersion"`, `"Workflow"`,
+// `"Tls"`, `"UnknownStep"`. For control-plane failures `kind` is
+// prefixed `"ControlPlane"` (e.g. `"ControlPlaneTransport"`,
+// `"ControlPlaneEncode"`, `"ControlPlaneTls"`,
+// `"ControlPlaneEnvelopeVersion"`, `"ControlPlaneNoMatchingWorker"`,
+// `"ControlPlaneMissingVramHint"`, `"ControlPlaneUnknownRun"`,
+// `"ControlPlaneUnknownWorker"`) so foreign consumers can discriminate
+// without juggling a second top-level variant.
 type BlazenErrorPeer struct {
 	Kind    string
 	Message string
 }
 
-// Distributed peer-to-peer error. `kind` is one of: `"Encode"`, `"Transport"`,
-// `"EnvelopeVersion"`, `"Workflow"`, `"Tls"`, `"UnknownStep"`.
+// Distributed peer-to-peer error and (folded in) distributed
+// control-plane error. For peer-mesh failures `kind` is one of
+// `"Encode"`, `"Transport"`, `"EnvelopeVersion"`, `"Workflow"`,
+// `"Tls"`, `"UnknownStep"`. For control-plane failures `kind` is
+// prefixed `"ControlPlane"` (e.g. `"ControlPlaneTransport"`,
+// `"ControlPlaneEncode"`, `"ControlPlaneTls"`,
+// `"ControlPlaneEnvelopeVersion"`, `"ControlPlaneNoMatchingWorker"`,
+// `"ControlPlaneMissingVramHint"`, `"ControlPlaneUnknownRun"`,
+// `"ControlPlaneUnknownWorker"`) so foreign consumers can discriminate
+// without juggling a second top-level variant.
 func NewBlazenErrorPeer(
 	kind string,
 	message string,
@@ -12567,6 +14307,91 @@ func (_ FfiDestroyerBlazenError) Destroy(value *BlazenError) {
 		_ = variantValue
 		panic(fmt.Sprintf("invalid error value `%v` in FfiDestroyerBlazenError.Destroy", value))
 	}
+}
+
+// How a worker declares its admission policy to the control plane.
+//
+// Carries the union of fields for the three flavours; consumers should
+// honour the discriminator in [`ControlPlaneAdmission::mode`].
+type ControlPlaneAdmissionMode uint
+
+const (
+	// Hard concurrency cap.
+	ControlPlaneAdmissionModeFixed ControlPlaneAdmissionMode = 1
+	// Worker self-decides via offer/claim/decline.
+	ControlPlaneAdmissionModeReactive ControlPlaneAdmissionMode = 2
+	// VRAM-sum cap.
+	ControlPlaneAdmissionModeVramBudget ControlPlaneAdmissionMode = 3
+)
+
+type FfiConverterControlPlaneAdmissionMode struct{}
+
+var FfiConverterControlPlaneAdmissionModeINSTANCE = FfiConverterControlPlaneAdmissionMode{}
+
+func (c FfiConverterControlPlaneAdmissionMode) Lift(rb RustBufferI) ControlPlaneAdmissionMode {
+	return LiftFromRustBuffer[ControlPlaneAdmissionMode](c, rb)
+}
+
+func (c FfiConverterControlPlaneAdmissionMode) Lower(value ControlPlaneAdmissionMode) C.RustBuffer {
+	return LowerIntoRustBuffer[ControlPlaneAdmissionMode](c, value)
+}
+
+func (c FfiConverterControlPlaneAdmissionMode) LowerExternal(value ControlPlaneAdmissionMode) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[ControlPlaneAdmissionMode](c, value))
+}
+func (FfiConverterControlPlaneAdmissionMode) Read(reader io.Reader) ControlPlaneAdmissionMode {
+	id := readInt32(reader)
+	return ControlPlaneAdmissionMode(id)
+}
+
+func (FfiConverterControlPlaneAdmissionMode) Write(writer io.Writer, value ControlPlaneAdmissionMode) {
+	writeInt32(writer, int32(value))
+}
+
+type FfiDestroyerControlPlaneAdmissionMode struct{}
+
+func (_ FfiDestroyerControlPlaneAdmissionMode) Destroy(value ControlPlaneAdmissionMode) {
+}
+
+// Lifecycle state of a workflow run, mirrored across the UniFFI
+// boundary.
+type ControlPlaneRunStatus uint
+
+const (
+	ControlPlaneRunStatusPending   ControlPlaneRunStatus = 1
+	ControlPlaneRunStatusRunning   ControlPlaneRunStatus = 2
+	ControlPlaneRunStatusCompleted ControlPlaneRunStatus = 3
+	ControlPlaneRunStatusFailed    ControlPlaneRunStatus = 4
+	ControlPlaneRunStatusCancelled ControlPlaneRunStatus = 5
+)
+
+type FfiConverterControlPlaneRunStatus struct{}
+
+var FfiConverterControlPlaneRunStatusINSTANCE = FfiConverterControlPlaneRunStatus{}
+
+func (c FfiConverterControlPlaneRunStatus) Lift(rb RustBufferI) ControlPlaneRunStatus {
+	return LiftFromRustBuffer[ControlPlaneRunStatus](c, rb)
+}
+
+func (c FfiConverterControlPlaneRunStatus) Lower(value ControlPlaneRunStatus) C.RustBuffer {
+	return LowerIntoRustBuffer[ControlPlaneRunStatus](c, value)
+}
+
+func (c FfiConverterControlPlaneRunStatus) LowerExternal(value ControlPlaneRunStatus) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[ControlPlaneRunStatus](c, value))
+}
+func (FfiConverterControlPlaneRunStatus) Read(reader io.Reader) ControlPlaneRunStatus {
+	id := readInt32(reader)
+	return ControlPlaneRunStatus(id)
+}
+
+func (FfiConverterControlPlaneRunStatus) Write(writer io.Writer, value ControlPlaneRunStatus) {
+	writeInt32(writer, int32(value))
+}
+
+type FfiDestroyerControlPlaneRunStatus struct{}
+
+func (_ FfiDestroyerControlPlaneRunStatus) Destroy(value ControlPlaneRunStatus) {
 }
 
 // What a [`StepHandler`] returns: zero, one, or many events to publish.
@@ -13296,6 +15121,100 @@ type FfiDestroyerSequenceCompletionRequest struct{}
 func (FfiDestroyerSequenceCompletionRequest) Destroy(sequence []CompletionRequest) {
 	for _, value := range sequence {
 		FfiDestroyerCompletionRequest{}.Destroy(value)
+	}
+}
+
+type FfiConverterSequenceControlPlaneWorkerCapability struct{}
+
+var FfiConverterSequenceControlPlaneWorkerCapabilityINSTANCE = FfiConverterSequenceControlPlaneWorkerCapability{}
+
+func (c FfiConverterSequenceControlPlaneWorkerCapability) Lift(rb RustBufferI) []ControlPlaneWorkerCapability {
+	return LiftFromRustBuffer[[]ControlPlaneWorkerCapability](c, rb)
+}
+
+func (c FfiConverterSequenceControlPlaneWorkerCapability) Read(reader io.Reader) []ControlPlaneWorkerCapability {
+	length := readInt32(reader)
+	if length == 0 {
+		return nil
+	}
+	result := make([]ControlPlaneWorkerCapability, 0, length)
+	for i := int32(0); i < length; i++ {
+		result = append(result, FfiConverterControlPlaneWorkerCapabilityINSTANCE.Read(reader))
+	}
+	return result
+}
+
+func (c FfiConverterSequenceControlPlaneWorkerCapability) Lower(value []ControlPlaneWorkerCapability) C.RustBuffer {
+	return LowerIntoRustBuffer[[]ControlPlaneWorkerCapability](c, value)
+}
+
+func (c FfiConverterSequenceControlPlaneWorkerCapability) LowerExternal(value []ControlPlaneWorkerCapability) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[[]ControlPlaneWorkerCapability](c, value))
+}
+
+func (c FfiConverterSequenceControlPlaneWorkerCapability) Write(writer io.Writer, value []ControlPlaneWorkerCapability) {
+	if len(value) > math.MaxInt32 {
+		panic("[]ControlPlaneWorkerCapability is too large to fit into Int32")
+	}
+
+	writeInt32(writer, int32(len(value)))
+	for _, item := range value {
+		FfiConverterControlPlaneWorkerCapabilityINSTANCE.Write(writer, item)
+	}
+}
+
+type FfiDestroyerSequenceControlPlaneWorkerCapability struct{}
+
+func (FfiDestroyerSequenceControlPlaneWorkerCapability) Destroy(sequence []ControlPlaneWorkerCapability) {
+	for _, value := range sequence {
+		FfiDestroyerControlPlaneWorkerCapability{}.Destroy(value)
+	}
+}
+
+type FfiConverterSequenceControlPlaneWorkerInfo struct{}
+
+var FfiConverterSequenceControlPlaneWorkerInfoINSTANCE = FfiConverterSequenceControlPlaneWorkerInfo{}
+
+func (c FfiConverterSequenceControlPlaneWorkerInfo) Lift(rb RustBufferI) []ControlPlaneWorkerInfo {
+	return LiftFromRustBuffer[[]ControlPlaneWorkerInfo](c, rb)
+}
+
+func (c FfiConverterSequenceControlPlaneWorkerInfo) Read(reader io.Reader) []ControlPlaneWorkerInfo {
+	length := readInt32(reader)
+	if length == 0 {
+		return nil
+	}
+	result := make([]ControlPlaneWorkerInfo, 0, length)
+	for i := int32(0); i < length; i++ {
+		result = append(result, FfiConverterControlPlaneWorkerInfoINSTANCE.Read(reader))
+	}
+	return result
+}
+
+func (c FfiConverterSequenceControlPlaneWorkerInfo) Lower(value []ControlPlaneWorkerInfo) C.RustBuffer {
+	return LowerIntoRustBuffer[[]ControlPlaneWorkerInfo](c, value)
+}
+
+func (c FfiConverterSequenceControlPlaneWorkerInfo) LowerExternal(value []ControlPlaneWorkerInfo) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[[]ControlPlaneWorkerInfo](c, value))
+}
+
+func (c FfiConverterSequenceControlPlaneWorkerInfo) Write(writer io.Writer, value []ControlPlaneWorkerInfo) {
+	if len(value) > math.MaxInt32 {
+		panic("[]ControlPlaneWorkerInfo is too large to fit into Int32")
+	}
+
+	writeInt32(writer, int32(len(value)))
+	for _, item := range value {
+		FfiConverterControlPlaneWorkerInfoINSTANCE.Write(writer, item)
+	}
+}
+
+type FfiDestroyerSequenceControlPlaneWorkerInfo struct{}
+
+func (FfiDestroyerSequenceControlPlaneWorkerInfo) Destroy(sequence []ControlPlaneWorkerInfo) {
+	for _, value := range sequence {
+		FfiDestroyerControlPlaneWorkerInfo{}.Destroy(value)
 	}
 }
 
@@ -14048,6 +15967,54 @@ type FfiDestroyerSequenceSequenceFloat64 struct{}
 func (FfiDestroyerSequenceSequenceFloat64) Destroy(sequence [][]float64) {
 	for _, value := range sequence {
 		FfiDestroyerSequenceFloat64{}.Destroy(value)
+	}
+}
+
+type FfiConverterMapStringString struct{}
+
+var FfiConverterMapStringStringINSTANCE = FfiConverterMapStringString{}
+
+func (c FfiConverterMapStringString) Lift(rb RustBufferI) map[string]string {
+	return LiftFromRustBuffer[map[string]string](c, rb)
+}
+
+func (_ FfiConverterMapStringString) Read(reader io.Reader) map[string]string {
+	result := make(map[string]string)
+	length := readInt32(reader)
+	for i := int32(0); i < length; i++ {
+		key := FfiConverterStringINSTANCE.Read(reader)
+		value := FfiConverterStringINSTANCE.Read(reader)
+		result[key] = value
+	}
+	return result
+}
+
+func (c FfiConverterMapStringString) Lower(value map[string]string) C.RustBuffer {
+	return LowerIntoRustBuffer[map[string]string](c, value)
+}
+
+func (c FfiConverterMapStringString) LowerExternal(value map[string]string) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[map[string]string](c, value))
+}
+
+func (_ FfiConverterMapStringString) Write(writer io.Writer, mapValue map[string]string) {
+	if len(mapValue) > math.MaxInt32 {
+		panic("map[string]string is too large to fit into Int32")
+	}
+
+	writeInt32(writer, int32(len(mapValue)))
+	for key, value := range mapValue {
+		FfiConverterStringINSTANCE.Write(writer, key)
+		FfiConverterStringINSTANCE.Write(writer, value)
+	}
+}
+
+type FfiDestroyerMapStringString struct{}
+
+func (_ FfiDestroyerMapStringString) Destroy(mapValue map[string]string) {
+	for key, value := range mapValue {
+		FfiDestroyerString{}.Destroy(key)
+		FfiDestroyerString{}.Destroy(value)
 	}
 }
 

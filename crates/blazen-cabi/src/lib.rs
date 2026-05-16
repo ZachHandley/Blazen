@@ -19,6 +19,10 @@ pub mod compute_factories;
 pub mod compute_records;
 pub mod compute_requests;
 pub mod compute_results;
+#[cfg(feature = "distributed")]
+pub mod controlplane;
+#[cfg(feature = "distributed")]
+pub mod controlplane_records;
 pub mod error;
 pub mod future;
 pub mod init;

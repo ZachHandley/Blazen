@@ -26,6 +26,31 @@
 #define BLAZEN_BATCH_ITEM_FAILURE 1
 
 /**
+ * Run is queued but not yet assigned to a worker.
+ */
+#define BLAZEN_RUN_STATUS_PENDING 0
+
+/**
+ * Run is in flight on a worker.
+ */
+#define BLAZEN_RUN_STATUS_RUNNING 1
+
+/**
+ * Run finished successfully and produced an output.
+ */
+#define BLAZEN_RUN_STATUS_COMPLETED 2
+
+/**
+ * Run finished with an error.
+ */
+#define BLAZEN_RUN_STATUS_FAILED 3
+
+/**
+ * Run was cancelled by the orchestrator or operator.
+ */
+#define BLAZEN_RUN_STATUS_CANCELLED 4
+
+/**
  * Variant tag for the `Auth` error category.
  */
 #define BLAZEN_ERROR_KIND_AUTH 1
@@ -198,6 +223,39 @@ typedef struct BlazenCompletionRequest BlazenCompletionRequest;
 typedef struct BlazenCompletionResponse BlazenCompletionResponse;
 
 /**
+ * Opaque wrapper around [`blazen_controlplane::Client`]. The inner
+ * [`Client`] is cheaply cloneable (it holds an `Arc<Mutex<...>>`
+ * internally) so multiple cabi calls on the same handle can run
+ * concurrently.
+ */
+typedef struct BlazenControlPlaneClient BlazenControlPlaneClient;
+
+/**
+ * Opaque handle returned by
+ * [`blazen_controlplane_client_subscribe_run_events`] /
+ * [`blazen_controlplane_client_subscribe_all`]. Holds the
+ * cancellation token tied to the background pump task and keeps the
+ * foreign-supplied vtable alive (so callbacks remain valid until the
+ * caller frees the subscription).
+ */
+typedef struct BlazenControlPlaneSubscription BlazenControlPlaneSubscription;
+
+/**
+ * Opaque wrapper around [`blazen_controlplane::Worker`].
+ *
+ * `Worker::run` consumes the value by move, so the inner slot is
+ * `Option<InnerHolder>` and goes `None` on the first successful `run`
+ * call. The `Mutex` lets `shutdown` inspect the slot without
+ * requiring `&mut`.
+ *
+ * Once `run` has consumed the worker, `shutdown` becomes a no-op —
+ * the standard way to terminate the worker after `run` is in flight
+ * is to drop the surrounding future (the bidi session loop honours
+ * cancellation at every iteration).
+ */
+typedef struct BlazenControlPlaneWorker BlazenControlPlaneWorker;
+
+/**
  * Opaque wrapper around [`blazen_uniffi::llm::EmbeddingModel`]. Construct
  * via the per-provider factories in Phase R4.
  */
@@ -306,6 +364,25 @@ typedef struct BlazenPipeline BlazenPipeline;
 typedef struct BlazenPipelineBuilder BlazenPipelineBuilder;
 
 /**
+ * Opaque wrapper around a [`blazen_core::distributed::RunEvent`].
+ *
+ * The subscription dispatcher in [`crate::controlplane`] decodes each
+ * streamed event into one of these and invokes the consumer's sink
+ * callback with a borrowed view. Standalone construction across the FFI
+ * isn't supported — events are output-only.
+ */
+typedef struct BlazenRunEvent BlazenRunEvent;
+
+/**
+ * Opaque handle wrapping a [`blazen_core::distributed::RunStateSnapshot`].
+ *
+ * Snapshots are output-only — produced by Rust as the result of submit /
+ * cancel / describe RPCs — so no public constructor is exposed across the
+ * FFI. The crate-private `into_ptr` mints fresh handles.
+ */
+typedef struct BlazenRunStateSnapshot BlazenRunStateSnapshot;
+
+/**
  * Opaque handle wrapping a `blazen_uniffi::workflow::StepOutput` enum.
  *
  * `StepOutput` is what a foreign step handler returns to the Rust
@@ -387,6 +464,22 @@ typedef struct BlazenTtsModel BlazenTtsModel;
  * only), a MIME type string, and a duration in milliseconds.
  */
 typedef struct BlazenTtsResult BlazenTtsResult;
+
+/**
+ * Opaque handle wrapping a [`blazen_core::distributed::WorkerInfo`].
+ *
+ * Surfaced through [`BlazenWorkerInfoList`] from `list_workers`. Tags,
+ * capabilities, and the admission snapshot are exposed as JSON via the
+ * accessor functions to keep the C surface flat (no nested opaque types).
+ */
+typedef struct BlazenWorkerInfo BlazenWorkerInfo;
+
+/**
+ * Owned list of `BlazenWorkerInfo` handles. Hands them out one at a time
+ * via [`blazen_worker_info_list_get`] — the list retains ownership until
+ * freed, so the per-entry pointers stay valid for the list's lifetime.
+ */
+typedef struct BlazenWorkerInfoList BlazenWorkerInfoList;
 
 /**
  * Opaque wrapper around `blazen_uniffi::workflow::Workflow`. The inner `Arc`
@@ -559,6 +652,116 @@ typedef struct {
 typedef struct {
     Vec_InnerVoiceHandle inner;
 } BlazenVoiceHandleArray;
+
+/**
+ * Vtable a foreign caller fills in to implement an assignment handler.
+ *
+ * Every function pointer is invoked from inside the cabi tokio
+ * runtime. The foreign side is responsible for thread-safety: Ruby's
+ * `ffi` gem automatically reacquires the GVL for declared callback
+ * signatures, so a single Ruby instance can safely back multiple
+ * concurrent invocations.
+ *
+ * ## Ownership
+ *
+ * - `user_data` is owned by the vtable. The cabi takes responsibility
+ *   for releasing it via `drop_user_data` exactly once, when the
+ *   wrapping `CAssignmentHandler` drops.
+ * - The `handle` callback receives three caller-owned NUL-terminated
+ *   UTF-8 strings (`run_id`, `workflow_name`, `input_json`). The
+ *   callback MUST NOT free them — the cabi frees them after the
+ *   callback returns.
+ * - On success (`return == 0`), the callback writes a caller-owned
+ *   `*mut c_char` (heap-allocated UTF-8 JSON, freeable via
+ *   [`crate::string::blazen_string_free`]) into `out_json`. Pass
+ *   `null` to report the JSON `null` value.
+ * - On failure (`return != 0`), the callback writes a caller-owned
+ *   `*mut BlazenError` into `out_err`. The cabi reclaims it.
+ */
+typedef struct {
+    /**
+     * Foreign-side context pointer handed back to every callback.
+     */
+    void *user_data;
+    /**
+     * Release `user_data`. Called exactly once on drop.
+     */
+    void (*drop_user_data)(void *user_data);
+    /**
+     * Run an assignment. See struct-level docs for ownership.
+     */
+    int32_t (*handle)(void *user_data,
+                      const char *run_id,
+                      const char *workflow_name,
+                      const char *input_json,
+                      char **out_json,
+                      BlazenError **out_err);
+    /**
+     * Notify the handler that the named run has been cancelled.
+     * `run_id` is borrowed for the call's duration.
+     */
+    void (*on_cancel)(void *user_data, const char *run_id);
+    /**
+     * Notify the handler that the worker has been drained. `immediate`
+     * = `true` aborts in-flight assignments; `false` waits for them.
+     */
+    void (*on_drain)(void *user_data, bool immediate);
+} BlazenAssignmentHandlerVTable;
+
+/**
+ * Vtable a foreign caller fills in to receive run-event streams.
+ *
+ * Each subscription owns one of these. The subscription pump task
+ * invokes the callbacks from a `spawn_blocking` thread, so foreign
+ * hosts that need GVL reacquisition (Ruby) get it for free, and
+ * hosts that pin to a particular thread (Dart) marshal back through
+ * their own runtime adapter.
+ *
+ * ## Ownership
+ *
+ * - `user_data` is owned by the vtable. The subscription releases it
+ *   via `drop_user_data` exactly once when the wrapping
+ *   [`BlazenControlPlaneSubscription`] drops.
+ * - `run_id`, `event_type`, and `data_json` passed to `on_event` are
+ *   BORROWED — the callback MUST NOT free them. They remain live for
+ *   the duration of the call.
+ * - `error` passed to `on_error` is BORROWED — same rules.
+ * - `on_close` is invoked exactly once when the stream terminates
+ *   cleanly (server end-of-stream). `on_error` is invoked at most
+ *   once and replaces `on_close` on the error path. Cancelling /
+ *   freeing the subscription suppresses both terminal callbacks.
+ */
+typedef struct {
+    /**
+     * Foreign-side context pointer handed back to every callback.
+     */
+    void *user_data;
+    /**
+     * Release `user_data`. Called exactly once when the wrapping
+     * subscription drops.
+     */
+    void (*drop_user_data)(void *user_data);
+    /**
+     * Receive one event. All three string arguments are borrowed,
+     * NUL-terminated UTF-8 buffers valid for the duration of the call.
+     * `data_json` is the serialised JSON payload of the event's
+     * `data` field.
+     */
+    void (*on_event)(void *user_data,
+                     const char *run_id,
+                     const char *event_type,
+                     const char *data_json,
+                     uint64_t timestamp_ms);
+    /**
+     * Terminal callback invoked once on clean stream end.
+     */
+    void (*on_close)(void *user_data);
+    /**
+     * Terminal callback invoked once on a stream error. `error` is a
+     * borrowed NUL-terminated UTF-8 buffer.
+     */
+    void (*on_error)(void *user_data, const char *error);
+} BlazenRunEventSinkVTable;
 
 /**
  * Opaque wrapper around [`blazen_llm::providers::openai_compat::OpenAiCompatConfig`].
@@ -3456,6 +3659,776 @@ BlazenVoiceHandleArray *blazen_voice_handle_array_from_json(const char *json,
  * non-null pointer is a double-free.
  */
  void blazen_voice_handle_array_free(BlazenVoiceHandleArray *handle);
+
+/**
+ * Synchronously open a connection to the control plane at `endpoint`.
+ * Blocks the calling thread on the cabi tokio runtime. Returns `0` on
+ * success (writing a caller-owned `*mut BlazenControlPlaneClient` to
+ * `out_client`) or `-1` on failure (writing the inner error to
+ * `out_err`).
+ *
+ * `endpoint` is a gRPC URI such as `"http://cp.example.com:7445"` or
+ * `"https://cp.example.com"`. TLS is selected automatically by the
+ * underlying tonic Endpoint based on the URI scheme; the cabi surface
+ * does not currently expose explicit TLS configuration — that landed
+ * only in the higher-level `UniFFI` / `PyO3` / `napi` bindings.
+ *
+ * # Safety
+ *
+ * `endpoint` must be a valid NUL-terminated UTF-8 buffer that remains
+ * live for the duration of the call. `out_client` is null OR a
+ * destination for one `*mut BlazenControlPlaneClient` write. `out_err`
+ * is null OR a destination for one `*mut BlazenError` write.
+ */
+
+int32_t blazen_controlplane_client_connect_blocking(const char *endpoint,
+                                                    BlazenControlPlaneClient **out_client,
+                                                    BlazenError **out_err);
+
+/**
+ * Opens a connection asynchronously, returning an opaque future
+ * handle. Resolves to `*mut BlazenControlPlaneClient` — pop with
+ * [`blazen_future_take_controlplane_client`].
+ *
+ * Returns null on null input or non-UTF-8 endpoint.
+ *
+ * # Safety
+ *
+ * `endpoint` must be a valid NUL-terminated UTF-8 buffer that remains
+ * live for the duration of the call (its contents are copied before
+ * this function returns).
+ */
+ BlazenFuture *blazen_controlplane_client_connect(const char *endpoint);
+
+/**
+ * Frees a `BlazenControlPlaneClient` handle. No-op on null.
+ *
+ * # Safety
+ *
+ * `client` must be null OR a pointer previously produced by the cabi
+ * control-plane surface. Calling this twice is a double-free.
+ */
+ void blazen_controlplane_client_free(BlazenControlPlaneClient *client);
+
+/**
+ * Synchronously submit a workflow run. Returns `0` on success
+ * (writing a caller-owned `*mut BlazenRunStateSnapshot` to
+ * `out_snapshot`) or `-1` on failure.
+ *
+ * `required_tags_json` is a JSON array of `key=value` strings; pass
+ * null or `"[]"` for no tag requirements.
+ *
+ * # Safety
+ *
+ * `client` must be a valid pointer to a `BlazenControlPlaneClient`.
+ * `workflow_name` must be a valid NUL-terminated UTF-8 buffer.
+ * `input_json` and `required_tags_json` must each be null OR a valid
+ * NUL-terminated UTF-8 buffer.
+ */
+
+int32_t blazen_controlplane_client_submit_workflow_blocking(const BlazenControlPlaneClient *client,
+                                                            const char *workflow_name,
+                                                            const char *input_json,
+                                                            const char *required_tags_json,
+                                                            bool wait_for_worker,
+                                                            BlazenRunStateSnapshot **out_snapshot,
+                                                            BlazenError **out_err);
+
+/**
+ * Async submit. Returns a future that resolves to
+ * `*mut BlazenRunStateSnapshot`. Pop with
+ * [`blazen_future_take_run_state_snapshot`].
+ *
+ * # Safety
+ *
+ * Same as [`blazen_controlplane_client_submit_workflow_blocking`].
+ */
+
+BlazenFuture *blazen_controlplane_client_submit_workflow(const BlazenControlPlaneClient *client,
+                                                         const char *workflow_name,
+                                                         const char *input_json,
+                                                         const char *required_tags_json,
+                                                         bool wait_for_worker);
+
+/**
+ * Synchronously cancel an in-flight run. Returns `0` on success and a
+ * fresh `BlazenRunStateSnapshot`; `-1` on failure with `out_err`.
+ *
+ * # Safety
+ *
+ * `client` must be a valid pointer. `run_id` must be a valid
+ * NUL-terminated UTF-8 buffer (a hyphenated UUID rendering).
+ */
+
+int32_t blazen_controlplane_client_cancel_workflow_blocking(const BlazenControlPlaneClient *client,
+                                                            const char *run_id,
+                                                            BlazenRunStateSnapshot **out_snapshot,
+                                                            BlazenError **out_err);
+
+/**
+ * Async cancel. Resolves to `*mut BlazenRunStateSnapshot`; pop with
+ * [`blazen_future_take_run_state_snapshot`].
+ *
+ * # Safety
+ *
+ * Same as [`blazen_controlplane_client_cancel_workflow_blocking`].
+ */
+
+BlazenFuture *blazen_controlplane_client_cancel_workflow(const BlazenControlPlaneClient *client,
+                                                         const char *run_id);
+
+/**
+ * Synchronously describe a run. Same shape as cancel.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_controlplane_client_cancel_workflow_blocking`].
+ */
+
+int32_t blazen_controlplane_client_describe_workflow_blocking(const BlazenControlPlaneClient *client,
+                                                              const char *run_id,
+                                                              BlazenRunStateSnapshot **out_snapshot,
+                                                              BlazenError **out_err);
+
+/**
+ * Async describe. Resolves to `*mut BlazenRunStateSnapshot`.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_controlplane_client_describe_workflow_blocking`].
+ */
+
+BlazenFuture *blazen_controlplane_client_describe_workflow(const BlazenControlPlaneClient *client,
+                                                           const char *run_id);
+
+/**
+ * Synchronously list connected workers. Returns `0` on success
+ * (writing a caller-owned `*mut BlazenWorkerInfoList` to `out_list`).
+ *
+ * # Safety
+ *
+ * `client` must be a valid pointer. `out_list` is null OR a valid
+ * destination for one `*mut BlazenWorkerInfoList` write. `out_err`
+ * upholds the standard out-pointer contract.
+ */
+
+int32_t blazen_controlplane_client_list_workers_blocking(const BlazenControlPlaneClient *client,
+                                                         BlazenWorkerInfoList **out_list,
+                                                         BlazenError **out_err);
+
+/**
+ * Async list. Resolves to `*mut BlazenWorkerInfoList`; pop with
+ * [`blazen_future_take_worker_info_list`].
+ *
+ * # Safety
+ *
+ * `client` must be a valid pointer to a `BlazenControlPlaneClient`.
+ */
+ BlazenFuture *blazen_controlplane_client_list_workers(const BlazenControlPlaneClient *client);
+
+/**
+ * Synchronously drain a worker. Returns `0` on success / `-1` on
+ * failure.
+ *
+ * # Safety
+ *
+ * `client` must be a valid pointer. `node_id` must be a valid
+ * NUL-terminated UTF-8 buffer.
+ */
+
+int32_t blazen_controlplane_client_drain_worker_blocking(const BlazenControlPlaneClient *client,
+                                                         const char *node_id,
+                                                         bool immediate,
+                                                         BlazenError **out_err);
+
+/**
+ * Async drain. Resolves to unit; pop with `blazen_future_take_unit`
+ * (defined in `persist.rs`).
+ *
+ * # Safety
+ *
+ * Same as [`blazen_controlplane_client_drain_worker_blocking`].
+ */
+
+BlazenFuture *blazen_controlplane_client_drain_worker(const BlazenControlPlaneClient *client,
+                                                      const char *node_id,
+                                                      bool immediate);
+
+/**
+ * Synchronously construct (and validate) a new worker. Does NOT open
+ * a network connection — that happens inside
+ * [`blazen_controlplane_worker_run_blocking`] /
+ * [`blazen_controlplane_worker_run`], which lets the retry policy
+ * cover the initial connect and reconnects uniformly.
+ *
+ * `capabilities_json` is a JSON array of `{ "kind": "<str>",
+ * "version": <u32> }` objects. Pass null, `"null"`, or `"[]"` to
+ * advertise no capabilities. `admission_mode` selects the worker's
+ * admission strategy:
+ * - `0` = `Fixed` with `max_in_flight = admission_param` (or 1 if
+ *   `admission_param == 0`).
+ * - `1` = `VramBudget` with `max_vram_mb = admission_param`.
+ * - `2` = `Reactive`.
+ *
+ * Any other value falls back to `Fixed { max_in_flight: 1 }`.
+ *
+ * `tags_json` is an optional JSON object mapping `key` -> `value`
+ * strings. Pass null for no tags.
+ *
+ * On success (`return == 0`), writes a caller-owned
+ * `*mut BlazenControlPlaneWorker` to `out_worker`. On failure,
+ * writes an error to `out_err` AND releases `vtable.user_data` via
+ * `vtable.drop_user_data` — the foreign caller MUST NOT free it
+ * themselves on either path.
+ *
+ * # Safety
+ *
+ * `endpoint`, `node_id` must be valid NUL-terminated UTF-8 buffers.
+ * `capabilities_json` and `tags_json` are null OR valid NUL-terminated
+ * UTF-8 buffers. `vtable.user_data` and `vtable.drop_user_data` /
+ * `vtable.handle` / `vtable.on_cancel` / `vtable.on_drain` must form a
+ * coherent thread-safe vtable (see [`BlazenAssignmentHandlerVTable`]
+ * docs).
+ */
+
+int32_t blazen_controlplane_worker_new_blocking(const char *endpoint,
+                                                const char *node_id,
+                                                const char *capabilities_json,
+                                                const char *tags_json,
+                                                uint32_t admission_mode,
+                                                uint64_t admission_param,
+                                                BlazenAssignmentHandlerVTable vtable,
+                                                BlazenControlPlaneWorker **out_worker,
+                                                BlazenError **out_err);
+
+/**
+ * Synchronously drive the worker until shutdown / drain / retry
+ * exhaustion. Consumes the inner worker; calling `run` twice returns
+ * `-1` with an Internal error.
+ *
+ * # Safety
+ *
+ * `worker` must be a valid pointer to a `BlazenControlPlaneWorker`.
+ */
+
+int32_t blazen_controlplane_worker_run_blocking(const BlazenControlPlaneWorker *worker,
+                                                BlazenError **out_err);
+
+/**
+ * Async variant of `run_blocking`. Resolves to unit; pop with
+ * `blazen_future_take_unit`. Returns null on null input or if `run`
+ * has already been called.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_controlplane_worker_run_blocking`].
+ */
+ BlazenFuture *blazen_controlplane_worker_run(const BlazenControlPlaneWorker *worker);
+
+/**
+ * Signal the worker to stop. No-op if `run` hasn't been called yet
+ * (the worker's shutdown hook is bound to the inner `Worker` which
+ * is consumed on the first `run` call, so post-`run` shutdown flows
+ * through the worker's own internal cancellation tokens).
+ *
+ * Idempotent.
+ *
+ * # Safety
+ *
+ * `worker` must be null OR a valid pointer to a
+ * `BlazenControlPlaneWorker`.
+ */
+ void blazen_controlplane_worker_shutdown(const BlazenControlPlaneWorker *worker);
+
+/**
+ * Frees a `BlazenControlPlaneWorker` handle. If `run` was never
+ * called, the contained worker config is dropped here (which in
+ * turn releases the assignment-handler vtable's `user_data`).
+ *
+ * # Safety
+ *
+ * `worker` must be null OR a pointer previously produced by the cabi
+ * control-plane surface. Calling this twice is a double-free.
+ */
+ void blazen_controlplane_worker_free(BlazenControlPlaneWorker *worker);
+
+/**
+ * Synchronously open an mTLS connection to the control plane at
+ * `endpoint`, loading the client identity + CA bundle from PEM files
+ * on disk. Same shape as
+ * [`blazen_controlplane_client_connect_blocking`].
+ *
+ * # Safety
+ *
+ * `endpoint`, `cert_path`, `key_path`, and `ca_path` must each be a
+ * valid NUL-terminated UTF-8 buffer that remains live for the
+ * duration of the call. `out_client` is null OR a destination for one
+ * `*mut BlazenControlPlaneClient` write. `out_err` is null OR a
+ * destination for one `*mut BlazenError` write.
+ */
+
+int32_t blazen_controlplane_client_connect_with_mtls_blocking(const char *endpoint,
+                                                              const char *cert_path,
+                                                              const char *key_path,
+                                                              const char *ca_path,
+                                                              BlazenControlPlaneClient **out_client,
+                                                              BlazenError **out_err);
+
+/**
+ * Async variant of
+ * [`blazen_controlplane_client_connect_with_mtls_blocking`]. Returns a
+ * `*mut BlazenFuture` resolving to
+ * `*mut BlazenControlPlaneClient` — pop with
+ * [`blazen_future_take_controlplane_client`]. Returns null on null
+ * input or non-UTF-8 paths.
+ *
+ * # Safety
+ *
+ * Same as
+ * [`blazen_controlplane_client_connect_with_mtls_blocking`]; the
+ * contents of each path buffer are copied before this function
+ * returns.
+ */
+
+BlazenFuture *blazen_controlplane_client_connect_with_mtls(const char *endpoint,
+                                                           const char *cert_path,
+                                                           const char *key_path,
+                                                           const char *ca_path);
+
+/**
+ * Synchronously construct (and validate) a new worker with mTLS
+ * loaded from PEM files on disk. Same semantics as
+ * [`blazen_controlplane_worker_new_blocking`], plus three additional
+ * path arguments. The vtable's ownership-transfer contract is
+ * unchanged — `vtable.user_data` is released via
+ * `vtable.drop_user_data` on every failure path.
+ *
+ * # Safety
+ *
+ * `endpoint`, `node_id`, `cert_path`, `key_path`, and `ca_path` must
+ * each be valid NUL-terminated UTF-8 buffers. `capabilities_json` and
+ * `tags_json` are null OR valid NUL-terminated UTF-8 buffers. The
+ * vtable must satisfy the contracts documented on
+ * [`BlazenAssignmentHandlerVTable`].
+ */
+
+int32_t blazen_controlplane_worker_new_with_mtls_blocking(const char *endpoint,
+                                                          const char *node_id,
+                                                          const char *capabilities_json,
+                                                          const char *tags_json,
+                                                          uint32_t admission_mode,
+                                                          uint64_t admission_param,
+                                                          const char *cert_path,
+                                                          const char *key_path,
+                                                          const char *ca_path,
+                                                          BlazenAssignmentHandlerVTable vtable,
+                                                          BlazenControlPlaneWorker **out_worker,
+                                                          BlazenError **out_err);
+
+/**
+ * Subscribe to the event stream for a single run. On success returns
+ * `0` and writes a caller-owned `*mut BlazenControlPlaneSubscription`
+ * into `out_sub`. The vtable's `user_data` is consumed on every
+ * path — released via `vtable.drop_user_data` on any early-return
+ * failure, otherwise released when the resulting subscription is
+ * freed.
+ *
+ * # Safety
+ *
+ * `client` must be a valid pointer to a `BlazenControlPlaneClient`.
+ * `run_id` must be a valid NUL-terminated UTF-8 buffer (a hyphenated
+ * UUID rendering). `vtable.user_data` plus the four function
+ * pointers must form a coherent thread-safe vtable (see
+ * [`BlazenRunEventSinkVTable`] docs).
+ */
+
+int32_t blazen_controlplane_client_subscribe_run_events(const BlazenControlPlaneClient *client,
+                                                        const char *run_id,
+                                                        BlazenRunEventSinkVTable sink,
+                                                        BlazenControlPlaneSubscription **out_sub,
+                                                        BlazenError **out_err);
+
+/**
+ * Subscribe to the fan-out event stream across all runs, optionally
+ * filtered by tag predicates. On success returns `0` and writes a
+ * caller-owned `*mut BlazenControlPlaneSubscription` into `out_sub`.
+ * `required_tags_json` is a JSON array of `key=value` strings (pass
+ * null or `"[]"` for no filtering).
+ *
+ * # Safety
+ *
+ * `client` must be a valid pointer to a `BlazenControlPlaneClient`.
+ * `required_tags_json` is null OR a valid NUL-terminated UTF-8
+ * buffer. `vtable.user_data` plus the four function pointers must
+ * form a coherent thread-safe vtable (see
+ * [`BlazenRunEventSinkVTable`] docs).
+ */
+
+int32_t blazen_controlplane_client_subscribe_all(const BlazenControlPlaneClient *client,
+                                                 const char *required_tags_json,
+                                                 BlazenRunEventSinkVTable sink,
+                                                 BlazenControlPlaneSubscription **out_sub,
+                                                 BlazenError **out_err);
+
+/**
+ * Cancel an in-flight subscription. Fires the internal cancellation
+ * token; the pump task observes it on the next stream poll, exits
+ * without firing terminal callbacks, and releases `user_data` via
+ * the vtable's `drop_user_data` thunk. Idempotent.
+ *
+ * # Safety
+ *
+ * `sub` must be null OR a valid pointer to a
+ * `BlazenControlPlaneSubscription` produced by the cabi surface.
+ */
+ void blazen_controlplane_subscription_cancel(BlazenControlPlaneSubscription *sub);
+
+/**
+ * Free a subscription handle. Cancels the underlying pump task as a
+ * side effect (same semantics as
+ * [`blazen_controlplane_subscription_cancel`]). No-op on null.
+ *
+ * # Safety
+ *
+ * `sub` must be null OR a pointer previously produced by the cabi
+ * control-plane surface. Calling this twice is a double-free.
+ */
+ void blazen_controlplane_subscription_free(BlazenControlPlaneSubscription *sub);
+
+/**
+ * Pop a `BlazenControlPlaneClient` from `fut`. On success returns `0`
+ * and writes a caller-owned `*mut BlazenControlPlaneClient` to `out`;
+ * on failure returns `-1` and writes the error to `err`.
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by
+ * [`blazen_controlplane_client_connect`], not yet freed. `out` / `err`
+ * are null OR valid destinations for their respective slots.
+ */
+
+int32_t blazen_future_take_controlplane_client(BlazenFuture *fut,
+                                               BlazenControlPlaneClient **out,
+                                               BlazenError **err);
+
+/**
+ * Pop a `BlazenRunStateSnapshot` from `fut`. Same shape as the client
+ * take helper.
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by one of
+ * [`blazen_controlplane_client_submit_workflow`],
+ * [`blazen_controlplane_client_cancel_workflow`], or
+ * [`blazen_controlplane_client_describe_workflow`], not yet freed.
+ */
+
+int32_t blazen_future_take_run_state_snapshot(BlazenFuture *fut,
+                                              BlazenRunStateSnapshot **out,
+                                              BlazenError **err);
+
+/**
+ * Pop a `BlazenWorkerInfoList` from `fut`. Same shape as the snapshot
+ * take helper.
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by
+ * [`blazen_controlplane_client_list_workers`], not yet freed.
+ */
+
+int32_t blazen_future_take_worker_info_list(BlazenFuture *fut,
+                                            BlazenWorkerInfoList **out,
+                                            BlazenError **err);
+
+/**
+ * Returns the run id as a heap-allocated NUL-terminated UTF-8 C string
+ * (the lowercase-hyphenated UUID rendering). Returns null if `snap` is
+ * null.
+ *
+ * # Ownership
+ *
+ * Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `snap` must be null OR a valid pointer to a `BlazenRunStateSnapshot`
+ * previously produced by the cabi surface.
+ */
+ char *blazen_run_state_snapshot_run_id(const BlazenRunStateSnapshot *snap);
+
+/**
+ * Returns the run's current status as one of the `BLAZEN_RUN_STATUS_*`
+ * constants. Returns `BLAZEN_RUN_STATUS_PENDING` (0) if `snap` is null —
+ * callers should pre-check for null when the distinction matters.
+ *
+ * # Safety
+ *
+ * `snap` must be null OR a valid pointer to a `BlazenRunStateSnapshot`.
+ */
+ uint32_t blazen_run_state_snapshot_status(const BlazenRunStateSnapshot *snap);
+
+/**
+ * Returns the submit-time wall-clock timestamp in milliseconds since the
+ * Unix epoch. Returns `0` if `snap` is null.
+ *
+ * # Safety
+ *
+ * `snap` must be null OR a valid pointer to a `BlazenRunStateSnapshot`.
+ */
+ uint64_t blazen_run_state_snapshot_started_at_ms(const BlazenRunStateSnapshot *snap);
+
+/**
+ * Returns the terminal-state timestamp in milliseconds since the Unix
+ * epoch via the `out_ms` out-param, with a `has_value` indicator
+ * (`0` = unset, `1` = set). Returns `-1` if `snap` is null, `0` otherwise.
+ *
+ * # Safety
+ *
+ * `snap` must be null OR a valid pointer to a `BlazenRunStateSnapshot`.
+ * `out_ms` and `has_value` must each be null OR a writable destination
+ * for one `u64` / `i32` respectively.
+ */
+
+int32_t blazen_run_state_snapshot_completed_at_ms(const BlazenRunStateSnapshot *snap,
+                                                  uint64_t *out_ms,
+                                                  int32_t *has_value);
+
+/**
+ * Returns the assigned worker's `node_id` (heap-allocated UTF-8 string),
+ * or null if the run is unassigned, the field is unset, or `snap` is
+ * null. Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `snap` must be null OR a valid pointer to a `BlazenRunStateSnapshot`.
+ */
+ char *blazen_run_state_snapshot_assigned_to(const BlazenRunStateSnapshot *snap);
+
+/**
+ * Returns the most-recent event timestamp in milliseconds via the
+ * `out_ms` and `has_value` out-params. Returns `-1` if `snap` is null,
+ * `0` otherwise.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_run_state_snapshot_completed_at_ms`].
+ */
+
+int32_t blazen_run_state_snapshot_last_event_at_ms(const BlazenRunStateSnapshot *snap,
+                                                   uint64_t *out_ms,
+                                                   int32_t *has_value);
+
+/**
+ * Returns the terminal `output` as a JSON-encoded UTF-8 string when
+ * `status == Completed`. Returns null if `snap` is null, `output` is
+ * unset, or JSON serialisation fails. Caller frees with
+ * [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `snap` must be null OR a valid pointer to a `BlazenRunStateSnapshot`.
+ */
+ char *blazen_run_state_snapshot_output_json(const BlazenRunStateSnapshot *snap);
+
+/**
+ * Returns the run's `error` message as a heap-allocated UTF-8 string
+ * when `status == Failed`. Returns null if `snap` is null or the field
+ * is unset. Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `snap` must be null OR a valid pointer to a `BlazenRunStateSnapshot`.
+ */
+ char *blazen_run_state_snapshot_error(const BlazenRunStateSnapshot *snap);
+
+/**
+ * Frees a `BlazenRunStateSnapshot` handle previously produced by the
+ * cabi surface. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `snap` must be null OR a pointer previously produced by the cabi
+ * control-plane surface. Calling this twice on the same non-null pointer
+ * is a double-free.
+ */
+ void blazen_run_state_snapshot_free(BlazenRunStateSnapshot *snap);
+
+/**
+ * Returns the worker's `node_id` as a heap-allocated UTF-8 string.
+ * Returns null if `info` is null.
+ *
+ * # Ownership
+ *
+ * Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `info` must be null OR a valid pointer to a `BlazenWorkerInfo`.
+ */
+ char *blazen_worker_info_node_id(const BlazenWorkerInfo *info);
+
+/**
+ * Returns the worker's capabilities as a JSON array of
+ * `{ "kind": "...", "version": <u32> }` objects. Returns null if `info`
+ * is null or JSON serialisation fails (which should be impossible for
+ * these well-typed fields). Caller frees with
+ * [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `info` must be null OR a valid pointer to a `BlazenWorkerInfo`.
+ */
+ char *blazen_worker_info_capabilities_json(const BlazenWorkerInfo *info);
+
+/**
+ * Returns the worker's tags as a JSON object (`{"key": "value", ...}`).
+ * Returns null if `info` is null. Caller frees with
+ * [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `info` must be null OR a valid pointer to a `BlazenWorkerInfo`.
+ */
+ char *blazen_worker_info_tags_json(const BlazenWorkerInfo *info);
+
+/**
+ * Returns a JSON encoding of the worker's `AdmissionMode`. Shapes:
+ * - `{"mode":"Fixed","max_in_flight":<u32>}`
+ * - `{"mode":"VramBudget","max_vram_mb":<u64>}`
+ * - `{"mode":"Reactive"}`
+ *
+ * Returns null if `info` is null. Caller frees with
+ * [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `info` must be null OR a valid pointer to a `BlazenWorkerInfo`.
+ */
+ char *blazen_worker_info_admission_json(const BlazenWorkerInfo *info);
+
+/**
+ * Returns the latest reported in-flight count for the worker. Returns
+ * `0` if `info` is null.
+ *
+ * # Safety
+ *
+ * `info` must be null OR a valid pointer to a `BlazenWorkerInfo`.
+ */
+ uint32_t blazen_worker_info_in_flight(const BlazenWorkerInfo *info);
+
+/**
+ * Returns the timestamp (ms since the Unix epoch) when the worker
+ * connected. Returns `0` if `info` is null.
+ *
+ * # Safety
+ *
+ * `info` must be null OR a valid pointer to a `BlazenWorkerInfo`.
+ */
+ uint64_t blazen_worker_info_connected_at_ms(const BlazenWorkerInfo *info);
+
+/**
+ * Frees a `BlazenWorkerInfo` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `info` must be null OR a pointer previously produced by the cabi
+ * control-plane surface. Calling this twice is a double-free.
+ */
+ void blazen_worker_info_free(BlazenWorkerInfo *info);
+
+/**
+ * Returns the number of entries in the list. Returns `0` if `list` is
+ * null.
+ *
+ * # Safety
+ *
+ * `list` must be null OR a valid pointer to a `BlazenWorkerInfoList`.
+ */
+ uintptr_t blazen_worker_info_list_count(const BlazenWorkerInfoList *list);
+
+/**
+ * Returns a fresh `BlazenWorkerInfo` clone for the entry at `index`,
+ * owned by the caller. Returns null if `list` is null or `index >=
+ * count`. Each call clones the underlying record so the returned handle
+ * outlives the list.
+ *
+ * # Ownership
+ *
+ * Caller frees with [`blazen_worker_info_free`].
+ *
+ * # Safety
+ *
+ * `list` must be null OR a valid pointer to a `BlazenWorkerInfoList`.
+ */
+ BlazenWorkerInfo *blazen_worker_info_list_get(const BlazenWorkerInfoList *list, uintptr_t index);
+
+/**
+ * Frees a `BlazenWorkerInfoList` previously produced by the cabi
+ * control-plane surface. No-op on a null pointer. Frees the underlying
+ * records but does NOT invalidate handles previously returned by
+ * [`blazen_worker_info_list_get`] — those are independent clones.
+ *
+ * # Safety
+ *
+ * `list` must be null OR a pointer previously produced by the cabi
+ * control-plane surface. Calling this twice is a double-free.
+ */
+ void blazen_worker_info_list_free(BlazenWorkerInfoList *list);
+
+/**
+ * Returns the run id as a heap-allocated NUL-terminated UTF-8 C string
+ * (the lowercase-hyphenated UUID rendering). Returns null if `event` is
+ * null. Caller frees with [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `event` must be null OR a valid pointer to a `BlazenRunEvent`.
+ */
+ char *blazen_run_event_run_id(const BlazenRunEvent *event);
+
+/**
+ * Returns the event type tag as a heap-allocated UTF-8 string. Returns
+ * null if `event` is null. Caller frees with
+ * [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `event` must be null OR a valid pointer to a `BlazenRunEvent`.
+ */
+ char *blazen_run_event_event_type(const BlazenRunEvent *event);
+
+/**
+ * Returns the event payload as JSON. Returns null if `event` is null or
+ * JSON encoding fails. Caller frees with
+ * [`crate::string::blazen_string_free`].
+ *
+ * # Safety
+ *
+ * `event` must be null OR a valid pointer to a `BlazenRunEvent`.
+ */
+ char *blazen_run_event_data_json(const BlazenRunEvent *event);
+
+/**
+ * Returns the event timestamp (ms since the Unix epoch). Returns `0` if
+ * `event` is null.
+ *
+ * # Safety
+ *
+ * `event` must be null OR a valid pointer to a `BlazenRunEvent`.
+ */
+ uint64_t blazen_run_event_timestamp_ms(const BlazenRunEvent *event);
+
+/**
+ * Frees a `BlazenRunEvent` previously produced by the cabi control-plane
+ * surface. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `event` must be null OR a pointer previously produced by the cabi
+ * control-plane surface. Calling this twice is a double-free.
+ */
+ void blazen_run_event_free(BlazenRunEvent *event);
 
 /**
  * Returns the variant tag for `err` — one of the `BLAZEN_ERROR_KIND_*`
@@ -7873,6 +8846,31 @@ BlazenFuture *blazen_complete_streaming(const BlazenCompletionModel *model,
  * surface. Double-free is undefined behavior.
  */
  void blazen_stream_chunk_free(BlazenStreamChunk *handle);
+
+/**
+ * Heap-allocates a fresh NUL-terminated UTF-8 C string from a borrowed
+ * caller-supplied C string. The returned pointer is owned by the
+ * caller (and the cabi runtime, when handed back across a vtable
+ * boundary) and must eventually be released with
+ * [`blazen_string_free`].
+ *
+ * FFI-host vtables that report string output via an out-param (e.g.
+ * the control-plane `AssignmentHandler`'s `handle` callback) MUST use
+ * this helper to mint the output buffer so the cabi can free it on
+ * the matching allocator. Foreign-allocated buffers (Ruby
+ * `MemoryPointer.from_string`, etc.) are not wire-compatible with the
+ * cabi's allocator and would invoke undefined behaviour if reclaimed
+ * via `CString::from_raw` on the Rust side.
+ *
+ * Returns `std::ptr::null_mut()` if `input` is null, contains non-
+ * UTF-8 bytes, or has an interior NUL byte.
+ *
+ * # Safety
+ *
+ * `input` must be null OR a NUL-terminated buffer that remains valid
+ * for the duration of this call.
+ */
+ char *blazen_string_alloc(const char *input);
 
 /**
  * Frees a heap-allocated C string produced by any `blazen_*` function that

@@ -24,6 +24,9 @@ blazen-pipeline = { version = "0.0.0-dev", path = "../blazen-pipeline", default-
 blazen-manager = { version = "0.0.0-dev", path = "../blazen-manager", default-features = false }
 blazen-telemetry = { version = "0.0.0-dev", path = "../blazen-telemetry", default-features = false, features = ["history", "otlp-http", "langfuse"] }
 blazen-peer = { version = "0.0.0-dev", path = "../blazen-peer", default-features = false, features = ["client", "http-transport"] }
+blazen-controlplane = { version = "0.0.0-dev", path = "../blazen-controlplane", default-features = false }
+postcard = { version = "1.1", features = ["alloc"] }
+base64 = "0.22"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
 tsify-next = { version = "0.5", features = ["js", "json"] }
 wasm-bindgen = "=0.2.118"
@@ -35,6 +38,14 @@ web-sys = { version = "=0.3.95", features = [
     "ReadableStreamDefaultReader",
     "ReadableStreamReadResult",
     "QueuingStrategy",
+    "EventSource",
+    "EventSourceInit",
+    "MessageEvent",
+    "Event",
+    "EventTarget",
+    "ErrorEvent",
+    "AbortController",
+    "AbortSignal",
 ] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

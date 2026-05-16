@@ -2094,6 +2094,1395 @@ public func FfiConverterTypeCompletionStreamSink_lower(_ value: CompletionStream
 
 
 /**
+ * Foreign-implementable handler invoked once per assignment a worker
+ * receives.
+ *
+ * `handle` is synchronous on the foreign side — foreign code that needs
+ * to drive its own async work must spawn a goroutine / coroutine /
+ * fiber inside the callback and return when that work resolves. The
+ * returned `Ok(String)` is interpreted as the assignment output's JSON
+ * representation; the returned `Err(String)` is surfaced to the control
+ * plane as an assignment failure.
+ *
+ * `on_cancel` and `on_drain` are best-effort notifications. The
+ * underlying Rust worker has already fired the per-run cancellation
+ * token / queue gate before invoking these; the foreign handler should
+ * use them only to release external resources (open file handles,
+ * network sockets, etc.).
+ */
+public protocol ControlPlaneAssignmentHandler: AnyObject, Sendable {
+    
+    /**
+     * Handle one assignment. Return `Ok(json)` for success or any
+     * [`BlazenError`] for failure — the error's `Display`
+     * representation is forwarded to the control plane as the
+     * assignment failure message.
+     *
+     * Use [`BlazenError::Tool`] for handler-side errors, or
+     * [`BlazenError::Workflow`] for workflow-level failures.
+     */
+    func handle(runId: String, workflowName: String, inputJson: String) throws  -> String
+    
+    /**
+     * Called when the server cancels an in-flight run. Foreign code
+     * should treat this as a notification; the underlying Rust worker
+     * has already fired the per-run cancellation token.
+     */
+    func onCancel(runId: String) 
+    
+    /**
+     * Called when the server initiates a drain. `immediate = true`
+     * means the worker must stop now; `false` means graceful drain.
+     */
+    func onDrain(immediate: Bool) 
+    
+}
+/**
+ * Foreign-implementable handler invoked once per assignment a worker
+ * receives.
+ *
+ * `handle` is synchronous on the foreign side — foreign code that needs
+ * to drive its own async work must spawn a goroutine / coroutine /
+ * fiber inside the callback and return when that work resolves. The
+ * returned `Ok(String)` is interpreted as the assignment output's JSON
+ * representation; the returned `Err(String)` is surfaced to the control
+ * plane as an assignment failure.
+ *
+ * `on_cancel` and `on_drain` are best-effort notifications. The
+ * underlying Rust worker has already fired the per-run cancellation
+ * token / queue gate before invoking these; the foreign handler should
+ * use them only to release external resources (open file handles,
+ * network sockets, etc.).
+ */
+open class ControlPlaneAssignmentHandlerImpl: ControlPlaneAssignmentHandler, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_controlplaneassignmenthandler(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_controlplaneassignmenthandler(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Handle one assignment. Return `Ok(json)` for success or any
+     * [`BlazenError`] for failure — the error's `Display`
+     * representation is forwarded to the control plane as the
+     * assignment failure message.
+     *
+     * Use [`BlazenError::Tool`] for handler-side errors, or
+     * [`BlazenError::Workflow`] for workflow-level failures.
+     */
+open func handle(runId: String, workflowName: String, inputJson: String)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_controlplaneassignmenthandler_handle(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(runId),
+        FfiConverterString.lower(workflowName),
+        FfiConverterString.lower(inputJson),$0
+    )
+})
+}
+    
+    /**
+     * Called when the server cancels an in-flight run. Foreign code
+     * should treat this as a notification; the underlying Rust worker
+     * has already fired the per-run cancellation token.
+     */
+open func onCancel(runId: String)  {try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_controlplaneassignmenthandler_on_cancel(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(runId),$0
+    )
+}
+}
+    
+    /**
+     * Called when the server initiates a drain. `immediate = true`
+     * means the worker must stop now; `false` means graceful drain.
+     */
+open func onDrain(immediate: Bool)  {try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_controlplaneassignmenthandler_on_drain(
+            self.uniffiCloneHandle(),
+        FfiConverterBool.lower(immediate),$0
+    )
+}
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceControlPlaneAssignmentHandler {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceControlPlaneAssignmentHandler = UniffiVTableCallbackInterfaceControlPlaneAssignmentHandler(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeControlPlaneAssignmentHandler.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface ControlPlaneAssignmentHandler: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeControlPlaneAssignmentHandler.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface ControlPlaneAssignmentHandler: handle missing in uniffiClone")
+            }
+        },
+        handle: { (
+            uniffiHandle: UInt64,
+            runId: RustBuffer,
+            workflowName: RustBuffer,
+            inputJson: RustBuffer,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> String in
+                guard let uniffiObj = try? FfiConverterTypeControlPlaneAssignmentHandler.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try uniffiObj.handle(
+                     runId: try FfiConverterString.lift(runId),
+                     workflowName: try FfiConverterString.lift(workflowName),
+                     inputJson: try FfiConverterString.lift(inputJson)
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterString.lower($0) }
+            uniffiTraitInterfaceCallWithError(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn,
+                lowerError: FfiConverterTypeBlazenError_lower
+            )
+        },
+        onCancel: { (
+            uniffiHandle: UInt64,
+            runId: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeControlPlaneAssignmentHandler.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onCancel(
+                     runId: try FfiConverterString.lift(runId)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        onDrain: { (
+            uniffiHandle: UInt64,
+            immediate: Int8,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeControlPlaneAssignmentHandler.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onDrain(
+                     immediate: try FfiConverterBool.lift(immediate)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceControlPlaneAssignmentHandler> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceControlPlaneAssignmentHandler>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitControlPlaneAssignmentHandler() {
+    uniffi_blazen_uniffi_fn_init_callback_vtable_controlplaneassignmenthandler(UniffiCallbackInterfaceControlPlaneAssignmentHandler.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeControlPlaneAssignmentHandler: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<ControlPlaneAssignmentHandler>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = ControlPlaneAssignmentHandler
+
+    public static func lift(_ handle: UInt64) throws -> ControlPlaneAssignmentHandler {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return ControlPlaneAssignmentHandlerImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: ControlPlaneAssignmentHandler) -> UInt64 {
+         if let rustImpl = value as? ControlPlaneAssignmentHandlerImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ControlPlaneAssignmentHandler {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: ControlPlaneAssignmentHandler, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneAssignmentHandler_lift(_ handle: UInt64) throws -> ControlPlaneAssignmentHandler {
+    return try FfiConverterTypeControlPlaneAssignmentHandler.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneAssignmentHandler_lower(_ value: ControlPlaneAssignmentHandler) -> UInt64 {
+    return FfiConverterTypeControlPlaneAssignmentHandler.lower(value)
+}
+
+
+
+
+
+
+/**
+ * gRPC client for the orchestrator side of the control plane.
+ *
+ * Construct with [`ControlPlaneClient::connect`] (async) or
+ * [`ControlPlaneClient::connect_blocking`] (sync). All RPCs are
+ * serialised behind an inner [`tokio::sync::Mutex`] held inside the
+ * upstream [`CoreClient`]; concurrent calls on the same handle are safe
+ * but each method holds the mutex for the duration of its RPC.
+ */
+public protocol ControlPlaneClientProtocol: AnyObject, Sendable {
+    
+    /**
+     * Cancel an in-flight run.
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::Validation`] if `run_id` is not a valid
+     * UUID; [`BlazenError::Workflow`] for server-side errors.
+     */
+    func cancelWorkflow(runId: String) async throws  -> ControlPlaneRunStateSnapshot
+    
+    /**
+     * Look up the current state of a run.
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::Validation`] if `run_id` is not a valid
+     * UUID; [`BlazenError::Workflow`] for server-side errors.
+     */
+    func describeWorkflow(runId: String) async throws  -> ControlPlaneRunStateSnapshot
+    
+    /**
+     * Tell the control plane to drain `node_id`.
+     *
+     * `immediate = true` asks the worker to stop now; `false` lets
+     * it finish in-flight assignments before disconnecting.
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::ControlPlane`] for RPC failures.
+     */
+    func drainWorker(nodeId: String, immediate: Bool) async throws 
+    
+    /**
+     * List currently-connected workers.
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::Workflow`] for server-side errors.
+     */
+    func listWorkers() async throws  -> [ControlPlaneWorkerInfo]
+    
+    /**
+     * Submit a workflow to the control plane.
+     *
+     * Returns the initial [`ControlPlaneRunStateSnapshot`] (status will
+     * usually be `Pending` or `Running` immediately after submission).
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::Validation`] if `request.input_json` is
+     * not valid JSON; [`BlazenError::Workflow`] for server-side errors.
+     */
+    func submitWorkflow(request: ControlPlaneSubmitRequest) async throws  -> ControlPlaneRunStateSnapshot
+    
+    /**
+     * Subscribe to events for `run_id`, forwarding each event to
+     * `subscriber` until the stream terminates.
+     *
+     * Returns a [`ControlPlaneSubscription`] handle; call
+     * [`ControlPlaneSubscription::cancel`] to stop pumping events
+     * before the run completes. The pump task always invokes either
+     * `on_close` or `on_error` exactly once before exiting.
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::Validation`] if `run_id` is not a valid
+     * UUID; [`BlazenError::Workflow`] if the server rejects the
+     * subscription request itself.
+     */
+    func subscribeRunEvents(runId: String, subscriber: ControlPlaneRunEventSubscriber) async throws  -> ControlPlaneSubscription
+    
+}
+/**
+ * gRPC client for the orchestrator side of the control plane.
+ *
+ * Construct with [`ControlPlaneClient::connect`] (async) or
+ * [`ControlPlaneClient::connect_blocking`] (sync). All RPCs are
+ * serialised behind an inner [`tokio::sync::Mutex`] held inside the
+ * upstream [`CoreClient`]; concurrent calls on the same handle are safe
+ * but each method holds the mutex for the duration of its RPC.
+ */
+open class ControlPlaneClient: ControlPlaneClientProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_controlplaneclient(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_controlplaneclient(handle, $0) }
+    }
+
+    
+    /**
+     * Async constructor. Use from Swift `async` / Kotlin `suspend`
+     * callers.
+     *
+     * # Errors
+     *
+     * Same as [`ControlPlaneClient::connect_blocking`].
+     */
+public static func connect(endpoint: String)async throws  -> ControlPlaneClient  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_constructor_controlplaneclient_connect(FfiConverterString.lower(endpoint)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_u64,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_u64,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_u64,
+            liftFunc: FfiConverterTypeControlPlaneClient_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous constructor. Blocks the current thread on the shared
+     * Tokio runtime while the TCP/HTTP-2 handshake completes.
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::ControlPlane`] (`kind = "Transport"`) if
+     * the endpoint URI is invalid or the handshake fails.
+     */
+public static func connectBlocking(endpoint: String)throws  -> ControlPlaneClient  {
+    return try  FfiConverterTypeControlPlaneClient_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_constructor_controlplaneclient_connect_blocking(
+        FfiConverterString.lower(endpoint),$0
+    )
+})
+}
+    
+
+    
+    /**
+     * Cancel an in-flight run.
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::Validation`] if `run_id` is not a valid
+     * UUID; [`BlazenError::Workflow`] for server-side errors.
+     */
+open func cancelWorkflow(runId: String)async throws  -> ControlPlaneRunStateSnapshot  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_controlplaneclient_cancel_workflow(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(runId)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeControlPlaneRunStateSnapshot_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Look up the current state of a run.
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::Validation`] if `run_id` is not a valid
+     * UUID; [`BlazenError::Workflow`] for server-side errors.
+     */
+open func describeWorkflow(runId: String)async throws  -> ControlPlaneRunStateSnapshot  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_controlplaneclient_describe_workflow(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(runId)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeControlPlaneRunStateSnapshot_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Tell the control plane to drain `node_id`.
+     *
+     * `immediate = true` asks the worker to stop now; `false` lets
+     * it finish in-flight assignments before disconnecting.
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::ControlPlane`] for RPC failures.
+     */
+open func drainWorker(nodeId: String, immediate: Bool)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_controlplaneclient_drain_worker(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(nodeId),FfiConverterBool.lower(immediate)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * List currently-connected workers.
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::Workflow`] for server-side errors.
+     */
+open func listWorkers()async throws  -> [ControlPlaneWorkerInfo]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_controlplaneclient_list_workers(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeControlPlaneWorkerInfo.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Submit a workflow to the control plane.
+     *
+     * Returns the initial [`ControlPlaneRunStateSnapshot`] (status will
+     * usually be `Pending` or `Running` immediately after submission).
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::Validation`] if `request.input_json` is
+     * not valid JSON; [`BlazenError::Workflow`] for server-side errors.
+     */
+open func submitWorkflow(request: ControlPlaneSubmitRequest)async throws  -> ControlPlaneRunStateSnapshot  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_controlplaneclient_submit_workflow(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeControlPlaneSubmitRequest_lower(request)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeControlPlaneRunStateSnapshot_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Subscribe to events for `run_id`, forwarding each event to
+     * `subscriber` until the stream terminates.
+     *
+     * Returns a [`ControlPlaneSubscription`] handle; call
+     * [`ControlPlaneSubscription::cancel`] to stop pumping events
+     * before the run completes. The pump task always invokes either
+     * `on_close` or `on_error` exactly once before exiting.
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::Validation`] if `run_id` is not a valid
+     * UUID; [`BlazenError::Workflow`] if the server rejects the
+     * subscription request itself.
+     */
+open func subscribeRunEvents(runId: String, subscriber: ControlPlaneRunEventSubscriber)async throws  -> ControlPlaneSubscription  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_controlplaneclient_subscribe_run_events(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(runId),FfiConverterTypeControlPlaneRunEventSubscriber_lower(subscriber)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_u64,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_u64,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_u64,
+            liftFunc: FfiConverterTypeControlPlaneSubscription_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeControlPlaneClient: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = ControlPlaneClient
+
+    public static func lift(_ handle: UInt64) throws -> ControlPlaneClient {
+        return ControlPlaneClient(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: ControlPlaneClient) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ControlPlaneClient {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: ControlPlaneClient, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneClient_lift(_ handle: UInt64) throws -> ControlPlaneClient {
+    return try FfiConverterTypeControlPlaneClient.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneClient_lower(_ value: ControlPlaneClient) -> UInt64 {
+    return FfiConverterTypeControlPlaneClient.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Foreign-implementable subscriber that observes a per-run event stream
+ * opened by [`ControlPlaneClient::subscribe_run_events`].
+ *
+ * Like [`ControlPlaneAssignmentHandler`], every method is synchronous
+ * on the foreign side. The subscription pumps inbound events on the
+ * shared Tokio runtime and invokes the callbacks in the order they
+ * arrive; foreign callers wanting concurrent processing should spawn
+ * from inside `on_event`.
+ */
+public protocol ControlPlaneRunEventSubscriber: AnyObject, Sendable {
+    
+    /**
+     * One event arrived from the run.
+     */
+    func onEvent(event: ControlPlaneRunEvent) 
+    
+    /**
+     * Stream ended cleanly (the run reached a terminal state).
+     */
+    func onClose() 
+    
+    /**
+     * Stream errored. `error` is best-effort and may not survive a
+     * reconnect-then-retry cycle.
+     */
+    func onError(error: String) 
+    
+}
+/**
+ * Foreign-implementable subscriber that observes a per-run event stream
+ * opened by [`ControlPlaneClient::subscribe_run_events`].
+ *
+ * Like [`ControlPlaneAssignmentHandler`], every method is synchronous
+ * on the foreign side. The subscription pumps inbound events on the
+ * shared Tokio runtime and invokes the callbacks in the order they
+ * arrive; foreign callers wanting concurrent processing should spawn
+ * from inside `on_event`.
+ */
+open class ControlPlaneRunEventSubscriberImpl: ControlPlaneRunEventSubscriber, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_controlplaneruneventsubscriber(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_controlplaneruneventsubscriber(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * One event arrived from the run.
+     */
+open func onEvent(event: ControlPlaneRunEvent)  {try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_controlplaneruneventsubscriber_on_event(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeControlPlaneRunEvent_lower(event),$0
+    )
+}
+}
+    
+    /**
+     * Stream ended cleanly (the run reached a terminal state).
+     */
+open func onClose()  {try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_controlplaneruneventsubscriber_on_close(
+            self.uniffiCloneHandle(),$0
+    )
+}
+}
+    
+    /**
+     * Stream errored. `error` is best-effort and may not survive a
+     * reconnect-then-retry cycle.
+     */
+open func onError(error: String)  {try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_controlplaneruneventsubscriber_on_error(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(error),$0
+    )
+}
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceControlPlaneRunEventSubscriber {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceControlPlaneRunEventSubscriber = UniffiVTableCallbackInterfaceControlPlaneRunEventSubscriber(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeControlPlaneRunEventSubscriber.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface ControlPlaneRunEventSubscriber: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeControlPlaneRunEventSubscriber.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface ControlPlaneRunEventSubscriber: handle missing in uniffiClone")
+            }
+        },
+        onEvent: { (
+            uniffiHandle: UInt64,
+            event: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeControlPlaneRunEventSubscriber.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onEvent(
+                     event: try FfiConverterTypeControlPlaneRunEvent_lift(event)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        onClose: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeControlPlaneRunEventSubscriber.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onClose(
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        onError: { (
+            uniffiHandle: UInt64,
+            error: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeControlPlaneRunEventSubscriber.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onError(
+                     error: try FfiConverterString.lift(error)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceControlPlaneRunEventSubscriber> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceControlPlaneRunEventSubscriber>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitControlPlaneRunEventSubscriber() {
+    uniffi_blazen_uniffi_fn_init_callback_vtable_controlplaneruneventsubscriber(UniffiCallbackInterfaceControlPlaneRunEventSubscriber.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeControlPlaneRunEventSubscriber: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<ControlPlaneRunEventSubscriber>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = ControlPlaneRunEventSubscriber
+
+    public static func lift(_ handle: UInt64) throws -> ControlPlaneRunEventSubscriber {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return ControlPlaneRunEventSubscriberImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: ControlPlaneRunEventSubscriber) -> UInt64 {
+         if let rustImpl = value as? ControlPlaneRunEventSubscriberImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ControlPlaneRunEventSubscriber {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: ControlPlaneRunEventSubscriber, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneRunEventSubscriber_lift(_ handle: UInt64) throws -> ControlPlaneRunEventSubscriber {
+    return try FfiConverterTypeControlPlaneRunEventSubscriber.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneRunEventSubscriber_lower(_ value: ControlPlaneRunEventSubscriber) -> UInt64 {
+    return FfiConverterTypeControlPlaneRunEventSubscriber.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Handle to an active run-event subscription. Drop the handle or call
+ * [`ControlPlaneSubscription::cancel`] to stop pumping events.
+ */
+public protocol ControlPlaneSubscriptionProtocol: AnyObject, Sendable {
+    
+    /**
+     * Cancel the subscription. Idempotent. After cancellation, the
+     * subscriber's `on_close` fires (best-effort) before the pump task
+     * exits.
+     */
+    func cancel() 
+    
+}
+/**
+ * Handle to an active run-event subscription. Drop the handle or call
+ * [`ControlPlaneSubscription::cancel`] to stop pumping events.
+ */
+open class ControlPlaneSubscription: ControlPlaneSubscriptionProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_controlplanesubscription(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_controlplanesubscription(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Cancel the subscription. Idempotent. After cancellation, the
+     * subscriber's `on_close` fires (best-effort) before the pump task
+     * exits.
+     */
+open func cancel()  {try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_controlplanesubscription_cancel(
+            self.uniffiCloneHandle(),$0
+    )
+}
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeControlPlaneSubscription: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = ControlPlaneSubscription
+
+    public static func lift(_ handle: UInt64) throws -> ControlPlaneSubscription {
+        return ControlPlaneSubscription(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: ControlPlaneSubscription) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ControlPlaneSubscription {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: ControlPlaneSubscription, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneSubscription_lift(_ handle: UInt64) throws -> ControlPlaneSubscription {
+    return try FfiConverterTypeControlPlaneSubscription.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneSubscription_lower(_ value: ControlPlaneSubscription) -> UInt64 {
+    return FfiConverterTypeControlPlaneSubscription.lower(value)
+}
+
+
+
+
+
+
+/**
+ * gRPC worker-side handle for the control plane.
+ *
+ * Wraps [`CoreWorker`] behind an `Arc<Mutex<Option<...>>>` because
+ * upstream [`CoreWorker::run`] consumes `self` by value. The first
+ * successful call to [`ControlPlaneWorker::run`] takes the worker out
+ * of the mutex; subsequent calls fail with [`BlazenError::Validation`].
+ * [`ControlPlaneWorker::shutdown`] is exposed separately because it
+ * needs to fire even while `run` is in flight.
+ */
+public protocol ControlPlaneWorkerProtocol: AnyObject, Sendable {
+    
+    /**
+     * Drive the worker session forever (or until shutdown / drain /
+     * retry exhaustion).
+     *
+     * Adapts `handler` to the upstream
+     * [`blazen_controlplane::AssignmentHandler`] trait and hands it to
+     * [`CoreWorker::run`]. Consumes the underlying worker — calling
+     * `run` twice on the same handle returns
+     * [`BlazenError::Validation`].
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::ControlPlane`] for transport / retry
+     * failures, or [`BlazenError::Validation`] if `run` is called more
+     * than once.
+     */
+    func run(handler: ControlPlaneAssignmentHandler) async throws 
+    
+    /**
+     * Signal the worker to stop. Returns immediately; any in-flight
+     * [`ControlPlaneWorker::run`] call will return cleanly once the
+     * in-flight assignments have been told to cancel.
+     *
+     * Idempotent.
+     */
+    func shutdown() 
+    
+}
+/**
+ * gRPC worker-side handle for the control plane.
+ *
+ * Wraps [`CoreWorker`] behind an `Arc<Mutex<Option<...>>>` because
+ * upstream [`CoreWorker::run`] consumes `self` by value. The first
+ * successful call to [`ControlPlaneWorker::run`] takes the worker out
+ * of the mutex; subsequent calls fail with [`BlazenError::Validation`].
+ * [`ControlPlaneWorker::shutdown`] is exposed separately because it
+ * needs to fire even while `run` is in flight.
+ */
+open class ControlPlaneWorker: ControlPlaneWorkerProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_controlplaneworker(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_controlplaneworker(handle, $0) }
+    }
+
+    
+    /**
+     * Synchronous constructor.
+     *
+     * Builds a [`WorkerConfig`] with `Fixed { max_in_flight: 1 }`
+     * admission and the supplied `capabilities`, validates the endpoint
+     * URI, and returns a worker that has *not* yet opened the bidi
+     * stream — call [`ControlPlaneWorker::run`] to do that.
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::ControlPlane`] (`kind = "Transport"`) if
+     * `endpoint` cannot be parsed as a URI.
+     */
+public static func newBlocking(endpoint: String, nodeId: String, capabilities: [ControlPlaneWorkerCapability])throws  -> ControlPlaneWorker  {
+    return try  FfiConverterTypeControlPlaneWorker_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_constructor_controlplaneworker_new_blocking(
+        FfiConverterString.lower(endpoint),
+        FfiConverterString.lower(nodeId),
+        FfiConverterSequenceTypeControlPlaneWorkerCapability.lower(capabilities),$0
+    )
+})
+}
+    
+
+    
+    /**
+     * Drive the worker session forever (or until shutdown / drain /
+     * retry exhaustion).
+     *
+     * Adapts `handler` to the upstream
+     * [`blazen_controlplane::AssignmentHandler`] trait and hands it to
+     * [`CoreWorker::run`]. Consumes the underlying worker — calling
+     * `run` twice on the same handle returns
+     * [`BlazenError::Validation`].
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::ControlPlane`] for transport / retry
+     * failures, or [`BlazenError::Validation`] if `run` is called more
+     * than once.
+     */
+open func run(handler: ControlPlaneAssignmentHandler)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_controlplaneworker_run(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeControlPlaneAssignmentHandler_lower(handler)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Signal the worker to stop. Returns immediately; any in-flight
+     * [`ControlPlaneWorker::run`] call will return cleanly once the
+     * in-flight assignments have been told to cancel.
+     *
+     * Idempotent.
+     */
+open func shutdown()  {try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_controlplaneworker_shutdown(
+            self.uniffiCloneHandle(),$0
+    )
+}
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeControlPlaneWorker: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = ControlPlaneWorker
+
+    public static func lift(_ handle: UInt64) throws -> ControlPlaneWorker {
+        return ControlPlaneWorker(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: ControlPlaneWorker) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ControlPlaneWorker {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: ControlPlaneWorker, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneWorker_lift(_ handle: UInt64) throws -> ControlPlaneWorker {
+    return try FfiConverterTypeControlPlaneWorker.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneWorker_lower(_ value: ControlPlaneWorker) -> UInt64 {
+    return FfiConverterTypeControlPlaneWorker.lower(value)
+}
+
+
+
+
+
+
+/**
  * User-extensible provider trait the foreign side implements directly.
  *
  * Mirrors [`blazen_llm::CustomProvider`] across the UniFFI boundary. Has 16
@@ -7606,6 +8995,442 @@ public func FfiConverterTypeCompletionResponse_lower(_ value: CompletionResponse
 
 
 /**
+ * Bundle of admission-policy fields for a worker.
+ *
+ * `max_in_flight` is meaningful when `mode == Fixed`, `total_mb` when
+ * `mode == VramBudget`; both fields are ignored when `mode == Reactive`.
+ * Either may be omitted to fall back to upstream defaults
+ * (`Fixed { max_in_flight: 1 }`, `VramBudget { max_vram_mb: 0 }`).
+ */
+public struct ControlPlaneAdmission: Equatable, Hashable {
+    public var mode: ControlPlaneAdmissionMode
+    public var maxInFlight: UInt32?
+    public var totalMb: UInt32?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(mode: ControlPlaneAdmissionMode, maxInFlight: UInt32?, totalMb: UInt32?) {
+        self.mode = mode
+        self.maxInFlight = maxInFlight
+        self.totalMb = totalMb
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ControlPlaneAdmission: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeControlPlaneAdmission: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ControlPlaneAdmission {
+        return
+            try ControlPlaneAdmission(
+                mode: FfiConverterTypeControlPlaneAdmissionMode.read(from: &buf), 
+                maxInFlight: FfiConverterOptionUInt32.read(from: &buf), 
+                totalMb: FfiConverterOptionUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ControlPlaneAdmission, into buf: inout [UInt8]) {
+        FfiConverterTypeControlPlaneAdmissionMode.write(value.mode, into: &buf)
+        FfiConverterOptionUInt32.write(value.maxInFlight, into: &buf)
+        FfiConverterOptionUInt32.write(value.totalMb, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneAdmission_lift(_ buf: RustBuffer) throws -> ControlPlaneAdmission {
+    return try FfiConverterTypeControlPlaneAdmission.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneAdmission_lower(_ value: ControlPlaneAdmission) -> RustBuffer {
+    return FfiConverterTypeControlPlaneAdmission.lower(value)
+}
+
+
+/**
+ * Foreign-facing run event.
+ *
+ * `data_json` is the upstream `data: serde_json::Value` serialized to a
+ * JSON string for transport across the UniFFI boundary.
+ */
+public struct ControlPlaneRunEvent: Equatable, Hashable {
+    public var runId: String
+    public var eventType: String
+    public var dataJson: String
+    public var timestampMs: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(runId: String, eventType: String, dataJson: String, timestampMs: UInt64) {
+        self.runId = runId
+        self.eventType = eventType
+        self.dataJson = dataJson
+        self.timestampMs = timestampMs
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ControlPlaneRunEvent: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeControlPlaneRunEvent: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ControlPlaneRunEvent {
+        return
+            try ControlPlaneRunEvent(
+                runId: FfiConverterString.read(from: &buf), 
+                eventType: FfiConverterString.read(from: &buf), 
+                dataJson: FfiConverterString.read(from: &buf), 
+                timestampMs: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ControlPlaneRunEvent, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.runId, into: &buf)
+        FfiConverterString.write(value.eventType, into: &buf)
+        FfiConverterString.write(value.dataJson, into: &buf)
+        FfiConverterUInt64.write(value.timestampMs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneRunEvent_lift(_ buf: RustBuffer) throws -> ControlPlaneRunEvent {
+    return try FfiConverterTypeControlPlaneRunEvent.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneRunEvent_lower(_ value: ControlPlaneRunEvent) -> RustBuffer {
+    return FfiConverterTypeControlPlaneRunEvent.lower(value)
+}
+
+
+/**
+ * Foreign-facing snapshot of a workflow run.
+ *
+ * `run_id` is the canonical UUID string (`"550e8400-e29b-41d4-a716-446655440000"`);
+ * `output_json` and `error` are flattened from the upstream snapshot's
+ * `output: Option<serde_json::Value>` / `error: Option<String>` fields.
+ */
+public struct ControlPlaneRunStateSnapshot: Equatable, Hashable {
+    public var runId: String
+    public var status: ControlPlaneRunStatus
+    public var startedAtMs: UInt64
+    public var completedAtMs: UInt64?
+    public var assignedTo: String?
+    public var lastEventAtMs: UInt64?
+    public var outputJson: String?
+    public var error: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(runId: String, status: ControlPlaneRunStatus, startedAtMs: UInt64, completedAtMs: UInt64?, assignedTo: String?, lastEventAtMs: UInt64?, outputJson: String?, error: String?) {
+        self.runId = runId
+        self.status = status
+        self.startedAtMs = startedAtMs
+        self.completedAtMs = completedAtMs
+        self.assignedTo = assignedTo
+        self.lastEventAtMs = lastEventAtMs
+        self.outputJson = outputJson
+        self.error = error
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ControlPlaneRunStateSnapshot: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeControlPlaneRunStateSnapshot: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ControlPlaneRunStateSnapshot {
+        return
+            try ControlPlaneRunStateSnapshot(
+                runId: FfiConverterString.read(from: &buf), 
+                status: FfiConverterTypeControlPlaneRunStatus.read(from: &buf), 
+                startedAtMs: FfiConverterUInt64.read(from: &buf), 
+                completedAtMs: FfiConverterOptionUInt64.read(from: &buf), 
+                assignedTo: FfiConverterOptionString.read(from: &buf), 
+                lastEventAtMs: FfiConverterOptionUInt64.read(from: &buf), 
+                outputJson: FfiConverterOptionString.read(from: &buf), 
+                error: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ControlPlaneRunStateSnapshot, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.runId, into: &buf)
+        FfiConverterTypeControlPlaneRunStatus.write(value.status, into: &buf)
+        FfiConverterUInt64.write(value.startedAtMs, into: &buf)
+        FfiConverterOptionUInt64.write(value.completedAtMs, into: &buf)
+        FfiConverterOptionString.write(value.assignedTo, into: &buf)
+        FfiConverterOptionUInt64.write(value.lastEventAtMs, into: &buf)
+        FfiConverterOptionString.write(value.outputJson, into: &buf)
+        FfiConverterOptionString.write(value.error, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneRunStateSnapshot_lift(_ buf: RustBuffer) throws -> ControlPlaneRunStateSnapshot {
+    return try FfiConverterTypeControlPlaneRunStateSnapshot.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneRunStateSnapshot_lower(_ value: ControlPlaneRunStateSnapshot) -> RustBuffer {
+    return FfiConverterTypeControlPlaneRunStateSnapshot.lower(value)
+}
+
+
+/**
+ * Foreign-facing workflow submission request.
+ *
+ * Mirrors [`CoreSubmitWorkflowRequest`] except `input_json` carries the
+ * initial input as a JSON-encoded string and `resource_hint` is omitted
+ * (the UniFFI surface today targets Fixed/Reactive admission only;
+ * VramBudget callers should target the native crate directly).
+ */
+public struct ControlPlaneSubmitRequest: Equatable, Hashable {
+    public var workflowName: String
+    public var inputJson: String
+    public var workflowVersion: UInt32?
+    public var requiredTags: [String]
+    public var idempotencyKey: String?
+    public var deadlineMs: UInt64?
+    public var waitForWorker: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(workflowName: String, inputJson: String, workflowVersion: UInt32?, requiredTags: [String], idempotencyKey: String?, deadlineMs: UInt64?, waitForWorker: Bool) {
+        self.workflowName = workflowName
+        self.inputJson = inputJson
+        self.workflowVersion = workflowVersion
+        self.requiredTags = requiredTags
+        self.idempotencyKey = idempotencyKey
+        self.deadlineMs = deadlineMs
+        self.waitForWorker = waitForWorker
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ControlPlaneSubmitRequest: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeControlPlaneSubmitRequest: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ControlPlaneSubmitRequest {
+        return
+            try ControlPlaneSubmitRequest(
+                workflowName: FfiConverterString.read(from: &buf), 
+                inputJson: FfiConverterString.read(from: &buf), 
+                workflowVersion: FfiConverterOptionUInt32.read(from: &buf), 
+                requiredTags: FfiConverterSequenceString.read(from: &buf), 
+                idempotencyKey: FfiConverterOptionString.read(from: &buf), 
+                deadlineMs: FfiConverterOptionUInt64.read(from: &buf), 
+                waitForWorker: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ControlPlaneSubmitRequest, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.workflowName, into: &buf)
+        FfiConverterString.write(value.inputJson, into: &buf)
+        FfiConverterOptionUInt32.write(value.workflowVersion, into: &buf)
+        FfiConverterSequenceString.write(value.requiredTags, into: &buf)
+        FfiConverterOptionString.write(value.idempotencyKey, into: &buf)
+        FfiConverterOptionUInt64.write(value.deadlineMs, into: &buf)
+        FfiConverterBool.write(value.waitForWorker, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneSubmitRequest_lift(_ buf: RustBuffer) throws -> ControlPlaneSubmitRequest {
+    return try FfiConverterTypeControlPlaneSubmitRequest.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneSubmitRequest_lower(_ value: ControlPlaneSubmitRequest) -> RustBuffer {
+    return FfiConverterTypeControlPlaneSubmitRequest.lower(value)
+}
+
+
+/**
+ * Typed capability a worker advertises to the control plane.
+ *
+ * `kind` follows the convention `"workflow:<name>"` /
+ * `"step:<name>"` / `"provider:<id>"` / `"tag:<key>=<value>"`.
+ * `version` lets the control plane gate routing on schema changes.
+ */
+public struct ControlPlaneWorkerCapability: Equatable, Hashable {
+    public var kind: String
+    public var version: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(kind: String, version: UInt32) {
+        self.kind = kind
+        self.version = version
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ControlPlaneWorkerCapability: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeControlPlaneWorkerCapability: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ControlPlaneWorkerCapability {
+        return
+            try ControlPlaneWorkerCapability(
+                kind: FfiConverterString.read(from: &buf), 
+                version: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ControlPlaneWorkerCapability, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.kind, into: &buf)
+        FfiConverterUInt32.write(value.version, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneWorkerCapability_lift(_ buf: RustBuffer) throws -> ControlPlaneWorkerCapability {
+    return try FfiConverterTypeControlPlaneWorkerCapability.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneWorkerCapability_lower(_ value: ControlPlaneWorkerCapability) -> RustBuffer {
+    return FfiConverterTypeControlPlaneWorkerCapability.lower(value)
+}
+
+
+/**
+ * Foreign-facing summary of a connected worker.
+ *
+ * Upstream [`CoreWorkerInfo`] carries an `admission_snapshot` and an
+ * `admission` field; this surface omits the snapshot (foreign callers
+ * who need it should query the control plane directly) and flattens
+ * `tags` from a `BTreeMap` to a [`HashMap`] for UniFFI compatibility.
+ */
+public struct ControlPlaneWorkerInfo: Equatable, Hashable {
+    public var nodeId: String
+    public var capabilities: [ControlPlaneWorkerCapability]
+    public var tags: [String: String]
+    public var inFlight: UInt32
+    public var connectedAtMs: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(nodeId: String, capabilities: [ControlPlaneWorkerCapability], tags: [String: String], inFlight: UInt32, connectedAtMs: UInt64) {
+        self.nodeId = nodeId
+        self.capabilities = capabilities
+        self.tags = tags
+        self.inFlight = inFlight
+        self.connectedAtMs = connectedAtMs
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ControlPlaneWorkerInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeControlPlaneWorkerInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ControlPlaneWorkerInfo {
+        return
+            try ControlPlaneWorkerInfo(
+                nodeId: FfiConverterString.read(from: &buf), 
+                capabilities: FfiConverterSequenceTypeControlPlaneWorkerCapability.read(from: &buf), 
+                tags: FfiConverterDictionaryStringString.read(from: &buf), 
+                inFlight: FfiConverterUInt32.read(from: &buf), 
+                connectedAtMs: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ControlPlaneWorkerInfo, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.nodeId, into: &buf)
+        FfiConverterSequenceTypeControlPlaneWorkerCapability.write(value.capabilities, into: &buf)
+        FfiConverterDictionaryStringString.write(value.tags, into: &buf)
+        FfiConverterUInt32.write(value.inFlight, into: &buf)
+        FfiConverterUInt64.write(value.connectedAtMs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneWorkerInfo_lift(_ buf: RustBuffer) throws -> ControlPlaneWorkerInfo {
+    return try FfiConverterTypeControlPlaneWorkerInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneWorkerInfo_lower(_ value: ControlPlaneWorkerInfo) -> RustBuffer {
+    return FfiConverterTypeControlPlaneWorkerInfo.lower(value)
+}
+
+
+/**
  * Embedding-role defaults. V1 composes only `base`.
  */
 public struct EmbeddingProviderDefaults: Equatable, Hashable {
@@ -11076,8 +12901,16 @@ public enum BlazenError: Swift.Error, Equatable, Hashable, Foundation.LocalizedE
     case Tool(message: String
     )
     /**
-     * Distributed peer-to-peer error. `kind` is one of: `"Encode"`, `"Transport"`,
-     * `"EnvelopeVersion"`, `"Workflow"`, `"Tls"`, `"UnknownStep"`.
+     * Distributed peer-to-peer error and (folded in) distributed
+     * control-plane error. For peer-mesh failures `kind` is one of
+     * `"Encode"`, `"Transport"`, `"EnvelopeVersion"`, `"Workflow"`,
+     * `"Tls"`, `"UnknownStep"`. For control-plane failures `kind` is
+     * prefixed `"ControlPlane"` (e.g. `"ControlPlaneTransport"`,
+     * `"ControlPlaneEncode"`, `"ControlPlaneTls"`,
+     * `"ControlPlaneEnvelopeVersion"`, `"ControlPlaneNoMatchingWorker"`,
+     * `"ControlPlaneMissingVramHint"`, `"ControlPlaneUnknownRun"`,
+     * `"ControlPlaneUnknownWorker"`) so foreign consumers can discriminate
+     * without juggling a second top-level variant.
      */
     case Peer(kind: String, message: String
     )
@@ -11340,6 +13173,187 @@ public func FfiConverterTypeBlazenError_lift(_ buf: RustBuffer) throws -> Blazen
 public func FfiConverterTypeBlazenError_lower(_ value: BlazenError) -> RustBuffer {
     return FfiConverterTypeBlazenError.lower(value)
 }
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * How a worker declares its admission policy to the control plane.
+ *
+ * Carries the union of fields for the three flavours; consumers should
+ * honour the discriminator in [`ControlPlaneAdmission::mode`].
+ */
+
+public enum ControlPlaneAdmissionMode: Equatable, Hashable {
+    
+    /**
+     * Hard concurrency cap.
+     */
+    case fixed
+    /**
+     * Worker self-decides via offer/claim/decline.
+     */
+    case reactive
+    /**
+     * VRAM-sum cap.
+     */
+    case vramBudget
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension ControlPlaneAdmissionMode: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeControlPlaneAdmissionMode: FfiConverterRustBuffer {
+    typealias SwiftType = ControlPlaneAdmissionMode
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ControlPlaneAdmissionMode {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .fixed
+        
+        case 2: return .reactive
+        
+        case 3: return .vramBudget
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ControlPlaneAdmissionMode, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .fixed:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .reactive:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .vramBudget:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneAdmissionMode_lift(_ buf: RustBuffer) throws -> ControlPlaneAdmissionMode {
+    return try FfiConverterTypeControlPlaneAdmissionMode.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneAdmissionMode_lower(_ value: ControlPlaneAdmissionMode) -> RustBuffer {
+    return FfiConverterTypeControlPlaneAdmissionMode.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Lifecycle state of a workflow run, mirrored across the UniFFI
+ * boundary.
+ */
+
+public enum ControlPlaneRunStatus: Equatable, Hashable {
+    
+    case pending
+    case running
+    case completed
+    case failed
+    case cancelled
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension ControlPlaneRunStatus: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeControlPlaneRunStatus: FfiConverterRustBuffer {
+    typealias SwiftType = ControlPlaneRunStatus
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ControlPlaneRunStatus {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .pending
+        
+        case 2: return .running
+        
+        case 3: return .completed
+        
+        case 4: return .failed
+        
+        case 5: return .cancelled
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ControlPlaneRunStatus, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .pending:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .running:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .completed:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .failed:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .cancelled:
+            writeInt(&buf, Int32(5))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneRunStatus_lift(_ buf: RustBuffer) throws -> ControlPlaneRunStatus {
+    return try FfiConverterTypeControlPlaneRunStatus.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeControlPlaneRunStatus_lower(_ value: ControlPlaneRunStatus) -> RustBuffer {
+    return FfiConverterTypeControlPlaneRunStatus.lower(value)
+}
+
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
@@ -11801,6 +13815,56 @@ fileprivate struct FfiConverterSequenceTypeCompletionRequest: FfiConverterRustBu
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeControlPlaneWorkerCapability: FfiConverterRustBuffer {
+    typealias SwiftType = [ControlPlaneWorkerCapability]
+
+    public static func write(_ value: [ControlPlaneWorkerCapability], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeControlPlaneWorkerCapability.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ControlPlaneWorkerCapability] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ControlPlaneWorkerCapability]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeControlPlaneWorkerCapability.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeControlPlaneWorkerInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [ControlPlaneWorkerInfo]
+
+    public static func write(_ value: [ControlPlaneWorkerInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeControlPlaneWorkerInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ControlPlaneWorkerInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ControlPlaneWorkerInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeControlPlaneWorkerInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeEvent: FfiConverterRustBuffer {
     typealias SwiftType = [Event]
 
@@ -12195,6 +14259,32 @@ fileprivate struct FfiConverterSequenceSequenceDouble: FfiConverterRustBuffer {
             seq.append(try FfiConverterSequenceDouble.read(from: &buf))
         }
         return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterDictionaryStringString: FfiConverterRustBuffer {
+    public static func write(_ value: [String: String], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for (key, value) in value {
+            FfiConverterString.write(key, into: &buf)
+            FfiConverterString.write(value, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [String: String] {
+        let len: Int32 = try readInt(&buf)
+        var dict = [String: String]()
+        dict.reserveCapacity(Int(len))
+        for _ in 0..<len {
+            let key = try FfiConverterString.read(from: &buf)
+            let value = try FfiConverterString.read(from: &buf)
+            dict[key] = value
+        }
+        return dict
     }
 }
 private let UNIFFI_RUST_FUTURE_POLL_READY: Int8 = 0
@@ -13469,6 +15559,51 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_ttsmodel_synthesize_blocking() != 50217) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_handle() != 640) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_on_cancel() != 36399) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_on_drain() != 63250) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_controlplaneclient_cancel_workflow() != 39238) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_controlplaneclient_describe_workflow() != 8003) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_controlplaneclient_drain_worker() != 17174) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_controlplaneclient_list_workers() != 315) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_controlplaneclient_submit_workflow() != 23792) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_controlplaneclient_subscribe_run_events() != 40711) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_controlplaneruneventsubscriber_on_event() != 3038) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_controlplaneruneventsubscriber_on_close() != 46575) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_controlplaneruneventsubscriber_on_error() != 32772) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_controlplanesubscription_cancel() != 27973) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_controlplaneworker_run() != 52241) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_controlplaneworker_shutdown() != 13840) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_completionmodel_complete() != 52439) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -13736,6 +15871,15 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_constructor_agent_new() != 30307) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_constructor_controlplaneclient_connect() != 13355) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_controlplaneclient_connect_blocking() != 65181) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_controlplaneworker_new_blocking() != 22162) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_constructor_peerclient_connect() != 36996) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -13756,6 +15900,8 @@ private let initializationResult: InitializationResult = {
     }
 
     uniffiCallbackInitCompletionStreamSink()
+    uniffiCallbackInitControlPlaneAssignmentHandler()
+    uniffiCallbackInitControlPlaneRunEventSubscriber()
     uniffiCallbackInitCustomProvider()
     uniffiCallbackInitStepHandler()
     uniffiCallbackInitToolHandler()

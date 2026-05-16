@@ -96,3 +96,24 @@ pub mod client;
 pub mod http;
 
 pub use error::ControlPlaneError;
+
+#[cfg(feature = "client")]
+pub use client::Client;
+
+#[cfg(feature = "client")]
+pub use worker::{
+    AssignmentContext, AssignmentFailure, AssignmentHandler, RetryPolicy, Worker, WorkerConfig,
+};
+
+#[cfg(all(
+    feature = "server",
+    not(any(target_os = "wasi", target_arch = "wasm32"))
+))]
+pub use server::{AssignmentStore, ControlPlaneServer, MemoryAssignmentStore};
+
+#[cfg(all(
+    feature = "server",
+    feature = "valkey-store",
+    not(any(target_os = "wasi", target_arch = "wasm32"))
+))]
+pub use server::ValkeyAssignmentStore;

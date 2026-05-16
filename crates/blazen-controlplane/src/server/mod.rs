@@ -17,14 +17,29 @@ pub mod registry;
 pub mod rpc;
 pub mod service;
 pub mod session;
+pub mod store;
 pub mod subscribe;
+#[cfg(feature = "valkey-store")]
+pub mod valkey_store;
 
 pub use service::ControlPlaneService;
+pub use store::{AssignmentStore, MemoryAssignmentStore};
+#[cfg(feature = "valkey-store")]
+pub use valkey_store::ValkeyAssignmentStore;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use tokio::sync::broadcast;
+
+use blazen_core::distributed::RunEvent;
+
 use crate::error::ControlPlaneError;
+
+/// Broadcast capacity for the per-server [`RunEvent`] fan-out bus.
+/// Subscribers that fall this far behind receive `BroadcastStreamRecvError::Lagged`
+/// (silently dropped by the subscribe handlers).
+const EVENT_BUS_CAPACITY: usize = 1024;
 
 /// The Blazen control-plane gRPC server.
 ///
@@ -53,6 +68,19 @@ pub struct SharedState {
     pub admission: admission::Admission,
     /// Local node identifier surfaced to workers in `Welcome`.
     pub node_id: String,
+    /// Per-server broadcast bus for [`RunEvent`]s. Producers: worker
+    /// `Event` frames (via [`session::handle_worker_session`]) plus
+    /// queue status transitions (via [`queue::AssignmentQueue`]'s
+    /// `mark_*` / `update_run_to_running` mutators). Consumers: the
+    /// `SubscribeRunEvents` / `SubscribeAll` server-streaming handlers
+    /// and (when `http-transport` is on) the matching SSE routes.
+    pub events: broadcast::Sender<RunEvent>,
+    /// Per-session state for the HTTP/SSE worker tier. Keyed by
+    /// `session_id` returned to the worker by `worker_register`. Each
+    /// entry's `outbound_rx` is taken exactly once by the matching
+    /// `worker_stream` handler.
+    #[cfg(feature = "http-transport")]
+    pub http_sessions: dashmap::DashMap<uuid::Uuid, Arc<crate::http::HttpWorkerState>>,
 }
 
 impl ControlPlaneServer {
@@ -60,11 +88,15 @@ impl ControlPlaneServer {
     #[must_use]
     pub fn new(node_id: impl Into<String>) -> Self {
         let node_id = node_id.into();
+        let (events_tx, _) = broadcast::channel(EVENT_BUS_CAPACITY);
         let shared = Arc::new(SharedState {
             registry: registry::WorkerRegistry::new(),
-            queue: queue::AssignmentQueue::new(),
+            queue: queue::AssignmentQueue::with_events(events_tx.clone()),
             admission: admission::Admission::new(),
             node_id: node_id.clone(),
+            events: events_tx,
+            #[cfg(feature = "http-transport")]
+            http_sessions: dashmap::DashMap::new(),
         });
         Self {
             node_id,
@@ -79,6 +111,32 @@ impl ControlPlaneServer {
     #[must_use]
     pub fn with_tls(mut self, tls: tonic::transport::ServerTlsConfig) -> Self {
         self.tls = Some(tls);
+        self
+    }
+
+    /// Replace the default in-memory [`AssignmentStore`] with a
+    /// caller-supplied implementation. Use this to wire in a
+    /// Valkey-backed store (or any other durable backing) so queue
+    /// mutations survive a control-plane restart.
+    ///
+    /// Builder-style: must be called BEFORE [`Self::serve`]. Internally
+    /// rebuilds the [`SharedState`] so the queue is constructed against
+    /// the supplied store. The previous `SharedState` is dropped; any
+    /// references handed out before this call (none, in normal builder
+    /// flow) would be orphaned.
+    #[must_use]
+    pub fn with_store(mut self, store: Arc<dyn store::AssignmentStore>) -> Self {
+        let (events_tx, _) = broadcast::channel(EVENT_BUS_CAPACITY);
+        let new_shared = Arc::new(SharedState {
+            registry: registry::WorkerRegistry::new(),
+            queue: queue::AssignmentQueue::with_events_and_store(events_tx.clone(), store),
+            admission: admission::Admission::new(),
+            node_id: self.node_id.clone(),
+            events: events_tx,
+            #[cfg(feature = "http-transport")]
+            http_sessions: dashmap::DashMap::new(),
+        });
+        self.shared = new_shared;
         self
     }
 
@@ -107,6 +165,13 @@ impl ControlPlaneServer {
         use crate::pb::blazen_control_plane_server::BlazenControlPlaneServer;
         use crate::server::interceptor::BearerAuthInterceptor;
         use crate::server::service::ControlPlaneService;
+
+        // Cold-start recovery: re-hydrate the queue's in-memory cache
+        // from the persisted [`AssignmentStore`] before accepting any
+        // gRPC connections. With the default in-memory store this is a
+        // no-op; with a durable store (e.g. Valkey) it surrenders work
+        // owned by the previous process back into the pending pool.
+        self.shared.queue.recover_from_store().await?;
 
         let service = ControlPlaneService::new(self.shared.clone());
         let interceptor = BearerAuthInterceptor::new();

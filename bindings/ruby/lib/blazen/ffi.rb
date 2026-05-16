@@ -244,6 +244,7 @@ module Blazen
     attach_function :blazen_shutdown,          [],          :int32
     attach_function :blazen_shutdown_telemetry, [],         :void
     attach_function :blazen_string_free,       [:pointer],  :void
+    attach_function :blazen_string_alloc,      [:pointer],  :pointer
     attach_function :blazen_string_array_free, [:pointer, :size_t], :void
 
     # -------------------------------------------------------------------
@@ -895,6 +896,176 @@ module Blazen
                     [:pointer, :pointer, :pointer, :size_t, :pointer, :int64],
                     :pointer
     attach_function :blazen_peer_client_free, [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # Control plane — Client / Worker / records / vtables
+    #
+    # Only attached when the native lib was built with the +distributed+
+    # feature. Symbol probes happen at attach time; missing symbols raise
+    # +FFI::NotFoundError+, which we trap by feature-detecting from the
+    # idiomatic wrapper in +lib/blazen/controlplane.rb+ (mirrors the peer
+    # surface).
+    # -------------------------------------------------------------------
+
+    # AssignmentHandler vtable callbacks
+    callback :assignment_handler_drop_user_data, [:pointer], :void
+    callback :assignment_handler_handle,
+             [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer],
+             :int32
+    callback :assignment_handler_on_cancel, [:pointer, :pointer], :void
+    callback :assignment_handler_on_drain, [:pointer, :bool], :void
+
+    # By-value vtable struct (mirrors +BlazenAssignmentHandlerVTable+ in
+    # +blazen.h+).
+    class BlazenAssignmentHandlerVTable < ::FFI::Struct
+      layout :user_data,       :pointer,
+             :drop_user_data,  :assignment_handler_drop_user_data,
+             :handle,          :assignment_handler_handle,
+             :on_cancel,       :assignment_handler_on_cancel,
+             :on_drain,        :assignment_handler_on_drain
+    end
+
+    # RunEventSink vtable callbacks — used by the control-plane
+    # subscription surface to deliver +RunEvent+ frames into Ruby.
+    callback :run_event_sink_drop_user_data, [:pointer], :void
+    callback :run_event_sink_on_event,
+             [:pointer, :pointer, :pointer, :pointer, :uint64],
+             :void
+    callback :run_event_sink_on_close, [:pointer], :void
+    callback :run_event_sink_on_error, [:pointer, :pointer], :void
+
+    # By-value vtable struct (mirrors +BlazenRunEventSinkVTable+ in
+    # +blazen.h+).
+    class BlazenRunEventSinkVTable < ::FFI::Struct
+      layout :user_data,       :pointer,
+             :drop_user_data,  :run_event_sink_drop_user_data,
+             :on_event,        :run_event_sink_on_event,
+             :on_close,        :run_event_sink_on_close,
+             :on_error,        :run_event_sink_on_error
+    end
+
+    # Client lifecycle
+    attach_function :blazen_controlplane_client_connect_blocking,
+                    [:pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_controlplane_client_connect,
+                    [:pointer], :pointer
+    attach_function :blazen_controlplane_client_connect_with_mtls_blocking,
+                    [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer],
+                    :int32,
+                    blocking: true
+    attach_function :blazen_controlplane_client_connect_with_mtls,
+                    [:pointer, :pointer, :pointer, :pointer], :pointer
+    attach_function :blazen_controlplane_client_free, [:pointer], :void
+
+    # Workflow lifecycle RPCs
+    attach_function :blazen_controlplane_client_submit_workflow_blocking,
+                    [:pointer, :pointer, :pointer, :pointer, :bool,
+                     :pointer, :pointer],
+                    :int32,
+                    blocking: true
+    attach_function :blazen_controlplane_client_submit_workflow,
+                    [:pointer, :pointer, :pointer, :pointer, :bool], :pointer
+
+    attach_function :blazen_controlplane_client_cancel_workflow_blocking,
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_controlplane_client_cancel_workflow,
+                    [:pointer, :pointer], :pointer
+
+    attach_function :blazen_controlplane_client_describe_workflow_blocking,
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_controlplane_client_describe_workflow,
+                    [:pointer, :pointer], :pointer
+
+    attach_function :blazen_controlplane_client_list_workers_blocking,
+                    [:pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_controlplane_client_list_workers,
+                    [:pointer], :pointer
+
+    attach_function :blazen_controlplane_client_drain_worker_blocking,
+                    [:pointer, :pointer, :bool, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_controlplane_client_drain_worker,
+                    [:pointer, :pointer, :bool], :pointer
+
+    # Worker lifecycle
+    attach_function :blazen_controlplane_worker_new_blocking,
+                    [:pointer, :pointer, :pointer, :pointer,
+                     :uint32, :uint64,
+                     BlazenAssignmentHandlerVTable.by_value,
+                     :pointer, :pointer],
+                    :int32,
+                    blocking: true
+    attach_function :blazen_controlplane_worker_new_with_mtls_blocking,
+                    [:pointer, :pointer, :pointer, :pointer,
+                     :uint32, :uint64,
+                     :pointer, :pointer, :pointer,
+                     BlazenAssignmentHandlerVTable.by_value,
+                     :pointer, :pointer],
+                    :int32,
+                    blocking: true
+    attach_function :blazen_controlplane_worker_run_blocking,
+                    [:pointer, :pointer], :int32, blocking: true
+    attach_function :blazen_controlplane_worker_run,
+                    [:pointer], :pointer
+    attach_function :blazen_controlplane_worker_shutdown, [:pointer], :void
+    attach_function :blazen_controlplane_worker_free, [:pointer], :void
+
+    # Subscription lifecycle
+    attach_function :blazen_controlplane_client_subscribe_run_events,
+                    [:pointer, :pointer,
+                     BlazenRunEventSinkVTable.by_value,
+                     :pointer, :pointer],
+                    :int32,
+                    blocking: true
+    attach_function :blazen_controlplane_client_subscribe_all,
+                    [:pointer, :pointer,
+                     BlazenRunEventSinkVTable.by_value,
+                     :pointer, :pointer],
+                    :int32,
+                    blocking: true
+    attach_function :blazen_controlplane_subscription_cancel,
+                    [:pointer], :void
+    attach_function :blazen_controlplane_subscription_free,
+                    [:pointer], :void
+
+    # Typed future takers
+    attach_function :blazen_future_take_controlplane_client,
+                    [:pointer, :pointer, :pointer], :int32
+    attach_function :blazen_future_take_run_state_snapshot,
+                    [:pointer, :pointer, :pointer], :int32
+    attach_function :blazen_future_take_worker_info_list,
+                    [:pointer, :pointer, :pointer], :int32
+
+    # RunStateSnapshot accessors
+    attach_function :blazen_run_state_snapshot_run_id,        [:pointer], :pointer
+    attach_function :blazen_run_state_snapshot_status,        [:pointer], :uint32
+    attach_function :blazen_run_state_snapshot_started_at_ms, [:pointer], :uint64
+    attach_function :blazen_run_state_snapshot_completed_at_ms,
+                    [:pointer, :pointer, :pointer], :int32
+    attach_function :blazen_run_state_snapshot_assigned_to,   [:pointer], :pointer
+    attach_function :blazen_run_state_snapshot_last_event_at_ms,
+                    [:pointer, :pointer, :pointer], :int32
+    attach_function :blazen_run_state_snapshot_output_json,   [:pointer], :pointer
+    attach_function :blazen_run_state_snapshot_error,         [:pointer], :pointer
+    attach_function :blazen_run_state_snapshot_free,          [:pointer], :void
+
+    # WorkerInfo accessors / list
+    attach_function :blazen_worker_info_node_id,           [:pointer], :pointer
+    attach_function :blazen_worker_info_capabilities_json, [:pointer], :pointer
+    attach_function :blazen_worker_info_tags_json,         [:pointer], :pointer
+    attach_function :blazen_worker_info_admission_json,    [:pointer], :pointer
+    attach_function :blazen_worker_info_in_flight,         [:pointer], :uint32
+    attach_function :blazen_worker_info_connected_at_ms,   [:pointer], :uint64
+    attach_function :blazen_worker_info_free,              [:pointer], :void
+
+    attach_function :blazen_worker_info_list_count, [:pointer], :size_t
+    attach_function :blazen_worker_info_list_get,
+                    [:pointer, :size_t], :pointer
+    attach_function :blazen_worker_info_list_free,  [:pointer], :void
 
     # -------------------------------------------------------------------
     # Persist — CheckpointStore / WorkflowCheckpoint / PersistedEvent

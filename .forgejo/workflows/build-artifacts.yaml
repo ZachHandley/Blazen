@@ -1826,10 +1826,9 @@ jobs:
     name: Build Swift XCFramework
     needs: version
     # macOS-only — the XCFramework bundles per-Apple-arch static archives that
-    # SwiftPM consumers (iOS / macOS apps) link against. If no macos-latest
-    # runner is configured on the Forgejo deployment, this job becomes a
-    # no-op (other release jobs gate on its presence via job-level `if:` so
-    # missing-macos is a warning, not a hard failure).
+    # SwiftPM consumers (iOS / macOS apps) link against. dispatch-release
+    # below depends on this job, and release-swift hard-fails on a missing
+    # artefact, so a broken macos-latest runner blocks the whole release.
     runs-on: macos-latest
     env:
       CARGO_TERM_COLOR: always
@@ -1964,11 +1963,10 @@ jobs:
   dispatch-release:
     name: Dispatch Release
     runs-on: ubuntu-latest
-    # build-swift-xcframework is intentionally NOT in `needs:` — if the
-    # macOS runner is unavailable, the XCFramework is missing but the rest
-    # of the release still proceeds; release-swift gates on artefact
-    # presence rather than this job's success.
-    needs: [version, build-wheels, build-sdist, build-napi, build-wasm, build-uniffi, build-cabi]
+    # build-swift-xcframework is included because a real macOS runner is
+    # configured on the Forgejo deployment; the XCFramework is a hard
+    # prerequisite for the Swift binding release.
+    needs: [version, build-wheels, build-sdist, build-napi, build-wasm, build-uniffi, build-cabi, build-swift-xcframework]
     steps:
       - name: Dispatch release.yaml
         run: |

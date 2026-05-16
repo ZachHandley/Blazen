@@ -8,12 +8,15 @@ import pathlib
 import typing
 __all__ = [
     "ActiveWorkflowSnapshot",
+    "AdmissionMode",
     "AgentConfig",
     "AgentEvent",
     "AgentResult",
     "AnthropicProvider",
     "ApiProtocol",
     "Artifact",
+    "AssignmentContext",
+    "AssignmentHandler",
     "AsyncByteIter",
     "AudioContent",
     "AudioMusicProviderDefaults",
@@ -73,6 +76,9 @@ __all__ = [
     "ContentPolicyError",
     "ContentStore",
     "Context",
+    "ControlPlaneClient",
+    "ControlPlaneWorker",
+    "ControlPlaneWorkerConfig",
     "CustomProvider",
     "DeepSeekProvider",
     "DerefRequest",
@@ -229,6 +235,7 @@ __all__ = [
     "RemoteWorkflowRequest",
     "RemoteWorkflowResponse",
     "RequestTiming",
+    "ResourceHint",
     "ResponseFormat",
     "RetryCompletionModel",
     "RetryConfig",
@@ -238,6 +245,8 @@ __all__ = [
     "RetryMiddleware",
     "RetryStack",
     "Role",
+    "RunEventStream",
+    "RunStatus",
     "SessionNamespace",
     "SessionPausePolicy",
     "SessionRefRegistry",
@@ -306,6 +315,7 @@ __all__ = [
     "WhisperError",
     "WhisperModel",
     "WhisperOptions",
+    "WorkerCapability",
     "Workflow",
     "WorkflowBuilder",
     "WorkflowCheckpoint",
@@ -386,6 +396,59 @@ class ActiveWorkflowSnapshot:
     def workflow_snapshot_json(self) -> builtins.str:
         r"""
         Workflow snapshot serialized as a JSON string.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class AdmissionMode:
+    r"""
+    How a worker declares its capacity to the control plane. Mirrors
+    [`blazen_core::distributed::AdmissionMode`].
+    
+    Construct via one of the classmethods rather than `__init__`:
+    
+    ```python
+    from blazen import AdmissionMode
+    mode = AdmissionMode.fixed(max_in_flight=4)
+    mode = AdmissionMode.vram_budget(max_vram_mb=24_576)
+    mode = AdmissionMode.reactive()
+    ```
+    """
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Identifier of the underlying admission variant — one of
+        ``"Fixed"``, ``"VramBudget"``, ``"Reactive"``.
+        """
+    @property
+    def max_in_flight(self) -> typing.Optional[builtins.int]:
+        r"""
+        For ``Fixed`` admission, the in-flight cap. `None` otherwise.
+        """
+    @property
+    def max_vram_mb(self) -> typing.Optional[builtins.int]:
+        r"""
+        For ``VramBudget`` admission, the VRAM cap in MB. `None`
+        otherwise.
+        """
+    @staticmethod
+    def fixed(max_in_flight: builtins.int = 1) -> AdmissionMode:
+        r"""
+        Hard count cap. Best for fungible CPU work where every job costs
+        roughly the same.
+        """
+    @staticmethod
+    def vram_budget(max_vram_mb: builtins.int) -> AdmissionMode:
+        r"""
+        VRAM-sum cap. Every assignment routed to a `VramBudget` worker
+        must carry a ``resource_hint.vram_mb`` estimate.
+        """
+    @staticmethod
+    def reactive() -> AdmissionMode:
+        r"""
+        Worker self-decides via offer/claim/decline negotiation. Best
+        for multi-model GPUs, browser/WebGPU workers, and `CustomProvider`
+        hosts with their own queueing.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -747,6 +810,81 @@ class Artifact:
         Build a custom artifact with an inner kind tag.
         """
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class AssignmentContext:
+    r"""
+    Per-assignment context handed to a Python handler's `handle`
+    implementation.
+    
+    Holds an `Arc` to the underlying Rust [`CoreAssignmentContext`] so
+    `emit_event` can forward non-terminal events back to the control
+    plane while the assignment is running.
+    """
+    @property
+    def run_id(self) -> builtins.str:
+        r"""
+        UUID of the run this context belongs to, as a string.
+        """
+    async def emit_event(self, event_type: builtins.str, data: typing.Optional[typing.Any]) -> None:
+        r"""
+        Emit a non-terminal event from the running assignment. The
+        returned coroutine completes once the frame is queued for send.
+        
+        Args:
+            event_type: Free-form event kind (e.g. ``"step.start"``,
+                ``"progress"``, ``"workflow.error"``).
+            data: A JSON-serializable payload. ``None`` is allowed.
+        
+        Raises:
+            ControlPlaneError: If the worker's outbound channel is closed
+                (the session has disconnected).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+class AssignmentHandler:
+    r"""
+    Abstract base class for worker assignment handlers.
+    
+    Subclass this from Python and override `handle` (required) and
+    optionally `on_cancel`, `on_drain`, `evaluate_offer`. Pass the
+    instance to [`PyControlPlaneWorker::run`].
+    
+    The methods may be `async def` (preferred) or plain `def`; the
+    adapter awaits any returned coroutine via
+    `pyo3_async_runtimes::into_future_with_locals`.
+    """
+    def __new__(cls) -> AssignmentHandler: ...
+    def handle(self, assignment: typing.Any, ctx: typing.Any) -> typing.Any:
+        r"""
+        Run an assignment to completion. The default implementation
+        raises ``NotImplementedError`` — override in a subclass.
+        
+        Args:
+            assignment: A dict carrying the workflow name, JSON-decoded
+                input, attempt counter, and optional deadline.
+            ctx: Per-assignment context (see `AssignmentContext`).
+        
+        Returns:
+            A JSON-serializable value reported back to the control plane
+            as the run's terminal output.
+        """
+    def on_cancel(self, run_id: builtins.str) -> None:
+        r"""
+        Hook fired when the control plane cancels an in-flight run.
+        Defaults to a no-op.
+        """
+    def on_drain(self, immediate: builtins.bool) -> None:
+        r"""
+        Hook fired when the control plane sends a drain instruction.
+        Defaults to a no-op.
+        """
+    def evaluate_offer(self, offer: typing.Any) -> builtins.str:
+        r"""
+        Decide whether to claim a reactive offer. Default: always claim.
+        Return ``"claim"`` to take the assignment or ``"decline"`` to
+        let the control plane try the next candidate.
+        """
 
 @typing.final
 class AsyncByteIter:
@@ -3300,6 +3438,170 @@ class Context:
         
         Returns:
             The UUID string for this workflow run.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ControlPlaneClient:
+    r"""
+    Orchestrator-side handle for the Blazen control plane. Construct via
+    [`PyControlPlaneClient::connect`].
+    """
+    @classmethod
+    async def connect(cls, endpoint: builtins.str, *, mtls: typing.Optional[tuple[builtins.str, builtins.str, builtins.str]] = None) -> ControlPlaneClient:
+        r"""
+        Open a connection to the control plane at ``endpoint``.
+        
+        Args:
+            endpoint: gRPC URI, e.g. ``"http://cp.example.com:7445"`` or
+                ``"https://cp.example.com"`` for TLS.
+            mtls: Optional ``(cert_path, key_path, ca_path)`` triple for
+                mutual TLS. If supplied the three files are loaded as
+                PEM and used to build the client TLS config.
+        
+        Raises:
+            ControlPlaneError: If the endpoint URI is invalid, the TLS
+                materials fail to load, or the TCP/HTTP-2 handshake
+                fails.
+        """
+    async def submit_workflow(self, workflow_name: builtins.str, input: typing.Optional[typing.Any], *, workflow_version: typing.Optional[builtins.int] = None, required_tags: typing.Optional[typing.Sequence[builtins.str]] = None, idempotency_key: typing.Optional[builtins.str] = None, deadline_ms: typing.Optional[builtins.int] = None, wait_for_worker: builtins.bool = True, resource_hint: typing.Optional[ResourceHint] = None) -> dict:
+        r"""
+        Submit a new workflow run.
+        
+        Returns:
+            A dict mirroring `RunStateSnapshot` (keys: ``run_id``,
+            ``status``, ``started_at_ms``, ``completed_at_ms``,
+            ``assigned_to``, ``last_event_at_ms``, ``output``,
+            ``error``).
+        """
+    async def cancel_workflow(self, run_id: builtins.str) -> dict:
+        r"""
+        Cancel an in-flight run.
+        """
+    async def describe_workflow(self, run_id: builtins.str) -> dict:
+        r"""
+        Look up the current state of a run.
+        """
+    async def list_workers(self) -> list[dict]:
+        r"""
+        List currently-connected workers.
+        """
+    async def drain_worker(self, node_id: builtins.str, immediate: builtins.bool) -> None:
+        r"""
+        Send a drain instruction to the named worker.
+        """
+    def subscribe_run_events(self, run_id: builtins.str) -> RunEventStream:
+        r"""
+        Subscribe to events for a single run. Returns an async iterator
+        that yields a dict per event until the run terminates.
+        """
+    def subscribe_all(self, required_tags: typing.Optional[typing.Sequence[builtins.str]] = None) -> RunEventStream:
+        r"""
+        Subscribe to events across all runs, optionally filtered by an
+        AND-list of tag predicates. Returns an async iterator that
+        yields a dict per event.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ControlPlaneWorker:
+    r"""
+    Worker handle that drives a bidi control-plane session.
+    
+    `connect` validates the configured endpoint without opening a
+    connection (the first network attempt happens inside `run` so the
+    retry policy covers the initial connect uniformly with reconnects).
+    
+    Calling `run()` consumes the underlying Rust `Worker` by value (the
+    upstream API requires `self` by move so it can spawn the bidi
+    session task and assignment workers tied to the same lifetime).
+    `shutdown()` is therefore best-effort: it works while `run()` has
+    not yet been called. Once `run()` is in flight, the canonical way
+    to terminate the worker is to cancel the awaiting Python task — the
+    inner select loop on each session honors the cancellation cleanly.
+    """
+    @staticmethod
+    def connect(config: ControlPlaneWorkerConfig) -> ControlPlaneWorker:
+        r"""
+        Validate the config and prepare a worker handle. Does NOT open
+        a network connection — the first connect happens inside `run`.
+        
+        Raises:
+            ControlPlaneError: If the configured endpoint URI cannot be
+                parsed.
+        """
+    async def run(self, handler: typing.Any) -> None:
+        r"""
+        Drive the worker until shutdown, drain, or the retry policy is
+        exhausted. Returns a coroutine that resolves when the session
+        ends.
+        
+        Args:
+            handler: A subclass of `AssignmentHandler`. The current
+                asyncio task locals are captured here so the handler's
+                coroutines run on the caller's event loop.
+        
+        Raises:
+            ControlPlaneError: When the retry policy is exhausted or the
+                initial endpoint is fundamentally broken; also raised
+                if `run()` is invoked more than once on the same
+                instance.
+        """
+    def shutdown(self) -> None:
+        r"""
+        Signal the worker to stop. Idempotent.
+        
+        This is best-effort: it has effect only while `run()` has not
+        yet been called. Once `run()` has consumed the underlying
+        worker by value, the way to stop the worker is to cancel the
+        asyncio task awaiting the `run()` coroutine — the bidi session
+        loop honors cancellation at every iteration.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ControlPlaneWorkerConfig:
+    r"""
+    Chainable builder for a [`Worker`]'s configuration. Mirrors
+    [`blazen_controlplane::WorkerConfig`].
+    
+    Construct via the `__init__` (endpoint + node_id) and chain the
+    builder methods. Each method returns a new instance so the chain
+    composes cleanly.
+    """
+    @property
+    def endpoint(self) -> builtins.str: ...
+    @property
+    def node_id(self) -> builtins.str: ...
+    def __new__(cls, endpoint: builtins.str, node_id: builtins.str) -> ControlPlaneWorkerConfig:
+        r"""
+        Base config with sensible defaults: ``Fixed { max_in_flight: 1 }``
+        admission, 5s heartbeat interval, no TLS, default exponential
+        retry policy.
+        """
+    def with_capability(self, cap: WorkerCapability) -> ControlPlaneWorkerConfig:
+        r"""
+        Append a capability the worker advertises at handshake.
+        """
+    def with_tag(self, key: builtins.str, value: builtins.str) -> ControlPlaneWorkerConfig:
+        r"""
+        Insert a single ``key=value`` tag.
+        """
+    def with_admission(self, admission: AdmissionMode) -> ControlPlaneWorkerConfig:
+        r"""
+        Override the admission mode.
+        """
+    def with_heartbeat_interval_ms(self, ms: builtins.int) -> ControlPlaneWorkerConfig:
+        r"""
+        Override the heartbeat cadence in milliseconds.
+        """
+    def with_mtls(self, cert_path: builtins.str, key_path: builtins.str, ca_path: builtins.str) -> ControlPlaneWorkerConfig:
+        r"""
+        Enable mTLS by loading a client identity + CA from PEM files.
+        
+        Raises:
+            ControlPlaneError: If any PEM file cannot be read or the
+                resulting TLS config is rejected.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -8924,6 +9226,22 @@ class RequestTiming:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class ResourceHint:
+    r"""
+    Optional resource estimate attached to a workflow submission. Used
+    by `VramBudget` workers to track in-flight VRAM and by `Reactive`
+    workers as input to their decide-fn.
+    """
+    @property
+    def vram_mb(self) -> typing.Optional[builtins.int]: ...
+    @property
+    def cpu_cores(self) -> typing.Optional[builtins.float]: ...
+    @property
+    def expected_seconds(self) -> typing.Optional[builtins.int]: ...
+    def __new__(cls, vram_mb: typing.Optional[builtins.int] = None, cpu_cores: typing.Optional[builtins.float] = None, expected_seconds: typing.Optional[builtins.int] = None) -> ResourceHint: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class ResponseFormat:
     r"""
     Typed response-format hint for structured output.
@@ -9240,6 +9558,21 @@ class Role:
     USER: builtins.str = 'user'
     ASSISTANT: builtins.str = 'assistant'
     TOOL: builtins.str = 'tool'
+
+@typing.final
+class RunEventStream:
+    r"""
+    Async iterator over run events.
+    
+    On first `__anext__` call, spawns a tokio task that owns a clone of
+    the underlying `Client`, opens the subscribe RPC, and forwards each
+    decoded event through an mpsc channel. This sidesteps the borrowed
+    lifetime on `Client::subscribe_run_events` / `subscribe_all` (which
+    would otherwise require an unsafe lifetime extension) — the worker
+    task holds its own clone for as long as the stream is alive.
+    """
+    def __aiter__(self) -> RunEventStream: ...
+    async def __anext__(self) -> dict: ...
 
 @typing.final
 class SessionNamespace:
@@ -11490,6 +11823,28 @@ class WhisperOptions:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class WorkerCapability:
+    r"""
+    A `kind`/`version` pair advertised by a worker.
+    """
+    @property
+    def kind(self) -> builtins.str: ...
+    @property
+    def version(self) -> builtins.int: ...
+    def __new__(cls, kind: builtins.str, version: builtins.int = 1) -> WorkerCapability:
+        r"""
+        Build a capability advertisement.
+        
+        Args:
+            kind: Conventional capability tag, e.g. ``"workflow:summarize"``,
+                ``"step:fetch"``, ``"provider:openai"``, ``"tag:gpu=h100"``.
+            version: Schema version for this capability. The control plane
+                refuses to route work to a worker advertising a mismatched
+                version.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class Workflow:
     r"""
     A validated, ready-to-run workflow.
@@ -12474,6 +12829,17 @@ class RefLifetime(enum.Enum):
     UntilExplicitDrop = ...
     UntilSnapshot = ...
     UntilParentFinish = ...
+
+@typing.final
+class RunStatus(enum.Enum):
+    r"""
+    Lifecycle status of a workflow run on the control plane.
+    """
+    Pending = ...
+    Running = ...
+    Completed = ...
+    Failed = ...
+    Cancelled = ...
 
 @typing.final
 class SessionPausePolicy(enum.Enum):

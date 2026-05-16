@@ -19,7 +19,9 @@ test = false
 doctest = false
 
 [dependencies]
+anyhow.workspace = true
 async-trait.workspace = true
+blazen-controlplane = { workspace = true, optional = true }
 blazen-core.workspace = true
 blazen-embed-tract = { workspace = true, optional = true }
 blazen-events.workspace = true
@@ -33,6 +35,7 @@ blazen-persist = { workspace = true, features = ["redb", "valkey"] }
 blazen-pipeline.workspace = true
 blazen-prompts.workspace = true
 blazen-telemetry = { workspace = true, features = ["history", "spans"] }
+futures-core.workspace = true
 bytes.workspace = true
 chrono.workspace = true
 futures-util.workspace = true
@@ -72,7 +75,15 @@ otlp = ["blazen-telemetry/otlp"]
 prometheus = ["blazen-telemetry/prometheus"]
 langfuse = ["blazen-telemetry/langfuse"]
 # Distributed workflow types (RemoteWorkflowRequest/Response, PeerClient ABC)
-distributed = ["blazen-core/distributed", "blazen-peer/server", "blazen-peer/client"]
+# and the control-plane orchestrator/worker bindings.
+distributed = [
+    "blazen-core/distributed",
+    "blazen-peer/server",
+    "blazen-peer/client",
+    "dep:blazen-controlplane",
+    "blazen-controlplane/client",
+    "blazen-controlplane/server",
+]
 
 [lints]
 workspace = true

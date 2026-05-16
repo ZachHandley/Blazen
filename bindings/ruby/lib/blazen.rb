@@ -54,6 +54,7 @@ require_relative "blazen/compute"
 require_relative "blazen/persist"
 require_relative "blazen/telemetry"
 require_relative "blazen/peer"
+require_relative "blazen/controlplane"
 
 module Blazen
   # Initialises the native runtime (warms the cabi tokio runtime and
