@@ -1,5 +1,3 @@
-#![cfg(feature = "valkey-store")]
-
 //! Valkey-backed [`AssignmentStore`].
 //!
 //! Each [`AssignmentStore`] method maps onto one or two Redis operations
