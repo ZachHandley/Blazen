@@ -9,8 +9,6 @@
 //! Gated on the `distributed` feature, matching the rest of the
 //! control-plane surface in [`crate::controlplane`].
 
-#![cfg(feature = "distributed")]
-
 use std::ffi::c_char;
 
 use blazen_core::distributed::{

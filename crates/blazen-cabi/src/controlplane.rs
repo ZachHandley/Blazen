@@ -40,8 +40,6 @@
 //! Gated on the `distributed` feature, matching the rest of the
 //! control-plane surface (see [`crate::controlplane_records`]).
 
-#![cfg(feature = "distributed")]
-
 use std::ffi::{CString, c_char};
 use std::os::raw::c_void;
 use std::path::PathBuf;
