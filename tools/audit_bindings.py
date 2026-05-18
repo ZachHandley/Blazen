@@ -189,6 +189,13 @@ WHITELIST: frozenset[str] = frozenset(
         # JS string enum. Bindings accept device strings ("cuda:0", "metal",
         # etc.) at the call site instead.
         "Device",
+        # `Pool` has the same enum-with-data shape as `Device`
+        # (`Cpu, Gpu(usize)`). The ModelManager APIs in every binding (py /
+        # node / wasm) already take pool labels as strings (`"cpu"`,
+        # `"gpu:0"`), matching how `Device` is consumed. The WASM `.d.ts`
+        # surfaces `Pool` as a tsify-generated `"cpu" | { gpu: number }`
+        # union but it is not used in any signature there either.
+        "Pool",
         # `EmbedModel` / `EmbedResponse` / `EmbedOptions` in `blazen-llm`
         # are target-conditional aliases for either the fastembed or tract
         # concrete types, depending on `target_env`. Bindings expose the
@@ -632,6 +639,7 @@ WHITELIST_REASONS: dict[str, str] = {
     # Cross-crate aliases
     "SerializedEvent": "bound under aliased name PersistedEvent in py/node",
     "Device": "Rust enum-with-data (Cuda(usize), Vulkan(usize), ...) -- bindings accept a device string",
+    "Pool": "Rust enum-with-data (Cpu, Gpu(usize)) -- bindings accept a pool label string (\"cpu\", \"gpu:0\")",
     "EmbedModel": "target-conditional alias for FastEmbedModel / TractEmbedModel (concrete types are bound separately)",
     "EmbedResponse": "target-conditional alias for FastEmbedResponse / TractResponse (concrete types are bound separately)",
     "EmbedOptions": "target-conditional alias for FastEmbedOptions / TractOptions (concrete types are bound separately)",
