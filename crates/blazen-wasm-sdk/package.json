@@ -10,7 +10,7 @@
     "blazen_wasm_sdk.d.ts"
   ],
   "scripts": {
-    "build": "wasm-pack build --target bundler",
+    "build": "wasm-pack build --target web",
     "build:web": "wasm-pack build --target web",
     "build:node": "wasm-pack build --target nodejs"
   },

@@ -1196,7 +1196,7 @@ jobs:
         if: steps.verify.outputs.completed != 'true'
         run: |
           cd crates/blazen-wasm-sdk
-          wasm-pack build --target bundler --release
+          wasm-pack build --target web --release
 
       - name: Rename pkg to @blazen-dev/wasm
         if: steps.verify.outputs.completed != 'true'

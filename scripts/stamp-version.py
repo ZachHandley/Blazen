@@ -82,7 +82,7 @@ def rename_wasm_pkg(repo: pathlib.Path, version: str) -> None:
     if not pkg_json_path.exists():
         print(
             f"error: {pkg_json_path} not found. "
-            "Run `wasm-pack build crates/blazen-wasm-sdk --target bundler --release` first.",
+            "Run `wasm-pack build crates/blazen-wasm-sdk --target web --release` first.",
             file=sys.stderr,
         )
         sys.exit(1)

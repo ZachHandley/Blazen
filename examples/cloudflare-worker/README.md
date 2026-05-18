@@ -14,7 +14,7 @@ completion and returns the `StopEvent` payload as JSON.
 
    ```bash
    cd crates/blazen-wasm-sdk
-   wasm-pack build --target bundler --release
+   wasm-pack build --target web --release
    ```
 
    This produces `crates/blazen-wasm-sdk/pkg/` with `blazen_wasm_sdk.js`,
@@ -90,7 +90,8 @@ Cloudflare account.
 - **No filesystem / native deps.** Anything in the SDK that touches the OS
   (filesystem, native crypto, threads) won't work — Workers run in a V8
   isolate. The WASM SDK is built specifically to avoid those.
-- **WASM cold start.** The `--target bundler` build auto-initializes the
-  module at import time, so the first request after a deploy pays the wasm
-  instantiation cost (~tens of ms for ~1.8 MB of wasm). Subsequent requests
-  on the same isolate reuse the initialized module.
+- **WASM cold start.** The `--target web` build instantiates the module on
+  the first `initSync({ module: wasmModule })` call (top of `worker.ts`),
+  so the first request after a deploy pays the wasm instantiation cost
+  (~tens of ms for ~1.8 MB of wasm). Subsequent requests on the same
+  isolate reuse the initialized module.
