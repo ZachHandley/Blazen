@@ -77,32 +77,35 @@ jobs:
     # consume the blazen-build generic package, so they have nothing to wait on.
     if: github.event_name == 'workflow_dispatch'
     steps:
-      - name: Poll Forgejo generic package until build-artifacts.yaml uploads are complete
+      - name: Poll Forgejo package metadata until build-artifacts uploads are complete
         shell: bash
         env:
           VERSION: ${{ needs.version.outputs.version }}
           AUTH: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
-        # Mirrors build-artifacts.yaml's `dispatch-release` `needs:` list
-        # (build-wheels, build-sdist, build-napi, build-wasm, build-uniffi,
-        # build-cabi). When build-artifacts is dispatched from ci.yaml it
-        # fires release.yaml itself, so in practice these are already present
-        # by the time we run — but a manual `release.yaml` dispatch could
-        # race ahead and we'd fail in fetch-artifacts with a confusing 404.
-        # Polling the generic package directly is the simplest gate: it
-        # doesn't deadlock on the in-flight build-artifacts run that
-        # dispatched us (its own dispatch-release job is still in_progress
-        # while we run), and it's the same surface fetch-artifacts uses
-        # below so any missing file here would fail there too.
+        # Gates the rest of release.yaml on every artifact uploaded by
+        # build-artifacts.yaml's matrix (build-wheels, build-sdist, build-napi,
+        # build-wasm, build-cabi, build-swift-xcframework). When release.yaml
+        # is dispatched from build-artifacts.yaml's `dispatch-release` step
+        # the files are already there; when re-dispatched manually we have
+        # to wait for an in-flight build.
         #
         # build-swift-xcframework IS in this gate — a real macOS runner is
         # configured on the Forgejo deployment, so the XCFramework is always
         # expected to be present. release-swift treats a missing XCFramework
         # as a hard failure (see release-swift#xcf step).
+        #
+        # We hit the package-files METADATA endpoint (one GET per tick)
+        # rather than HEAD-probing each file URL. Forgejo's generic-package
+        # router only registers GET/PUT/DELETE for /{filename}, so HEAD
+        # returns 405 Method Not Allowed forever and the previous poll loop
+        # hung the full 2h deadline. The /files endpoint returns a JSON
+        # array of every uploaded file's name in one shot — diff that
+        # against EXPECTED and we're done.
         run: |
           set -euo pipefail
-          BASE="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}"
+          API="https://forge.blackleafdigital.com/api/v1/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/files"
 
-          FILES=(
+          EXPECTED=(
             wheels-x86_64-unknown-linux-gnu.tar.gz
             wheels-aarch64-unknown-linux-gnu.tar.gz
             wheels-x86_64-unknown-linux-musl.tar.gz
@@ -131,25 +134,41 @@ jobs:
           # so faster polling buys nothing.
           DEADLINE=$(( $(date +%s) + 7200 ))
           while :; do
+            RESP=$(curl -s -w '\n%{http_code}' -u "$AUTH" "$API")
+            CODE=$(printf '%s' "$RESP" | tail -n1)
+            BODY=$(printf '%s' "$RESP" | sed '$d')
+
+            # 404 = package-version row not yet created (Forgejo creates it
+            # lazily on the first successful PUT). Treat as "no files yet"
+            # so we keep polling instead of failing during the cold window
+            # at the start of a build.
+            case "$CODE" in
+              200) PRESENT=$(printf '%s' "$BODY" | jq -r '.[].name' | sort -u) ;;
+              404) PRESENT="" ;;
+              *)
+                echo "::error::Unexpected HTTP $CODE from $API"
+                printf '%s' "$BODY" | head -c 500
+                exit 1
+                ;;
+            esac
+
             MISSING=()
-            for F in "${FILES[@]}"; do
-              CODE=$(curl --silent --output /dev/null --write-out '%{http_code}' \
-                --head -u "$AUTH" "${BASE}/${F}")
-              if [ "$CODE" != "200" ]; then
-                MISSING+=("${F} (HTTP ${CODE})")
-              fi
+            for F in "${EXPECTED[@]}"; do
+              grep -Fxq "$F" <<<"$PRESENT" || MISSING+=("$F")
             done
+
             if [ ${#MISSING[@]} -eq 0 ]; then
-              echo "All build-artifacts uploads present for v${VERSION}."
+              echo "All ${#EXPECTED[@]} build-artifacts uploads present for v${VERSION}."
               exit 0
             fi
+
             NOW=$(date +%s)
-            if [ "${NOW}" -ge "${DEADLINE}" ]; then
-              echo "::error::Timed out waiting for build-artifacts.yaml uploads for v${VERSION}."
-              for M in "${MISSING[@]}"; do echo "  missing: ${M}"; done
+            if [ "$NOW" -ge "$DEADLINE" ]; then
+              echo "::error::Timed out waiting for build-artifacts uploads for v${VERSION}."
+              for M in "${MISSING[@]}"; do echo "  missing: $M"; done
               exit 1
             fi
-            echo "[$(date -u +%H:%M:%S)] waiting on ${#MISSING[@]}/${#FILES[@]} artefact(s); next check in 30s"
+            echo "[$(date -u +%H:%M:%S)] waiting on ${#MISSING[@]}/${#EXPECTED[@]} artefact(s); next check in 30s"
             sleep 30
           done
 
