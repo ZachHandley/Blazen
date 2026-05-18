@@ -20,7 +20,7 @@ use blazen_llm::traits::Tool;
 use blazen_llm::types::{ChatMessage, CompletionResponse, ToolDefinition};
 use napi::threadsafe_function::ThreadsafeFunctionCallMode;
 
-use crate::error::llm_error_to_napi;
+use crate::error::blazen_caller_error_to_napi;
 use crate::providers::JsCompletionModel;
 use crate::types::events::JsAgentEvent;
 use crate::types::{JsChatMessage, JsCompletionResponse, build_response};
@@ -245,12 +245,63 @@ impl Tool for JsToolWrapper {
             .await
             .map_err(|e| BlazenError::tool_error(e.to_string()))?;
 
-        // Dispatch on shape: if the value is an object with an explicit
-        // `data` key, treat it as a structured `ToolOutput` and decode an
-        // optional `llmOverride`. The `data`-key guard prevents
-        // misinterpreting an arbitrary user dict like `{"items": [1,2,3]}`
-        // as a ToolOutput. Otherwise, auto-wrap the bare value with no
-        // override.
+        // Envelope dispatch — the JS-side `toolHandler` wrapper in
+        // `crates/blazen-node/error-classes.js` wraps every handler call
+        // so user-thrown errors are converted into a resolved
+        // `{__blazenOk: false, errorRef, errorName, errorMessage}` envelope
+        // (instead of a rejected Promise). On success, it returns
+        // `{__blazenOk: true, value}`. We dispatch on `__blazenOk` here:
+        //
+        // * `false` — capture the UUID `errorRef` as the opaque source on a
+        //   `BlazenError::CallerError`. `blazen_caller_error_to_napi` later
+        //   emits the sentinel that the JS wrapper's outer catch reads to
+        //   re-throw the original instance (preserving `instanceof`).
+        // * `true`  — unwrap `value` and proceed through the same shape
+        //   dispatch we used pre-envelope (structured `{data, llmOverride}`
+        //   vs bare auto-wrapped value).
+        //
+        // If `__blazenOk` is missing entirely (e.g. an older JS shim or
+        // direct napi call that bypasses the wrapper), fall through to the
+        // legacy raw-value path for back-compat.
+        if let Some(obj) = result.as_object() {
+            match obj.get("__blazenOk") {
+                Some(serde_json::Value::Bool(false)) => {
+                    let uuid = obj
+                        .get("errorRef")
+                        .and_then(|v| v.as_str())
+                        .map_or_else(|| "<missing-ref>".to_string(), String::from);
+                    let err_name = obj
+                        .get("errorName")
+                        .and_then(|v| v.as_str())
+                        .map(String::from);
+                    let err_message = obj
+                        .get("errorMessage")
+                        .and_then(|v| v.as_str())
+                        .map_or_else(|| "caller error".to_string(), String::from);
+                    let mut e = BlazenError::caller_error(err_message, uuid);
+                    if let Some(n) = err_name {
+                        e = e.with_caller_name(n);
+                    }
+                    return Err(e);
+                }
+                Some(serde_json::Value::Bool(true)) => {
+                    let value = obj.get("value").cloned().unwrap_or(serde_json::Value::Null);
+                    if value.as_object().is_some_and(|m| m.contains_key("data")) {
+                        return decode_structured_tool_output(value)
+                            .map_err(|e| BlazenError::tool_error(e.to_string()));
+                    }
+                    return Ok(value.into());
+                }
+                _ => {}
+            }
+        }
+
+        // Legacy raw-value path (no envelope). Dispatch on shape: if the
+        // value is an object with an explicit `data` key, treat it as a
+        // structured `ToolOutput` and decode an optional `llmOverride`.
+        // The `data`-key guard prevents misinterpreting an arbitrary user
+        // dict like `{"items": [1,2,3]}` as a ToolOutput. Otherwise,
+        // auto-wrap the bare value with no override.
         if let Some(obj) = result.as_object()
             && obj.contains_key("data")
         {
@@ -264,11 +315,16 @@ impl Tool for JsToolWrapper {
 /// Decode a JS object of shape `{ data, llmOverride? }` into a Rust
 /// [`blazen_llm::types::ToolOutput`].
 ///
-/// The wrapper is `#[napi(object)]` and therefore not `Deserialize`, so we
-/// pull `data` and `llmOverride` out by hand and let the inner [`LlmPayload`]
-/// (which derives `Deserialize`) parse itself. The serde tag/rename rules on
-/// [`LlmPayload`] match the JS shape: `{ kind: "text" | "json" | ... }` plus
-/// the variant-specific fields.
+/// The wrapper is `#[napi(object)]` and therefore not directly `Deserialize`,
+/// so we pull `data` and `llmOverride` out by hand. The `llmOverride` value
+/// is first deserialized into the napi-side [`crate::types::tool_output::LlmPayload`]
+/// (a flat `{ kind, text?, value?, parts?, provider? }` struct that matches
+/// the TypeScript surface), then converted to the core
+/// [`blazen_llm::types::LlmPayload`] enum via
+/// [`crate::types::tool_output::js_llm_payload_to_rust`]. This avoids the
+/// cross-layer discriminator mismatch (`kind` on the JS side vs serde's
+/// `type` tag on the core enum) that would otherwise occur if we deserialized
+/// the core enum directly.
 fn decode_structured_tool_output(
     value: serde_json::Value,
 ) -> napi::Result<blazen_llm::types::ToolOutput<serde_json::Value>> {
@@ -289,10 +345,11 @@ fn decode_structured_tool_output(
         .or_else(|| obj.remove("llm_override"));
     let llm_override = match raw_override {
         None | Some(serde_json::Value::Null) => None,
-        Some(v) => Some(
-            serde_json::from_value::<blazen_llm::types::LlmPayload>(v)
-                .map_err(|e| napi::Error::from_reason(format!("invalid llmOverride: {e}")))?,
-        ),
+        Some(v) => {
+            let payload: crate::types::tool_output::LlmPayload = serde_json::from_value(v)
+                .map_err(|e| napi::Error::from_reason(format!("invalid llmOverride: {e}")))?;
+            Some(crate::types::tool_output::js_llm_payload_to_rust(payload)?)
+        }
     };
 
     Ok(blazen_llm::types::ToolOutput { data, llm_override })
@@ -389,7 +446,7 @@ pub async fn run_agent(
     let inner = crate::providers::completion_model::arc_from_js_model(model)?;
     let result = rust_run_agent(inner.as_ref(), rust_messages, config)
         .await
-        .map_err(llm_error_to_napi)?;
+        .map_err(blazen_caller_error_to_napi)?;
 
     let js_messages: Vec<serde_json::Value> = result
         .messages
@@ -523,7 +580,7 @@ pub async fn run_agent_with_callback(
 
     let result = rust_run_agent_with_callback(inner.as_ref(), rust_messages, config, on_event_fn)
         .await
-        .map_err(llm_error_to_napi)?;
+        .map_err(blazen_caller_error_to_napi)?;
 
     let js_messages: Vec<serde_json::Value> = result
         .messages

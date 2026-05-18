@@ -86,6 +86,77 @@ pub enum BlazenError {
         name: Option<String>,
         message: String,
     },
+
+    /// Caller-side error captured from a binding (Node / Python / WASM /
+    /// `UniFFI` / cabi). Carries an opaque type-erased handle to the *original*
+    /// caller error value so the binding's error-conversion path can downcast
+    /// and re-throw it, preserving class identity and custom properties where
+    /// the FFI mechanism allows.
+    ///
+    /// - Node: `source` holds a `napi::bindgen_prelude::Reference<Unknown<'static>>`.
+    /// - Python: `source` holds a `pyo3::Py<pyo3::PyAny>`.
+    /// - WASM: `source` holds a `send_wrapper::SendWrapper<wasm_bindgen::JsValue>`.
+    /// - `UniFFI` / cabi: `source` holds a binding-specific struct carrying
+    ///   `name` / `message` / `properties_json` for structural re-raise.
+    ///
+    /// `name` is the optional tool / source name. `message` is a fallback
+    /// string used by `Display` and by callers that don't downcast the source.
+    #[error("caller error{name_in_paren}: {message}", name_in_paren = name.as_deref().map(|n| format!(" in `{n}`")).unwrap_or_default())]
+    CallerError {
+        name: Option<String>,
+        message: String,
+        /// Type-erased original caller-side error value. `None` when no
+        /// binding-side handle was attached (internal callers). Wrapped in
+        /// [`CallerErrorSource`] (a thin `std::error::Error`-implementing
+        /// newtype around `Box<dyn Any + Send + Sync>`) so that thiserror's
+        /// auto-`#[source]` detection on the literal field name `source`
+        /// can find a compatible trait impl. Downcasting goes through the
+        /// newtype's `Deref<Target = dyn Any + Send + Sync>` impl, so
+        /// `source.as_ref().unwrap().downcast_ref::<T>()` works as-is.
+        #[source]
+        source: Option<CallerErrorSource>,
+    },
+}
+
+/// Opaque, type-erased caller-side error payload for
+/// [`BlazenError::CallerError`].
+///
+/// This is a transparent newtype over `Box<dyn Any + Send + Sync>`. It
+/// exists for one reason: thiserror auto-treats fields named `source` as
+/// `#[source]` and requires the field type to implement `std::error::Error`.
+/// `dyn Any` does not, so we wrap it in a type that does.
+///
+/// `Deref<Target = dyn Any + Send + Sync>` is implemented so callers can
+/// downcast the inner value directly:
+///
+/// ```ignore
+/// if let BlazenError::CallerError { source: Some(s), .. } = &err {
+///     if let Some(orig) = s.downcast_ref::<MyError>() { /* ... */ }
+/// }
+/// ```
+pub struct CallerErrorSource(pub Box<dyn std::any::Any + Send + Sync>);
+
+impl std::fmt::Debug for CallerErrorSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("CallerErrorSource")
+            .field(&"<opaque>")
+            .finish()
+    }
+}
+
+impl std::fmt::Display for CallerErrorSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("<opaque caller error>")
+    }
+}
+
+impl std::error::Error for CallerErrorSource {}
+
+impl std::ops::Deref for CallerErrorSource {
+    type Target = dyn std::any::Any + Send + Sync;
+    fn deref(&self) -> &Self::Target {
+        &*self.0
+    }
 }
 
 /// Structured payload for [`BlazenError::ProviderHttp`].
@@ -169,6 +240,8 @@ impl BlazenError {
             Self::Provider { status_code, .. } => status_code.is_none_or(|code| code >= 500),
             Self::ProviderHttp(d) => d.status >= 500 || d.status == 429,
             Self::Compute(ComputeErrorKind::JobFailed { retryable, .. }) => *retryable,
+            // CallerError is non-retryable — caller-side errors are user-originated
+            // and not the framework's to retry. Folds into the wildcard below.
             _ => false,
         }
     }
@@ -266,6 +339,35 @@ impl BlazenError {
         }
     }
 
+    /// Build a [`BlazenError::CallerError`] from a caller-side opaque source.
+    ///
+    /// The `source` is boxed as `dyn Any + Send + Sync` and round-tripped back
+    /// to the binding's error-conversion path, which downcasts it to re-throw
+    /// the original caller error. See the `CallerError` variant docs.
+    pub fn caller_error<E>(message: impl Into<String>, source: E) -> Self
+    where
+        E: std::any::Any + Send + Sync + 'static,
+    {
+        Self::CallerError {
+            name: None,
+            message: message.into(),
+            source: Some(CallerErrorSource(Box::new(source))),
+        }
+    }
+
+    /// Builder: attach a tool/source name to a [`BlazenError::CallerError`].
+    /// Panics with `debug_assert!` if called on any other variant — callers
+    /// should chain immediately after `caller_error(...)`.
+    #[must_use]
+    pub fn with_caller_name(mut self, name: impl Into<String>) -> Self {
+        if let Self::CallerError { name: slot, .. } = &mut self {
+            *slot = Some(name.into());
+        } else {
+            debug_assert!(false, "with_caller_name called on non-CallerError variant");
+        }
+        self
+    }
+
     #[must_use]
     pub fn no_content() -> Self {
         Self::Completion(CompletionErrorKind::NoContent)
@@ -313,3 +415,44 @@ pub type ComputeError = BlazenError;
 
 /// Result type alias for Blazen operations.
 pub type Result<T, E = BlazenError> = std::result::Result<T, E>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn blazen_error_stays_under_size_threshold() {
+        // `clippy::result_large_err` defaults to a 128-byte threshold; the
+        // existing variants are boxed accordingly (see comment near line 95).
+        // Catch regressions if a new variant inflates the enum.
+        assert!(
+            std::mem::size_of::<BlazenError>() <= 128,
+            "BlazenError grew to {} bytes; box the offending variant",
+            std::mem::size_of::<BlazenError>()
+        );
+    }
+
+    #[test]
+    fn caller_error_constructor_stores_source() {
+        struct Marker(u32);
+        let err = BlazenError::caller_error("boom", Marker(42));
+        match err {
+            BlazenError::CallerError {
+                ref source,
+                ref message,
+                ..
+            } => {
+                assert_eq!(message, "boom");
+                let downcast = source.as_ref().unwrap().downcast_ref::<Marker>().unwrap();
+                assert_eq!(downcast.0, 42);
+            }
+            _ => panic!("expected CallerError variant"),
+        }
+    }
+
+    #[test]
+    fn caller_error_is_not_retryable() {
+        let err = BlazenError::caller_error("x", 0u8);
+        assert!(!err.is_retryable());
+    }
+}

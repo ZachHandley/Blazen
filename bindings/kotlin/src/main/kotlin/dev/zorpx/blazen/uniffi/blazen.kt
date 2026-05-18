@@ -3269,7 +3269,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_method_agent_run_blocking() != 6800.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_toolhandler_execute() != 52993.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_toolhandler_execute() != 37809.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_imagegenmodel_generate() != 52613.toShort()) {
@@ -13673,6 +13673,31 @@ public interface ToolHandler {
      * The returned string is JSON-encoded and round-trips back into the LLM
      * as the tool result on the next turn. Return `"null"` (the JSON literal)
      * when the tool produced no useful result.
+     *
+     * ## Structured `ToolOutput`
+     *
+     * Returning a JSON object with a `data` key opts into the structured
+     * [`blazen_llm::types::ToolOutput`] shape:
+     *
+     * ```text
+     * {
+     * "data": { /* user-visible payload */ },
+     * "llm_override": {
+     * "kind": "parts",
+     * "parts": [{ "type": "text", "text": "summary for the model" }]
+     * }
+     * }
+     * ```
+     *
+     * `llmOverride` (camelCase) is also accepted. The inner `parts[]`
+     * discriminator uses `"type"` (matching the core `ContentPart` serde
+     * tag); the outer discriminator uses `"kind"`. Foreign-language helper
+     * types (`Blazen::ToolOutput` in Ruby, `blazen.ToolOutput` in Go,
+     * `Blazen.ToolOutput` in Swift, `dev.blazen.ToolOutput` in Kotlin)
+     * produce this shape automatically.
+     *
+     * Returning anything else (a primitive, a JSON object without a `data`
+     * key, etc.) auto-wraps the whole value as `data` with no override.
      */
     suspend fun `execute`(
         `toolName`: kotlin.String,
@@ -13800,6 +13825,31 @@ open class ToolHandlerImpl :
      * The returned string is JSON-encoded and round-trips back into the LLM
      * as the tool result on the next turn. Return `"null"` (the JSON literal)
      * when the tool produced no useful result.
+     *
+     * ## Structured `ToolOutput`
+     *
+     * Returning a JSON object with a `data` key opts into the structured
+     * [`blazen_llm::types::ToolOutput`] shape:
+     *
+     * ```text
+     * {
+     * "data": { /* user-visible payload */ },
+     * "llm_override": {
+     * "kind": "parts",
+     * "parts": [{ "type": "text", "text": "summary for the model" }]
+     * }
+     * }
+     * ```
+     *
+     * `llmOverride` (camelCase) is also accepted. The inner `parts[]`
+     * discriminator uses `"type"` (matching the core `ContentPart` serde
+     * tag); the outer discriminator uses `"kind"`. Foreign-language helper
+     * types (`Blazen::ToolOutput` in Ruby, `blazen.ToolOutput` in Go,
+     * `Blazen.ToolOutput` in Swift, `dev.blazen.ToolOutput` in Kotlin)
+     * produce this shape automatically.
+     *
+     * Returning anything else (a primitive, a JSON object without a `data`
+     * key, etc.) auto-wraps the whole value as `data` with no override.
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -18258,6 +18308,25 @@ sealed class BlazenException : kotlin.Exception() {
     ) : BlazenException()
 
     /**
+     * Caller-side error raised by a foreign-language tool handler.
+     *
+     * Carries structural error data — `name` (foreign-language exception
+     * class name, e.g. `"SubmitSignal"`), `message`, and `properties_json`
+     * (JSON-encoded custom attributes). Foreign consumers pattern-match on
+     * `name` and decode `properties_json` to recover custom payload data.
+     *
+     * Full exception class identity is not preserved across the UniFFI
+     * boundary (the Node/Python/WASM bindings get full `instanceof`
+     * preservation because they have native object references; UniFFI does
+     * not). This variant is the structural equivalent.
+     */
+    class CallerException(
+        val `name`: kotlin.String?,
+        override val `message`: kotlin.String,
+        val `propertiesJson`: kotlin.String,
+    ) : BlazenException()
+
+    /**
      * Distributed peer-to-peer error and (folded in) distributed
      * control-plane error. For peer-mesh failures `kind` is one of
      * `"Encode"`, `"Transport"`, `"EnvelopeVersion"`, `"Workflow"`,
@@ -18412,44 +18481,52 @@ public object FfiConverterTypeBlazenError : FfiConverterRustBuffer<BlazenExcepti
             }
 
             12 -> {
-                BlazenException.Peer(
+                BlazenException.CallerException(
+                    FfiConverterOptionalString.read(buf),
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                 )
             }
 
             13 -> {
-                BlazenException.Persist(
+                BlazenException.Peer(
+                    FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                 )
             }
 
             14 -> {
+                BlazenException.Persist(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            15 -> {
                 BlazenException.Prompt(
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                 )
             }
 
-            15 -> {
+            16 -> {
                 BlazenException.Memory(
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                 )
             }
 
-            16 -> {
+            17 -> {
                 BlazenException.Cache(
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                 )
             }
 
-            17 -> {
+            18 -> {
                 BlazenException.Cancelled()
             }
 
-            18 -> {
+            19 -> {
                 BlazenException.Internal(
                     FfiConverterString.read(buf),
                 )
@@ -18535,6 +18612,14 @@ public object FfiConverterTypeBlazenError : FfiConverterRustBuffer<BlazenExcepti
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL +
                     FfiConverterString.allocationSize(value.`message`)
+            )
+
+            is BlazenException.CallerException -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL +
+                    FfiConverterOptionalString.allocationSize(value.`name`) +
+                    FfiConverterString.allocationSize(value.`message`) +
+                    FfiConverterString.allocationSize(value.`propertiesJson`)
             )
 
             is BlazenException.Peer -> (
@@ -18663,47 +18748,55 @@ public object FfiConverterTypeBlazenError : FfiConverterRustBuffer<BlazenExcepti
                 Unit
             }
 
-            is BlazenException.Peer -> {
+            is BlazenException.CallerException -> {
                 buf.putInt(12)
+                FfiConverterOptionalString.write(value.`name`, buf)
+                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`propertiesJson`, buf)
+                Unit
+            }
+
+            is BlazenException.Peer -> {
+                buf.putInt(13)
                 FfiConverterString.write(value.`kind`, buf)
                 FfiConverterString.write(value.`message`, buf)
                 Unit
             }
 
             is BlazenException.Persist -> {
-                buf.putInt(13)
+                buf.putInt(14)
                 FfiConverterString.write(value.`message`, buf)
                 Unit
             }
 
             is BlazenException.Prompt -> {
-                buf.putInt(14)
-                FfiConverterString.write(value.`kind`, buf)
-                FfiConverterString.write(value.`message`, buf)
-                Unit
-            }
-
-            is BlazenException.Memory -> {
                 buf.putInt(15)
                 FfiConverterString.write(value.`kind`, buf)
                 FfiConverterString.write(value.`message`, buf)
                 Unit
             }
 
-            is BlazenException.Cache -> {
+            is BlazenException.Memory -> {
                 buf.putInt(16)
                 FfiConverterString.write(value.`kind`, buf)
                 FfiConverterString.write(value.`message`, buf)
                 Unit
             }
 
-            is BlazenException.Cancelled -> {
+            is BlazenException.Cache -> {
                 buf.putInt(17)
+                FfiConverterString.write(value.`kind`, buf)
+                FfiConverterString.write(value.`message`, buf)
+                Unit
+            }
+
+            is BlazenException.Cancelled -> {
+                buf.putInt(18)
                 Unit
             }
 
             is BlazenException.Internal -> {
-                buf.putInt(18)
+                buf.putInt(19)
                 FfiConverterString.write(value.`message`, buf)
                 Unit
             }

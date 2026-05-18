@@ -7072,8 +7072,9 @@ export interface JsContentMetadata {
 /**
  * A single part in a multi-part message.
  *
- * `partType` is one of `"text"`, `"image"`, `"audio"`, `"video"`. Set the
- * matching field (`text`, `image`, `audio`, `video`) accordingly.
+ * `partType` is one of `"text"`, `"image"`, `"audio"`, `"video"`, `"file"`.
+ * Set the matching field (`text`, `image`, `audio`, `video`, `file`)
+ * accordingly.
  */
 export interface JsContentPart {
   partType: string
@@ -7081,6 +7082,7 @@ export interface JsContentPart {
   image?: JsImageContent
   audio?: JsAudioContent
   video?: JsVideoContent
+  file?: FileContent
 }
 
 /** Request to dereference a remote session ref. */
@@ -8321,11 +8323,8 @@ export interface LlmPayload {
    * `kind: "provider_raw"`.
    */
   value?: any
-  /**
-   * Multimodal content parts (serialized `ContentPart[]`).
-   * Required for `kind: "parts"`.
-   */
-  parts?: any
+  /** Multimodal content parts. Required for `kind: "parts"`. */
+  parts?: Array<JsContentPart>
   /** Provider id string. Required for `kind: "provider_raw"`. */
   provider?: string
 }

@@ -21,6 +21,36 @@
 //!
 //! Consumers who don't use the wrapper still get a readable message at
 //! the end (minus the sentinel line).
+//!
+//! ## Caller error sentinel protocol
+//!
+//! Tool handlers can throw arbitrary JS `Error` subclasses (`class MyError
+//! extends Error {}`). napi-rs cannot carry a JS Error value across the
+//! Rust agent loop boundary, so we use a UUID-via-JS-Map trampoline:
+//!
+//! 1. The JS-side `toolHandler` wrapper in `crates/blazen-node/error-classes.js`
+//!    catches the user's thrown error, stashes the *raw instance* in a
+//!    module-level `Map` keyed by a freshly-generated UUID, and returns a
+//!    `{__blazenOk: false, errorRef: <uuid>, errorName, errorMessage}` envelope
+//!    so the napi side can read the metadata without touching JS error
+//!    internals.
+//! 2. The napi tool wrapper sees `__blazenOk: false`, extracts the UUID,
+//!    and builds a [`BlazenError::CallerError`] whose opaque source is the
+//!    UUID `String`.
+//! 3. When the agent run rejects, [`blazen_caller_error_to_napi`] emits a
+//!    [`napi::Error`] whose message starts with [`CALLER_ERROR_SENTINEL`]
+//!    and embeds the UUID + name + message as JSON.
+//! 4. The JS wrapper's outer `.catch(...)` parses the sentinel, looks up
+//!    the original error instance in its `Map`, and re-throws it —
+//!    preserving `instanceof MyError`, custom prototype chain, and all
+//!    own-properties.
+//!
+//! Raw message format:
+//!
+//! ```text
+//! __BLAZEN_CALLER_ERROR__ {"ref":"<uuid>","name":"MyError","message":"boom"}
+//! [CallerError] boom
+//! ```
 
 use napi::Status;
 use serde::Serialize;
@@ -28,6 +58,12 @@ use serde::Serialize;
 /// Sentinel prefix on provider-error messages. The JS wrapper at
 /// `crates/blazen-node/errors.js` pattern-matches on this. Keep in sync.
 pub const PROVIDER_ERROR_SENTINEL: &str = "__BLAZEN_PROVIDER_ERROR__";
+
+/// Sentinel prefix on caller-error messages. The JS wrapper at
+/// `crates/blazen-node/error-classes.js` pattern-matches on this, reads the
+/// embedded UUID `ref`, looks up the original JS Error instance in its
+/// in-process `Map`, and re-throws it. Keep in sync.
+pub const CALLER_ERROR_SENTINEL: &str = "__BLAZEN_CALLER_ERROR__";
 
 /// Structured payload embedded in a provider-error message's JSON line.
 /// Field names use camelCase to match the receiving JS convention.
@@ -157,6 +193,46 @@ pub fn blazen_error_to_napi(err: blazen_llm::BlazenError) -> napi::Error {
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn llm_error_to_napi(err: blazen_llm::BlazenError) -> napi::Error {
+    blazen_error_to_napi(err)
+}
+
+/// Convert a [`BlazenError::CallerError`] carrying a UUID `String` source
+/// (set by the napi-side tool wrapper when it observed the JS-side
+/// `{__blazenOk: false, errorRef}` envelope) into a sentinel-formatted
+/// [`napi::Error`] that the JS-side wrapper in `error-classes.js` parses
+/// to re-throw the original error instance.
+///
+/// On a `CallerError` whose source downcasts to a `String` (the UUID
+/// stashed by the napi tool wrapper), embeds the UUID + name + message
+/// in a sentinel payload. The JS wrapper's outer `.catch(...)` parses
+/// the sentinel, looks up the original error in its in-process Map, and
+/// throws it — preserving `instanceof MyError`, prototype chain, and all
+/// own-properties.
+///
+/// Other variants fall through to [`blazen_error_to_napi`].
+///
+/// See the module-level "Caller error sentinel protocol" docs.
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn blazen_caller_error_to_napi(err: blazen_llm::BlazenError) -> napi::Error {
+    if let blazen_llm::BlazenError::CallerError {
+        source: Some(s),
+        name,
+        message,
+    } = &err
+        && let Some(uuid) = (**s).downcast_ref::<String>()
+    {
+        let payload = serde_json::json!({
+            "ref": uuid,
+            "name": name,
+            "message": message,
+        });
+        let json = payload.to_string();
+        return napi::Error::new(
+            Status::GenericFailure,
+            format!("{CALLER_ERROR_SENTINEL} {json}\n[CallerError] {message}"),
+        );
+    }
     blazen_error_to_napi(err)
 }
 

@@ -21,6 +21,27 @@
 
 use thiserror::Error;
 
+/// Structured payload stored in `blazen_llm::BlazenError::CallerError.source`
+/// when a UniFFI tool handler raises a typed caller error.
+///
+/// Foreign-language handlers can't carry their exception class identity
+/// across the UniFFI IDL boundary (FFI mechanism is genuinely missing),
+/// so we preserve `(name, message, properties_json)` instead. The
+/// foreign-side `name` is the exception class name (e.g. `"SubmitSignal"`);
+/// `properties_json` is a JSON-encoded blob of any custom attributes the
+/// foreign side wants to round-trip.
+///
+/// `crates/blazen-uniffi/src/agent.rs` constructs this payload when a
+/// UniFFI `ToolHandler` returns `Err(BlazenError::CallerError { ... })`;
+/// the conversion back to UniFFI [`BlazenError::CallerError`] in this
+/// file downcasts the opaque `Box<dyn Any>` to recover the fields.
+#[derive(Debug, Clone)]
+pub struct UniffiCallerErrorPayload {
+    pub name: Option<String>,
+    pub message: String,
+    pub properties_json: String,
+}
+
 /// Canonical error type for all Blazen UniFFI bindings.
 ///
 /// Each variant carries a `message` field with a human-readable description
@@ -87,6 +108,24 @@ pub enum BlazenError {
     /// Tool / function-call error during LLM agent execution.
     #[error("tool: {message}")]
     Tool { message: String },
+
+    /// Caller-side error raised by a foreign-language tool handler.
+    ///
+    /// Carries structural error data — `name` (foreign-language exception
+    /// class name, e.g. `"SubmitSignal"`), `message`, and `properties_json`
+    /// (JSON-encoded custom attributes). Foreign consumers pattern-match on
+    /// `name` and decode `properties_json` to recover custom payload data.
+    ///
+    /// Full exception class identity is not preserved across the UniFFI
+    /// boundary (the Node/Python/WASM bindings get full `instanceof`
+    /// preservation because they have native object references; UniFFI does
+    /// not). This variant is the structural equivalent.
+    #[error("caller{name_in_paren}: {message}", name_in_paren = name.as_deref().map(|n| format!(" `{n}`")).unwrap_or_default())]
+    CallerError {
+        name: Option<String>,
+        message: String,
+        properties_json: String,
+    },
 
     /// Distributed peer-to-peer error and (folded in) distributed
     /// control-plane error. For peer-mesh failures `kind` is one of
@@ -188,6 +227,31 @@ impl From<blazen_llm::BlazenError> for BlazenError {
             },
             L::Compute(_) => Self::Compute { message: display },
             L::Media(_) => Self::Media { message: display },
+            L::CallerError {
+                source,
+                name,
+                message,
+            } => {
+                // Downcast the opaque source to recover UniFFI's structured payload.
+                // If the source came from a different binding (Node/Python/WASM
+                // typed handles, or no source at all), fall back to `name`/`message`
+                // and an empty properties_json.
+                let (final_name, properties_json) = source
+                    .as_ref()
+                    .and_then(|s| s.downcast_ref::<UniffiCallerErrorPayload>())
+                    .map(|p| {
+                        (
+                            p.name.clone().or_else(|| name.clone()),
+                            p.properties_json.clone(),
+                        )
+                    })
+                    .unwrap_or_else(|| (name, "{}".to_string()));
+                Self::CallerError {
+                    name: final_name,
+                    message,
+                    properties_json,
+                }
+            }
             // Serialization / Request / Completion all fold into Internal; if a
             // caller needs to discriminate these we can promote them later.
             _ => Self::Internal { message: display },

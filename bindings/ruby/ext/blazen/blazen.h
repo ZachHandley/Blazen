@@ -141,6 +141,15 @@
 #define BLAZEN_ERROR_KIND_INTERNAL 18
 
 /**
+ * Variant tag for the `CallerError` category — a foreign-language exception
+ * raised inside a host-side handler callback (e.g. Ruby `ToolHandler`) and
+ * reflected back across the FFI boundary. Carries the original exception
+ * class name plus a JSON blob of its custom attributes; consume them via
+ * [`blazen_error_name`] and [`blazen_error_properties_json`].
+ */
+#define BLAZEN_ERROR_KIND_CALLER 19
+
+/**
  * `StepOutput` variant tag for the `None` case — the step performed work
  * but produced no event.
  */
@@ -4519,6 +4528,39 @@ int32_t blazen_run_state_snapshot_last_event_at_ms(const BlazenRunStateSnapshot 
  * cabi surface.
  */
  char *blazen_error_endpoint(const BlazenError *err);
+
+/**
+ * Returns the foreign-language exception class name carried by the
+ * `CallerError` variant as a heap-allocated NUL-terminated UTF-8 C string.
+ * Returns null if `err` is null, the variant doesn't carry a name (e.g.
+ * `name = None`), or the variant isn't `CallerError`. Caller frees with
+ * `blazen_string_free`.
+ *
+ * # Safety
+ *
+ * `err` must be null OR a valid pointer to a `BlazenError` produced by the
+ * cabi surface.
+ */
+ char *blazen_error_name(const BlazenError *err);
+
+/**
+ * Returns the foreign-language structured-properties JSON blob carried by
+ * the `CallerError` variant. The caller-side foreign exception's custom
+ * attributes were serialised into this JSON string by the Ruby/Go/Swift/Kotlin
+ * tool-handler wrapper before raising; consumers decode it to recover the
+ * custom payload (`{"payload": {...}, "...": ...}`). Returns null if `err`
+ * is null or the variant isn't `CallerError`. Caller frees with
+ * `blazen_string_free`.
+ *
+ * For variants other than `CallerError`, returns null. For a `CallerError`
+ * with no custom attributes, returns `"{}"` (an empty JSON object).
+ *
+ * # Safety
+ *
+ * `err` must be null OR a valid pointer to a `BlazenError` produced by the
+ * cabi surface.
+ */
+ char *blazen_error_properties_json(const BlazenError *err);
 
 /**
  * Returns the `request_id` for the `Provider` variant as a heap-allocated

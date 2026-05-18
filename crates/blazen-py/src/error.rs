@@ -243,6 +243,23 @@ pub fn blazen_error_to_pyerr(err: blazen_llm::BlazenError) -> PyErr {
         }
         blazen_llm::BlazenError::Compute(_) => ComputeError::new_err(err.to_string()),
         blazen_llm::BlazenError::Media(_) => MediaError::new_err(err.to_string()),
+        blazen_llm::BlazenError::CallerError {
+            source: Some(s),
+            name: _,
+            message,
+        } => {
+            // Downcast the opaque source to the original `Py<PyAny>` exception
+            // instance stored by `pyerr_to_caller_error` in agent.rs. If it
+            // matches, re-raise via `PyErr::from_value` — preserving the
+            // original Python exception's class and custom attributes for
+            // `except MyError` pattern-matching. Falls back to a plain
+            // `BlazenException` if the source came from a different binding
+            // (e.g. cross-binding test or future caller-error variants).
+            if let Some(py_any) = s.downcast_ref::<pyo3::Py<pyo3::PyAny>>() {
+                return Python::attach(|py| pyo3::PyErr::from_value(py_any.bind(py).clone()));
+            }
+            BlazenException::new_err(message.clone())
+        }
         _ => BlazenException::new_err(err.to_string()),
     }
 }

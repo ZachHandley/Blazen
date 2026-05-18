@@ -23,6 +23,7 @@ use blazen_llm::agent::{AgentConfig, AgentEvent};
 use blazen_llm::traits::Tool;
 use blazen_llm::types::{ToolCall, ToolDefinition};
 
+use crate::agent::blazen_error_to_jsvalue;
 use crate::chat_message::js_messages_to_vec;
 use crate::completion_model::WasmCompletionModel;
 
@@ -232,22 +233,40 @@ fn js_to_tool_output(
             .map_err(|e| blazen_llm::BlazenError::tool_error(e.to_string()))?
     };
 
-    if let serde_json::Value::Object(map) = &raw
-        && map.contains_key("data")
-    {
-        let mut normalized = map.clone();
-        if !normalized.contains_key("llm_override")
-            && let Some(v) = normalized.remove("llmOverride")
-        {
-            normalized.insert("llm_override".into(), v);
-        }
-        let normalized_value = serde_json::Value::Object(normalized);
-        if let Ok(out) = serde_json::from_value::<ToolOutput<serde_json::Value>>(normalized_value) {
-            return Ok(out);
-        }
+    // Structured ToolOutput shape: object with a `data` key. Anything else
+    // is auto-wrapped as the raw `data` payload.
+    let serde_json::Value::Object(mut obj) = raw else {
+        return Ok(ToolOutput::new(raw));
+    };
+    if !obj.contains_key("data") {
+        return Ok(ToolOutput::new(serde_json::Value::Object(obj)));
     }
 
-    Ok(ToolOutput::new(raw))
+    let data = obj.remove("data").unwrap_or(serde_json::Value::Null);
+
+    // Accept either camelCase `llmOverride` (canonical JS) or snake_case
+    // `llm_override` (legacy / Rust-style).
+    let raw_override = obj
+        .remove("llmOverride")
+        .or_else(|| obj.remove("llm_override"));
+
+    let llm_override = match raw_override {
+        None | Some(serde_json::Value::Null) => None,
+        Some(v) => {
+            let wasm_payload: WasmLlmPayload = serde_json::from_value(v).map_err(|e| {
+                blazen_llm::BlazenError::tool_error(format!("invalid llmOverride payload: {e}"))
+            })?;
+            let payload: blazen_llm::types::LlmPayload =
+                wasm_payload.try_into().map_err(|e: String| {
+                    blazen_llm::BlazenError::tool_error(format!(
+                        "invalid llmOverride payload: {e}"
+                    ))
+                })?;
+            Some(payload)
+        }
+    };
+
+    Ok(ToolOutput { data, llm_override })
 }
 
 impl JsTool {
@@ -258,16 +277,35 @@ impl JsTool {
         let js_args = serde_wasm_bindgen::to_value(&arguments)
             .map_err(|e| blazen_llm::BlazenError::tool_error(e.to_string()))?;
 
+        // JS-thrown Errors are preserved as `CallerError` with the original
+        // `JsValue` payload so JS callers can still `instanceof` / inspect
+        // properties after the rejection.
         let result = self
             .handler
             .call1(&JsValue::NULL, &js_args)
-            .map_err(|e| blazen_llm::BlazenError::tool_error(format!("{e:?}")))?;
+            .map_err(|e| {
+                blazen_llm::BlazenError::caller_error(
+                    format!(
+                        "tool handler `{}` threw on invocation",
+                        self.definition.name
+                    ),
+                    send_wrapper::SendWrapper::new(e),
+                )
+            })?;
 
         let result = if result.has_type::<js_sys::Promise>() {
             let promise: js_sys::Promise = result.unchecked_into();
             wasm_bindgen_futures::JsFuture::from(promise)
                 .await
-                .map_err(|e| blazen_llm::BlazenError::tool_error(format!("{e:?}")))?
+                .map_err(|e| {
+                    blazen_llm::BlazenError::caller_error(
+                        format!(
+                            "tool handler `{}` promise rejected",
+                            self.definition.name
+                        ),
+                        send_wrapper::SendWrapper::new(e),
+                    )
+                })?
         } else {
             result
         };
@@ -398,7 +436,7 @@ pub fn run_agent_with_callback(
             },
         ))
         .await
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        .map_err(blazen_error_to_jsvalue)?;
 
         let obj = js_sys::Object::new();
         js_sys::Reflect::set(
@@ -449,4 +487,288 @@ pub fn run_agent_with_callback(
 
         Ok(obj.into())
     })
+}
+
+// ---------------------------------------------------------------------------
+// WasmLlmPayload + content-part mirrors (JS-facing tool-output override)
+// ---------------------------------------------------------------------------
+//
+// These mirror the core [`blazen_llm::types::LlmPayload`] and
+// [`blazen_llm::types::ContentPart`] families with a JS-friendly,
+// discriminator-consistent shape: every variant uses a flat string tag
+// (`kind` on the outer payload, `partType` on each content part,
+// `sourceType` on each media source). The core types use serde tags
+// `kind` / `type` (mixed) which is fine for Rust↔Rust wire traffic but
+// confusing when round-tripping through JSON-shaped JS objects — and in
+// the past has caused subtle "kind=parts but inner block has no `type`
+// field" deserialization failures for honest JS callers.
+//
+// These types deserialize from the JS-side shape directly; conversion
+// into the core types happens explicitly via [`TryFrom`].
+
+/// JS-facing image source discriminator (TS-friendly `sourceType`).
+#[derive(Debug, Clone, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct WasmImageSource {
+    /// `"url"` or `"base64"`.
+    pub source_type: String,
+    /// Set for `sourceType: "url"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    /// Set for `sourceType: "base64"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data: Option<String>,
+}
+
+/// JS-facing media source (used by File/Audio/Video).
+#[derive(Debug, Clone, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct WasmMediaSource {
+    /// `"url"` or `"base64"`.
+    pub source_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data: Option<String>,
+}
+
+/// JS-facing mirror of [`blazen_llm::types::ImageContent`].
+#[derive(Debug, Clone, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct WasmImageContent {
+    pub source: WasmImageSource,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media_type: Option<String>,
+}
+
+/// JS-facing mirror of [`blazen_llm::types::FileContent`].
+#[derive(Debug, Clone, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct WasmFileContent {
+    pub source: WasmMediaSource,
+    pub media_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filename: Option<String>,
+}
+
+/// JS-facing mirror of [`blazen_llm::types::AudioContent`].
+#[derive(Debug, Clone, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct WasmAudioContent {
+    pub source: WasmMediaSource,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_seconds: Option<f32>,
+}
+
+/// JS-facing mirror of [`blazen_llm::types::VideoContent`].
+#[derive(Debug, Clone, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct WasmVideoContent {
+    pub source: WasmMediaSource,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_seconds: Option<f32>,
+}
+
+/// JS-facing flat `ContentPart` discriminator (`partType` field).
+///
+/// `partType` is one of `"text"`, `"image"`, `"file"`, `"audio"`,
+/// `"video"`. Set the matching field (`text`, `image`, `file`, `audio`,
+/// `video`) accordingly.
+#[derive(Debug, Clone, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct WasmContentPart {
+    pub part_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<WasmImageContent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<WasmFileContent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio: Option<WasmAudioContent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub video: Option<WasmVideoContent>,
+}
+
+/// JS-facing `LlmPayload` mirror (`kind` outer + `partType` inner).
+///
+/// Variants:
+/// - `{ kind: "text", text }`
+/// - `{ kind: "json", value }`
+/// - `{ kind: "parts", parts: WasmContentPart[] }`
+/// - `{ kind: "provider_raw", provider, value }`
+///
+/// The `kind` tag uses the same `snake_case` strings as the core enum
+/// (`text`, `json`, `parts`, `provider_raw`) — the camelCase
+/// `rename_all` on this struct applies to FIELD names only, not the tag
+/// value. The converter matches the kind string literally.
+#[derive(Debug, Clone, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct WasmLlmPayload {
+    /// `"text"`, `"json"`, `"parts"`, or `"provider_raw"`.
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parts: Option<Vec<WasmContentPart>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+}
+
+impl TryFrom<WasmLlmPayload> for blazen_llm::types::LlmPayload {
+    type Error = String;
+
+    fn try_from(p: WasmLlmPayload) -> Result<Self, String> {
+        use blazen_llm::types::{LlmPayload, ProviderId};
+        match p.kind.as_str() {
+            "text" => Ok(LlmPayload::Text {
+                text: p
+                    .text
+                    .ok_or_else(|| "kind=text requires `text`".to_string())?,
+            }),
+            "json" => Ok(LlmPayload::Json {
+                value: p
+                    .value
+                    .ok_or_else(|| "kind=json requires `value`".to_string())?,
+            }),
+            "parts" => {
+                let raw = p.parts.unwrap_or_default();
+                let mut parts = Vec::with_capacity(raw.len());
+                for part in raw {
+                    parts.push(wasm_content_part_to_rust(part)?);
+                }
+                Ok(LlmPayload::Parts { parts })
+            }
+            "provider_raw" => {
+                let provider_str = p
+                    .provider
+                    .ok_or_else(|| "kind=provider_raw requires `provider`".to_string())?;
+                let provider = match provider_str.as_str() {
+                    "openai" => ProviderId::OpenAi,
+                    "openai_compat" => ProviderId::OpenAiCompat,
+                    "azure" => ProviderId::Azure,
+                    "anthropic" => ProviderId::Anthropic,
+                    "gemini" => ProviderId::Gemini,
+                    "responses" => ProviderId::Responses,
+                    "fal" => ProviderId::Fal,
+                    other => return Err(format!("unknown provider: {other}")),
+                };
+                Ok(LlmPayload::ProviderRaw {
+                    provider,
+                    value: p
+                        .value
+                        .ok_or_else(|| "kind=provider_raw requires `value`".to_string())?,
+                })
+            }
+            other => Err(format!("unknown llmOverride kind: {other}")),
+        }
+    }
+}
+
+fn wasm_content_part_to_rust(
+    part: WasmContentPart,
+) -> Result<blazen_llm::types::ContentPart, String> {
+    use blazen_llm::types::{
+        AudioContent, ContentPart, FileContent, ImageContent, VideoContent,
+    };
+
+    match part.part_type.as_str() {
+        "text" => Ok(ContentPart::Text {
+            text: part
+                .text
+                .ok_or_else(|| "partType=text requires `text`".to_string())?,
+        }),
+        "image" => {
+            let img = part
+                .image
+                .ok_or_else(|| "partType=image requires `image`".to_string())?;
+            Ok(ContentPart::Image(ImageContent {
+                source: wasm_image_source_to_rust(img.source)?,
+                media_type: img.media_type,
+            }))
+        }
+        "file" => {
+            let f = part
+                .file
+                .ok_or_else(|| "partType=file requires `file`".to_string())?;
+            Ok(ContentPart::File(FileContent {
+                source: wasm_media_source_to_rust(f.source)?,
+                media_type: f.media_type,
+                filename: f.filename,
+            }))
+        }
+        "audio" => {
+            let a = part
+                .audio
+                .ok_or_else(|| "partType=audio requires `audio`".to_string())?;
+            Ok(ContentPart::Audio(AudioContent {
+                source: wasm_media_source_to_rust(a.source)?,
+                media_type: a.media_type,
+                duration_seconds: a.duration_seconds,
+            }))
+        }
+        "video" => {
+            let v = part
+                .video
+                .ok_or_else(|| "partType=video requires `video`".to_string())?;
+            Ok(ContentPart::Video(VideoContent {
+                source: wasm_media_source_to_rust(v.source)?,
+                media_type: v.media_type,
+                duration_seconds: v.duration_seconds,
+            }))
+        }
+        other => Err(format!("unknown partType: {other}")),
+    }
+}
+
+fn wasm_image_source_to_rust(
+    s: WasmImageSource,
+) -> Result<blazen_llm::types::ImageSource, String> {
+    use blazen_llm::types::ImageSource;
+    match s.source_type.as_str() {
+        "url" => Ok(ImageSource::Url {
+            url: s
+                .url
+                .ok_or_else(|| "sourceType=url requires `url`".to_string())?,
+        }),
+        "base64" => Ok(ImageSource::Base64 {
+            data: s
+                .data
+                .ok_or_else(|| "sourceType=base64 requires `data`".to_string())?,
+        }),
+        other => Err(format!("unknown image sourceType: {other}")),
+    }
+}
+
+fn wasm_media_source_to_rust(
+    s: WasmMediaSource,
+) -> Result<blazen_llm::types::MediaSource, String> {
+    use blazen_llm::types::MediaSource;
+    match s.source_type.as_str() {
+        "url" => Ok(MediaSource::Url {
+            url: s
+                .url
+                .ok_or_else(|| "sourceType=url requires `url`".to_string())?,
+        }),
+        "base64" => Ok(MediaSource::Base64 {
+            data: s
+                .data
+                .ok_or_else(|| "sourceType=base64 requires `data`".to_string())?,
+        }),
+        other => Err(format!("unknown media sourceType: {other}")),
+    }
 }

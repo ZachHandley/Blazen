@@ -57,6 +57,11 @@ tokio = { version = "1", default-features = false, features = ["sync"] }
 bytes = "1"
 chrono = { version = "0.4", default-features = false, features = ["serde", "wasmbind", "clock"] }
 uuid = { version = "1", default-features = false, features = ["v4", "serde"] }
+# Send/Sync wrapper for !Send types in single-threaded WASM. Required because
+# `BlazenError::CallerError` carries an opaque `Box<dyn Any + Send + Sync>`
+# and `JsValue` is `!Send` — wrapping in `SendWrapper` lets us pass the
+# original rejection value through the agent loop and re-throw it intact.
+send_wrapper = "0.6"
 
 [features]
 default = []

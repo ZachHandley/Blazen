@@ -260,6 +260,9 @@ module Blazen
     attach_function :blazen_error_request_id,       [:pointer], :pointer
     attach_function :blazen_error_detail,           [:pointer], :pointer
     attach_function :blazen_error_subkind,          [:pointer], :pointer
+    attach_function :blazen_error_name,             [:pointer], :pointer
+    attach_function :blazen_error_properties_json,  [:pointer], :pointer
+    attach_function :blazen_error_from_json,        [:pointer], :pointer
     attach_function :blazen_error_free,             [:pointer], :void
 
     # -------------------------------------------------------------------

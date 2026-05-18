@@ -14,6 +14,7 @@ use blazen_llm::agent::{AgentConfig, FINISH_WORKFLOW_TOOL_NAME};
 use blazen_llm::traits::Tool;
 use blazen_llm::types::ToolDefinition;
 
+use crate::agent_types::WasmLlmPayload;
 use crate::chat_message::js_messages_to_vec;
 use crate::completion_model::WasmCompletionModel;
 
@@ -79,9 +80,6 @@ fn js_to_tool_output(
 ) -> Result<blazen_llm::types::ToolOutput<serde_json::Value>, blazen_llm::BlazenError> {
     use blazen_llm::types::ToolOutput;
 
-    // First, normalize string results: try JSON-parse, falling back to a
-    // string-typed Value. This preserves the prior behavior so that handlers
-    // returning a JSON string of a structured ToolOutput still get unpacked.
     let raw: serde_json::Value = if let Some(s) = js_value.as_string() {
         serde_json::from_str(&s).unwrap_or(serde_json::Value::String(s))
     } else {
@@ -89,24 +87,35 @@ fn js_to_tool_output(
             .map_err(|e| blazen_llm::BlazenError::tool_error(e.to_string()))?
     };
 
-    // Heuristic: an object with a `data` key is treated as a structured
-    // ToolOutput. Anything else is wrapped as `ToolOutput::new(raw)`.
-    if let serde_json::Value::Object(map) = &raw
-        && map.contains_key("data")
-    {
-        let mut normalized = map.clone();
-        if !normalized.contains_key("llm_override")
-            && let Some(v) = normalized.remove("llmOverride")
-        {
-            normalized.insert("llm_override".into(), v);
-        }
-        let normalized_value = serde_json::Value::Object(normalized);
-        if let Ok(out) = serde_json::from_value::<ToolOutput<serde_json::Value>>(normalized_value) {
-            return Ok(out);
-        }
+    let serde_json::Value::Object(mut obj) = raw else {
+        return Ok(ToolOutput::new(raw));
+    };
+    if !obj.contains_key("data") {
+        return Ok(ToolOutput::new(serde_json::Value::Object(obj)));
     }
 
-    Ok(ToolOutput::new(raw))
+    let data = obj.remove("data").unwrap_or(serde_json::Value::Null);
+    let raw_override = obj
+        .remove("llmOverride")
+        .or_else(|| obj.remove("llm_override"));
+
+    let llm_override = match raw_override {
+        None | Some(serde_json::Value::Null) => None,
+        Some(v) => {
+            let wasm_payload: WasmLlmPayload = serde_json::from_value(v).map_err(|e| {
+                blazen_llm::BlazenError::tool_error(format!("invalid llmOverride payload: {e}"))
+            })?;
+            let payload: blazen_llm::types::LlmPayload =
+                wasm_payload.try_into().map_err(|e: String| {
+                    blazen_llm::BlazenError::tool_error(format!(
+                        "invalid llmOverride payload: {e}"
+                    ))
+                })?;
+            Some(payload)
+        }
+    };
+
+    Ok(ToolOutput { data, llm_override })
 }
 
 impl JsTool {
@@ -125,18 +134,37 @@ impl JsTool {
         let js_args = serde_wasm_bindgen::to_value(&arguments)
             .map_err(|e| blazen_llm::BlazenError::tool_error(e.to_string()))?;
 
-        // Call the JS handler.
+        // Call the JS handler. JS-thrown Errors are preserved as
+        // `CallerError` with the original `JsValue` payload so the JS caller
+        // can still `instanceof` / inspect properties after the rejection.
         let result = self
             .handler
             .call1(&JsValue::NULL, &js_args)
-            .map_err(|e| blazen_llm::BlazenError::tool_error(format!("{e:?}")))?;
+            .map_err(|e| {
+                blazen_llm::BlazenError::caller_error(
+                    format!(
+                        "tool handler `{}` threw on invocation",
+                        self.definition.name
+                    ),
+                    send_wrapper::SendWrapper::new(e),
+                )
+            })?;
 
-        // If the result is a Promise, await it.
+        // If the result is a Promise, await it. Rejections preserve the
+        // original `JsValue` the same way.
         let result = if result.has_type::<js_sys::Promise>() {
             let promise: js_sys::Promise = result.unchecked_into();
             wasm_bindgen_futures::JsFuture::from(promise)
                 .await
-                .map_err(|e| blazen_llm::BlazenError::tool_error(format!("{e:?}")))?
+                .map_err(|e| {
+                    blazen_llm::BlazenError::caller_error(
+                        format!(
+                            "tool handler `{}` promise rejected",
+                            self.definition.name
+                        ),
+                        send_wrapper::SendWrapper::new(e),
+                    )
+                })?
         } else {
             result
         };
@@ -162,6 +190,28 @@ impl Tool for JsTool {
         // SAFETY: WASM is single-threaded, Send is vacuously satisfied.
         SendFuture(self.execute_impl(arguments)).await
     }
+}
+
+// ---------------------------------------------------------------------------
+// Error conversion: BlazenError -> JsValue
+// ---------------------------------------------------------------------------
+
+/// Convert a `BlazenError` to a JS-side `JsValue` for `Err` returns from
+/// `#[wasm_bindgen] async fn` exports. On `BlazenError::CallerError`
+/// carrying a `SendWrapper<JsValue>`, returns the **original** JsValue
+/// (preserves prototype chain & `instanceof MyError`). On any other
+/// variant, falls back to `JsValue::from_str(&err.to_string())`.
+pub fn blazen_error_to_jsvalue(err: blazen_llm::BlazenError) -> JsValue {
+    if let blazen_llm::BlazenError::CallerError {
+        source: Some(s), ..
+    } = &err
+        && let Some(wrapped) = s.downcast_ref::<send_wrapper::SendWrapper<JsValue>>()
+    {
+        // SAFETY: WASM is single-threaded; SendWrapper deref is safe on the
+        // construction thread (which is the only thread we have).
+        return (**wrapped).clone();
+    }
+    JsValue::from_str(&err.to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -332,7 +382,7 @@ pub fn run_agent(
 
         let result = blazen_llm::run_agent(model_arc.as_ref(), msgs, config)
             .await
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            .map_err(blazen_error_to_jsvalue)?;
 
         // Build the result JS object.
         let obj = js_sys::Object::new();

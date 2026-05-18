@@ -5,9 +5,11 @@ use napi_derive::napi;
 
 use blazen_llm::content::{ContentHandle, ContentKind};
 use blazen_llm::types::{
-    AudioContent, ChatMessage, ContentPart, ImageContent, ImageSource, MediaSource, MessageContent,
-    ProviderId, Role, VideoContent,
+    AudioContent, ChatMessage, ContentPart, FileContent, ImageContent, ImageSource, MediaSource,
+    MessageContent, ProviderId, Role, VideoContent,
 };
+
+use crate::types::completion_request::JsFileContent;
 
 // ---------------------------------------------------------------------------
 // Role string enum
@@ -43,65 +45,93 @@ pub enum JsRole {
 ///   content registered with a `ContentStore`. The store resolves the
 ///   handle at request-build time.
 #[napi(object)]
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct JsImageSource {
     #[napi(js_name = "sourceType")]
     pub source_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data: Option<String>,
     /// Provider name for `sourceType: "providerFile"` (e.g. `"openai"`,
     /// `"anthropic"`, `"gemini"`, `"fal"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider: Option<String>,
     /// Provider-issued file id for `sourceType: "providerFile"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     /// Content handle id for `sourceType: "handle"`.
     #[napi(js_name = "handleId")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub handle_id: Option<String>,
     /// Content handle kind for `sourceType: "handle"` (e.g. `"image"`,
     /// `"audio"`, `"three_d_model"`). See `ContentKind` for the full set.
     #[napi(js_name = "handleKind")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub handle_kind: Option<String>,
 }
 
 /// Image content for multimodal messages.
 #[napi(object)]
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct JsImageContent {
     pub source: JsImageSource,
     #[napi(js_name = "mediaType")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub media_type: Option<String>,
 }
 
 /// Audio content for multimodal messages.
 #[napi(object)]
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct JsAudioContent {
     pub source: JsImageSource,
     #[napi(js_name = "mediaType")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub media_type: Option<String>,
     #[napi(js_name = "durationSeconds")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration_seconds: Option<f64>,
 }
 
 /// Video content for multimodal messages.
 #[napi(object)]
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct JsVideoContent {
     pub source: JsImageSource,
     #[napi(js_name = "mediaType")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub media_type: Option<String>,
     #[napi(js_name = "durationSeconds")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration_seconds: Option<f64>,
 }
 
 /// A single part in a multi-part message.
 ///
-/// `partType` is one of `"text"`, `"image"`, `"audio"`, `"video"`. Set the
-/// matching field (`text`, `image`, `audio`, `video`) accordingly.
+/// `partType` is one of `"text"`, `"image"`, `"audio"`, `"video"`, `"file"`.
+/// Set the matching field (`text`, `image`, `audio`, `video`, `file`)
+/// accordingly.
 #[napi(object)]
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct JsContentPart {
     #[napi(js_name = "partType")]
     pub part_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<JsImageContent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audio: Option<JsAudioContent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub video: Option<JsVideoContent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<JsFileContent>,
 }
 
 // ---------------------------------------------------------------------------
@@ -560,9 +590,23 @@ pub(crate) fn convert_js_parts(parts: Vec<JsContentPart>) -> Result<Vec<ContentP
                     duration_seconds: duration,
                 }))
             }
+            "file" => {
+                let file = part.file.ok_or_else(|| {
+                    napi::Error::new(
+                        napi::Status::InvalidArg,
+                        "Content part with partType \"file\" must include a `file` field",
+                    )
+                })?;
+                let source = js_source_to_rust(&file.source, "file")?;
+                Ok(ContentPart::File(FileContent {
+                    source,
+                    media_type: file.media_type,
+                    filename: file.filename,
+                }))
+            }
             other => Err(napi::Error::new(
                 napi::Status::InvalidArg,
-                format!("Invalid content part type: \"{other}\". Must be \"text\", \"image\", \"audio\", or \"video\""),
+                format!("Invalid content part type: \"{other}\". Must be \"text\", \"image\", \"audio\", \"video\", or \"file\""),
             )),
         })
         .collect()

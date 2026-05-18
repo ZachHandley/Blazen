@@ -6120,14 +6120,17 @@ class LlmPayload:
     - ``LlmPayload.text("hello")`` — plain text, works on every provider.
     - ``LlmPayload.json({"k": "v"})`` — structured JSON; Anthropic and
       Gemini consume natively, OpenAI/Responses stringify on the wire.
+    - ``LlmPayload.parts([ContentPart.text(...), ContentPart.image_url(...)])``
+      — multimodal payload built from `ContentPart` instances.
     - ``LlmPayload.provider_raw(provider="anthropic", value={...})`` —
       provider-specific escape hatch. The named provider receives ``value``
       verbatim; every other provider falls back to the default conversion
       from ``ToolOutput.data``.
     
-    Inspect the variant via ``payload.kind`` (``"text"``, ``"json"``, or
-    ``"provider_raw"``). The ``text``, ``value``, and ``provider`` getters
-    return ``None`` for variants that don't carry the corresponding field.
+    Inspect the variant via ``payload.kind`` (``"text"``, ``"json"``,
+    ``"parts"``, or ``"provider_raw"``). The ``text_value``, ``value``,
+    ``parts_value``, and ``provider`` getters return ``None`` for variants
+    that don't carry the corresponding field.
     """
     @property
     def kind(self) -> builtins.str:
@@ -6146,6 +6149,11 @@ class LlmPayload:
         `None` for `Text` and `Parts`.
         """
     @property
+    def parts_value(self) -> typing.Optional[builtins.list[ContentPart]]:
+        r"""
+        The content parts for `Parts` payloads. `None` for other variants.
+        """
+    @property
     def provider(self) -> typing.Optional[builtins.str]:
         r"""
         The provider name for `ProviderRaw` payloads. `None` otherwise.
@@ -6159,6 +6167,17 @@ class LlmPayload:
     def json(value: typing.Any) -> LlmPayload:
         r"""
         Create a structured-JSON payload from any JSON-serializable Python value.
+        """
+    @staticmethod
+    def parts(parts: typing.Sequence[ContentPart]) -> LlmPayload:
+        r"""
+        Create a multi-part payload (text + image + file + audio + video).
+        
+        Each provider applies its own multimodal strategy; see the underlying
+        `blazen_llm::types::LlmPayload::Parts` docs.
+        
+        :param parts: A list of [`ContentPart`] instances built via
+            ``ContentPart.text(...)``, ``ContentPart.image_url(...)``, etc.
         """
     @staticmethod
     def provider_raw(*, provider: builtins.str, value: typing.Any) -> LlmPayload:

@@ -32,9 +32,44 @@ use blazen_llm::types::{
     ToolOutput as CoreToolOutput,
 };
 
-use crate::errors::{BlazenError, BlazenResult};
+use crate::errors::{
+    BlazenError, BlazenError as UniffiBlazenError, BlazenResult, UniffiCallerErrorPayload,
+};
 use crate::llm::{CompletionModel, TokenUsage, Tool};
 use crate::runtime::runtime;
+
+// ---------------------------------------------------------------------------
+// Foreign-error -> core-error bridge
+// ---------------------------------------------------------------------------
+
+/// Convert a foreign-side UniFFI [`crate::errors::BlazenError`] back to a
+/// `CoreBlazenError` for the core agent loop. On [`UniffiBlazenError::CallerError`],
+/// boxes the structured `(name, message, properties_json)` as a
+/// [`UniffiCallerErrorPayload`] inside [`CoreBlazenError::CallerError.source`]
+/// so the on-the-way-out converter in `errors.rs` can downcast and
+/// reconstruct the typed `CallerError` variant for foreign consumers.
+/// Other variants flatten to their `Display` string (the existing
+/// behavior).
+fn uniffi_error_to_core(err: UniffiBlazenError) -> CoreBlazenError {
+    if let UniffiBlazenError::CallerError {
+        name,
+        message,
+        properties_json,
+    } = err
+    {
+        let payload = UniffiCallerErrorPayload {
+            name: name.clone(),
+            message: message.clone(),
+            properties_json,
+        };
+        let mut e = CoreBlazenError::caller_error(message, payload);
+        if let Some(n) = name {
+            e = e.with_caller_name(n);
+        }
+        return e;
+    }
+    CoreBlazenError::tool_error(err.to_string())
+}
 
 // ---------------------------------------------------------------------------
 // Foreign-implementable tool dispatcher
@@ -59,6 +94,31 @@ pub trait ToolHandler: Send + Sync {
     /// The returned string is JSON-encoded and round-trips back into the LLM
     /// as the tool result on the next turn. Return `"null"` (the JSON literal)
     /// when the tool produced no useful result.
+    ///
+    /// ## Structured `ToolOutput`
+    ///
+    /// Returning a JSON object with a `data` key opts into the structured
+    /// [`blazen_llm::types::ToolOutput`] shape:
+    ///
+    /// ```text
+    /// {
+    ///   "data": { /* user-visible payload */ },
+    ///   "llm_override": {
+    ///     "kind": "parts",
+    ///     "parts": [{ "type": "text", "text": "summary for the model" }]
+    ///   }
+    /// }
+    /// ```
+    ///
+    /// `llmOverride` (camelCase) is also accepted. The inner `parts[]`
+    /// discriminator uses `"type"` (matching the core `ContentPart` serde
+    /// tag); the outer discriminator uses `"kind"`. Foreign-language helper
+    /// types (`Blazen::ToolOutput` in Ruby, `blazen.ToolOutput` in Go,
+    /// `Blazen.ToolOutput` in Swift, `dev.blazen.ToolOutput` in Kotlin)
+    /// produce this shape automatically.
+    ///
+    /// Returning anything else (a primitive, a JSON object without a `data`
+    /// key, etc.) auto-wraps the whole value as `data` with no override.
     async fn execute(&self, tool_name: String, arguments_json: String) -> BlazenResult<String>;
 }
 
@@ -115,7 +175,7 @@ impl CoreTool for ToolHandlerAdapter {
             .handler
             .execute(tool_name, arguments_json)
             .await
-            .map_err(|e| CoreBlazenError::tool_error(e.to_string()))?;
+            .map_err(uniffi_error_to_core)?;
         let value = if raw.is_empty() {
             serde_json::Value::Null
         } else {
@@ -123,6 +183,26 @@ impl CoreTool for ToolHandlerAdapter {
                 CoreBlazenError::tool_error(format!("invalid JSON returned by tool handler: {e}"))
             })?
         };
+        // If the JSON object has a `data` key, treat it as a structured
+        // `ToolOutput` (foreign-language helpers like `Blazen::ToolOutput` /
+        // `blazen.ToolOutput` produce this shape). Accept either `llm_override`
+        // or `llmOverride` for the override field name. Otherwise auto-wrap
+        // the whole value as `data` with no override.
+        if let serde_json::Value::Object(map) = &value
+            && map.contains_key("data")
+        {
+            let mut obj = map.clone();
+            if !obj.contains_key("llm_override")
+                && let Some(v) = obj.remove("llmOverride")
+            {
+                obj.insert("llm_override".into(), v);
+            }
+            let normalized = serde_json::Value::Object(obj);
+            return serde_json::from_value::<CoreToolOutput<serde_json::Value>>(normalized)
+                .map_err(|e| {
+                    CoreBlazenError::tool_error(format!("invalid structured ToolOutput: {e}"))
+                });
+        }
         Ok(CoreToolOutput::new(value))
     }
 }

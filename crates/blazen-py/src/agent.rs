@@ -41,6 +41,21 @@ fn py_result_to_tool_output(
     Ok(blazen_llm::types::ToolOutput::new(value))
 }
 
+/// Convert a [`PyErr`] into a [`BlazenError::CallerError`] that carries the
+/// original Python exception **instance** as a `Py<PyAny>`. The
+/// blazen-py error converter downcasts this on the way out and uses
+/// [`PyErr::from_value`] to re-raise the same instance — preserving the
+/// exception's class, args, and custom attributes for `except MyError`
+/// pattern-matching on the Python side.
+fn pyerr_to_caller_error(err: &PyErr, context: &str) -> BlazenError {
+    let (exc, message): (Py<PyAny>, String) = Python::attach(|py| {
+        let value = err.value(py);
+        let msg = value.to_string();
+        (value.clone().into_any().unbind(), msg)
+    });
+    BlazenError::caller_error(format!("{context}: {message}"), exc)
+}
+
 // ---------------------------------------------------------------------------
 // PyToolWrapper -- bridges a Python callable into the Rust Tool trait
 // ---------------------------------------------------------------------------
@@ -91,21 +106,25 @@ impl Tool for PyToolWrapper {
                     callable.call1(py, (args_py,))
                 })
             })
-            .map_err(|e: PyErr| BlazenError::tool_error(e.to_string()))?;
+            .map_err(|e: PyErr| pyerr_to_caller_error(&e, "async tool handler invocation"))?;
 
             let future = Python::attach(|py| {
                 pyo3_async_runtimes::into_future_with_locals(&locals, coroutine.into_bound(py))
             })
-            .map_err(|e: PyErr| BlazenError::tool_error(e.to_string()))?;
+            .map_err(|e: PyErr| {
+                pyerr_to_caller_error(&e, "async tool handler future construction")
+            })?;
 
             let py_result = pyo3_async_runtimes::tokio::scope(locals, future)
                 .await
-                .map_err(|e: PyErr| BlazenError::tool_error(e.to_string()))?;
+                .map_err(|e: PyErr| pyerr_to_caller_error(&e, "async tool handler"))?;
 
             let output = tokio::task::block_in_place(|| {
                 Python::attach(|py| py_result_to_tool_output(py, py_result.bind(py)))
             })
-            .map_err(|e: PyErr| BlazenError::tool_error(e.to_string()))?;
+            .map_err(|e: PyErr| {
+                pyerr_to_caller_error(&e, "async tool handler result conversion")
+            })?;
 
             Ok(output)
         } else {
@@ -117,7 +136,7 @@ impl Tool for PyToolWrapper {
                     py_result_to_tool_output(py, result.bind(py))
                 })
             })
-            .map_err(|e: PyErr| BlazenError::tool_error(e.to_string()))?;
+            .map_err(|e: PyErr| pyerr_to_caller_error(&e, "tool handler"))?;
 
             Ok(output)
         }
@@ -662,7 +681,7 @@ pub fn run_agent_with_callback<'py>(
             on_event,
         )
         .await
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        .map_err(crate::error::blazen_error_to_pyerr)?;
         Ok(PyAgentResult { inner: result })
     })
 }
@@ -750,7 +769,7 @@ pub fn run_agent<'py>(
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
         let result = rust_run_agent(inner_model.as_ref(), rust_messages, config)
             .await
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            .map_err(crate::error::blazen_error_to_pyerr)?;
         Ok(PyAgentResult { inner: result })
     })
 }

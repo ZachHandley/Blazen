@@ -7296,6 +7296,31 @@ public protocol ToolHandler: AnyObject, Sendable {
      * The returned string is JSON-encoded and round-trips back into the LLM
      * as the tool result on the next turn. Return `"null"` (the JSON literal)
      * when the tool produced no useful result.
+     *
+     * ## Structured `ToolOutput`
+     *
+     * Returning a JSON object with a `data` key opts into the structured
+     * [`blazen_llm::types::ToolOutput`] shape:
+     *
+     * ```text
+     * {
+     * "data": { /* user-visible payload */ },
+     * "llm_override": {
+     * "kind": "parts",
+     * "parts": [{ "type": "text", "text": "summary for the model" }]
+     * }
+     * }
+     * ```
+     *
+     * `llmOverride` (camelCase) is also accepted. The inner `parts[]`
+     * discriminator uses `"type"` (matching the core `ContentPart` serde
+     * tag); the outer discriminator uses `"kind"`. Foreign-language helper
+     * types (`Blazen::ToolOutput` in Ruby, `blazen.ToolOutput` in Go,
+     * `Blazen.ToolOutput` in Swift, `dev.blazen.ToolOutput` in Kotlin)
+     * produce this shape automatically.
+     *
+     * Returning anything else (a primitive, a JSON object without a `data`
+     * key, etc.) auto-wraps the whole value as `data` with no override.
      */
     func execute(toolName: String, argumentsJson: String) async throws  -> String
     
@@ -7372,6 +7397,31 @@ open class ToolHandlerImpl: ToolHandler, @unchecked Sendable {
      * The returned string is JSON-encoded and round-trips back into the LLM
      * as the tool result on the next turn. Return `"null"` (the JSON literal)
      * when the tool produced no useful result.
+     *
+     * ## Structured `ToolOutput`
+     *
+     * Returning a JSON object with a `data` key opts into the structured
+     * [`blazen_llm::types::ToolOutput`] shape:
+     *
+     * ```text
+     * {
+     * "data": { /* user-visible payload */ },
+     * "llm_override": {
+     * "kind": "parts",
+     * "parts": [{ "type": "text", "text": "summary for the model" }]
+     * }
+     * }
+     * ```
+     *
+     * `llmOverride` (camelCase) is also accepted. The inner `parts[]`
+     * discriminator uses `"type"` (matching the core `ContentPart` serde
+     * tag); the outer discriminator uses `"kind"`. Foreign-language helper
+     * types (`Blazen::ToolOutput` in Ruby, `blazen.ToolOutput` in Go,
+     * `Blazen.ToolOutput` in Swift, `dev.blazen.ToolOutput` in Kotlin)
+     * produce this shape automatically.
+     *
+     * Returning anything else (a primitive, a JSON object without a `data`
+     * key, etc.) auto-wraps the whole value as `data` with no override.
      */
 open func execute(toolName: String, argumentsJson: String)async throws  -> String  {
     return
@@ -12901,6 +12951,21 @@ public enum BlazenError: Swift.Error, Equatable, Hashable, Foundation.LocalizedE
     case Tool(message: String
     )
     /**
+     * Caller-side error raised by a foreign-language tool handler.
+     *
+     * Carries structural error data — `name` (foreign-language exception
+     * class name, e.g. `"SubmitSignal"`), `message`, and `properties_json`
+     * (JSON-encoded custom attributes). Foreign consumers pattern-match on
+     * `name` and decode `properties_json` to recover custom payload data.
+     *
+     * Full exception class identity is not preserved across the UniFFI
+     * boundary (the Node/Python/WASM bindings get full `instanceof`
+     * preservation because they have native object references; UniFFI does
+     * not). This variant is the structural equivalent.
+     */
+    case CallerError(name: String?, message: String, propertiesJson: String
+    )
+    /**
      * Distributed peer-to-peer error and (folded in) distributed
      * control-plane error. For peer-mesh failures `kind` is one of
      * `"Encode"`, `"Transport"`, `"EnvelopeVersion"`, `"Workflow"`,
@@ -13019,27 +13084,32 @@ public struct FfiConverterTypeBlazenError: FfiConverterRustBuffer {
         case 11: return .Tool(
             message: try FfiConverterString.read(from: &buf)
             )
-        case 12: return .Peer(
+        case 12: return .CallerError(
+            name: try FfiConverterOptionString.read(from: &buf), 
+            message: try FfiConverterString.read(from: &buf), 
+            propertiesJson: try FfiConverterString.read(from: &buf)
+            )
+        case 13: return .Peer(
             kind: try FfiConverterString.read(from: &buf), 
             message: try FfiConverterString.read(from: &buf)
             )
-        case 13: return .Persist(
+        case 14: return .Persist(
             message: try FfiConverterString.read(from: &buf)
             )
-        case 14: return .Prompt(
+        case 15: return .Prompt(
             kind: try FfiConverterString.read(from: &buf), 
             message: try FfiConverterString.read(from: &buf)
             )
-        case 15: return .Memory(
+        case 16: return .Memory(
             kind: try FfiConverterString.read(from: &buf), 
             message: try FfiConverterString.read(from: &buf)
             )
-        case 16: return .Cache(
+        case 17: return .Cache(
             kind: try FfiConverterString.read(from: &buf), 
             message: try FfiConverterString.read(from: &buf)
             )
-        case 17: return .Cancelled
-        case 18: return .Internal(
+        case 18: return .Cancelled
+        case 19: return .Internal(
             message: try FfiConverterString.read(from: &buf)
             )
 
@@ -13118,41 +13188,48 @@ public struct FfiConverterTypeBlazenError: FfiConverterRustBuffer {
             FfiConverterString.write(message, into: &buf)
             
         
-        case let .Peer(kind,message):
+        case let .CallerError(name,message,propertiesJson):
             writeInt(&buf, Int32(12))
+            FfiConverterOptionString.write(name, into: &buf)
+            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(propertiesJson, into: &buf)
+            
+        
+        case let .Peer(kind,message):
+            writeInt(&buf, Int32(13))
             FfiConverterString.write(kind, into: &buf)
             FfiConverterString.write(message, into: &buf)
             
         
         case let .Persist(message):
-            writeInt(&buf, Int32(13))
+            writeInt(&buf, Int32(14))
             FfiConverterString.write(message, into: &buf)
             
         
         case let .Prompt(kind,message):
-            writeInt(&buf, Int32(14))
-            FfiConverterString.write(kind, into: &buf)
-            FfiConverterString.write(message, into: &buf)
-            
-        
-        case let .Memory(kind,message):
             writeInt(&buf, Int32(15))
             FfiConverterString.write(kind, into: &buf)
             FfiConverterString.write(message, into: &buf)
             
         
-        case let .Cache(kind,message):
+        case let .Memory(kind,message):
             writeInt(&buf, Int32(16))
             FfiConverterString.write(kind, into: &buf)
             FfiConverterString.write(message, into: &buf)
             
         
-        case .Cancelled:
+        case let .Cache(kind,message):
             writeInt(&buf, Int32(17))
+            FfiConverterString.write(kind, into: &buf)
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case .Cancelled:
+            writeInt(&buf, Int32(18))
         
         
         case let .Internal(message):
-            writeInt(&buf, Int32(18))
+            writeInt(&buf, Int32(19))
             FfiConverterString.write(message, into: &buf)
             
         }
@@ -15538,7 +15615,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_agent_run_blocking() != 6800) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_toolhandler_execute() != 52993) {
+    if (uniffi_blazen_uniffi_checksum_method_toolhandler_execute() != 37809) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_imagegenmodel_generate() != 52613) {

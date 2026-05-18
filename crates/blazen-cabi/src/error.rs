@@ -65,6 +65,12 @@ pub const BLAZEN_ERROR_KIND_CACHE: u32 = 16;
 pub const BLAZEN_ERROR_KIND_CANCELLED: u32 = 17;
 /// Variant tag for the `Internal` (catch-all) error category.
 pub const BLAZEN_ERROR_KIND_INTERNAL: u32 = 18;
+/// Variant tag for the `CallerError` category — a foreign-language exception
+/// raised inside a host-side handler callback (e.g. Ruby `ToolHandler`) and
+/// reflected back across the FFI boundary. Carries the original exception
+/// class name plus a JSON blob of its custom attributes; consume them via
+/// [`blazen_error_name`] and [`blazen_error_properties_json`].
+pub const BLAZEN_ERROR_KIND_CALLER: u32 = 19;
 
 /// Opaque error handle owned by the caller. Produced by any fallible cabi
 /// function via an out-parameter `*mut *mut BlazenError`. Released with
@@ -148,6 +154,7 @@ pub unsafe extern "C" fn blazen_error_kind(err: *const BlazenError) -> u32 {
         InnerError::Cache { .. } => BLAZEN_ERROR_KIND_CACHE,
         InnerError::Cancelled => BLAZEN_ERROR_KIND_CANCELLED,
         InnerError::Internal { .. } => BLAZEN_ERROR_KIND_INTERNAL,
+        InnerError::CallerError { .. } => BLAZEN_ERROR_KIND_CALLER,
     }
 }
 
@@ -187,7 +194,8 @@ pub unsafe extern "C" fn blazen_error_message(err: *const BlazenError) -> *mut c
         | InnerError::Prompt { message, .. }
         | InnerError::Memory { message, .. }
         | InnerError::Cache { message, .. }
-        | InnerError::Internal { message } => message.as_str(),
+        | InnerError::Internal { message }
+        | InnerError::CallerError { message, .. } => message.as_str(),
         InnerError::Cancelled => "cancelled",
     };
     alloc_cstring(msg)
@@ -305,6 +313,59 @@ pub unsafe extern "C" fn blazen_error_endpoint(err: *const BlazenError) -> *mut 
             endpoint: Some(endpoint),
             ..
         } => alloc_cstring(endpoint),
+        _ => std::ptr::null_mut(),
+    }
+}
+
+/// Returns the foreign-language exception class name carried by the
+/// `CallerError` variant as a heap-allocated NUL-terminated UTF-8 C string.
+/// Returns null if `err` is null, the variant doesn't carry a name (e.g.
+/// `name = None`), or the variant isn't `CallerError`. Caller frees with
+/// `blazen_string_free`.
+///
+/// # Safety
+///
+/// `err` must be null OR a valid pointer to a `BlazenError` produced by the
+/// cabi surface.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_error_name(err: *const BlazenError) -> *mut c_char {
+    if err.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `err` is a live `BlazenError` pointer.
+    let err = unsafe { &*err };
+    match &err.inner {
+        InnerError::CallerError { name: Some(n), .. } => alloc_cstring(n),
+        _ => std::ptr::null_mut(),
+    }
+}
+
+/// Returns the foreign-language structured-properties JSON blob carried by
+/// the `CallerError` variant. The caller-side foreign exception's custom
+/// attributes were serialised into this JSON string by the Ruby/Go/Swift/Kotlin
+/// tool-handler wrapper before raising; consumers decode it to recover the
+/// custom payload (`{"payload": {...}, "...": ...}`). Returns null if `err`
+/// is null or the variant isn't `CallerError`. Caller frees with
+/// `blazen_string_free`.
+///
+/// For variants other than `CallerError`, returns null. For a `CallerError`
+/// with no custom attributes, returns `"{}"` (an empty JSON object).
+///
+/// # Safety
+///
+/// `err` must be null OR a valid pointer to a `BlazenError` produced by the
+/// cabi surface.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_error_properties_json(err: *const BlazenError) -> *mut c_char {
+    if err.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `err` is a live `BlazenError` pointer.
+    let err = unsafe { &*err };
+    match &err.inner {
+        InnerError::CallerError {
+            properties_json, ..
+        } => alloc_cstring(properties_json),
         _ => std::ptr::null_mut(),
     }
 }
@@ -464,6 +525,7 @@ pub unsafe extern "C" fn blazen_error_from_json(json: *const c_char) -> *mut Bla
 /// `kind`, missing required field on a structured variant) collapses to
 /// `InnerError::Internal { message }` where `message` is a best-effort
 /// description.
+#[allow(clippy::too_many_lines)] // one arm per BlazenError variant
 fn parse_error_json(s: &str) -> InnerError {
     let value: serde_json::Value = match serde_json::from_str(s) {
         Ok(v) => v,
@@ -553,6 +615,11 @@ fn parse_error_json(s: &str) -> InnerError {
         },
         Some("Cancelled") => InnerError::Cancelled,
         Some("Internal") => InnerError::Internal { message },
+        Some("CallerError") => InnerError::CallerError {
+            name: get_str("name"),
+            message,
+            properties_json: get_str("properties_json").unwrap_or_else(|| "{}".to_string()),
+        },
         Some(other) => InnerError::Internal {
             message: format!(
                 "blazen_error_from_json: unknown error kind {other:?}; original message: {message}"

@@ -194,6 +194,28 @@ fn uniffi_err_to_llm(err: UniffiError) -> LlmError {
         | UniffiError::Memory { message, .. }
         | UniffiError::Cache { message, .. } => LlmError::request(message),
         UniffiError::Cancelled => LlmError::request("cancelled"),
+        UniffiError::CallerError {
+            name,
+            message,
+            properties_json,
+        } => {
+            // Caller-side foreign error from a custom provider's tool
+            // handler. Round-trips the structural fields through
+            // `UniffiCallerErrorPayload` so the core CallerError's opaque
+            // source carries the same shape the agent loop's
+            // `ToolHandlerAdapter` uses; the UniFFI/cabi error converters
+            // downcast this back on the way out.
+            let payload = blazen_uniffi::errors::UniffiCallerErrorPayload {
+                name: name.clone(),
+                message: message.clone(),
+                properties_json,
+            };
+            let mut e = LlmError::caller_error(message, payload);
+            if let Some(n) = name {
+                e = e.with_caller_name(n);
+            }
+            e
+        }
     }
 }
 

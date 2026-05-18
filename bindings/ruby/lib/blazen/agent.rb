@@ -91,15 +91,19 @@ module Blazen
     # (the handler is responsible for them being well-formed JSON for the
     # model), every other value goes through +JSON.dump+.
     #
-    # On any Ruby exception we log to +$stderr+ and return +-1+; the Rust
-    # trampoline maps that to an +InternalError("returned -1 without setting
-    # out_err")+. (We intentionally don't fabricate a +BlazenError+ from the
-    # Ruby side — keeping the failure path simple matches the StepHandler
-    # / StreamSink trampolines.)
+    # On any Ruby exception we construct a +BlazenError::CallerError+ via the
+    # C ABI's +blazen_error_from_json+, write the handle to +out_err+, and
+    # return +-1+. The error carries the original exception's +class.name+,
+    # +message+, and any custom instance variables serialised as
+    # +properties_json+ — so foreign callers see +error.name == "MyError"+
+    # and can JSON-decode +error.properties_json+ to recover the payload.
+    # Full instanceof preservation isn't possible through the C ABI (FFI
+    # mechanism is genuinely missing); structural preservation is the
+    # documented binding-parity exception for UniFFI/cabi bindings.
     EXECUTE_FN = ::FFI::Function.new(
       :int32,
       %i[pointer pointer pointer pointer pointer],
-      proc do |user_data_ptr, tool_name_ptr, arguments_json_ptr, out_result_json, _out_err|
+      proc do |user_data_ptr, tool_name_ptr, arguments_json_ptr, out_result_json, out_err|
         id = user_data_ptr.address
         handler = lookup_tool_handler(id)
 
@@ -129,13 +133,48 @@ module Blazen
           out_result_json.write_pointer(ptr)
           0
         rescue StandardError => e
-          warn "[blazen] tool handler raised: #{e.class}: #{e.message}"
-          warn e.backtrace.join("\n") if e.backtrace
+          write_caller_error(out_err, e)
           -1
         end
       end,
       blocking: true,
     )
+
+    # Builds a +BlazenError::CallerError+ via the C ABI and writes the
+    # resulting handle into the +out_err+ slot supplied by the Rust
+    # trampoline. Captures +e.class.name+ as +name+, +e.message+ as
+    # +message+, and JSON-marshals any custom instance variables defined
+    # on +e+ (i.e. those not present on +StandardError+) into
+    # +properties_json+. Non-JSON-serialisable values fall back to their
+    # +inspect+ string.
+    def self.write_caller_error(out_err, exc)
+      return if out_err.nil? || out_err.null?
+
+      props = {}
+      base_ivars = StandardError.new.instance_variables
+      (exc.instance_variables - base_ivars).each do |ivar|
+        key = ivar.to_s.delete_prefix("@")
+        value = exc.instance_variable_get(ivar)
+        props[key] =
+          begin
+            JSON.parse(JSON.dump(value))
+          rescue StandardError
+            value.inspect
+          end
+      end
+
+      payload = {
+        "kind" => "CallerError",
+        "name" => exc.class.name,
+        "message" => exc.message,
+        "properties_json" => JSON.dump(props),
+      }
+      json_str = JSON.dump(payload)
+      err_ptr = Blazen::FFI.blazen_error_from_json(::FFI::MemoryPointer.from_string(json_str))
+      out_err.write_pointer(err_ptr) unless err_ptr.null?
+    rescue StandardError => sub_err
+      warn "[blazen] failed to construct CallerError handle: #{sub_err.class}: #{sub_err.message}"
+    end
 
     # +drop_user_data+ thunk for the +BlazenToolHandlerVTable+. Releases the
     # registry slot when the inner +CToolHandler+ drops on the Rust side

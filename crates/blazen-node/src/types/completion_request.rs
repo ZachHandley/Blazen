@@ -24,6 +24,8 @@ use crate::generated::{JsRequestTiming, JsTokenUsage, JsToolDefinition};
 /// File / document content (PDF, generic file, etc.) for multimodal
 /// messages. Mirrors [`blazen_llm::types::FileContent`].
 #[napi(object, js_name = "FileContent")]
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct JsFileContent {
     /// The source of the file data.
     pub source: JsImageSource,
@@ -31,6 +33,7 @@ pub struct JsFileContent {
     #[napi(js_name = "mediaType")]
     pub media_type: String,
     /// An optional filename for display purposes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filename: Option<String>,
 }
 

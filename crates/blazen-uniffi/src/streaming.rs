@@ -313,6 +313,15 @@ fn clone_error(err: &BlazenError) -> BlazenError {
         BlazenError::Tool { message } => BlazenError::Tool {
             message: message.clone(),
         },
+        BlazenError::CallerError {
+            name,
+            message,
+            properties_json,
+        } => BlazenError::CallerError {
+            name: name.clone(),
+            message: message.clone(),
+            properties_json: properties_json.clone(),
+        },
         BlazenError::Peer { kind, message } => BlazenError::Peer {
             kind: kind.clone(),
             message: message.clone(),

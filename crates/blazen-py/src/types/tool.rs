@@ -4,7 +4,7 @@
 //! - [`PyToolOutput`] — the two-channel return value from a tool
 //!   (`data` for callers, optional `llm_override` for what the LLM sees).
 //! - [`PyLlmPayload`] — the override payload, constructed via classmethod
-//!   factories (`text`, `json`, `provider_raw`).
+//!   factories (`text`, `json`, `parts`, `provider_raw`).
 //! - [`PyToolCall`] — a typed wrapper for a tool invocation requested by
 //!   the model (id / name / arguments).
 //! - [`PyToolDefinition`] — canonical typed wrapper for a tool definition
@@ -27,14 +27,17 @@ use blazen_llm::types::{LlmPayload, ProviderId, ToolCall, ToolDefinition, ToolOu
 /// - ``LlmPayload.text("hello")`` — plain text, works on every provider.
 /// - ``LlmPayload.json({"k": "v"})`` — structured JSON; Anthropic and
 ///   Gemini consume natively, OpenAI/Responses stringify on the wire.
+/// - ``LlmPayload.parts([ContentPart.text(...), ContentPart.image_url(...)])``
+///   — multimodal payload built from `ContentPart` instances.
 /// - ``LlmPayload.provider_raw(provider="anthropic", value={...})`` —
 ///   provider-specific escape hatch. The named provider receives ``value``
 ///   verbatim; every other provider falls back to the default conversion
 ///   from ``ToolOutput.data``.
 ///
-/// Inspect the variant via ``payload.kind`` (``"text"``, ``"json"``, or
-/// ``"provider_raw"``). The ``text``, ``value``, and ``provider`` getters
-/// return ``None`` for variants that don't carry the corresponding field.
+/// Inspect the variant via ``payload.kind`` (``"text"``, ``"json"``,
+/// ``"parts"``, or ``"provider_raw"``). The ``text_value``, ``value``,
+/// ``parts_value``, and ``provider`` getters return ``None`` for variants
+/// that don't carry the corresponding field.
 #[gen_stub_pyclass]
 #[pyclass(name = "LlmPayload", from_py_object)]
 #[derive(Clone)]
@@ -60,6 +63,22 @@ impl PyLlmPayload {
         Ok(Self {
             inner: LlmPayload::Json { value },
         })
+    }
+
+    /// Create a multi-part payload (text + image + file + audio + video).
+    ///
+    /// Each provider applies its own multimodal strategy; see the underlying
+    /// `blazen_llm::types::LlmPayload::Parts` docs.
+    ///
+    /// :param parts: A list of [`ContentPart`] instances built via
+    ///     ``ContentPart.text(...)``, ``ContentPart.image_url(...)``, etc.
+    #[staticmethod]
+    fn parts(parts: Vec<PyRef<'_, crate::types::message::PyContentPart>>) -> Self {
+        let inner_parts: Vec<blazen_llm::types::ContentPart> =
+            parts.iter().map(|p| p.inner.clone()).collect();
+        Self {
+            inner: LlmPayload::Parts { parts: inner_parts },
+        }
     }
 
     /// Create a provider-specific payload.
@@ -125,6 +144,21 @@ impl PyLlmPayload {
                 Ok(Some(crate::convert::json_to_py(py, value)?))
             }
             _ => Ok(None),
+        }
+    }
+
+    /// The content parts for `Parts` payloads. `None` for other variants.
+    #[getter]
+    fn parts_value(&self) -> Option<Vec<crate::types::message::PyContentPart>> {
+        if let LlmPayload::Parts { parts } = &self.inner {
+            Some(
+                parts
+                    .iter()
+                    .map(|p| crate::types::message::PyContentPart { inner: p.clone() })
+                    .collect(),
+            )
+        } else {
+            None
         }
     }
 

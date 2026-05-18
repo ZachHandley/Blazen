@@ -23,6 +23,77 @@
 
 const PROVIDER_ERROR_SENTINEL = '__BLAZEN_PROVIDER_ERROR__'
 
+// Sentinel + stash for caller-error preservation. The napi side
+// formats `__BLAZEN_CALLER_ERROR__ {json} \n [CallerError] msg` when a
+// user's tool handler threw. The JSON `ref` is a UUID that maps to an
+// entry in `callerErrorStash` (populated by `wrapToolHandlerForCallerErrors`
+// below); the stashed value is the ORIGINAL JS Error instance -- so
+// `enrichError` can re-throw it verbatim, preserving `instanceof MyError`
+// and all custom properties. See `crates/blazen-node/src/error.rs`
+// CALLER_ERROR_SENTINEL.
+const CALLER_ERROR_SENTINEL = '__BLAZEN_CALLER_ERROR__'
+
+// Module-level Map keyed by UUID strings. Values are the original
+// thrown JS Error instances. Each entry is added by
+// `wrapToolHandlerForCallerErrors` and deleted in `enrichError` after
+// re-throw (or fall-back). Entries that escape the stash because the
+// agent loop produced a non-CallerError outcome are cleaned up by the
+// `runAgent` wrapper's `.finally(...)` (see `wrapRunAgentForCallerErrors`
+// in index.js).
+const callerErrorStash = new Map()
+
+// Build a fresh UUID string suitable for Map keys. Uses the built-in
+// crypto.randomUUID() when available (Node 14.17+); falls back to a
+// simple time+random pattern otherwise.
+function freshUuid() {
+  try {
+    // eslint-disable-next-line global-require
+    const { randomUUID } = require('crypto')
+    if (typeof randomUUID === 'function') {
+      return randomUUID()
+    }
+  } catch {
+    // Fall through.
+  }
+  return `caller-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+// Wrap a user-supplied tool handler so any thrown / rejected error is
+// captured as an envelope `{__blazenOk: false, errorRef: uuid, errorName,
+// errorMessage}` and stashed for `enrichError` to re-throw. Success
+// returns become `{__blazenOk: true, value: <user's return>}`.
+//
+// Returns a freshly-wrapped function (does NOT mutate the user's
+// handler). The wrapped function is what the napi `runAgent` /
+// `runAgentWithCallback` Rust side sees.
+//
+// The wrapped function returns a Promise (always) so the napi
+// `Promise<serde_json::Value>` resolution path is uniform regardless of
+// whether the user's handler is sync or async.
+function wrapToolHandlerForCallerErrors(handler) {
+  if (typeof handler !== 'function') {
+    return handler
+  }
+  return async function blazenEnvelopeToolHandler(...args) {
+    try {
+      const value = await handler.apply(this, args)
+      return { __blazenOk: true, value }
+    } catch (error) {
+      const ref = freshUuid()
+      callerErrorStash.set(ref, error)
+      const errorName =
+        (error && typeof error === 'object' && typeof error.name === 'string')
+          ? error.name
+          : undefined
+      const errorMessage =
+        (error && typeof error === 'object' && typeof error.message === 'string')
+          ? error.message
+          : String(error)
+      return { __blazenOk: false, errorRef: ref, errorName, errorMessage }
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Class hierarchy
 // ---------------------------------------------------------------------------
@@ -702,6 +773,41 @@ function enrichError(err) {
     }
   }
 
+  // Detect and strip the caller-error sentinel. If the stash has the
+  // original error, re-throw it verbatim (preserves `instanceof MyError`
+  // and all custom properties). Otherwise fall back to a generic Error
+  // carrying the name+message from the sentinel JSON.
+  if (message.startsWith(CALLER_ERROR_SENTINEL)) {
+    const newlineIdx = message.indexOf('\n')
+    let payload = null
+    if (newlineIdx !== -1) {
+      const jsonPart = message
+        .slice(CALLER_ERROR_SENTINEL.length, newlineIdx)
+        .trim()
+      try {
+        payload = JSON.parse(jsonPart)
+      } catch {
+        payload = null
+      }
+    }
+    if (payload && typeof payload.ref === 'string') {
+      const original = callerErrorStash.get(payload.ref)
+      callerErrorStash.delete(payload.ref)
+      if (original !== undefined) {
+        return original
+      }
+    }
+    // Fallback: construct a generic Error with the sentinel-embedded
+    // name and message. instanceof won't match, but `.name` / `.message`
+    // still let consumers branch on the error type.
+    const fallback = new Error((payload && payload.message) || 'caller error')
+    if (payload && typeof payload.name === 'string') {
+      fallback.name = payload.name
+    }
+    fallback.stack = err.stack
+    return fallback
+  }
+
   const match = TAG_RE.exec(message)
   if (!match) {
     return err
@@ -852,4 +958,9 @@ module.exports = {
 
   // Helper
   enrichError,
+
+  // Caller-error preservation
+  CALLER_ERROR_SENTINEL,
+  wrapToolHandlerForCallerErrors,
+  callerErrorStash,
 }

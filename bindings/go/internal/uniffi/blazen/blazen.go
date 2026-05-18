@@ -872,7 +872,7 @@ func uniffiCheckChecksums() {
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_toolhandler_execute()
 		})
-		if checksum != 52993 {
+		if checksum != 37809 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_toolhandler_execute: UniFFI API checksum mismatch")
 		}
@@ -8987,6 +8987,31 @@ type ToolHandler interface {
 	// The returned string is JSON-encoded and round-trips back into the LLM
 	// as the tool result on the next turn. Return `"null"` (the JSON literal)
 	// when the tool produced no useful result.
+	//
+	// ## Structured `ToolOutput`
+	//
+	// Returning a JSON object with a `data` key opts into the structured
+	// [`blazen_llm::types::ToolOutput`] shape:
+	//
+	// ```text
+	// {
+	// "data": { /* user-visible payload */ },
+	// "llm_override": {
+	// "kind": "parts",
+	// "parts": [{ "type": "text", "text": "summary for the model" }]
+	// }
+	// }
+	// ```
+	//
+	// `llmOverride` (camelCase) is also accepted. The inner `parts[]`
+	// discriminator uses `"type"` (matching the core `ContentPart` serde
+	// tag); the outer discriminator uses `"kind"`. Foreign-language helper
+	// types (`Blazen::ToolOutput` in Ruby, `blazen.ToolOutput` in Go,
+	// `Blazen.ToolOutput` in Swift, `dev.blazen.ToolOutput` in Kotlin)
+	// produce this shape automatically.
+	//
+	// Returning anything else (a primitive, a JSON object without a `data`
+	// key, etc.) auto-wraps the whole value as `data` with no override.
 	Execute(toolName string, argumentsJson string) (string, error)
 }
 
@@ -9010,6 +9035,31 @@ type ToolHandlerImpl struct {
 // The returned string is JSON-encoded and round-trips back into the LLM
 // as the tool result on the next turn. Return `"null"` (the JSON literal)
 // when the tool produced no useful result.
+//
+// ## Structured `ToolOutput`
+//
+// Returning a JSON object with a `data` key opts into the structured
+// [`blazen_llm::types::ToolOutput`] shape:
+//
+// ```text
+// {
+// "data": { /* user-visible payload */ },
+// "llm_override": {
+// "kind": "parts",
+// "parts": [{ "type": "text", "text": "summary for the model" }]
+// }
+// }
+// ```
+//
+// `llmOverride` (camelCase) is also accepted. The inner `parts[]`
+// discriminator uses `"type"` (matching the core `ContentPart` serde
+// tag); the outer discriminator uses `"kind"`. Foreign-language helper
+// types (`Blazen::ToolOutput` in Ruby, `blazen.ToolOutput` in Go,
+// `Blazen.ToolOutput` in Swift, `dev.blazen.ToolOutput` in Kotlin)
+// produce this shape automatically.
+//
+// Returning anything else (a primitive, a JSON object without a `data`
+// key, etc.) auto-wraps the whole value as `data` with no override.
 func (_self *ToolHandlerImpl) Execute(toolName string, argumentsJson string) (string, error) {
 	_pointer := _self.ffiObject.incrementPointer("ToolHandler")
 	defer _self.ffiObject.decrementPointer()
@@ -13415,6 +13465,7 @@ var ErrBlazenErrorMedia = fmt.Errorf("BlazenErrorMedia")
 var ErrBlazenErrorProvider = fmt.Errorf("BlazenErrorProvider")
 var ErrBlazenErrorWorkflow = fmt.Errorf("BlazenErrorWorkflow")
 var ErrBlazenErrorTool = fmt.Errorf("BlazenErrorTool")
+var ErrBlazenErrorCallerError = fmt.Errorf("BlazenErrorCallerError")
 var ErrBlazenErrorPeer = fmt.Errorf("BlazenErrorPeer")
 var ErrBlazenErrorPersist = fmt.Errorf("BlazenErrorPersist")
 var ErrBlazenErrorPrompt = fmt.Errorf("BlazenErrorPrompt")
@@ -13825,6 +13876,70 @@ func (self BlazenErrorTool) Is(target error) bool {
 	return target == ErrBlazenErrorTool
 }
 
+// Caller-side error raised by a foreign-language tool handler.
+//
+// Carries structural error data — `name` (foreign-language exception
+// class name, e.g. `"SubmitSignal"`), `message`, and `properties_json`
+// (JSON-encoded custom attributes). Foreign consumers pattern-match on
+// `name` and decode `properties_json` to recover custom payload data.
+//
+// Full exception class identity is not preserved across the UniFFI
+// boundary (the Node/Python/WASM bindings get full `instanceof`
+// preservation because they have native object references; UniFFI does
+// not). This variant is the structural equivalent.
+type BlazenErrorCallerError struct {
+	Name           *string
+	Message        string
+	PropertiesJson string
+}
+
+// Caller-side error raised by a foreign-language tool handler.
+//
+// Carries structural error data — `name` (foreign-language exception
+// class name, e.g. `"SubmitSignal"`), `message`, and `properties_json`
+// (JSON-encoded custom attributes). Foreign consumers pattern-match on
+// `name` and decode `properties_json` to recover custom payload data.
+//
+// Full exception class identity is not preserved across the UniFFI
+// boundary (the Node/Python/WASM bindings get full `instanceof`
+// preservation because they have native object references; UniFFI does
+// not). This variant is the structural equivalent.
+func NewBlazenErrorCallerError(
+	name *string,
+	message string,
+	propertiesJson string,
+) *BlazenError {
+	return &BlazenError{err: &BlazenErrorCallerError{
+		Name:           name,
+		Message:        message,
+		PropertiesJson: propertiesJson}}
+}
+
+func (e BlazenErrorCallerError) destroy() {
+	FfiDestroyerOptionalString{}.Destroy(e.Name)
+	FfiDestroyerString{}.Destroy(e.Message)
+	FfiDestroyerString{}.Destroy(e.PropertiesJson)
+}
+
+func (err BlazenErrorCallerError) Error() string {
+	return fmt.Sprint("CallerError",
+		": ",
+
+		"Name=",
+		err.Name,
+		", ",
+		"Message=",
+		err.Message,
+		", ",
+		"PropertiesJson=",
+		err.PropertiesJson,
+	)
+}
+
+func (self BlazenErrorCallerError) Is(target error) bool {
+	return target == ErrBlazenErrorCallerError
+}
+
 // Distributed peer-to-peer error and (folded in) distributed
 // control-plane error. For peer-mesh failures `kind` is one of
 // `"Encode"`, `"Transport"`, `"EnvelopeVersion"`, `"Workflow"`,
@@ -14155,32 +14270,38 @@ func (c FfiConverterBlazenError) Read(reader io.Reader) *BlazenError {
 			Message: FfiConverterStringINSTANCE.Read(reader),
 		}}
 	case 12:
+		return &BlazenError{&BlazenErrorCallerError{
+			Name:           FfiConverterOptionalStringINSTANCE.Read(reader),
+			Message:        FfiConverterStringINSTANCE.Read(reader),
+			PropertiesJson: FfiConverterStringINSTANCE.Read(reader),
+		}}
+	case 13:
 		return &BlazenError{&BlazenErrorPeer{
 			Kind:    FfiConverterStringINSTANCE.Read(reader),
 			Message: FfiConverterStringINSTANCE.Read(reader),
 		}}
-	case 13:
+	case 14:
 		return &BlazenError{&BlazenErrorPersist{
 			Message: FfiConverterStringINSTANCE.Read(reader),
 		}}
-	case 14:
+	case 15:
 		return &BlazenError{&BlazenErrorPrompt{
 			Kind:    FfiConverterStringINSTANCE.Read(reader),
 			Message: FfiConverterStringINSTANCE.Read(reader),
 		}}
-	case 15:
+	case 16:
 		return &BlazenError{&BlazenErrorMemory{
 			Kind:    FfiConverterStringINSTANCE.Read(reader),
 			Message: FfiConverterStringINSTANCE.Read(reader),
 		}}
-	case 16:
+	case 17:
 		return &BlazenError{&BlazenErrorCache{
 			Kind:    FfiConverterStringINSTANCE.Read(reader),
 			Message: FfiConverterStringINSTANCE.Read(reader),
 		}}
-	case 17:
-		return &BlazenError{&BlazenErrorCancelled{}}
 	case 18:
+		return &BlazenError{&BlazenErrorCancelled{}}
+	case 19:
 		return &BlazenError{&BlazenErrorInternal{
 			Message: FfiConverterStringINSTANCE.Read(reader),
 		}}
@@ -14233,29 +14354,34 @@ func (c FfiConverterBlazenError) Write(writer io.Writer, value *BlazenError) {
 	case *BlazenErrorTool:
 		writeInt32(writer, 11)
 		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
-	case *BlazenErrorPeer:
+	case *BlazenErrorCallerError:
 		writeInt32(writer, 12)
+		FfiConverterOptionalStringINSTANCE.Write(writer, variantValue.Name)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.PropertiesJson)
+	case *BlazenErrorPeer:
+		writeInt32(writer, 13)
 		FfiConverterStringINSTANCE.Write(writer, variantValue.Kind)
 		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
 	case *BlazenErrorPersist:
-		writeInt32(writer, 13)
+		writeInt32(writer, 14)
 		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
 	case *BlazenErrorPrompt:
-		writeInt32(writer, 14)
-		FfiConverterStringINSTANCE.Write(writer, variantValue.Kind)
-		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
-	case *BlazenErrorMemory:
 		writeInt32(writer, 15)
 		FfiConverterStringINSTANCE.Write(writer, variantValue.Kind)
 		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
-	case *BlazenErrorCache:
+	case *BlazenErrorMemory:
 		writeInt32(writer, 16)
 		FfiConverterStringINSTANCE.Write(writer, variantValue.Kind)
 		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
-	case *BlazenErrorCancelled:
+	case *BlazenErrorCache:
 		writeInt32(writer, 17)
-	case *BlazenErrorInternal:
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Kind)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
+	case *BlazenErrorCancelled:
 		writeInt32(writer, 18)
+	case *BlazenErrorInternal:
+		writeInt32(writer, 19)
 		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
 	default:
 		_ = variantValue
@@ -14288,6 +14414,8 @@ func (_ FfiDestroyerBlazenError) Destroy(value *BlazenError) {
 	case BlazenErrorWorkflow:
 		variantValue.destroy()
 	case BlazenErrorTool:
+		variantValue.destroy()
+	case BlazenErrorCallerError:
 		variantValue.destroy()
 	case BlazenErrorPeer:
 		variantValue.destroy()

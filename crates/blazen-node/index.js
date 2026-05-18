@@ -1042,6 +1042,67 @@ module.exports.videoInput = nativeBinding.videoInput
     }
   }
 
+  // Specialised handling for the agent entrypoints. The user's
+  // `toolHandler` argument must be wrapped to envelope-format thrown
+  // errors (see `wrapToolHandlerForCallerErrors` in error-classes.js);
+  // `enrichError` then re-throws the original instance after the agent
+  // loop rejects with the `__BLAZEN_CALLER_ERROR__` sentinel. The
+  // generic `wrap()` loop below is skipped for these via the
+  // `__blazenCallerErrorWrapped` marker.
+  const { wrapToolHandlerForCallerErrors, callerErrorStash } = errorClasses
+  const AGENT_ENTRYPOINTS = ['runAgent', 'runAgentWithCallback']
+  for (const fnName of AGENT_ENTRYPOINTS) {
+    const orig = module.exports[fnName]
+    if (typeof orig !== 'function') continue
+    // toolHandler is positional arg index 3 for both runAgent and
+    // runAgentWithCallback in the current TS signatures.
+    const TOOL_HANDLER_ARG_INDEX = 3
+    const wrapped = function blazenAgentEntrypoint(...args) {
+      if (args.length > TOOL_HANDLER_ARG_INDEX) {
+        const userHandler = args[TOOL_HANDLER_ARG_INDEX]
+        if (typeof userHandler === 'function') {
+          args[TOOL_HANDLER_ARG_INDEX] = wrapToolHandlerForCallerErrors(userHandler)
+        }
+      }
+      // Track stash entries created during this run so we can
+      // garbage-collect any that the agent loop swallowed (e.g.
+      // succeeded after a handler threw, or the loop ended before the
+      // napi side surfaced the caller error).
+      const stashSnapshot = new Set(callerErrorStash.keys())
+      const cleanupNewStash = () => {
+        for (const key of callerErrorStash.keys()) {
+          if (!stashSnapshot.has(key)) {
+            callerErrorStash.delete(key)
+          }
+        }
+      }
+      try {
+        const result = orig.apply(this, args)
+        if (result && typeof result.then === 'function') {
+          return result.then(
+            (v) => {
+              cleanupNewStash()
+              return v
+            },
+            (e) => {
+              const enriched = enrichError(e)
+              cleanupNewStash()
+              throw enriched
+            },
+          )
+        }
+        cleanupNewStash()
+        return result
+      } catch (e) {
+        const enriched = enrichError(e)
+        cleanupNewStash()
+        throw enriched
+      }
+    }
+    wrapped.__blazenCallerErrorWrapped = true
+    module.exports[fnName] = wrapped
+  }
+
   // Wrap every top-level export. Distinguish functions (call wrap) from
   // constructors (call patchPrototype). Heuristic: a constructor has a
   // `prototype` object with own properties beyond `constructor`. When
@@ -1055,6 +1116,8 @@ module.exports.videoInput = nativeBinding.videoInput
     if (typeof orig !== 'function') continue
     // Skip the typed-error classes we are about to install.
     if (Object.prototype.hasOwnProperty.call(errorClasses, key)) continue
+    // Skip the agent entrypoints we already specialised above.
+    if (orig.__blazenCallerErrorWrapped) continue
     if (orig.prototype && typeof orig.prototype === 'object') {
       patchPrototype(orig)
     }
