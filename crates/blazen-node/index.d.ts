@@ -3377,10 +3377,14 @@ export declare class ModelManager {
    * );
    * ```
    *
-   * `isLoaded`, `memoryEstimateBytes`, and `device` are all
-   * nullable / optional (pass `null` or `undefined` to omit).
+   * `isLoaded`, `memoryEstimateBytes`, `device`, `loadAdapter`,
+   * `unloadAdapter`, and `listAdapters` are all nullable / optional
+   * (pass `null` or `undefined` to omit). Omitted adapter callbacks
+   * cause [`JsModelManager::load_adapter`] / `unloadAdapter` /
+   * `listAdapters` to surface the upstream "backend does not support
+   * `LoRA` adapters" error for this model.
    */
-  registerLocalModel(id: string, load: LifecycleTsfn, unload: LifecycleTsfn, isLoaded?: IsLoadedTsfn | undefined | null, memoryEstimateBytes?: bigint | undefined | null, device?: string | undefined | null): Promise<void>
+  registerLocalModel(id: string, load: LifecycleTsfn, unload: LifecycleTsfn, isLoaded?: IsLoadedTsfn | undefined | null, memoryEstimateBytes?: bigint | undefined | null, device?: string | undefined | null, loadAdapter?: LoadAdapterTsfn | undefined | null, unloadAdapter?: UnloadAdapterTsfn | undefined | null, listAdapters?: ListAdaptersTsfn | undefined | null): Promise<void>
   /**
    * Load a model, evicting LRU peers in the same pool if the budget
    * would be exceeded.
@@ -3424,6 +3428,34 @@ export declare class ModelManager {
   pools(): Array<JsPoolBudget>
   /** Status of all registered models. */
   status(): Promise<Array<JsModelStatus>>
+  /**
+   * Mount a PEFT-format `LoRA` adapter onto a registered model.
+   *
+   * `adapterDir` must contain the canonical PEFT layout
+   * (`adapter_model.safetensors` + `adapter_config.json`). The base
+   * model is implicitly loaded (`ensureLoaded`) before mounting.
+   *
+   * Returns the adapter id assigned by the backend (echoes
+   * `options.adapterId`).
+   *
+   * Throws if the model is not registered, the adapter id is already
+   * mounted, the pool budget would be exceeded, or the backend does
+   * not support adapters.
+   */
+  loadAdapter(modelId: string, adapterDir: string, options: AdapterOptions): Promise<string>
+  /**
+   * Unmount a previously-loaded adapter from a registered model.
+   *
+   * Throws if the model is not registered or the adapter id is not
+   * currently mounted on it.
+   */
+  unloadAdapter(modelId: string, adapterId: string): Promise<void>
+  /**
+   * List adapters currently mounted on a registered model.
+   *
+   * Throws if the model is not registered.
+   */
+  listAdapters(modelId: string): Promise<Array<JsAdapterStatus>>
 }
 export type JsModelManager = ModelManager
 
@@ -5948,6 +5980,26 @@ export declare class XaiProvider {
 export type JsXaiProvider = XaiProvider
 
 /**
+ * Caller-supplied options when mounting a `LoRA` adapter via
+ * [`JsModelManager::load_adapter`].
+ *
+ * Mirrors [`blazen_llm::AdapterOptions`]; `scale` is optional and
+ * defaults to `1.0` (full strength, PEFT convention) when omitted.
+ */
+export interface AdapterOptions {
+  /**
+   * Caller-chosen identifier for this adapter mount. Must be unique
+   * per `(model, adapter)` pair within a manager.
+   */
+  adapterId: string
+  /**
+   * Scaling factor applied to the adapter's delta-weights. Defaults
+   * to `1.0` when not provided.
+   */
+  scale?: number
+}
+
+/**
  * Aggregate one [`JsUsageEvent`] into a [`crate::types::JsTokenUsageClass`].
  * Returns a fresh class instance that adds the seven token counters from the
  * event into the existing usage. Mirrors the Rust `TokenUsage::add` /
@@ -6676,6 +6728,41 @@ export interface JobHandleOptions {
 export declare const enum JoinStrategy {
   WaitAll = 'WaitAll',
   FirstCompletes = 'FirstCompletes'
+}
+
+/**
+ * Handle returned by [`JsModelManager::load_adapter`] and accepted by
+ * JS-side `unloadAdapter` lifecycle callbacks (see
+ * [`JsModelManager::register_local_model`]).
+ *
+ * Mirrors [`blazen_llm::AdapterHandle`]; `mountStrategy` is one of
+ * `"attached"`, `"rebuilt"`, or `"merged"`.
+ */
+export interface JsAdapterHandle {
+  /** Echoes [`AdapterOptions::adapter_id`]. */
+  adapterId: string
+  /** Bytes the adapter occupies on top of the base model. */
+  memoryBytes: bigint
+  /**
+   * One of `"attached"`, `"rebuilt"`, or `"merged"` — what the
+   * backend actually did to honor the mount request.
+   */
+  mountStrategy: string
+}
+
+/**
+ * Snapshot of one mounted adapter, returned by
+ * [`JsModelManager::list_adapters`]. Mirrors [`blazen_llm::AdapterStatus`].
+ */
+export interface JsAdapterStatus {
+  /** Caller-supplied adapter identifier. */
+  adapterId: string
+  /** Scaling factor applied at mount time. */
+  scale: number
+  /** Absolute filesystem path to the adapter directory. */
+  sourceDir: string
+  /** Bytes the adapter occupies on top of the base model. */
+  memoryBytes: bigint
 }
 
 /** An entry to add to the memory store (used by `addMany`). */

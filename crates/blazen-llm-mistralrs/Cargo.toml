@@ -61,7 +61,7 @@ cuda = ["engine"]
 metal = ["engine"]
 accelerate = ["engine"]
 mkl = ["engine"]
-flash-attn = ["cuda"]
+flash-attn = ["cuda", "mistralrs/flash-attn"]
 
 [lints]
 workspace = true

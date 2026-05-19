@@ -8,6 +8,7 @@ import pathlib
 import typing
 __all__ = [
     "ActiveWorkflowSnapshot",
+    "AdapterStatus",
     "AdmissionMode",
     "AgentConfig",
     "AgentEvent",
@@ -397,6 +398,21 @@ class ActiveWorkflowSnapshot:
         r"""
         Workflow snapshot serialized as a JSON string.
         """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class AdapterStatus:
+    r"""
+    Snapshot of one mounted adapter.
+    """
+    @property
+    def adapter_id(self) -> builtins.str: ...
+    @property
+    def scale(self) -> builtins.float: ...
+    @property
+    def source_dir(self) -> builtins.str: ...
+    @property
+    def memory_bytes(self) -> builtins.int: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -7203,6 +7219,34 @@ class ModelManager:
     async def status(self) -> list[ModelStatus]:
         r"""
         Status of all registered models.
+        """
+    async def load_adapter(self, model_id: builtins.str, adapter_dir: builtins.str, *, adapter_id: builtins.str, scale: typing.Optional[builtins.float] = None) -> str:
+        r"""
+        Mount a PEFT-format LoRA adapter onto a registered model.
+        
+        The base model is loaded if necessary (via the same single-model
+        `ensure_loaded` path as `load`). The adapter directory must contain
+        `adapter_model.safetensors` and `adapter_config.json`; the on-disk
+        size of those files is charged against the model's pool budget.
+        
+        Args:
+            model_id: The id of a previously-registered model.
+            adapter_dir: Filesystem path containing the PEFT adapter files.
+            adapter_id: Caller-chosen unique id for this adapter (passed back
+                to ``unload_adapter`` and surfaced in ``list_adapters``).
+            scale: Strength multiplier for the adapter delta-weights.
+                Defaults to ``1.0`` (full PEFT strength).
+        
+        Returns:
+            The ``adapter_id`` echoed by the backend, as a string.
+        """
+    async def unload_adapter(self, model_id: builtins.str, adapter_id: builtins.str) -> None:
+        r"""
+        Unmount a previously-loaded adapter, freeing its memory budget.
+        """
+    async def list_adapters(self, model_id: builtins.str) -> list[AdapterStatus]:
+        r"""
+        List adapters currently mounted on a registered model.
         """
 
 @typing.final

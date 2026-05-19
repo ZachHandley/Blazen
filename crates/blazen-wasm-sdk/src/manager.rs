@@ -27,8 +27,9 @@
 //! const status = await manager.status();
 //! ```
 
+use std::collections::HashMap;
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use js_sys::{Function, Object, Promise, Reflect};
@@ -115,6 +116,19 @@ struct JsLocalModelAdapter {
     unload_fn: Arc<JsClosure>,
     is_loaded_fn: Option<Arc<JsClosure>>,
     memory_bytes_fn: Option<Arc<JsClosure>>,
+    /// Captured for parity with the native [`LocalModel`] adapter surface.
+    /// In WASM, adapter dispatch goes through `WasmModelManager`'s own
+    /// callback map (because the Rust-side `ModelManager` requires a
+    /// filesystem path we don't have in browsers), so these handles are
+    /// retained on the adapter purely so the same lifecycle object can
+    /// service both routes if a future Rust-side WASM `load_adapter`
+    /// path materializes.
+    #[allow(dead_code)]
+    load_adapter_fn: Option<Arc<JsClosure>>,
+    #[allow(dead_code)]
+    unload_adapter_fn: Option<Arc<JsClosure>>,
+    #[allow(dead_code)]
+    list_adapters_fn: Option<Arc<JsClosure>>,
     memory_estimate_bytes: u64,
     device: Device,
 }
@@ -264,36 +278,75 @@ impl LocalModel for JsLocalModelAdapter {
 /// });
 /// await manager.load('my-model');
 /// ```
+///
+/// # Adapter (PEFT/LoRA) semantics in WASM
+///
+/// Unlike the native bindings, the WASM SDK's [`Self::load_adapter`],
+/// [`Self::unload_adapter`], and [`Self::list_adapters`] methods BYPASS
+/// the Rust-side [`ModelManager`] entirely. There is no filesystem path
+/// to give it — the browser sandbox has no `std::fs`. Instead, the bytes
+/// are forwarded directly to the JS lifecycle callbacks
+/// (`loadAdapter`/`unloadAdapter`/`listAdapters`) supplied at register
+/// time. The JS lifecycle IS the adapter manager in browsers; the SDK
+/// just routes calls to it.
+///
+/// Expected JS callback signatures:
+/// - `loadAdapter(adapterBytes: Uint8Array, options: object) -> Promise<string>`
+///   resolves to the assigned adapter id.
+/// - `unloadAdapter(adapterId: string) -> Promise<void>`.
+/// - `listAdapters() -> Array<{ adapterId, scale, sourceDir, memoryBytes }>`
+///   (sync or async). If absent, `listAdapters` returns an empty array.
+///
+/// If `loadAdapter` or `unloadAdapter` were not provided at register time,
+/// the returned promise rejects with a diagnostic message — the SDK has
+/// no built-in browser backend that can mount adapters on its own.
 #[wasm_bindgen(js_name = "ModelManager")]
 pub struct WasmModelManager {
     inner: Arc<ModelManager>,
     /// Cached CPU pool budget in bytes for synchronous `budgetBytes` access.
     cpu_budget_cache: f64,
+    /// Per-model adapter callbacks captured at register time. Indexed by
+    /// model id. Used by `load_adapter` / `unload_adapter` / `list_adapters`
+    /// to forward bytes directly to JS without going through the Rust-side
+    /// `ModelManager` (which requires a filesystem path).
+    adapter_callbacks: Arc<Mutex<HashMap<String, AdapterCallbacks>>>,
+}
+
+/// JS callbacks for browser-side adapter management, captured at register
+/// time and dispatched by `WasmModelManager::{load,unload,list}_adapter`.
+#[derive(Clone, Default)]
+struct AdapterCallbacks {
+    load: Option<Arc<JsClosure>>,
+    unload: Option<Arc<JsClosure>>,
+    list: Option<Arc<JsClosure>>,
 }
 
 // SAFETY: WASM is single-threaded.
 unsafe impl Send for WasmModelManager {}
 unsafe impl Sync for WasmModelManager {}
 
+/// Lifecycle callbacks extracted from a `lifecycle` JS object.
+///
+/// `load` and `unload` are required; everything else is optional.
+struct LifecycleCallbacks {
+    load: Function,
+    unload: Function,
+    is_loaded: Option<Function>,
+    memory_bytes: Option<Function>,
+    device: Option<Function>,
+    load_adapter: Option<Function>,
+    unload_adapter: Option<Function>,
+    list_adapters: Option<Function>,
+}
+
 /// Extract the lifecycle callbacks from a `lifecycle` JS object.
 ///
-/// Returns a tuple of `(load, unload, isLoaded, memoryBytes, device)`:
 /// - `load` and `unload` are required and must be functions.
-/// - `isLoaded`, `memoryBytes`, and `device` are optional. If absent (or
-///   `undefined`/`null`) they are returned as `None`. If present but not a
-///   function, an error is returned.
-fn extract_lifecycle(
-    lifecycle: &JsValue,
-) -> Result<
-    (
-        Function,
-        Function,
-        Option<Function>,
-        Option<Function>,
-        Option<Function>,
-    ),
-    JsValue,
-> {
+/// - `isLoaded`, `memoryBytes`, `device`, `loadAdapter`, `unloadAdapter`,
+///   and `listAdapters` are optional. If absent (or `undefined`/`null`)
+///   they are returned as `None`. If present but not a function, an error
+///   is returned.
+fn extract_lifecycle(lifecycle: &JsValue) -> Result<LifecycleCallbacks, JsValue> {
     if !lifecycle.is_object() {
         return Err(JsValue::from_str("lifecycle must be an object"));
     }
@@ -313,8 +366,20 @@ fn extract_lifecycle(
     let is_loaded = extract_optional_fn(lifecycle, "isLoaded")?;
     let memory_bytes = extract_optional_fn(lifecycle, "memoryBytes")?;
     let device = extract_optional_fn(lifecycle, "device")?;
+    let load_adapter = extract_optional_fn(lifecycle, "loadAdapter")?;
+    let unload_adapter = extract_optional_fn(lifecycle, "unloadAdapter")?;
+    let list_adapters = extract_optional_fn(lifecycle, "listAdapters")?;
 
-    Ok((load, unload, is_loaded, memory_bytes, device))
+    Ok(LifecycleCallbacks {
+        load,
+        unload,
+        is_loaded,
+        memory_bytes,
+        device,
+        load_adapter,
+        unload_adapter,
+        list_adapters,
+    })
 }
 
 /// Read an optional function-valued key from a JS object.
@@ -365,6 +430,7 @@ impl WasmModelManager {
         Self {
             inner: Arc::new(ModelManager::with_budgets_gb(cpu_ram_gb, gpu_gb)),
             cpu_budget_cache: cpu_ram_gb * 1_073_741_824.0,
+            adapter_callbacks: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -409,6 +475,11 @@ impl WasmModelManager {
     /// Rejects if `lifecycle` is not an object, its `load`/`unload` keys are
     /// not functions, or its optional callback keys are present but not
     /// functions.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal adapter-callbacks mutex is poisoned (should
+    /// not happen in single-threaded WASM).
     #[wasm_bindgen]
     #[allow(
         clippy::needless_pass_by_value,
@@ -422,17 +493,41 @@ impl WasmModelManager {
         memory_estimate_bytes: f64,
         lifecycle: Object,
     ) -> Result<Promise, JsValue> {
-        let (load_fn, unload_fn, is_loaded_fn, memory_bytes_fn, device_fn) =
-            extract_lifecycle(lifecycle.as_ref())?;
+        let cbs = extract_lifecycle(lifecycle.as_ref())?;
 
-        let device = resolve_device_from_callback(device_fn.as_ref());
+        let device = resolve_device_from_callback(cbs.device.as_ref());
+
+        let load_adapter_fn = cbs.load_adapter.map(|f| Arc::new(JsClosure(f)));
+        let unload_adapter_fn = cbs.unload_adapter.map(|f| Arc::new(JsClosure(f)));
+        let list_adapters_fn = cbs.list_adapters.map(|f| Arc::new(JsClosure(f)));
+
+        // Stash the adapter callbacks for the bypass-mode `load_adapter` /
+        // `unload_adapter` / `list_adapters` methods. These don't flow
+        // through the Rust-side `ModelManager` (no `Path` in browsers).
+        {
+            let mut map = self
+                .adapter_callbacks
+                .lock()
+                .expect("adapter_callbacks mutex poisoned");
+            map.insert(
+                id.clone(),
+                AdapterCallbacks {
+                    load: load_adapter_fn.clone(),
+                    unload: unload_adapter_fn.clone(),
+                    list: list_adapters_fn.clone(),
+                },
+            );
+        }
 
         let adapter: Arc<dyn LocalModel> = Arc::new(JsLocalModelAdapter {
             id: id.clone(),
-            load_fn: Arc::new(JsClosure(load_fn)),
-            unload_fn: Arc::new(JsClosure(unload_fn)),
-            is_loaded_fn: is_loaded_fn.map(|f| Arc::new(JsClosure(f))),
-            memory_bytes_fn: memory_bytes_fn.map(|f| Arc::new(JsClosure(f))),
+            load_fn: Arc::new(JsClosure(cbs.load)),
+            unload_fn: Arc::new(JsClosure(cbs.unload)),
+            is_loaded_fn: cbs.is_loaded.map(|f| Arc::new(JsClosure(f))),
+            memory_bytes_fn: cbs.memory_bytes.map(|f| Arc::new(JsClosure(f))),
+            load_adapter_fn,
+            unload_adapter_fn,
+            list_adapters_fn,
             memory_estimate_bytes: memory_estimate_bytes as u64,
             device,
         });
@@ -458,6 +553,174 @@ impl WasmModelManager {
     pub fn unregister(&self, _id: &str) {
         // No-op: upstream `ModelManager` has no `unregister` method.
         // Callers should `unload` before discarding the manager.
+    }
+
+    /// Mount a `PEFT`-format `LoRA` adapter via the registered model's JS lifecycle.
+    ///
+    /// Unlike the native bindings, the WASM SDK does NOT call the Rust-side
+    /// [`ModelManager::load_adapter`] — there's no filesystem path to give it
+    /// inside a browser sandbox. Instead, the `adapter_bytes` (an inflated
+    /// `PEFT` adapter archive — typically a `Uint8Array` of a `.safetensors` /
+    /// tarball / zip the caller has already prepared) and the `options`
+    /// object are forwarded verbatim to the `loadAdapter` callback that was
+    /// supplied to [`Self::register`]. The callback is expected to resolve
+    /// to a string adapter id, which becomes the resolved value of the
+    /// returned promise.
+    ///
+    /// `options` should follow the shape `{ adapterId: string, scale?: number }`;
+    /// the Rust side does not introspect it.
+    ///
+    /// # Errors
+    ///
+    /// Rejects with `JsValue::from_str` if no `loadAdapter` callback was
+    /// registered for `id` (the SDK has no built-in browser backend that
+    /// can mount adapters on its own), if the model id is unknown, or if
+    /// the underlying JS callback throws / rejects.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal adapter-callbacks mutex is poisoned (a panic
+    /// while another caller was holding the lock — should not happen in
+    /// single-threaded WASM).
+    #[wasm_bindgen(js_name = "loadAdapter")]
+    pub fn load_adapter(
+        &self,
+        id: String,
+        adapter_bytes: js_sys::Uint8Array,
+        options: Object,
+    ) -> Promise {
+        let callbacks = self.adapter_callbacks.clone();
+        let bytes_val: JsValue = adapter_bytes.into();
+        let opts_val: JsValue = options.into();
+        future_to_promise(SendFuture(async move {
+            let cb = {
+                let map = callbacks.lock().expect("adapter_callbacks mutex poisoned");
+                map.get(&id).and_then(|c| c.load.clone())
+            };
+            let Some(cb) = cb else {
+                return Err(JsValue::from_str(&format!(
+                    "model '{id}' lifecycle does not implement loadAdapter \
+                     (in-browser adapter mounting not supported by SDK built-in backends)"
+                )));
+            };
+            let result = cb.0.call2(&JsValue::NULL, &bytes_val, &opts_val).map_err(|e| {
+                JsValue::from_str(&format!(
+                    "model '{id}' lifecycle.loadAdapter() threw: {e:?}"
+                ))
+            })?;
+            if result.has_type::<Promise>() {
+                let promise: Promise = result.unchecked_into();
+                let val = JsFuture::from(promise).await.map_err(|e| {
+                    JsValue::from_str(&format!(
+                        "model '{id}' lifecycle.loadAdapter() rejected: {e:?}"
+                    ))
+                })?;
+                Ok(val)
+            } else {
+                Ok(result)
+            }
+        }))
+    }
+
+    /// Unmount a previously-loaded adapter via the registered model's JS
+    /// lifecycle.
+    ///
+    /// Bypasses the Rust-side [`ModelManager`] for the same reason as
+    /// [`Self::load_adapter`]. Forwards `adapter_id` to the `unloadAdapter`
+    /// callback registered at [`Self::register`] time.
+    ///
+    /// # Errors
+    ///
+    /// Rejects if no `unloadAdapter` callback was registered for `id`,
+    /// the model id is unknown, or the underlying JS callback throws /
+    /// rejects.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal adapter-callbacks mutex is poisoned (should
+    /// not happen in single-threaded WASM).
+    #[wasm_bindgen(js_name = "unloadAdapter")]
+    pub fn unload_adapter(&self, id: String, adapter_id: String) -> Promise {
+        let callbacks = self.adapter_callbacks.clone();
+        future_to_promise(SendFuture(async move {
+            let cb = {
+                let map = callbacks.lock().expect("adapter_callbacks mutex poisoned");
+                map.get(&id).and_then(|c| c.unload.clone())
+            };
+            let Some(cb) = cb else {
+                return Err(JsValue::from_str(&format!(
+                    "model '{id}' lifecycle does not implement unloadAdapter \
+                     (in-browser adapter mounting not supported by SDK built-in backends)"
+                )));
+            };
+            let result = cb
+                .0
+                .call1(&JsValue::NULL, &JsValue::from_str(&adapter_id))
+                .map_err(|e| {
+                    JsValue::from_str(&format!(
+                        "model '{id}' lifecycle.unloadAdapter() threw: {e:?}"
+                    ))
+                })?;
+            if result.has_type::<Promise>() {
+                let promise: Promise = result.unchecked_into();
+                JsFuture::from(promise).await.map_err(|e| {
+                    JsValue::from_str(&format!(
+                        "model '{id}' lifecycle.unloadAdapter() rejected: {e:?}"
+                    ))
+                })?;
+            }
+            Ok(JsValue::UNDEFINED)
+        }))
+    }
+
+    /// List adapters currently mounted on the given model.
+    ///
+    /// Bypasses the Rust-side [`ModelManager`] for the same reason as
+    /// [`Self::load_adapter`]. Invokes the `listAdapters` callback
+    /// registered at [`Self::register`] time. The callback is expected
+    /// to return (or resolve to) an `Array<{ adapterId, scale, sourceDir,
+    /// memoryBytes }>`, which is returned verbatim.
+    ///
+    /// If no `listAdapters` callback was registered, resolves to an
+    /// empty array (truthful — "no adapters mounted" — not an error).
+    ///
+    /// # Errors
+    ///
+    /// Rejects only if the registered callback itself throws or rejects.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal adapter-callbacks mutex is poisoned (should
+    /// not happen in single-threaded WASM).
+    #[wasm_bindgen(js_name = "listAdapters")]
+    pub fn list_adapters(&self, id: String) -> Promise {
+        let callbacks = self.adapter_callbacks.clone();
+        future_to_promise(SendFuture(async move {
+            let cb = {
+                let map = callbacks.lock().expect("adapter_callbacks mutex poisoned");
+                map.get(&id).and_then(|c| c.list.clone())
+            };
+            let Some(cb) = cb else {
+                // No callback -> truthfully report an empty list.
+                return Ok(js_sys::Array::new().into());
+            };
+            let result = cb.0.call0(&JsValue::NULL).map_err(|e| {
+                JsValue::from_str(&format!(
+                    "model '{id}' lifecycle.listAdapters() threw: {e:?}"
+                ))
+            })?;
+            if result.has_type::<Promise>() {
+                let promise: Promise = result.unchecked_into();
+                let val = JsFuture::from(promise).await.map_err(|e| {
+                    JsValue::from_str(&format!(
+                        "model '{id}' lifecycle.listAdapters() rejected: {e:?}"
+                    ))
+                })?;
+                Ok(val)
+            } else {
+                Ok(result)
+            }
+        }))
     }
 
     /// Load a model, evicting LRU models in the same pool if needed.

@@ -34,6 +34,8 @@ pub mod compute_types;
 pub mod controlplane;
 pub mod errors;
 pub mod llm;
+pub mod local_model;
+pub mod manager;
 #[cfg(feature = "distributed")]
 pub mod peer;
 pub mod persist;
@@ -72,6 +74,10 @@ pub use llm::{
     ChatMessage, CompletionModel, CompletionRequest, CompletionResponse, EmbeddingModel,
     EmbeddingResponse, Media, TokenUsage, Tool, ToolCall,
 };
+pub use local_model::{
+    AdapterHandleRecord, AdapterOptionsRecord, AdapterStatusRecord, ForeignLocalModel,
+};
+pub use manager::{ModelStatusRecord, PoolStatusRecord, UniffiModelManager};
 #[cfg(feature = "distributed")]
 pub use peer::{PeerClient, PeerServer};
 pub use persist::{

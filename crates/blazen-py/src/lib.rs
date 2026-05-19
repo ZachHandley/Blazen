@@ -577,6 +577,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Model manager
     m.add_class::<manager::PyModelManager>()?;
     m.add_class::<manager::PyModelStatus>()?;
+    m.add_class::<manager::PyAdapterStatus>()?;
 
     // Model cache (HuggingFace Hub downloader / on-disk cache)
     m.add_class::<model_cache::PyModelCache>()?;

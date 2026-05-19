@@ -21,16 +21,22 @@ tokio = { workspace = true }
 tracing.workspace = true
 thiserror = { workspace = true }
 
-# On Apple targets, forward metal feature into candle-core
+# Apple-target deps unconditionally pull metal + accelerate. The `metal` /
+# `accelerate` feature flags exist as no-op markers for cross-platform
+# scripts; on Apple targets the backends are always available, on other
+# targets enabling them forwards to nothing (the dep can't compile there).
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-candle-core = { workspace = true, optional = true, features = ["metal"] }
+candle-core = { workspace = true, optional = true, features = ["metal", "accelerate"] }
+candle-nn = { workspace = true, optional = true, features = ["metal", "accelerate"] }
+candle-transformers = { workspace = true, optional = true, features = ["metal", "accelerate"] }
 
 [features]
 default = ["cpu"]
 engine = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub"]
 cpu = ["engine"]
-cuda = ["engine"]
+cuda = ["engine", "candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
 metal = ["engine"]
+accelerate = ["engine"]
 
 [lints]
 workspace = true

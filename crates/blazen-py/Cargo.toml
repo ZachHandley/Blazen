@@ -69,7 +69,10 @@ piper = ["blazen-llm/piper"]
 tiktoken = ["blazen-llm/tiktoken"]
 # Pure-Rust ONNX embedding backend (musl/WASM-friendly alternative to fastembed).
 tract = ["dep:blazen-embed-tract"]
-local-all = ["embed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "piper", "tiktoken", "distributed", "otlp", "prometheus", "langfuse"]
+# ORT-backed embedding backend (faster than tract on x86_64/aarch64 where ORT
+# ships prebuilts; target-gated optional dep so musl builds skip it).
+fastembed = ["blazen-llm/embed", "dep:blazen-embed-fastembed"]
+local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "piper", "tiktoken", "distributed", "otlp", "prometheus", "langfuse"]
 # Telemetry exporters
 otlp = ["blazen-telemetry/otlp"]
 prometheus = ["blazen-telemetry/prometheus"]
@@ -84,6 +87,7 @@ distributed = [
     "blazen-controlplane/client",
     "blazen-controlplane/server",
 ]
+blazen-embed-fastembed = ["dep:blazen-embed-fastembed"]
 
 [lints]
 workspace = true
@@ -94,3 +98,6 @@ path = "examples/stub_gen.rs"
 
 [target.'cfg(unix)'.dependencies]
 openssl-sys = { version = "0.9", features = ["vendored"] }
+
+[target.'cfg(not(target_env = "musl"))'.dependencies]
+blazen-embed-fastembed = { workspace = true, optional = true }

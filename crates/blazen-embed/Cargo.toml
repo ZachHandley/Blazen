@@ -8,14 +8,48 @@ rust-version.workspace = true
 repository.workspace = true
 description = "Embedding backend facade for Blazen: picks fastembed (ORT) or tract (pure Rust) per target"
 
-# Use fastembed (ORT) everywhere EXCEPT musl-Linux and Intel macOS.
-# - musl: ort-sys can't link against musl libc
-# - x86_64-apple-darwin: pyke does not ship prebuilt ORT binaries for Intel Mac
-[target.'cfg(not(any(target_env = "musl", all(target_os = "macos", target_arch = "x86_64"))))'.dependencies]
+# ORT (fastembed) prebuilt-binary support matrix per
+# `ort-sys-2.0.0-rc.10/build.rs:248-255` covers only:
+#   - x86_64-unknown-linux-gnu  (glibc)
+#   - x86_64-pc-windows-msvc
+#   - x86_64-apple-darwin   (Intel mac universal2 slice)
+#   - aarch64-apple-darwin  (Apple Silicon universal2 slice)
+# Everything else (musl, aarch64-linux, aarch64-windows, wasm) must use tract.
+#
+# NOTE on Intel mac: pyke historically did not ship Intel-mac prebuilts at the
+# `fastembed-rs` layer even though `ort` upstream does — the previous comment
+# excluded it. We now INCLUDE it because the supported-arch list above is the
+# canonical ORT matrix; if the pyke crate regresses on Intel mac, users can
+# force `embed-tract` to override.
+[target.'cfg(all(not(target_family = "wasm"), not(target_env = "musl"), any(all(target_arch = "x86_64", target_os = "linux"), all(target_arch = "x86_64", target_os = "windows"), all(target_arch = "x86_64", target_os = "macos"), all(target_arch = "aarch64", target_os = "macos"))))'.dependencies]
 blazen-embed-fastembed = { workspace = true }
 
-[target.'cfg(any(target_env = "musl", all(target_os = "macos", target_arch = "x86_64")))'.dependencies]
+# Tract (pure-Rust ONNX) is the default everywhere ORT is unsupported:
+# musl Linux, aarch64-unknown-linux-*, aarch64-pc-windows-msvc, all wasm.
+[target.'cfg(any(target_family = "wasm", target_env = "musl", all(target_arch = "aarch64", target_os = "linux"), all(target_arch = "aarch64", target_os = "windows")))'.dependencies]
 blazen-embed-tract = { workspace = true }
+
+[dependencies]
+# Optional pull-in for the explicit override features below. The unconditional
+# target-cfg blocks above pick the DEFAULT backend per platform; these optional
+# entries let `embed-tract` / `embed-fastembed` FORCE a specific backend even
+# when the target's default would have picked the other one. Both knobs are
+# additive in Cargo terms but are documented as mutually exclusive — enabling
+# both yields the fastembed re-exports (see lib.rs precedence).
+blazen-embed-fastembed = { workspace = true, optional = true }
+blazen-embed-tract = { workspace = true, optional = true }
+
+[features]
+# Force the tract backend regardless of target. Useful on
+# `x86_64-unknown-linux-gnu` when you want to skip the ORT C++ toolchain
+# requirement, or to produce a single binary that does not link libonnxruntime.
+embed-tract = ["dep:blazen-embed-tract"]
+# Force the fastembed (ORT) backend regardless of target. ONLY meaningful on
+# the four ORT-supported triples listed in the comment above; will fail to
+# build on aarch64-linux / musl / wasm because `ort-sys` has no prebuilt for
+# those and the source build requires a C++17 toolchain + onnxruntime checkout.
+# Mutually exclusive with `embed-tract` (see lib.rs for precedence).
+embed-fastembed = ["dep:blazen-embed-fastembed"]
 
 [lints]
 workspace = true

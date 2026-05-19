@@ -1,13 +1,13 @@
 //! Node.js binding for the memory-budget-aware model manager.
 
 use napi::Status;
-use napi::bindgen_prelude::{BigInt, Promise};
+use napi::bindgen_prelude::{BigInt, FnArgs, Promise};
 use napi::threadsafe_function::ThreadsafeFunction;
 use napi_derive::napi;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use blazen_llm::{BlazenError, Device, LocalModel, Pool};
+use blazen_llm::{AdapterHandle, AdapterMountStrategy, BlazenError, Device, LocalModel, Pool};
 use blazen_manager::ModelManager;
 
 use crate::providers::completion_model::JsCompletionModel;
@@ -21,6 +21,25 @@ type LifecycleTsfn = ThreadsafeFunction<(), Promise<()>, (), Status, false, true
 
 /// Optional `isLoaded()` predicate returning `Promise<boolean>`.
 type IsLoadedTsfn = ThreadsafeFunction<(), Promise<bool>, (), Status, false, true>;
+
+/// Optional `loadAdapter(adapterDir, options)` callback returning
+/// `Promise<JsAdapterHandle>`.
+type LoadAdapterTsfn = ThreadsafeFunction<
+    FnArgs<(String, AdapterOptions)>,
+    Promise<JsAdapterHandle>,
+    FnArgs<(String, AdapterOptions)>,
+    Status,
+    false,
+    true,
+>;
+
+/// Optional `unloadAdapter(handle)` callback returning `Promise<void>`.
+type UnloadAdapterTsfn =
+    ThreadsafeFunction<JsAdapterHandle, Promise<()>, JsAdapterHandle, Status, false, true>;
+
+/// Optional `listAdapters()` callback returning `Promise<JsAdapterStatus[]>`.
+type ListAdaptersTsfn =
+    ThreadsafeFunction<(), Promise<Vec<JsAdapterStatus>>, (), Status, false, true>;
 
 // ---------------------------------------------------------------------------
 // Pool label parsing
@@ -98,6 +117,67 @@ pub struct JsPoolBudget {
     pub budget_bytes: BigInt,
 }
 
+/// Caller-supplied options when mounting a `LoRA` adapter via
+/// [`JsModelManager::load_adapter`].
+///
+/// Mirrors [`blazen_llm::AdapterOptions`]; `scale` is optional and
+/// defaults to `1.0` (full strength, PEFT convention) when omitted.
+#[napi(object)]
+pub struct AdapterOptions {
+    /// Caller-chosen identifier for this adapter mount. Must be unique
+    /// per `(model, adapter)` pair within a manager.
+    #[napi(js_name = "adapterId")]
+    pub adapter_id: String,
+    /// Scaling factor applied to the adapter's delta-weights. Defaults
+    /// to `1.0` when not provided.
+    pub scale: Option<f64>,
+}
+
+/// Handle returned by [`JsModelManager::load_adapter`] and accepted by
+/// JS-side `unloadAdapter` lifecycle callbacks (see
+/// [`JsModelManager::register_local_model`]).
+///
+/// Mirrors [`blazen_llm::AdapterHandle`]; `mountStrategy` is one of
+/// `"attached"`, `"rebuilt"`, or `"merged"`.
+#[napi(object)]
+pub struct JsAdapterHandle {
+    /// Echoes [`AdapterOptions::adapter_id`].
+    #[napi(js_name = "adapterId")]
+    pub adapter_id: String,
+    /// Bytes the adapter occupies on top of the base model.
+    #[napi(js_name = "memoryBytes")]
+    pub memory_bytes: BigInt,
+    /// One of `"attached"`, `"rebuilt"`, or `"merged"` — what the
+    /// backend actually did to honor the mount request.
+    #[napi(js_name = "mountStrategy")]
+    pub mount_strategy: String,
+}
+
+/// Snapshot of one mounted adapter, returned by
+/// [`JsModelManager::list_adapters`]. Mirrors [`blazen_llm::AdapterStatus`].
+#[napi(object)]
+pub struct JsAdapterStatus {
+    /// Caller-supplied adapter identifier.
+    #[napi(js_name = "adapterId")]
+    pub adapter_id: String,
+    /// Scaling factor applied at mount time.
+    pub scale: f64,
+    /// Absolute filesystem path to the adapter directory.
+    #[napi(js_name = "sourceDir")]
+    pub source_dir: String,
+    /// Bytes the adapter occupies on top of the base model.
+    #[napi(js_name = "memoryBytes")]
+    pub memory_bytes: BigInt,
+}
+
+fn mount_strategy_label(strategy: AdapterMountStrategy) -> &'static str {
+    match strategy {
+        AdapterMountStrategy::Attached => "attached",
+        AdapterMountStrategy::Rebuilt => "rebuilt",
+        AdapterMountStrategy::Merged => "merged",
+    }
+}
+
 /// Memory-budget-aware model manager with per-pool LRU eviction.
 ///
 /// Tracks registered local models and their estimated memory footprint.
@@ -125,7 +205,12 @@ pub struct JsModelManager {
 }
 
 #[napi]
-#[allow(clippy::missing_errors_doc, clippy::needless_pass_by_value)]
+#[allow(
+    clippy::missing_errors_doc,
+    clippy::needless_pass_by_value,
+    clippy::too_many_arguments,
+    clippy::cast_possible_truncation
+)]
 impl JsModelManager {
     /// Create a new model manager with per-pool memory budgets.
     ///
@@ -240,8 +325,12 @@ impl JsModelManager {
     /// );
     /// ```
     ///
-    /// `isLoaded`, `memoryEstimateBytes`, and `device` are all
-    /// nullable / optional (pass `null` or `undefined` to omit).
+    /// `isLoaded`, `memoryEstimateBytes`, `device`, `loadAdapter`,
+    /// `unloadAdapter`, and `listAdapters` are all nullable / optional
+    /// (pass `null` or `undefined` to omit). Omitted adapter callbacks
+    /// cause [`JsModelManager::load_adapter`] / `unloadAdapter` /
+    /// `listAdapters` to surface the upstream "backend does not support
+    /// `LoRA` adapters" error for this model.
     #[napi(js_name = "registerLocalModel")]
     pub async fn register_local_model(
         &self,
@@ -251,6 +340,9 @@ impl JsModelManager {
         is_loaded: Option<IsLoadedTsfn>,
         memory_estimate_bytes: Option<BigInt>,
         device: Option<String>,
+        load_adapter: Option<LoadAdapterTsfn>,
+        unload_adapter: Option<UnloadAdapterTsfn>,
+        list_adapters: Option<ListAdaptersTsfn>,
     ) -> napi::Result<()> {
         let memory = memory_estimate_bytes.map_or(0, |b| b.get_u64().1);
         let parsed_device = device
@@ -263,6 +355,9 @@ impl JsModelManager {
             is_loaded_fn: is_loaded.map(Arc::new),
             memory_estimate_bytes: memory,
             device: parsed_device,
+            load_adapter_fn: load_adapter.map(Arc::new),
+            unload_adapter_fn: unload_adapter.map(Arc::new),
+            list_adapters_fn: list_adapters.map(Arc::new),
         };
         let local_model: Arc<dyn LocalModel> = Arc::new(adapter);
         self.inner.register(&id, local_model, memory).await;
@@ -360,6 +455,71 @@ impl JsModelManager {
             })
             .collect()
     }
+
+    /// Mount a PEFT-format `LoRA` adapter onto a registered model.
+    ///
+    /// `adapterDir` must contain the canonical PEFT layout
+    /// (`adapter_model.safetensors` + `adapter_config.json`). The base
+    /// model is implicitly loaded (`ensureLoaded`) before mounting.
+    ///
+    /// Returns the adapter id assigned by the backend (echoes
+    /// `options.adapterId`).
+    ///
+    /// Throws if the model is not registered, the adapter id is already
+    /// mounted, the pool budget would be exceeded, or the backend does
+    /// not support adapters.
+    #[napi(js_name = "loadAdapter")]
+    pub async fn load_adapter(
+        &self,
+        model_id: String,
+        adapter_dir: String,
+        options: AdapterOptions,
+    ) -> napi::Result<String> {
+        let llm_options = blazen_llm::AdapterOptions {
+            adapter_id: options.adapter_id,
+            scale: options.scale.map_or(1.0_f32, |s| s as f32),
+        };
+        let path = std::path::PathBuf::from(adapter_dir);
+        let handle = self
+            .inner
+            .load_adapter(&model_id, &path, llm_options)
+            .await
+            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        Ok(handle.adapter_id)
+    }
+
+    /// Unmount a previously-loaded adapter from a registered model.
+    ///
+    /// Throws if the model is not registered or the adapter id is not
+    /// currently mounted on it.
+    #[napi(js_name = "unloadAdapter")]
+    pub async fn unload_adapter(&self, model_id: String, adapter_id: String) -> napi::Result<()> {
+        self.inner
+            .unload_adapter(&model_id, &adapter_id)
+            .await
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    /// List adapters currently mounted on a registered model.
+    ///
+    /// Throws if the model is not registered.
+    #[napi(js_name = "listAdapters")]
+    pub async fn list_adapters(&self, model_id: String) -> napi::Result<Vec<JsAdapterStatus>> {
+        let statuses = self
+            .inner
+            .list_adapters(&model_id)
+            .await
+            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        Ok(statuses
+            .into_iter()
+            .map(|s| JsAdapterStatus {
+                adapter_id: s.adapter_id,
+                scale: f64::from(s.scale),
+                source_dir: s.source_dir.to_string_lossy().into_owned(),
+                memory_bytes: BigInt::from(s.memory_bytes),
+            })
+            .collect())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -380,6 +540,9 @@ struct JsLocalModelAdapter {
     is_loaded_fn: Option<Arc<IsLoadedTsfn>>,
     memory_estimate_bytes: u64,
     device: Device,
+    load_adapter_fn: Option<Arc<LoadAdapterTsfn>>,
+    unload_adapter_fn: Option<Arc<UnloadAdapterTsfn>>,
+    list_adapters_fn: Option<Arc<ListAdaptersTsfn>>,
 }
 
 impl std::fmt::Debug for JsLocalModelAdapter {
@@ -393,6 +556,7 @@ impl std::fmt::Debug for JsLocalModelAdapter {
 }
 
 #[async_trait::async_trait]
+#[allow(clippy::cast_possible_truncation)]
 impl LocalModel for JsLocalModelAdapter {
     async fn load(&self) -> Result<(), BlazenError> {
         let promise = self.load.call_async(()).await.map_err(|e| {
@@ -448,5 +612,104 @@ impl LocalModel for JsLocalModelAdapter {
 
     async fn memory_bytes(&self) -> Option<u64> {
         Some(self.memory_estimate_bytes)
+    }
+
+    async fn load_adapter(
+        &self,
+        adapter_dir: &std::path::Path,
+        options: blazen_llm::AdapterOptions,
+    ) -> Result<AdapterHandle, BlazenError> {
+        let Some(ref load_adapter) = self.load_adapter_fn else {
+            return Err(BlazenError::unsupported(
+                "JS lifecycle does not implement loadAdapter",
+            ));
+        };
+        let js_options = AdapterOptions {
+            adapter_id: options.adapter_id,
+            scale: Some(f64::from(options.scale)),
+        };
+        let adapter_dir_str = adapter_dir.to_string_lossy().into_owned();
+        let promise = load_adapter
+            .call_async(FnArgs::from((adapter_dir_str, js_options)))
+            .await
+            .map_err(|e| {
+                BlazenError::provider(
+                    "node_local_model",
+                    format!("model '{}' loadAdapter() dispatch failed: {e}", self.id),
+                )
+            })?;
+        let js_handle = promise.await.map_err(|e| {
+            BlazenError::provider(
+                "node_local_model",
+                format!("model '{}' loadAdapter() rejected: {e}", self.id),
+            )
+        })?;
+        let mount_strategy = match js_handle.mount_strategy.as_str() {
+            "attached" => AdapterMountStrategy::Attached,
+            "rebuilt" => AdapterMountStrategy::Rebuilt,
+            "merged" => AdapterMountStrategy::Merged,
+            other => {
+                return Err(BlazenError::provider(
+                    "node_local_model",
+                    format!(
+                        "model '{}' loadAdapter() returned unknown mountStrategy '{other}'; \
+                         expected 'attached', 'rebuilt', or 'merged'",
+                        self.id,
+                    ),
+                ));
+            }
+        };
+        Ok(AdapterHandle {
+            adapter_id: js_handle.adapter_id,
+            memory_bytes: js_handle.memory_bytes.get_u64().1,
+            mount_strategy,
+        })
+    }
+
+    async fn unload_adapter(&self, handle: &AdapterHandle) -> Result<(), BlazenError> {
+        let Some(ref unload_adapter) = self.unload_adapter_fn else {
+            return Err(BlazenError::unsupported(
+                "JS lifecycle does not implement unloadAdapter",
+            ));
+        };
+        let js_handle = JsAdapterHandle {
+            adapter_id: handle.adapter_id.clone(),
+            memory_bytes: BigInt::from(handle.memory_bytes),
+            mount_strategy: mount_strategy_label(handle.mount_strategy).to_string(),
+        };
+        let promise = unload_adapter.call_async(js_handle).await.map_err(|e| {
+            BlazenError::provider(
+                "node_local_model",
+                format!("model '{}' unloadAdapter() dispatch failed: {e}", self.id),
+            )
+        })?;
+        promise.await.map_err(|e| {
+            BlazenError::provider(
+                "node_local_model",
+                format!("model '{}' unloadAdapter() rejected: {e}", self.id),
+            )
+        })?;
+        Ok(())
+    }
+
+    async fn list_adapters(&self) -> Vec<blazen_llm::AdapterStatus> {
+        let Some(ref list_adapters) = self.list_adapters_fn else {
+            return Vec::new();
+        };
+        let Ok(promise) = list_adapters.call_async(()).await else {
+            return Vec::new();
+        };
+        let Ok(statuses) = promise.await else {
+            return Vec::new();
+        };
+        statuses
+            .into_iter()
+            .map(|s| blazen_llm::AdapterStatus {
+                adapter_id: s.adapter_id,
+                scale: s.scale as f32,
+                source_dir: std::path::PathBuf::from(s.source_dir),
+                memory_bytes: s.memory_bytes.get_u64().1,
+            })
+            .collect()
     }
 }

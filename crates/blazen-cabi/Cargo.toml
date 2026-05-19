@@ -35,6 +35,7 @@ thiserror.workspace = true
 tokio = { workspace = true }
 tracing.workspace = true
 uuid = { workspace = true }
+blazen-manager.workspace = true
 
 [build-dependencies]
 cbindgen = "0.29"
@@ -54,9 +55,13 @@ whispercpp = ["blazen-uniffi/whispercpp"]
 piper = ["blazen-uniffi/piper"]
 tiktoken = ["blazen-uniffi/tiktoken"]
 tract = ["blazen-uniffi/tract"]
+# ORT-backed embedding backend (forwarded through blazen-uniffi; target-gated
+# at the uniffi crate so musl builds skip it automatically).
+fastembed = ["blazen-uniffi/fastembed"]
 
 local-all = [
     "embed",
+    "fastembed",
     "tract",
     "candle-embed",
     "mistralrs",

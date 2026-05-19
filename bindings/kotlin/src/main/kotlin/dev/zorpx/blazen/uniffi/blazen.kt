@@ -792,6 +792,80 @@ internal interface UniffiCallbackInterfaceControlPlaneRunEventSubscriberMethod2 
     )
 }
 
+internal interface UniffiCallbackInterfaceForeignLocalModelMethod0 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceForeignLocalModelMethod1 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceForeignLocalModelMethod2 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteI8,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceForeignLocalModelMethod3 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `uniffiOutReturn`: RustBuffer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
+internal interface UniffiCallbackInterfaceForeignLocalModelMethod4 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceForeignLocalModelMethod5 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `adapterDir`: RustBuffer.ByValue,
+        `options`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceForeignLocalModelMethod6 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `handle`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceForeignLocalModelMethod7 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
 internal interface UniffiCallbackInterfaceCustomProviderMethod0 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
@@ -1070,6 +1144,69 @@ internal open class UniffiVTableCallbackInterfaceControlPlaneRunEventSubscriber(
         `onEvent` = other.`onEvent`
         `onClose` = other.`onClose`
         `onError` = other.`onError`
+    }
+}
+
+@Structure.FieldOrder(
+    "uniffiFree",
+    "uniffiClone",
+    "load",
+    "unload",
+    "isLoaded",
+    "device",
+    "memoryBytes",
+    "loadAdapter",
+    "unloadAdapter",
+    "listAdapters",
+)
+internal open class UniffiVTableCallbackInterfaceForeignLocalModel(
+    @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+    @JvmField internal var `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+    @JvmField internal var `load`: UniffiCallbackInterfaceForeignLocalModelMethod0? = null,
+    @JvmField internal var `unload`: UniffiCallbackInterfaceForeignLocalModelMethod1? = null,
+    @JvmField internal var `isLoaded`: UniffiCallbackInterfaceForeignLocalModelMethod2? = null,
+    @JvmField internal var `device`: UniffiCallbackInterfaceForeignLocalModelMethod3? = null,
+    @JvmField internal var `memoryBytes`: UniffiCallbackInterfaceForeignLocalModelMethod4? = null,
+    @JvmField internal var `loadAdapter`: UniffiCallbackInterfaceForeignLocalModelMethod5? = null,
+    @JvmField internal var `unloadAdapter`: UniffiCallbackInterfaceForeignLocalModelMethod6? = null,
+    @JvmField internal var `listAdapters`: UniffiCallbackInterfaceForeignLocalModelMethod7? = null,
+) : Structure() {
+    class UniffiByValue(
+        `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+        `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+        `load`: UniffiCallbackInterfaceForeignLocalModelMethod0? = null,
+        `unload`: UniffiCallbackInterfaceForeignLocalModelMethod1? = null,
+        `isLoaded`: UniffiCallbackInterfaceForeignLocalModelMethod2? = null,
+        `device`: UniffiCallbackInterfaceForeignLocalModelMethod3? = null,
+        `memoryBytes`: UniffiCallbackInterfaceForeignLocalModelMethod4? = null,
+        `loadAdapter`: UniffiCallbackInterfaceForeignLocalModelMethod5? = null,
+        `unloadAdapter`: UniffiCallbackInterfaceForeignLocalModelMethod6? = null,
+        `listAdapters`: UniffiCallbackInterfaceForeignLocalModelMethod7? = null,
+    ) : UniffiVTableCallbackInterfaceForeignLocalModel(
+            `uniffiFree`,
+            `uniffiClone`,
+            `load`,
+            `unload`,
+            `isLoaded`,
+            `device`,
+            `memoryBytes`,
+            `loadAdapter`,
+            `unloadAdapter`,
+            `listAdapters`,
+        ),
+        Structure.ByValue
+
+    internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceForeignLocalModel) {
+        `uniffiFree` = other.`uniffiFree`
+        `uniffiClone` = other.`uniffiClone`
+        `load` = other.`load`
+        `unload` = other.`unload`
+        `isLoaded` = other.`isLoaded`
+        `device` = other.`device`
+        `memoryBytes` = other.`memoryBytes`
+        `loadAdapter` = other.`loadAdapter`
+        `unloadAdapter` = other.`unloadAdapter`
+        `listAdapters` = other.`listAdapters`
     }
 }
 
@@ -1416,6 +1553,50 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_method_embeddingmodel_model_id(): Short
 
+    external fun uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_load(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_unload(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_is_loaded(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_device(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_memory_bytes(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_load_adapter(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_unload_adapter(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_list_adapters(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_available_bytes(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_ensure_loaded(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_is_loaded(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_list_adapters(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load_adapter(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_pools(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_register_local(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_status(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_unload(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_unload_adapter(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_unload_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_used_bytes(): Short
+
     external fun uniffi_blazen_uniffi_checksum_method_peerclient_node_id(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_peerclient_run_remote_workflow(): Short
@@ -1586,6 +1767,12 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_constructor_controlplaneworker_new_blocking(): Short
 
+    external fun uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_with_budgets_gb(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_with_pool_budgets(): Short
+
     external fun uniffi_blazen_uniffi_checksum_constructor_peerclient_connect(): Short
 
     external fun uniffi_blazen_uniffi_checksum_constructor_peerserver_new(): Short
@@ -1613,6 +1800,7 @@ internal object UniffiLib {
         uniffiCallbackInterfaceControlPlaneAssignmentHandler.register(this)
         uniffiCallbackInterfaceControlPlaneRunEventSubscriber.register(this)
         uniffiCallbackInterfaceCustomProvider.register(this)
+        uniffiCallbackInterfaceForeignLocalModel.register(this)
         uniffiCallbackInterfaceStepHandler.register(this)
         uniffiCallbackInterfaceToolHandler.register(this)
     }
@@ -1953,6 +2141,143 @@ internal object UniffiLib {
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_foreignlocalmodel(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_foreignlocalmodel(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_init_callback_vtable_foreignlocalmodel(
+        `vtable`: UniffiVTableCallbackInterfaceForeignLocalModel,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_foreignlocalmodel_load(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_foreignlocalmodel_unload(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_foreignlocalmodel_is_loaded(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_foreignlocalmodel_device(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_foreignlocalmodel_memory_bytes(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_foreignlocalmodel_load_adapter(
+        `ptr`: Long,
+        `adapterDir`: RustBuffer.ByValue,
+        `options`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_foreignlocalmodel_unload_adapter(
+        `ptr`: Long,
+        `handle`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_foreignlocalmodel_list_adapters(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_clone_uniffimodelmanager(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_uniffimodelmanager(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_uniffimodelmanager_new(uniffi_out_err: UniffiRustCallStatus): Long
+
+    external fun uniffi_blazen_uniffi_fn_constructor_uniffimodelmanager_with_budgets_gb(
+        `cpuRamGb`: Double,
+        `gpuVramGb`: Double,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_constructor_uniffimodelmanager_with_pool_budgets(
+        `perPoolBudgets`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_available_bytes(
+        `ptr`: Long,
+        `pool`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_ensure_loaded(
+        `ptr`: Long,
+        `modelId`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_is_loaded(
+        `ptr`: Long,
+        `modelId`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_list_adapters(
+        `ptr`: Long,
+        `modelId`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_load(
+        `ptr`: Long,
+        `modelId`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_load_adapter(
+        `ptr`: Long,
+        `modelId`: RustBuffer.ByValue,
+        `adapterDir`: RustBuffer.ByValue,
+        `options`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_load_blocking(
+        `ptr`: Long,
+        `modelId`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_pools(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_register_local(
+        `ptr`: Long,
+        `id`: RustBuffer.ByValue,
+        `model`: Long,
+        `memoryEstimateBytes`: Long,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_status(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_unload(
+        `ptr`: Long,
+        `modelId`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_unload_adapter(
+        `ptr`: Long,
+        `modelId`: RustBuffer.ByValue,
+        `adapterId`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_unload_blocking(
+        `ptr`: Long,
+        `modelId`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_used_bytes(
+        `ptr`: Long,
+        `pool`: RustBuffer.ByValue,
+    ): Long
 
     external fun uniffi_blazen_uniffi_fn_clone_peerclient(
         `handle`: Long,
@@ -3356,6 +3681,72 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_method_embeddingmodel_model_id() != 36076.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_load() != 57606.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_unload() != 30655.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_is_loaded() != 35239.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_device() != 36918.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_memory_bytes() != 63180.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_load_adapter() != 64869.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_unload_adapter() != 45180.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_list_adapters() != 49821.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_available_bytes() != 19672.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_ensure_loaded() != 33632.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_is_loaded() != 48692.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_list_adapters() != 57369.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load() != 56552.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load_adapter() != 2343.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load_blocking() != 10510.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_pools() != 34891.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_register_local() != 23428.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_status() != 18811.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_unload() != 3272.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_unload_adapter() != 43755.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_unload_blocking() != 2783.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_used_bytes() != 51636.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_blazen_uniffi_checksum_method_peerclient_node_id() != 16043.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3609,6 +4000,15 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_constructor_controlplaneworker_new_blocking() != 22162.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_new() != 31159.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_with_budgets_gb() != 1375.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_with_pool_budgets() != 59591.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_constructor_peerclient_connect() != 36996.toShort()) {
@@ -11097,6 +11497,753 @@ public object FfiConverterTypeEmbeddingModel : FfiConverter<EmbeddingModel, Long
 //
 
 /**
+ * Foreign-language implementation of a local (on-device) model.
+ *
+ * Implementors mirror the upstream [`blazen_llm::LocalModel`] trait but in
+ * FFI-friendly form: paths are `String`, the `device()` accessor returns a
+ * `String` ("cpu", "cuda:0", "metal", ...) that gets parsed back into
+ * [`blazen_llm::Device`] when forwarded to the manager.
+ *
+ * `is_loaded`, `memory_bytes`, `device`, `load_adapter`, `unload_adapter`,
+ * and `list_adapters` are NOT optional on this trait — UniFFI does not have a
+ * concept of "default trait method" that the foreign side can opt out of.
+ * Foreign implementors that don't care about a verb should return a sensible
+ * neutral value (`false` for `is_loaded`, `0` / `None` for `memory_bytes`,
+ * `"cpu"` for `device`, an empty `list_adapters`, or raise
+ * [`BlazenError::Unsupported`] from the adapter verbs).
+ */
+public interface ForeignLocalModel {
+    suspend fun `load`()
+
+    suspend fun `unload`()
+
+    suspend fun `isLoaded`(): kotlin.Boolean
+
+    fun `device`(): kotlin.String
+
+    suspend fun `memoryBytes`(): kotlin.ULong?
+
+    suspend fun `loadAdapter`(
+        `adapterDir`: kotlin.String,
+        `options`: AdapterOptionsRecord,
+    ): AdapterHandleRecord
+
+    suspend fun `unloadAdapter`(`handle`: AdapterHandleRecord)
+
+    suspend fun `listAdapters`(): List<AdapterStatusRecord>
+
+    companion object
+}
+
+/**
+ * Foreign-language implementation of a local (on-device) model.
+ *
+ * Implementors mirror the upstream [`blazen_llm::LocalModel`] trait but in
+ * FFI-friendly form: paths are `String`, the `device()` accessor returns a
+ * `String` ("cpu", "cuda:0", "metal", ...) that gets parsed back into
+ * [`blazen_llm::Device`] when forwarded to the manager.
+ *
+ * `is_loaded`, `memory_bytes`, `device`, `load_adapter`, `unload_adapter`,
+ * and `list_adapters` are NOT optional on this trait — UniFFI does not have a
+ * concept of "default trait method" that the foreign side can opt out of.
+ * Foreign implementors that don't care about a verb should return a sensible
+ * neutral value (`false` for `is_loaded`, `0` / `None` for `memory_bytes`,
+ * `"cpu"` for `device`, an empty `list_adapters`, or raise
+ * [`BlazenError::Unsupported`] from the adapter verbs).
+ */
+open class ForeignLocalModelImpl :
+    Disposable,
+    AutoCloseable,
+    ForeignLocalModel {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_foreignlocalmodel(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_foreignlocalmodel(handle, status)
+        }
+    }
+
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `load`() =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_foreignlocalmodel_load(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `unload`() =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_foreignlocalmodel_unload(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `isLoaded`(): kotlin.Boolean =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_foreignlocalmodel_is_loaded(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_i8(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_i8(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_i8(future) },
+            // lift function
+            { FfiConverterBoolean.lift(it) },
+            // Error FFI converter
+            UniffiNullRustCallStatusErrorHandler,
+        )
+
+    override fun `device`(): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_foreignlocalmodel_device(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `memoryBytes`(): kotlin.ULong? =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_foreignlocalmodel_memory_bytes(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterOptionalULong.lift(it) },
+            // Error FFI converter
+            UniffiNullRustCallStatusErrorHandler,
+        )
+
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `loadAdapter`(
+        `adapterDir`: kotlin.String,
+        `options`: AdapterOptionsRecord,
+    ): AdapterHandleRecord =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_foreignlocalmodel_load_adapter(
+                    uniffiHandle,
+                    FfiConverterString.lower(`adapterDir`),
+                    FfiConverterTypeAdapterOptionsRecord.lower(`options`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeAdapterHandleRecord.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `unloadAdapter`(`handle`: AdapterHandleRecord) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_foreignlocalmodel_unload_adapter(
+                    uniffiHandle,
+                    FfiConverterTypeAdapterHandleRecord.lower(`handle`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `listAdapters`(): List<AdapterStatusRecord> =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_foreignlocalmodel_list_adapters(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterSequenceTypeAdapterStatusRecord.lift(it) },
+            // Error FFI converter
+            UniffiNullRustCallStatusErrorHandler,
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+// Put the implementation in an object so we don't pollute the top-level namespace
+internal object uniffiCallbackInterfaceForeignLocalModel {
+    internal object `load` : UniffiCallbackInterfaceForeignLocalModelMethod0 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeForeignLocalModel.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend { uniffiObj.`load`() }
+            val uniffiHandleSuccess = { _: Unit ->
+                val uniffiResult =
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `unload` : UniffiCallbackInterfaceForeignLocalModelMethod1 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeForeignLocalModel.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend { uniffiObj.`unload`() }
+            val uniffiHandleSuccess = { _: Unit ->
+                val uniffiResult =
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `isLoaded` : UniffiCallbackInterfaceForeignLocalModelMethod2 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteI8,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeForeignLocalModel.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend { uniffiObj.`isLoaded`() }
+            val uniffiHandleSuccess = { returnValue: kotlin.Boolean ->
+                val uniffiResult =
+                    UniffiForeignFutureResultI8.UniffiByValue(
+                        FfiConverterBoolean.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultI8.UniffiByValue(
+                        0.toByte(),
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsync(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `device` : UniffiCallbackInterfaceForeignLocalModelMethod3 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `uniffiOutReturn`: RustBuffer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypeForeignLocalModel.handleMap.get(uniffiHandle)
+            val makeCall = { uniffiObj.`device`() }
+            val writeReturn = { value: kotlin.String -> uniffiOutReturn.setValue(FfiConverterString.lower(value)) }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object `memoryBytes` : UniffiCallbackInterfaceForeignLocalModelMethod4 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeForeignLocalModel.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend { uniffiObj.`memoryBytes`() }
+            val uniffiHandleSuccess = { returnValue: kotlin.ULong? ->
+                val uniffiResult =
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        FfiConverterOptionalULong.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        RustBuffer.ByValue(),
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsync(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `loadAdapter` : UniffiCallbackInterfaceForeignLocalModelMethod5 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `adapterDir`: RustBuffer.ByValue,
+            `options`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeForeignLocalModel.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`loadAdapter`(
+                    FfiConverterString.lift(`adapterDir`),
+                    FfiConverterTypeAdapterOptionsRecord.lift(`options`),
+                )
+                }
+            val uniffiHandleSuccess = { returnValue: AdapterHandleRecord ->
+                val uniffiResult =
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        FfiConverterTypeAdapterHandleRecord.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        RustBuffer.ByValue(),
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `unloadAdapter` : UniffiCallbackInterfaceForeignLocalModelMethod6 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `handle`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeForeignLocalModel.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`unloadAdapter`(
+                    FfiConverterTypeAdapterHandleRecord.lift(`handle`),
+                )
+                }
+            val uniffiHandleSuccess = { _: Unit ->
+                val uniffiResult =
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `listAdapters` : UniffiCallbackInterfaceForeignLocalModelMethod7 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteRustBuffer,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeForeignLocalModel.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend { uniffiObj.`listAdapters`() }
+            val uniffiHandleSuccess = { returnValue: List<AdapterStatusRecord> ->
+                val uniffiResult =
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        FfiConverterSequenceTypeAdapterStatusRecord.lower(returnValue),
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer.UniffiByValue(
+                        RustBuffer.ByValue(),
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsync(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object uniffiFree : UniffiCallbackInterfaceFree {
+        override fun callback(handle: Long) {
+            FfiConverterTypeForeignLocalModel.handleMap.remove(handle)
+        }
+    }
+
+    internal object uniffiClone : UniffiCallbackInterfaceClone {
+        override fun callback(handle: Long): Long = FfiConverterTypeForeignLocalModel.handleMap.clone(handle)
+    }
+
+    internal var vtable =
+        UniffiVTableCallbackInterfaceForeignLocalModel.UniffiByValue(
+            uniffiFree,
+            uniffiClone,
+            `load`,
+            `unload`,
+            `isLoaded`,
+            `device`,
+            `memoryBytes`,
+            `loadAdapter`,
+            `unloadAdapter`,
+            `listAdapters`,
+        )
+
+    // Registers the foreign callback with the Rust side.
+    // This method is generated for each callback interface.
+    internal fun register(lib: UniffiLib) {
+        lib.uniffi_blazen_uniffi_fn_init_callback_vtable_foreignlocalmodel(vtable)
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeForeignLocalModel : FfiConverter<ForeignLocalModel, Long> {
+    internal val handleMap = UniffiHandleMap<ForeignLocalModel>()
+
+    override fun lower(value: ForeignLocalModel): Long {
+        if (value is ForeignLocalModelImpl) {
+            // Rust-implemented object.  Clone the handle and return it
+            return value.uniffiCloneHandle()
+        } else {
+            // Kotlin object, generate a new vtable handle and return that.
+            return handleMap.insert(value)
+        }
+    }
+
+    override fun lift(value: Long): ForeignLocalModel {
+        if ((value and 1.toLong()) == 0.toLong()) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return ForeignLocalModelImpl(UniffiWithHandle, value)
+        } else {
+            // Kotlin-generated handle, get the object from the handle map
+            return handleMap.remove(value)
+        }
+    }
+
+    override fun read(buf: ByteBuffer): ForeignLocalModel = lift(buf.getLong())
+
+    override fun allocationSize(value: ForeignLocalModel) = 8UL
+
+    override fun write(
+        value: ForeignLocalModel,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
  * An image-generation model.
  *
  * Construct via [`new_diffusion_model`] (local, feature-gated) or
@@ -14404,6 +15551,633 @@ public object FfiConverterTypeTtsModel : FfiConverter<TtsModel, Long> {
 //
 
 /**
+ * Memory-budget-aware model manager with per-pool LRU eviction.
+ *
+ * Foreign code constructs one of these, registers
+ * [`ForeignLocalModel`]-implementing handles against it, and drives loads /
+ * unloads / adapter lifecycle from any thread / fiber / goroutine /
+ * coroutine on the foreign side.
+ */
+public interface UniffiModelManagerInterface {
+    suspend fun `availableBytes`(`pool`: kotlin.String): kotlin.ULong
+
+    suspend fun `ensureLoaded`(`modelId`: kotlin.String)
+
+    suspend fun `isLoaded`(`modelId`: kotlin.String): kotlin.Boolean
+
+    suspend fun `listAdapters`(`modelId`: kotlin.String): List<AdapterStatusRecord>
+
+    suspend fun `load`(`modelId`: kotlin.String)
+
+    /**
+     * Mount a PEFT-format LoRA adapter and return the adapter id reported
+     * by the backend.
+     */
+    suspend fun `loadAdapter`(
+        `modelId`: kotlin.String,
+        `adapterDir`: kotlin.String,
+        `options`: AdapterOptionsRecord,
+    ): kotlin.String
+
+    /**
+     * Synchronous variant of [`Self::load`] — blocks the current thread on
+     * the shared Tokio runtime.
+     */
+    fun `loadBlocking`(`modelId`: kotlin.String)
+
+    /**
+     * List configured pools and their budgets in bytes.
+     */
+    fun `pools`(): List<PoolStatusRecord>
+
+    /**
+     * Register a foreign-implemented [`ForeignLocalModel`] under `id`.
+     *
+     * `memory_estimate_bytes` is the model's estimated footprint and is
+     * charged against the pool derived from the foreign model's `device()`
+     * when it's loaded.
+     */
+    suspend fun `registerLocal`(
+        `id`: kotlin.String,
+        `model`: ForeignLocalModel,
+        `memoryEstimateBytes`: kotlin.ULong,
+    )
+
+    suspend fun `status`(): List<ModelStatusRecord>
+
+    suspend fun `unload`(`modelId`: kotlin.String)
+
+    suspend fun `unloadAdapter`(
+        `modelId`: kotlin.String,
+        `adapterId`: kotlin.String,
+    )
+
+    /**
+     * Synchronous variant of [`Self::unload`].
+     */
+    fun `unloadBlocking`(`modelId`: kotlin.String)
+
+    suspend fun `usedBytes`(`pool`: kotlin.String): kotlin.ULong
+
+    companion object
+}
+
+/**
+ * Memory-budget-aware model manager with per-pool LRU eviction.
+ *
+ * Foreign code constructs one of these, registers
+ * [`ForeignLocalModel`]-implementing handles against it, and drives loads /
+ * unloads / adapter lifecycle from any thread / fiber / goroutine /
+ * coroutine on the foreign side.
+ */
+open class UniffiModelManager :
+    Disposable,
+    AutoCloseable,
+    UniffiModelManagerInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a manager with no budget enforcement (both `Cpu` and
+     * `Gpu(0)` pools seeded with `u64::MAX`).
+     *
+     * Matches the Python binding's `ModelManager()` no-arg sentinel
+     * behaviour. For real deployments, prefer
+     * [`Self::with_budgets_gb`](Self::with_budgets_gb) or
+     * [`Self::with_pool_budgets`](Self::with_pool_budgets).
+     */
+    constructor() :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_uniffimodelmanager_new(_status)
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_uniffimodelmanager(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_uniffimodelmanager(handle, status)
+        }
+    }
+
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `availableBytes`(`pool`: kotlin.String): kotlin.ULong =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_available_bytes(
+                    uniffiHandle,
+                    FfiConverterString.lower(`pool`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_u64(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_u64(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_u64(future) },
+            // lift function
+            { FfiConverterULong.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `ensureLoaded`(`modelId`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_ensure_loaded(
+                    uniffiHandle,
+                    FfiConverterString.lower(`modelId`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `isLoaded`(`modelId`: kotlin.String): kotlin.Boolean =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_is_loaded(
+                    uniffiHandle,
+                    FfiConverterString.lower(`modelId`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_i8(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_i8(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_i8(future) },
+            // lift function
+            { FfiConverterBoolean.lift(it) },
+            // Error FFI converter
+            UniffiNullRustCallStatusErrorHandler,
+        )
+
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `listAdapters`(`modelId`: kotlin.String): List<AdapterStatusRecord> =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_list_adapters(
+                    uniffiHandle,
+                    FfiConverterString.lower(`modelId`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterSequenceTypeAdapterStatusRecord.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `load`(`modelId`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_load(
+                    uniffiHandle,
+                    FfiConverterString.lower(`modelId`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Mount a PEFT-format LoRA adapter and return the adapter id reported
+     * by the backend.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `loadAdapter`(
+        `modelId`: kotlin.String,
+        `adapterDir`: kotlin.String,
+        `options`: AdapterOptionsRecord,
+    ): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_load_adapter(
+                    uniffiHandle,
+                    FfiConverterString.lower(`modelId`),
+                    FfiConverterString.lower(`adapterDir`),
+                    FfiConverterTypeAdapterOptionsRecord.lower(`options`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`Self::load`] — blocks the current thread on
+     * the shared Tokio runtime.
+     */
+    @Throws(BlazenException::class)
+    override fun `loadBlocking`(`modelId`: kotlin.String) =
+        callWithHandle {
+            uniffiRustCallWithError(BlazenException) { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_load_blocking(
+                    it,
+                    FfiConverterString.lower(`modelId`),
+                    _status,
+                )
+            }
+        }
+
+    /**
+     * List configured pools and their budgets in bytes.
+     */
+    override fun `pools`(): List<PoolStatusRecord> =
+        FfiConverterSequenceTypePoolStatusRecord.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_pools(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Register a foreign-implemented [`ForeignLocalModel`] under `id`.
+     *
+     * `memory_estimate_bytes` is the model's estimated footprint and is
+     * charged against the pool derived from the foreign model's `device()`
+     * when it's loaded.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `registerLocal`(
+        `id`: kotlin.String,
+        `model`: ForeignLocalModel,
+        `memoryEstimateBytes`: kotlin.ULong,
+    ) = uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_register_local(
+                uniffiHandle,
+                FfiConverterString.lower(`id`),
+                FfiConverterTypeForeignLocalModel.lower(`model`),
+                FfiConverterULong.lower(`memoryEstimateBytes`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        // Error FFI converter
+        BlazenException.ErrorHandler,
+    )
+
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `status`(): List<ModelStatusRecord> =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_status(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterSequenceTypeModelStatusRecord.lift(it) },
+            // Error FFI converter
+            UniffiNullRustCallStatusErrorHandler,
+        )
+
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `unload`(`modelId`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_unload(
+                    uniffiHandle,
+                    FfiConverterString.lower(`modelId`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `unloadAdapter`(
+        `modelId`: kotlin.String,
+        `adapterId`: kotlin.String,
+    ) = uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_unload_adapter(
+                uniffiHandle,
+                FfiConverterString.lower(`modelId`),
+                FfiConverterString.lower(`adapterId`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        // Error FFI converter
+        BlazenException.ErrorHandler,
+    )
+
+    /**
+     * Synchronous variant of [`Self::unload`].
+     */
+    @Throws(BlazenException::class)
+    override fun `unloadBlocking`(`modelId`: kotlin.String) =
+        callWithHandle {
+            uniffiRustCallWithError(BlazenException) { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_unload_blocking(
+                    it,
+                    FfiConverterString.lower(`modelId`),
+                    _status,
+                )
+            }
+        }
+
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `usedBytes`(`pool`: kotlin.String): kotlin.ULong =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_used_bytes(
+                    uniffiHandle,
+                    FfiConverterString.lower(`pool`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_u64(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_u64(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_u64(future) },
+            // lift function
+            { FfiConverterULong.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    companion object {
+        /**
+         * Construct a manager with one CPU-pool budget and one GPU-pool
+         * (`Gpu(0)`) budget, both expressed in gigabytes.
+         */
+        fun `withBudgetsGb`(
+            `cpuRamGb`: kotlin.Double,
+            `gpuVramGb`: kotlin.Double,
+        ): UniffiModelManager =
+            FfiConverterTypeUniffiModelManager.lift(
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_constructor_uniffimodelmanager_with_budgets_gb(
+                        FfiConverterDouble.lower(`cpuRamGb`),
+                        FfiConverterDouble.lower(`gpuVramGb`),
+                        _status,
+                    )
+                },
+            )
+
+        /**
+         * Construct a manager with explicit per-pool budgets.
+         *
+         * Keys are pool labels (`"cpu"`, `"gpu"`, `"gpu:0"`, `"gpu:1"`, ...);
+         * values are budgets in **gigabytes** (mirrors the Python binding's
+         * `pool_budgets` ergonomics — bytes-as-`u64` would force foreign
+         * callers to write `64 * 1024 * 1024 * 1024` for trivial values).
+         */
+        @Throws(BlazenException::class)
+        fun `withPoolBudgets`(`perPoolBudgets`: Map<kotlin.String, kotlin.Double>): UniffiModelManager =
+            FfiConverterTypeUniffiModelManager.lift(
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_constructor_uniffimodelmanager_with_pool_budgets(
+                        FfiConverterMapStringDouble.lower(`perPoolBudgets`),
+                        _status,
+                    )
+                },
+            )
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeUniffiModelManager : FfiConverter<UniffiModelManager, Long> {
+    override fun lower(value: UniffiModelManager): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): UniffiModelManager = UniffiModelManager(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): UniffiModelManager = lift(buf.getLong())
+
+    override fun allocationSize(value: UniffiModelManager) = 8UL
+
+    override fun write(
+        value: UniffiModelManager,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
  * A built workflow ready to run.
  */
 public interface WorkflowInterface {
@@ -14974,6 +16748,132 @@ public object FfiConverterTypeWorkflowBuilder : FfiConverter<WorkflowBuilder, Lo
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
+    }
+}
+
+/**
+ * Result returned by [`ForeignLocalModel::load_adapter`], mirroring
+ * [`blazen_llm::AdapterHandle`].
+ *
+ * `mount_strategy` is one of `"attached"`, `"rebuilt"`, `"merged"` — kept
+ * as a string discriminator so adding a new strategy to the upstream enum
+ * does not break the FFI contract.
+ */
+data class AdapterHandleRecord(
+    var `adapterId`: kotlin.String,
+    var `memoryBytes`: kotlin.ULong,
+    var `mountStrategy`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAdapterHandleRecord : FfiConverterRustBuffer<AdapterHandleRecord> {
+    override fun read(buf: ByteBuffer): AdapterHandleRecord =
+        AdapterHandleRecord(
+            FfiConverterString.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: AdapterHandleRecord) =
+        (
+            FfiConverterString.allocationSize(value.`adapterId`) +
+                FfiConverterULong.allocationSize(value.`memoryBytes`) +
+                FfiConverterString.allocationSize(value.`mountStrategy`)
+        )
+
+    override fun write(
+        value: AdapterHandleRecord,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`adapterId`, buf)
+        FfiConverterULong.write(value.`memoryBytes`, buf)
+        FfiConverterString.write(value.`mountStrategy`, buf)
+    }
+}
+
+/**
+ * Adapter mount options handed to [`ForeignLocalModel::load_adapter`].
+ *
+ * Mirrors [`blazen_llm::AdapterOptions`] but lives as a UniFFI Record so
+ * foreign code can construct it natively.
+ */
+data class AdapterOptionsRecord(
+    var `adapterId`: kotlin.String,
+    var `scale`: kotlin.Float,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAdapterOptionsRecord : FfiConverterRustBuffer<AdapterOptionsRecord> {
+    override fun read(buf: ByteBuffer): AdapterOptionsRecord =
+        AdapterOptionsRecord(
+            FfiConverterString.read(buf),
+            FfiConverterFloat.read(buf),
+        )
+
+    override fun allocationSize(value: AdapterOptionsRecord) =
+        (
+            FfiConverterString.allocationSize(value.`adapterId`) +
+                FfiConverterFloat.allocationSize(value.`scale`)
+        )
+
+    override fun write(
+        value: AdapterOptionsRecord,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`adapterId`, buf)
+        FfiConverterFloat.write(value.`scale`, buf)
+    }
+}
+
+/**
+ * Snapshot of a single mounted adapter — wire form of
+ * [`blazen_llm::AdapterStatus`].
+ */
+data class AdapterStatusRecord(
+    var `adapterId`: kotlin.String,
+    var `scale`: kotlin.Float,
+    var `sourceDir`: kotlin.String,
+    var `memoryBytes`: kotlin.ULong,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAdapterStatusRecord : FfiConverterRustBuffer<AdapterStatusRecord> {
+    override fun read(buf: ByteBuffer): AdapterStatusRecord =
+        AdapterStatusRecord(
+            FfiConverterString.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterULong.read(buf),
+        )
+
+    override fun allocationSize(value: AdapterStatusRecord) =
+        (
+            FfiConverterString.allocationSize(value.`adapterId`) +
+                FfiConverterFloat.allocationSize(value.`scale`) +
+                FfiConverterString.allocationSize(value.`sourceDir`) +
+                FfiConverterULong.allocationSize(value.`memoryBytes`)
+        )
+
+    override fun write(
+        value: AdapterStatusRecord,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`adapterId`, buf)
+        FfiConverterFloat.write(value.`scale`, buf)
+        FfiConverterString.write(value.`sourceDir`, buf)
+        FfiConverterULong.write(value.`memoryBytes`, buf)
     }
 }
 
@@ -16497,6 +18397,56 @@ public object FfiConverterTypeMediaOutput : FfiConverterRustBuffer<MediaOutput> 
 }
 
 /**
+ * Per-model state snapshot returned by [`UniffiModelManager::status`].
+ */
+data class ModelStatusRecord(
+    var `id`: kotlin.String,
+    var `loaded`: kotlin.Boolean,
+    var `memoryEstimateBytes`: kotlin.ULong,
+    /**
+     * Pool label (`"cpu"` or `"gpu:N"`).
+     */
+    var `pool`: kotlin.String,
+    var `adapters`: List<AdapterStatusRecord>,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeModelStatusRecord : FfiConverterRustBuffer<ModelStatusRecord> {
+    override fun read(buf: ByteBuffer): ModelStatusRecord =
+        ModelStatusRecord(
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterSequenceTypeAdapterStatusRecord.read(buf),
+        )
+
+    override fun allocationSize(value: ModelStatusRecord) =
+        (
+            FfiConverterString.allocationSize(value.`id`) +
+                FfiConverterBoolean.allocationSize(value.`loaded`) +
+                FfiConverterULong.allocationSize(value.`memoryEstimateBytes`) +
+                FfiConverterString.allocationSize(value.`pool`) +
+                FfiConverterSequenceTypeAdapterStatusRecord.allocationSize(value.`adapters`)
+        )
+
+    override fun write(
+        value: ModelStatusRecord,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`id`, buf)
+        FfiConverterBoolean.write(value.`loaded`, buf)
+        FfiConverterULong.write(value.`memoryEstimateBytes`, buf)
+        FfiConverterString.write(value.`pool`, buf)
+        FfiConverterSequenceTypeAdapterStatusRecord.write(value.`adapters`, buf)
+    }
+}
+
+/**
  * Request to generate music or sound effects.
  */
 data class MusicRequest(
@@ -16669,6 +18619,44 @@ public object FfiConverterTypePersistedEvent : FfiConverterRustBuffer<PersistedE
     ) {
         FfiConverterString.write(value.`eventType`, buf)
         FfiConverterString.write(value.`dataJson`, buf)
+    }
+}
+
+/**
+ * Per-pool budget snapshot returned by [`UniffiModelManager::pools`].
+ */
+data class PoolStatusRecord(
+    /**
+     * Pool label (`"cpu"` or `"gpu:N"`).
+     */
+    var `pool`: kotlin.String,
+    var `budgetBytes`: kotlin.ULong,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePoolStatusRecord : FfiConverterRustBuffer<PoolStatusRecord> {
+    override fun read(buf: ByteBuffer): PoolStatusRecord =
+        PoolStatusRecord(
+            FfiConverterString.read(buf),
+            FfiConverterULong.read(buf),
+        )
+
+    override fun allocationSize(value: PoolStatusRecord) =
+        (
+            FfiConverterString.allocationSize(value.`pool`) +
+                FfiConverterULong.allocationSize(value.`budgetBytes`)
+        )
+
+    override fun write(
+        value: PoolStatusRecord,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`pool`, buf)
+        FfiConverterULong.write(value.`budgetBytes`, buf)
     }
 }
 
@@ -19405,6 +21393,34 @@ public object FfiConverterSequenceTypeWorkflow : FfiConverterRustBuffer<List<Wor
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeAdapterStatusRecord : FfiConverterRustBuffer<List<AdapterStatusRecord>> {
+    override fun read(buf: ByteBuffer): List<AdapterStatusRecord> {
+        val len = buf.getInt()
+        return List<AdapterStatusRecord>(len) {
+            FfiConverterTypeAdapterStatusRecord.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<AdapterStatusRecord>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeAdapterStatusRecord.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<AdapterStatusRecord>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeAdapterStatusRecord.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeChatMessage : FfiConverterRustBuffer<List<ChatMessage>> {
     override fun read(buf: ByteBuffer): List<ChatMessage> {
         val len = buf.getInt()
@@ -19713,6 +21729,34 @@ public object FfiConverterSequenceTypeMedia : FfiConverterRustBuffer<List<Media>
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeModelStatusRecord : FfiConverterRustBuffer<List<ModelStatusRecord>> {
+    override fun read(buf: ByteBuffer): List<ModelStatusRecord> {
+        val len = buf.getInt()
+        return List<ModelStatusRecord>(len) {
+            FfiConverterTypeModelStatusRecord.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<ModelStatusRecord>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeModelStatusRecord.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<ModelStatusRecord>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeModelStatusRecord.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypePersistedEvent : FfiConverterRustBuffer<List<PersistedEvent>> {
     override fun read(buf: ByteBuffer): List<PersistedEvent> {
         val len = buf.getInt()
@@ -19734,6 +21778,34 @@ public object FfiConverterSequenceTypePersistedEvent : FfiConverterRustBuffer<Li
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypePersistedEvent.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypePoolStatusRecord : FfiConverterRustBuffer<List<PoolStatusRecord>> {
+    override fun read(buf: ByteBuffer): List<PoolStatusRecord> {
+        val len = buf.getInt()
+        return List<PoolStatusRecord>(len) {
+            FfiConverterTypePoolStatusRecord.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<PoolStatusRecord>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypePoolStatusRecord.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<PoolStatusRecord>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypePoolStatusRecord.write(it, buf)
         }
     }
 }
@@ -19958,6 +22030,47 @@ public object FfiConverterSequenceSequenceDouble : FfiConverterRustBuffer<List<L
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterSequenceDouble.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterMapStringDouble : FfiConverterRustBuffer<Map<kotlin.String, kotlin.Double>> {
+    override fun read(buf: ByteBuffer): Map<kotlin.String, kotlin.Double> {
+        val len = buf.getInt()
+        return buildMap<kotlin.String, kotlin.Double>(len) {
+            repeat(len) {
+                val k = FfiConverterString.read(buf)
+                val v = FfiConverterDouble.read(buf)
+                this[k] = v
+            }
+        }
+    }
+
+    override fun allocationSize(value: Map<kotlin.String, kotlin.Double>): ULong {
+        val spaceForMapSize = 4UL
+        val spaceForChildren =
+            value
+                .map { (k, v) ->
+                    FfiConverterString.allocationSize(k) +
+                        FfiConverterDouble.allocationSize(v)
+                }.sum()
+        return spaceForMapSize + spaceForChildren
+    }
+
+    override fun write(
+        value: Map<kotlin.String, kotlin.Double>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        // The parens on `(k, v)` here ensure we're calling the right method,
+        // which is important for compatibility with older android devices.
+        // Ref https://blog.danlew.net/2017/03/16/kotlin-puzzler-whose-line-is-it-anyways/
+        value.forEach { (k, v) ->
+            FfiConverterString.write(k, buf)
+            FfiConverterDouble.write(v, buf)
         }
     }
 }

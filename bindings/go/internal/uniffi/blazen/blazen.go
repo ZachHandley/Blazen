@@ -366,6 +366,7 @@ func init() {
 	FfiConverterControlPlaneAssignmentHandlerINSTANCE.register()
 	FfiConverterControlPlaneRunEventSubscriberINSTANCE.register()
 	FfiConverterCustomProviderINSTANCE.register()
+	FfiConverterForeignLocalModelINSTANCE.register()
 	FfiConverterStepHandlerINSTANCE.register()
 	FfiConverterToolHandlerINSTANCE.register()
 	uniffiCheckChecksums()
@@ -1131,6 +1132,204 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_load()
+		})
+		if checksum != 57606 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_load: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_unload()
+		})
+		if checksum != 30655 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_unload: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_is_loaded()
+		})
+		if checksum != 35239 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_is_loaded: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_device()
+		})
+		if checksum != 36918 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_device: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_memory_bytes()
+		})
+		if checksum != 63180 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_memory_bytes: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_load_adapter()
+		})
+		if checksum != 64869 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_load_adapter: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_unload_adapter()
+		})
+		if checksum != 45180 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_unload_adapter: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_list_adapters()
+		})
+		if checksum != 49821 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_list_adapters: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_available_bytes()
+		})
+		if checksum != 19672 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_available_bytes: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_ensure_loaded()
+		})
+		if checksum != 33632 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_ensure_loaded: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_is_loaded()
+		})
+		if checksum != 48692 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_is_loaded: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_list_adapters()
+		})
+		if checksum != 57369 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_list_adapters: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load()
+		})
+		if checksum != 56552 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load_adapter()
+		})
+		if checksum != 2343 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load_adapter: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load_blocking()
+		})
+		if checksum != 10510 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_pools()
+		})
+		if checksum != 34891 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_pools: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_register_local()
+		})
+		if checksum != 23428 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_register_local: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_status()
+		})
+		if checksum != 18811 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_status: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_unload()
+		})
+		if checksum != 3272 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_unload: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_unload_adapter()
+		})
+		if checksum != 43755 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_unload_adapter: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_unload_blocking()
+		})
+		if checksum != 2783 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_unload_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_used_bytes()
+		})
+		if checksum != 51636 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_used_bytes: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_peerclient_node_id()
 		})
 		if checksum != 16043 {
@@ -1892,6 +2091,33 @@ func uniffiCheckChecksums() {
 		if checksum != 22162 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_controlplaneworker_new_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_new()
+		})
+		if checksum != 31159 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_with_budgets_gb()
+		})
+		if checksum != 1375 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_with_budgets_gb: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_with_pool_budgets()
+		})
+		if checksum != 59591 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_with_pool_budgets: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -7625,6 +7851,753 @@ func (_ FfiDestroyerEmbeddingModel) Destroy(value *EmbeddingModel) {
 	value.Destroy()
 }
 
+// Foreign-language implementation of a local (on-device) model.
+//
+// Implementors mirror the upstream [`blazen_llm::LocalModel`] trait but in
+// FFI-friendly form: paths are `String`, the `device()` accessor returns a
+// `String` ("cpu", "cuda:0", "metal", ...) that gets parsed back into
+// [`blazen_llm::Device`] when forwarded to the manager.
+//
+// `is_loaded`, `memory_bytes`, `device`, `load_adapter`, `unload_adapter`,
+// and `list_adapters` are NOT optional on this trait — UniFFI does not have a
+// concept of "default trait method" that the foreign side can opt out of.
+// Foreign implementors that don't care about a verb should return a sensible
+// neutral value (`false` for `is_loaded`, `0` / `None` for `memory_bytes`,
+// `"cpu"` for `device`, an empty `list_adapters`, or raise
+// [`BlazenError::Unsupported`] from the adapter verbs).
+type ForeignLocalModel interface {
+	Load() error
+	Unload() error
+	IsLoaded() bool
+	Device() string
+	MemoryBytes() *uint64
+	LoadAdapter(adapterDir string, options AdapterOptionsRecord) (AdapterHandleRecord, error)
+	UnloadAdapter(handle AdapterHandleRecord) error
+	ListAdapters() []AdapterStatusRecord
+}
+
+// Foreign-language implementation of a local (on-device) model.
+//
+// Implementors mirror the upstream [`blazen_llm::LocalModel`] trait but in
+// FFI-friendly form: paths are `String`, the `device()` accessor returns a
+// `String` ("cpu", "cuda:0", "metal", ...) that gets parsed back into
+// [`blazen_llm::Device`] when forwarded to the manager.
+//
+// `is_loaded`, `memory_bytes`, `device`, `load_adapter`, `unload_adapter`,
+// and `list_adapters` are NOT optional on this trait — UniFFI does not have a
+// concept of "default trait method" that the foreign side can opt out of.
+// Foreign implementors that don't care about a verb should return a sensible
+// neutral value (`false` for `is_loaded`, `0` / `None` for `memory_bytes`,
+// `"cpu"` for `device`, an empty `list_adapters`, or raise
+// [`BlazenError::Unsupported`] from the adapter verbs).
+type ForeignLocalModelImpl struct {
+	ffiObject FfiObject
+}
+
+func (_self *ForeignLocalModelImpl) Load() error {
+	_pointer := _self.ffiObject.incrementPointer("ForeignLocalModel")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_foreignlocalmodel_load(
+			_pointer),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+func (_self *ForeignLocalModelImpl) Unload() error {
+	_pointer := _self.ffiObject.incrementPointer("ForeignLocalModel")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_foreignlocalmodel_unload(
+			_pointer),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+func (_self *ForeignLocalModelImpl) IsLoaded() bool {
+	_pointer := _self.ffiObject.incrementPointer("ForeignLocalModel")
+	defer _self.ffiObject.decrementPointer()
+	res, _ := uniffiRustCallAsync[error](
+		nil,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) C.int8_t {
+			res := C.ffi_blazen_uniffi_rust_future_complete_i8(handle, status)
+			return res
+		},
+		// liftFn
+		func(ffi C.int8_t) bool {
+			return FfiConverterBoolINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_foreignlocalmodel_is_loaded(
+			_pointer),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_i8(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_i8(handle)
+		},
+	)
+
+	return res
+}
+
+func (_self *ForeignLocalModelImpl) Device() string {
+	_pointer := _self.ffiObject.incrementPointer("ForeignLocalModel")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterStringINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_foreignlocalmodel_device(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+func (_self *ForeignLocalModelImpl) MemoryBytes() *uint64 {
+	_pointer := _self.ffiObject.incrementPointer("ForeignLocalModel")
+	defer _self.ffiObject.decrementPointer()
+	res, _ := uniffiRustCallAsync[error](
+		nil,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) *uint64 {
+			return FfiConverterOptionalUint64INSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_foreignlocalmodel_memory_bytes(
+			_pointer),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	return res
+}
+
+func (_self *ForeignLocalModelImpl) LoadAdapter(adapterDir string, options AdapterOptionsRecord) (AdapterHandleRecord, error) {
+	_pointer := _self.ffiObject.incrementPointer("ForeignLocalModel")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) AdapterHandleRecord {
+			return FfiConverterAdapterHandleRecordINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_foreignlocalmodel_load_adapter(
+			_pointer, FfiConverterStringINSTANCE.Lower(adapterDir), FfiConverterAdapterOptionsRecordINSTANCE.Lower(options)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+func (_self *ForeignLocalModelImpl) UnloadAdapter(handle AdapterHandleRecord) error {
+	_pointer := _self.ffiObject.incrementPointer("ForeignLocalModel")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_foreignlocalmodel_unload_adapter(
+			_pointer, FfiConverterAdapterHandleRecordINSTANCE.Lower(handle)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+func (_self *ForeignLocalModelImpl) ListAdapters() []AdapterStatusRecord {
+	_pointer := _self.ffiObject.incrementPointer("ForeignLocalModel")
+	defer _self.ffiObject.decrementPointer()
+	res, _ := uniffiRustCallAsync[error](
+		nil,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) []AdapterStatusRecord {
+			return FfiConverterSequenceAdapterStatusRecordINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_foreignlocalmodel_list_adapters(
+			_pointer),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	return res
+}
+func (object *ForeignLocalModelImpl) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterForeignLocalModel struct {
+	handleMap *concurrentHandleMap[ForeignLocalModel]
+}
+
+var FfiConverterForeignLocalModelINSTANCE = FfiConverterForeignLocalModel{
+	handleMap: newConcurrentHandleMap[ForeignLocalModel](),
+}
+
+func (c FfiConverterForeignLocalModel) Lift(handle C.uint64_t) ForeignLocalModel {
+	if uint64(handle)&1 == 0 {
+		// Rust-generated handle (even), construct a new object wrapping the handle
+		result := &ForeignLocalModelImpl{
+			newFfiObject(
+				handle,
+				func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+					return C.uniffi_blazen_uniffi_fn_clone_foreignlocalmodel(handle, status)
+				},
+				func(handle C.uint64_t, status *C.RustCallStatus) {
+					C.uniffi_blazen_uniffi_fn_free_foreignlocalmodel(handle, status)
+				},
+			),
+		}
+		runtime.SetFinalizer(result, (*ForeignLocalModelImpl).Destroy)
+		return result
+	} else {
+		// Go-generated handle (odd), retrieve from the handle map
+		val, ok := c.handleMap.tryGet(uint64(handle))
+		if !ok {
+			panic(fmt.Errorf("no callback in handle map: %d", handle))
+		}
+		c.handleMap.remove(uint64(handle))
+		return val
+	}
+}
+
+func (c FfiConverterForeignLocalModel) Read(reader io.Reader) ForeignLocalModel {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterForeignLocalModel) Lower(value ForeignLocalModel) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	if val, ok := value.(*ForeignLocalModelImpl); ok {
+		// Rust-backed object, clone the handle
+		handle := val.ffiObject.incrementPointer("ForeignLocalModel")
+		defer val.ffiObject.decrementPointer()
+		return handle
+	} else {
+		// Go-backed object, insert into handle map
+		return C.uint64_t(c.handleMap.insert(value))
+	}
+}
+
+func (c FfiConverterForeignLocalModel) Write(writer io.Writer, value ForeignLocalModel) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalForeignLocalModel(handle uint64) ForeignLocalModel {
+	return FfiConverterForeignLocalModelINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalForeignLocalModel(value ForeignLocalModel) uint64 {
+	return uint64(FfiConverterForeignLocalModelINSTANCE.Lower(value))
+}
+
+type FfiDestroyerForeignLocalModel struct{}
+
+func (_ FfiDestroyerForeignLocalModel) Destroy(value ForeignLocalModel) {
+	if val, ok := value.(*ForeignLocalModelImpl); ok {
+		val.Destroy()
+	}
+}
+
+//export blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod0
+func blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod0(uniffiHandle C.uint64_t, uniffiFutureCallback C.UniffiForeignFutureCompleteVoid, uniffiCallbackData C.uint64_t, uniffiOutDroppedCallback *C.UniffiForeignFutureDroppedCallbackStruct) {
+	handle := uint64(uniffiHandle)
+	uniffiObj, ok := FfiConverterForeignLocalModelINSTANCE.handleMap.tryGet(handle)
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+
+	result := make(chan C.UniffiForeignFutureResultVoid, 1)
+	cancel := make(chan struct{}, 1)
+	guardHandle := cgo.NewHandle(cancel)
+	*uniffiOutDroppedCallback = C.UniffiForeignFutureDroppedCallbackStruct{
+		handle: C.uint64_t(guardHandle),
+		free:   C.UniffiForeignFutureDroppedCallback(C.blazen_uniffiFreeGorutine),
+	}
+
+	// Wait for compleation or cancel
+	go func() {
+		select {
+		case <-cancel:
+		case res := <-result:
+			C.call_UniffiForeignFutureCompleteVoid(uniffiFutureCallback, uniffiCallbackData, res)
+		}
+	}()
+
+	// Eval callback asynchroniously
+	go func() {
+		asyncResult := &C.UniffiForeignFutureResultVoid{}
+		callStatus := &asyncResult.callStatus
+		defer func() {
+			result <- *asyncResult
+		}()
+
+		err :=
+			uniffiObj.Load()
+
+		if err != nil {
+			var actualError *BlazenError
+			if errors.As(err, &actualError) {
+				*callStatus = C.RustCallStatus{
+					code:     C.int8_t(uniffiCallbackResultError),
+					errorBuf: FfiConverterBlazenErrorINSTANCE.Lower(actualError),
+				}
+			} else {
+				*callStatus = C.RustCallStatus{
+					code: C.int8_t(uniffiCallbackUnexpectedResultError),
+				}
+			}
+			return
+		}
+
+	}()
+}
+
+//export blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod1
+func blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod1(uniffiHandle C.uint64_t, uniffiFutureCallback C.UniffiForeignFutureCompleteVoid, uniffiCallbackData C.uint64_t, uniffiOutDroppedCallback *C.UniffiForeignFutureDroppedCallbackStruct) {
+	handle := uint64(uniffiHandle)
+	uniffiObj, ok := FfiConverterForeignLocalModelINSTANCE.handleMap.tryGet(handle)
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+
+	result := make(chan C.UniffiForeignFutureResultVoid, 1)
+	cancel := make(chan struct{}, 1)
+	guardHandle := cgo.NewHandle(cancel)
+	*uniffiOutDroppedCallback = C.UniffiForeignFutureDroppedCallbackStruct{
+		handle: C.uint64_t(guardHandle),
+		free:   C.UniffiForeignFutureDroppedCallback(C.blazen_uniffiFreeGorutine),
+	}
+
+	// Wait for compleation or cancel
+	go func() {
+		select {
+		case <-cancel:
+		case res := <-result:
+			C.call_UniffiForeignFutureCompleteVoid(uniffiFutureCallback, uniffiCallbackData, res)
+		}
+	}()
+
+	// Eval callback asynchroniously
+	go func() {
+		asyncResult := &C.UniffiForeignFutureResultVoid{}
+		callStatus := &asyncResult.callStatus
+		defer func() {
+			result <- *asyncResult
+		}()
+
+		err :=
+			uniffiObj.Unload()
+
+		if err != nil {
+			var actualError *BlazenError
+			if errors.As(err, &actualError) {
+				*callStatus = C.RustCallStatus{
+					code:     C.int8_t(uniffiCallbackResultError),
+					errorBuf: FfiConverterBlazenErrorINSTANCE.Lower(actualError),
+				}
+			} else {
+				*callStatus = C.RustCallStatus{
+					code: C.int8_t(uniffiCallbackUnexpectedResultError),
+				}
+			}
+			return
+		}
+
+	}()
+}
+
+//export blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod2
+func blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod2(uniffiHandle C.uint64_t, uniffiFutureCallback C.UniffiForeignFutureCompleteI8, uniffiCallbackData C.uint64_t, uniffiOutDroppedCallback *C.UniffiForeignFutureDroppedCallbackStruct) {
+	handle := uint64(uniffiHandle)
+	uniffiObj, ok := FfiConverterForeignLocalModelINSTANCE.handleMap.tryGet(handle)
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+
+	result := make(chan C.UniffiForeignFutureResultI8, 1)
+	cancel := make(chan struct{}, 1)
+	guardHandle := cgo.NewHandle(cancel)
+	*uniffiOutDroppedCallback = C.UniffiForeignFutureDroppedCallbackStruct{
+		handle: C.uint64_t(guardHandle),
+		free:   C.UniffiForeignFutureDroppedCallback(C.blazen_uniffiFreeGorutine),
+	}
+
+	// Wait for compleation or cancel
+	go func() {
+		select {
+		case <-cancel:
+		case res := <-result:
+			C.call_UniffiForeignFutureCompleteI8(uniffiFutureCallback, uniffiCallbackData, res)
+		}
+	}()
+
+	// Eval callback asynchroniously
+	go func() {
+		asyncResult := &C.UniffiForeignFutureResultI8{}
+		uniffiOutReturn := &asyncResult.returnValue
+		defer func() {
+			result <- *asyncResult
+		}()
+
+		res :=
+			uniffiObj.IsLoaded()
+
+		*uniffiOutReturn = FfiConverterBoolINSTANCE.Lower(res)
+	}()
+}
+
+//export blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod3
+func blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod3(uniffiHandle C.uint64_t, uniffiOutReturn *C.RustBuffer, callStatus *C.RustCallStatus) {
+	handle := uint64(uniffiHandle)
+	uniffiObj, ok := FfiConverterForeignLocalModelINSTANCE.handleMap.tryGet(handle)
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+
+	res :=
+		uniffiObj.Device()
+
+	*uniffiOutReturn = FfiConverterStringINSTANCE.Lower(res)
+}
+
+//export blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod4
+func blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod4(uniffiHandle C.uint64_t, uniffiFutureCallback C.UniffiForeignFutureCompleteRustBuffer, uniffiCallbackData C.uint64_t, uniffiOutDroppedCallback *C.UniffiForeignFutureDroppedCallbackStruct) {
+	handle := uint64(uniffiHandle)
+	uniffiObj, ok := FfiConverterForeignLocalModelINSTANCE.handleMap.tryGet(handle)
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+
+	result := make(chan C.UniffiForeignFutureResultRustBuffer, 1)
+	cancel := make(chan struct{}, 1)
+	guardHandle := cgo.NewHandle(cancel)
+	*uniffiOutDroppedCallback = C.UniffiForeignFutureDroppedCallbackStruct{
+		handle: C.uint64_t(guardHandle),
+		free:   C.UniffiForeignFutureDroppedCallback(C.blazen_uniffiFreeGorutine),
+	}
+
+	// Wait for compleation or cancel
+	go func() {
+		select {
+		case <-cancel:
+		case res := <-result:
+			C.call_UniffiForeignFutureCompleteRustBuffer(uniffiFutureCallback, uniffiCallbackData, res)
+		}
+	}()
+
+	// Eval callback asynchroniously
+	go func() {
+		asyncResult := &C.UniffiForeignFutureResultRustBuffer{}
+		uniffiOutReturn := &asyncResult.returnValue
+		defer func() {
+			result <- *asyncResult
+		}()
+
+		res :=
+			uniffiObj.MemoryBytes()
+
+		*uniffiOutReturn = FfiConverterOptionalUint64INSTANCE.Lower(res)
+	}()
+}
+
+//export blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod5
+func blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod5(uniffiHandle C.uint64_t, adapterDir C.RustBuffer, options C.RustBuffer, uniffiFutureCallback C.UniffiForeignFutureCompleteRustBuffer, uniffiCallbackData C.uint64_t, uniffiOutDroppedCallback *C.UniffiForeignFutureDroppedCallbackStruct) {
+	handle := uint64(uniffiHandle)
+	uniffiObj, ok := FfiConverterForeignLocalModelINSTANCE.handleMap.tryGet(handle)
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+
+	result := make(chan C.UniffiForeignFutureResultRustBuffer, 1)
+	cancel := make(chan struct{}, 1)
+	guardHandle := cgo.NewHandle(cancel)
+	*uniffiOutDroppedCallback = C.UniffiForeignFutureDroppedCallbackStruct{
+		handle: C.uint64_t(guardHandle),
+		free:   C.UniffiForeignFutureDroppedCallback(C.blazen_uniffiFreeGorutine),
+	}
+
+	// Wait for compleation or cancel
+	go func() {
+		select {
+		case <-cancel:
+		case res := <-result:
+			C.call_UniffiForeignFutureCompleteRustBuffer(uniffiFutureCallback, uniffiCallbackData, res)
+		}
+	}()
+
+	// Eval callback asynchroniously
+	go func() {
+		asyncResult := &C.UniffiForeignFutureResultRustBuffer{}
+		uniffiOutReturn := &asyncResult.returnValue
+		callStatus := &asyncResult.callStatus
+		defer func() {
+			result <- *asyncResult
+		}()
+
+		res, err :=
+			uniffiObj.LoadAdapter(
+				FfiConverterStringINSTANCE.Lift(GoRustBuffer{
+					inner: adapterDir,
+				}),
+				FfiConverterAdapterOptionsRecordINSTANCE.Lift(GoRustBuffer{
+					inner: options,
+				}),
+			)
+
+		if err != nil {
+			var actualError *BlazenError
+			if errors.As(err, &actualError) {
+				*callStatus = C.RustCallStatus{
+					code:     C.int8_t(uniffiCallbackResultError),
+					errorBuf: FfiConverterBlazenErrorINSTANCE.Lower(actualError),
+				}
+			} else {
+				*callStatus = C.RustCallStatus{
+					code: C.int8_t(uniffiCallbackUnexpectedResultError),
+				}
+			}
+			return
+		}
+
+		*uniffiOutReturn = FfiConverterAdapterHandleRecordINSTANCE.Lower(res)
+	}()
+}
+
+//export blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod6
+func blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod6(uniffiHandle C.uint64_t, adapterHandleBuf C.RustBuffer, uniffiFutureCallback C.UniffiForeignFutureCompleteVoid, uniffiCallbackData C.uint64_t, uniffiOutDroppedCallback *C.UniffiForeignFutureDroppedCallbackStruct) {
+	handle := uint64(uniffiHandle)
+	uniffiObj, ok := FfiConverterForeignLocalModelINSTANCE.handleMap.tryGet(handle)
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+
+	result := make(chan C.UniffiForeignFutureResultVoid, 1)
+	cancel := make(chan struct{}, 1)
+	guardHandle := cgo.NewHandle(cancel)
+	*uniffiOutDroppedCallback = C.UniffiForeignFutureDroppedCallbackStruct{
+		handle: C.uint64_t(guardHandle),
+		free:   C.UniffiForeignFutureDroppedCallback(C.blazen_uniffiFreeGorutine),
+	}
+
+	// Wait for compleation or cancel
+	go func() {
+		select {
+		case <-cancel:
+		case res := <-result:
+			C.call_UniffiForeignFutureCompleteVoid(uniffiFutureCallback, uniffiCallbackData, res)
+		}
+	}()
+
+	// Eval callback asynchroniously
+	go func() {
+		asyncResult := &C.UniffiForeignFutureResultVoid{}
+		callStatus := &asyncResult.callStatus
+		defer func() {
+			result <- *asyncResult
+		}()
+
+		err :=
+			uniffiObj.UnloadAdapter(
+				FfiConverterAdapterHandleRecordINSTANCE.Lift(GoRustBuffer{
+					inner: adapterHandleBuf,
+				}),
+			)
+
+		if err != nil {
+			var actualError *BlazenError
+			if errors.As(err, &actualError) {
+				*callStatus = C.RustCallStatus{
+					code:     C.int8_t(uniffiCallbackResultError),
+					errorBuf: FfiConverterBlazenErrorINSTANCE.Lower(actualError),
+				}
+			} else {
+				*callStatus = C.RustCallStatus{
+					code: C.int8_t(uniffiCallbackUnexpectedResultError),
+				}
+			}
+			return
+		}
+
+	}()
+}
+
+//export blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod7
+func blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod7(uniffiHandle C.uint64_t, uniffiFutureCallback C.UniffiForeignFutureCompleteRustBuffer, uniffiCallbackData C.uint64_t, uniffiOutDroppedCallback *C.UniffiForeignFutureDroppedCallbackStruct) {
+	handle := uint64(uniffiHandle)
+	uniffiObj, ok := FfiConverterForeignLocalModelINSTANCE.handleMap.tryGet(handle)
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+
+	result := make(chan C.UniffiForeignFutureResultRustBuffer, 1)
+	cancel := make(chan struct{}, 1)
+	guardHandle := cgo.NewHandle(cancel)
+	*uniffiOutDroppedCallback = C.UniffiForeignFutureDroppedCallbackStruct{
+		handle: C.uint64_t(guardHandle),
+		free:   C.UniffiForeignFutureDroppedCallback(C.blazen_uniffiFreeGorutine),
+	}
+
+	// Wait for compleation or cancel
+	go func() {
+		select {
+		case <-cancel:
+		case res := <-result:
+			C.call_UniffiForeignFutureCompleteRustBuffer(uniffiFutureCallback, uniffiCallbackData, res)
+		}
+	}()
+
+	// Eval callback asynchroniously
+	go func() {
+		asyncResult := &C.UniffiForeignFutureResultRustBuffer{}
+		uniffiOutReturn := &asyncResult.returnValue
+		defer func() {
+			result <- *asyncResult
+		}()
+
+		res :=
+			uniffiObj.ListAdapters()
+
+		*uniffiOutReturn = FfiConverterSequenceAdapterStatusRecordINSTANCE.Lower(res)
+	}()
+}
+
+var UniffiVTableCallbackInterfaceForeignLocalModelINSTANCE = C.UniffiVTableCallbackInterfaceForeignLocalModel{
+	uniffiFree:    (C.UniffiCallbackInterfaceFree)(C.blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelFree),
+	uniffiClone:   (C.UniffiCallbackInterfaceClone)(C.blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelClone),
+	load:          (C.UniffiCallbackInterfaceForeignLocalModelMethod0)(C.blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod0),
+	unload:        (C.UniffiCallbackInterfaceForeignLocalModelMethod1)(C.blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod1),
+	isLoaded:      (C.UniffiCallbackInterfaceForeignLocalModelMethod2)(C.blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod2),
+	device:        (C.UniffiCallbackInterfaceForeignLocalModelMethod3)(C.blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod3),
+	memoryBytes:   (C.UniffiCallbackInterfaceForeignLocalModelMethod4)(C.blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod4),
+	loadAdapter:   (C.UniffiCallbackInterfaceForeignLocalModelMethod5)(C.blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod5),
+	unloadAdapter: (C.UniffiCallbackInterfaceForeignLocalModelMethod6)(C.blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod6),
+	listAdapters:  (C.UniffiCallbackInterfaceForeignLocalModelMethod7)(C.blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelMethod7),
+}
+
+//export blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelFree
+func blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelFree(handle C.uint64_t) {
+	FfiConverterForeignLocalModelINSTANCE.handleMap.remove(uint64(handle))
+}
+
+//export blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelClone
+func blazen_uniffi_local_model_cgo_dispatchCallbackInterfaceForeignLocalModelClone(handle C.uint64_t) C.uint64_t {
+	val, ok := FfiConverterForeignLocalModelINSTANCE.handleMap.tryGet(uint64(handle))
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+	return C.uint64_t(FfiConverterForeignLocalModelINSTANCE.handleMap.insert(val))
+}
+
+func (c FfiConverterForeignLocalModel) register() {
+	C.uniffi_blazen_uniffi_fn_init_callback_vtable_foreignlocalmodel(&UniffiVTableCallbackInterfaceForeignLocalModelINSTANCE)
+}
+
 // An image-generation model.
 //
 // Construct via [`new_diffusion_model`] (local, feature-gated) or
@@ -9408,6 +10381,541 @@ func (_ FfiDestroyerTtsModel) Destroy(value *TtsModel) {
 	value.Destroy()
 }
 
+// Memory-budget-aware model manager with per-pool LRU eviction.
+//
+// Foreign code constructs one of these, registers
+// [`ForeignLocalModel`]-implementing handles against it, and drives loads /
+// unloads / adapter lifecycle from any thread / fiber / goroutine /
+// coroutine on the foreign side.
+type UniffiModelManagerInterface interface {
+	AvailableBytes(pool string) (uint64, error)
+	EnsureLoaded(modelId string) error
+	IsLoaded(modelId string) bool
+	ListAdapters(modelId string) ([]AdapterStatusRecord, error)
+	Load(modelId string) error
+	// Mount a PEFT-format LoRA adapter and return the adapter id reported
+	// by the backend.
+	LoadAdapter(modelId string, adapterDir string, options AdapterOptionsRecord) (string, error)
+	// Synchronous variant of [`Self::load`] — blocks the current thread on
+	// the shared Tokio runtime.
+	LoadBlocking(modelId string) error
+	// List configured pools and their budgets in bytes.
+	Pools() []PoolStatusRecord
+	// Register a foreign-implemented [`ForeignLocalModel`] under `id`.
+	//
+	// `memory_estimate_bytes` is the model's estimated footprint and is
+	// charged against the pool derived from the foreign model's `device()`
+	// when it's loaded.
+	RegisterLocal(id string, model ForeignLocalModel, memoryEstimateBytes uint64) error
+	Status() []ModelStatusRecord
+	Unload(modelId string) error
+	UnloadAdapter(modelId string, adapterId string) error
+	// Synchronous variant of [`Self::unload`].
+	UnloadBlocking(modelId string) error
+	UsedBytes(pool string) (uint64, error)
+}
+
+// Memory-budget-aware model manager with per-pool LRU eviction.
+//
+// Foreign code constructs one of these, registers
+// [`ForeignLocalModel`]-implementing handles against it, and drives loads /
+// unloads / adapter lifecycle from any thread / fiber / goroutine /
+// coroutine on the foreign side.
+type UniffiModelManager struct {
+	ffiObject FfiObject
+}
+
+// Construct a manager with no budget enforcement (both `Cpu` and
+// `Gpu(0)` pools seeded with `u64::MAX`).
+//
+// Matches the Python binding's `ModelManager()` no-arg sentinel
+// behaviour. For real deployments, prefer
+// [`Self::with_budgets_gb`](Self::with_budgets_gb) or
+// [`Self::with_pool_budgets`](Self::with_pool_budgets).
+func NewUniffiModelManager() *UniffiModelManager {
+	return FfiConverterUniffiModelManagerINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_uniffimodelmanager_new(_uniffiStatus)
+	}))
+}
+
+// Construct a manager with one CPU-pool budget and one GPU-pool
+// (`Gpu(0)`) budget, both expressed in gigabytes.
+func UniffiModelManagerWithBudgetsGb(cpuRamGb float64, gpuVramGb float64) *UniffiModelManager {
+	return FfiConverterUniffiModelManagerINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_uniffimodelmanager_with_budgets_gb(FfiConverterFloat64INSTANCE.Lower(cpuRamGb), FfiConverterFloat64INSTANCE.Lower(gpuVramGb), _uniffiStatus)
+	}))
+}
+
+// Construct a manager with explicit per-pool budgets.
+//
+// Keys are pool labels (`"cpu"`, `"gpu"`, `"gpu:0"`, `"gpu:1"`, ...);
+// values are budgets in **gigabytes** (mirrors the Python binding's
+// `pool_budgets` ergonomics — bytes-as-`u64` would force foreign
+// callers to write `64 * 1024 * 1024 * 1024` for trivial values).
+func UniffiModelManagerWithPoolBudgets(perPoolBudgets map[string]float64) (*UniffiModelManager, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_uniffimodelmanager_with_pool_budgets(FfiConverterMapStringFloat64INSTANCE.Lower(perPoolBudgets), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *UniffiModelManager
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterUniffiModelManagerINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+func (_self *UniffiModelManager) AvailableBytes(pool string) (uint64, error) {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+			res := C.ffi_blazen_uniffi_rust_future_complete_u64(handle, status)
+			return res
+		},
+		// liftFn
+		func(ffi C.uint64_t) uint64 {
+			return FfiConverterUint64INSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_available_bytes(
+			_pointer, FfiConverterStringINSTANCE.Lower(pool)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_u64(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_u64(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+func (_self *UniffiModelManager) EnsureLoaded(modelId string) error {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_ensure_loaded(
+			_pointer, FfiConverterStringINSTANCE.Lower(modelId)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+func (_self *UniffiModelManager) IsLoaded(modelId string) bool {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	res, _ := uniffiRustCallAsync[error](
+		nil,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) C.int8_t {
+			res := C.ffi_blazen_uniffi_rust_future_complete_i8(handle, status)
+			return res
+		},
+		// liftFn
+		func(ffi C.int8_t) bool {
+			return FfiConverterBoolINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_is_loaded(
+			_pointer, FfiConverterStringINSTANCE.Lower(modelId)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_i8(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_i8(handle)
+		},
+	)
+
+	return res
+}
+
+func (_self *UniffiModelManager) ListAdapters(modelId string) ([]AdapterStatusRecord, error) {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) []AdapterStatusRecord {
+			return FfiConverterSequenceAdapterStatusRecordINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_list_adapters(
+			_pointer, FfiConverterStringINSTANCE.Lower(modelId)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+func (_self *UniffiModelManager) Load(modelId string) error {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_load(
+			_pointer, FfiConverterStringINSTANCE.Lower(modelId)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+// Mount a PEFT-format LoRA adapter and return the adapter id reported
+// by the backend.
+func (_self *UniffiModelManager) LoadAdapter(modelId string, adapterDir string, options AdapterOptionsRecord) (string, error) {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) string {
+			return FfiConverterStringINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_load_adapter(
+			_pointer, FfiConverterStringINSTANCE.Lower(modelId), FfiConverterStringINSTANCE.Lower(adapterDir), FfiConverterAdapterOptionsRecordINSTANCE.Lower(options)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`Self::load`] — blocks the current thread on
+// the shared Tokio runtime.
+func (_self *UniffiModelManager) LoadBlocking(modelId string) error {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	_, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) bool {
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_load_blocking(
+			_pointer, FfiConverterStringINSTANCE.Lower(modelId), _uniffiStatus)
+		return false
+	})
+	return _uniffiErr.AsError()
+}
+
+// List configured pools and their budgets in bytes.
+func (_self *UniffiModelManager) Pools() []PoolStatusRecord {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterSequencePoolStatusRecordINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_pools(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Register a foreign-implemented [`ForeignLocalModel`] under `id`.
+//
+// `memory_estimate_bytes` is the model's estimated footprint and is
+// charged against the pool derived from the foreign model's `device()`
+// when it's loaded.
+func (_self *UniffiModelManager) RegisterLocal(id string, model ForeignLocalModel, memoryEstimateBytes uint64) error {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_register_local(
+			_pointer, FfiConverterStringINSTANCE.Lower(id), FfiConverterForeignLocalModelINSTANCE.Lower(model), FfiConverterUint64INSTANCE.Lower(memoryEstimateBytes)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+func (_self *UniffiModelManager) Status() []ModelStatusRecord {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	res, _ := uniffiRustCallAsync[error](
+		nil,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) []ModelStatusRecord {
+			return FfiConverterSequenceModelStatusRecordINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_status(
+			_pointer),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	return res
+}
+
+func (_self *UniffiModelManager) Unload(modelId string) error {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_unload(
+			_pointer, FfiConverterStringINSTANCE.Lower(modelId)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+func (_self *UniffiModelManager) UnloadAdapter(modelId string, adapterId string) error {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_unload_adapter(
+			_pointer, FfiConverterStringINSTANCE.Lower(modelId), FfiConverterStringINSTANCE.Lower(adapterId)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+// Synchronous variant of [`Self::unload`].
+func (_self *UniffiModelManager) UnloadBlocking(modelId string) error {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	_, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) bool {
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_unload_blocking(
+			_pointer, FfiConverterStringINSTANCE.Lower(modelId), _uniffiStatus)
+		return false
+	})
+	return _uniffiErr.AsError()
+}
+
+func (_self *UniffiModelManager) UsedBytes(pool string) (uint64, error) {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+			res := C.ffi_blazen_uniffi_rust_future_complete_u64(handle, status)
+			return res
+		},
+		// liftFn
+		func(ffi C.uint64_t) uint64 {
+			return FfiConverterUint64INSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_used_bytes(
+			_pointer, FfiConverterStringINSTANCE.Lower(pool)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_u64(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_u64(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+func (object *UniffiModelManager) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterUniffiModelManager struct{}
+
+var FfiConverterUniffiModelManagerINSTANCE = FfiConverterUniffiModelManager{}
+
+func (c FfiConverterUniffiModelManager) Lift(handle C.uint64_t) *UniffiModelManager {
+	result := &UniffiModelManager{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_uniffimodelmanager(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_uniffimodelmanager(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*UniffiModelManager).Destroy)
+	return result
+}
+
+func (c FfiConverterUniffiModelManager) Read(reader io.Reader) *UniffiModelManager {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterUniffiModelManager) Lower(value *UniffiModelManager) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*UniffiModelManager")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterUniffiModelManager) Write(writer io.Writer, value *UniffiModelManager) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalUniffiModelManager(handle uint64) *UniffiModelManager {
+	return FfiConverterUniffiModelManagerINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalUniffiModelManager(value *UniffiModelManager) uint64 {
+	return uint64(FfiConverterUniffiModelManagerINSTANCE.Lower(value))
+}
+
+type FfiDestroyerUniffiModelManager struct{}
+
+func (_ FfiDestroyerUniffiModelManager) Destroy(value *UniffiModelManager) {
+	value.Destroy()
+}
+
 // A built workflow ready to run.
 type WorkflowInterface interface {
 	// Run the workflow to completion with the given JSON input as the
@@ -9718,6 +11226,162 @@ func LowerToExternalWorkflowBuilder(value *WorkflowBuilder) uint64 {
 type FfiDestroyerWorkflowBuilder struct{}
 
 func (_ FfiDestroyerWorkflowBuilder) Destroy(value *WorkflowBuilder) {
+	value.Destroy()
+}
+
+// Result returned by [`ForeignLocalModel::load_adapter`], mirroring
+// [`blazen_llm::AdapterHandle`].
+//
+// `mount_strategy` is one of `"attached"`, `"rebuilt"`, `"merged"` — kept
+// as a string discriminator so adding a new strategy to the upstream enum
+// does not break the FFI contract.
+type AdapterHandleRecord struct {
+	AdapterId     string
+	MemoryBytes   uint64
+	MountStrategy string
+}
+
+func (r *AdapterHandleRecord) Destroy() {
+	FfiDestroyerString{}.Destroy(r.AdapterId)
+	FfiDestroyerUint64{}.Destroy(r.MemoryBytes)
+	FfiDestroyerString{}.Destroy(r.MountStrategy)
+}
+
+type FfiConverterAdapterHandleRecord struct{}
+
+var FfiConverterAdapterHandleRecordINSTANCE = FfiConverterAdapterHandleRecord{}
+
+func (c FfiConverterAdapterHandleRecord) Lift(rb RustBufferI) AdapterHandleRecord {
+	return LiftFromRustBuffer[AdapterHandleRecord](c, rb)
+}
+
+func (c FfiConverterAdapterHandleRecord) Read(reader io.Reader) AdapterHandleRecord {
+	return AdapterHandleRecord{
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterUint64INSTANCE.Read(reader),
+		FfiConverterStringINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterAdapterHandleRecord) Lower(value AdapterHandleRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[AdapterHandleRecord](c, value)
+}
+
+func (c FfiConverterAdapterHandleRecord) LowerExternal(value AdapterHandleRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[AdapterHandleRecord](c, value))
+}
+
+func (c FfiConverterAdapterHandleRecord) Write(writer io.Writer, value AdapterHandleRecord) {
+	FfiConverterStringINSTANCE.Write(writer, value.AdapterId)
+	FfiConverterUint64INSTANCE.Write(writer, value.MemoryBytes)
+	FfiConverterStringINSTANCE.Write(writer, value.MountStrategy)
+}
+
+type FfiDestroyerAdapterHandleRecord struct{}
+
+func (_ FfiDestroyerAdapterHandleRecord) Destroy(value AdapterHandleRecord) {
+	value.Destroy()
+}
+
+// Adapter mount options handed to [`ForeignLocalModel::load_adapter`].
+//
+// Mirrors [`blazen_llm::AdapterOptions`] but lives as a UniFFI Record so
+// foreign code can construct it natively.
+type AdapterOptionsRecord struct {
+	AdapterId string
+	Scale     float32
+}
+
+func (r *AdapterOptionsRecord) Destroy() {
+	FfiDestroyerString{}.Destroy(r.AdapterId)
+	FfiDestroyerFloat32{}.Destroy(r.Scale)
+}
+
+type FfiConverterAdapterOptionsRecord struct{}
+
+var FfiConverterAdapterOptionsRecordINSTANCE = FfiConverterAdapterOptionsRecord{}
+
+func (c FfiConverterAdapterOptionsRecord) Lift(rb RustBufferI) AdapterOptionsRecord {
+	return LiftFromRustBuffer[AdapterOptionsRecord](c, rb)
+}
+
+func (c FfiConverterAdapterOptionsRecord) Read(reader io.Reader) AdapterOptionsRecord {
+	return AdapterOptionsRecord{
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterFloat32INSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterAdapterOptionsRecord) Lower(value AdapterOptionsRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[AdapterOptionsRecord](c, value)
+}
+
+func (c FfiConverterAdapterOptionsRecord) LowerExternal(value AdapterOptionsRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[AdapterOptionsRecord](c, value))
+}
+
+func (c FfiConverterAdapterOptionsRecord) Write(writer io.Writer, value AdapterOptionsRecord) {
+	FfiConverterStringINSTANCE.Write(writer, value.AdapterId)
+	FfiConverterFloat32INSTANCE.Write(writer, value.Scale)
+}
+
+type FfiDestroyerAdapterOptionsRecord struct{}
+
+func (_ FfiDestroyerAdapterOptionsRecord) Destroy(value AdapterOptionsRecord) {
+	value.Destroy()
+}
+
+// Snapshot of a single mounted adapter — wire form of
+// [`blazen_llm::AdapterStatus`].
+type AdapterStatusRecord struct {
+	AdapterId   string
+	Scale       float32
+	SourceDir   string
+	MemoryBytes uint64
+}
+
+func (r *AdapterStatusRecord) Destroy() {
+	FfiDestroyerString{}.Destroy(r.AdapterId)
+	FfiDestroyerFloat32{}.Destroy(r.Scale)
+	FfiDestroyerString{}.Destroy(r.SourceDir)
+	FfiDestroyerUint64{}.Destroy(r.MemoryBytes)
+}
+
+type FfiConverterAdapterStatusRecord struct{}
+
+var FfiConverterAdapterStatusRecordINSTANCE = FfiConverterAdapterStatusRecord{}
+
+func (c FfiConverterAdapterStatusRecord) Lift(rb RustBufferI) AdapterStatusRecord {
+	return LiftFromRustBuffer[AdapterStatusRecord](c, rb)
+}
+
+func (c FfiConverterAdapterStatusRecord) Read(reader io.Reader) AdapterStatusRecord {
+	return AdapterStatusRecord{
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterFloat32INSTANCE.Read(reader),
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterUint64INSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterAdapterStatusRecord) Lower(value AdapterStatusRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[AdapterStatusRecord](c, value)
+}
+
+func (c FfiConverterAdapterStatusRecord) LowerExternal(value AdapterStatusRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[AdapterStatusRecord](c, value))
+}
+
+func (c FfiConverterAdapterStatusRecord) Write(writer io.Writer, value AdapterStatusRecord) {
+	FfiConverterStringINSTANCE.Write(writer, value.AdapterId)
+	FfiConverterFloat32INSTANCE.Write(writer, value.Scale)
+	FfiConverterStringINSTANCE.Write(writer, value.SourceDir)
+	FfiConverterUint64INSTANCE.Write(writer, value.MemoryBytes)
+}
+
+type FfiDestroyerAdapterStatusRecord struct{}
+
+func (_ FfiDestroyerAdapterStatusRecord) Destroy(value AdapterStatusRecord) {
 	value.Destroy()
 }
 
@@ -11542,6 +13206,64 @@ func (_ FfiDestroyerMediaOutput) Destroy(value MediaOutput) {
 	value.Destroy()
 }
 
+// Per-model state snapshot returned by [`UniffiModelManager::status`].
+type ModelStatusRecord struct {
+	Id                  string
+	Loaded              bool
+	MemoryEstimateBytes uint64
+	// Pool label (`"cpu"` or `"gpu:N"`).
+	Pool     string
+	Adapters []AdapterStatusRecord
+}
+
+func (r *ModelStatusRecord) Destroy() {
+	FfiDestroyerString{}.Destroy(r.Id)
+	FfiDestroyerBool{}.Destroy(r.Loaded)
+	FfiDestroyerUint64{}.Destroy(r.MemoryEstimateBytes)
+	FfiDestroyerString{}.Destroy(r.Pool)
+	FfiDestroyerSequenceAdapterStatusRecord{}.Destroy(r.Adapters)
+}
+
+type FfiConverterModelStatusRecord struct{}
+
+var FfiConverterModelStatusRecordINSTANCE = FfiConverterModelStatusRecord{}
+
+func (c FfiConverterModelStatusRecord) Lift(rb RustBufferI) ModelStatusRecord {
+	return LiftFromRustBuffer[ModelStatusRecord](c, rb)
+}
+
+func (c FfiConverterModelStatusRecord) Read(reader io.Reader) ModelStatusRecord {
+	return ModelStatusRecord{
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterBoolINSTANCE.Read(reader),
+		FfiConverterUint64INSTANCE.Read(reader),
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterSequenceAdapterStatusRecordINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterModelStatusRecord) Lower(value ModelStatusRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[ModelStatusRecord](c, value)
+}
+
+func (c FfiConverterModelStatusRecord) LowerExternal(value ModelStatusRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[ModelStatusRecord](c, value))
+}
+
+func (c FfiConverterModelStatusRecord) Write(writer io.Writer, value ModelStatusRecord) {
+	FfiConverterStringINSTANCE.Write(writer, value.Id)
+	FfiConverterBoolINSTANCE.Write(writer, value.Loaded)
+	FfiConverterUint64INSTANCE.Write(writer, value.MemoryEstimateBytes)
+	FfiConverterStringINSTANCE.Write(writer, value.Pool)
+	FfiConverterSequenceAdapterStatusRecordINSTANCE.Write(writer, value.Adapters)
+}
+
+type FfiDestroyerModelStatusRecord struct{}
+
+func (_ FfiDestroyerModelStatusRecord) Destroy(value ModelStatusRecord) {
+	value.Destroy()
+}
+
 // Request to generate music or sound effects.
 type MusicRequest struct {
 	Prompt          string
@@ -11725,6 +13447,52 @@ func (c FfiConverterPersistedEvent) Write(writer io.Writer, value PersistedEvent
 type FfiDestroyerPersistedEvent struct{}
 
 func (_ FfiDestroyerPersistedEvent) Destroy(value PersistedEvent) {
+	value.Destroy()
+}
+
+// Per-pool budget snapshot returned by [`UniffiModelManager::pools`].
+type PoolStatusRecord struct {
+	// Pool label (`"cpu"` or `"gpu:N"`).
+	Pool        string
+	BudgetBytes uint64
+}
+
+func (r *PoolStatusRecord) Destroy() {
+	FfiDestroyerString{}.Destroy(r.Pool)
+	FfiDestroyerUint64{}.Destroy(r.BudgetBytes)
+}
+
+type FfiConverterPoolStatusRecord struct{}
+
+var FfiConverterPoolStatusRecordINSTANCE = FfiConverterPoolStatusRecord{}
+
+func (c FfiConverterPoolStatusRecord) Lift(rb RustBufferI) PoolStatusRecord {
+	return LiftFromRustBuffer[PoolStatusRecord](c, rb)
+}
+
+func (c FfiConverterPoolStatusRecord) Read(reader io.Reader) PoolStatusRecord {
+	return PoolStatusRecord{
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterUint64INSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterPoolStatusRecord) Lower(value PoolStatusRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[PoolStatusRecord](c, value)
+}
+
+func (c FfiConverterPoolStatusRecord) LowerExternal(value PoolStatusRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[PoolStatusRecord](c, value))
+}
+
+func (c FfiConverterPoolStatusRecord) Write(writer io.Writer, value PoolStatusRecord) {
+	FfiConverterStringINSTANCE.Write(writer, value.Pool)
+	FfiConverterUint64INSTANCE.Write(writer, value.BudgetBytes)
+}
+
+type FfiDestroyerPoolStatusRecord struct{}
+
+func (_ FfiDestroyerPoolStatusRecord) Destroy(value PoolStatusRecord) {
 	value.Destroy()
 }
 
@@ -15158,6 +16926,53 @@ func (FfiDestroyerSequenceWorkflow) Destroy(sequence []*Workflow) {
 	}
 }
 
+type FfiConverterSequenceAdapterStatusRecord struct{}
+
+var FfiConverterSequenceAdapterStatusRecordINSTANCE = FfiConverterSequenceAdapterStatusRecord{}
+
+func (c FfiConverterSequenceAdapterStatusRecord) Lift(rb RustBufferI) []AdapterStatusRecord {
+	return LiftFromRustBuffer[[]AdapterStatusRecord](c, rb)
+}
+
+func (c FfiConverterSequenceAdapterStatusRecord) Read(reader io.Reader) []AdapterStatusRecord {
+	length := readInt32(reader)
+	if length == 0 {
+		return nil
+	}
+	result := make([]AdapterStatusRecord, 0, length)
+	for i := int32(0); i < length; i++ {
+		result = append(result, FfiConverterAdapterStatusRecordINSTANCE.Read(reader))
+	}
+	return result
+}
+
+func (c FfiConverterSequenceAdapterStatusRecord) Lower(value []AdapterStatusRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[[]AdapterStatusRecord](c, value)
+}
+
+func (c FfiConverterSequenceAdapterStatusRecord) LowerExternal(value []AdapterStatusRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[[]AdapterStatusRecord](c, value))
+}
+
+func (c FfiConverterSequenceAdapterStatusRecord) Write(writer io.Writer, value []AdapterStatusRecord) {
+	if len(value) > math.MaxInt32 {
+		panic("[]AdapterStatusRecord is too large to fit into Int32")
+	}
+
+	writeInt32(writer, int32(len(value)))
+	for _, item := range value {
+		FfiConverterAdapterStatusRecordINSTANCE.Write(writer, item)
+	}
+}
+
+type FfiDestroyerSequenceAdapterStatusRecord struct{}
+
+func (FfiDestroyerSequenceAdapterStatusRecord) Destroy(sequence []AdapterStatusRecord) {
+	for _, value := range sequence {
+		FfiDestroyerAdapterStatusRecord{}.Destroy(value)
+	}
+}
+
 type FfiConverterSequenceChatMessage struct{}
 
 var FfiConverterSequenceChatMessageINSTANCE = FfiConverterSequenceChatMessage{}
@@ -15675,6 +17490,53 @@ func (FfiDestroyerSequenceMedia) Destroy(sequence []Media) {
 	}
 }
 
+type FfiConverterSequenceModelStatusRecord struct{}
+
+var FfiConverterSequenceModelStatusRecordINSTANCE = FfiConverterSequenceModelStatusRecord{}
+
+func (c FfiConverterSequenceModelStatusRecord) Lift(rb RustBufferI) []ModelStatusRecord {
+	return LiftFromRustBuffer[[]ModelStatusRecord](c, rb)
+}
+
+func (c FfiConverterSequenceModelStatusRecord) Read(reader io.Reader) []ModelStatusRecord {
+	length := readInt32(reader)
+	if length == 0 {
+		return nil
+	}
+	result := make([]ModelStatusRecord, 0, length)
+	for i := int32(0); i < length; i++ {
+		result = append(result, FfiConverterModelStatusRecordINSTANCE.Read(reader))
+	}
+	return result
+}
+
+func (c FfiConverterSequenceModelStatusRecord) Lower(value []ModelStatusRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[[]ModelStatusRecord](c, value)
+}
+
+func (c FfiConverterSequenceModelStatusRecord) LowerExternal(value []ModelStatusRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[[]ModelStatusRecord](c, value))
+}
+
+func (c FfiConverterSequenceModelStatusRecord) Write(writer io.Writer, value []ModelStatusRecord) {
+	if len(value) > math.MaxInt32 {
+		panic("[]ModelStatusRecord is too large to fit into Int32")
+	}
+
+	writeInt32(writer, int32(len(value)))
+	for _, item := range value {
+		FfiConverterModelStatusRecordINSTANCE.Write(writer, item)
+	}
+}
+
+type FfiDestroyerSequenceModelStatusRecord struct{}
+
+func (FfiDestroyerSequenceModelStatusRecord) Destroy(sequence []ModelStatusRecord) {
+	for _, value := range sequence {
+		FfiDestroyerModelStatusRecord{}.Destroy(value)
+	}
+}
+
 type FfiConverterSequencePersistedEvent struct{}
 
 var FfiConverterSequencePersistedEventINSTANCE = FfiConverterSequencePersistedEvent{}
@@ -15719,6 +17581,53 @@ type FfiDestroyerSequencePersistedEvent struct{}
 func (FfiDestroyerSequencePersistedEvent) Destroy(sequence []PersistedEvent) {
 	for _, value := range sequence {
 		FfiDestroyerPersistedEvent{}.Destroy(value)
+	}
+}
+
+type FfiConverterSequencePoolStatusRecord struct{}
+
+var FfiConverterSequencePoolStatusRecordINSTANCE = FfiConverterSequencePoolStatusRecord{}
+
+func (c FfiConverterSequencePoolStatusRecord) Lift(rb RustBufferI) []PoolStatusRecord {
+	return LiftFromRustBuffer[[]PoolStatusRecord](c, rb)
+}
+
+func (c FfiConverterSequencePoolStatusRecord) Read(reader io.Reader) []PoolStatusRecord {
+	length := readInt32(reader)
+	if length == 0 {
+		return nil
+	}
+	result := make([]PoolStatusRecord, 0, length)
+	for i := int32(0); i < length; i++ {
+		result = append(result, FfiConverterPoolStatusRecordINSTANCE.Read(reader))
+	}
+	return result
+}
+
+func (c FfiConverterSequencePoolStatusRecord) Lower(value []PoolStatusRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[[]PoolStatusRecord](c, value)
+}
+
+func (c FfiConverterSequencePoolStatusRecord) LowerExternal(value []PoolStatusRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[[]PoolStatusRecord](c, value))
+}
+
+func (c FfiConverterSequencePoolStatusRecord) Write(writer io.Writer, value []PoolStatusRecord) {
+	if len(value) > math.MaxInt32 {
+		panic("[]PoolStatusRecord is too large to fit into Int32")
+	}
+
+	writeInt32(writer, int32(len(value)))
+	for _, item := range value {
+		FfiConverterPoolStatusRecordINSTANCE.Write(writer, item)
+	}
+}
+
+type FfiDestroyerSequencePoolStatusRecord struct{}
+
+func (FfiDestroyerSequencePoolStatusRecord) Destroy(sequence []PoolStatusRecord) {
+	for _, value := range sequence {
+		FfiDestroyerPoolStatusRecord{}.Destroy(value)
 	}
 }
 
@@ -16095,6 +18004,54 @@ type FfiDestroyerSequenceSequenceFloat64 struct{}
 func (FfiDestroyerSequenceSequenceFloat64) Destroy(sequence [][]float64) {
 	for _, value := range sequence {
 		FfiDestroyerSequenceFloat64{}.Destroy(value)
+	}
+}
+
+type FfiConverterMapStringFloat64 struct{}
+
+var FfiConverterMapStringFloat64INSTANCE = FfiConverterMapStringFloat64{}
+
+func (c FfiConverterMapStringFloat64) Lift(rb RustBufferI) map[string]float64 {
+	return LiftFromRustBuffer[map[string]float64](c, rb)
+}
+
+func (_ FfiConverterMapStringFloat64) Read(reader io.Reader) map[string]float64 {
+	result := make(map[string]float64)
+	length := readInt32(reader)
+	for i := int32(0); i < length; i++ {
+		key := FfiConverterStringINSTANCE.Read(reader)
+		value := FfiConverterFloat64INSTANCE.Read(reader)
+		result[key] = value
+	}
+	return result
+}
+
+func (c FfiConverterMapStringFloat64) Lower(value map[string]float64) C.RustBuffer {
+	return LowerIntoRustBuffer[map[string]float64](c, value)
+}
+
+func (c FfiConverterMapStringFloat64) LowerExternal(value map[string]float64) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[map[string]float64](c, value))
+}
+
+func (_ FfiConverterMapStringFloat64) Write(writer io.Writer, mapValue map[string]float64) {
+	if len(mapValue) > math.MaxInt32 {
+		panic("map[string]float64 is too large to fit into Int32")
+	}
+
+	writeInt32(writer, int32(len(mapValue)))
+	for key, value := range mapValue {
+		FfiConverterStringINSTANCE.Write(writer, key)
+		FfiConverterFloat64INSTANCE.Write(writer, value)
+	}
+}
+
+type FfiDestroyerMapStringFloat64 struct{}
+
+func (_ FfiDestroyerMapStringFloat64) Destroy(mapValue map[string]float64) {
+	for key, value := range mapValue {
+		FfiDestroyerString{}.Destroy(key)
+		FfiDestroyerFloat64{}.Destroy(value)
 	}
 }
 

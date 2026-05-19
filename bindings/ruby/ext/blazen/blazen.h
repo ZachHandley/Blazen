@@ -150,6 +150,21 @@
 #define BLAZEN_ERROR_KIND_CALLER 19
 
 /**
+ * Tag for [`AdapterMountStrategy::Attached`].
+ */
+#define BLAZEN_ADAPTER_MOUNT_STRATEGY_ATTACHED 1
+
+/**
+ * Tag for [`AdapterMountStrategy::Rebuilt`].
+ */
+#define BLAZEN_ADAPTER_MOUNT_STRATEGY_REBUILT 2
+
+/**
+ * Tag for [`AdapterMountStrategy::Merged`].
+ */
+#define BLAZEN_ADAPTER_MOUNT_STRATEGY_MERGED 3
+
+/**
  * `StepOutput` variant tag for the `None` case — the step performed work
  * but produced no event.
  */
@@ -168,6 +183,33 @@
 #define BLAZEN_STEP_OUTPUT_MULTIPLE 2
 
 typedef struct Arc_InnerCustomProviderHandle Arc_InnerCustomProviderHandle;
+
+/**
+ * Opaque result returned by
+ * [`crate::manager::blazen_model_manager_load_adapter_blocking`] and its
+ * future variant. Carries the adapter id echoed by the backend plus the
+ * runtime memory footprint and the mount-strategy tag.
+ */
+typedef struct BlazenAdapterHandleInfo BlazenAdapterHandleInfo;
+
+/**
+ * Opaque snapshot of one mounted adapter — wraps
+ * [`blazen_llm::AdapterStatus`] plus the mount-strategy tag reported by the
+ * underlying [`AdapterHandle`](blazen_llm::AdapterHandle) at mount time
+ * (status snapshots stored on the manager don't normally carry that field;
+ * the manager records it on a per-handle basis instead, see
+ * [`crate::manager::blazen_model_manager_load_adapter_blocking`]).
+ */
+typedef struct BlazenAdapterStatus BlazenAdapterStatus;
+
+/**
+ * Opaque list of [`BlazenAdapterStatus`] snapshots. Owned by the caller —
+ * free with [`blazen_adapter_status_list_free`]. Iterate by calling
+ * [`blazen_adapter_status_list_len`] and either
+ * [`blazen_adapter_status_list_get`] (borrows the entry, no allocation) or
+ * [`blazen_adapter_status_list_take`] (transfers ownership of one entry).
+ */
+typedef struct BlazenAdapterStatusList BlazenAdapterStatusList;
 
 /**
  * Opaque wrapper around `blazen_uniffi::agent::Agent`.
@@ -329,6 +371,28 @@ typedef struct BlazenImageGenResult BlazenImageGenResult;
 typedef struct BlazenMedia BlazenMedia;
 
 /**
+ * Opaque handle around [`blazen_manager::ModelManager`]. Construct via
+ * [`blazen_model_manager_new`] or [`blazen_model_manager_with_budgets_gb`];
+ * release with [`blazen_model_manager_free`].
+ */
+typedef struct BlazenModelManager BlazenModelManager;
+
+/**
+ * Opaque snapshot of one registered model — wraps
+ * [`blazen_manager::ModelStatus`]. The pool label is rendered via
+ * [`Pool::Display`](blazen_llm::Pool); adapters are exposed as a count plus
+ * a take-by-index accessor that produces a fresh list handle scoped to one
+ * model.
+ */
+typedef struct BlazenModelStatus BlazenModelStatus;
+
+/**
+ * Opaque list of [`BlazenModelStatus`] snapshots. Same access pattern as
+ * [`BlazenAdapterStatusList`].
+ */
+typedef struct BlazenModelStatusList BlazenModelStatusList;
+
+/**
  * Opaque wrapper around `blazen_uniffi::peer::PeerClient`.
  *
  * The inner `Arc` matches the `self: Arc<Self>` shape of the underlying
@@ -371,6 +435,20 @@ typedef struct BlazenPipeline BlazenPipeline;
  * cloning the `Arc` per cabi call is sound.
  */
 typedef struct BlazenPipelineBuilder BlazenPipelineBuilder;
+
+/**
+ * Opaque snapshot of one configured pool: its label, total budget, current
+ * usage, and the number of currently-loaded models. Produced by
+ * [`crate::manager::blazen_model_manager_pools`] (which packages the
+ * `(Pool, budget)` pairs reported by [`blazen_manager::ModelManager::pools`]
+ * together with live usage / count from the status snapshot).
+ */
+typedef struct BlazenPoolStatus BlazenPoolStatus;
+
+/**
+ * Opaque list of [`BlazenPoolStatus`] snapshots.
+ */
+typedef struct BlazenPoolStatusList BlazenPoolStatusList;
 
 /**
  * Opaque wrapper around a [`blazen_core::distributed::RunEvent`].
@@ -4716,6 +4794,68 @@ int32_t blazen_run_state_snapshot_last_event_at_ms(const BlazenRunStateSnapshot 
  int32_t blazen_future_wait(BlazenFuture *fut);
 
 /**
+ * Pops a `Result<bool, _>` future, writing the boolean into `*out` on
+ * success. Returns `0` on success or `-1` on failure (writes `*err`).
+ *
+ * # Safety
+ *
+ * `fut` is null OR a live cabi-produced future. `out` and `err` are each
+ * null OR a single-writer destination.
+ */
+ int32_t blazen_future_take_bool(BlazenFuture *fut, bool *out, BlazenError **err);
+
+/**
+ * Pops a `Result<Vec<blazen_manager::ModelStatus>, _>` future, writing a
+ * caller-owned `BlazenModelStatusList*` into `*out` (free with
+ * [`crate::manager_records::blazen_model_status_list_free`]). Returns `0` on
+ * success or `-1` on failure (writes `*err`).
+ *
+ * # Safety
+ *
+ * `fut` is null OR a future produced by
+ * [`crate::manager::blazen_model_manager_status`]. `out` and `err` follow
+ * the usual single-writer contract.
+ */
+
+int32_t blazen_future_take_model_status_list(BlazenFuture *fut,
+                                             BlazenModelStatusList **out,
+                                             BlazenError **err);
+
+/**
+ * Pops a `Result<blazen_llm::AdapterHandle, _>` future, writing a
+ * caller-owned `BlazenAdapterHandleInfo*` into `*out` (free with
+ * [`crate::manager_records::blazen_adapter_handle_info_free`]). Returns
+ * `0` on success or `-1` on failure (writes `*err`).
+ *
+ * # Safety
+ *
+ * `fut` is null OR a future produced by
+ * [`crate::manager::blazen_model_manager_load_adapter`]. `out` and `err`
+ * follow the usual single-writer contract.
+ */
+
+int32_t blazen_future_take_adapter_handle_info(BlazenFuture *fut,
+                                               BlazenAdapterHandleInfo **out,
+                                               BlazenError **err);
+
+/**
+ * Pops a `Result<Vec<blazen_llm::AdapterStatus>, _>` future, writing a
+ * caller-owned `BlazenAdapterStatusList*` into `*out` (free with
+ * [`crate::manager_records::blazen_adapter_status_list_free`]). Returns
+ * `0` on success or `-1` on failure (writes `*err`).
+ *
+ * # Safety
+ *
+ * `fut` is null OR a future produced by
+ * [`crate::manager::blazen_model_manager_list_adapters`]. `out` and `err`
+ * follow the usual single-writer contract.
+ */
+
+int32_t blazen_future_take_adapter_status_list(BlazenFuture *fut,
+                                               BlazenAdapterStatusList **out,
+                                               BlazenError **err);
+
+/**
  * Frees the future handle. If the typed result was never consumed by a
  * `blazen_future_take_*`, the boxed value (or the unread `BlazenError`) is
  * dropped here. No-op on a null pointer.
@@ -5652,6 +5792,572 @@ BlazenCompletionResponse *blazen_completion_response_from_json(const char *json,
 
 BlazenEmbeddingResponse *blazen_embedding_response_from_json(const char *json,
                                                              BlazenError **out_err);
+
+/**
+ * Constructs a manager with `u64::MAX` budgets on `Pool::Cpu` and
+ * `Pool::Gpu(0)`. Matches the Python binding's no-args constructor sentinel
+ * — useful for tests and runtime-unconstrained embedders. Caller frees with
+ * [`blazen_model_manager_free`].
+ */
+ BlazenModelManager *blazen_model_manager_new(void);
+
+/**
+ * Constructs a manager with explicit CPU RAM and GPU VRAM budgets, both in
+ * gigabytes. Pass `0.0` to disable a pool. Caller frees with
+ * [`blazen_model_manager_free`].
+ */
+ BlazenModelManager *blazen_model_manager_with_budgets_gb(double cpu_ram_gb, double gpu_vram_gb);
+
+/**
+ * Frees a [`BlazenModelManager`] handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `mgr` must be null OR a pointer previously produced by the cabi surface.
+ * Double-free is undefined behavior.
+ */
+ void blazen_model_manager_free(BlazenModelManager *mgr);
+
+/**
+ * Synchronously loads the model registered as `model_id`. Returns `0` on
+ * success or `-1` on failure (writing `*out_err`).
+ *
+ * # Safety
+ *
+ * `mgr` must be null OR a live [`BlazenModelManager`]. `model_id` must be a
+ * NUL-terminated UTF-8 buffer valid for the duration of the call.
+ * `out_err` is null OR a single-writer destination.
+ */
+
+int32_t blazen_model_manager_load_blocking(const BlazenModelManager *mgr,
+                                           const char *model_id,
+                                           BlazenError **out_err);
+
+/**
+ * Spawns a load onto the cabi tokio runtime; pop the result with
+ * [`blazen_future_take_unit`]. Returns null on argument-shape failure.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_model_manager_load_blocking`] (minus `out_err`).
+ */
+ BlazenFuture *blazen_model_manager_load(const BlazenModelManager *mgr, const char *model_id);
+
+/**
+ * Synchronously unloads the model registered as `model_id`. Returns `0` on
+ * success or `-1` on failure.
+ *
+ * # Safety
+ *
+ * See [`blazen_model_manager_load_blocking`].
+ */
+
+int32_t blazen_model_manager_unload_blocking(const BlazenModelManager *mgr,
+                                             const char *model_id,
+                                             BlazenError **out_err);
+
+/**
+ * Spawns an unload onto the cabi tokio runtime; pop the result with
+ * [`blazen_future_take_unit`].
+ *
+ * # Safety
+ *
+ * Same as [`blazen_model_manager_load`].
+ */
+ BlazenFuture *blazen_model_manager_unload(const BlazenModelManager *mgr, const char *model_id);
+
+/**
+ * Synchronously checks whether `model_id` is currently loaded. Returns `1`
+ * for loaded, `0` for not loaded, `-1` on argument-shape failure (writing
+ * `*out_err`).
+ *
+ * # Safety
+ *
+ * See [`blazen_model_manager_load_blocking`].
+ */
+
+int32_t blazen_model_manager_is_loaded_blocking(const BlazenModelManager *mgr,
+                                                const char *model_id,
+                                                BlazenError **out_err);
+
+/**
+ * Spawns an `is_loaded` query onto the cabi tokio runtime; pop the result
+ * with [`blazen_future_take_bool`].
+ *
+ * # Safety
+ *
+ * Same as [`blazen_model_manager_load`].
+ */
+ BlazenFuture *blazen_model_manager_is_loaded(const BlazenModelManager *mgr, const char *model_id);
+
+/**
+ * Synchronously snapshots the status of every registered model. Returns a
+ * caller-owned [`BlazenModelStatusList`] on success (free with
+ * [`crate::manager_records::blazen_model_status_list_free`]) or null on
+ * failure (writes `*out_err`).
+ *
+ * # Safety
+ *
+ * `mgr` must be null OR a live [`BlazenModelManager`]. `out_err` is null OR
+ * a single-writer destination.
+ */
+
+BlazenModelStatusList *blazen_model_manager_status_blocking(const BlazenModelManager *mgr,
+                                                            BlazenError **out_err);
+
+/**
+ * Spawns the status snapshot onto the cabi tokio runtime; pop the result
+ * with [`blazen_future_take_model_status_list`].
+ *
+ * # Safety
+ *
+ * `mgr` must be null OR a live [`BlazenModelManager`].
+ */
+ BlazenFuture *blazen_model_manager_status(const BlazenModelManager *mgr);
+
+/**
+ * Snapshots configured pools together with their live `used_bytes` and
+ * loaded-model counts. Returns a caller-owned [`BlazenPoolStatusList`]
+ * (never null on a non-null `mgr`).
+ *
+ * Why: `ModelManager::pools` is synchronous and only returns `(label,
+ * budget)` pairs — to also surface `used_bytes` and `loaded_models` we have
+ * to await `used_bytes(pool)` and walk the model statuses. The cabi blocks
+ * on those awaits so a single C call returns the full snapshot.
+ *
+ * # Safety
+ *
+ * `mgr` must be null OR a live [`BlazenModelManager`].
+ */
+ BlazenPoolStatusList *blazen_model_manager_pools(const BlazenModelManager *mgr);
+
+/**
+ * Synchronously mounts a PEFT-format `LoRA` adapter. Returns a caller-owned
+ * [`BlazenAdapterHandleInfo`] (free with
+ * [`crate::manager_records::blazen_adapter_handle_info_free`]) on success
+ * or null on failure (writes `*out_err`).
+ *
+ * `scale` is the strength multiplier for the adapter delta-weights;
+ * `1.0` is full PEFT strength. The base model is loaded automatically if
+ * not already in residence.
+ *
+ * # Safety
+ *
+ * `mgr` must be null OR a live [`BlazenModelManager`]. `model_id`,
+ * `adapter_dir`, and `adapter_id` must each be NUL-terminated UTF-8
+ * buffers valid for the duration of this call.
+ */
+
+BlazenAdapterHandleInfo *blazen_model_manager_load_adapter_blocking(const BlazenModelManager *mgr,
+                                                                    const char *model_id,
+                                                                    const char *adapter_dir,
+                                                                    const char *adapter_id,
+                                                                    double scale,
+                                                                    BlazenError **out_err);
+
+/**
+ * Spawns a `load_adapter` onto the cabi tokio runtime; pop the result with
+ * [`blazen_future_take_adapter_handle_info`].
+ *
+ * # Safety
+ *
+ * Same as [`blazen_model_manager_load_adapter_blocking`] (minus `out_err`).
+ * String buffers are copied before this function returns.
+ */
+
+BlazenFuture *blazen_model_manager_load_adapter(const BlazenModelManager *mgr,
+                                                const char *model_id,
+                                                const char *adapter_dir,
+                                                const char *adapter_id,
+                                                double scale);
+
+/**
+ * Synchronously unmounts a previously-loaded adapter.
+ *
+ * # Safety
+ *
+ * `mgr` must be null OR a live [`BlazenModelManager`]. `model_id` and
+ * `adapter_id` must each be NUL-terminated UTF-8 buffers valid for the
+ * call.
+ */
+
+int32_t blazen_model_manager_unload_adapter_blocking(const BlazenModelManager *mgr,
+                                                     const char *model_id,
+                                                     const char *adapter_id,
+                                                     BlazenError **out_err);
+
+/**
+ * Spawns an `unload_adapter` onto the cabi tokio runtime; pop the result
+ * with [`blazen_future_take_unit`].
+ *
+ * # Safety
+ *
+ * Same as [`blazen_model_manager_unload_adapter_blocking`] (minus
+ * `out_err`).
+ */
+
+BlazenFuture *blazen_model_manager_unload_adapter(const BlazenModelManager *mgr,
+                                                  const char *model_id,
+                                                  const char *adapter_id);
+
+/**
+ * Synchronously lists adapters mounted on `model_id`. Returns a
+ * caller-owned [`BlazenAdapterStatusList`] (free with
+ * [`crate::manager_records::blazen_adapter_status_list_free`]) on success
+ * or null on failure (writes `*out_err`).
+ *
+ * # Safety
+ *
+ * `mgr` must be null OR a live [`BlazenModelManager`]. `model_id` must be a
+ * NUL-terminated UTF-8 buffer valid for the call.
+ */
+
+BlazenAdapterStatusList *blazen_model_manager_list_adapters_blocking(const BlazenModelManager *mgr,
+                                                                     const char *model_id,
+                                                                     BlazenError **out_err);
+
+/**
+ * Spawns a `list_adapters` onto the cabi tokio runtime; pop the result with
+ * [`blazen_future_take_adapter_status_list`].
+ *
+ * # Safety
+ *
+ * Same as [`blazen_model_manager_list_adapters_blocking`] (minus
+ * `out_err`).
+ */
+
+BlazenFuture *blazen_model_manager_list_adapters(const BlazenModelManager *mgr,
+                                                 const char *model_id);
+
+/**
+ * Returns the adapter id as a caller-owned C string. Null on a null handle.
+ *
+ * # Safety
+ *
+ * `s` must be null OR a live [`BlazenAdapterStatus`].
+ */
+ char *blazen_adapter_status_adapter_id(const BlazenAdapterStatus *s);
+
+/**
+ * Returns the adapter source directory as a caller-owned C string. Null on
+ * a null handle.
+ *
+ * # Safety
+ *
+ * `s` must be null OR a live [`BlazenAdapterStatus`].
+ */
+ char *blazen_adapter_status_source_dir(const BlazenAdapterStatus *s);
+
+/**
+ * Returns the adapter scale (delta-weight multiplier). Returns `0.0` on a
+ * null handle.
+ *
+ * # Safety
+ *
+ * `s` must be null OR a live [`BlazenAdapterStatus`].
+ */
+ double blazen_adapter_status_scale(const BlazenAdapterStatus *s);
+
+/**
+ * Returns the adapter's runtime memory footprint in bytes (as reported by
+ * the backend at mount time). Returns `0` on a null handle.
+ *
+ * # Safety
+ *
+ * `s` must be null OR a live [`BlazenAdapterStatus`].
+ */
+ uint64_t blazen_adapter_status_memory_bytes(const BlazenAdapterStatus *s);
+
+/**
+ * Returns the mount-strategy tag (one of `BLAZEN_ADAPTER_MOUNT_STRATEGY_*`).
+ * Returns `0` on a null handle.
+ *
+ * # Safety
+ *
+ * `s` must be null OR a live [`BlazenAdapterStatus`].
+ */
+ uint32_t blazen_adapter_status_mount_strategy(const BlazenAdapterStatus *s);
+
+/**
+ * Frees a [`BlazenAdapterStatus`] handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `s` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_adapter_status_free(BlazenAdapterStatus *s);
+
+/**
+ * Returns the number of entries in the list. Returns `0` on a null handle.
+ *
+ * # Safety
+ *
+ * `list` must be null OR a live [`BlazenAdapterStatusList`].
+ */
+ uintptr_t blazen_adapter_status_list_len(const BlazenAdapterStatusList *list);
+
+/**
+ * Borrows the `idx`-th entry as a `*const BlazenAdapterStatus`. The borrow
+ * is valid until the list is freed or modified. Returns null if `list` is
+ * null or `idx` is out of range.
+ *
+ * # Safety
+ *
+ * `list` must be null OR a live [`BlazenAdapterStatusList`].
+ */
+
+const BlazenAdapterStatus *blazen_adapter_status_list_get(const BlazenAdapterStatusList *list,
+                                                          uintptr_t idx);
+
+/**
+ * Pops the `idx`-th entry and returns it as a caller-owned
+ * [`BlazenAdapterStatus`] handle (free with
+ * [`blazen_adapter_status_free`]). Returns null if `list` is null or `idx`
+ * is out of range. The list shrinks by one on success.
+ *
+ * # Safety
+ *
+ * `list` must be null OR a live [`BlazenAdapterStatusList`].
+ */
+ BlazenAdapterStatus *blazen_adapter_status_list_take(BlazenAdapterStatusList *list, uintptr_t idx);
+
+/**
+ * Frees a [`BlazenAdapterStatusList`], dropping any remaining entries.
+ *
+ * # Safety
+ *
+ * `list` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_adapter_status_list_free(BlazenAdapterStatusList *list);
+
+/**
+ * Returns the model id as a caller-owned C string. Null on a null handle.
+ *
+ * # Safety
+ *
+ * `s` must be null OR a live [`BlazenModelStatus`].
+ */
+ char *blazen_model_status_id(const BlazenModelStatus *s);
+
+/**
+ * Returns `true` if the model is currently loaded. Returns `false` on a
+ * null handle.
+ *
+ * # Safety
+ *
+ * `s` must be null OR a live [`BlazenModelStatus`].
+ */
+ bool blazen_model_status_loaded(const BlazenModelStatus *s);
+
+/**
+ * Returns the model's estimated memory footprint in bytes. Returns `0` on a
+ * null handle.
+ *
+ * # Safety
+ *
+ * `s` must be null OR a live [`BlazenModelStatus`].
+ */
+ uint64_t blazen_model_status_memory_bytes(const BlazenModelStatus *s);
+
+/**
+ * Returns the pool label (`"cpu"` or `"gpu:N"`) as a caller-owned C string.
+ * Null on a null handle.
+ *
+ * # Safety
+ *
+ * `s` must be null OR a live [`BlazenModelStatus`].
+ */
+ char *blazen_model_status_pool(const BlazenModelStatus *s);
+
+/**
+ * Returns the number of adapters mounted on this model. Returns `0` on a
+ * null handle.
+ *
+ * # Safety
+ *
+ * `s` must be null OR a live [`BlazenModelStatus`].
+ */
+ uintptr_t blazen_model_status_adapters_count(const BlazenModelStatus *s);
+
+/**
+ * Returns a caller-owned [`BlazenAdapterStatusList`] cloned from the
+ * model's mounted-adapters snapshot. Null on a null handle. Free with
+ * [`blazen_adapter_status_list_free`].
+ *
+ * # Safety
+ *
+ * `s` must be null OR a live [`BlazenModelStatus`].
+ */
+ BlazenAdapterStatusList *blazen_model_status_adapters(const BlazenModelStatus *s);
+
+/**
+ * Frees a [`BlazenModelStatus`] handle.
+ *
+ * # Safety
+ *
+ * `s` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_model_status_free(BlazenModelStatus *s);
+
+/**
+ * Returns the number of entries in the list. Returns `0` on a null handle.
+ *
+ * # Safety
+ *
+ * `list` must be null OR a live [`BlazenModelStatusList`].
+ */
+ uintptr_t blazen_model_status_list_len(const BlazenModelStatusList *list);
+
+/**
+ * Borrows the `idx`-th entry. Returns null if `list` is null or `idx` is
+ * out of range.
+ *
+ * # Safety
+ *
+ * `list` must be null OR a live [`BlazenModelStatusList`].
+ */
+
+const BlazenModelStatus *blazen_model_status_list_get(const BlazenModelStatusList *list,
+                                                      uintptr_t idx);
+
+/**
+ * Pops the `idx`-th entry and returns it as a caller-owned handle. Returns
+ * null if `list` is null or `idx` is out of range.
+ *
+ * # Safety
+ *
+ * `list` must be null OR a live [`BlazenModelStatusList`].
+ */
+ BlazenModelStatus *blazen_model_status_list_take(BlazenModelStatusList *list, uintptr_t idx);
+
+/**
+ * Frees a [`BlazenModelStatusList`], dropping any remaining entries.
+ *
+ * # Safety
+ *
+ * `list` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_model_status_list_free(BlazenModelStatusList *list);
+
+/**
+ * Returns the pool label as a caller-owned C string. Null on a null handle.
+ *
+ * # Safety
+ *
+ * `s` must be null OR a live [`BlazenPoolStatus`].
+ */
+ char *blazen_pool_status_id(const BlazenPoolStatus *s);
+
+/**
+ * Returns the pool's total budget in bytes.
+ *
+ * # Safety
+ *
+ * `s` must be null OR a live [`BlazenPoolStatus`].
+ */
+ uint64_t blazen_pool_status_budget_bytes(const BlazenPoolStatus *s);
+
+/**
+ * Returns bytes currently used by loaded models in this pool.
+ *
+ * # Safety
+ *
+ * `s` must be null OR a live [`BlazenPoolStatus`].
+ */
+ uint64_t blazen_pool_status_used_bytes(const BlazenPoolStatus *s);
+
+/**
+ * Returns the number of currently-loaded models charged to this pool.
+ *
+ * # Safety
+ *
+ * `s` must be null OR a live [`BlazenPoolStatus`].
+ */
+ uintptr_t blazen_pool_status_loaded_models(const BlazenPoolStatus *s);
+
+/**
+ * Frees a [`BlazenPoolStatus`] handle.
+ *
+ * # Safety
+ *
+ * `s` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_pool_status_free(BlazenPoolStatus *s);
+
+/**
+ * Returns the number of entries in the list.
+ *
+ * # Safety
+ *
+ * `list` must be null OR a live [`BlazenPoolStatusList`].
+ */
+ uintptr_t blazen_pool_status_list_len(const BlazenPoolStatusList *list);
+
+/**
+ * Borrows the `idx`-th entry. Returns null on null `list` or out-of-range
+ * `idx`.
+ *
+ * # Safety
+ *
+ * `list` must be null OR a live [`BlazenPoolStatusList`].
+ */
+
+const BlazenPoolStatus *blazen_pool_status_list_get(const BlazenPoolStatusList *list,
+                                                    uintptr_t idx);
+
+/**
+ * Pops the `idx`-th entry and returns a caller-owned handle.
+ *
+ * # Safety
+ *
+ * `list` must be null OR a live [`BlazenPoolStatusList`].
+ */
+ BlazenPoolStatus *blazen_pool_status_list_take(BlazenPoolStatusList *list, uintptr_t idx);
+
+/**
+ * Frees a [`BlazenPoolStatusList`], dropping any remaining entries.
+ *
+ * # Safety
+ *
+ * `list` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_pool_status_list_free(BlazenPoolStatusList *list);
+
+/**
+ * Returns the adapter id as a caller-owned C string. Null on a null handle.
+ *
+ * # Safety
+ *
+ * `h` must be null OR a live [`BlazenAdapterHandleInfo`].
+ */
+ char *blazen_adapter_handle_info_adapter_id(const BlazenAdapterHandleInfo *h);
+
+/**
+ * Returns the adapter's runtime memory footprint in bytes.
+ *
+ * # Safety
+ *
+ * `h` must be null OR a live [`BlazenAdapterHandleInfo`].
+ */
+ uint64_t blazen_adapter_handle_info_memory_bytes(const BlazenAdapterHandleInfo *h);
+
+/**
+ * Returns the mount-strategy tag (one of `BLAZEN_ADAPTER_MOUNT_STRATEGY_*`).
+ *
+ * # Safety
+ *
+ * `h` must be null OR a live [`BlazenAdapterHandleInfo`].
+ */
+ uint32_t blazen_adapter_handle_info_mount_strategy(const BlazenAdapterHandleInfo *h);
+
+/**
+ * Frees a [`BlazenAdapterHandleInfo`] handle.
+ *
+ * # Safety
+ *
+ * `h` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_adapter_handle_info_free(BlazenAdapterHandleInfo *h);
 
 /**
  * Construct a new peer server with the given UTF-8 `node_id`. Returns null

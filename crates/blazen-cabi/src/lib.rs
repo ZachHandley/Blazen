@@ -28,6 +28,8 @@ pub mod future;
 pub mod init;
 pub mod llm;
 pub mod llm_records;
+pub mod manager;
+pub mod manager_records;
 pub mod peer;
 pub mod persist;
 pub mod persist_factories;

@@ -187,6 +187,246 @@ impl blazen_llm::LocalModel for PyLocalModelWrapper {
             }
         }
     }
+
+    async fn load_adapter(
+        &self,
+        adapter_dir: &std::path::Path,
+        options: blazen_llm::AdapterOptions,
+    ) -> Result<blazen_llm::AdapterHandle, blazen_llm::BlazenError> {
+        // Probe the Python object for a callable `load_adapter`. Missing /
+        // non-callable falls back to `Unsupported`, mirroring the default
+        // `LocalModel::load_adapter` impl but with a wrapper-specific
+        // diagnostic so callers know the bridge layer (not the underlying
+        // backend) rejected the verb.
+        //
+        // We invoke the Python method under `Python::attach`; if it returned
+        // a coroutine we drive it on the caller's asyncio loop via the
+        // pyo3-async bridge. Synchronous returns are extracted in-place.
+        let prepared = tokio::task::block_in_place(|| {
+            Python::attach(|py| -> PyResult<Option<PreparedPyCall>> {
+                let bound = self.obj.bind(py);
+                let Ok(attr) = bound.getattr("load_adapter") else {
+                    return Ok(None);
+                };
+                if !attr.is_callable() {
+                    return Ok(None);
+                }
+                let kwargs = pyo3::types::PyDict::new(py);
+                kwargs.set_item("adapter_id", &options.adapter_id)?;
+                kwargs.set_item("scale", options.scale)?;
+                let path_str = adapter_dir.display().to_string();
+                let result = attr.call((path_str,), Some(&kwargs))?;
+                prepare_call(py, result).map(Some)
+            })
+        })
+        .map_err(|e| blazen_llm::BlazenError::provider("python_local_model", e.to_string()))?;
+
+        let Some(prepared) = prepared else {
+            return Err(blazen_llm::BlazenError::unsupported(
+                "Python LocalModel does not implement load_adapter",
+            ));
+        };
+
+        let py_result = await_prepared(prepared)
+            .await
+            .map_err(|e| blazen_llm::BlazenError::provider("python_local_model", e.to_string()))?;
+
+        // Expected return: a string adapter_id, OR a dict-like with
+        // `adapter_id` / `memory_bytes` keys. We accept either shape and
+        // synthesize an `AdapterHandle` either way. The strategy is always
+        // reported as `Attached` because Python wrappers don't surface
+        // mount-strategy distinctions today.
+        Python::attach(
+            |py| -> Result<blazen_llm::AdapterHandle, blazen_llm::BlazenError> {
+                let bound = py_result.bind(py);
+                if let Ok(adapter_id) = bound.extract::<String>() {
+                    return Ok(blazen_llm::AdapterHandle {
+                        adapter_id,
+                        memory_bytes: 0,
+                        mount_strategy: blazen_llm::AdapterMountStrategy::Attached,
+                    });
+                }
+                let adapter_id: String = bound
+                .get_item("adapter_id")
+                .map_err(|e| {
+                    blazen_llm::BlazenError::provider(
+                        "python_local_model",
+                        format!(
+                            "load_adapter return value must be a str or have an 'adapter_id' key: {e}"
+                        ),
+                    )
+                })?
+                .extract()
+                .map_err(|e| {
+                    blazen_llm::BlazenError::provider(
+                        "python_local_model",
+                        format!("load_adapter 'adapter_id' must be str: {e}"),
+                    )
+                })?;
+                let memory_bytes: u64 = bound
+                    .get_item("memory_bytes")
+                    .ok()
+                    .and_then(|v| v.extract().ok())
+                    .unwrap_or(0);
+                Ok(blazen_llm::AdapterHandle {
+                    adapter_id,
+                    memory_bytes,
+                    mount_strategy: blazen_llm::AdapterMountStrategy::Attached,
+                })
+            },
+        )
+    }
+
+    async fn unload_adapter(
+        &self,
+        handle: &blazen_llm::AdapterHandle,
+    ) -> Result<(), blazen_llm::BlazenError> {
+        let prepared = tokio::task::block_in_place(|| {
+            Python::attach(|py| -> PyResult<Option<PreparedPyCall>> {
+                let bound = self.obj.bind(py);
+                let Ok(attr) = bound.getattr("unload_adapter") else {
+                    return Ok(None);
+                };
+                if !attr.is_callable() {
+                    return Ok(None);
+                }
+                let result = attr.call1((handle.adapter_id.clone(),))?;
+                prepare_call(py, result).map(Some)
+            })
+        })
+        .map_err(|e| blazen_llm::BlazenError::provider("python_local_model", e.to_string()))?;
+
+        let Some(prepared) = prepared else {
+            return Err(blazen_llm::BlazenError::unsupported(
+                "Python LocalModel does not implement unload_adapter",
+            ));
+        };
+
+        await_prepared(prepared)
+            .await
+            .map_err(|e| blazen_llm::BlazenError::provider("python_local_model", e.to_string()))?;
+        Ok(())
+    }
+
+    async fn list_adapters(&self) -> Vec<blazen_llm::AdapterStatus> {
+        let prepared = match tokio::task::block_in_place(|| {
+            Python::attach(|py| -> PyResult<Option<PreparedPyCall>> {
+                let bound = self.obj.bind(py);
+                let Ok(attr) = bound.getattr("list_adapters") else {
+                    return Ok(None);
+                };
+                if !attr.is_callable() {
+                    return Ok(None);
+                }
+                let result = attr.call0()?;
+                prepare_call(py, result).map(Some)
+            })
+        }) {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!("PyLocalModelWrapper: list_adapters() raised: {e}");
+                return Vec::new();
+            }
+        };
+
+        let Some(prepared) = prepared else {
+            return Vec::new();
+        };
+
+        let py_result = match await_prepared(prepared).await {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!("PyLocalModelWrapper: list_adapters() raised: {e}");
+                return Vec::new();
+            }
+        };
+
+        Python::attach(|py| -> Vec<blazen_llm::AdapterStatus> {
+            let bound = py_result.bind(py);
+            let Ok(iter) = bound.try_iter() else {
+                tracing::warn!("PyLocalModelWrapper: list_adapters() did not return an iterable");
+                return Vec::new();
+            };
+            let mut out = Vec::new();
+            for item in iter {
+                let Ok(item) = item else { continue };
+                let adapter_id: String = match item.get_item("adapter_id").and_then(|v| v.extract())
+                {
+                    Ok(v) => v,
+                    Err(e) => {
+                        tracing::warn!(
+                            "PyLocalModelWrapper: list_adapters item missing 'adapter_id': {e}"
+                        );
+                        continue;
+                    }
+                };
+                let scale: f32 = item
+                    .get_item("scale")
+                    .ok()
+                    .and_then(|v| v.extract().ok())
+                    .unwrap_or(1.0);
+                let source_dir: String = item
+                    .get_item("source_dir")
+                    .ok()
+                    .and_then(|v| v.extract().ok())
+                    .unwrap_or_default();
+                let memory_bytes: u64 = item
+                    .get_item("memory_bytes")
+                    .ok()
+                    .and_then(|v| v.extract().ok())
+                    .unwrap_or(0);
+                out.push(blazen_llm::AdapterStatus {
+                    adapter_id,
+                    scale,
+                    source_dir: std::path::PathBuf::from(source_dir),
+                    memory_bytes,
+                });
+            }
+            out
+        })
+    }
+}
+
+/// Either a resolved synchronous Python return value, or a coroutine-driven
+/// future paired with the asyncio task-local context it needs to run under.
+enum PreparedPyCall {
+    Sync(Py<PyAny>),
+    Async {
+        fut: std::pin::Pin<Box<dyn std::future::Future<Output = PyResult<Py<PyAny>>> + Send>>,
+        locals: pyo3_async_runtimes::TaskLocals,
+    },
+}
+
+/// Inspect a Python call result: if it's a coroutine, wire it into a Rust
+/// future driven by the caller's asyncio loop; otherwise capture the value
+/// for synchronous return.
+fn prepare_call(py: Python<'_>, result: Bound<'_, PyAny>) -> PyResult<PreparedPyCall> {
+    let inspect = py.import("inspect")?;
+    let is_coro: bool = inspect
+        .call_method1("iscoroutine", (&result,))
+        .and_then(|r| r.extract())
+        .unwrap_or(false);
+    if is_coro {
+        let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
+        let fut = pyo3_async_runtimes::into_future_with_locals(&locals, result)?;
+        Ok(PreparedPyCall::Async {
+            fut: Box::pin(fut),
+            locals,
+        })
+    } else {
+        Ok(PreparedPyCall::Sync(result.unbind()))
+    }
+}
+
+/// Resolve a [`PreparedPyCall`] uniformly, scoping the async branch onto its
+/// captured task-locals so the awaited coroutine runs on the right loop.
+async fn await_prepared(prepared: PreparedPyCall) -> PyResult<Py<PyAny>> {
+    match prepared {
+        PreparedPyCall::Sync(v) => Ok(v),
+        PreparedPyCall::Async { fut, locals } => {
+            pyo3_async_runtimes::tokio::scope(locals, fut).await
+        }
+    }
 }
 
 /// Build a [`PyLocalModelWrapper`] from a Python object, validating that
@@ -347,6 +587,43 @@ impl PyModelStatus {
             self.memory_estimate_bytes,
             format!("{}", self.pool)
         )
+    }
+}
+
+/// Snapshot of one mounted adapter.
+#[gen_stub_pyclass]
+#[pyclass(name = "AdapterStatus", frozen, module = "blazen", skip_from_py_object)]
+#[derive(Clone)]
+pub struct PyAdapterStatus {
+    #[pyo3(get)]
+    pub adapter_id: String,
+    #[pyo3(get)]
+    pub scale: f32,
+    #[pyo3(get)]
+    pub source_dir: String,
+    #[pyo3(get)]
+    pub memory_bytes: u64,
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyAdapterStatus {
+    fn __repr__(&self) -> String {
+        format!(
+            "AdapterStatus(adapter_id={:?}, scale={}, source_dir={:?}, memory_bytes={})",
+            self.adapter_id, self.scale, self.source_dir, self.memory_bytes
+        )
+    }
+}
+
+impl From<blazen_llm::AdapterStatus> for PyAdapterStatus {
+    fn from(s: blazen_llm::AdapterStatus) -> Self {
+        Self {
+            adapter_id: s.adapter_id,
+            scale: s.scale,
+            source_dir: s.source_dir.display().to_string(),
+            memory_bytes: s.memory_bytes,
+        }
     }
 }
 
@@ -603,6 +880,91 @@ impl PyModelManager {
                     memory_estimate_bytes: s.memory_estimate_bytes,
                     pool: s.pool,
                 })
+                .collect::<Vec<_>>())
+        })
+    }
+
+    /// Mount a PEFT-format LoRA adapter onto a registered model.
+    ///
+    /// The base model is loaded if necessary (via the same single-model
+    /// `ensure_loaded` path as `load`). The adapter directory must contain
+    /// `adapter_model.safetensors` and `adapter_config.json`; the on-disk
+    /// size of those files is charged against the model's pool budget.
+    ///
+    /// Args:
+    ///     model_id: The id of a previously-registered model.
+    ///     adapter_dir: Filesystem path containing the PEFT adapter files.
+    ///     adapter_id: Caller-chosen unique id for this adapter (passed back
+    ///         to ``unload_adapter`` and surfaced in ``list_adapters``).
+    ///     scale: Strength multiplier for the adapter delta-weights.
+    ///         Defaults to ``1.0`` (full PEFT strength).
+    ///
+    /// Returns:
+    ///     The ``adapter_id`` echoed by the backend, as a string.
+    #[gen_stub(override_return_type(
+        type_repr = "typing.Coroutine[typing.Any, typing.Any, str]",
+        imports = ("typing",)
+    ))]
+    #[pyo3(signature = (model_id, adapter_dir, *, adapter_id, scale=None))]
+    fn load_adapter<'py>(
+        &self,
+        py: Python<'py>,
+        model_id: String,
+        adapter_dir: String,
+        adapter_id: String,
+        scale: Option<f32>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let options = blazen_llm::AdapterOptions {
+            adapter_id,
+            scale: scale.unwrap_or(1.0),
+        };
+        let path = std::path::PathBuf::from(adapter_dir);
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let handle = inner
+                .load_adapter(&model_id, &path, options)
+                .await
+                .map_err(BlazenPyError::from)?;
+            Ok(handle.adapter_id)
+        })
+    }
+
+    /// Unmount a previously-loaded adapter, freeing its memory budget.
+    #[gen_stub(override_return_type(
+        type_repr = "typing.Coroutine[typing.Any, typing.Any, None]",
+        imports = ("typing",)
+    ))]
+    fn unload_adapter<'py>(
+        &self,
+        py: Python<'py>,
+        model_id: String,
+        adapter_id: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            inner
+                .unload_adapter(&model_id, &adapter_id)
+                .await
+                .map_err(BlazenPyError::from)?;
+            Ok(())
+        })
+    }
+
+    /// List adapters currently mounted on a registered model.
+    #[gen_stub(override_return_type(
+        type_repr = "typing.Coroutine[typing.Any, typing.Any, list[AdapterStatus]]",
+        imports = ("typing",)
+    ))]
+    fn list_adapters<'py>(&self, py: Python<'py>, model_id: String) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let statuses = inner
+                .list_adapters(&model_id)
+                .await
+                .map_err(BlazenPyError::from)?;
+            Ok(statuses
+                .into_iter()
+                .map(PyAdapterStatus::from)
                 .collect::<Vec<_>>())
         })
     }

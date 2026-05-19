@@ -355,6 +355,181 @@ pub unsafe extern "C" fn blazen_future_wait(fut: *mut BlazenFuture) -> i32 {
     0
 }
 
+// ---------------------------------------------------------------------------
+// Generic typed takers used by multiple cabi modules
+//
+// These are the smallest building blocks — `()` and `bool` results show up
+// across the manager / agent / batch surfaces, and string results show up
+// wherever a verb returns a single id. Bigger return types each get their
+// own typed taker next to the module they belong to (see
+// `blazen_future_take_model_status_list` etc. in
+// `crate::manager_records` consumer pathways).
+// ---------------------------------------------------------------------------
+
+// Why: `blazen_future_take_unit` already exists in `crate::persist` and is
+// shared across modules (peer, controlplane, etc.) — see its documentation
+// there. Manager verbs that resolve to `Result<(), _>` reuse the same
+// symbol; documenting that pointer here would be redundant.
+
+/// Pops a `Result<bool, _>` future, writing the boolean into `*out` on
+/// success. Returns `0` on success or `-1` on failure (writes `*err`).
+///
+/// # Safety
+///
+/// `fut` is null OR a live cabi-produced future. `out` and `err` are each
+/// null OR a single-writer destination.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_future_take_bool(
+    fut: *mut BlazenFuture,
+    out: *mut bool,
+    err: *mut *mut crate::error::BlazenError,
+) -> i32 {
+    // SAFETY: caller upholds the future-pointer contract.
+    match unsafe { BlazenFuture::take_typed::<bool>(fut) } {
+        Ok(v) => {
+            if !out.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *out = v;
+                }
+            }
+            0
+        }
+        Err(e) => {
+            if !err.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *err = crate::error::BlazenError::from(e).into_ptr();
+                }
+            }
+            -1
+        }
+    }
+}
+
+/// Pops a `Result<Vec<blazen_manager::ModelStatus>, _>` future, writing a
+/// caller-owned `BlazenModelStatusList*` into `*out` (free with
+/// [`crate::manager_records::blazen_model_status_list_free`]). Returns `0` on
+/// success or `-1` on failure (writes `*err`).
+///
+/// # Safety
+///
+/// `fut` is null OR a future produced by
+/// [`crate::manager::blazen_model_manager_status`]. `out` and `err` follow
+/// the usual single-writer contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_future_take_model_status_list(
+    fut: *mut BlazenFuture,
+    out: *mut *mut crate::manager_records::BlazenModelStatusList,
+    err: *mut *mut crate::error::BlazenError,
+) -> i32 {
+    // SAFETY: caller upholds the future-pointer contract.
+    match unsafe { BlazenFuture::take_typed::<Vec<blazen_manager::ModelStatus>>(fut) } {
+        Ok(items) => {
+            if !out.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *out = Box::into_raw(Box::new(
+                        crate::manager_records::BlazenModelStatusList::from(items),
+                    ));
+                }
+            }
+            0
+        }
+        Err(e) => {
+            if !err.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *err = crate::error::BlazenError::from(e).into_ptr();
+                }
+            }
+            -1
+        }
+    }
+}
+
+/// Pops a `Result<blazen_llm::AdapterHandle, _>` future, writing a
+/// caller-owned `BlazenAdapterHandleInfo*` into `*out` (free with
+/// [`crate::manager_records::blazen_adapter_handle_info_free`]). Returns
+/// `0` on success or `-1` on failure (writes `*err`).
+///
+/// # Safety
+///
+/// `fut` is null OR a future produced by
+/// [`crate::manager::blazen_model_manager_load_adapter`]. `out` and `err`
+/// follow the usual single-writer contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_future_take_adapter_handle_info(
+    fut: *mut BlazenFuture,
+    out: *mut *mut crate::manager_records::BlazenAdapterHandleInfo,
+    err: *mut *mut crate::error::BlazenError,
+) -> i32 {
+    // SAFETY: caller upholds the future-pointer contract.
+    match unsafe { BlazenFuture::take_typed::<blazen_llm::AdapterHandle>(fut) } {
+        Ok(handle) => {
+            if !out.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *out = Box::into_raw(Box::new(
+                        crate::manager_records::BlazenAdapterHandleInfo::from(handle),
+                    ));
+                }
+            }
+            0
+        }
+        Err(e) => {
+            if !err.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *err = crate::error::BlazenError::from(e).into_ptr();
+                }
+            }
+            -1
+        }
+    }
+}
+
+/// Pops a `Result<Vec<blazen_llm::AdapterStatus>, _>` future, writing a
+/// caller-owned `BlazenAdapterStatusList*` into `*out` (free with
+/// [`crate::manager_records::blazen_adapter_status_list_free`]). Returns
+/// `0` on success or `-1` on failure (writes `*err`).
+///
+/// # Safety
+///
+/// `fut` is null OR a future produced by
+/// [`crate::manager::blazen_model_manager_list_adapters`]. `out` and `err`
+/// follow the usual single-writer contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_future_take_adapter_status_list(
+    fut: *mut BlazenFuture,
+    out: *mut *mut crate::manager_records::BlazenAdapterStatusList,
+    err: *mut *mut crate::error::BlazenError,
+) -> i32 {
+    // SAFETY: caller upholds the future-pointer contract.
+    match unsafe { BlazenFuture::take_typed::<Vec<blazen_llm::AdapterStatus>>(fut) } {
+        Ok(items) => {
+            if !out.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *out = Box::into_raw(Box::new(
+                        crate::manager_records::BlazenAdapterStatusList::from_statuses(items),
+                    ));
+                }
+            }
+            0
+        }
+        Err(e) => {
+            if !err.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *err = crate::error::BlazenError::from(e).into_ptr();
+                }
+            }
+            -1
+        }
+    }
+}
+
 /// Frees the future handle. If the typed result was never consumed by a
 /// `blazen_future_take_*`, the boxed value (or the unread `BlazenError`) is
 /// dropped here. No-op on a null pointer.

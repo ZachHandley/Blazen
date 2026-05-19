@@ -70,6 +70,11 @@ public extension BlazenError {
         // requestId, detail, retryAfterMs)`.
         case let .Provider(_, message, _, _, _, _, _, _):
             return message
+        // `CallerError` carries `(name, message, propertiesJson)` — the
+        // structured exception payload thrown from a foreign callback
+        // (Python / JS / Ruby) that we round-tripped through UniFFI.
+        case let .CallerError(_, message, _):
+            return message
         case .Cancelled:
             return "cancelled"
         }

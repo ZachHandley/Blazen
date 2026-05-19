@@ -1,0 +1,763 @@
+//! C-ABI surface over [`blazen_manager::ModelManager`]: memory-budget-aware
+//! model loader with per-pool LRU eviction and `LoRA` adapter orchestration.
+//!
+//! ## Construction
+//!
+//! Two constructors are exposed: [`blazen_model_manager_new`] (defaults to
+//! `u64::MAX` budgets on `Pool::Cpu` and `Pool::Gpu(0)` — the same
+//! "no enforcement" sentinel the Python binding uses when neither budget is
+//! given) and [`blazen_model_manager_with_budgets_gb`] (CPU RAM + GPU VRAM
+//! budgets in gigabytes).
+//!
+//! ## Async pattern
+//!
+//! Every verb that exercises the underlying `async` API exposes a
+//! `_blocking` variant (drives the cabi tokio runtime via `block_on`) and a
+//! future-returning variant whose result is taken via the matching
+//! `blazen_future_take_*` typed accessor declared in
+//! [`crate::future`]. Verbs that are synchronous in Rust today
+//! ([`ModelManager::pools`] is the only one) are exposed as a single
+//! synchronous extern function.
+//!
+//! ## Deferred surface
+//!
+//! `register` / `register_local` is intentionally **not** exposed here. The
+//! underlying API requires an `Arc<dyn LocalModel>`, which means the cabi
+//! would need a foreign-language callback trampoline (sync + async hooks for
+//! `load` / `unload` / `is_loaded` / `device` / `memory_bytes` /
+//! `load_adapter` / `unload_adapter` / `list_adapters`). That trampoline is
+//! tracked alongside the Ruby callback wave; until it lands, callers wire
+//! local models in via the provider factories (which carry an internal
+//! `LocalModel` impl) and register them through native code paths or use
+//! the C-ABI manager only for backends registered before the manager
+//! handle was wrapped.
+
+use std::ffi::c_char;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use blazen_llm::AdapterOptions;
+use blazen_manager::ModelManager;
+use blazen_uniffi::errors::BlazenError as InnerError;
+
+use crate::error::BlazenError;
+use crate::future::BlazenFuture;
+use crate::manager_records::{
+    BlazenAdapterHandleInfo, BlazenAdapterStatusList, BlazenModelStatusList, BlazenPoolStatus,
+    BlazenPoolStatusList,
+};
+use crate::runtime::runtime;
+use crate::string::cstr_to_str;
+
+// ---------------------------------------------------------------------------
+// Local error-out helpers (mirror the per-module style used in agent.rs/llm.rs)
+// ---------------------------------------------------------------------------
+
+unsafe fn write_error(out_err: *mut *mut BlazenError, err: InnerError) -> i32 {
+    if !out_err.is_null() {
+        // SAFETY: per the function-level contract on each caller, `out_err` is
+        // either null (handled above) or a single-writer destination.
+        unsafe {
+            *out_err = BlazenError::from(err).into_ptr();
+        }
+    }
+    -1
+}
+
+unsafe fn write_internal_error(out_err: *mut *mut BlazenError, msg: &str) -> i32 {
+    // SAFETY: forwarded to `write_error`.
+    unsafe {
+        write_error(
+            out_err,
+            InnerError::Internal {
+                message: msg.to_owned(),
+            },
+        )
+    }
+}
+
+// Why: blazen_llm::BlazenError and blazen_uniffi::errors::BlazenError are
+// distinct types. Route through the existing
+// `impl From<blazen_llm::BlazenError> for InnerError` in blazen-uniffi so
+// per-variant category mapping (Validation/Unsupported/Timeout/...) stays
+// in one place.
+fn into_inner_error(e: blazen_llm::BlazenError) -> InnerError {
+    e.into()
+}
+
+// ---------------------------------------------------------------------------
+// BlazenModelManager
+// ---------------------------------------------------------------------------
+
+/// Opaque handle around [`blazen_manager::ModelManager`]. Construct via
+/// [`blazen_model_manager_new`] or [`blazen_model_manager_with_budgets_gb`];
+/// release with [`blazen_model_manager_free`].
+pub struct BlazenModelManager(pub(crate) Arc<ModelManager>);
+
+impl BlazenModelManager {
+    fn into_ptr(self) -> *mut BlazenModelManager {
+        Box::into_raw(Box::new(self))
+    }
+}
+
+/// Constructs a manager with `u64::MAX` budgets on `Pool::Cpu` and
+/// `Pool::Gpu(0)`. Matches the Python binding's no-args constructor sentinel
+/// — useful for tests and runtime-unconstrained embedders. Caller frees with
+/// [`blazen_model_manager_free`].
+#[unsafe(no_mangle)]
+pub extern "C" fn blazen_model_manager_new() -> *mut BlazenModelManager {
+    use std::collections::HashMap;
+
+    use blazen_llm::Pool;
+
+    let mut budgets: HashMap<Pool, u64> = HashMap::new();
+    budgets.insert(Pool::Cpu, u64::MAX);
+    budgets.insert(Pool::Gpu(0), u64::MAX);
+    BlazenModelManager(Arc::new(ModelManager::new(budgets))).into_ptr()
+}
+
+/// Constructs a manager with explicit CPU RAM and GPU VRAM budgets, both in
+/// gigabytes. Pass `0.0` to disable a pool. Caller frees with
+/// [`blazen_model_manager_free`].
+#[unsafe(no_mangle)]
+pub extern "C" fn blazen_model_manager_with_budgets_gb(
+    cpu_ram_gb: f64,
+    gpu_vram_gb: f64,
+) -> *mut BlazenModelManager {
+    BlazenModelManager(Arc::new(ModelManager::with_budgets_gb(
+        cpu_ram_gb,
+        gpu_vram_gb,
+    )))
+    .into_ptr()
+}
+
+/// Frees a [`BlazenModelManager`] handle. No-op on a null pointer.
+///
+/// # Safety
+///
+/// `mgr` must be null OR a pointer previously produced by the cabi surface.
+/// Double-free is undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_free(mgr: *mut BlazenModelManager) {
+    if mgr.is_null() {
+        return;
+    }
+    // SAFETY: per the `Box::into_raw` provenance contract.
+    drop(unsafe { Box::from_raw(mgr) });
+}
+
+// ---------------------------------------------------------------------------
+// load / unload / is_loaded
+// ---------------------------------------------------------------------------
+
+unsafe fn borrow_model_id(
+    fn_name: &str,
+    model_id: *const c_char,
+    out_err: *mut *mut BlazenError,
+) -> Option<String> {
+    // SAFETY: caller upholds the NUL + lifetime contract on `model_id`.
+    if let Some(s) = unsafe { cstr_to_str(model_id) } {
+        Some(s.to_owned())
+    } else {
+        // SAFETY: `out_err` upholds the function-level contract on caller.
+        unsafe {
+            write_internal_error(out_err, &format!("{fn_name}: null or non-UTF-8 model_id"));
+        }
+        None
+    }
+}
+
+/// Synchronously loads the model registered as `model_id`. Returns `0` on
+/// success or `-1` on failure (writing `*out_err`).
+///
+/// # Safety
+///
+/// `mgr` must be null OR a live [`BlazenModelManager`]. `model_id` must be a
+/// NUL-terminated UTF-8 buffer valid for the duration of the call.
+/// `out_err` is null OR a single-writer destination.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_load_blocking(
+    mgr: *const BlazenModelManager,
+    model_id: *const c_char,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if mgr.is_null() {
+        // SAFETY: out_err contract per the per-fn doc.
+        return unsafe {
+            write_internal_error(out_err, "blazen_model_manager_load_blocking: null manager")
+        };
+    }
+    // SAFETY: out_err + model_id contracts per the per-fn doc.
+    let Some(id) =
+        (unsafe { borrow_model_id("blazen_model_manager_load_blocking", model_id, out_err) })
+    else {
+        return -1;
+    };
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    match runtime().block_on(async move { inner.load(&id).await }) {
+        Ok(()) => 0,
+        // SAFETY: out_err contract per the per-fn doc.
+        Err(e) => unsafe { write_error(out_err, into_inner_error(e)) },
+    }
+}
+
+/// Spawns a load onto the cabi tokio runtime; pop the result with
+/// [`blazen_future_take_unit`]. Returns null on argument-shape failure.
+///
+/// # Safety
+///
+/// Same as [`blazen_model_manager_load_blocking`] (minus `out_err`).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_load(
+    mgr: *const BlazenModelManager,
+    model_id: *const c_char,
+) -> *mut BlazenFuture {
+    if mgr.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the NUL + lifetime contract on `model_id`.
+    let Some(id) = (unsafe { cstr_to_str(model_id) }).map(str::to_owned) else {
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    BlazenFuture::spawn(async move { inner.load(&id).await.map_err(into_inner_error) })
+}
+
+/// Synchronously unloads the model registered as `model_id`. Returns `0` on
+/// success or `-1` on failure.
+///
+/// # Safety
+///
+/// See [`blazen_model_manager_load_blocking`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_unload_blocking(
+    mgr: *const BlazenModelManager,
+    model_id: *const c_char,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if mgr.is_null() {
+        // SAFETY: out_err contract per the per-fn doc.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_unload_blocking: null manager",
+            )
+        };
+    }
+    // SAFETY: out_err + model_id contracts per the per-fn doc.
+    let Some(id) =
+        (unsafe { borrow_model_id("blazen_model_manager_unload_blocking", model_id, out_err) })
+    else {
+        return -1;
+    };
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    match runtime().block_on(async move { inner.unload(&id).await }) {
+        Ok(()) => 0,
+        // SAFETY: out_err contract per the per-fn doc.
+        Err(e) => unsafe { write_error(out_err, into_inner_error(e)) },
+    }
+}
+
+/// Spawns an unload onto the cabi tokio runtime; pop the result with
+/// [`blazen_future_take_unit`].
+///
+/// # Safety
+///
+/// Same as [`blazen_model_manager_load`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_unload(
+    mgr: *const BlazenModelManager,
+    model_id: *const c_char,
+) -> *mut BlazenFuture {
+    if mgr.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the NUL + lifetime contract on `model_id`.
+    let Some(id) = (unsafe { cstr_to_str(model_id) }).map(str::to_owned) else {
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    BlazenFuture::spawn(async move { inner.unload(&id).await.map_err(into_inner_error) })
+}
+
+/// Synchronously checks whether `model_id` is currently loaded. Returns `1`
+/// for loaded, `0` for not loaded, `-1` on argument-shape failure (writing
+/// `*out_err`).
+///
+/// # Safety
+///
+/// See [`blazen_model_manager_load_blocking`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_is_loaded_blocking(
+    mgr: *const BlazenModelManager,
+    model_id: *const c_char,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if mgr.is_null() {
+        // SAFETY: out_err contract per the per-fn doc.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_is_loaded_blocking: null manager",
+            )
+        };
+    }
+    // SAFETY: out_err + model_id contracts per the per-fn doc.
+    let Some(id) =
+        (unsafe { borrow_model_id("blazen_model_manager_is_loaded_blocking", model_id, out_err) })
+    else {
+        return -1;
+    };
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    i32::from(runtime().block_on(async move { inner.is_loaded(&id).await }))
+}
+
+/// Spawns an `is_loaded` query onto the cabi tokio runtime; pop the result
+/// with [`blazen_future_take_bool`].
+///
+/// # Safety
+///
+/// Same as [`blazen_model_manager_load`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_is_loaded(
+    mgr: *const BlazenModelManager,
+    model_id: *const c_char,
+) -> *mut BlazenFuture {
+    if mgr.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the NUL + lifetime contract on `model_id`.
+    let Some(id) = (unsafe { cstr_to_str(model_id) }).map(str::to_owned) else {
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    BlazenFuture::spawn(async move { Ok::<bool, InnerError>(inner.is_loaded(&id).await) })
+}
+
+// ---------------------------------------------------------------------------
+// status
+// ---------------------------------------------------------------------------
+
+/// Synchronously snapshots the status of every registered model. Returns a
+/// caller-owned [`BlazenModelStatusList`] on success (free with
+/// [`crate::manager_records::blazen_model_status_list_free`]) or null on
+/// failure (writes `*out_err`).
+///
+/// # Safety
+///
+/// `mgr` must be null OR a live [`BlazenModelManager`]. `out_err` is null OR
+/// a single-writer destination.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_status_blocking(
+    mgr: *const BlazenModelManager,
+    out_err: *mut *mut BlazenError,
+) -> *mut BlazenModelStatusList {
+    if mgr.is_null() {
+        // SAFETY: out_err contract per the per-fn doc.
+        unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_status_blocking: null manager",
+            );
+        }
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    let statuses = runtime().block_on(async move { inner.status().await });
+    BlazenModelStatusList::from(statuses).into_ptr()
+}
+
+/// Spawns the status snapshot onto the cabi tokio runtime; pop the result
+/// with [`blazen_future_take_model_status_list`].
+///
+/// # Safety
+///
+/// `mgr` must be null OR a live [`BlazenModelManager`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_status(
+    mgr: *const BlazenModelManager,
+) -> *mut BlazenFuture {
+    if mgr.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    BlazenFuture::spawn(async move {
+        Ok::<Vec<blazen_manager::ModelStatus>, InnerError>(inner.status().await)
+    })
+}
+
+// ---------------------------------------------------------------------------
+// pools
+// ---------------------------------------------------------------------------
+
+/// Snapshots configured pools together with their live `used_bytes` and
+/// loaded-model counts. Returns a caller-owned [`BlazenPoolStatusList`]
+/// (never null on a non-null `mgr`).
+///
+/// Why: `ModelManager::pools` is synchronous and only returns `(label,
+/// budget)` pairs — to also surface `used_bytes` and `loaded_models` we have
+/// to await `used_bytes(pool)` and walk the model statuses. The cabi blocks
+/// on those awaits so a single C call returns the full snapshot.
+///
+/// # Safety
+///
+/// `mgr` must be null OR a live [`BlazenModelManager`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_pools(
+    mgr: *const BlazenModelManager,
+) -> *mut BlazenPoolStatusList {
+    if mgr.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    let snapshot = runtime().block_on(async move { collect_pool_snapshot(&inner).await });
+    BlazenPoolStatusList { inner: snapshot }.into_ptr()
+}
+
+async fn collect_pool_snapshot(mgr: &ModelManager) -> Vec<BlazenPoolStatus> {
+    let statuses = mgr.status().await;
+    let mut out = Vec::new();
+    for (pool, budget_bytes) in mgr.pools() {
+        let used_bytes = mgr.used_bytes(pool).await;
+        let loaded_models = statuses
+            .iter()
+            .filter(|s| s.pool == pool && s.loaded)
+            .count();
+        out.push(BlazenPoolStatus {
+            pool_label: format!("{pool}"),
+            budget_bytes,
+            used_bytes,
+            loaded_models,
+        });
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// load_adapter / unload_adapter / list_adapters
+// ---------------------------------------------------------------------------
+
+unsafe fn borrow_adapter_args(
+    fn_name: &str,
+    model_id: *const c_char,
+    adapter_dir: *const c_char,
+    adapter_id: *const c_char,
+    out_err: *mut *mut BlazenError,
+) -> Option<(String, PathBuf, String)> {
+    // SAFETY: caller upholds the NUL + lifetime contract on `model_id`.
+    let Some(model_id) = (unsafe { cstr_to_str(model_id) }).map(str::to_owned) else {
+        // SAFETY: out_err contract.
+        unsafe {
+            write_internal_error(out_err, &format!("{fn_name}: null or non-UTF-8 model_id"));
+        }
+        return None;
+    };
+    // SAFETY: caller upholds the NUL + lifetime contract on `adapter_dir`.
+    let Some(adapter_dir) = (unsafe { cstr_to_str(adapter_dir) }).map(PathBuf::from) else {
+        // SAFETY: out_err contract.
+        unsafe {
+            write_internal_error(
+                out_err,
+                &format!("{fn_name}: null or non-UTF-8 adapter_dir"),
+            );
+        }
+        return None;
+    };
+    // SAFETY: caller upholds the NUL + lifetime contract on `adapter_id`.
+    let Some(adapter_id) = (unsafe { cstr_to_str(adapter_id) }).map(str::to_owned) else {
+        // SAFETY: out_err contract.
+        unsafe {
+            write_internal_error(out_err, &format!("{fn_name}: null or non-UTF-8 adapter_id"));
+        }
+        return None;
+    };
+    Some((model_id, adapter_dir, adapter_id))
+}
+
+/// Synchronously mounts a PEFT-format `LoRA` adapter. Returns a caller-owned
+/// [`BlazenAdapterHandleInfo`] (free with
+/// [`crate::manager_records::blazen_adapter_handle_info_free`]) on success
+/// or null on failure (writes `*out_err`).
+///
+/// `scale` is the strength multiplier for the adapter delta-weights;
+/// `1.0` is full PEFT strength. The base model is loaded automatically if
+/// not already in residence.
+///
+/// # Safety
+///
+/// `mgr` must be null OR a live [`BlazenModelManager`]. `model_id`,
+/// `adapter_dir`, and `adapter_id` must each be NUL-terminated UTF-8
+/// buffers valid for the duration of this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_load_adapter_blocking(
+    mgr: *const BlazenModelManager,
+    model_id: *const c_char,
+    adapter_dir: *const c_char,
+    adapter_id: *const c_char,
+    scale: f64,
+    out_err: *mut *mut BlazenError,
+) -> *mut BlazenAdapterHandleInfo {
+    if mgr.is_null() {
+        // SAFETY: out_err contract.
+        unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_load_adapter_blocking: null manager",
+            );
+        }
+        return std::ptr::null_mut();
+    }
+    // SAFETY: see borrow_adapter_args contract.
+    let Some((model_id, adapter_dir, adapter_id)) = (unsafe {
+        borrow_adapter_args(
+            "blazen_model_manager_load_adapter_blocking",
+            model_id,
+            adapter_dir,
+            adapter_id,
+            out_err,
+        )
+    }) else {
+        return std::ptr::null_mut();
+    };
+    let options = AdapterOptions {
+        adapter_id,
+        #[allow(clippy::cast_possible_truncation)] // C surface uses f64; AdapterOptions::scale is f32
+        scale: scale as f32,
+    };
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    match runtime()
+        .block_on(async move { inner.load_adapter(&model_id, &adapter_dir, options).await })
+    {
+        Ok(handle) => BlazenAdapterHandleInfo::from(handle).into_ptr(),
+        Err(e) => {
+            // SAFETY: out_err contract.
+            unsafe {
+                write_error(out_err, into_inner_error(e));
+            }
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Spawns a `load_adapter` onto the cabi tokio runtime; pop the result with
+/// [`blazen_future_take_adapter_handle_info`].
+///
+/// # Safety
+///
+/// Same as [`blazen_model_manager_load_adapter_blocking`] (minus `out_err`).
+/// String buffers are copied before this function returns.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_load_adapter(
+    mgr: *const BlazenModelManager,
+    model_id: *const c_char,
+    adapter_dir: *const c_char,
+    adapter_id: *const c_char,
+    scale: f64,
+) -> *mut BlazenFuture {
+    if mgr.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the NUL + lifetime contracts on the three strings.
+    let (Some(model_id), Some(adapter_dir), Some(adapter_id)) = (
+        unsafe { cstr_to_str(model_id) }.map(str::to_owned),
+        unsafe { cstr_to_str(adapter_dir) }.map(PathBuf::from),
+        unsafe { cstr_to_str(adapter_id) }.map(str::to_owned),
+    ) else {
+        return std::ptr::null_mut();
+    };
+    let options = AdapterOptions {
+        adapter_id,
+        #[allow(clippy::cast_possible_truncation)] // C surface uses f64
+        scale: scale as f32,
+    };
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    BlazenFuture::spawn(async move {
+        inner
+            .load_adapter(&model_id, &adapter_dir, options)
+            .await
+            .map_err(into_inner_error)
+    })
+}
+
+/// Synchronously unmounts a previously-loaded adapter.
+///
+/// # Safety
+///
+/// `mgr` must be null OR a live [`BlazenModelManager`]. `model_id` and
+/// `adapter_id` must each be NUL-terminated UTF-8 buffers valid for the
+/// call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_unload_adapter_blocking(
+    mgr: *const BlazenModelManager,
+    model_id: *const c_char,
+    adapter_id: *const c_char,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if mgr.is_null() {
+        // SAFETY: out_err contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_unload_adapter_blocking: null manager",
+            )
+        };
+    }
+    // SAFETY: caller upholds the NUL + lifetime contracts.
+    let Some(model_id) = (unsafe { cstr_to_str(model_id) }).map(str::to_owned) else {
+        // SAFETY: out_err contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_unload_adapter_blocking: null or non-UTF-8 model_id",
+            )
+        };
+    };
+    let Some(adapter_id) = (unsafe { cstr_to_str(adapter_id) }).map(str::to_owned) else {
+        // SAFETY: out_err contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_unload_adapter_blocking: null or non-UTF-8 adapter_id",
+            )
+        };
+    };
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    match runtime().block_on(async move { inner.unload_adapter(&model_id, &adapter_id).await }) {
+        Ok(()) => 0,
+        // SAFETY: out_err contract.
+        Err(e) => unsafe { write_error(out_err, into_inner_error(e)) },
+    }
+}
+
+/// Spawns an `unload_adapter` onto the cabi tokio runtime; pop the result
+/// with [`blazen_future_take_unit`].
+///
+/// # Safety
+///
+/// Same as [`blazen_model_manager_unload_adapter_blocking`] (minus
+/// `out_err`).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_unload_adapter(
+    mgr: *const BlazenModelManager,
+    model_id: *const c_char,
+    adapter_id: *const c_char,
+) -> *mut BlazenFuture {
+    if mgr.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the NUL + lifetime contracts.
+    let (Some(model_id), Some(adapter_id)) = (
+        unsafe { cstr_to_str(model_id) }.map(str::to_owned),
+        unsafe { cstr_to_str(adapter_id) }.map(str::to_owned),
+    ) else {
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    BlazenFuture::spawn(async move {
+        inner
+            .unload_adapter(&model_id, &adapter_id)
+            .await
+            .map_err(into_inner_error)
+    })
+}
+
+/// Synchronously lists adapters mounted on `model_id`. Returns a
+/// caller-owned [`BlazenAdapterStatusList`] (free with
+/// [`crate::manager_records::blazen_adapter_status_list_free`]) on success
+/// or null on failure (writes `*out_err`).
+///
+/// # Safety
+///
+/// `mgr` must be null OR a live [`BlazenModelManager`]. `model_id` must be a
+/// NUL-terminated UTF-8 buffer valid for the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_list_adapters_blocking(
+    mgr: *const BlazenModelManager,
+    model_id: *const c_char,
+    out_err: *mut *mut BlazenError,
+) -> *mut BlazenAdapterStatusList {
+    if mgr.is_null() {
+        // SAFETY: out_err contract.
+        unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_list_adapters_blocking: null manager",
+            );
+        }
+        return std::ptr::null_mut();
+    }
+    // SAFETY: out_err + model_id contracts.
+    let Some(id) = (unsafe {
+        borrow_model_id(
+            "blazen_model_manager_list_adapters_blocking",
+            model_id,
+            out_err,
+        )
+    }) else {
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    match runtime().block_on(async move { inner.list_adapters(&id).await }) {
+        Ok(items) => BlazenAdapterStatusList::from_statuses(items).into_ptr(),
+        Err(e) => {
+            // SAFETY: out_err contract.
+            unsafe {
+                write_error(out_err, into_inner_error(e));
+            }
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Spawns a `list_adapters` onto the cabi tokio runtime; pop the result with
+/// [`blazen_future_take_adapter_status_list`].
+///
+/// # Safety
+///
+/// Same as [`blazen_model_manager_list_adapters_blocking`] (minus
+/// `out_err`).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_list_adapters(
+    mgr: *const BlazenModelManager,
+    model_id: *const c_char,
+) -> *mut BlazenFuture {
+    if mgr.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the NUL + lifetime contract.
+    let Some(id) = (unsafe { cstr_to_str(model_id) }).map(str::to_owned) else {
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    BlazenFuture::spawn(async move { inner.list_adapters(&id).await.map_err(into_inner_error) })
+}

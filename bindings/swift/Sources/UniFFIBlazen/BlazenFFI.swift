@@ -5691,6 +5691,649 @@ public func FfiConverterTypeEmbeddingModel_lower(_ value: EmbeddingModel) -> UIn
 
 
 /**
+ * Foreign-language implementation of a local (on-device) model.
+ *
+ * Implementors mirror the upstream [`blazen_llm::LocalModel`] trait but in
+ * FFI-friendly form: paths are `String`, the `device()` accessor returns a
+ * `String` ("cpu", "cuda:0", "metal", ...) that gets parsed back into
+ * [`blazen_llm::Device`] when forwarded to the manager.
+ *
+ * `is_loaded`, `memory_bytes`, `device`, `load_adapter`, `unload_adapter`,
+ * and `list_adapters` are NOT optional on this trait — UniFFI does not have a
+ * concept of "default trait method" that the foreign side can opt out of.
+ * Foreign implementors that don't care about a verb should return a sensible
+ * neutral value (`false` for `is_loaded`, `0` / `None` for `memory_bytes`,
+ * `"cpu"` for `device`, an empty `list_adapters`, or raise
+ * [`BlazenError::Unsupported`] from the adapter verbs).
+ */
+public protocol ForeignLocalModel: AnyObject, Sendable {
+    
+    func load() async throws 
+    
+    func unload() async throws 
+    
+    func isLoaded() async  -> Bool
+    
+    func device()  -> String
+    
+    func memoryBytes() async  -> UInt64?
+    
+    func loadAdapter(adapterDir: String, options: AdapterOptionsRecord) async throws  -> AdapterHandleRecord
+    
+    func unloadAdapter(handle: AdapterHandleRecord) async throws 
+    
+    func listAdapters() async  -> [AdapterStatusRecord]
+    
+}
+/**
+ * Foreign-language implementation of a local (on-device) model.
+ *
+ * Implementors mirror the upstream [`blazen_llm::LocalModel`] trait but in
+ * FFI-friendly form: paths are `String`, the `device()` accessor returns a
+ * `String` ("cpu", "cuda:0", "metal", ...) that gets parsed back into
+ * [`blazen_llm::Device`] when forwarded to the manager.
+ *
+ * `is_loaded`, `memory_bytes`, `device`, `load_adapter`, `unload_adapter`,
+ * and `list_adapters` are NOT optional on this trait — UniFFI does not have a
+ * concept of "default trait method" that the foreign side can opt out of.
+ * Foreign implementors that don't care about a verb should return a sensible
+ * neutral value (`false` for `is_loaded`, `0` / `None` for `memory_bytes`,
+ * `"cpu"` for `device`, an empty `list_adapters`, or raise
+ * [`BlazenError::Unsupported`] from the adapter verbs).
+ */
+open class ForeignLocalModelImpl: ForeignLocalModel, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_foreignlocalmodel(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_foreignlocalmodel(handle, $0) }
+    }
+
+    
+
+    
+open func load()async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_foreignlocalmodel_load(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+open func unload()async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_foreignlocalmodel_unload(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+open func isLoaded()async  -> Bool  {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_foreignlocalmodel_is_loaded(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_i8,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_i8,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_i8,
+            liftFunc: FfiConverterBool.lift,
+            errorHandler: nil
+            
+        )
+}
+    
+open func device() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_foreignlocalmodel_device(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func memoryBytes()async  -> UInt64?  {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_foreignlocalmodel_memory_bytes(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterOptionUInt64.lift,
+            errorHandler: nil
+            
+        )
+}
+    
+open func loadAdapter(adapterDir: String, options: AdapterOptionsRecord)async throws  -> AdapterHandleRecord  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_foreignlocalmodel_load_adapter(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(adapterDir),FfiConverterTypeAdapterOptionsRecord_lower(options)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeAdapterHandleRecord_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+open func unloadAdapter(handle: AdapterHandleRecord)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_foreignlocalmodel_unload_adapter(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeAdapterHandleRecord_lower(handle)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+open func listAdapters()async  -> [AdapterStatusRecord]  {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_foreignlocalmodel_list_adapters(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeAdapterStatusRecord.lift,
+            errorHandler: nil
+            
+        )
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceForeignLocalModel {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceForeignLocalModel = UniffiVTableCallbackInterfaceForeignLocalModel(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeForeignLocalModel.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface ForeignLocalModel: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeForeignLocalModel.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface ForeignLocalModel: handle missing in uniffiClone")
+            }
+        },
+        load: { (
+            uniffiHandle: UInt64,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteVoid,
+            uniffiCallbackData: UInt64,
+            uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+        ) in
+            let makeCall = {
+                () async throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeForeignLocalModel.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.load(
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: ()) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { (statusCode, errorBuf) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeBlazenError_lower,
+                droppedCallback: uniffiOutDroppedCallback
+            )
+        },
+        unload: { (
+            uniffiHandle: UInt64,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteVoid,
+            uniffiCallbackData: UInt64,
+            uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+        ) in
+            let makeCall = {
+                () async throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeForeignLocalModel.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.unload(
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: ()) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { (statusCode, errorBuf) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeBlazenError_lower,
+                droppedCallback: uniffiOutDroppedCallback
+            )
+        },
+        isLoaded: { (
+            uniffiHandle: UInt64,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteI8,
+            uniffiCallbackData: UInt64,
+            uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+        ) in
+            let makeCall = {
+                () async throws -> Bool in
+                guard let uniffiObj = try? FfiConverterTypeForeignLocalModel.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return await uniffiObj.isLoaded(
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: Bool) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultI8(
+                        returnValue: FfiConverterBool.lower(returnValue),
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { (statusCode, errorBuf) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultI8(
+                        returnValue: 0,
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            uniffiTraitInterfaceCallAsync(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                droppedCallback: uniffiOutDroppedCallback
+            )
+        },
+        device: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> String in
+                guard let uniffiObj = try? FfiConverterTypeForeignLocalModel.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.device(
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterString.lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        memoryBytes: { (
+            uniffiHandle: UInt64,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteRustBuffer,
+            uniffiCallbackData: UInt64,
+            uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+        ) in
+            let makeCall = {
+                () async throws -> UInt64? in
+                guard let uniffiObj = try? FfiConverterTypeForeignLocalModel.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return await uniffiObj.memoryBytes(
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: UInt64?) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer(
+                        returnValue: FfiConverterOptionUInt64.lower(returnValue),
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { (statusCode, errorBuf) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer(
+                        returnValue: RustBuffer.empty(),
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            uniffiTraitInterfaceCallAsync(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                droppedCallback: uniffiOutDroppedCallback
+            )
+        },
+        loadAdapter: { (
+            uniffiHandle: UInt64,
+            adapterDir: RustBuffer,
+            options: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteRustBuffer,
+            uniffiCallbackData: UInt64,
+            uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+        ) in
+            let makeCall = {
+                () async throws -> AdapterHandleRecord in
+                guard let uniffiObj = try? FfiConverterTypeForeignLocalModel.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.loadAdapter(
+                     adapterDir: try FfiConverterString.lift(adapterDir),
+                     options: try FfiConverterTypeAdapterOptionsRecord_lift(options)
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: AdapterHandleRecord) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer(
+                        returnValue: FfiConverterTypeAdapterHandleRecord_lower(returnValue),
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { (statusCode, errorBuf) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer(
+                        returnValue: RustBuffer.empty(),
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeBlazenError_lower,
+                droppedCallback: uniffiOutDroppedCallback
+            )
+        },
+        unloadAdapter: { (
+            uniffiHandle: UInt64,
+            handle: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteVoid,
+            uniffiCallbackData: UInt64,
+            uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+        ) in
+            let makeCall = {
+                () async throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeForeignLocalModel.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.unloadAdapter(
+                     handle: try FfiConverterTypeAdapterHandleRecord_lift(handle)
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: ()) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { (statusCode, errorBuf) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeBlazenError_lower,
+                droppedCallback: uniffiOutDroppedCallback
+            )
+        },
+        listAdapters: { (
+            uniffiHandle: UInt64,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteRustBuffer,
+            uniffiCallbackData: UInt64,
+            uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+        ) in
+            let makeCall = {
+                () async throws -> [AdapterStatusRecord] in
+                guard let uniffiObj = try? FfiConverterTypeForeignLocalModel.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return await uniffiObj.listAdapters(
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: [AdapterStatusRecord]) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer(
+                        returnValue: FfiConverterSequenceTypeAdapterStatusRecord.lower(returnValue),
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { (statusCode, errorBuf) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultRustBuffer(
+                        returnValue: RustBuffer.empty(),
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            uniffiTraitInterfaceCallAsync(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                droppedCallback: uniffiOutDroppedCallback
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceForeignLocalModel> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceForeignLocalModel>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitForeignLocalModel() {
+    uniffi_blazen_uniffi_fn_init_callback_vtable_foreignlocalmodel(UniffiCallbackInterfaceForeignLocalModel.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeForeignLocalModel: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<ForeignLocalModel>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = ForeignLocalModel
+
+    public static func lift(_ handle: UInt64) throws -> ForeignLocalModel {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return ForeignLocalModelImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: ForeignLocalModel) -> UInt64 {
+         if let rustImpl = value as? ForeignLocalModelImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ForeignLocalModel {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: ForeignLocalModel, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeForeignLocalModel_lift(_ handle: UInt64) throws -> ForeignLocalModel {
+    return try FfiConverterTypeForeignLocalModel.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeForeignLocalModel_lower(_ value: ForeignLocalModel) -> UInt64 {
+    return FfiConverterTypeForeignLocalModel.lower(value)
+}
+
+
+
+
+
+
+/**
  * An image-generation model.
  *
  * Construct via [`new_diffusion_model`] (local, feature-gated) or
@@ -7767,6 +8410,456 @@ public func FfiConverterTypeTtsModel_lower(_ value: TtsModel) -> UInt64 {
 
 
 /**
+ * Memory-budget-aware model manager with per-pool LRU eviction.
+ *
+ * Foreign code constructs one of these, registers
+ * [`ForeignLocalModel`]-implementing handles against it, and drives loads /
+ * unloads / adapter lifecycle from any thread / fiber / goroutine /
+ * coroutine on the foreign side.
+ */
+public protocol UniffiModelManagerProtocol: AnyObject, Sendable {
+    
+    func availableBytes(pool: String) async throws  -> UInt64
+    
+    func ensureLoaded(modelId: String) async throws 
+    
+    func isLoaded(modelId: String) async  -> Bool
+    
+    func listAdapters(modelId: String) async throws  -> [AdapterStatusRecord]
+    
+    func load(modelId: String) async throws 
+    
+    /**
+     * Mount a PEFT-format LoRA adapter and return the adapter id reported
+     * by the backend.
+     */
+    func loadAdapter(modelId: String, adapterDir: String, options: AdapterOptionsRecord) async throws  -> String
+    
+    /**
+     * Synchronous variant of [`Self::load`] — blocks the current thread on
+     * the shared Tokio runtime.
+     */
+    func loadBlocking(modelId: String) throws 
+    
+    /**
+     * List configured pools and their budgets in bytes.
+     */
+    func pools()  -> [PoolStatusRecord]
+    
+    /**
+     * Register a foreign-implemented [`ForeignLocalModel`] under `id`.
+     *
+     * `memory_estimate_bytes` is the model's estimated footprint and is
+     * charged against the pool derived from the foreign model's `device()`
+     * when it's loaded.
+     */
+    func registerLocal(id: String, model: ForeignLocalModel, memoryEstimateBytes: UInt64) async throws 
+    
+    func status() async  -> [ModelStatusRecord]
+    
+    func unload(modelId: String) async throws 
+    
+    func unloadAdapter(modelId: String, adapterId: String) async throws 
+    
+    /**
+     * Synchronous variant of [`Self::unload`].
+     */
+    func unloadBlocking(modelId: String) throws 
+    
+    func usedBytes(pool: String) async throws  -> UInt64
+    
+}
+/**
+ * Memory-budget-aware model manager with per-pool LRU eviction.
+ *
+ * Foreign code constructs one of these, registers
+ * [`ForeignLocalModel`]-implementing handles against it, and drives loads /
+ * unloads / adapter lifecycle from any thread / fiber / goroutine /
+ * coroutine on the foreign side.
+ */
+open class UniffiModelManager: UniffiModelManagerProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_uniffimodelmanager(self.handle, $0) }
+    }
+    /**
+     * Construct a manager with no budget enforcement (both `Cpu` and
+     * `Gpu(0)` pools seeded with `u64::MAX`).
+     *
+     * Matches the Python binding's `ModelManager()` no-arg sentinel
+     * behaviour. For real deployments, prefer
+     * [`Self::with_budgets_gb`](Self::with_budgets_gb) or
+     * [`Self::with_pool_budgets`](Self::with_pool_budgets).
+     */
+public convenience init() {
+    let handle =
+        try! rustCall() {
+    uniffi_blazen_uniffi_fn_constructor_uniffimodelmanager_new($0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_uniffimodelmanager(handle, $0) }
+    }
+
+    
+    /**
+     * Construct a manager with one CPU-pool budget and one GPU-pool
+     * (`Gpu(0)`) budget, both expressed in gigabytes.
+     */
+public static func withBudgetsGb(cpuRamGb: Double, gpuVramGb: Double) -> UniffiModelManager  {
+    return try!  FfiConverterTypeUniffiModelManager_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_constructor_uniffimodelmanager_with_budgets_gb(
+        FfiConverterDouble.lower(cpuRamGb),
+        FfiConverterDouble.lower(gpuVramGb),$0
+    )
+})
+}
+    
+    /**
+     * Construct a manager with explicit per-pool budgets.
+     *
+     * Keys are pool labels (`"cpu"`, `"gpu"`, `"gpu:0"`, `"gpu:1"`, ...);
+     * values are budgets in **gigabytes** (mirrors the Python binding's
+     * `pool_budgets` ergonomics — bytes-as-`u64` would force foreign
+     * callers to write `64 * 1024 * 1024 * 1024` for trivial values).
+     */
+public static func withPoolBudgets(perPoolBudgets: [String: Double])throws  -> UniffiModelManager  {
+    return try  FfiConverterTypeUniffiModelManager_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_constructor_uniffimodelmanager_with_pool_budgets(
+        FfiConverterDictionaryStringDouble.lower(perPoolBudgets),$0
+    )
+})
+}
+    
+
+    
+open func availableBytes(pool: String)async throws  -> UInt64  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_available_bytes(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(pool)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_u64,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_u64,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_u64,
+            liftFunc: FfiConverterUInt64.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+open func ensureLoaded(modelId: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_ensure_loaded(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(modelId)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+open func isLoaded(modelId: String)async  -> Bool  {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_is_loaded(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(modelId)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_i8,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_i8,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_i8,
+            liftFunc: FfiConverterBool.lift,
+            errorHandler: nil
+            
+        )
+}
+    
+open func listAdapters(modelId: String)async throws  -> [AdapterStatusRecord]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_list_adapters(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(modelId)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeAdapterStatusRecord.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+open func load(modelId: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_load(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(modelId)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Mount a PEFT-format LoRA adapter and return the adapter id reported
+     * by the backend.
+     */
+open func loadAdapter(modelId: String, adapterDir: String, options: AdapterOptionsRecord)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_load_adapter(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(modelId),FfiConverterString.lower(adapterDir),FfiConverterTypeAdapterOptionsRecord_lower(options)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`Self::load`] — blocks the current thread on
+     * the shared Tokio runtime.
+     */
+open func loadBlocking(modelId: String)throws   {try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_uniffimodelmanager_load_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(modelId),$0
+    )
+}
+}
+    
+    /**
+     * List configured pools and their budgets in bytes.
+     */
+open func pools() -> [PoolStatusRecord]  {
+    return try!  FfiConverterSequenceTypePoolStatusRecord.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_uniffimodelmanager_pools(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Register a foreign-implemented [`ForeignLocalModel`] under `id`.
+     *
+     * `memory_estimate_bytes` is the model's estimated footprint and is
+     * charged against the pool derived from the foreign model's `device()`
+     * when it's loaded.
+     */
+open func registerLocal(id: String, model: ForeignLocalModel, memoryEstimateBytes: UInt64)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_register_local(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(id),FfiConverterTypeForeignLocalModel_lower(model),FfiConverterUInt64.lower(memoryEstimateBytes)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+open func status()async  -> [ModelStatusRecord]  {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_status(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeModelStatusRecord.lift,
+            errorHandler: nil
+            
+        )
+}
+    
+open func unload(modelId: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_unload(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(modelId)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+open func unloadAdapter(modelId: String, adapterId: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_unload_adapter(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(modelId),FfiConverterString.lower(adapterId)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`Self::unload`].
+     */
+open func unloadBlocking(modelId: String)throws   {try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_uniffimodelmanager_unload_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(modelId),$0
+    )
+}
+}
+    
+open func usedBytes(pool: String)async throws  -> UInt64  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_used_bytes(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(pool)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_u64,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_u64,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_u64,
+            liftFunc: FfiConverterUInt64.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeUniffiModelManager: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = UniffiModelManager
+
+    public static func lift(_ handle: UInt64) throws -> UniffiModelManager {
+        return UniffiModelManager(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: UniffiModelManager) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UniffiModelManager {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: UniffiModelManager, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUniffiModelManager_lift(_ handle: UInt64) throws -> UniffiModelManager {
+    return try FfiConverterTypeUniffiModelManager.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUniffiModelManager_lower(_ value: UniffiModelManager) -> UInt64 {
+    return FfiConverterTypeUniffiModelManager.lower(value)
+}
+
+
+
+
+
+
+/**
  * A built workflow ready to run.
  */
 public protocol WorkflowProtocol: AnyObject, Sendable {
@@ -8155,6 +9248,198 @@ public func FfiConverterTypeWorkflowBuilder_lower(_ value: WorkflowBuilder) -> U
 }
 
 
+
+
+/**
+ * Result returned by [`ForeignLocalModel::load_adapter`], mirroring
+ * [`blazen_llm::AdapterHandle`].
+ *
+ * `mount_strategy` is one of `"attached"`, `"rebuilt"`, `"merged"` — kept
+ * as a string discriminator so adding a new strategy to the upstream enum
+ * does not break the FFI contract.
+ */
+public struct AdapterHandleRecord: Equatable, Hashable {
+    public var adapterId: String
+    public var memoryBytes: UInt64
+    public var mountStrategy: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(adapterId: String, memoryBytes: UInt64, mountStrategy: String) {
+        self.adapterId = adapterId
+        self.memoryBytes = memoryBytes
+        self.mountStrategy = mountStrategy
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension AdapterHandleRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAdapterHandleRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AdapterHandleRecord {
+        return
+            try AdapterHandleRecord(
+                adapterId: FfiConverterString.read(from: &buf), 
+                memoryBytes: FfiConverterUInt64.read(from: &buf), 
+                mountStrategy: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AdapterHandleRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.adapterId, into: &buf)
+        FfiConverterUInt64.write(value.memoryBytes, into: &buf)
+        FfiConverterString.write(value.mountStrategy, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAdapterHandleRecord_lift(_ buf: RustBuffer) throws -> AdapterHandleRecord {
+    return try FfiConverterTypeAdapterHandleRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAdapterHandleRecord_lower(_ value: AdapterHandleRecord) -> RustBuffer {
+    return FfiConverterTypeAdapterHandleRecord.lower(value)
+}
+
+
+/**
+ * Adapter mount options handed to [`ForeignLocalModel::load_adapter`].
+ *
+ * Mirrors [`blazen_llm::AdapterOptions`] but lives as a UniFFI Record so
+ * foreign code can construct it natively.
+ */
+public struct AdapterOptionsRecord: Equatable, Hashable {
+    public var adapterId: String
+    public var scale: Float
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(adapterId: String, scale: Float) {
+        self.adapterId = adapterId
+        self.scale = scale
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension AdapterOptionsRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAdapterOptionsRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AdapterOptionsRecord {
+        return
+            try AdapterOptionsRecord(
+                adapterId: FfiConverterString.read(from: &buf), 
+                scale: FfiConverterFloat.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AdapterOptionsRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.adapterId, into: &buf)
+        FfiConverterFloat.write(value.scale, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAdapterOptionsRecord_lift(_ buf: RustBuffer) throws -> AdapterOptionsRecord {
+    return try FfiConverterTypeAdapterOptionsRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAdapterOptionsRecord_lower(_ value: AdapterOptionsRecord) -> RustBuffer {
+    return FfiConverterTypeAdapterOptionsRecord.lower(value)
+}
+
+
+/**
+ * Snapshot of a single mounted adapter — wire form of
+ * [`blazen_llm::AdapterStatus`].
+ */
+public struct AdapterStatusRecord: Equatable, Hashable {
+    public var adapterId: String
+    public var scale: Float
+    public var sourceDir: String
+    public var memoryBytes: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(adapterId: String, scale: Float, sourceDir: String, memoryBytes: UInt64) {
+        self.adapterId = adapterId
+        self.scale = scale
+        self.sourceDir = sourceDir
+        self.memoryBytes = memoryBytes
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension AdapterStatusRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAdapterStatusRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AdapterStatusRecord {
+        return
+            try AdapterStatusRecord(
+                adapterId: FfiConverterString.read(from: &buf), 
+                scale: FfiConverterFloat.read(from: &buf), 
+                sourceDir: FfiConverterString.read(from: &buf), 
+                memoryBytes: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AdapterStatusRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.adapterId, into: &buf)
+        FfiConverterFloat.write(value.scale, into: &buf)
+        FfiConverterString.write(value.sourceDir, into: &buf)
+        FfiConverterUInt64.write(value.memoryBytes, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAdapterStatusRecord_lift(_ buf: RustBuffer) throws -> AdapterStatusRecord {
+    return try FfiConverterTypeAdapterStatusRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAdapterStatusRecord_lower(_ value: AdapterStatusRecord) -> RustBuffer {
+    return FfiConverterTypeAdapterStatusRecord.lower(value)
+}
 
 
 /**
@@ -10468,6 +11753,81 @@ public func FfiConverterTypeMediaOutput_lower(_ value: MediaOutput) -> RustBuffe
 
 
 /**
+ * Per-model state snapshot returned by [`UniffiModelManager::status`].
+ */
+public struct ModelStatusRecord: Equatable, Hashable {
+    public var id: String
+    public var loaded: Bool
+    public var memoryEstimateBytes: UInt64
+    /**
+     * Pool label (`"cpu"` or `"gpu:N"`).
+     */
+    public var pool: String
+    public var adapters: [AdapterStatusRecord]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, loaded: Bool, memoryEstimateBytes: UInt64, 
+        /**
+         * Pool label (`"cpu"` or `"gpu:N"`).
+         */pool: String, adapters: [AdapterStatusRecord]) {
+        self.id = id
+        self.loaded = loaded
+        self.memoryEstimateBytes = memoryEstimateBytes
+        self.pool = pool
+        self.adapters = adapters
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ModelStatusRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeModelStatusRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ModelStatusRecord {
+        return
+            try ModelStatusRecord(
+                id: FfiConverterString.read(from: &buf), 
+                loaded: FfiConverterBool.read(from: &buf), 
+                memoryEstimateBytes: FfiConverterUInt64.read(from: &buf), 
+                pool: FfiConverterString.read(from: &buf), 
+                adapters: FfiConverterSequenceTypeAdapterStatusRecord.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ModelStatusRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterBool.write(value.loaded, into: &buf)
+        FfiConverterUInt64.write(value.memoryEstimateBytes, into: &buf)
+        FfiConverterString.write(value.pool, into: &buf)
+        FfiConverterSequenceTypeAdapterStatusRecord.write(value.adapters, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeModelStatusRecord_lift(_ buf: RustBuffer) throws -> ModelStatusRecord {
+    return try FfiConverterTypeModelStatusRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeModelStatusRecord_lower(_ value: ModelStatusRecord) -> RustBuffer {
+    return FfiConverterTypeModelStatusRecord.lower(value)
+}
+
+
+/**
  * Request to generate music or sound effects.
  */
 public struct MusicRequest: Equatable, Hashable {
@@ -10738,6 +12098,69 @@ public func FfiConverterTypePersistedEvent_lift(_ buf: RustBuffer) throws -> Per
 #endif
 public func FfiConverterTypePersistedEvent_lower(_ value: PersistedEvent) -> RustBuffer {
     return FfiConverterTypePersistedEvent.lower(value)
+}
+
+
+/**
+ * Per-pool budget snapshot returned by [`UniffiModelManager::pools`].
+ */
+public struct PoolStatusRecord: Equatable, Hashable {
+    /**
+     * Pool label (`"cpu"` or `"gpu:N"`).
+     */
+    public var pool: String
+    public var budgetBytes: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Pool label (`"cpu"` or `"gpu:N"`).
+         */pool: String, budgetBytes: UInt64) {
+        self.pool = pool
+        self.budgetBytes = budgetBytes
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension PoolStatusRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePoolStatusRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PoolStatusRecord {
+        return
+            try PoolStatusRecord(
+                pool: FfiConverterString.read(from: &buf), 
+                budgetBytes: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PoolStatusRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.pool, into: &buf)
+        FfiConverterUInt64.write(value.budgetBytes, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePoolStatusRecord_lift(_ buf: RustBuffer) throws -> PoolStatusRecord {
+    return try FfiConverterTypePoolStatusRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePoolStatusRecord_lower(_ value: PoolStatusRecord) -> RustBuffer {
+    return FfiConverterTypePoolStatusRecord.lower(value)
 }
 
 
@@ -13842,6 +15265,31 @@ fileprivate struct FfiConverterSequenceTypeWorkflow: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeAdapterStatusRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [AdapterStatusRecord]
+
+    public static func write(_ value: [AdapterStatusRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeAdapterStatusRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [AdapterStatusRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [AdapterStatusRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeAdapterStatusRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeChatMessage: FfiConverterRustBuffer {
     typealias SwiftType = [ChatMessage]
 
@@ -14117,6 +15565,31 @@ fileprivate struct FfiConverterSequenceTypeMedia: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeModelStatusRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [ModelStatusRecord]
+
+    public static func write(_ value: [ModelStatusRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeModelStatusRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ModelStatusRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ModelStatusRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeModelStatusRecord.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypePersistedEvent: FfiConverterRustBuffer {
     typealias SwiftType = [PersistedEvent]
 
@@ -14134,6 +15607,31 @@ fileprivate struct FfiConverterSequenceTypePersistedEvent: FfiConverterRustBuffe
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypePersistedEvent.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypePoolStatusRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [PoolStatusRecord]
+
+    public static func write(_ value: [PoolStatusRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypePoolStatusRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [PoolStatusRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [PoolStatusRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypePoolStatusRecord.read(from: &buf))
         }
         return seq
     }
@@ -14336,6 +15834,32 @@ fileprivate struct FfiConverterSequenceSequenceDouble: FfiConverterRustBuffer {
             seq.append(try FfiConverterSequenceDouble.read(from: &buf))
         }
         return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterDictionaryStringDouble: FfiConverterRustBuffer {
+    public static func write(_ value: [String: Double], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for (key, value) in value {
+            FfiConverterString.write(key, into: &buf)
+            FfiConverterDouble.write(value, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [String: Double] {
+        let len: Int32 = try readInt(&buf)
+        var dict = [String: Double]()
+        dict.reserveCapacity(Int(len))
+        for _ in 0..<len {
+            let key = try FfiConverterString.read(from: &buf)
+            let value = try FfiConverterDouble.read(from: &buf)
+            dict[key] = value
+        }
+        return dict
     }
 }
 
@@ -15702,6 +17226,72 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_embeddingmodel_model_id() != 36076) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_load() != 57606) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_unload() != 30655) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_is_loaded() != 35239) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_device() != 36918) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_memory_bytes() != 63180) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_load_adapter() != 64869) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_unload_adapter() != 45180) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_list_adapters() != 49821) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_available_bytes() != 19672) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_ensure_loaded() != 33632) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_is_loaded() != 48692) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_list_adapters() != 57369) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load() != 56552) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load_adapter() != 2343) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load_blocking() != 10510) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_pools() != 34891) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_register_local() != 23428) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_status() != 18811) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_unload() != 3272) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_unload_adapter() != 43755) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_unload_blocking() != 2783) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_used_bytes() != 51636) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_peerclient_node_id() != 16043) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15957,6 +17547,15 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_constructor_controlplaneworker_new_blocking() != 22162) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_new() != 31159) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_with_budgets_gb() != 1375) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_with_pool_budgets() != 59591) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_constructor_peerclient_connect() != 36996) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15980,6 +17579,7 @@ private let initializationResult: InitializationResult = {
     uniffiCallbackInitControlPlaneAssignmentHandler()
     uniffiCallbackInitControlPlaneRunEventSubscriber()
     uniffiCallbackInitCustomProvider()
+    uniffiCallbackInitForeignLocalModel()
     uniffiCallbackInitStepHandler()
     uniffiCallbackInitToolHandler()
     return InitializationResult.ok

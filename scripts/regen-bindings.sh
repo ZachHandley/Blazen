@@ -145,6 +145,40 @@ if n:
     print(f"  ↳ patched OnError parameter shadowing ({n} site)")
 PY
     fi
+    # Patch a known uniffi-bindgen-go codegen bug in callback-interface
+    # dispatch shims: when a callback method has a parameter the codegen
+    # names `handle`, that name shadows the local `handle := uint64(uniffiHandle)`
+    # declared at the top of the shim. The Go compiler accepts this but the
+    # resulting binding mis-routes the call. Rename the offending parameter
+    # to `adapterHandleBuf` everywhere it appears in dispatch shims.
+    if [[ -f bindings/go/internal/uniffi/blazen/blazen.go ]]; then
+        python3 - <<'PY'
+import re
+from pathlib import Path
+p = Path("bindings/go/internal/uniffi/blazen/blazen.go")
+src = p.read_text()
+# Match: dispatch shim signature with `handle C.RustBuffer` parameter
+sig_pattern = re.compile(
+    r'(func [A-Za-z0-9_]+_cgo_dispatchCallbackInterface[A-Za-z0-9_]+Method\d+\(uniffiHandle C\.uint64_t, )handle( C\.RustBuffer,)'
+)
+# After renaming the parameter, the body needs `handle` → `adapterHandleBuf`
+# inside the FfiConverter lift call. The original body pattern uses
+# `inner: handle,` (RustBufferI struct-literal lift).
+body_pattern = re.compile(r'(\n\t+inner: )handle(,\n)')
+
+new_src, sig_count = sig_pattern.subn(r'\1adapterHandleBuf\2', src)
+if sig_count:
+    new_src, body_count = body_pattern.subn(r'\1adapterHandleBuf\2', new_src)
+    if body_count != sig_count:
+        import sys
+        sys.exit(
+            f"ERROR: patched {sig_count} dispatch shim signatures but only "
+            f"{body_count} `inner: handle,` body sites — codegen shape changed."
+        )
+    p.write_text(new_src)
+    print(f"  ↳ patched {sig_count} callback-interface `handle` parameter shadowing site(s)")
+PY
+    fi
     # Patch upstream uniffi-bindgen-go's misleading "TODO: this is bad" and
     # "TODO: Remove this" comments. The audit (2026-05-13) showed that the
     # incrementPointer / decrementPointer pair is safe: incrementPointer calls
@@ -186,9 +220,9 @@ new_b = (
 )
 count_a = src.count(old_a)
 count_b = src.count(old_b)
-if count_a != 24:
+if count_a != 26:
     sys.exit(
-        f"ERROR: expected 24 'TODO: this is bad' blocks in blazen.go, found {count_a}. "
+        f"ERROR: expected 26 'TODO: this is bad' blocks in blazen.go, found {count_a}. "
         "Upstream uniffi-bindgen-go codegen likely changed — re-audit and update "
         "the patch in scripts/regen-bindings.sh."
     )

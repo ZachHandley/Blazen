@@ -59,7 +59,6 @@ mod engine {
     fn resolve_device(device_str: Option<&str>) -> Result<Device, CandleLlmError> {
         match device_str.unwrap_or("cpu") {
             "cpu" => Ok(Device::Cpu),
-            #[cfg(feature = "cuda")]
             s if s.starts_with("cuda") => {
                 let ordinal = s
                     .strip_prefix("cuda:")
@@ -68,7 +67,6 @@ mod engine {
                 Device::new_cuda(ordinal)
                     .map_err(|e| CandleLlmError::ModelLoad(format!("CUDA device error: {e}")))
             }
-            #[cfg(feature = "metal")]
             "metal" => Device::new_metal(0)
                 .map_err(|e| CandleLlmError::ModelLoad(format!("Metal device error: {e}"))),
             other => Err(CandleLlmError::InvalidOptions(format!(

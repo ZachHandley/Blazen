@@ -567,7 +567,6 @@ mod engine {
         let device_str = opts.device.as_deref().unwrap_or("cpu");
         match device_str {
             "cpu" => Ok(Device::Cpu),
-            #[cfg(feature = "cuda")]
             s if s.starts_with("cuda") => {
                 let ordinal = if s == "cuda" {
                     0
@@ -588,18 +587,9 @@ mod engine {
                     ))
                 })
             }
-            #[cfg(not(feature = "cuda"))]
-            s if s.starts_with("cuda") => Err(CandleEmbedError::InvalidOptions(
-                "CUDA requested but the `cuda` feature is not enabled".into(),
-            )),
-            #[cfg(feature = "metal")]
             "metal" => Device::new_metal(0).map_err(|e| {
                 CandleEmbedError::InvalidOptions(format!("failed to initialise Metal device: {e}"))
             }),
-            #[cfg(not(feature = "metal"))]
-            "metal" => Err(CandleEmbedError::InvalidOptions(
-                "Metal requested but the `metal` feature is not enabled".into(),
-            )),
             other => Err(CandleEmbedError::InvalidOptions(format!(
                 "unrecognised device specifier: {other}"
             ))),

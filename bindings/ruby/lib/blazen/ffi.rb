@@ -1241,6 +1241,112 @@ module Blazen
     attach_function :blazen_step_output_free, [:pointer], :void
 
     # -------------------------------------------------------------------
+    # ModelManager — typed future-take entry points (mirror cabi/future.rs)
+    # -------------------------------------------------------------------
+    attach_function :blazen_future_take_bool,
+                    [:pointer, :pointer, :pointer], :int32
+    attach_function :blazen_future_take_model_status_list,
+                    [:pointer, :pointer, :pointer], :int32
+    attach_function :blazen_future_take_adapter_handle_info,
+                    [:pointer, :pointer, :pointer], :int32
+    attach_function :blazen_future_take_adapter_status_list,
+                    [:pointer, :pointer, :pointer], :int32
+
+    # -------------------------------------------------------------------
+    # ModelManager — manager construction / verbs (cabi/manager.rs)
+    # -------------------------------------------------------------------
+    attach_function :blazen_model_manager_new,             [], :pointer
+    attach_function :blazen_model_manager_with_budgets_gb, [:double, :double], :pointer
+    attach_function :blazen_model_manager_free,            [:pointer], :void
+
+    attach_function :blazen_model_manager_load_blocking,
+                    [:pointer, :pointer, :pointer], :int32, blocking: true
+    attach_function :blazen_model_manager_load,
+                    [:pointer, :pointer], :pointer
+
+    attach_function :blazen_model_manager_unload_blocking,
+                    [:pointer, :pointer, :pointer], :int32, blocking: true
+    attach_function :blazen_model_manager_unload,
+                    [:pointer, :pointer], :pointer
+
+    attach_function :blazen_model_manager_is_loaded_blocking,
+                    [:pointer, :pointer, :pointer], :int32, blocking: true
+    attach_function :blazen_model_manager_is_loaded,
+                    [:pointer, :pointer], :pointer
+
+    attach_function :blazen_model_manager_status_blocking,
+                    [:pointer, :pointer], :pointer, blocking: true
+    attach_function :blazen_model_manager_status,
+                    [:pointer], :pointer
+
+    attach_function :blazen_model_manager_pools,
+                    [:pointer], :pointer
+
+    attach_function :blazen_model_manager_load_adapter_blocking,
+                    [:pointer, :pointer, :pointer, :pointer, :double, :pointer],
+                    :pointer, blocking: true
+    attach_function :blazen_model_manager_load_adapter,
+                    [:pointer, :pointer, :pointer, :pointer, :double], :pointer
+
+    attach_function :blazen_model_manager_unload_adapter_blocking,
+                    [:pointer, :pointer, :pointer, :pointer], :int32, blocking: true
+    attach_function :blazen_model_manager_unload_adapter,
+                    [:pointer, :pointer, :pointer], :pointer
+
+    attach_function :blazen_model_manager_list_adapters_blocking,
+                    [:pointer, :pointer, :pointer], :pointer, blocking: true
+    attach_function :blazen_model_manager_list_adapters,
+                    [:pointer, :pointer], :pointer
+
+    # -------------------------------------------------------------------
+    # ModelManager — record accessors (cabi/manager_records.rs)
+    # -------------------------------------------------------------------
+    attach_function :blazen_adapter_status_adapter_id,     [:pointer], :pointer
+    attach_function :blazen_adapter_status_source_dir,     [:pointer], :pointer
+    attach_function :blazen_adapter_status_scale,          [:pointer], :double
+    attach_function :blazen_adapter_status_memory_bytes,   [:pointer], :uint64
+    attach_function :blazen_adapter_status_mount_strategy, [:pointer], :uint32
+    attach_function :blazen_adapter_status_free,           [:pointer], :void
+
+    attach_function :blazen_adapter_status_list_len,  [:pointer], :size_t
+    attach_function :blazen_adapter_status_list_get,  [:pointer, :size_t], :pointer
+    attach_function :blazen_adapter_status_list_take, [:pointer, :size_t], :pointer
+    attach_function :blazen_adapter_status_list_free, [:pointer], :void
+
+    attach_function :blazen_model_status_id,              [:pointer], :pointer
+    attach_function :blazen_model_status_loaded,          [:pointer], :bool
+    attach_function :blazen_model_status_memory_bytes,    [:pointer], :uint64
+    attach_function :blazen_model_status_pool,            [:pointer], :pointer
+    attach_function :blazen_model_status_adapters_count,  [:pointer], :size_t
+    attach_function :blazen_model_status_adapters,        [:pointer], :pointer
+    attach_function :blazen_model_status_free,            [:pointer], :void
+
+    attach_function :blazen_model_status_list_len,  [:pointer], :size_t
+    attach_function :blazen_model_status_list_get,  [:pointer, :size_t], :pointer
+    attach_function :blazen_model_status_list_take, [:pointer, :size_t], :pointer
+    attach_function :blazen_model_status_list_free, [:pointer], :void
+
+    attach_function :blazen_pool_status_id,             [:pointer], :pointer
+    attach_function :blazen_pool_status_budget_bytes,   [:pointer], :uint64
+    attach_function :blazen_pool_status_used_bytes,     [:pointer], :uint64
+    attach_function :blazen_pool_status_loaded_models,  [:pointer], :size_t
+    attach_function :blazen_pool_status_free,           [:pointer], :void
+
+    attach_function :blazen_pool_status_list_len,  [:pointer], :size_t
+    attach_function :blazen_pool_status_list_get,  [:pointer, :size_t], :pointer
+    attach_function :blazen_pool_status_list_take, [:pointer, :size_t], :pointer
+    attach_function :blazen_pool_status_list_free, [:pointer], :void
+
+    attach_function :blazen_adapter_handle_info_adapter_id,     [:pointer], :pointer
+    attach_function :blazen_adapter_handle_info_memory_bytes,   [:pointer], :uint64
+    attach_function :blazen_adapter_handle_info_mount_strategy, [:pointer], :uint32
+    attach_function :blazen_adapter_handle_info_free,           [:pointer], :void
+
+    ADAPTER_MOUNT_STRATEGY_ATTACHED = 1
+    ADAPTER_MOUNT_STRATEGY_REBUILT  = 2
+    ADAPTER_MOUNT_STRATEGY_MERGED   = 3
+
+    # -------------------------------------------------------------------
     # Ruby-side helpers
     # -------------------------------------------------------------------
 
