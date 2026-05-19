@@ -22,7 +22,7 @@
 use std::pin::Pin;
 
 use async_trait::async_trait;
-use blazen_llm_llamacpp::{ChatMessageInput, ChatRole, LlamaCppProvider};
+use blazen_llm_llamacpp::{ChatMessageInput, ChatRole, LlamaCppProvider, MountedAdapter};
 use futures_util::Stream;
 
 use crate::error::BlazenError;
@@ -209,14 +209,107 @@ impl crate::traits::LocalModel for LlamaCppProvider {
 
     async fn load_adapter(
         &self,
-        _adapter_dir: &std::path::Path,
-        _options: crate::AdapterOptions,
+        adapter_dir: &std::path::Path,
+        options: crate::AdapterOptions,
     ) -> Result<crate::AdapterHandle, BlazenError> {
-        Err(BlazenError::unsupported(
-            "llama.cpp LoRA wiring pending; the llama-cpp-2 binding exposes \
-             lora_adapter_init/set — wire those in a follow-up",
-        ))
+        let adapter_file = resolve_adapter_file(adapter_dir)?;
+        let memory_bytes = adapter_on_disk_bytes(&adapter_file);
+
+        let mounted =
+            LlamaCppProvider::load_adapter(self, &adapter_file, options.adapter_id, options.scale)
+                .await
+                .map_err(|e| BlazenError::provider("llamacpp", e.to_string()))?;
+
+        Ok(crate::AdapterHandle {
+            adapter_id: mounted.adapter_id,
+            memory_bytes,
+            mount_strategy: crate::AdapterMountStrategy::Attached,
+        })
     }
+
+    async fn unload_adapter(&self, handle: &crate::AdapterHandle) -> Result<(), BlazenError> {
+        LlamaCppProvider::unload_adapter(self, &handle.adapter_id)
+            .await
+            .map_err(|e| BlazenError::provider("llamacpp", e.to_string()))
+    }
+
+    async fn list_adapters(&self) -> Vec<crate::AdapterStatus> {
+        LlamaCppProvider::list_adapters(self)
+            .await
+            .into_iter()
+            .map(|m: MountedAdapter| {
+                let memory_bytes = adapter_on_disk_bytes(&m.source_path);
+                crate::AdapterStatus {
+                    adapter_id: m.adapter_id,
+                    scale: m.scale,
+                    source_dir: m.source_path,
+                    memory_bytes,
+                }
+            })
+            .collect()
+    }
+}
+
+/// Resolve a caller-supplied adapter directory or file path into the GGUF
+/// `LoRA` file llama.cpp's `lora_adapter_init` expects.
+///
+/// The PEFT canonical layout (`adapter_model.safetensors` +
+/// `adapter_config.json`) is NOT consumed directly by llama.cpp — the
+/// adapter must be converted to GGUF first via llama.cpp's
+/// `convert_lora_to_gguf.py`. This helper accepts:
+///
+/// 1. A direct path to a GGUF/bin file -> passed through.
+/// 2. A directory containing `adapter_model.gguf` -> selected.
+/// 3. A directory containing `lora.bin` -> selected.
+/// 4. A directory containing only `adapter_model.safetensors` -> rejected
+///    with a clear error explaining the required conversion.
+fn resolve_adapter_file(path: &std::path::Path) -> Result<std::path::PathBuf, BlazenError> {
+    if path.is_file() {
+        return Ok(path.to_path_buf());
+    }
+    if !path.is_dir() {
+        return Err(BlazenError::provider(
+            "llamacpp",
+            format!(
+                "adapter path does not exist or is not a file/directory: {}",
+                path.display()
+            ),
+        ));
+    }
+    for candidate in ["adapter_model.gguf", "lora.bin"] {
+        let candidate_path = path.join(candidate);
+        if candidate_path.is_file() {
+            return Ok(candidate_path);
+        }
+    }
+    if path.join("adapter_model.safetensors").is_file() {
+        return Err(BlazenError::provider(
+            "llamacpp",
+            format!(
+                "adapter directory {} contains PEFT safetensors weights, but llama.cpp \
+                 requires GGUF format. Convert the adapter via llama.cpp's \
+                 `convert_lora_to_gguf.py` and place the result at \
+                 `{}/adapter_model.gguf`.",
+                path.display(),
+                path.display()
+            ),
+        ));
+    }
+    Err(BlazenError::provider(
+        "llamacpp",
+        format!(
+            "adapter directory {} contains no llama.cpp-compatible adapter file \
+             (looked for `adapter_model.gguf`, `lora.bin`)",
+            path.display()
+        ),
+    ))
+}
+
+/// Estimate an adapter's memory footprint by stat-ing the GGUF file on
+/// disk. Returns `0` on any I/O error — the manager-level orchestrator
+/// already validated the directory before calling `load_adapter`.
+fn adapter_on_disk_bytes(adapter_file: &std::path::Path) -> u64 {
+    std::fs::metadata(adapter_file).map_or(0, |m| m.len())
 }
 
 // ---------------------------------------------------------------------------

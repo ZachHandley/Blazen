@@ -19,8 +19,18 @@
 //! provider) but cannot actually run inference. This keeps workspace builds
 //! fast when the heavy native dependencies are not needed.
 
+#[cfg(feature = "engine")]
+pub mod lora;
+#[cfg(feature = "engine")]
+pub mod lora_backend;
 mod options;
 mod provider;
+#[cfg(feature = "engine")]
+pub mod safetensors_engine;
 
 pub use options::CandleLlmOptions;
-pub use provider::{CandleInferenceResult, CandleLlmError, CandleLlmProvider};
+pub use provider::{
+    CandleInferenceResult, CandleLlmError, CandleLlmProvider, MountedAdapterRecord,
+};
+#[cfg(feature = "engine")]
+pub use safetensors_engine::SafetensorsEngine;

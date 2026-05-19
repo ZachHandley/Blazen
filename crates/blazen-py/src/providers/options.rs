@@ -931,6 +931,7 @@ impl PyLlamaCppOptions {
                 context_length,
                 n_gpu_layers,
                 cache_dir: cache_dir.map(PathBuf::from),
+                initial_adapters: Vec::new(),
             },
         }
     }
@@ -1048,6 +1049,8 @@ impl PyCandleLlmOptions {
                 revision,
                 context_length,
                 cache_dir: cache_dir.map(PathBuf::from),
+                initial_adapters: Vec::new(),
+                force_safetensors: false,
             },
         }
     }

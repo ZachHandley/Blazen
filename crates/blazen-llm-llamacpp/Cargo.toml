@@ -19,6 +19,7 @@ tokio-stream = { workspace = true, optional = true }
 tracing.workspace = true
 thiserror = { workspace = true }
 futures-util = { workspace = true }
+llama-cpp-sys-2 = { version = "=0.1.143", default-features = false, optional = true }
 
 [features]
 default = ["cpu"]
@@ -28,7 +29,12 @@ default = ["cpu"]
 # machines without the matching toolkit. Users wanting real GPU
 # acceleration enable llama-cpp-2's features directly in their binary
 # crate's Cargo.toml; Cargo's feature unification merges them.
-engine = ["dep:llama-cpp-2", "dep:encoding_rs", "dep:tokio-stream"]
+engine = [
+    "dep:llama-cpp-2",
+    "dep:llama-cpp-sys-2",
+    "dep:encoding_rs",
+    "dep:tokio-stream",
+]
 cpu = ["engine"]
 cuda = ["engine"]
 metal = ["engine"]

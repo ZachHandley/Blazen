@@ -73,6 +73,7 @@ impl From<JsLlamaCppOptions> for LlamaCppOptions {
             context_length: val.context_length.map(|v| v as usize),
             n_gpu_layers: val.n_gpu_layers,
             cache_dir: val.cache_dir.map(std::path::PathBuf::from),
+            initial_adapters: Vec::new(),
         }
     }
 }

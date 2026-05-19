@@ -29,6 +29,8 @@ pub enum LlamaCppError {
     Inference(String),
     /// The `engine` feature is not enabled.
     EngineNotAvailable,
+    /// Mounting (or activating) a `LoRA` adapter failed.
+    AdapterFailed(String),
 }
 
 impl fmt::Display for LlamaCppError {
@@ -41,6 +43,7 @@ impl fmt::Display for LlamaCppError {
                 f,
                 "llama.cpp engine not available: compile with the `engine` feature"
             ),
+            Self::AdapterFailed(msg) => write!(f, "llama.cpp adapter mount failed: {msg}"),
         }
     }
 }
@@ -115,6 +118,27 @@ impl ChatMessageInput {
     }
 }
 
+/// One `LoRA` adapter currently mounted on a [`LlamaCppProvider`].
+///
+/// Tracked in `LlamaCppProvider::loaded_adapters` so subsequent
+/// [`LlamaCppProvider::load_adapter`] / [`LlamaCppProvider::unload_adapter`]
+/// calls can re-apply the correct set on each freshly-created inference
+/// context.
+#[derive(Debug, Clone)]
+pub struct MountedAdapter {
+    pub adapter_id: String,
+    pub source_path: std::path::PathBuf,
+    pub scale: f32,
+    /// Handle to the loaded adapter on the engine side. Only present when the
+    /// `engine` feature is active and the adapter has actually been
+    /// initialised on the loaded model. Wrapped in
+    /// `Arc<AdapterHandleCell>` so it can be cheaply cloned out of the
+    /// `RwLock` and shared between the provider's adapter map and the inner
+    /// activation helper.
+    #[cfg(feature = "engine")]
+    pub(crate) handle: std::sync::Arc<AdapterHandleCell>,
+}
+
 // ---------------------------------------------------------------------------
 // Provider
 // ---------------------------------------------------------------------------
@@ -143,7 +167,61 @@ pub struct LlamaCppProvider {
     /// inner `Arc` gives cheap clones out of the lock.
     #[cfg(feature = "engine")]
     engine: std::sync::Arc<tokio::sync::RwLock<Option<std::sync::Arc<Engine>>>>,
+    /// `LoRA` adapters currently mounted on this provider, keyed by
+    /// `adapter_id`. The map is shared between the public adapter API
+    /// and the inference helpers so each freshly-built inference context
+    /// can re-activate the current set.
+    ///
+    /// Multiple adapters can be active concurrently: every entry in the
+    /// map is mounted in a single batched call to the raw
+    /// `llama_set_adapters_lora` FFI on each freshly-created inference
+    /// context (the `llama-cpp-2` safe wrapper only exposes a
+    /// single-adapter "replace-all-with-one" form, which is bypassed
+    /// here). [`LlamaCppProvider::list_adapters`] /
+    /// [`LlamaCppProvider::unload_adapter`] target individual handles
+    /// by id.
+    #[cfg(feature = "engine")]
+    loaded_adapters:
+        std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<String, MountedAdapter>>>,
 }
+
+/// Interior-mutability cell for a `LlamaLoraAdapter`. The upstream wrapper
+/// holds a raw `NonNull` pointer with no Send/Sync impls; we move it into
+/// inference threads via `spawn_blocking`, which requires Send. The
+/// underlying `llama_adapter_lora` C handle is safe to share across threads
+/// as long as `llama_set_adapters_lora` / `llama_adapter_lora_free` are not
+/// called concurrently on it — Blazen serialises both via the provider's
+/// `RwLock<HashMap<...>>`, so the unsafe impl is sound.
+#[cfg(feature = "engine")]
+pub(crate) struct AdapterHandleCell {
+    pub(crate) adapter: std::sync::Mutex<llama_cpp_2::model::LlamaLoraAdapter>,
+}
+
+#[cfg(feature = "engine")]
+#[allow(unsafe_code)]
+unsafe impl Send for AdapterHandleCell {}
+#[cfg(feature = "engine")]
+#[allow(unsafe_code)]
+unsafe impl Sync for AdapterHandleCell {}
+
+#[cfg(feature = "engine")]
+impl std::fmt::Debug for AdapterHandleCell {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AdapterHandleCell").finish_non_exhaustive()
+    }
+}
+
+/// Send shim for moving a freshly-loaded `LlamaLoraAdapter` back across a
+/// `spawn_blocking` boundary. The underlying C handle is safe to transfer
+/// because the only ops we perform on it (`llama_set_adapters_lora`,
+/// `llama_adapter_lora_free` at Drop) are serialised through the
+/// provider's `RwLock<HashMap<...>>`.
+#[cfg(feature = "engine")]
+struct SendAdapter(llama_cpp_2::model::LlamaLoraAdapter);
+
+#[cfg(feature = "engine")]
+#[allow(unsafe_code)]
+unsafe impl Send for SendAdapter {}
 
 /// Inner engine state. Only compiled with the `engine` feature.
 #[cfg(feature = "engine")]
@@ -174,6 +252,10 @@ impl LlamaCppProvider {
             model_path,
             #[cfg(feature = "engine")]
             engine: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
+            #[cfg(feature = "engine")]
+            loaded_adapters: std::sync::Arc::new(tokio::sync::RwLock::new(
+                std::collections::HashMap::new(),
+            )),
             options: opts,
         })
     }
@@ -357,6 +439,10 @@ impl LlamaCppProvider {
         // in-flight blocking inference task), VRAM is freed by the Drop
         // impl on the underlying llama.cpp model + backend.
         *guard = None;
+        // Why: adapter handles are tied to the LlamaModel that just got
+        // dropped — keeping them would dangle the underlying C pointers.
+        let mut adapters_guard = self.loaded_adapters.write().await;
+        adapters_guard.clear();
         Ok(())
     }
 
@@ -385,6 +471,158 @@ impl LlamaCppProvider {
     #[allow(clippy::unused_async)]
     pub async fn is_loaded(&self) -> bool {
         false
+    }
+
+    /// Mount a `LoRA` adapter on the loaded base model via llama.cpp's
+    /// hot-attach API (`llama_adapter_lora_init` +
+    /// `llama_set_adapters_lora`).
+    ///
+    /// The adapter is loaded into the live model handle and re-applied to
+    /// every inference context the provider builds going forward — no
+    /// engine rebuild is performed. The base model must already be loaded
+    /// (or be loadable lazily); this method triggers a load if needed.
+    ///
+    /// Multiple adapters can be active simultaneously: this provider
+    /// calls the underlying `llama_set_adapters_lora` directly via raw
+    /// FFI to batch every loaded adapter into a single context-mount
+    /// call (the `llama-cpp-2` safe wrapper only exposes the
+    /// "replace-all-with-one" form, which is why we bypass it here).
+    ///
+    /// `adapter_path` must be a llama.cpp-compatible adapter file (GGUF
+    /// `LoRA` format). PEFT-canonical `safetensors` adapters must be
+    /// converted to GGUF first via llama.cpp's
+    /// `convert_lora_to_gguf.py`; this provider does not perform that
+    /// conversion.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LlamaCppError::AdapterFailed`] when the file cannot be
+    /// loaded as a `LoRA` adapter by llama.cpp, or when a duplicate
+    /// `adapter_id` is requested.
+    #[cfg(feature = "engine")]
+    pub async fn load_adapter(
+        &self,
+        adapter_path: &std::path::Path,
+        adapter_id: impl Into<String>,
+        scale: f32,
+    ) -> Result<MountedAdapter, LlamaCppError> {
+        let adapter_id = adapter_id.into();
+
+        {
+            let guard = self.loaded_adapters.read().await;
+            if guard.contains_key(&adapter_id) {
+                return Err(LlamaCppError::AdapterFailed(format!(
+                    "adapter '{adapter_id}' is already mounted",
+                )));
+            }
+        }
+
+        let engine = self.get_or_load_engine().await?;
+
+        if !adapter_path.exists() {
+            return Err(LlamaCppError::AdapterFailed(format!(
+                "adapter path does not exist: {}",
+                adapter_path.display()
+            )));
+        }
+
+        let adapter_path_owned = adapter_path.to_path_buf();
+        let adapter = tokio::task::spawn_blocking(move || {
+            engine
+                .model
+                .lora_adapter_init(&adapter_path_owned)
+                .map(SendAdapter)
+        })
+        .await
+        .map_err(|e| LlamaCppError::AdapterFailed(format!("spawn_blocking panicked: {e}")))?
+        .map_err(|e| {
+            LlamaCppError::AdapterFailed(format!(
+                "lora_adapter_init failed for '{}': {e}",
+                adapter_path.display()
+            ))
+        })?
+        .0;
+
+        let mounted = MountedAdapter {
+            adapter_id: adapter_id.clone(),
+            source_path: adapter_path.to_path_buf(),
+            scale,
+            handle: std::sync::Arc::new(AdapterHandleCell {
+                adapter: std::sync::Mutex::new(adapter),
+            }),
+        };
+
+        {
+            let mut guard = self.loaded_adapters.write().await;
+            guard.insert(adapter_id, mounted.clone());
+        }
+
+        Ok(mounted)
+    }
+
+    /// Stub: engine not available.
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`LlamaCppError::EngineNotAvailable`].
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn load_adapter(
+        &self,
+        _adapter_path: &std::path::Path,
+        _adapter_id: impl Into<String>,
+        _scale: f32,
+    ) -> Result<MountedAdapter, LlamaCppError> {
+        Err(LlamaCppError::EngineNotAvailable)
+    }
+
+    /// Remove a previously-mounted `LoRA` adapter. The adapter is dropped
+    /// from the provider's registry; subsequent contexts will no longer
+    /// have it applied.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LlamaCppError::AdapterFailed`] if no adapter with the
+    /// given id is currently mounted.
+    #[cfg(feature = "engine")]
+    pub async fn unload_adapter(&self, adapter_id: &str) -> Result<(), LlamaCppError> {
+        let mut guard = self.loaded_adapters.write().await;
+        if guard.remove(adapter_id).is_none() {
+            return Err(LlamaCppError::AdapterFailed(format!(
+                "adapter '{adapter_id}' is not mounted",
+            )));
+        }
+        Ok(())
+    }
+
+    /// Stub: engine not available.
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`LlamaCppError::EngineNotAvailable`].
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn unload_adapter(&self, _adapter_id: &str) -> Result<(), LlamaCppError> {
+        Err(LlamaCppError::EngineNotAvailable)
+    }
+
+    /// Snapshot the list of `LoRA` adapters currently mounted on this
+    /// provider.
+    #[cfg(feature = "engine")]
+    pub async fn list_adapters(&self) -> Vec<MountedAdapter> {
+        self.loaded_adapters
+            .read()
+            .await
+            .values()
+            .cloned()
+            .collect()
+    }
+
+    /// Stub: engine not available; no adapters can be mounted.
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn list_adapters(&self) -> Vec<MountedAdapter> {
+        Vec::new()
     }
 }
 
@@ -541,6 +779,210 @@ fn format_prompt(
         .map_err(|e| LlamaCppError::Inference(format!("failed to apply chat template: {e}")))
 }
 
+/// Mount every `LlamaCppOptions::initial_adapters` entry on the
+/// freshly-loaded engine into the shared adapter map. Free-function form
+/// so the streaming task (which only has clones of `options` and the
+/// `Arc<RwLock<...>>` maps) can call it without `&self`.
+#[cfg(feature = "engine")]
+async fn bootstrap_initial_adapters_for(
+    options: &LlamaCppOptions,
+    engine: &std::sync::Arc<Engine>,
+    loaded_adapters: &std::sync::Arc<
+        tokio::sync::RwLock<std::collections::HashMap<String, MountedAdapter>>,
+    >,
+) -> Result<(), LlamaCppError> {
+    if options.initial_adapters.is_empty() {
+        return Ok(());
+    }
+    for path in &options.initial_adapters {
+        if !path.exists() {
+            return Err(LlamaCppError::AdapterFailed(format!(
+                "initial adapter path does not exist: {}",
+                path.display()
+            )));
+        }
+        let adapter_id = path.display().to_string();
+        {
+            let guard = loaded_adapters.read().await;
+            if guard.contains_key(&adapter_id) {
+                continue;
+            }
+        }
+        let engine_for_blocking = std::sync::Arc::clone(engine);
+        let path_for_blocking = path.clone();
+        let adapter = tokio::task::spawn_blocking(move || {
+            engine_for_blocking
+                .model
+                .lora_adapter_init(&path_for_blocking)
+                .map(SendAdapter)
+        })
+        .await
+        .map_err(|e| LlamaCppError::AdapterFailed(format!("spawn_blocking panicked: {e}")))?
+        .map_err(|e| {
+            LlamaCppError::AdapterFailed(format!(
+                "lora_adapter_init failed for initial adapter '{}': {e}",
+                path.display()
+            ))
+        })?
+        .0;
+        let mounted = MountedAdapter {
+            adapter_id: adapter_id.clone(),
+            source_path: path.clone(),
+            scale: 1.0,
+            handle: std::sync::Arc::new(AdapterHandleCell {
+                adapter: std::sync::Mutex::new(adapter),
+            }),
+        };
+        let mut guard = loaded_adapters.write().await;
+        guard.insert(adapter_id, mounted);
+    }
+    Ok(())
+}
+
+/// Layout mirror of `llama_cpp_2::context::LlamaContext<'a>` used to
+/// extract the underlying `*mut llama_context` C pointer. The upstream
+/// type holds the pointer in a `pub(crate)` field and exposes no public
+/// accessor, so the only way to call the raw multi-adapter FFI
+/// (`llama_set_adapters_lora` with `n_adapters > 1`) is to mirror the
+/// struct definition byte-for-byte here and transmute a reference.
+///
+/// Field declarations must stay in lockstep with
+/// `llama-cpp-2`'s `LlamaContext`. The `lora_context_layout_matches`
+/// const assert below catches size/alignment drift at compile time.
+#[cfg(feature = "engine")]
+#[allow(dead_code)]
+struct LlamaContextLayoutMirror<'a> {
+    context: std::ptr::NonNull<llama_cpp_sys_2::llama_context>,
+    model: &'a llama_cpp_2::model::LlamaModel,
+    initialized_logits: Vec<i32>,
+    embeddings_enabled: bool,
+}
+
+#[cfg(feature = "engine")]
+const _: () = {
+    // Why: catch upstream struct-layout changes that would silently
+    // misinterpret the transmuted pointer as something other than the
+    // raw C `llama_context*`.
+    assert!(
+        std::mem::size_of::<LlamaContextLayoutMirror<'static>>()
+            == std::mem::size_of::<llama_cpp_2::context::LlamaContext<'static>>(),
+        "LlamaContext layout mirror size mismatch — llama-cpp-2 changed its struct"
+    );
+    assert!(
+        std::mem::align_of::<LlamaContextLayoutMirror<'static>>()
+            == std::mem::align_of::<llama_cpp_2::context::LlamaContext<'static>>(),
+        "LlamaContext layout mirror alignment mismatch — llama-cpp-2 changed its struct"
+    );
+};
+
+/// Extract the raw `*mut llama_context` from a safe-wrapper context.
+///
+/// # Safety
+///
+/// The caller must guarantee that `LlamaContextLayoutMirror` mirrors the
+/// real `LlamaContext` field declarations exactly. The const-asserts
+/// above check size and alignment, which together with identical field
+/// types in the same order is sufficient for rustc to assign identical
+/// layouts to both types in the same compilation.
+#[cfg(feature = "engine")]
+#[allow(unsafe_code)]
+unsafe fn raw_context_ptr(
+    ctx: &llama_cpp_2::context::LlamaContext<'_>,
+) -> *mut llama_cpp_sys_2::llama_context {
+    // SAFETY: LlamaContextLayoutMirror has identical field declarations,
+    // size, and alignment to LlamaContext (validated by const-asserts).
+    let mirror: &LlamaContextLayoutMirror<'_> = unsafe {
+        &*std::ptr::from_ref::<llama_cpp_2::context::LlamaContext<'_>>(ctx)
+            .cast::<LlamaContextLayoutMirror<'_>>()
+    };
+    mirror.context.as_ptr()
+}
+
+/// Extract the raw `*mut llama_adapter_lora` from a safe-wrapper adapter.
+///
+/// `LlamaLoraAdapter` is `#[repr(transparent)]` over
+/// `NonNull<llama_adapter_lora>`, so this transmute is sound.
+///
+/// # Safety
+///
+/// Caller must keep `adapter` alive for as long as the returned pointer
+/// is in use.
+#[cfg(feature = "engine")]
+#[allow(unsafe_code)]
+unsafe fn raw_adapter_ptr(
+    adapter: &llama_cpp_2::model::LlamaLoraAdapter,
+) -> *mut llama_cpp_sys_2::llama_adapter_lora {
+    // SAFETY: LlamaLoraAdapter is repr(transparent) over
+    // NonNull<llama_adapter_lora>.
+    let nn: &std::ptr::NonNull<llama_cpp_sys_2::llama_adapter_lora> = unsafe {
+        &*std::ptr::from_ref::<llama_cpp_2::model::LlamaLoraAdapter>(adapter)
+            .cast::<std::ptr::NonNull<llama_cpp_sys_2::llama_adapter_lora>>()
+    };
+    nn.as_ptr()
+}
+
+/// Apply every mounted `LoRA` adapter to a freshly-built inference
+/// context in a single batched call.
+///
+/// Bypasses `llama_cpp_2::context::LlamaContext::lora_adapter_set`,
+/// which hard-codes `n_adapters = 1` and therefore replaces all
+/// previously-set adapters every call — making it impossible to mount
+/// more than one adapter at a time through the safe API. We instead
+/// build one `(adapters, scales)` array and invoke
+/// `llama_set_adapters_lora` directly so all adapters take effect
+/// together.
+#[cfg(feature = "engine")]
+#[allow(unsafe_code)]
+fn apply_adapters_to_context(
+    ctx: &mut llama_cpp_2::context::LlamaContext<'_>,
+    adapters: &[MountedAdapter],
+) -> Result<(), LlamaCppError> {
+    if adapters.is_empty() {
+        return Ok(());
+    }
+
+    let mut guards = Vec::with_capacity(adapters.len());
+    for mounted in adapters {
+        let guard = mounted.handle.adapter.lock().map_err(|e| {
+            LlamaCppError::AdapterFailed(format!(
+                "adapter '{}' mutex poisoned: {e}",
+                mounted.adapter_id
+            ))
+        })?;
+        guards.push((mounted, guard));
+    }
+
+    let mut adapter_ptrs: Vec<*mut llama_cpp_sys_2::llama_adapter_lora> = guards
+        .iter()
+        // SAFETY: each guard keeps the LlamaLoraAdapter alive for the
+        // duration of the FFI call below.
+        .map(|(_, g)| unsafe { raw_adapter_ptr(g) })
+        .collect();
+    let mut scales: Vec<f32> = guards.iter().map(|(m, _)| m.scale).collect();
+
+    // SAFETY: ctx is held by &mut for the duration of the call; adapter
+    // pointers and the scales buffer outlive the call; n_adapters
+    // matches the array lengths.
+    let rc = unsafe {
+        llama_cpp_sys_2::llama_set_adapters_lora(
+            raw_context_ptr(ctx),
+            adapter_ptrs.as_mut_ptr(),
+            adapter_ptrs.len(),
+            scales.as_mut_ptr(),
+        )
+    };
+
+    drop(guards);
+
+    if rc != 0 {
+        return Err(LlamaCppError::AdapterFailed(format!(
+            "llama_set_adapters_lora returned {rc} when activating {} adapter(s)",
+            adapters.len()
+        )));
+    }
+    Ok(())
+}
+
 /// Simple fallback prompt formatting when the model's template is not available.
 #[cfg(feature = "engine")]
 fn format_prompt_chatml(messages: &[ChatMessageInput]) -> String {
@@ -587,13 +1029,28 @@ impl LlamaCppProvider {
         }
         // Slow path: acquire write lock, double-check, build, clone Arc.
         let mut guard = self.engine.write().await;
-        if guard.is_none() {
+        let just_loaded = guard.is_none();
+        if just_loaded {
             let engine = build_engine(&self.options).await?;
             *guard = Some(std::sync::Arc::new(engine));
         }
         // SAFETY: we just set Some above (or found Some from a concurrent loader).
-        let engine = guard.as_ref().expect("engine loaded above");
-        Ok(std::sync::Arc::clone(engine))
+        let engine = std::sync::Arc::clone(guard.as_ref().expect("engine loaded above"));
+        drop(guard);
+        if just_loaded {
+            self.bootstrap_initial_adapters(&engine).await?;
+        }
+        Ok(engine)
+    }
+
+    /// Mount every `LlamaCppOptions::initial_adapters` entry on the
+    /// freshly-loaded engine. Called from the slow path of
+    /// [`Self::get_or_load_engine`].
+    async fn bootstrap_initial_adapters(
+        &self,
+        engine: &std::sync::Arc<Engine>,
+    ) -> Result<(), LlamaCppError> {
+        bootstrap_initial_adapters_for(&self.options, engine, &self.loaded_adapters).await
     }
 
     #[allow(
@@ -610,6 +1067,15 @@ impl LlamaCppProvider {
         // owned `Arc<Engine>` into the blocking task so it stays alive for
         // the duration of inference, independent of any concurrent `unload`.
         let engine = self.get_or_load_engine().await?;
+        // Snapshot the active adapters before crossing the spawn_blocking
+        // boundary so we never hold the RwLock across an await/move.
+        let adapters: Vec<MountedAdapter> = self
+            .loaded_adapters
+            .read()
+            .await
+            .values()
+            .cloned()
+            .collect();
 
         tokio::task::spawn_blocking(move || {
             use llama_cpp_2::context::params::LlamaContextParams;
@@ -640,6 +1106,8 @@ impl LlamaCppProvider {
                 .model
                 .new_context(&eng.backend, ctx_params)
                 .map_err(|e| LlamaCppError::Inference(format!("failed to create context: {e}")))?;
+
+            apply_adapters_to_context(&mut ctx, &adapters)?;
 
             // Encode the prompt into the context.
             let mut batch = LlamaBatch::new(eng.context_length as usize, 1);
@@ -751,6 +1219,7 @@ impl LlamaCppProvider {
 
         // Clone the Arc + options so the spawned task can outlive `&self`.
         let engine_lock = std::sync::Arc::clone(&self.engine);
+        let adapters_lock = std::sync::Arc::clone(&self.loaded_adapters);
         let options = self.options.clone();
 
         tokio::spawn(async move {
@@ -759,17 +1228,18 @@ impl LlamaCppProvider {
             // of calling `get_or_load_engine` so that we can preserve the
             // existing error-delivery contract (load errors appear as the
             // first stream item, not as a synchronous return error).
-            let engine: std::sync::Arc<Engine> = {
+            let (engine, just_loaded): (std::sync::Arc<Engine>, bool) = {
                 // Fast path: acquire read lock, check if already loaded.
                 {
                     let guard = engine_lock.read().await;
                     if let Some(engine) = guard.as_ref() {
-                        std::sync::Arc::clone(engine)
+                        (std::sync::Arc::clone(engine), false)
                     } else {
                         drop(guard);
                         // Slow path: acquire write lock, double-check, build.
                         let mut guard = engine_lock.write().await;
-                        if guard.is_none() {
+                        let did_load = guard.is_none();
+                        if did_load {
                             match build_engine(&options).await {
                                 Ok(eng) => {
                                     *guard = Some(std::sync::Arc::new(eng));
@@ -781,10 +1251,26 @@ impl LlamaCppProvider {
                             }
                         }
                         // SAFETY: we just set Some above (or found Some from a concurrent loader).
-                        std::sync::Arc::clone(guard.as_ref().expect("engine loaded above"))
+                        (
+                            std::sync::Arc::clone(guard.as_ref().expect("engine loaded above")),
+                            did_load,
+                        )
                     }
                 }
             };
+
+            if just_loaded
+                && let Err(e) =
+                    bootstrap_initial_adapters_for(&options, &engine, &adapters_lock).await
+            {
+                let _ = tx.send(Err(e)).await;
+                return;
+            }
+
+            // Snapshot active adapters before crossing into the blocking
+            // thread so we never hold the RwLock across an FFI boundary.
+            let adapters: Vec<MountedAdapter> =
+                adapters_lock.read().await.values().cloned().collect();
 
             // Hand the actual (blocking) token-generation loop off to a
             // dedicated blocking thread. The `Arc<Engine>` we hold keeps
@@ -832,6 +1318,11 @@ impl LlamaCppProvider {
                         return;
                     }
                 };
+
+                if let Err(e) = apply_adapters_to_context(&mut ctx, &adapters) {
+                    send_err(e);
+                    return;
+                }
 
                 let mut batch = LlamaBatch::new(eng.context_length as usize, 1);
                 let last_index = tokens.len() as i32 - 1;

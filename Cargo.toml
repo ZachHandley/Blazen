@@ -128,7 +128,6 @@ blazen-memory-valkey = { version = "0.0.0-dev", path = "crates/blazen-memory-val
 blazen-persist = { version = "0.0.0-dev", path = "crates/blazen-persist", registry = "forgejo" }
 blazen-pipeline = { version = "0.0.0-dev", path = "crates/blazen-pipeline", registry = "forgejo" }
 blazen-prompts = { version = "0.0.0-dev", path = "crates/blazen-prompts", registry = "forgejo" }
-blazen = { version = "0.0.0-dev", path = "crates/blazen", registry = "forgejo" }
 blazen-telemetry = { version = "0.0.0-dev", path = "crates/blazen-telemetry", registry = "forgejo" }
 blazen-model-cache = { version = "0.0.0-dev", path = "crates/blazen-model-cache", registry = "forgejo" }
 blazen-embed = { version = "0.0.0-dev", path = "crates/blazen-embed", registry = "forgejo" }

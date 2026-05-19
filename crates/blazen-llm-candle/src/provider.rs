@@ -6,8 +6,12 @@
 //! returns [`CandleLlmError::EngineNotAvailable`] for all inference calls.
 
 use std::fmt;
+use std::path::PathBuf;
 
 use crate::CandleLlmOptions;
+
+#[cfg(feature = "engine")]
+use std::path::Path;
 
 /// Error type for candle LLM operations.
 #[derive(Debug)]
@@ -18,6 +22,10 @@ pub enum CandleLlmError {
     ModelLoad(String),
     /// An inference operation failed.
     Inference(String),
+    /// The detected model/format is recognised but the engine has not
+    /// wired support for it yet (e.g. safetensors path detects a
+    /// `model_type` other than `llama`).
+    Unsupported(String),
     /// The `engine` feature is not enabled.
     EngineNotAvailable,
 }
@@ -28,6 +36,7 @@ impl fmt::Display for CandleLlmError {
             Self::InvalidOptions(msg) => write!(f, "candle LLM invalid options: {msg}"),
             Self::ModelLoad(msg) => write!(f, "candle LLM model load failed: {msg}"),
             Self::Inference(msg) => write!(f, "candle LLM inference failed: {msg}"),
+            Self::Unsupported(msg) => write!(f, "candle LLM unsupported: {msg}"),
             Self::EngineNotAvailable => write!(
                 f,
                 "candle LLM engine not available: compile with the `engine` feature"
@@ -205,6 +214,15 @@ mod engine {
                 device = ?opts.device,
                 "candle LLM engine loaded"
             );
+
+            if !opts.initial_adapters.is_empty() {
+                tracing::warn!(
+                    count = opts.initial_adapters.len(),
+                    "initial_adapters configured but candle backend's quantized_llama \
+                     engine has no per-Linear hook; adapters will fail to mount until \
+                     a per-architecture wrapper is implemented"
+                );
+            }
 
             Ok(Self {
                 model,
@@ -476,6 +494,160 @@ mod engine {
 }
 
 // ---------------------------------------------------------------------------
+// Format-dispatch wrapper for the two engine paths.
+// ---------------------------------------------------------------------------
+
+/// Loaded engine, either GGUF-quantized or non-quantized safetensors.
+///
+/// The variant is chosen at load time by [`load_with_autodetect`]
+/// based on a HF Hub metadata probe and the user's
+/// [`CandleLlmOptions::force_safetensors`] override.
+#[cfg(feature = "engine")]
+pub(crate) enum LoadedEngine {
+    /// Quantized GGUF path via `candle_transformers::quantized_llama`.
+    Gguf(engine::CandleEngine),
+    /// Non-quantized safetensors path via
+    /// `candle_transformers::models::llama::Llama`. Foundation for
+    /// the Wave C LoRA-merge work.
+    Safetensors(crate::safetensors_engine::SafetensorsEngine),
+}
+
+/// Outcome of an HF Hub format probe, before any download.
+#[cfg(feature = "engine")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FormatChoice {
+    Gguf,
+    Safetensors,
+}
+
+/// Decide which engine path to take given the repo's discovered file
+/// layout and the user's preference.
+#[cfg(feature = "engine")]
+fn choose_format(
+    layout: &crate::safetensors_engine::RepoLayout,
+    force_safetensors: bool,
+    repo_id: &str,
+) -> Result<FormatChoice, CandleLlmError> {
+    match (layout.has_gguf(), layout.has_safetensors()) {
+        (true, true) => {
+            if force_safetensors {
+                Ok(FormatChoice::Safetensors)
+            } else {
+                Ok(FormatChoice::Gguf)
+            }
+        }
+        (true, false) => Ok(FormatChoice::Gguf),
+        (false, true) => Ok(FormatChoice::Safetensors),
+        (false, false) => Err(CandleLlmError::InvalidOptions(format!(
+            "repo '{repo_id}' contains neither GGUF nor safetensors weights"
+        ))),
+    }
+}
+
+/// Load whichever engine matches the repo, honouring
+/// `force_safetensors` for tiebreaks.
+///
+/// `pre_registered_adapters` is consulted only on the safetensors path
+/// (GGUF cannot consume merged deltas); when non-empty its adapters are
+/// re-parsed against the engine device and folded into the initial
+/// `VarBuilder` via
+/// [`crate::safetensors_engine::SafetensorsEngine::load_with_adapters`].
+#[cfg(feature = "engine")]
+async fn load_with_autodetect(
+    opts: &CandleLlmOptions,
+    pre_registered_adapters: &[MountedAdapterRecord],
+) -> Result<LoadedEngine, CandleLlmError> {
+    let repo_id = opts.model_id.as_deref().ok_or_else(|| {
+        CandleLlmError::InvalidOptions("model_id is required for engine init".into())
+    })?;
+    let revision = opts.revision.as_deref();
+
+    let layout = crate::safetensors_engine::probe_repo_layout(repo_id, revision).await?;
+    let choice = choose_format(&layout, opts.force_safetensors, repo_id)?;
+
+    tracing::info!(
+        repo = repo_id,
+        gguf_count = layout.gguf.len(),
+        safetensors_count = layout.safetensors.len(),
+        ?choice,
+        pre_registered_adapters = pre_registered_adapters.len(),
+        "candle engine format auto-detect"
+    );
+
+    match choice {
+        FormatChoice::Gguf => {
+            if !pre_registered_adapters.is_empty() {
+                return Err(CandleLlmError::Unsupported(
+                    "candle GGUF + LoRA requires dequantize-merge-requantize; \
+                     use safetensors format or the mistralrs backend"
+                        .into(),
+                ));
+            }
+            engine::CandleEngine::load(opts)
+                .await
+                .map(LoadedEngine::Gguf)
+        }
+        FormatChoice::Safetensors => {
+            // Why: deltas must be precomputed on the engine's
+            // ultimate device. Resolve once here and pass it through.
+            let device = resolve_device_for_initial_load(opts.device.as_deref())?;
+            let parsed = parse_adapters_on_device(pre_registered_adapters, &device)?;
+            crate::safetensors_engine::SafetensorsEngine::load_with_adapters(opts, &parsed)
+                .await
+                .map(LoadedEngine::Safetensors)
+        }
+    }
+}
+
+/// Resolve the candle [`candle_core::Device`] from the caller's device
+/// string for the purposes of pre-load adapter parsing. Kept in this
+/// module to avoid widening [`crate::safetensors_engine`]'s private
+/// surface for what is essentially the same lookup as
+/// [`crate::safetensors_engine::resolve_device`].
+#[cfg(feature = "engine")]
+fn resolve_device_for_initial_load(
+    device_str: Option<&str>,
+) -> Result<candle_core::Device, CandleLlmError> {
+    match device_str.unwrap_or("cpu") {
+        "cpu" => Ok(candle_core::Device::Cpu),
+        s if s.starts_with("cuda") => {
+            let ordinal = s
+                .strip_prefix("cuda:")
+                .and_then(|n| n.parse::<usize>().ok())
+                .unwrap_or(0);
+            candle_core::Device::new_cuda(ordinal)
+                .map_err(|e| CandleLlmError::ModelLoad(format!("CUDA device error: {e}")))
+        }
+        "metal" => candle_core::Device::new_metal(0)
+            .map_err(|e| CandleLlmError::ModelLoad(format!("Metal device error: {e}"))),
+        other => Err(CandleLlmError::InvalidOptions(format!(
+            "unsupported device: {other}"
+        ))),
+    }
+}
+
+/// Re-parse every recorded adapter directory against `device` so the
+/// `(B@A) * scale` deltas land on the same device the merging backend
+/// will consume them from.
+#[cfg(feature = "engine")]
+fn parse_adapters_on_device(
+    records: &[MountedAdapterRecord],
+    device: &candle_core::Device,
+) -> Result<Vec<crate::lora::LoadedAdapter>, CandleLlmError> {
+    records
+        .iter()
+        .map(|r| {
+            crate::lora::LoadedAdapter::from_dir(
+                &r.adapter_dir,
+                r.adapter_id.clone(),
+                r.scale,
+                device,
+            )
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
 // Public provider type
 // ---------------------------------------------------------------------------
 
@@ -511,7 +683,35 @@ pub struct CandleLlmProvider {
     /// that an `unload` call cannot yank the engine out from under an
     /// in-flight inference.
     #[cfg(feature = "engine")]
-    engine: std::sync::Arc<tokio::sync::Mutex<Option<engine::CandleEngine>>>,
+    engine: std::sync::Arc<tokio::sync::Mutex<Option<LoadedEngine>>>,
+    /// Mounted `LoRA` adapters, keyed by caller-supplied adapter id.
+    ///
+    /// Adapters are parsed + validated against the PEFT-canonical
+    /// layout but the candle `quantized_llama::ModelWeights` forward
+    /// pass exposes no per-`Linear` hook, so deltas cannot be applied
+    /// in-place. [`Self::load_adapter`] therefore validates the
+    /// adapter directory and returns an `Unsupported`-shaped
+    /// [`CandleLlmError::Inference`] instead of recording the mount;
+    /// this map exists for diagnostics + future per-architecture
+    /// wrappers that will be able to consume the parsed layers.
+    #[cfg(feature = "engine")]
+    loaded_adapters: std::sync::Arc<
+        tokio::sync::RwLock<std::collections::HashMap<String, MountedAdapterRecord>>,
+    >,
+}
+
+/// Bookkeeping record for a successfully-parsed adapter mount. Kept
+/// separate from [`crate::lora::LoadedAdapter`] so the public
+/// [`CandleLlmProvider::list_adapters`] return shape stays cheap-to-clone.
+#[cfg(feature = "engine")]
+#[derive(Debug, Clone)]
+pub struct MountedAdapterRecord {
+    /// Caller-chosen identifier (echoes `AdapterOptions::adapter_id`).
+    pub adapter_id: String,
+    /// Directory the adapter was mounted from.
+    pub adapter_dir: PathBuf,
+    /// Caller-supplied runtime scale multiplier.
+    pub scale: f32,
 }
 
 impl CandleLlmProvider {
@@ -547,6 +747,10 @@ impl CandleLlmProvider {
             options: opts,
             #[cfg(feature = "engine")]
             engine: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
+            #[cfg(feature = "engine")]
+            loaded_adapters: std::sync::Arc::new(tokio::sync::RwLock::new(
+                std::collections::HashMap::new(),
+            )),
         })
     }
 
@@ -684,10 +888,14 @@ impl CandleLlmProvider {
     #[cfg(feature = "engine")]
     async fn get_or_load_engine_guard(
         &self,
-    ) -> Result<tokio::sync::OwnedMutexGuard<Option<engine::CandleEngine>>, CandleLlmError> {
+    ) -> Result<tokio::sync::OwnedMutexGuard<Option<LoadedEngine>>, CandleLlmError> {
         let mut guard = std::sync::Arc::clone(&self.engine).lock_owned().await;
         if guard.is_none() {
-            let eng = engine::CandleEngine::load(&self.options).await?;
+            let pre_registered: Vec<MountedAdapterRecord> = {
+                let adapters_guard = self.loaded_adapters.read().await;
+                adapters_guard.values().cloned().collect()
+            };
+            let eng = load_with_autodetect(&self.options, &pre_registered).await?;
             *guard = Some(eng);
         }
         Ok(guard)
@@ -728,23 +936,39 @@ impl CandleLlmProvider {
                 // impossible `None` case with a structured error
                 // instead of a panic so the public API surface stays
                 // panic-free.
-                let engine = owned_guard.as_mut().ok_or_else(|| {
+                let loaded = owned_guard.as_mut().ok_or_else(|| {
                     CandleLlmError::Inference(
                         "engine slot empty under the mutex after successful load".into(),
                     )
                 })?;
 
-                let prompt = engine::format_prompt(&messages);
-
-                let prompt_token_count = engine
-                    .tokenizer
-                    .encode(prompt.as_str(), true)
-                    .map_or(0, |enc| enc.get_ids().len());
-
-                let (text, completion_tokens) =
-                    engine::generate(engine, &prompt, max_tokens, temperature, top_p)?;
-
-                Ok::<_, CandleLlmError>((text, prompt_token_count, completion_tokens))
+                match loaded {
+                    LoadedEngine::Gguf(eng) => {
+                        let prompt = engine::format_prompt(&messages);
+                        let prompt_token_count = eng
+                            .tokenizer
+                            .encode(prompt.as_str(), true)
+                            .map_or(0, |enc| enc.get_ids().len());
+                        let (text, completion_tokens) =
+                            engine::generate(eng, &prompt, max_tokens, temperature, top_p)?;
+                        Ok::<_, CandleLlmError>((text, prompt_token_count, completion_tokens))
+                    }
+                    LoadedEngine::Safetensors(eng) => {
+                        let prompt = crate::safetensors_engine::format_prompt(eng, &messages);
+                        let prompt_token_count = eng
+                            .tokenizer
+                            .encode(prompt.as_str(), true)
+                            .map_or(0, |enc| enc.get_ids().len());
+                        let (text, completion_tokens) = crate::safetensors_engine::infer_engine(
+                            eng,
+                            &prompt,
+                            max_tokens,
+                            temperature,
+                            top_p,
+                        )?;
+                        Ok::<_, CandleLlmError>((text, prompt_token_count, completion_tokens))
+                    }
+                }
                 // `owned_guard` is dropped here, releasing the mutex.
             })
             .await
@@ -798,25 +1022,43 @@ impl CandleLlmProvider {
                 // impossible `None` case by emitting a structured
                 // error on the channel instead of panicking, so the
                 // public API surface stays panic-free.
-                let Some(engine) = owned_guard.as_mut() else {
+                let Some(loaded) = owned_guard.as_mut() else {
                     let _ = tx.blocking_send(Err(CandleLlmError::Inference(
                         "engine slot empty under the mutex after successful load".into(),
                     )));
                     return;
                 };
 
-                let prompt = engine::format_prompt(&messages);
-
-                let result = engine::generate_streaming(
-                    engine,
-                    &prompt,
-                    max_tokens,
-                    temperature,
-                    top_p,
-                    |token_text| {
-                        let _ = tx.blocking_send(Ok(token_text));
-                    },
-                );
+                let result = match loaded {
+                    LoadedEngine::Gguf(eng) => {
+                        let prompt = engine::format_prompt(&messages);
+                        engine::generate_streaming(
+                            eng,
+                            &prompt,
+                            max_tokens,
+                            temperature,
+                            top_p,
+                            |token_text| {
+                                let _ = tx.blocking_send(Ok(token_text));
+                            },
+                        )
+                        .map(|_| ())
+                    }
+                    LoadedEngine::Safetensors(eng) => {
+                        let prompt = crate::safetensors_engine::format_prompt(eng, &messages);
+                        crate::safetensors_engine::infer_stream_engine(
+                            eng,
+                            &prompt,
+                            max_tokens,
+                            temperature,
+                            top_p,
+                            |token_text| {
+                                let _ = tx.blocking_send(Ok(token_text));
+                            },
+                        )
+                        .map(|_| ())
+                    }
+                };
 
                 if let Err(e) = result {
                     let _ = tx.blocking_send(Err(e));
@@ -833,6 +1075,251 @@ impl CandleLlmProvider {
             Err(CandleLlmError::EngineNotAvailable)
         }
     }
+
+    // -----------------------------------------------------------------------
+    // LoRA adapter mount / unmount / list
+    //
+    // The current candle engine runs `quantized_llama::ModelWeights`,
+    // a monolithic GGUF model whose forward pass exposes no per-`Linear`
+    // hook. The PEFT adapter format is fully parsed + validated here (so
+    // bad inputs are caught early) but `load_adapter` returns a clear
+    // `Unsupported` error rather than silently mounting a no-op delta.
+    // The parsed [`crate::lora::LoadedAdapter`] machinery is the
+    // building block future per-architecture wrappers (e.g. a hand-built
+    // Qwen2 / Llama2 forward path that exposes per-layer `Linear`s) will
+    // consume to apply the deltas.
+    // -----------------------------------------------------------------------
+
+    /// Mount a PEFT-format `LoRA` adapter onto the loaded base model.
+    ///
+    /// `adapter_dir` must contain `adapter_config.json` and
+    /// `adapter_model.safetensors` (the PEFT canonical layout). The
+    /// adapter is parsed + validated immediately, then registered in
+    /// the provider's adapter table. The action taken depends on which
+    /// engine variant is currently loaded:
+    ///
+    /// * [`LoadedEngine::Safetensors`] — the engine is rebuilt with the
+    ///   merged set of adapters; the returned record reports a
+    ///   `Rebuilt` mount strategy at the caller-trait layer.
+    /// * [`LoadedEngine::Gguf`] — `LoRA` on the quantized GGUF path
+    ///   requires dequantize-merge-requantize work that is not
+    ///   implemented here, so a clear [`CandleLlmError::Unsupported`]
+    ///   is returned.
+    ///
+    /// If the engine is not yet loaded, the adapter is recorded against
+    /// the empty engine slot and the next [`Self::load`] / inference
+    /// call will pull the adapter set into the initial build via
+    /// [`crate::safetensors_engine::SafetensorsEngine::load_with_adapters`]
+    /// (subject to repo format: GGUF auto-detects still error with
+    /// `Unsupported`).
+    ///
+    /// # Errors
+    ///
+    /// - [`CandleLlmError::EngineNotAvailable`] without the `engine` feature.
+    /// - [`CandleLlmError::InvalidOptions`] if the directory is missing
+    ///   either canonical file, or `adapter_config.json` fails parsing.
+    /// - [`CandleLlmError::ModelLoad`] if the safetensors file fails to
+    ///   load or its keys violate the PEFT pairing convention, or if
+    ///   the safetensors-path rebuild fails.
+    /// - [`CandleLlmError::Unsupported`] when the active engine is the
+    ///   GGUF / quantized path.
+    #[cfg(feature = "engine")]
+    pub async fn load_adapter(
+        &self,
+        adapter_dir: &Path,
+        adapter_id: String,
+        scale: f32,
+    ) -> Result<MountedAdapterRecord, CandleLlmError> {
+        if !adapter_dir.is_dir() {
+            return Err(CandleLlmError::InvalidOptions(format!(
+                "adapter_dir does not exist or is not a directory: {}",
+                adapter_dir.display()
+            )));
+        }
+        let cfg_path = adapter_dir.join("adapter_config.json");
+        let weights_path = adapter_dir.join("adapter_model.safetensors");
+        if !cfg_path.is_file() {
+            return Err(CandleLlmError::InvalidOptions(format!(
+                "adapter_config.json missing at {}",
+                cfg_path.display()
+            )));
+        }
+        if !weights_path.is_file() {
+            return Err(CandleLlmError::InvalidOptions(format!(
+                "adapter_model.safetensors missing at {}",
+                weights_path.display()
+            )));
+        }
+
+        {
+            let guard = self.loaded_adapters.read().await;
+            if guard.contains_key(&adapter_id) {
+                return Err(CandleLlmError::InvalidOptions(format!(
+                    "adapter '{adapter_id}' is already mounted"
+                )));
+            }
+        }
+
+        // Why: validate immediately against the active engine's device
+        // when one is loaded, so the `(B@A)` precompute lands on the
+        // same device used by inference. Falls back to CPU if no
+        // engine is loaded — the rebuild path re-parses on the engine
+        // device anyway.
+        let device = {
+            let guard = self.engine.lock().await;
+            match guard.as_ref() {
+                Some(LoadedEngine::Safetensors(eng)) => eng.device.clone(),
+                Some(LoadedEngine::Gguf(eng)) => eng.device.clone(),
+                None => candle_core::Device::Cpu,
+            }
+        };
+        crate::lora::LoadedAdapter::from_dir(adapter_dir, adapter_id.clone(), scale, &device)?;
+
+        let record = MountedAdapterRecord {
+            adapter_id: adapter_id.clone(),
+            adapter_dir: adapter_dir.to_path_buf(),
+            scale,
+        };
+
+        let mut engine_guard = self.engine.lock().await;
+        match engine_guard.as_ref() {
+            Some(LoadedEngine::Gguf(_)) => {
+                return Err(CandleLlmError::Unsupported(format!(
+                    "candle GGUF + LoRA requires dequantize-merge-requantize; \
+                     use safetensors format or the mistralrs backend \
+                     (adapter '{adapter_id}' parsed cleanly but cannot be attached)"
+                )));
+            }
+            Some(LoadedEngine::Safetensors(_)) => {
+                let next_records: Vec<MountedAdapterRecord> = {
+                    let adapters_guard = self.loaded_adapters.read().await;
+                    let mut list: Vec<MountedAdapterRecord> =
+                        adapters_guard.values().cloned().collect();
+                    list.push(record.clone());
+                    list
+                };
+                let parsed = parse_adapters_on_device(&next_records, &device)?;
+                let new_engine = crate::safetensors_engine::SafetensorsEngine::load_with_adapters(
+                    &self.options,
+                    &parsed,
+                )
+                .await?;
+                *engine_guard = Some(LoadedEngine::Safetensors(new_engine));
+            }
+            None => {
+                // Why: no engine loaded yet — just register; the next
+                // load call will pull `loaded_adapters` into the
+                // initial build.
+            }
+        }
+        drop(engine_guard);
+
+        let mut adapters_guard = self.loaded_adapters.write().await;
+        adapters_guard.insert(adapter_id, record.clone());
+        Ok(record)
+    }
+
+    /// Stub: engine not available.
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`CandleLlmError::EngineNotAvailable`].
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn load_adapter(
+        &self,
+        adapter_dir: &std::path::Path,
+        adapter_id: String,
+        scale: f32,
+    ) -> Result<MountedAdapterRecord, CandleLlmError> {
+        let _ = (adapter_dir, adapter_id, scale);
+        Err(CandleLlmError::EngineNotAvailable)
+    }
+
+    /// Remove a previously-mounted adapter by id. Idempotent — removing
+    /// a non-existent id returns `Ok(())`.
+    ///
+    /// # Errors
+    ///
+    /// Currently never returns an error; the `Result` is preserved for
+    /// API consistency with the rest of the [`CandleLlmProvider`]
+    /// surface (and to forward-compat against a future implementation
+    /// that does perform fallible work).
+    #[cfg(feature = "engine")]
+    pub async fn unload_adapter(&self, adapter_id: &str) -> Result<(), CandleLlmError> {
+        let removed_existed = {
+            let mut guard = self.loaded_adapters.write().await;
+            guard.remove(adapter_id).is_some()
+        };
+        if !removed_existed {
+            return Ok(());
+        }
+
+        let mut engine_guard = self.engine.lock().await;
+        match engine_guard.as_ref() {
+            Some(LoadedEngine::Safetensors(eng)) => {
+                let device = eng.device.clone();
+                let remaining: Vec<MountedAdapterRecord> = {
+                    let adapters_guard = self.loaded_adapters.read().await;
+                    adapters_guard.values().cloned().collect()
+                };
+                let parsed = parse_adapters_on_device(&remaining, &device)?;
+                let new_engine = crate::safetensors_engine::SafetensorsEngine::load_with_adapters(
+                    &self.options,
+                    &parsed,
+                )
+                .await?;
+                *engine_guard = Some(LoadedEngine::Safetensors(new_engine));
+            }
+            // Why: on GGUF the load_adapter path would have errored
+            // before recording the adapter, so we should never reach
+            // here with a Gguf engine + non-empty removal. Defensive
+            // no-op keeps the rebuild scoped to safetensors.
+            Some(LoadedEngine::Gguf(_)) | None => {}
+        }
+        Ok(())
+    }
+
+    /// Stub: engine not available.
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`CandleLlmError::EngineNotAvailable`].
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn unload_adapter(&self, adapter_id: &str) -> Result<(), CandleLlmError> {
+        let _ = adapter_id;
+        Err(CandleLlmError::EngineNotAvailable)
+    }
+
+    /// Snapshot of the currently-mounted adapters.
+    #[cfg(feature = "engine")]
+    pub async fn list_adapters(&self) -> Vec<MountedAdapterRecord> {
+        self.loaded_adapters
+            .read()
+            .await
+            .values()
+            .cloned()
+            .collect()
+    }
+
+    /// Stub: without the engine feature there are never any adapters.
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn list_adapters(&self) -> Vec<MountedAdapterRecord> {
+        Vec::new()
+    }
+}
+
+/// Public empty-shaped stub of [`MountedAdapterRecord`] for builds
+/// without the `engine` feature so the [`CandleLlmProvider::list_adapters`]
+/// signature stays identical across feature configurations.
+#[cfg(not(feature = "engine"))]
+#[derive(Debug, Clone)]
+pub struct MountedAdapterRecord {
+    pub adapter_id: String,
+    pub adapter_dir: PathBuf,
+    pub scale: f32,
 }
 
 // ---------------------------------------------------------------------------

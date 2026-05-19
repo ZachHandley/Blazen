@@ -257,14 +257,62 @@ impl crate::traits::LocalModel for CandleLlmProvider {
 
     async fn load_adapter(
         &self,
-        _adapter_dir: &std::path::Path,
-        _options: crate::AdapterOptions,
+        adapter_dir: &std::path::Path,
+        options: crate::AdapterOptions,
     ) -> Result<crate::AdapterHandle, BlazenError> {
-        Err(BlazenError::unsupported(
-            "candle backend has no built-in LoRA primitive in candle_transformers 0.x; \
-             implement via custom Linear-layer wiring before enabling",
-        ))
+        let mounted =
+            CandleLlmProvider::load_adapter(self, adapter_dir, options.adapter_id, options.scale)
+                .await
+                .map_err(|e| BlazenError::provider("candle-llm", e.to_string()))?;
+
+        let memory_bytes = candle_adapter_on_disk_bytes(adapter_dir);
+
+        Ok(crate::AdapterHandle {
+            adapter_id: mounted.adapter_id,
+            memory_bytes,
+            mount_strategy: crate::AdapterMountStrategy::Rebuilt,
+        })
     }
+
+    async fn unload_adapter(&self, handle: &crate::AdapterHandle) -> Result<(), BlazenError> {
+        CandleLlmProvider::unload_adapter(self, &handle.adapter_id)
+            .await
+            .map_err(|e| BlazenError::provider("candle-llm", e.to_string()))
+    }
+
+    async fn list_adapters(&self) -> Vec<crate::AdapterStatus> {
+        CandleLlmProvider::list_adapters(self)
+            .await
+            .into_iter()
+            .map(|m| {
+                let memory_bytes = candle_adapter_on_disk_bytes(&m.adapter_dir);
+                crate::AdapterStatus {
+                    adapter_id: m.adapter_id,
+                    scale: m.scale,
+                    source_dir: m.adapter_dir,
+                    memory_bytes,
+                }
+            })
+            .collect()
+    }
+}
+
+/// Estimate an adapter's memory footprint by summing PEFT canonical
+/// files on disk. Mirrors the helper in
+/// `crates/blazen-llm/src/backends/mistralrs.rs`. Returns `0` on any
+/// I/O error so the manager's pool accounting degrades gracefully.
+fn candle_adapter_on_disk_bytes(adapter_dir: &std::path::Path) -> u64 {
+    let mut total: u64 = 0;
+    for name in [
+        "adapter_model.safetensors",
+        "adapter_config.json",
+        "tokenizer.json",
+    ] {
+        if let Ok(meta) = std::fs::metadata(adapter_dir.join(name)) {
+            total = total.saturating_add(meta.len());
+        }
+    }
+    total
 }
 
 // ---------------------------------------------------------------------------

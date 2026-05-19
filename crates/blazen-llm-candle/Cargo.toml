@@ -40,3 +40,6 @@ accelerate = ["engine"]
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+safetensors = "0.7.0"

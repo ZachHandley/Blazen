@@ -64,6 +64,30 @@ pub struct CandleLlmOptions {
     /// When `None`, falls back to `blazen-model-cache`'s default cache
     /// directory (`$BLAZEN_CACHE_DIR` or `~/.cache/blazen/models`).
     pub cache_dir: Option<PathBuf>,
+
+    /// PEFT adapter directories to mount immediately after the base
+    /// model loads. Each directory must contain `adapter_config.json`
+    /// and `adapter_model.safetensors`. The adapter id defaults to the
+    /// directory's last path component; callers needing custom ids
+    /// should mount via [`CandleLlmProvider::load_adapter`] after
+    /// construction instead.
+    ///
+    /// [`CandleLlmProvider::load_adapter`]: crate::CandleLlmProvider::load_adapter
+    #[serde(default)]
+    pub initial_adapters: Vec<PathBuf>,
+
+    /// Force the safetensors (non-quantized) loader path even when a
+    /// repo contains both GGUF and safetensors weights.
+    ///
+    /// Default `false`. Auto-detection at load time normally prefers
+    /// GGUF when both formats are present (smaller, faster); set this
+    /// to `true` to opt into the dequantized safetensors path — required
+    /// to ground the per-Linear hooks future `LoRA` merging needs.
+    ///
+    /// Has no effect when only one format is present in the repo: the
+    /// loader uses whichever is available.
+    #[serde(default)]
+    pub force_safetensors: bool,
 }
 
 #[cfg(test)]
@@ -79,6 +103,19 @@ mod tests {
         assert!(opts.revision.is_none());
         assert!(opts.context_length.is_none());
         assert!(opts.cache_dir.is_none());
+        assert!(opts.initial_adapters.is_empty());
+        assert!(!opts.force_safetensors);
+    }
+
+    #[test]
+    fn force_safetensors_round_trip() {
+        let opts = CandleLlmOptions {
+            force_safetensors: true,
+            ..CandleLlmOptions::default()
+        };
+        let json = serde_json::to_string(&opts).expect("serialize");
+        let parsed: CandleLlmOptions = serde_json::from_str(&json).expect("deserialize");
+        assert!(parsed.force_safetensors);
     }
 
     #[test]
@@ -102,6 +139,8 @@ mod tests {
             revision: Some("main".into()),
             context_length: Some(4096),
             cache_dir: Some(PathBuf::from("/tmp/candle-cache")),
+            initial_adapters: vec![PathBuf::from("/tmp/adapter-a")],
+            force_safetensors: false,
         };
         let json = serde_json::to_string(&opts).expect("serialize");
         let parsed: CandleLlmOptions = serde_json::from_str(&json).expect("deserialize");

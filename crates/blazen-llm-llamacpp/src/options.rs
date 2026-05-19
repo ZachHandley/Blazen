@@ -61,6 +61,18 @@ pub struct LlamaCppOptions {
     /// When `None`, falls back to `blazen-model-cache`'s default cache
     /// directory (`$BLAZEN_CACHE_DIR` or `~/.cache/blazen/models`).
     pub cache_dir: Option<PathBuf>,
+
+    /// `LoRA` adapter files to mount on the engine when it is first built.
+    /// Each path must point at a GGUF-format `LoRA` adapter file (see the
+    /// `load_adapter` doc comment on the provider for the expected layout).
+    ///
+    /// Subsequent calls to
+    /// [`LlamaCppProvider::load_adapter`](crate::LlamaCppProvider::load_adapter)
+    /// add to this set, and
+    /// [`LlamaCppProvider::unload_adapter`](crate::LlamaCppProvider::unload_adapter)
+    /// calls remove from it; the field reflects the *boot-time* set only.
+    #[serde(default)]
+    pub initial_adapters: Vec<PathBuf>,
 }
 
 #[cfg(test)]
@@ -76,6 +88,29 @@ mod tests {
         assert!(opts.context_length.is_none());
         assert!(opts.n_gpu_layers.is_none());
         assert!(opts.cache_dir.is_none());
+        assert!(opts.initial_adapters.is_empty());
+    }
+
+    #[test]
+    fn initial_adapters_serde_roundtrip() {
+        let opts = LlamaCppOptions {
+            initial_adapters: vec![PathBuf::from("/cache/lora-a.gguf")],
+            ..LlamaCppOptions::default()
+        };
+        let json = serde_json::to_string(&opts).expect("serialize");
+        let parsed: LlamaCppOptions = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(parsed.initial_adapters.len(), 1);
+        assert_eq!(
+            parsed.initial_adapters[0],
+            PathBuf::from("/cache/lora-a.gguf")
+        );
+    }
+
+    #[test]
+    fn initial_adapters_defaults_empty_when_missing_from_json() {
+        let json = r#"{"model_path":"/models/llama.gguf"}"#;
+        let parsed: LlamaCppOptions = serde_json::from_str(json).expect("deserialize");
+        assert!(parsed.initial_adapters.is_empty());
     }
 
     #[test]
@@ -99,6 +134,7 @@ mod tests {
             context_length: Some(8192),
             n_gpu_layers: Some(32),
             cache_dir: Some(PathBuf::from("/tmp/llamacpp-cache")),
+            initial_adapters: Vec::new(),
         };
         let json = serde_json::to_string(&opts).expect("serialize");
         let parsed: LlamaCppOptions = serde_json::from_str(&json).expect("deserialize");

@@ -69,6 +69,8 @@ impl From<JsCandleLlmOptions> for CandleLlmOptions {
             revision: val.revision,
             context_length: val.context_length.map(|v| v as usize),
             cache_dir: val.cache_dir.map(std::path::PathBuf::from),
+            initial_adapters: Vec::new(),
+            force_safetensors: false,
         }
     }
 }

@@ -547,6 +547,7 @@ pub fn new_llamacpp_completion_model(
         context_length: context_length.map(|c| c as usize),
         n_gpu_layers,
         cache_dir: None,
+        initial_adapters: Vec::new(),
     };
     let provider = crate::runtime::runtime()
         .block_on(async { blazen_llm::LlamaCppProvider::from_options(opts).await })
@@ -586,6 +587,8 @@ pub fn new_candle_completion_model(
         revision,
         context_length: context_length.map(|c| c as usize),
         cache_dir: None,
+        initial_adapters: Vec::new(),
+        force_safetensors: false,
     };
     let provider =
         blazen_llm::CandleLlmProvider::from_options(opts).map_err(|e| BlazenError::Provider {

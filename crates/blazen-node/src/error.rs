@@ -323,6 +323,7 @@ pub fn candle_llm_error_to_napi(err: blazen_llm::CandleLlmError) -> napi::Error 
         CandleLlmError::InvalidOptions(_) => "CandleLlmInvalidOptionsError",
         CandleLlmError::ModelLoad(_) => "CandleLlmModelLoadError",
         CandleLlmError::Inference(_) => "CandleLlmInferenceError",
+        CandleLlmError::Unsupported(_) => "CandleLlmUnsupportedError",
         CandleLlmError::EngineNotAvailable => "CandleLlmEngineNotAvailableError",
     };
     napi::Error::new(Status::GenericFailure, format!("[{prefix}] {err}"))
@@ -355,6 +356,7 @@ pub fn llamacpp_error_to_napi(err: blazen_llm::LlamaCppError) -> napi::Error {
         LlamaCppError::ModelLoad(_) => "LlamaCppModelLoadError",
         LlamaCppError::Inference(_) => "LlamaCppInferenceError",
         LlamaCppError::EngineNotAvailable => "LlamaCppEngineNotAvailableError",
+        LlamaCppError::AdapterFailed(_) => "LlamaCppAdapterFailedError",
     };
     napi::Error::new(Status::GenericFailure, format!("[{prefix}] {err}"))
 }
