@@ -86,4 +86,14 @@ impl crate::traits::LocalModel for CandleEmbedModel {
             .and_then(|s| crate::device::Device::parse(s).ok())
             .unwrap_or(crate::device::Device::Cpu)
     }
+
+    async fn load_adapter(
+        &self,
+        _adapter_dir: &std::path::Path,
+        _options: crate::AdapterOptions,
+    ) -> Result<crate::AdapterHandle, BlazenError> {
+        Err(BlazenError::unsupported(
+            "embedding models do not support LoRA adapters in this backend",
+        ))
+    }
 }

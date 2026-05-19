@@ -653,6 +653,7 @@ impl PyMistralRsOptions {
                 // binding. Users must construct `MistralRsOptions`
                 // directly in Rust to enable vision mode.
                 vision: false,
+                initial_adapters: Vec::new(),
             },
         }
     }

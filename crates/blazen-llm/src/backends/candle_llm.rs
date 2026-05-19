@@ -254,6 +254,17 @@ impl crate::traits::LocalModel for CandleLlmProvider {
             .and_then(|s| crate::device::Device::parse(s).ok())
             .unwrap_or(crate::device::Device::Cpu)
     }
+
+    async fn load_adapter(
+        &self,
+        _adapter_dir: &std::path::Path,
+        _options: crate::AdapterOptions,
+    ) -> Result<crate::AdapterHandle, BlazenError> {
+        Err(BlazenError::unsupported(
+            "candle backend has no built-in LoRA primitive in candle_transformers 0.x; \
+             implement via custom Linear-layer wiring before enabling",
+        ))
+    }
 }
 
 // ---------------------------------------------------------------------------

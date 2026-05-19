@@ -271,6 +271,16 @@ impl LocalModel for WhisperCppProvider {
             .and_then(|s| crate::device::Device::parse(s).ok())
             .unwrap_or(crate::device::Device::Cpu)
     }
+
+    async fn load_adapter(
+        &self,
+        _adapter_dir: &std::path::Path,
+        _options: crate::AdapterOptions,
+    ) -> Result<crate::AdapterHandle, BlazenError> {
+        Err(BlazenError::unsupported(
+            "whisper.cpp does not support LoRA adapters",
+        ))
+    }
 }
 
 // ---------------------------------------------------------------------------

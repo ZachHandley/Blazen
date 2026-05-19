@@ -204,8 +204,9 @@ pub use retry::{RetryCompletionModel, RetryConfig};
 pub use tokens::TiktokenCounter;
 pub use tokens::{EstimateCounter, TokenCounter};
 pub use traits::{
-    CompletionModel, EmbeddingModel, LocalModel, ModelCapabilities, ModelInfo, ModelPricing,
-    ModelRegistry, ProviderCapabilities, ProviderConfig, ProviderInfo, StructuredOutput, Tool,
+    AdapterHandle, AdapterMountStrategy, AdapterOptions, AdapterStatus, CompletionModel,
+    EmbeddingModel, LocalModel, ModelCapabilities, ModelInfo, ModelPricing, ModelRegistry,
+    ProviderCapabilities, ProviderConfig, ProviderInfo, StructuredOutput, Tool,
 };
 pub use typed_tool::{TypedTool, typed_tool_simple};
 pub use types::{
@@ -232,7 +233,7 @@ pub use blazen_embed::{EmbedError, EmbedModel, EmbedOptions, EmbedResponse};
 pub use blazen_llm_mistralrs::{
     ChatMessageInput, ChatRole, InferenceChunk, InferenceChunkStream, InferenceImage,
     InferenceImageSource, InferenceResult, InferenceToolCall, InferenceUsage, MistralRsError,
-    MistralRsOptions, MistralRsProvider,
+    MistralRsOptions, MistralRsProvider, MountedAdapter,
 };
 
 #[cfg(feature = "candle-embed")]

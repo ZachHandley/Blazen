@@ -94,6 +94,7 @@ impl From<JsMistralRsOptions> for blazen_llm::MistralRsOptions {
             // Users must construct `MistralRsOptions` directly in Rust to
             // enable vision mode.
             vision: false,
+            initial_adapters: Vec::new(),
         }
     }
 }

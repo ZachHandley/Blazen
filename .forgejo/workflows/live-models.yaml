@@ -1,0 +1,72 @@
+name: Live Models
+
+on:
+  pull_request:
+    branches: ["main"]
+    types: [labeled, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      backend_filter:
+        description: 'Optional cargo test filter to run a subset (e.g. "live_mistralrs"). Empty runs all four.'
+        type: string
+        required: false
+        default: ''
+
+concurrency:
+  group: live-models-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  CARGO_BUILD_JOBS: "4"
+  RUST_BACKTRACE: 1
+  # Cache models under the runner's home so re-runs hit cached weights.
+  BLAZEN_TESTS_CACHE: "/root/.cache/blazen-tests"
+
+jobs:
+  gate:
+    # Skip on pull_request unless the `live-models` label is present.
+    # workflow_dispatch always runs.
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'live-models')
+    name: Run real-weights tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + git index
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: live-models-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            live-models-${{ runner.os }}-cargo-
+
+      - name: Cache model weights
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BLAZEN_TESTS_CACHE }}
+          # Bumping this key forces a fresh download.
+          key: live-models-weights-v1
+
+      - name: Install nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: Run live-models tests
+        run: |
+          FILTER='${{ inputs.backend_filter }}'
+          if [ -n "$FILTER" ]; then
+            cargo nextest run -p blazen-manager --features live-models --run-ignored only --test-threads 1 "$FILTER"
+          else
+            cargo nextest run -p blazen-manager --features live-models --run-ignored only --test-threads 1
+          fi

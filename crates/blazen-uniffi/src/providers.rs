@@ -509,6 +509,7 @@ pub fn new_mistralrs_completion_model(
         chat_template: None,
         cache_dir: None,
         vision,
+        initial_adapters: Vec::new(),
     };
     let provider =
         blazen_llm::MistralRsProvider::from_options(opts).map_err(|e| BlazenError::Provider {

@@ -32,6 +32,8 @@ pub enum MistralRsError {
     Inference(String),
     /// The `engine` feature is not enabled.
     EngineNotAvailable,
+    /// Mounting (or remounting) a `LoRA` adapter failed at engine rebuild time.
+    AdapterFailed(String),
 }
 
 impl fmt::Display for MistralRsError {
@@ -44,11 +46,24 @@ impl fmt::Display for MistralRsError {
                 f,
                 "mistral.rs engine not available: compile with the `engine` feature"
             ),
+            Self::AdapterFailed(msg) => write!(f, "mistral.rs adapter mount failed: {msg}"),
         }
     }
 }
 
 impl std::error::Error for MistralRsError {}
+
+/// One `LoRA` adapter currently mounted on a [`MistralRsProvider`].
+///
+/// Tracked in `MistralRsProvider::mounted_adapters` so subsequent
+/// [`MistralRsProvider::load_adapter`] / [`MistralRsProvider::unload_adapter`]
+/// calls can rebuild the engine with the correct set of adapters.
+#[derive(Debug, Clone)]
+pub struct MountedAdapter {
+    pub adapter_id: String,
+    pub adapter_dir: std::path::PathBuf,
+    pub scale: f32,
+}
 
 // ---------------------------------------------------------------------------
 // Inference result types (always available)
@@ -237,6 +252,11 @@ pub struct MistralRsProvider {
     /// `Arc` gives cheap clones out of the lock.
     #[cfg(feature = "engine")]
     engine: std::sync::Arc<tokio::sync::RwLock<Option<std::sync::Arc<mistralrs::Model>>>>,
+    /// `LoRA` adapters currently mounted on this provider, ordered by mount time.
+    /// Each `load_adapter` call appends here; each `unload_adapter` call removes.
+    /// On engine (re)load, the dirs are passed to `LoraModelBuilder`.
+    #[cfg(feature = "engine")]
+    mounted_adapters: std::sync::Arc<tokio::sync::RwLock<Vec<MountedAdapter>>>,
 }
 
 impl MistralRsProvider {
@@ -257,10 +277,23 @@ impl MistralRsProvider {
             ));
         }
 
+        #[cfg(feature = "engine")]
+        let initial_mounted: Vec<MountedAdapter> = opts
+            .initial_adapters
+            .iter()
+            .map(|dir| MountedAdapter {
+                adapter_id: dir.display().to_string(),
+                adapter_dir: dir.clone(),
+                scale: 1.0,
+            })
+            .collect();
+
         Ok(Self {
             model_id: opts.model_id.clone(),
             #[cfg(feature = "engine")]
             engine: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
+            #[cfg(feature = "engine")]
+            mounted_adapters: std::sync::Arc::new(tokio::sync::RwLock::new(initial_mounted)),
             options: opts,
         })
     }
@@ -435,6 +468,8 @@ impl MistralRsProvider {
         // in-flight streaming task), VRAM is freed by the Drop impl on
         // the underlying mistral.rs runner.
         *guard = None;
+        let mut adapters_guard = self.mounted_adapters.write().await;
+        adapters_guard.clear();
         Ok(())
     }
 
@@ -464,6 +499,135 @@ impl MistralRsProvider {
     pub async fn is_loaded(&self) -> bool {
         false
     }
+
+    /// Mount a `LoRA` adapter at runtime by rebuilding the engine with the
+    /// adapter directory included in [`mistralrs::LoraModelBuilder`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MistralRsError::InvalidOptions`] if an adapter with the same
+    /// `adapter_id` is already mounted, or [`MistralRsError::AdapterFailed`]
+    /// if the engine rebuild fails.
+    #[cfg(feature = "engine")]
+    pub async fn load_adapter(
+        &self,
+        adapter_dir: &std::path::Path,
+        adapter_id: impl Into<String>,
+        scale: f32,
+    ) -> Result<MountedAdapter, MistralRsError> {
+        let adapter_id = adapter_id.into();
+
+        {
+            let guard = self.mounted_adapters.read().await;
+            if guard.iter().any(|a| a.adapter_id == adapter_id) {
+                return Err(MistralRsError::InvalidOptions(format!(
+                    "adapter '{adapter_id}' is already mounted",
+                )));
+            }
+        }
+
+        let new_entry = MountedAdapter {
+            adapter_id: adapter_id.clone(),
+            adapter_dir: adapter_dir.to_path_buf(),
+            scale,
+        };
+
+        let new_list: Vec<MountedAdapter> = {
+            let guard = self.mounted_adapters.read().await;
+            let mut list = guard.clone();
+            list.push(new_entry.clone());
+            list
+        };
+
+        let new_engine = build_engine(&self.options, &new_list).await?;
+
+        {
+            let mut engine_guard = self.engine.write().await;
+            *engine_guard = Some(std::sync::Arc::new(new_engine));
+        }
+        {
+            let mut adapters_guard = self.mounted_adapters.write().await;
+            *adapters_guard = new_list;
+        }
+        Ok(new_entry)
+    }
+
+    /// Stub: engine not available.
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`MistralRsError::EngineNotAvailable`].
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn load_adapter(
+        &self,
+        _adapter_dir: &std::path::Path,
+        _adapter_id: impl Into<String>,
+        _scale: f32,
+    ) -> Result<MountedAdapter, MistralRsError> {
+        Err(MistralRsError::EngineNotAvailable)
+    }
+
+    /// Unmount a previously mounted `LoRA` adapter by rebuilding the engine
+    /// with the remaining adapter set.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MistralRsError::InvalidOptions`] if no adapter with the
+    /// given `adapter_id` is currently mounted, or
+    /// [`MistralRsError::AdapterFailed`] if the engine rebuild fails.
+    #[cfg(feature = "engine")]
+    pub async fn unload_adapter(&self, adapter_id: &str) -> Result<(), MistralRsError> {
+        let new_list: Vec<MountedAdapter> = {
+            let guard = self.mounted_adapters.read().await;
+            if !guard.iter().any(|a| a.adapter_id == adapter_id) {
+                return Err(MistralRsError::InvalidOptions(format!(
+                    "adapter '{adapter_id}' is not mounted",
+                )));
+            }
+            guard
+                .iter()
+                .filter(|a| a.adapter_id != adapter_id)
+                .cloned()
+                .collect()
+        };
+
+        let new_engine = build_engine(&self.options, &new_list).await?;
+
+        {
+            let mut engine_guard = self.engine.write().await;
+            *engine_guard = Some(std::sync::Arc::new(new_engine));
+        }
+        {
+            let mut adapters_guard = self.mounted_adapters.write().await;
+            *adapters_guard = new_list;
+        }
+        Ok(())
+    }
+
+    /// Stub: engine not available.
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`MistralRsError::EngineNotAvailable`].
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn unload_adapter(&self, _adapter_id: &str) -> Result<(), MistralRsError> {
+        Err(MistralRsError::EngineNotAvailable)
+    }
+
+    /// Snapshot the list of `LoRA` adapters currently mounted on this provider.
+    #[cfg(feature = "engine")]
+    pub async fn list_adapters(&self) -> Vec<MountedAdapter> {
+        self.mounted_adapters.read().await.clone()
+    }
+
+    /// Stub: engine not available; no adapters can be mounted.
+    #[cfg(not(feature = "engine"))]
+    #[allow(clippy::unused_async)]
+    pub async fn list_adapters(&self) -> Vec<MountedAdapter> {
+        Vec::new()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -471,14 +635,26 @@ impl MistralRsProvider {
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "engine")]
-async fn build_engine(opts: &MistralRsOptions) -> Result<mistralrs::Model, MistralRsError> {
-    use mistralrs::{MultimodalModelBuilder, TextModelBuilder};
+async fn build_engine(
+    opts: &MistralRsOptions,
+    adapters: &[MountedAdapter],
+) -> Result<mistralrs::Model, MistralRsError> {
+    use mistralrs::{LoraModelBuilder, MultimodalModelBuilder, TextModelBuilder};
 
     tracing::info!(
         model_id = %opts.model_id,
         vision = opts.vision,
+        adapter_count = adapters.len(),
         "loading mistral.rs model"
     );
+
+    if opts.vision && !adapters.is_empty() {
+        return Err(MistralRsError::InvalidOptions(
+            "vision mode is incompatible with LoRA adapters -- \
+             mistralrs 0.8.1 LoraModelBuilder wraps TextModelBuilder only"
+                .into(),
+        ));
+    }
 
     if opts.vision {
         let mut builder = MultimodalModelBuilder::new(&opts.model_id);
@@ -494,10 +670,21 @@ async fn build_engine(opts: &MistralRsOptions) -> Result<mistralrs::Model, Mistr
         if let Some(ref tmpl) = opts.chat_template {
             builder = builder.with_chat_template(tmpl.clone());
         }
-        builder
-            .build()
-            .await
-            .map_err(|e| MistralRsError::Init(e.to_string()))
+        if adapters.is_empty() {
+            builder
+                .build()
+                .await
+                .map_err(|e| MistralRsError::Init(e.to_string()))
+        } else {
+            let adapter_paths = adapters
+                .iter()
+                .map(|a| a.adapter_dir.display().to_string())
+                .collect::<Vec<_>>();
+            LoraModelBuilder::from_text_model_builder(builder, adapter_paths)
+                .build()
+                .await
+                .map_err(|e| MistralRsError::AdapterFailed(e.to_string()))
+        }
     }
 }
 
@@ -580,10 +767,13 @@ impl MistralRsProvider {
                 return Ok(std::sync::Arc::clone(model));
             }
         }
+        // Snapshot the mounted adapter list before taking the write lock,
+        // so we never hold a lock across the engine build await.
+        let adapters = self.mounted_adapters.read().await.clone();
         // Slow path: acquire write lock, double-check, build, clone Arc.
         let mut guard = self.engine.write().await;
         if guard.is_none() {
-            let model = build_engine(&self.options).await?;
+            let model = build_engine(&self.options, &adapters).await?;
             *guard = Some(std::sync::Arc::new(model));
         }
         // SAFETY: we just set Some above (or found Some from a concurrent loader).
@@ -687,6 +877,7 @@ impl MistralRsProvider {
 
         // Clone the Arc + options so the spawned task can outlive `&self`.
         let engine_lock = std::sync::Arc::clone(&self.engine);
+        let adapters_lock = std::sync::Arc::clone(&self.mounted_adapters);
         let options = self.options.clone();
 
         tokio::spawn(async move {
@@ -705,10 +896,12 @@ impl MistralRsProvider {
                         std::sync::Arc::clone(model)
                     } else {
                         drop(guard);
+                        // Snapshot adapters before taking the write lock.
+                        let adapters = adapters_lock.read().await.clone();
                         // Slow path: acquire write lock, double-check, build.
                         let mut guard = engine_lock.write().await;
                         if guard.is_none() {
-                            match build_engine(&options).await {
+                            match build_engine(&options, &adapters).await {
                                 Ok(model) => {
                                     *guard = Some(std::sync::Arc::new(model));
                                 }

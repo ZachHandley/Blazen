@@ -28,5 +28,5 @@ pub use options::MistralRsOptions;
 pub use provider::{
     ChatMessageInput, ChatRole, InferenceChunk, InferenceChunkStream, InferenceImage,
     InferenceImageSource, InferenceResult, InferenceToolCall, InferenceUsage, MistralRsError,
-    MistralRsProvider,
+    MistralRsProvider, MountedAdapter,
 };

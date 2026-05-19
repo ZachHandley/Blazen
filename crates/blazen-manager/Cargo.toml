@@ -13,12 +13,41 @@ blazen-llm.workspace = true
 tokio = { version = "1", default-features = false, features = ["sync"] }
 tracing.workspace = true
 async-trait.workspace = true
+blazen-llm-mistralrs = { workspace = true, optional = true }
+blazen-llm-candle = { workspace = true, optional = true }
+blazen-llm-llamacpp = { workspace = true, optional = true }
+blazen-model-cache = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", default-features = false, features = ["rt", "rt-multi-thread"] }
 
 [dev-dependencies]
+tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
+
+[features]
+# Opt-in real-weights integration tests under `tests/live_models.rs`. Disabled
+# by default; enabled in the Forgejo `live-models` job. Pulls in the three
+# local-completion backends plus the model-cache downloader. The inner-crate
+# `engine` features still need separate enabling at the command line because
+# blazen-llm does not currently forward them (pending PR1.5 feature redesign).
+live-models = [
+    "dep:blazen-llm-mistralrs",
+    "dep:blazen-llm-candle",
+    "dep:blazen-llm-llamacpp",
+    "dep:blazen-model-cache",
+    "blazen-llm-mistralrs/engine",
+    "blazen-llm-candle/engine",
+    "blazen-llm-llamacpp/engine",
+    # Activate the LocalModel trait bridges in blazen-llm so the
+    # tests/live_models.rs harness can register providers via
+    # `Arc<dyn LocalModel>`. Without these, the bridge files in
+    # blazen-llm/src/backends/{mistralrs,candle_llm,llamacpp}.rs are
+    # cfg-gated out and the trait impl is missing.
+    "blazen-llm/mistralrs",
+    "blazen-llm/candle-llm",
+    "blazen-llm/llamacpp",
+]
 
 [lints]
 workspace = true

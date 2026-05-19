@@ -14,10 +14,11 @@
 //! answer. It only prevents OOM.
 
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 
-use blazen_llm::{BlazenError, LocalModel, Pool};
+use blazen_llm::{AdapterHandle, AdapterOptions, AdapterStatus, BlazenError, LocalModel, Pool};
 use tokio::sync::Mutex;
 
 /// Status of a registered model.
@@ -27,10 +28,13 @@ pub struct ModelStatus {
     pub id: String,
     /// Whether the model is currently loaded.
     pub loaded: bool,
-    /// Estimated memory footprint in bytes.
+    /// Estimated memory footprint in bytes. Includes the base model plus any
+    /// mounted adapters.
     pub memory_estimate_bytes: u64,
     /// Pool this model is registered against.
     pub pool: Pool,
+    /// Adapters currently mounted on this model (empty if none).
+    pub adapters: Vec<AdapterStatus>,
 }
 
 struct RegisteredModel {
@@ -39,6 +43,7 @@ struct RegisteredModel {
     pool: Pool,
     loaded: bool,
     last_used: Option<Instant>,
+    adapters: HashMap<String, AdapterStatus>,
 }
 
 /// Memory-budget-aware model manager with per-pool LRU eviction.
@@ -94,6 +99,7 @@ impl ModelManager {
                 pool,
                 loaded: false,
                 last_used: None,
+                adapters: HashMap::new(),
             },
         );
     }
@@ -241,6 +247,7 @@ impl ModelManager {
                 loaded: entry.loaded,
                 memory_estimate_bytes: entry.memory_estimate_bytes,
                 pool: entry.pool,
+                adapters: entry.adapters.values().cloned().collect(),
             })
             .collect()
     }
@@ -252,12 +259,175 @@ impl ModelManager {
             .map(|e| e.memory_estimate_bytes)
             .sum()
     }
+
+    /// Mount a `PEFT`-format `LoRA` adapter on a previously-registered model.
+    ///
+    /// The base model is loaded automatically via [`Self::ensure_loaded`]
+    /// before the adapter is mounted. Adapter file sizes are summed from
+    /// `adapter_dir` and checked against the pool budget before forwarding
+    /// to the backend; if the result would exceed the budget the call
+    /// fails with [`BlazenError::validation`] and the pool is NOT auto-
+    /// evicted (evicting another tenant's model to make room for this
+    /// tenant's adapter is action-at-a-distance and breaks isolation).
+    ///
+    /// After the backend reports success the manager bumps the model's
+    /// `memory_estimate_bytes` by the adapter's `memory_bytes` so future
+    /// LRU decisions see the updated footprint.
+    ///
+    /// # Errors
+    ///
+    /// - [`BlazenError::validation`] if `model_id` is not registered, the
+    ///   adapter directory is missing required files, the adapter id is
+    ///   already mounted, or the pool budget would be exceeded.
+    /// - [`BlazenError::unsupported`] if the backend cannot mount adapters.
+    /// - Any error returned by [`LocalModel::load`] (during the
+    ///   `ensure_loaded` pre-flight) or [`LocalModel::load_adapter`].
+    pub async fn load_adapter(
+        &self,
+        model_id: &str,
+        adapter_dir: &Path,
+        options: AdapterOptions,
+    ) -> Result<AdapterHandle, BlazenError> {
+        self.ensure_loaded(model_id).await?;
+
+        let adapter_id = options.adapter_id.clone();
+        let scale = options.scale;
+        let source_dir = adapter_dir.to_path_buf();
+
+        let (model, pool, used, budget, on_disk_estimate) = {
+            let state = self.state.lock().await;
+            let entry = state.get(model_id).ok_or_else(|| {
+                BlazenError::validation(format!("model '{model_id}' is not registered"))
+            })?;
+            if entry.adapters.contains_key(&adapter_id) {
+                return Err(BlazenError::validation(format!(
+                    "adapter '{adapter_id}' is already mounted on model '{model_id}'; \
+                     unload it first to replace",
+                )));
+            }
+            let pool = entry.pool;
+            let budget = self.pool_budgets.get(&pool).copied().unwrap_or(0);
+            let used = Self::used_bytes_in_pool(&state, pool);
+            let model = entry.model.clone();
+            let on_disk = sum_adapter_bytes(adapter_dir)?;
+            (model, pool, used, budget, on_disk)
+        };
+
+        if used + on_disk_estimate > budget {
+            return Err(BlazenError::validation(format!(
+                "mounting adapter '{adapter_id}' on '{model_id}' would exceed pool {pool} budget \
+                 (need {on_disk_estimate} more, used {used}, budget {budget})",
+            )));
+        }
+
+        let handle = model.load_adapter(adapter_dir, options).await?;
+
+        let status = AdapterStatus {
+            adapter_id: handle.adapter_id.clone(),
+            scale,
+            source_dir,
+            memory_bytes: handle.memory_bytes,
+        };
+        let mut state = self.state.lock().await;
+        if let Some(entry) = state.get_mut(model_id) {
+            entry.memory_estimate_bytes = entry
+                .memory_estimate_bytes
+                .saturating_add(handle.memory_bytes);
+            entry.adapters.insert(handle.adapter_id.clone(), status);
+            entry.last_used = Some(Instant::now());
+        }
+        Ok(handle)
+    }
+
+    /// Remove an adapter previously mounted via [`Self::load_adapter`].
+    ///
+    /// # Errors
+    ///
+    /// - [`BlazenError::validation`] if `model_id` is not registered or
+    ///   `adapter_id` is not currently mounted on it.
+    /// - Any error returned by [`LocalModel::unload_adapter`].
+    pub async fn unload_adapter(
+        &self,
+        model_id: &str,
+        adapter_id: &str,
+    ) -> Result<(), BlazenError> {
+        let (model, status) = {
+            let state = self.state.lock().await;
+            let entry = state.get(model_id).ok_or_else(|| {
+                BlazenError::validation(format!("model '{model_id}' is not registered"))
+            })?;
+            let status = entry.adapters.get(adapter_id).cloned().ok_or_else(|| {
+                BlazenError::validation(format!(
+                    "adapter '{adapter_id}' is not mounted on model '{model_id}'",
+                ))
+            })?;
+            (entry.model.clone(), status)
+        };
+
+        let handle = AdapterHandle {
+            adapter_id: status.adapter_id.clone(),
+            memory_bytes: status.memory_bytes,
+            mount_strategy: blazen_llm::AdapterMountStrategy::Attached,
+        };
+        model.unload_adapter(&handle).await?;
+
+        let mut state = self.state.lock().await;
+        if let Some(entry) = state.get_mut(model_id) {
+            entry.memory_estimate_bytes = entry
+                .memory_estimate_bytes
+                .saturating_sub(status.memory_bytes);
+            entry.adapters.remove(adapter_id);
+        }
+        Ok(())
+    }
+
+    /// List adapters mounted on a registered model.
+    ///
+    /// # Errors
+    /// [`BlazenError::validation`] if `model_id` is not registered.
+    pub async fn list_adapters(&self, model_id: &str) -> Result<Vec<AdapterStatus>, BlazenError> {
+        let state = self.state.lock().await;
+        let entry = state.get(model_id).ok_or_else(|| {
+            BlazenError::validation(format!("model '{model_id}' is not registered"))
+        })?;
+        Ok(entry.adapters.values().cloned().collect())
+    }
+}
+
+/// Sum the on-disk sizes of the canonical PEFT-layout files in
+/// `adapter_dir`: `adapter_model.safetensors` (required) +
+/// `adapter_config.json` (required) + `tokenizer.json` (optional). Used as
+/// a conservative pre-flight estimate before calling
+/// [`LocalModel::load_adapter`]. The backend reports the true runtime
+/// footprint after the mount succeeds.
+fn sum_adapter_bytes(adapter_dir: &Path) -> Result<u64, BlazenError> {
+    let required = ["adapter_model.safetensors", "adapter_config.json"];
+    let optional = ["tokenizer.json"];
+
+    let mut total: u64 = 0;
+    for name in required {
+        let path: PathBuf = adapter_dir.join(name);
+        let meta = std::fs::metadata(&path).map_err(|e| {
+            BlazenError::validation(format!(
+                "adapter directory missing required file '{name}' at {}: {e}",
+                path.display(),
+            ))
+        })?;
+        total = total.saturating_add(meta.len());
+    }
+    for name in optional {
+        let path = adapter_dir.join(name);
+        if let Ok(meta) = std::fs::metadata(&path) {
+            total = total.saturating_add(meta.len());
+        }
+    }
+    Ok(total)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use blazen_llm::Device;
+    use blazen_llm::{AdapterMountStrategy, Device};
     use std::sync::Mutex as StdMutex;
 
     const GB: u64 = 1_073_741_824;
@@ -265,6 +435,8 @@ mod tests {
     struct MockLocalModel {
         loaded: StdMutex<bool>,
         device: Device,
+        adapters: StdMutex<HashMap<String, AdapterStatus>>,
+        next_adapter_memory_bytes: StdMutex<u64>,
     }
 
     impl MockLocalModel {
@@ -272,7 +444,14 @@ mod tests {
             Self {
                 loaded: StdMutex::new(false),
                 device,
+                adapters: StdMutex::new(HashMap::new()),
+                next_adapter_memory_bytes: StdMutex::new(1024),
             }
+        }
+
+        fn with_adapter_memory(self, bytes: u64) -> Self {
+            *self.next_adapter_memory_bytes.lock().unwrap() = bytes;
+            self
         }
     }
 
@@ -292,6 +471,53 @@ mod tests {
         fn device(&self) -> Device {
             self.device
         }
+        async fn load_adapter(
+            &self,
+            adapter_dir: &std::path::Path,
+            options: AdapterOptions,
+        ) -> Result<AdapterHandle, BlazenError> {
+            let memory_bytes = *self.next_adapter_memory_bytes.lock().unwrap();
+            let status = AdapterStatus {
+                adapter_id: options.adapter_id.clone(),
+                scale: options.scale,
+                source_dir: adapter_dir.to_path_buf(),
+                memory_bytes,
+            };
+            self.adapters
+                .lock()
+                .unwrap()
+                .insert(options.adapter_id.clone(), status);
+            Ok(AdapterHandle {
+                adapter_id: options.adapter_id,
+                memory_bytes,
+                mount_strategy: AdapterMountStrategy::Attached,
+            })
+        }
+        async fn unload_adapter(&self, handle: &AdapterHandle) -> Result<(), BlazenError> {
+            let mut adapters = self.adapters.lock().unwrap();
+            if adapters.remove(&handle.adapter_id).is_none() {
+                return Err(BlazenError::validation(format!(
+                    "mock backend has no adapter '{}'",
+                    handle.adapter_id
+                )));
+            }
+            Ok(())
+        }
+        async fn list_adapters(&self) -> Vec<AdapterStatus> {
+            self.adapters.lock().unwrap().values().cloned().collect()
+        }
+    }
+
+    fn make_peft_adapter_dir(bytes_a: usize, bytes_b: usize) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            dir.path().join("adapter_model.safetensors"),
+            vec![0u8; bytes_a],
+        )
+        .expect("write safetensors");
+        std::fs::write(dir.path().join("adapter_config.json"), vec![0u8; bytes_b])
+            .expect("write config");
+        dir
     }
 
     fn cpu_gpu_mgr(cpu_gb: u64, gpu_gb: u64) -> ModelManager {
@@ -480,5 +706,163 @@ mod tests {
         );
         assert!(!mgr.is_loaded("orphan").await);
         assert_eq!(mgr.available_bytes(Pool::Gpu(7)).await, 0);
+    }
+
+    #[tokio::test]
+    async fn test_load_adapter_records_memory_and_status() {
+        let mgr = cpu_gpu_mgr(16, 0);
+        let model = Arc::new(MockLocalModel::new(Device::Cpu).with_adapter_memory(2 * GB));
+        mgr.register("base", model.clone(), 4 * GB).await;
+        mgr.load("base").await.unwrap();
+
+        let dir = make_peft_adapter_dir(1024, 256);
+        let handle = mgr
+            .load_adapter("base", dir.path(), AdapterOptions::new("a1"))
+            .await
+            .expect("load_adapter should succeed");
+
+        assert_eq!(handle.adapter_id, "a1");
+        assert_eq!(handle.memory_bytes, 2 * GB);
+        assert_eq!(handle.mount_strategy, AdapterMountStrategy::Attached);
+
+        let listed = mgr.list_adapters("base").await.unwrap();
+        assert_eq!(listed.len(), 1);
+        let entry = &listed[0];
+        assert_eq!(entry.adapter_id, "a1");
+        assert!((entry.scale - 1.0).abs() < f32::EPSILON);
+        assert_eq!(entry.source_dir, dir.path().to_path_buf());
+        assert_eq!(entry.memory_bytes, 2 * GB);
+
+        let statuses = mgr.status().await;
+        let base_status = statuses.iter().find(|s| s.id == "base").expect("base");
+        assert_eq!(base_status.memory_estimate_bytes, 4 * GB + 2 * GB);
+        assert_eq!(base_status.adapters.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_load_adapter_refuses_duplicate_id() {
+        let mgr = cpu_gpu_mgr(16, 0);
+        let model = Arc::new(MockLocalModel::new(Device::Cpu).with_adapter_memory(GB));
+        mgr.register("base", model.clone(), 4 * GB).await;
+        mgr.load("base").await.unwrap();
+
+        let dir = make_peft_adapter_dir(1024, 256);
+        mgr.load_adapter("base", dir.path(), AdapterOptions::new("dup"))
+            .await
+            .expect("first mount should succeed");
+
+        let dir2 = make_peft_adapter_dir(1024, 256);
+        let err = mgr
+            .load_adapter("base", dir2.path(), AdapterOptions::new("dup"))
+            .await
+            .expect_err("second mount with same id must fail");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("already mounted"),
+            "expected 'already mounted' in error, got: {msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_load_adapter_fails_if_pool_full() {
+        let mut budgets = HashMap::new();
+        budgets.insert(Pool::Cpu, 8 * 1024_u64);
+        budgets.insert(Pool::Gpu(0), 0);
+        let mgr = ModelManager::new(budgets);
+
+        let model = Arc::new(MockLocalModel::new(Device::Cpu));
+        mgr.register("base", model.clone(), 4 * 1024).await;
+        mgr.load("base").await.unwrap();
+
+        let dir = make_peft_adapter_dir(4 * 1024, 4 * 1024);
+        let err = mgr
+            .load_adapter("base", dir.path(), AdapterOptions::new("oversized"))
+            .await
+            .expect_err("mounting an adapter that exceeds budget must fail");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("would exceed pool"),
+            "expected 'would exceed pool' in error, got: {msg}"
+        );
+        assert!(
+            msg.contains("CPU") || msg.contains("cpu") || msg.contains("Cpu"),
+            "expected pool name in error, got: {msg}"
+        );
+
+        assert!(mgr.list_adapters("base").await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_unload_adapter_decrements_memory() {
+        let mgr = cpu_gpu_mgr(16, 0);
+        let model = Arc::new(MockLocalModel::new(Device::Cpu).with_adapter_memory(2 * GB));
+        mgr.register("base", model.clone(), 4 * GB).await;
+        mgr.load("base").await.unwrap();
+
+        let dir = make_peft_adapter_dir(1024, 256);
+        mgr.load_adapter("base", dir.path(), AdapterOptions::new("rm"))
+            .await
+            .unwrap();
+
+        let statuses = mgr.status().await;
+        let base = statuses.iter().find(|s| s.id == "base").expect("base");
+        assert_eq!(base.memory_estimate_bytes, 4 * GB + 2 * GB);
+
+        mgr.unload_adapter("base", "rm").await.unwrap();
+
+        let statuses = mgr.status().await;
+        let base = statuses.iter().find(|s| s.id == "base").expect("base");
+        assert_eq!(base.memory_estimate_bytes, 4 * GB);
+        assert!(base.adapters.is_empty());
+
+        let err = mgr
+            .unload_adapter("base", "rm")
+            .await
+            .expect_err("second unload must fail");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("is not mounted"),
+            "expected 'is not mounted' in error, got: {msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_list_adapters_reflects_state() {
+        use std::collections::HashSet;
+
+        let mgr = cpu_gpu_mgr(16, 0);
+        let model = Arc::new(MockLocalModel::new(Device::Cpu).with_adapter_memory(1024));
+        mgr.register("base", model.clone(), 4 * GB).await;
+        mgr.load("base").await.unwrap();
+
+        for id in ["a", "b", "c"] {
+            let dir = make_peft_adapter_dir(512, 128);
+            mgr.load_adapter("base", dir.path(), AdapterOptions::new(id))
+                .await
+                .unwrap();
+        }
+
+        let list = mgr.list_adapters("base").await.unwrap();
+        assert_eq!(list.len(), 3);
+        let ids: HashSet<String> = list.iter().map(|a| a.adapter_id.clone()).collect();
+        assert!(ids.contains("a") && ids.contains("b") && ids.contains("c"));
+
+        mgr.unload_adapter("base", "b").await.unwrap();
+
+        let list = mgr.list_adapters("base").await.unwrap();
+        assert_eq!(list.len(), 2);
+        let ids: HashSet<String> = list.iter().map(|a| a.adapter_id.clone()).collect();
+        assert!(ids.contains("a") && ids.contains("c"));
+        assert!(!ids.contains("b"));
+
+        let err = mgr
+            .list_adapters("nonexistent")
+            .await
+            .expect_err("list_adapters on unknown model must fail");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("not registered"),
+            "expected 'not registered' in error, got: {msg}"
+        );
     }
 }

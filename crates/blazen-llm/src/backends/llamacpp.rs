@@ -206,6 +206,17 @@ impl crate::traits::LocalModel for LlamaCppProvider {
             .and_then(|s| crate::device::Device::parse(s).ok())
             .unwrap_or(crate::device::Device::Cpu)
     }
+
+    async fn load_adapter(
+        &self,
+        _adapter_dir: &std::path::Path,
+        _options: crate::AdapterOptions,
+    ) -> Result<crate::AdapterHandle, BlazenError> {
+        Err(BlazenError::unsupported(
+            "llama.cpp LoRA wiring pending; the llama-cpp-2 binding exposes \
+             lora_adapter_init/set — wire those in a follow-up",
+        ))
+    }
 }
 
 // ---------------------------------------------------------------------------

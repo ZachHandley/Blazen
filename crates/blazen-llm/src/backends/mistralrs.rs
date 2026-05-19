@@ -31,6 +31,7 @@ use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use blazen_llm_mistralrs::{
     ChatMessageInput, ChatRole, InferenceImage, InferenceImageSource, MistralRsProvider,
+    MountedAdapter,
 };
 use futures_util::Stream;
 
@@ -329,6 +330,67 @@ impl crate::traits::LocalModel for MistralRsProvider {
             .and_then(|s| crate::device::Device::parse(s).ok())
             .unwrap_or(crate::device::Device::Cpu)
     }
+
+    async fn load_adapter(
+        &self,
+        adapter_dir: &std::path::Path,
+        options: crate::AdapterOptions,
+    ) -> Result<crate::AdapterHandle, BlazenError> {
+        let mounted =
+            MistralRsProvider::load_adapter(self, adapter_dir, options.adapter_id, options.scale)
+                .await
+                .map_err(|e| BlazenError::provider("mistralrs", e.to_string()))?;
+
+        let memory_bytes = adapter_on_disk_bytes(adapter_dir);
+
+        Ok(crate::AdapterHandle {
+            adapter_id: mounted.adapter_id,
+            memory_bytes,
+            mount_strategy: crate::AdapterMountStrategy::Rebuilt,
+        })
+    }
+
+    async fn unload_adapter(&self, handle: &crate::AdapterHandle) -> Result<(), BlazenError> {
+        MistralRsProvider::unload_adapter(self, &handle.adapter_id)
+            .await
+            .map_err(|e| BlazenError::provider("mistralrs", e.to_string()))
+    }
+
+    async fn list_adapters(&self) -> Vec<crate::AdapterStatus> {
+        MistralRsProvider::list_adapters(self)
+            .await
+            .into_iter()
+            .map(|m: MountedAdapter| {
+                let memory_bytes = adapter_on_disk_bytes(&m.adapter_dir);
+                crate::AdapterStatus {
+                    adapter_id: m.adapter_id,
+                    scale: m.scale,
+                    source_dir: m.adapter_dir,
+                    memory_bytes,
+                }
+            })
+            .collect()
+    }
+}
+
+/// Estimate an adapter's memory footprint by summing the canonical PEFT
+/// layout files on disk: `adapter_model.safetensors` (required) +
+/// `adapter_config.json` (required) + `tokenizer.json` (optional).
+/// Returns `0` on any I/O error -- the manager-level orchestrator has
+/// already validated the directory before calling `load_adapter`, so a
+/// missing file at this point is the engine rebuild's problem to report.
+fn adapter_on_disk_bytes(adapter_dir: &std::path::Path) -> u64 {
+    let mut total: u64 = 0;
+    for name in [
+        "adapter_model.safetensors",
+        "adapter_config.json",
+        "tokenizer.json",
+    ] {
+        if let Ok(meta) = std::fs::metadata(adapter_dir.join(name)) {
+            total = total.saturating_add(meta.len());
+        }
+    }
+    total
 }
 
 // ---------------------------------------------------------------------------

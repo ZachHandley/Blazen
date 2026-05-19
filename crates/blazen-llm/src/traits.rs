@@ -468,4 +468,118 @@ pub trait LocalModel: Send + Sync {
     async fn memory_bytes(&self) -> Option<u64> {
         None
     }
+
+    /// Mount a `PEFT`-format `LoRA` adapter onto the loaded base model.
+    ///
+    /// `adapter_dir` must contain PEFT canonical layout:
+    /// `adapter_model.safetensors` + `adapter_config.json`. The base model
+    /// must already be loaded (`is_loaded()` returns `true`); the standard
+    /// caller (`ModelManager::load_adapter`) guarantees this.
+    ///
+    /// Backends that cannot mount adapters return
+    /// [`BlazenError::unsupported`](crate::error::BlazenError::unsupported)
+    /// with a backend-specific diagnostic message. Backends that have to
+    /// rebuild the underlying engine to honor the verb (e.g. mistral.rs,
+    /// whose upstream API is `LoraModelBuilder` only) report
+    /// [`AdapterMountStrategy::Rebuilt`] on the returned handle so callers
+    /// know they paid full reload cost.
+    ///
+    /// The default implementation returns `Unsupported` so existing
+    /// `LocalModel` implementors compile unchanged.
+    async fn load_adapter(
+        &self,
+        _adapter_dir: &std::path::Path,
+        _options: AdapterOptions,
+    ) -> Result<AdapterHandle, crate::error::BlazenError> {
+        Err(crate::error::BlazenError::unsupported(
+            "this backend does not support LoRA adapters",
+        ))
+    }
+
+    /// Remove a previously-mounted adapter. Default impl returns
+    /// [`BlazenError::unsupported`](crate::error::BlazenError::unsupported)
+    /// for the same reason as [`Self::load_adapter`].
+    async fn unload_adapter(
+        &self,
+        _handle: &AdapterHandle,
+    ) -> Result<(), crate::error::BlazenError> {
+        Err(crate::error::BlazenError::unsupported(
+            "this backend does not support LoRA adapters",
+        ))
+    }
+
+    /// List currently-mounted adapters. The default returns an empty
+    /// `Vec` because "no adapters mounted" is a truthful state for any
+    /// backend — adapter capability is probed via [`Self::load_adapter`].
+    async fn list_adapters(&self) -> Vec<AdapterStatus> {
+        Vec::new()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// LoRA adapter types (used by LocalModel::load_adapter and ModelManager)
+// ---------------------------------------------------------------------------
+
+/// Caller-supplied parameters for [`LocalModel::load_adapter`].
+#[derive(Debug, Clone)]
+pub struct AdapterOptions {
+    /// Caller-chosen identifier. Used as the `adapter_id` on the returned
+    /// handle, surfaced in [`LocalModel::list_adapters`], and accepted by
+    /// [`LocalModel::unload_adapter`]. Must be unique per (model, adapter)
+    /// pair within a manager; [`ModelManager::load_adapter`] enforces this
+    /// uniqueness (individual backends may not).
+    pub adapter_id: String,
+
+    /// Scaling factor applied to the adapter's delta-weights. `1.0` = full
+    /// strength (PEFT convention). Backends that cannot honor non-`1.0`
+    /// scales return
+    /// [`BlazenError::unsupported`](crate::error::BlazenError::unsupported).
+    pub scale: f32,
+}
+
+impl AdapterOptions {
+    /// Construct options with the default scale (`1.0`).
+    pub fn new(adapter_id: impl Into<String>) -> Self {
+        Self {
+            adapter_id: adapter_id.into(),
+            scale: 1.0,
+        }
+    }
+}
+
+/// Token returned by [`LocalModel::load_adapter`], passed back to
+/// [`LocalModel::unload_adapter`] to remove this specific adapter.
+#[derive(Debug, Clone)]
+pub struct AdapterHandle {
+    /// Echoes [`AdapterOptions::adapter_id`].
+    pub adapter_id: String,
+    /// Bytes the adapter occupies on top of the base model, as reported by
+    /// the backend. Used by [`ModelManager`] to update its pool accounting.
+    pub memory_bytes: u64,
+    /// What the backend actually did to honor the request. Forensic only —
+    /// the manager treats every strategy identically.
+    pub mount_strategy: AdapterMountStrategy,
+}
+
+/// How a backend honored a [`LocalModel::load_adapter`] request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AdapterMountStrategy {
+    /// Adapter was hot-attached to the live model (no engine rebuild).
+    Attached,
+    /// Engine was torn down and rebuilt with the adapter. Caller paid
+    /// full base-weights reload cost.
+    Rebuilt,
+    /// Adapter weights were merged into the base in place; cannot be
+    /// removed without reloading the base. Reserved for future backends.
+    Merged,
+}
+
+/// Snapshot of a single mounted adapter, returned by
+/// [`LocalModel::list_adapters`] and [`ModelManager::list_adapters`].
+#[derive(Debug, Clone)]
+pub struct AdapterStatus {
+    pub adapter_id: String,
+    pub scale: f32,
+    pub source_dir: std::path::PathBuf,
+    pub memory_bytes: u64,
 }

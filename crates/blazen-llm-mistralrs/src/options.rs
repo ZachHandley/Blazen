@@ -79,6 +79,20 @@ pub struct MistralRsOptions {
     /// vision-capable model.
     #[serde(default)]
     pub vision: bool,
+
+    /// Adapter directories to mount via `mistralrs::LoraModelBuilder` when
+    /// the engine is first built. Each path must contain a PEFT canonical
+    /// layout (`adapter_model.safetensors` + `adapter_config.json`).
+    ///
+    /// Subsequent calls to [`MistralRsProvider::load_adapter`] add to this
+    /// set, and calls to [`MistralRsProvider::unload_adapter`] remove from
+    /// it; the field reflects the *boot-time* set only.
+    ///
+    /// `LoRA` mounting is incompatible with [`Self::vision`] (the upstream
+    /// `LoraModelBuilder` wraps `TextModelBuilder` only). Setting both
+    /// causes engine load to fail with `MistralRsError::InvalidOptions`.
+    #[serde(default)]
+    pub initial_adapters: Vec<PathBuf>,
 }
 
 impl MistralRsOptions {
@@ -107,6 +121,7 @@ impl MistralRsOptions {
             chat_template: None,
             cache_dir: None,
             vision: false,
+            initial_adapters: Vec::new(),
         }
     }
 }
@@ -126,6 +141,7 @@ mod tests {
         assert!(opts.chat_template.is_none());
         assert!(opts.cache_dir.is_none());
         assert!(!opts.vision);
+        assert!(opts.initial_adapters.is_empty());
     }
 
     #[test]
@@ -159,6 +175,7 @@ mod tests {
             chat_template: Some("{{ bos_token }}".into()),
             cache_dir: Some(PathBuf::from("/tmp/cache")),
             vision: true,
+            initial_adapters: vec![],
         };
         let json = serde_json::to_string(&opts).expect("serialize");
         let parsed: MistralRsOptions = serde_json::from_str(&json).expect("deserialize");
@@ -167,5 +184,27 @@ mod tests {
         assert_eq!(parsed.quantization, Some("q4_k_m".into()));
         assert_eq!(parsed.device, Some("cpu".into()));
         assert!(parsed.vision);
+    }
+
+    #[test]
+    fn initial_adapters_serde_roundtrip() {
+        let opts = MistralRsOptions {
+            initial_adapters: vec![
+                PathBuf::from("/cache/lora-a"),
+                PathBuf::from("/cache/lora-b"),
+            ],
+            ..MistralRsOptions::required("test/model")
+        };
+        let json = serde_json::to_string(&opts).expect("serialize");
+        let parsed: MistralRsOptions = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(parsed.initial_adapters.len(), 2);
+        assert_eq!(parsed.initial_adapters[0], PathBuf::from("/cache/lora-a"));
+    }
+
+    #[test]
+    fn initial_adapters_defaults_empty_when_missing_from_json() {
+        let json = r#"{"model_id":"test/model"}"#;
+        let parsed: MistralRsOptions = serde_json::from_str(json).expect("deserialize");
+        assert!(parsed.initial_adapters.is_empty());
     }
 }

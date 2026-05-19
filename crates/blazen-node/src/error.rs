@@ -308,6 +308,7 @@ pub fn mistralrs_error_to_napi(err: blazen_llm::MistralRsError) -> napi::Error {
         MistralRsError::Init(_) => "MistralRsInitError",
         MistralRsError::Inference(_) => "MistralRsInferenceError",
         MistralRsError::EngineNotAvailable => "MistralRsEngineNotAvailableError",
+        MistralRsError::AdapterFailed(_) => "MistralRsAdapterFailedError",
     };
     napi::Error::new(Status::GenericFailure, format!("[{prefix}] {err}"))
 }
