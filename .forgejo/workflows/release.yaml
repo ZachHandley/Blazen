@@ -68,114 +68,10 @@ jobs:
             exit 1
           fi
 
-  wait-for-build-artifacts:
-    name: Wait for Build Artifacts
-    runs-on: ubuntu-latest
-    needs: version
-    # workflow_dispatch only — binding tag pushes (bindings/go/v*,
-    # bindings/swift/v*) flow into release-go / release-swift below and don't
-    # consume the blazen-build generic package, so they have nothing to wait on.
-    if: github.event_name == 'workflow_dispatch'
-    steps:
-      - name: Poll Forgejo package metadata until build-artifacts uploads are complete
-        shell: bash
-        env:
-          VERSION: ${{ needs.version.outputs.version }}
-          AUTH: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
-        # Gates the rest of release.yaml on every artifact uploaded by
-        # build-artifacts.yaml's matrix (build-wheels, build-sdist, build-napi,
-        # build-wasm, build-cabi, build-swift-xcframework). When release.yaml
-        # is dispatched from build-artifacts.yaml's `dispatch-release` step
-        # the files are already there; when re-dispatched manually we have
-        # to wait for an in-flight build.
-        #
-        # build-swift-xcframework IS in this gate — a real macOS runner is
-        # configured on the Forgejo deployment, so the XCFramework is always
-        # expected to be present. release-swift treats a missing XCFramework
-        # as a hard failure (see release-swift#xcf step).
-        #
-        # We hit the package-files METADATA endpoint (one GET per tick)
-        # rather than HEAD-probing each file URL. Forgejo's generic-package
-        # router only registers GET/PUT/DELETE for /{filename}, so HEAD
-        # returns 405 Method Not Allowed forever and the previous poll loop
-        # hung the full 2h deadline. The /files endpoint returns a JSON
-        # array of every uploaded file's name in one shot — diff that
-        # against EXPECTED and we're done.
-        run: |
-          set -euo pipefail
-          API="https://forge.blackleafdigital.com/api/v1/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/files"
-
-          EXPECTED=(
-            wheels-x86_64-unknown-linux-gnu.tar.gz
-            wheels-aarch64-unknown-linux-gnu.tar.gz
-            wheels-x86_64-unknown-linux-musl.tar.gz
-            wheels-aarch64-unknown-linux-musl.tar.gz
-            wheels-aarch64-apple-darwin.tar.gz
-            wheels-x86_64-pc-windows-msvc.tar.gz
-            sdist.tar.gz
-            napi-x86_64-unknown-linux-gnu.tar.gz
-            napi-aarch64-unknown-linux-gnu.tar.gz
-            napi-x86_64-unknown-linux-musl.tar.gz
-            napi-aarch64-unknown-linux-musl.tar.gz
-            napi-aarch64-apple-darwin.tar.gz
-            napi-x86_64-pc-windows-msvc.tar.gz
-            napi-wasm32-wasi.tar.gz
-            wasm.tar.gz
-            libblazen_cabi-linux-x86_64.so
-            libblazen_cabi-linux-aarch64.so
-            libblazen_cabi-darwin-x86_64.dylib
-            libblazen_cabi-darwin-aarch64.dylib
-            libblazen_cabi-windows-x86_64.dll
-            BlazenFFI.xcframework.zip
-          )
-
-          # 2h cap accommodates the slowest matrix entries (macOS aarch64
-          # wheel + napi). Poll cadence is 30s — the macOS build dominates
-          # so faster polling buys nothing.
-          DEADLINE=$(( $(date +%s) + 7200 ))
-          while :; do
-            RESP=$(curl -s -w '\n%{http_code}' -u "$AUTH" "$API")
-            CODE=$(printf '%s' "$RESP" | tail -n1)
-            BODY=$(printf '%s' "$RESP" | sed '$d')
-
-            # 404 = package-version row not yet created (Forgejo creates it
-            # lazily on the first successful PUT). Treat as "no files yet"
-            # so we keep polling instead of failing during the cold window
-            # at the start of a build.
-            case "$CODE" in
-              200) PRESENT=$(printf '%s' "$BODY" | jq -r '.[].name' | sort -u) ;;
-              404) PRESENT="" ;;
-              *)
-                echo "::error::Unexpected HTTP $CODE from $API"
-                printf '%s' "$BODY" | head -c 500
-                exit 1
-                ;;
-            esac
-
-            MISSING=()
-            for F in "${EXPECTED[@]}"; do
-              grep -Fxq "$F" <<<"$PRESENT" || MISSING+=("$F")
-            done
-
-            if [ ${#MISSING[@]} -eq 0 ]; then
-              echo "All ${#EXPECTED[@]} build-artifacts uploads present for v${VERSION}."
-              exit 0
-            fi
-
-            NOW=$(date +%s)
-            if [ "$NOW" -ge "$DEADLINE" ]; then
-              echo "::error::Timed out waiting for build-artifacts uploads for v${VERSION}."
-              for M in "${MISSING[@]}"; do echo "  missing: $M"; done
-              exit 1
-            fi
-            echo "[$(date -u +%H:%M:%S)] waiting on ${#MISSING[@]}/${#EXPECTED[@]} artefact(s); next check in 30s"
-            sleep 30
-          done
-
   fetch-artifacts:
     name: Fetch Build Artifacts
     runs-on: ubuntu-latest
-    needs: [version, wait-for-build-artifacts]
+    needs: version
     outputs:
       version: ${{ needs.version.outputs.version }}
     steps:
@@ -257,10 +153,7 @@ jobs:
   publish-rust:
     name: Publish Rust Crates
     runs-on: ubuntu-latest
-    # wait-for-build-artifacts isn't strictly required for crates.io
-    # (publish-rust builds from source), but gating here prevents poisoning
-    # the public registry when build-artifacts has failed upstream.
-    needs: [version, wait-for-build-artifacts]
+    needs: version
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -940,9 +833,7 @@ jobs:
   release-ruby:
     name: Release Ruby gem
     runs-on: ubuntu-latest
-    # release-ruby downloads libblazen_cabi-* directly (not via fetch-artifacts),
-    # so it needs the same wait gate.
-    needs: [version, wait-for-build-artifacts]
+    needs: [version]
     # Fires from workflow_dispatch only. Skipped if RUBYGEMS_API_KEY isn't set
     # in repo secrets (a missing key shows up as an empty string after env
     # interpolation, so the gate is on the env var, not `secrets.*` directly
