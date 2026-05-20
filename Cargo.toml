@@ -33,6 +33,7 @@ members = [
     "crates/blazen-manager",
     "crates/blazen-train",
     "crates/blazen-audio-candle",
+    "crates/blazen-llm-vllm",
 ]
 exclude = [
     "crates/blazen-wasm",
@@ -141,6 +142,7 @@ blazen-embed-candle = { version = "0.0.0-dev", path = "crates/blazen-embed-candl
 blazen-image-diffusion = { version = "0.0.0-dev", path = "crates/blazen-image-diffusion", registry = "forgejo" }
 blazen-llm-candle = { version = "0.0.0-dev", path = "crates/blazen-llm-candle", registry = "forgejo" }
 blazen-llm-llamacpp = { version = "0.0.0-dev", path = "crates/blazen-llm-llamacpp", registry = "forgejo" }
+blazen-llm-vllm = { version = "0.0.0-dev", path = "crates/blazen-llm-vllm", registry = "forgejo" }
 blazen-audio-piper = { version = "0.0.0-dev", path = "crates/blazen-audio-piper", registry = "forgejo" }
 blazen-audio-candle = { version = "0.0.0-dev", path = "crates/blazen-audio-candle", registry = "forgejo" }
 blazen-peer = { version = "0.0.0-dev", path = "crates/blazen-peer", registry = "forgejo" }

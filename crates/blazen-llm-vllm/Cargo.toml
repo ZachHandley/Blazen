@@ -1,0 +1,35 @@
+[package]
+name = "blazen-llm-vllm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "vLLM OpenAI-compat + LoRA adapter management proxy provider for Blazen"
+
+[features]
+default = []
+# Engine feature. vLLM is an HTTP proxy — there is no in-process runtime
+# to optionally link, so this flag is currently a no-op kept for parity
+# with the other local-backend crates (`blazen-llm-mistralrs`,
+# `blazen-llm-llamacpp`, ...). Reserved for any future server-launch
+# helpers that bring in heavy native deps.
+engine = []
+
+[dependencies]
+async-trait.workspace = true
+futures-util.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync", "macros", "rt", "time"] }
+tracing.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+mockito = "1.7.2"
+tokio = { workspace = true, features = ["macros", "rt"] }

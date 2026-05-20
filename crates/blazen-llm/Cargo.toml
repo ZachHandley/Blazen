@@ -28,6 +28,10 @@ embed = ["dep:blazen-embed"]      # Phase 2: local embeddings via blazen-embed f
 candle-embed = ["dep:blazen-embed-candle"]   # Phase 6: local embeddings via candle
 mistralrs = ["dep:blazen-llm-mistralrs"]      # Phase 3: local LLM via mistral.rs
 llamacpp = ["dep:blazen-llm-llamacpp"]       # Phase 8: local LLM via llama.cpp
+# External-engine proxy: vLLM server over its OpenAI-compatible HTTP surface
+# plus runtime LoRA mount/unmount endpoints. Pulls in `reqwest` because the
+# bridge in backends/vllm.rs drives the SSE response stream directly.
+vllm = ["dep:blazen-llm-vllm", "dep:reqwest"]
 candle-llm = ["dep:blazen-llm-candle"]     # Phase 7: local LLM via candle
 diffusion = ["dep:blazen-image-diffusion"]      # Phase 5: bridge + types only (no native runtime)
 # Forwarding activator: pull the diffusion-rs runtime so the bridge actually
@@ -71,6 +75,7 @@ blazen-embed-candle = { workspace = true, optional = true }
 blazen-image-diffusion = { workspace = true, optional = true }
 blazen-llm-candle = { workspace = true, optional = true }
 blazen-llm-llamacpp = { workspace = true, optional = true }
+blazen-llm-vllm = { workspace = true, optional = true }
 blazen-audio-piper = { workspace = true, optional = true }
 blazen-audio-candle = { workspace = true, optional = true }
 

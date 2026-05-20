@@ -740,7 +740,7 @@ impl LocalModel for JsLocalModelAdapter {
     }
 
     fn device(&self) -> Device {
-        self.device
+        self.device.clone()
     }
 
     async fn memory_bytes(&self) -> Option<u64> {

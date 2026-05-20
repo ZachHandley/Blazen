@@ -157,7 +157,7 @@ impl blazen_llm::LocalModel for PyLocalModelWrapper {
     }
 
     fn device(&self) -> blazen_llm::Device {
-        self.device
+        self.device.clone()
     }
 
     async fn memory_bytes(&self) -> Option<u64> {

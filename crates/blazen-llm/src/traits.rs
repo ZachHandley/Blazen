@@ -583,3 +583,50 @@ pub struct AdapterStatus {
     pub source_dir: std::path::PathBuf,
     pub memory_bytes: u64,
 }
+
+/// How an adapter on the Blazen-orchestrator side gets handed to a *remote*
+/// inference engine.
+///
+/// Required by external-engine proxy backends (`blazen-llm-vllm`,
+/// `blazen-llm-ollama`, ...) when the engine runs on a different host than
+/// Blazen so the adapter directory on the Blazen filesystem isn't directly
+/// visible to the engine. In-process backends (mistral.rs, llama.cpp,
+/// candle) ignore this — they always read straight from
+/// [`AdapterOptions::adapter_id`]'s source path.
+///
+/// Defaults to [`AdapterTransport::LocalFs`] for backwards compatibility:
+/// existing callers that don't set a transport keep the "engine reads
+/// from a shared filesystem" behaviour they always had.
+#[derive(Debug, Clone)]
+pub enum AdapterTransport {
+    /// Adapter directory is reachable on the engine host's filesystem at
+    /// the given path. Wraps a path the engine can read directly — works
+    /// for single-host deployments, `NFS` / `CephFS` / k8s PVC mounts where
+    /// Blazen and the engine see the same disk.
+    LocalFs(std::path::PathBuf),
+
+    /// Adapter weights have been read into memory on the Blazen side and
+    /// should be pushed to the engine over HTTP. The backend is responsible
+    /// for choosing the right upload endpoint (vLLM has no first-class push
+    /// API today; this variant is reserved for sidecar-style uploaders).
+    HttpPush(Vec<u8>),
+
+    /// Adapter lives on Hugging Face Hub; the engine pulls it itself.
+    /// `repo` is the canonical `org/name` slug; `revision` pins a specific
+    /// commit, branch, or tag (default: the engine's idea of "latest").
+    HfHub {
+        repo: String,
+        revision: Option<String>,
+    },
+}
+
+impl Default for AdapterTransport {
+    /// Defaults to `LocalFs("")` — a back-compat sentinel saying "the
+    /// caller didn't specify a transport; the adapter directory passed to
+    /// [`LocalModel::load_adapter`] is itself the path the engine sees."
+    /// Proxy providers should treat an empty path here as "fall through
+    /// to the `adapter_dir` argument".
+    fn default() -> Self {
+        Self::LocalFs(std::path::PathBuf::new())
+    }
+}

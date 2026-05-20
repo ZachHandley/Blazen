@@ -204,9 +204,9 @@ pub use retry::{RetryCompletionModel, RetryConfig};
 pub use tokens::TiktokenCounter;
 pub use tokens::{EstimateCounter, TokenCounter};
 pub use traits::{
-    AdapterHandle, AdapterMountStrategy, AdapterOptions, AdapterStatus, CompletionModel,
-    EmbeddingModel, LocalModel, ModelCapabilities, ModelInfo, ModelPricing, ModelRegistry,
-    ProviderCapabilities, ProviderConfig, ProviderInfo, StructuredOutput, Tool,
+    AdapterHandle, AdapterMountStrategy, AdapterOptions, AdapterStatus, AdapterTransport,
+    CompletionModel, EmbeddingModel, LocalModel, ModelCapabilities, ModelInfo, ModelPricing,
+    ModelRegistry, ProviderCapabilities, ProviderConfig, ProviderInfo, StructuredOutput, Tool,
 };
 pub use typed_tool::{TypedTool, typed_tool_simple};
 pub use types::{

@@ -4,7 +4,15 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// Selects which hardware device to target for model execution.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+///
+/// `Remote { endpoint }` is for external-engine proxy backends
+/// (`blazen-llm-vllm`, `blazen-llm-ollama`, ...) where the actual hardware
+/// lives in another process — typically another host. The proxy provider
+/// surfaces the upstream server's URL as the "device"; the
+/// [`Pool`] conversion collapses it to [`Pool::Remote`] so the
+/// `ModelManager`'s host RAM and per-GPU VRAM budgets are not double-counted
+/// against the proxy.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(rename_all = "snake_case")]
@@ -20,6 +28,35 @@ pub enum Device {
     Vulkan(usize),
     /// Run on an AMD `ROCm` GPU at the given device index.
     Rocm(usize),
+    /// Run on a *remote* inference engine identified by its base URL
+    /// (e.g. `"http://vllm-1.cluster.internal:8000"`). Used by proxy
+    /// providers; not a target the local runtime can dispatch onto.
+    Remote { endpoint: String },
+}
+
+impl Device {
+    /// Bytes this device's model placement should count against any
+    /// host-side budget. Returns `0` for [`Self::Remote`] — proxy
+    /// providers never charge the local [`ModelManager`] for weights
+    /// that physically live in another process.
+    ///
+    /// All other variants return `0` here too: the on-device VRAM /
+    /// host-RAM footprint comes from the model itself
+    /// ([`LocalModel::memory_bytes`](crate::traits::LocalModel::memory_bytes)),
+    /// not the device tag. The method exists so callers can ask the
+    /// device alone "should I count this?" without consulting the model.
+    #[must_use]
+    #[allow(clippy::unused_self)] // signature is forward-looking; today every variant returns 0
+    pub fn memory_bytes(&self) -> u64 {
+        // Every variant currently returns 0: the on-device footprint
+        // comes from the model itself (`LocalModel::memory_bytes`), not
+        // the device tag. The method exists so callers can ask the
+        // device alone "should I count this?" — for `Remote` the answer
+        // is unambiguously no, and the parity with the other arms makes
+        // future per-device adjustments a one-line change.
+        let _ = self;
+        0
+    }
 }
 
 impl Device {
@@ -51,6 +88,7 @@ impl Device {
     /// | `"metal"`    | `Device::Metal` |
     /// | `"vulkan:1"` | `Device::Vulkan(1)` |
     /// | `"rocm:0"`   | `Device::Rocm(0)` |
+    /// | `"remote:http://host:8000"` | `Device::Remote { endpoint: "http://host:8000".into() }` |
     ///
     /// # Errors
     ///
@@ -58,6 +96,22 @@ impl Device {
     /// not match any recognised device specifier.
     pub fn parse(s: &str) -> Result<Self, crate::error::BlazenError> {
         let s = s.trim();
+        // `Remote` carries a URL that must survive case and contains its
+        // own `:` separator, so handle it before the lowercased split.
+        if let Some(rest) = s
+            .strip_prefix("remote:")
+            .or_else(|| s.strip_prefix("Remote:"))
+            .or_else(|| s.strip_prefix("REMOTE:"))
+        {
+            if rest.is_empty() {
+                return Err(crate::error::BlazenError::validation(
+                    "remote device requires an endpoint URL: \"remote:<url>\"",
+                ));
+            }
+            return Ok(Self::Remote {
+                endpoint: rest.to_string(),
+            });
+        }
         let lower = s.to_ascii_lowercase();
 
         if let Some((name, idx)) = lower.split_once(':') {
@@ -97,6 +151,7 @@ impl fmt::Display for Device {
             Self::Metal => f.write_str("metal"),
             Self::Vulkan(idx) => write!(f, "vulkan:{idx}"),
             Self::Rocm(idx) => write!(f, "rocm:{idx}"),
+            Self::Remote { endpoint } => write!(f, "remote:{endpoint}"),
         }
     }
 }
@@ -115,6 +170,10 @@ pub enum Pool {
     Cpu,
     /// GPU VRAM pool at the given device index. Metal collapses to `Gpu(0)`.
     Gpu(usize),
+    /// Off-host pool — the memory lives in another process / host (remote
+    /// inference engine reached over HTTP). Proxy backends report this so
+    /// the `ModelManager` knows to skip local budget bookkeeping for them.
+    Remote,
 }
 
 impl From<&Device> for Pool {
@@ -123,6 +182,7 @@ impl From<&Device> for Pool {
             Device::Cpu => Self::Cpu,
             Device::Cuda(n) | Device::Vulkan(n) | Device::Rocm(n) => Self::Gpu(*n),
             Device::Metal => Self::Gpu(0),
+            Device::Remote { .. } => Self::Remote,
         }
     }
 }
@@ -138,6 +198,7 @@ impl fmt::Display for Pool {
         match self {
             Self::Cpu => f.write_str("cpu"),
             Self::Gpu(idx) => write!(f, "gpu:{idx}"),
+            Self::Remote => f.write_str("remote"),
         }
     }
 }
@@ -360,5 +421,63 @@ mod tests {
         let p = Pool::Gpu(2);
         let json = serde_json::to_string(&p).unwrap();
         assert_eq!(serde_json::from_str::<Pool>(&json).unwrap(), p);
+    }
+
+    // -- Remote (proxy-backend device) --------------------------------------
+
+    #[test]
+    fn parse_remote_http_url() {
+        let d = Device::parse("remote:http://vllm.local:8000").unwrap();
+        assert_eq!(
+            d,
+            Device::Remote {
+                endpoint: "http://vllm.local:8000".into()
+            }
+        );
+    }
+
+    #[test]
+    fn parse_remote_https_url_preserves_path() {
+        let d = Device::parse("remote:https://api.example.com/v1").unwrap();
+        assert_eq!(
+            d,
+            Device::Remote {
+                endpoint: "https://api.example.com/v1".into()
+            }
+        );
+    }
+
+    #[test]
+    fn parse_remote_missing_endpoint_errors() {
+        assert!(Device::parse("remote:").is_err());
+    }
+
+    #[test]
+    fn display_remote_roundtrips_via_parse() {
+        let d = Device::Remote {
+            endpoint: "http://h:8000".into(),
+        };
+        assert_eq!(Device::parse(&d.to_string()).unwrap(), d);
+    }
+
+    #[test]
+    fn pool_from_remote_device() {
+        let d = Device::Remote {
+            endpoint: "http://h:8000".into(),
+        };
+        assert_eq!(Pool::from(&d), Pool::Remote);
+    }
+
+    #[test]
+    fn remote_device_memory_bytes_is_zero() {
+        let d = Device::Remote {
+            endpoint: "http://h:8000".into(),
+        };
+        assert_eq!(d.memory_bytes(), 0);
+    }
+
+    #[test]
+    fn pool_display_remote() {
+        assert_eq!(Pool::Remote.to_string(), "remote");
     }
 }

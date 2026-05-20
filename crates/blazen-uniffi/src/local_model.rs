@@ -202,12 +202,12 @@ impl blazen_llm::LocalModel for ForeignLocalModelAdapter {
     }
 
     fn device(&self) -> blazen_llm::Device {
-        if let Some(d) = *self.cached_device.lock() {
+        if let Some(d) = self.cached_device.lock().clone() {
             return d;
         }
         let raw = self.inner.device();
         let parsed = blazen_llm::Device::parse(&raw).unwrap_or(blazen_llm::Device::Cpu);
-        *self.cached_device.lock() = Some(parsed);
+        *self.cached_device.lock() = Some(parsed.clone());
         parsed
     }
 

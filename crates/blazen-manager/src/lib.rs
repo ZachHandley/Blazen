@@ -900,7 +900,7 @@ mod tests {
             *self.loaded.lock().unwrap()
         }
         fn device(&self) -> Device {
-            self.device
+            self.device.clone()
         }
         async fn load_adapter(
             &self,
