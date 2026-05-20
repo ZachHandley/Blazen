@@ -77,7 +77,7 @@ impl Tool for JsToolImpl {
         let name = self.def.name.clone();
         let promise = self
             .handler
-            .call_async(FnArgs::from((name, arguments)))
+            .call_async_catch(FnArgs::from((name, arguments)))
             .await
             .map_err(|e| BlazenError::tool_error(e.to_string()))?;
         let result = promise

@@ -50,7 +50,6 @@
   "files": [
     "index.js",
     "index.d.ts",
-    "error-classes.js",
     "blazen.workers.js",
     "blazen.workers.d.ts"
   ],

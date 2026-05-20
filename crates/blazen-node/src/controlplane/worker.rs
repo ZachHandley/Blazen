@@ -260,7 +260,7 @@ impl AssignmentHandler for JsAssignmentHandlerBridge {
 
         let promise = self
             .tsfn
-            .call_async(FnArgs::from((js_assignment, js_ctx)))
+            .call_async_catch(FnArgs::from((js_assignment, js_ctx)))
             .await
             .map_err(|e| {
                 AssignmentFailure::new(format!("assignment handler dispatch failed: {e}"))

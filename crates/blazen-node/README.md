@@ -330,24 +330,30 @@ Each local-inference backend has its own `ProviderError` subtree:
 
 `PromptError`, `MemoryError`, `CacheError`, `PersistError`, and several `Peer*` errors all extend `BlazenError` with their own narrower subclasses (e.g. `PromptMissingVariableError`, `MemoryNotFoundError`, `DownloadError`).
 
-### `enrichError` -- re-classify across the FFI boundary
+### Native typed errors -- no shim required
 
-If an error has been re-thrown through plain `Error` (for example after being serialized through a structured-clone boundary, or wrapped by user code), call `enrichError(err)` to re-attach the correct `BlazenError` subclass:
+Errors are constructed as proper JS subclasses by the native binding itself.
+When Rust returns a `ProviderError`, `instanceof ProviderError` is true on the
+JS side and structured fields (`provider`, `status`, `endpoint`, `requestId`,
+`detail`, `retryAfterMs`) are own properties on the error instance:
 
 ```typescript
-import { enrichError, RateLimitError } from "blazen";
+import { ProviderError } from "blazen";
 
 try {
-  await someWrapperThatRethrows();
-} catch (raw) {
-  const e = enrichError(raw);
-  if (e instanceof RateLimitError) {
-    // narrow as usual
+  await model.complete([ChatMessage.user("hi")]);
+} catch (err) {
+  if (err instanceof ProviderError) {
+    console.log(err.provider, err.status, err.requestId);
   } else {
-    throw e;
+    throw err;
   }
 }
 ```
+
+No `enrichError` wrapper is needed -- the JS instance is the original throw
+value (preserved through napi-rs 3.9.0's `napi::Error::with_class` and
+`call_async_catch`).
 
 ---
 
@@ -775,7 +781,6 @@ import {
   BlazenError, RateLimitError, AuthError, ProviderError,
   LlamaCppError, MistralRsError, CandleLlmError, WhisperError,
   PiperError, DiffusionError, FastEmbedError, TractError,
-  enrichError,
   // Typed result classes
   AgentResult, BatchResult,
   // Local inference
@@ -844,7 +849,6 @@ import type {
 | `ProviderError` | `BlazenError` subclass with structured fields: `provider`, `status`, `endpoint`, `requestId`, `detail`, `retryAfterMs` |
 | `LlamaCppError` / `MistralRsError` / `CandleLlmError` / `CandleEmbedError` / `WhisperError` / `PiperError` / `DiffusionError` / `FastEmbedError` / `TractError` | Per-backend `ProviderError` subtrees with narrower variants |
 | `PromptError` / `MemoryError` / `CacheError` / `PersistError` | Other `BlazenError` subtrees |
-| `enrichError(err)` | Re-classify a re-thrown error back to the correct `BlazenError` subclass |
 | `ProgressCallback` | Subclassable JS class; override `onProgress(downloaded: bigint, total?: bigint)` |
 | `PipelineBuilder.onPersist(callback)` / `.onPersistJson(callback)` | Per-stage persist hooks; callback returns `Promise<void>` |
 | `LangfuseConfig(publicKey, secretKey, host?, batchSize?, flushIntervalMs?)` | Positional ctor for the Langfuse exporter |

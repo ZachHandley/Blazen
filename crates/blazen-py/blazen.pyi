@@ -21,6 +21,7 @@ __all__ = [
     "AsyncByteIter",
     "AudioContent",
     "AudioMusicProviderDefaults",
+    "AudioResult",
     "AudioSpeechProviderDefaults",
     "AuthError",
     "AuthMethod",
@@ -110,6 +111,10 @@ __all__ = [
     "FinishReason",
     "FireworksProvider",
     "GeminiProvider",
+    "Generated3DModel",
+    "GeneratedAudio",
+    "GeneratedImage",
+    "GeneratedVideo",
     "GroqProvider",
     "HfLoadOptions",
     "HistoryEvent",
@@ -123,6 +128,7 @@ __all__ = [
     "ImageModel",
     "ImageProvider",
     "ImageRequest",
+    "ImageResult",
     "ImageSource",
     "ImageUpscaleProviderDefaults",
     "InMemoryBackend",
@@ -139,6 +145,7 @@ __all__ = [
     "JobStatus",
     "JoinStrategy",
     "JsonlBackend",
+    "JsonlDataset",
     "LangfuseConfig",
     "LlamaCppChatMessageInput",
     "LlamaCppChatRole",
@@ -151,6 +158,7 @@ __all__ = [
     "LlamaCppProvider",
     "LlmPayload",
     "LocalModel",
+    "LoraConfig",
     "MediaError",
     "MediaOutput",
     "MediaSource",
@@ -167,6 +175,7 @@ __all__ = [
     "MistralRsError",
     "MistralRsOptions",
     "MistralRsProvider",
+    "MixedPrecision",
     "Modality",
     "ModelCache",
     "ModelCapabilities",
@@ -184,6 +193,7 @@ __all__ = [
     "OpenAiEmbeddingModel",
     "OpenAiProvider",
     "OpenRouterProvider",
+    "OptimConfig",
     "OtlpConfig",
     "ParallelStage",
     "ParallelSubWorkflowsStep",
@@ -216,16 +226,6 @@ __all__ = [
     "ProviderId",
     "ProviderInfo",
     "ProviderOptions",
-    "PyAudioResult",
-    "PyGenerated3DModel",
-    "PyGeneratedAudio",
-    "PyGeneratedImage",
-    "PyGeneratedVideo",
-    "PyImageResult",
-    "PyThreeDResult",
-    "PyTranscriptionResult",
-    "PyTranscriptionSegment",
-    "PyVideoResult",
     "Quantization",
     "RateLimitError",
     "ReasoningTrace",
@@ -250,6 +250,8 @@ __all__ = [
     "Role",
     "RunEventStream",
     "RunStatus",
+    "SchedulerConfig",
+    "SchedulerKind",
     "SessionNamespace",
     "SessionPausePolicy",
     "SessionRefRegistry",
@@ -278,6 +280,7 @@ __all__ = [
     "ThreeDProvider",
     "ThreeDProviderDefaults",
     "ThreeDRequest",
+    "ThreeDResult",
     "TiktokenCounter",
     "TimeoutError",
     "TogetherProvider",
@@ -292,9 +295,14 @@ __all__ = [
     "TractError",
     "TractOptions",
     "TractResponse",
+    "TrainConfig",
+    "TrainedAdapter",
+    "TrainingEvent",
     "Transcription",
     "TranscriptionProviderDefaults",
     "TranscriptionRequest",
+    "TranscriptionResult",
+    "TranscriptionSegment",
     "TypedTool",
     "UnsupportedError",
     "UpscaleRequest",
@@ -310,6 +318,7 @@ __all__ = [
     "VideoProvider",
     "VideoProviderDefaults",
     "VideoRequest",
+    "VideoResult",
     "VoiceCloneRequest",
     "VoiceCloningProviderDefaults",
     "VoiceHandle",
@@ -720,7 +729,7 @@ class ApiProtocol:
         Build an OpenAI-protocol selector wrapping the supplied config.
         """
     @classmethod
-    def custom(cls, _cls: type) -> ApiProtocol:
+    def custom(cls) -> ApiProtocol:
         r"""
         Build a host-dispatch (user-defined) protocol selector.
         """
@@ -974,6 +983,33 @@ class AudioMusicProviderDefaults:
             base: Universal [`BaseProviderDefaults`]; defaults to an empty bag.
             before: Optional ``async def(request: dict) -> None`` typed
                 hook applied after the universal ``before_request``.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class AudioResult:
+    r"""
+    Result of an audio generation or TTS operation.
+    """
+    @property
+    def audio(self) -> builtins.list[GeneratedAudio]:
+        r"""
+        The generated audio clips.
+        """
+    @property
+    def timing(self) -> RequestTiming:
+        r"""
+        Request timing breakdown.
+        """
+    @property
+    def cost(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost in USD, if reported by the provider.
+        """
+    @property
+    def metadata(self) -> dict[str, typing.Any]:
+        r"""
+        Arbitrary provider-specific metadata (as a dict).
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -2933,11 +2969,11 @@ class CompletionResponse:
     @property
     def timing(self) -> typing.Optional[RequestTiming]: ...
     @property
-    def images(self) -> builtins.list[PyGeneratedImage]: ...
+    def images(self) -> builtins.list[GeneratedImage]: ...
     @property
-    def audio(self) -> builtins.list[PyGeneratedAudio]: ...
+    def audio(self) -> builtins.list[GeneratedAudio]: ...
     @property
-    def videos(self) -> builtins.list[PyGeneratedVideo]: ...
+    def videos(self) -> builtins.list[GeneratedVideo]: ...
     @property
     def metadata_extra(self) -> dict[str, typing.Any]: ...
     @property
@@ -4937,6 +4973,119 @@ class GeminiProvider:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class Generated3DModel:
+    r"""
+    A single generated 3D model with optional mesh metadata.
+    """
+    @property
+    def media(self) -> MediaOutput:
+        r"""
+        The underlying media output.
+        """
+    @property
+    def vertex_count(self) -> typing.Optional[builtins.int]:
+        r"""
+        Total vertex count, if known.
+        """
+    @property
+    def face_count(self) -> typing.Optional[builtins.int]:
+        r"""
+        Total face/triangle count, if known.
+        """
+    @property
+    def has_textures(self) -> builtins.bool:
+        r"""
+        Whether the model includes texture data.
+        """
+    @property
+    def has_animations(self) -> builtins.bool:
+        r"""
+        Whether the model includes animation data.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class GeneratedAudio:
+    r"""
+    A single generated audio clip with optional metadata.
+    """
+    @property
+    def media(self) -> MediaOutput:
+        r"""
+        The underlying media output.
+        """
+    @property
+    def duration_seconds(self) -> typing.Optional[builtins.float]:
+        r"""
+        Duration in seconds, if known.
+        """
+    @property
+    def sample_rate(self) -> typing.Optional[builtins.int]:
+        r"""
+        Sample rate in Hz, if known.
+        """
+    @property
+    def channels(self) -> typing.Optional[builtins.int]:
+        r"""
+        Number of audio channels, if known.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class GeneratedImage:
+    r"""
+    A single generated image with optional dimension metadata.
+    """
+    @property
+    def media(self) -> MediaOutput:
+        r"""
+        The underlying media output.
+        """
+    @property
+    def width(self) -> typing.Optional[builtins.int]:
+        r"""
+        Image width in pixels, if known.
+        """
+    @property
+    def height(self) -> typing.Optional[builtins.int]:
+        r"""
+        Image height in pixels, if known.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class GeneratedVideo:
+    r"""
+    A single generated video with optional metadata.
+    """
+    @property
+    def media(self) -> MediaOutput:
+        r"""
+        The underlying media output.
+        """
+    @property
+    def width(self) -> typing.Optional[builtins.int]:
+        r"""
+        Video width in pixels, if known.
+        """
+    @property
+    def height(self) -> typing.Optional[builtins.int]:
+        r"""
+        Video height in pixels, if known.
+        """
+    @property
+    def duration_seconds(self) -> typing.Optional[builtins.float]:
+        r"""
+        Duration in seconds, if known.
+        """
+    @property
+    def fps(self) -> typing.Optional[builtins.float]:
+        r"""
+        Frames per second, if known.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class GroqProvider:
     r"""
     A Groq provider — ultra-fast LPU inference for popular open models.
@@ -5415,6 +5564,33 @@ class ImageRequest:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class ImageResult:
+    r"""
+    Result of an image generation or upscale operation.
+    """
+    @property
+    def images(self) -> builtins.list[GeneratedImage]:
+        r"""
+        The generated or upscaled images.
+        """
+    @property
+    def timing(self) -> RequestTiming:
+        r"""
+        Request timing breakdown.
+        """
+    @property
+    def cost(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost in USD, if reported by the provider.
+        """
+    @property
+    def metadata(self) -> dict[str, typing.Any]:
+        r"""
+        Arbitrary provider-specific metadata (as a dict).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class ImageSource:
     r"""
     How a piece of media is provided. Variants are constructed via the
@@ -5866,6 +6042,35 @@ class JsonlBackend:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class JsonlDataset:
+    r"""
+    JSONL-backed training dataset.
+    
+    Each line of the input file must deserialize to either
+    ``{"messages": [{"role": ..., "content": ...}, ...]}`` (OpenAI shape)
+    or ``{"prompt": "...", "completion": "..."}`` (legacy SFT).
+    """
+    @staticmethod
+    def from_path(path: builtins.str, tokenizer_path: builtins.str, chat_template: typing.Optional[builtins.str] = None, max_seq_len: builtins.int = 2048, device: builtins.str = 'cpu', pad_token_id: builtins.int = 0) -> JsonlDataset:
+        r"""
+        Load a JSONL training file using the tokenizer at ``tokenizer_path``.
+        
+        Args:
+            path: Filesystem path to the JSONL file.
+            tokenizer_path: Path to a HuggingFace ``tokenizer.json`` file.
+            chat_template: Optional Jinja2 chat template from the model's
+                ``tokenizer_config.json``. Required if any row uses the
+                ``messages`` shape.
+            max_seq_len: Maximum tokenized sequence length per example.
+            device: Candle device string (``"cpu"``, ``"cuda:0"``, ``"metal"``).
+            pad_token_id: Token id to write into padded positions.
+        """
+    def __len__(self) -> builtins.int:
+        r"""
+        Number of examples in the dataset.
+        """
+
+@typing.final
 class LangfuseConfig:
     r"""
     Configuration for the Langfuse LLM observability exporter.
@@ -6260,6 +6465,32 @@ class LocalModel:
         r"""
         Return the device this model targets as a string: `'cpu'`, `'cuda:0'`,
         `'metal'`, etc.
+        """
+
+@typing.final
+class LoraConfig:
+    r"""
+    LoRA hyperparameters.
+    """
+    @property
+    def rank(self) -> builtins.int: ...
+    @rank.setter
+    def rank(self, value: builtins.int) -> None: ...
+    @property
+    def alpha(self) -> builtins.float: ...
+    @alpha.setter
+    def alpha(self, value: builtins.float) -> None: ...
+    @property
+    def dropout(self) -> builtins.float: ...
+    @dropout.setter
+    def dropout(self, value: builtins.float) -> None: ...
+    @property
+    def target_modules(self) -> builtins.list[builtins.str]: ...
+    @target_modules.setter
+    def target_modules(self, value: typing.Sequence[builtins.str]) -> None: ...
+    def __new__(cls, *, rank: builtins.int = 16, alpha: builtins.float = 32.0, dropout: builtins.float = 0.0, target_modules: typing.Optional[typing.Sequence[builtins.str]] = None) -> LoraConfig:
+        r"""
+        Build a LoRA hyperparameter bag.
         """
 
 @typing.final
@@ -6773,7 +7004,7 @@ class MiddlewareStack:
         r"""
         Create an empty middleware stack.
         """
-    def layer(self, slf: MiddlewareStack, middleware: typing.Any) -> MiddlewareStack:
+    def layer(self, middleware: typing.Any) -> MiddlewareStack:
         r"""
         Add a middleware layer.
         
@@ -7295,6 +7526,28 @@ class ModelManager:
             The chosen backend as a string (``"mistralrs"`` / ``"candle"`` /
             ``"llamacpp"``).
         """
+    async def train_lora(self, config: TrainConfig, dataset: JsonlDataset, progress: typing.Optional[typing.Any] = None) -> TrainedAdapter:
+        r"""
+        Train a LoRA adapter end-to-end on the configured base model.
+        
+        Downloads the base model from HuggingFace (cached), builds a
+        `VarMap`, runs the AdamW + LoRA training loop driven by
+        ``dataset``, and writes the resulting PEFT-format adapter to
+        ``config.output_dir``. The returned :class:`TrainedAdapter`'s
+        ``adapter_dir`` is immediately mountable via
+        :meth:`ModelManager.load_adapter` on a compatible backend.
+        
+        Args:
+            config: Full :class:`TrainConfig` for the run.
+            dataset: A :class:`JsonlDataset` providing training batches.
+            progress: Optional callable invoked with one
+                :class:`TrainingEvent` per Started/StepCompleted/
+                CheckpointSaved/Finished transition. Raising from the
+                callable cancels the run.
+        
+        Returns:
+            A :class:`TrainedAdapter` describing the on-disk adapter.
+        """
 
 @typing.final
 class ModelPricing:
@@ -7674,6 +7927,40 @@ class OpenRouterProvider:
         Return an opaque handle to the underlying HTTP client.
         """
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class OptimConfig:
+    r"""
+    AdamW optimizer hyperparameters.
+    """
+    @property
+    def learning_rate(self) -> builtins.float: ...
+    @learning_rate.setter
+    def learning_rate(self, value: builtins.float) -> None: ...
+    @property
+    def beta1(self) -> builtins.float: ...
+    @beta1.setter
+    def beta1(self, value: builtins.float) -> None: ...
+    @property
+    def beta2(self) -> builtins.float: ...
+    @beta2.setter
+    def beta2(self, value: builtins.float) -> None: ...
+    @property
+    def epsilon(self) -> builtins.float: ...
+    @epsilon.setter
+    def epsilon(self, value: builtins.float) -> None: ...
+    @property
+    def weight_decay(self) -> builtins.float: ...
+    @weight_decay.setter
+    def weight_decay(self, value: builtins.float) -> None: ...
+    @property
+    def gradient_clip(self) -> typing.Optional[builtins.float]: ...
+    @gradient_clip.setter
+    def gradient_clip(self, value: typing.Optional[builtins.float]) -> None: ...
+    def __new__(cls, *, learning_rate: builtins.float = 0.0002, beta1: builtins.float = 0.9, beta2: builtins.float = 0.999, epsilon: builtins.float = 1e-08, weight_decay: builtins.float = 0.0, gradient_clip: typing.Optional[builtins.float] = 1.0) -> OptimConfig:
+        r"""
+        Build an AdamW hyperparameter bag.
+        """
 
 @typing.final
 class OtlpConfig:
@@ -8794,291 +9081,6 @@ class ProviderOptions:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
-class PyAudioResult:
-    r"""
-    Result of an audio generation or TTS operation.
-    """
-    @property
-    def audio(self) -> builtins.list[PyGeneratedAudio]:
-        r"""
-        The generated audio clips.
-        """
-    @property
-    def timing(self) -> RequestTiming:
-        r"""
-        Request timing breakdown.
-        """
-    @property
-    def cost(self) -> typing.Optional[builtins.float]:
-        r"""
-        Cost in USD, if reported by the provider.
-        """
-    @property
-    def metadata(self) -> dict[str, typing.Any]:
-        r"""
-        Arbitrary provider-specific metadata (as a dict).
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class PyGenerated3DModel:
-    r"""
-    A single generated 3D model with optional mesh metadata.
-    """
-    @property
-    def media(self) -> MediaOutput:
-        r"""
-        The underlying media output.
-        """
-    @property
-    def vertex_count(self) -> typing.Optional[builtins.int]:
-        r"""
-        Total vertex count, if known.
-        """
-    @property
-    def face_count(self) -> typing.Optional[builtins.int]:
-        r"""
-        Total face/triangle count, if known.
-        """
-    @property
-    def has_textures(self) -> builtins.bool:
-        r"""
-        Whether the model includes texture data.
-        """
-    @property
-    def has_animations(self) -> builtins.bool:
-        r"""
-        Whether the model includes animation data.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class PyGeneratedAudio:
-    r"""
-    A single generated audio clip with optional metadata.
-    """
-    @property
-    def media(self) -> MediaOutput:
-        r"""
-        The underlying media output.
-        """
-    @property
-    def duration_seconds(self) -> typing.Optional[builtins.float]:
-        r"""
-        Duration in seconds, if known.
-        """
-    @property
-    def sample_rate(self) -> typing.Optional[builtins.int]:
-        r"""
-        Sample rate in Hz, if known.
-        """
-    @property
-    def channels(self) -> typing.Optional[builtins.int]:
-        r"""
-        Number of audio channels, if known.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class PyGeneratedImage:
-    r"""
-    A single generated image with optional dimension metadata.
-    """
-    @property
-    def media(self) -> MediaOutput:
-        r"""
-        The underlying media output.
-        """
-    @property
-    def width(self) -> typing.Optional[builtins.int]:
-        r"""
-        Image width in pixels, if known.
-        """
-    @property
-    def height(self) -> typing.Optional[builtins.int]:
-        r"""
-        Image height in pixels, if known.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class PyGeneratedVideo:
-    r"""
-    A single generated video with optional metadata.
-    """
-    @property
-    def media(self) -> MediaOutput:
-        r"""
-        The underlying media output.
-        """
-    @property
-    def width(self) -> typing.Optional[builtins.int]:
-        r"""
-        Video width in pixels, if known.
-        """
-    @property
-    def height(self) -> typing.Optional[builtins.int]:
-        r"""
-        Video height in pixels, if known.
-        """
-    @property
-    def duration_seconds(self) -> typing.Optional[builtins.float]:
-        r"""
-        Duration in seconds, if known.
-        """
-    @property
-    def fps(self) -> typing.Optional[builtins.float]:
-        r"""
-        Frames per second, if known.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class PyImageResult:
-    r"""
-    Result of an image generation or upscale operation.
-    """
-    @property
-    def images(self) -> builtins.list[PyGeneratedImage]:
-        r"""
-        The generated or upscaled images.
-        """
-    @property
-    def timing(self) -> RequestTiming:
-        r"""
-        Request timing breakdown.
-        """
-    @property
-    def cost(self) -> typing.Optional[builtins.float]:
-        r"""
-        Cost in USD, if reported by the provider.
-        """
-    @property
-    def metadata(self) -> dict[str, typing.Any]:
-        r"""
-        Arbitrary provider-specific metadata (as a dict).
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class PyThreeDResult:
-    r"""
-    Result of a 3D model generation operation.
-    """
-    @property
-    def models(self) -> builtins.list[PyGenerated3DModel]:
-        r"""
-        The generated 3D models.
-        """
-    @property
-    def timing(self) -> RequestTiming:
-        r"""
-        Request timing breakdown.
-        """
-    @property
-    def cost(self) -> typing.Optional[builtins.float]:
-        r"""
-        Cost in USD, if reported by the provider.
-        """
-    @property
-    def metadata(self) -> dict[str, typing.Any]:
-        r"""
-        Arbitrary provider-specific metadata (as a dict).
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class PyTranscriptionResult:
-    r"""
-    Result of a transcription operation.
-    """
-    @property
-    def text(self) -> builtins.str:
-        r"""
-        The full transcribed text.
-        """
-    @property
-    def segments(self) -> builtins.list[PyTranscriptionSegment]:
-        r"""
-        Time-aligned segments, if available.
-        """
-    @property
-    def language(self) -> typing.Optional[builtins.str]:
-        r"""
-        Detected or specified language code (e.g. "en", "fr").
-        """
-    @property
-    def timing(self) -> RequestTiming:
-        r"""
-        Request timing breakdown.
-        """
-    @property
-    def cost(self) -> typing.Optional[builtins.float]:
-        r"""
-        Cost in USD, if reported by the provider.
-        """
-    @property
-    def metadata(self) -> dict[str, typing.Any]:
-        r"""
-        Arbitrary provider-specific metadata (as a dict).
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class PyTranscriptionSegment:
-    r"""
-    A single segment within a transcription.
-    """
-    @property
-    def text(self) -> builtins.str:
-        r"""
-        The transcribed text for this segment.
-        """
-    @property
-    def start(self) -> builtins.float:
-        r"""
-        Start time in seconds.
-        """
-    @property
-    def end(self) -> builtins.float:
-        r"""
-        End time in seconds.
-        """
-    @property
-    def speaker(self) -> typing.Optional[builtins.str]:
-        r"""
-        Speaker label, if diarization was enabled.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class PyVideoResult:
-    r"""
-    Result of a video generation operation.
-    """
-    @property
-    def videos(self) -> builtins.list[PyGeneratedVideo]:
-        r"""
-        The generated videos.
-        """
-    @property
-    def timing(self) -> RequestTiming:
-        r"""
-        Request timing breakdown.
-        """
-    @property
-    def cost(self) -> typing.Optional[builtins.float]:
-        r"""
-        Cost in USD, if reported by the provider.
-        """
-    @property
-    def metadata(self) -> dict[str, typing.Any]:
-        r"""
-        Arbitrary provider-specific metadata (as a dict).
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
 class ReasoningTrace:
     r"""
     Chain-of-thought / extended-thinking trace from models that expose one
@@ -9161,7 +9163,7 @@ class RegistryKey:
     Construct one from a UUID string with `RegistryKey(uuid_str)` or mint
     a fresh random one with `RegistryKey.new()`.
     """
-    def __eq__(self, other: builtins.object) -> builtins.bool: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __new__(cls, uuid_str: builtins.str) -> RegistryKey:
         r"""
         Construct a [`PyRegistryKey`] by parsing a UUID string.
@@ -9683,6 +9685,24 @@ class RunEventStream:
     """
     def __aiter__(self) -> RunEventStream: ...
     async def __anext__(self) -> dict: ...
+
+@typing.final
+class SchedulerConfig:
+    r"""
+    Learning-rate scheduler configuration.
+    """
+    @property
+    def kind(self) -> SchedulerKind: ...
+    @kind.setter
+    def kind(self, value: SchedulerKind) -> None: ...
+    @property
+    def warmup_steps(self) -> builtins.int: ...
+    @warmup_steps.setter
+    def warmup_steps(self, value: builtins.int) -> None: ...
+    def __new__(cls, *, kind: SchedulerKind = SchedulerKind.COSINE, warmup_steps: builtins.int = 0) -> SchedulerConfig:
+        r"""
+        Build a scheduler configuration.
+        """
 
 @typing.final
 class SessionNamespace:
@@ -10620,6 +10640,33 @@ class ThreeDRequest:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class ThreeDResult:
+    r"""
+    Result of a 3D model generation operation.
+    """
+    @property
+    def models(self) -> builtins.list[Generated3DModel]:
+        r"""
+        The generated 3D models.
+        """
+    @property
+    def timing(self) -> RequestTiming:
+        r"""
+        Request timing breakdown.
+        """
+    @property
+    def cost(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost in USD, if reported by the provider.
+        """
+    @property
+    def metadata(self) -> dict[str, typing.Any]:
+        r"""
+        Arbitrary provider-specific metadata (as a dict).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class TiktokenCounter(TokenCounter):
     r"""
     Exact BPE token counter backed by ``tiktoken-rs`` (feature: ``tiktoken``).
@@ -11053,6 +11100,120 @@ class TractResponse:
         """
     def __repr__(self) -> builtins.str: ...
 
+@typing.final
+class TrainConfig:
+    r"""
+    Full configuration for one training run.
+    """
+    @property
+    def base_model_repo(self) -> builtins.str: ...
+    @base_model_repo.setter
+    def base_model_repo(self, value: builtins.str) -> None: ...
+    @property
+    def output_dir(self) -> builtins.str: ...
+    @output_dir.setter
+    def output_dir(self, value: builtins.str) -> None: ...
+    @property
+    def lora(self) -> LoraConfig: ...
+    @lora.setter
+    def lora(self, value: LoraConfig) -> None: ...
+    @property
+    def optim(self) -> OptimConfig: ...
+    @optim.setter
+    def optim(self, value: OptimConfig) -> None: ...
+    @property
+    def scheduler(self) -> SchedulerConfig: ...
+    @scheduler.setter
+    def scheduler(self, value: SchedulerConfig) -> None: ...
+    @property
+    def max_steps(self) -> builtins.int: ...
+    @max_steps.setter
+    def max_steps(self, value: builtins.int) -> None: ...
+    @property
+    def batch_size(self) -> builtins.int: ...
+    @batch_size.setter
+    def batch_size(self, value: builtins.int) -> None: ...
+    @property
+    def gradient_accumulation_steps(self) -> builtins.int: ...
+    @gradient_accumulation_steps.setter
+    def gradient_accumulation_steps(self, value: builtins.int) -> None: ...
+    @property
+    def max_seq_len(self) -> builtins.int: ...
+    @max_seq_len.setter
+    def max_seq_len(self, value: builtins.int) -> None: ...
+    @property
+    def eval_steps(self) -> typing.Optional[builtins.int]: ...
+    @eval_steps.setter
+    def eval_steps(self, value: typing.Optional[builtins.int]) -> None: ...
+    @property
+    def save_steps(self) -> typing.Optional[builtins.int]: ...
+    @save_steps.setter
+    def save_steps(self, value: typing.Optional[builtins.int]) -> None: ...
+    @property
+    def seed(self) -> builtins.int: ...
+    @seed.setter
+    def seed(self, value: builtins.int) -> None: ...
+    @property
+    def mixed_precision(self) -> MixedPrecision: ...
+    @mixed_precision.setter
+    def mixed_precision(self, value: MixedPrecision) -> None: ...
+    @property
+    def device(self) -> typing.Optional[builtins.str]: ...
+    @device.setter
+    def device(self, value: typing.Optional[builtins.str]) -> None: ...
+    def __new__(cls, *, base_model_repo: builtins.str, output_dir: builtins.str, lora: typing.Optional[LoraConfig] = None, optim: typing.Optional[OptimConfig] = None, scheduler: typing.Optional[SchedulerConfig] = None, max_steps: builtins.int = 1000, batch_size: builtins.int = 4, gradient_accumulation_steps: builtins.int = 1, max_seq_len: builtins.int = 2048, eval_steps: typing.Optional[builtins.int] = None, save_steps: typing.Optional[builtins.int] = None, seed: builtins.int = 42, mixed_precision: MixedPrecision = MixedPrecision.BF16, device: typing.Optional[builtins.str] = None) -> TrainConfig:
+        r"""
+        Build a TrainConfig.
+        
+        Raises ``ValueError`` if ``max_steps == 0``, ``batch_size == 0``,
+        ``gradient_accumulation_steps == 0``, or ``max_seq_len == 0``.
+        """
+
+@typing.final
+class TrainedAdapter:
+    r"""
+    Result of a completed training run.
+    """
+    @property
+    def adapter_dir(self) -> builtins.str: ...
+    @property
+    def final_loss(self) -> builtins.float: ...
+    @property
+    def total_steps(self) -> builtins.int: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class TrainingEvent:
+    r"""
+    One observable event emitted during a training run.
+    
+    Switch on :attr:`kind` (one of ``"started"`` / ``"step_completed"`` /
+    ``"evaluating"`` / ``"eval_completed"`` / ``"checkpoint_saved"`` /
+    ``"finished"``); the remaining attributes carry the per-variant payload
+    and are ``None`` for variants that do not populate them.
+    """
+    @property
+    def kind(self) -> builtins.str: ...
+    @property
+    def step(self) -> typing.Optional[builtins.int]: ...
+    @property
+    def loss(self) -> typing.Optional[builtins.float]: ...
+    @property
+    def learning_rate(self) -> typing.Optional[builtins.float]: ...
+    @property
+    def elapsed_ms(self) -> typing.Optional[builtins.float]: ...
+    @property
+    def total_steps(self) -> typing.Optional[builtins.int]: ...
+    @property
+    def eval_loss(self) -> typing.Optional[builtins.float]: ...
+    @property
+    def checkpoint_path(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def adapter_dir(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def final_loss(self) -> typing.Optional[builtins.float]: ...
+    def __repr__(self) -> builtins.str: ...
+
 class Transcription:
     r"""
     An audio transcription provider.
@@ -11218,6 +11379,70 @@ class TranscriptionRequest:
             >>> req = TranscriptionRequest.from_file(
             ...     "/path/to/audio.wav", language="en"
             ... )
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class TranscriptionResult:
+    r"""
+    Result of a transcription operation.
+    """
+    @property
+    def text(self) -> builtins.str:
+        r"""
+        The full transcribed text.
+        """
+    @property
+    def segments(self) -> builtins.list[TranscriptionSegment]:
+        r"""
+        Time-aligned segments, if available.
+        """
+    @property
+    def language(self) -> typing.Optional[builtins.str]:
+        r"""
+        Detected or specified language code (e.g. "en", "fr").
+        """
+    @property
+    def timing(self) -> RequestTiming:
+        r"""
+        Request timing breakdown.
+        """
+    @property
+    def cost(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost in USD, if reported by the provider.
+        """
+    @property
+    def metadata(self) -> dict[str, typing.Any]:
+        r"""
+        Arbitrary provider-specific metadata (as a dict).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class TranscriptionSegment:
+    r"""
+    A single segment within a transcription.
+    """
+    @property
+    def text(self) -> builtins.str:
+        r"""
+        The transcribed text for this segment.
+        """
+    @property
+    def start(self) -> builtins.float:
+        r"""
+        Start time in seconds.
+        """
+    @property
+    def end(self) -> builtins.float:
+        r"""
+        End time in seconds.
+        """
+    @property
+    def speaker(self) -> typing.Optional[builtins.str]:
+        r"""
+        Speaker label, if diarization was enabled.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -11680,6 +11905,33 @@ class VideoRequest:
     @property
     def model(self) -> typing.Optional[builtins.str]: ...
     def __new__(cls, *, prompt: builtins.str, image_url: typing.Optional[builtins.str] = None, duration_seconds: typing.Optional[builtins.float] = None, negative_prompt: typing.Optional[builtins.str] = None, width: typing.Optional[builtins.int] = None, height: typing.Optional[builtins.int] = None, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> VideoRequest: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class VideoResult:
+    r"""
+    Result of a video generation operation.
+    """
+    @property
+    def videos(self) -> builtins.list[GeneratedVideo]:
+        r"""
+        The generated videos.
+        """
+    @property
+    def timing(self) -> RequestTiming:
+        r"""
+        Request timing breakdown.
+        """
+    @property
+    def cost(self) -> typing.Optional[builtins.float]:
+        r"""
+        Cost in USD, if reported by the provider.
+        """
+    @property
+    def metadata(self) -> dict[str, typing.Any]:
+        r"""
+        Arbitrary provider-specific metadata (as a dict).
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -12867,6 +13119,14 @@ class LlamaCppChatRole(enum.Enum):
     Tool = ...
 
 @typing.final
+class MixedPrecision(enum.Enum):
+    r"""
+    Mixed-precision mode passed to :class:`TrainConfig`.
+    """
+    NONE = ...
+    BF16 = ...
+
+@typing.final
 class PauseReason(enum.Enum):
     r"""
     Reason a workflow was paused.
@@ -12967,6 +13227,15 @@ class RunStatus(enum.Enum):
     Completed = ...
     Failed = ...
     Cancelled = ...
+
+@typing.final
+class SchedulerKind(enum.Enum):
+    r"""
+    Learning-rate schedule shape passed to :class:`SchedulerConfig`.
+    """
+    CONSTANT = ...
+    LINEAR = ...
+    COSINE = ...
 
 @typing.final
 class SessionPausePolicy(enum.Enum):

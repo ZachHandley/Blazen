@@ -310,7 +310,7 @@ pub async fn try_deserialize_event(
     };
 
     let promise = tsfn
-        .call_async(value)
+        .call_async_catch(value)
         .await
         .map_err(|e| napi::Error::from_reason(format!("deserializer call failed: {e}")))?;
     let resolved = promise

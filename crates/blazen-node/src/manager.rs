@@ -692,7 +692,7 @@ impl std::fmt::Debug for JsLocalModelAdapter {
 #[allow(clippy::cast_possible_truncation)]
 impl LocalModel for JsLocalModelAdapter {
     async fn load(&self) -> Result<(), BlazenError> {
-        let promise = self.load.call_async(()).await.map_err(|e| {
+        let promise = self.load.call_async_catch(()).await.map_err(|e| {
             BlazenError::provider(
                 "node_local_model",
                 format!("model '{}' load() dispatch failed: {e}", self.id),
@@ -708,7 +708,7 @@ impl LocalModel for JsLocalModelAdapter {
     }
 
     async fn unload(&self) -> Result<(), BlazenError> {
-        let promise = self.unload.call_async(()).await.map_err(|e| {
+        let promise = self.unload.call_async_catch(()).await.map_err(|e| {
             BlazenError::provider(
                 "node_local_model",
                 format!("model '{}' unload() dispatch failed: {e}", self.id),
@@ -733,7 +733,7 @@ impl LocalModel for JsLocalModelAdapter {
         let Some(ref is_loaded) = self.is_loaded_fn else {
             return false;
         };
-        let Ok(promise) = is_loaded.call_async(()).await else {
+        let Ok(promise) = is_loaded.call_async_catch(()).await else {
             return false;
         };
         promise.await.unwrap_or(false)
@@ -763,7 +763,7 @@ impl LocalModel for JsLocalModelAdapter {
         };
         let adapter_dir_str = adapter_dir.to_string_lossy().into_owned();
         let promise = load_adapter
-            .call_async(FnArgs::from((adapter_dir_str, js_options)))
+            .call_async_catch(FnArgs::from((adapter_dir_str, js_options)))
             .await
             .map_err(|e| {
                 BlazenError::provider(
@@ -810,12 +810,15 @@ impl LocalModel for JsLocalModelAdapter {
             memory_bytes: BigInt::from(handle.memory_bytes),
             mount_strategy: mount_strategy_label(handle.mount_strategy).to_string(),
         };
-        let promise = unload_adapter.call_async(js_handle).await.map_err(|e| {
-            BlazenError::provider(
-                "node_local_model",
-                format!("model '{}' unloadAdapter() dispatch failed: {e}", self.id),
-            )
-        })?;
+        let promise = unload_adapter
+            .call_async_catch(js_handle)
+            .await
+            .map_err(|e| {
+                BlazenError::provider(
+                    "node_local_model",
+                    format!("model '{}' unloadAdapter() dispatch failed: {e}", self.id),
+                )
+            })?;
         promise.await.map_err(|e| {
             BlazenError::provider(
                 "node_local_model",
@@ -829,7 +832,7 @@ impl LocalModel for JsLocalModelAdapter {
         let Some(ref list_adapters) = self.list_adapters_fn else {
             return Vec::new();
         };
-        let Ok(promise) = list_adapters.call_async(()).await else {
+        let Ok(promise) = list_adapters.call_async_catch(()).await else {
             return Vec::new();
         };
         let Ok(statuses) = promise.await else {

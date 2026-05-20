@@ -979,7 +979,7 @@ pub(crate) fn js_async_iterable_to_byte_stream(iter: Object<'_>) -> Result<ByteS
             State::Open(t) => t,
             State::Done => return None,
         };
-        let promise = match tsfn.call_async(()).await {
+        let promise = match tsfn.call_async_catch(()).await {
             Ok(p) => p,
             Err(e) => {
                 return Some((
@@ -1160,7 +1160,7 @@ async fn call_fetch_stream(
     let handle_json = serde_json::to_value(&handle).map_err(|e| {
         BlazenError::provider("custom", format!("failed to serialize ContentHandle: {e}"))
     })?;
-    let promise = tsfn.call_async(handle_json).await.map_err(|e| {
+    let promise = tsfn.call_async_catch(handle_json).await.map_err(|e| {
         BlazenError::provider(
             "custom",
             format!("ContentStore `fetchStream` dispatch failed: {e}"),
@@ -1326,7 +1326,7 @@ async fn invoke(
     method: &str,
     arg: serde_json::Value,
 ) -> std::result::Result<serde_json::Value, BlazenError> {
-    let promise = tsfn.call_async(arg).await.map_err(|e| {
+    let promise = tsfn.call_async_catch(arg).await.map_err(|e| {
         BlazenError::provider(
             "custom",
             format!("ContentStore `{method}` dispatch failed: {e}"),
@@ -1433,7 +1433,7 @@ async fn call_put(
             )
         })?;
         let promise = tsfn
-            .call_async(PutStreamArgs { body, hint })
+            .call_async_catch(PutStreamArgs { body, hint })
             .await
             .map_err(|e| {
                 BlazenError::provider("custom", format!("ContentStore `put` dispatch failed: {e}"))
@@ -1572,7 +1572,7 @@ fn parse_content_kind(s: &str) -> Option<blazen_llm::content::ContentKind> {
 ///
 /// Mirrors [`crate::providers::custom::NodeHostDispatch`] in style: each
 /// method's TSF is built once at construction time so the per-call hot
-/// path is `HashMap::get` + `tsfn.call_async`.
+/// path is `HashMap::get` + `tsfn.call_async_catch`.
 pub struct JsHostContentStore {
     /// Cached, pre-bound callbacks keyed by JS-camelCase method name.
     methods: HashMap<&'static str, Arc<StoreMethodTsfn>>,

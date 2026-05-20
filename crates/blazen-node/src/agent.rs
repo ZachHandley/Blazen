@@ -232,76 +232,47 @@ impl Tool for JsToolWrapper {
     ) -> std::result::Result<blazen_llm::types::ToolOutput<serde_json::Value>, BlazenError> {
         let name = self.def.name.clone();
 
-        // Call the JS handler with (toolName, arguments).
-        // call_async returns a Future<Result<Promise<Value>>>.
-        // We await the outer call, then await the inner promise.
-        let promise = self
+        // Call the JS handler with (toolName, arguments). Uses napi 3.9.0's
+        // `call_async_catch` so a synchronous throw inside the callback is
+        // captured as `Err(napi::Error)` with `maybe_raw` pointing at the
+        // original JS exception, instead of panicking the host.
+        let promise_result = self
             .handler
-            .call_async(FnArgs::from((name, arguments)))
-            .await
-            .map_err(|e| BlazenError::tool_error(e.to_string()))?;
+            .call_async_catch(FnArgs::from((name, arguments)))
+            .await;
 
-        let result = promise
-            .await
-            .map_err(|e| BlazenError::tool_error(e.to_string()))?;
-
-        // Envelope dispatch — the JS-side `toolHandler` wrapper in
-        // `crates/blazen-node/error-classes.js` wraps every handler call
-        // so user-thrown errors are converted into a resolved
-        // `{__blazenOk: false, errorRef, errorName, errorMessage}` envelope
-        // (instead of a rejected Promise). On success, it returns
-        // `{__blazenOk: true, value}`. We dispatch on `__blazenOk` here:
-        //
-        // * `false` — capture the UUID `errorRef` as the opaque source on a
-        //   `BlazenError::CallerError`. `blazen_caller_error_to_napi` later
-        //   emits the sentinel that the JS wrapper's outer catch reads to
-        //   re-throw the original instance (preserving `instanceof`).
-        // * `true`  — unwrap `value` and proceed through the same shape
-        //   dispatch we used pre-envelope (structured `{data, llmOverride}`
-        //   vs bare auto-wrapped value).
-        //
-        // If `__blazenOk` is missing entirely (e.g. an older JS shim or
-        // direct napi call that bypasses the wrapper), fall through to the
-        // legacy raw-value path for back-compat.
-        if let Some(obj) = result.as_object() {
-            match obj.get("__blazenOk") {
-                Some(serde_json::Value::Bool(false)) => {
-                    let uuid = obj
-                        .get("errorRef")
-                        .and_then(|v| v.as_str())
-                        .map_or_else(|| "<missing-ref>".to_string(), String::from);
-                    let err_name = obj
-                        .get("errorName")
-                        .and_then(|v| v.as_str())
-                        .map(String::from);
-                    let err_message = obj
-                        .get("errorMessage")
-                        .and_then(|v| v.as_str())
-                        .map_or_else(|| "caller error".to_string(), String::from);
-                    let mut e = BlazenError::caller_error(err_message, uuid);
-                    if let Some(n) = err_name {
-                        e = e.with_caller_name(n);
-                    }
-                    return Err(e);
-                }
-                Some(serde_json::Value::Bool(true)) => {
-                    let value = obj.get("value").cloned().unwrap_or(serde_json::Value::Null);
-                    if value.as_object().is_some_and(|m| m.contains_key("data")) {
-                        return decode_structured_tool_output(value)
-                            .map_err(|e| BlazenError::tool_error(e.to_string()));
-                    }
-                    return Ok(value.into());
-                }
-                _ => {}
+        let promise = match promise_result {
+            Ok(p) => p,
+            Err(e) if e.has_js_value() => {
+                // Sync throw from the user's JS callback. Stash the original
+                // napi error so `blazen_caller_error_to_napi` can re-throw
+                // the exact same JS instance later (preserving `instanceof`).
+                let message = e.reason.clone();
+                let uuid = crate::error_classes::stash_caller_error(e);
+                return Err(BlazenError::caller_error(message, uuid));
             }
-        }
+            Err(e) => return Err(BlazenError::tool_error(e.to_string())),
+        };
 
-        // Legacy raw-value path (no envelope). Dispatch on shape: if the
-        // value is an object with an explicit `data` key, treat it as a
-        // structured `ToolOutput` and decode an optional `llmOverride`.
-        // The `data`-key guard prevents misinterpreting an arbitrary user
-        // dict like `{"items": [1,2,3]}` as a ToolOutput. Otherwise,
-        // auto-wrap the bare value with no override.
+        // Await the resolved value. Async rejections in the JS callback also
+        // surface with `maybe_raw` set (napi-rs's Promise->Future impl
+        // converts the rejection value via `Unknown::into()` which preserves
+        // the napi_ref). Same stash-and-rethrow pattern applies.
+        let result = match promise.await {
+            Ok(v) => v,
+            Err(e) if e.has_js_value() => {
+                let message = e.reason.clone();
+                let uuid = crate::error_classes::stash_caller_error(e);
+                return Err(BlazenError::caller_error(message, uuid));
+            }
+            Err(e) => return Err(BlazenError::tool_error(e.to_string())),
+        };
+
+        // Dispatch on shape: if the value is an object with an explicit `data`
+        // key, treat it as a structured `ToolOutput` and decode an optional
+        // `llmOverride`. The `data`-key guard prevents misinterpreting an
+        // arbitrary user dict like `{"items": [1,2,3]}` as a ToolOutput.
+        // Otherwise, auto-wrap the bare value with no override.
         if let Some(obj) = result.as_object()
             && obj.contains_key("data")
         {

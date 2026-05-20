@@ -8,7 +8,7 @@ name = "napi"
 readme = "README.md"
 repository = "https://github.com/napi-rs/napi-rs"
 rust-version.workspace = true
-version = "3.8.6"
+version = "3.9.0"
 
 [lib]
 doctest = false
@@ -74,7 +74,7 @@ tracing = ["dep:tracing"]
 bitflags = "2"
 # Keep ctor's priority support disabled until the Apple/Zig cross-link
 # path stops emitting unresolved `section$end$__DATA$CTOR` references.
-ctor = { version = "0.11.0", default-features = false }
+ctor = { version = "1.0.0", default-features = false }
 nohash-hasher = "0.2.0"
 rustc-hash = "2.1.1"
 
@@ -133,4 +133,4 @@ version = "0.1"
 version = "0.3"
 
 [build-dependencies]
-napi-build = { path = "../build", version = "2.3.1" }
+napi-build = { path = "../build", version = "2.3.2" }

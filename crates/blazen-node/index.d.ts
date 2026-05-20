@@ -2690,6 +2690,26 @@ export declare class JsonlBackend {
 export type JsJsonlBackend = JsonlBackend
 
 /**
+ * JSONL-backed training dataset.
+ *
+ * Each line of the input file must deserialize to either
+ * `{"messages": [{"role": ..., "content": ...}, ...]}` (OpenAI shape)
+ * or `{"prompt": "...", "completion": "..."}` (legacy SFT).
+ */
+export declare class JsonlDataset {
+  /**
+   * Load a JSONL training file using the tokenizer at `tokenizerPath`.
+   *
+   * # Errors
+   *
+   * Throws if the tokenizer cannot be loaded, the device string is
+   * invalid, or the JSONL file fails to parse.
+   */
+  static fromPath(path: string, tokenizerPath: string, opts?: JsJsonlDatasetOptions | undefined | null): JsonlDataset
+}
+export type JsJsonlDataset = JsonlDataset
+
+/**
  * Configuration for the Langfuse exporter.
  *
  * Wraps [`blazen_telemetry::LangfuseConfig`]. Construct with the public and
@@ -3476,6 +3496,30 @@ export declare class ModelManager {
    * Throws if the model is not registered.
    */
   listAdapters(modelId: string): Promise<Array<JsAdapterStatus>>
+  /**
+   * Train a `LoRA` adapter end-to-end on the configured base model.
+   *
+   * Downloads the base model from HuggingFace (cached), builds a
+   * VarMap, runs the AdamW + LoRA training loop driven by `dataset`,
+   * and writes the resulting PEFT-format adapter to
+   * `config.outputDir`. The returned `TrainedAdapter`'s `adapterDir`
+   * is immediately mountable via [`Self::load_adapter`] on a
+   * compatible backend.
+   *
+   * `progress`, when supplied, is invoked once per Started /
+   * StepCompleted / Evaluating / EvalCompleted / CheckpointSaved /
+   * Finished transition. The return value is ignored; throwing
+   * inside the callback does not abort the run. A failure to queue
+   * the call (closed function, etc.) cancels the run with a
+   * `BlazenError::cancelled`.
+   *
+   * # Errors
+   *
+   * Throws on invalid config, unrecognised device, HF download
+   * failure, dataset I/O failure, trainer failure, or queueing
+   * failure on the progress callback.
+   */
+  trainLora(config: JsTrainConfig, dataset: JsonlDataset, progress?: ProgressTsfn | undefined | null): Promise<TrainedAdapter>
 }
 export type JsModelManager = ModelManager
 
@@ -7571,6 +7615,21 @@ export declare const enum JsJobStatus {
   Cancelled = 'cancelled'
 }
 
+/** Optional knobs for [`JsJsonlDataset::from_path`]. */
+export interface JsJsonlDatasetOptions {
+  /**
+   * Jinja2 chat template (from `tokenizer_config.json`). Required when
+   * rows use the `messages` shape.
+   */
+  chatTemplate?: string
+  /** Maximum tokenized sequence length per example. Default `2048`. */
+  maxSeqLen?: number
+  /** Candle device string. Default `"cpu"`. */
+  device?: string
+  /** Token id to write into padded positions. Default `0`. */
+  padTokenId?: number
+}
+
 /**
  * Options for the local llama.cpp LLM backend.
  *
@@ -7597,6 +7656,21 @@ export interface JsLlamaCppOptions {
   nGpuLayers?: number
   /** Path to cache downloaded models. */
   cacheDir?: string
+}
+
+/** LoRA hyperparameters. */
+export interface JsLoraConfig {
+  /** Low-rank dimension (PEFT "r"). Default `16`. */
+  rank?: number
+  /** Scaling numerator; effective per-layer scale is `alpha / rank`. Default `32`. */
+  alpha?: number
+  /** Dropout applied to LoRA-A input. Default `0.0`. */
+  dropout?: number
+  /**
+   * Module-name suffixes to inject LoRA into. Default
+   * `["q_proj","k_proj","v_proj","o_proj"]`.
+   */
+  targetModules?: Array<string>
 }
 
 export interface JsMediaOutput {
@@ -7668,6 +7742,12 @@ export interface JsMistralRsOptions {
   chatTemplate?: string
   /** Path to cache downloaded models. */
   cacheDir?: string
+}
+
+/** Mixed-precision mode passed to [`JsTrainConfig`]. */
+export declare const enum JsMixedPrecision {
+  None = 'none',
+  Bf16 = 'bf16'
 }
 
 /**
@@ -7755,6 +7835,22 @@ export interface JsOpenAiCompatConfig {
    * Defaults to `false`.
    */
   supportsModelListing?: boolean
+}
+
+/** AdamW optimizer hyperparameters. */
+export interface JsOptimConfig {
+  /** Peak learning rate (applied at end of warmup). Default `2e-4`. */
+  learningRate?: number
+  /** AdamW beta1. Default `0.9`. */
+  beta1?: number
+  /** AdamW beta2. Default `0.999`. */
+  beta2?: number
+  /** AdamW numerical-stability epsilon. Default `1e-8`. */
+  epsilon?: number
+  /** Decoupled weight decay. Default `0.0`. */
+  weightDecay?: number
+  /** Global gradient L2-norm clip; `null` disables clipping. Default `1.0`. */
+  gradientClip?: number
 }
 
 /**
@@ -7987,6 +8083,21 @@ export declare const enum JsRunStatus {
   Completed = 'Completed',
   Failed = 'Failed',
   Cancelled = 'Cancelled'
+}
+
+/** Learning-rate scheduler configuration. */
+export interface JsSchedulerConfig {
+  /** Schedule shape. Default `Cosine`. */
+  kind?: JsSchedulerKind
+  /** Linear-warmup duration in steps applied before the main shape. Default `0`. */
+  warmupSteps?: number
+}
+
+/** Learning-rate schedule shape passed to [`JsSchedulerConfig`]. */
+export declare const enum JsSchedulerKind {
+  Constant = 'constant',
+  Linear = 'linear',
+  Cosine = 'cosine'
 }
 
 export interface JsSpeechRequest {
@@ -8243,6 +8354,66 @@ export interface JsTractResponse {
   embeddings: Array<Array<number>>
   /** The model identifier that produced these embeddings. */
   model: string
+}
+
+/** Full configuration for one training run. */
+export interface JsTrainConfig {
+  /** HuggingFace repo id of the base model. */
+  baseModelRepo: string
+  /** Filesystem directory where the trained adapter and checkpoints land. */
+  outputDir: string
+  lora?: JsLoraConfig
+  optim?: JsOptimConfig
+  scheduler?: JsSchedulerConfig
+  /** Total optimizer steps to run. Default `1000`. */
+  maxSteps?: number
+  /** Micro-batch size (per forward pass). Default `4`. */
+  batchSize?: number
+  /** Micro-batches accumulated before each optimizer step. Default `1`. */
+  gradientAccumulationSteps?: number
+  /** Maximum tokenized sequence length per example. Default `2048`. */
+  maxSeqLen?: number
+  /** Run evaluation every N steps when set. */
+  evalSteps?: number
+  /** Write a checkpoint every N steps when set. */
+  saveSteps?: number
+  /** RNG seed (dataset shuffling + LoRA `A` init). Default `42`. */
+  seed?: bigint
+  /** Mixed-precision mode for forward / backward. Default `Bf16`. */
+  mixedPrecision?: JsMixedPrecision
+  /** Device string forwarded to the trainer (`"cpu"`, `"cuda:0"`, `"metal"`). */
+  device?: string
+}
+
+/** Result of a completed training run. */
+export interface JsTrainedAdapter {
+  /** Directory the PEFT-format adapter was written to. */
+  adapterDir: string
+  /** Final training loss. */
+  finalLoss: number
+  /** Total optimizer steps executed. */
+  totalSteps: bigint
+}
+
+/**
+ * One observable event emitted during a training run.
+ *
+ * Switch on `kind` (`"started"` / `"stepCompleted"` / `"evaluating"` /
+ * `"evalCompleted"` / `"checkpointSaved"` / `"finished"`); other fields
+ * carry the per-variant payload and are absent for variants that do not
+ * populate them.
+ */
+export interface JsTrainingEvent {
+  kind: string
+  step?: bigint
+  loss?: number
+  learningRate?: number
+  elapsedMs?: number
+  totalSteps?: bigint
+  evalLoss?: number
+  checkpointPath?: string
+  adapterDir?: string
+  finalLoss?: number
 }
 
 export interface JsTranscriptionRequest {
@@ -9604,11 +9775,13 @@ export class LlamaCppInvalidOptionsError extends LlamaCppError {}
 export class LlamaCppModelLoadError extends LlamaCppError {}
 export class LlamaCppInferenceError extends LlamaCppError {}
 export class LlamaCppEngineNotAvailableError extends LlamaCppError {}
+export class LlamaCppAdapterFailedError extends LlamaCppError {}
 export class CandleLlmError extends ProviderError {}
 export class CandleLlmInvalidOptionsError extends CandleLlmError {}
 export class CandleLlmModelLoadError extends CandleLlmError {}
 export class CandleLlmInferenceError extends CandleLlmError {}
 export class CandleLlmEngineNotAvailableError extends CandleLlmError {}
+export class CandleLlmUnsupportedError extends CandleLlmError {}
 export class CandleEmbedError extends ProviderError {}
 export class CandleEmbedInvalidOptionsError extends CandleEmbedError {}
 export class CandleEmbedModelLoadError extends CandleEmbedError {}
@@ -9620,6 +9793,7 @@ export class MistralRsInvalidOptionsError extends MistralRsError {}
 export class MistralRsInitError extends MistralRsError {}
 export class MistralRsInferenceError extends MistralRsError {}
 export class MistralRsEngineNotAvailableError extends MistralRsError {}
+export class MistralRsAdapterFailedError extends MistralRsError {}
 export class WhisperError extends ProviderError {}
 export class WhisperInvalidOptionsError extends WhisperError {}
 export class WhisperModelLoadError extends WhisperError {}
@@ -9669,4 +9843,3 @@ export class CacheError extends BlazenError {}
 export class DownloadError extends CacheError {}
 export class CacheDirError extends CacheError {}
 export class IoError extends CacheError {}
-export declare function enrichError(err: unknown): unknown

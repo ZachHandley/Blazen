@@ -2,12 +2,21 @@
 // `index.d.ts` to:
 //
 //   1. Add type aliases mirroring blazen-llm (`MediaSource`, `ImageSource`).
-//   2. Wrap every exported function and class method so thrown napi errors
-//      are upgraded to typed JS error classes (see `error-classes.js`).
-//   3. Re-export the typed error classes (`BlazenError`, `ProviderError`,
-//      ...) from the package's main entry so consumers can do
-//      `const { BlazenError } = require('blazen')`.
-//   4. Append `.d.ts` declarations for the error classes.
+//   1b. Inject ContentBody / ContentHint helper types.
+//   3. Append `.d.ts` declarations for the runtime-registered error classes
+//      (BlazenError + 70+ subclasses). The classes themselves are constructed
+//      at module load by `crates/blazen-node/src/error_classes.rs::register_all_classes`
+//      via napi-patched's `register_error_class` API; we just need TypeScript
+//      to know they exist.
+//   4. Emit the `blazen/workers` subpath entry for Cloudflare workerd.
+//
+// **Section 2 (JS-side error wrapping)** used to live here. It was deleted
+// when napi 3.9.0 + napi-patched's `register_error_class` made it possible
+// to construct typed subclasses natively from Rust. Errors emitted by Rust
+// via `napi::Error::with_class("ProviderError", reason).with_field(...)`
+// arrive on the JS side as proper instances of the registered class with
+// structured fields as own properties -- no JS-side enrichError/sentinel
+// parsing required.
 //
 // Idempotent: each section is gated by a sentinel marker so re-running
 // after another `napi build` only re-applies sections that were wiped
@@ -100,191 +109,62 @@ const workersDtsPath = new URL('../blazen.workers.d.ts', import.meta.url)
 }
 
 // ---------------------------------------------------------------------------
-// Section 2: append typed-error wrapping + re-exports to index.js
+// Section 2b: cjs-module-lexer hints for runtime-registered error classes
 // ---------------------------------------------------------------------------
 //
-// Strategy: instead of editing every individual `module.exports.X = ...`
-// line, we append a block at the END of `index.js` that:
-//   - imports `./error-classes.js` (the typed-error shim);
-//   - iterates over the current `module.exports` and replaces every
-//     function with a wrapper that calls `enrichError` on throw / reject;
-//   - for every constructor (class), wraps each enumerable prototype
-//     method the same way;
-//   - assigns the typed error classes onto `module.exports` so consumers
-//     can do `require('blazen').BlazenError`.
+// The native module's `module_exports` hook (see
+// `crates/blazen-node/src/lib.rs::module_exports`) binds every JS error
+// class onto `module.exports` at module load. That's enough for
+// `require('blazen').BlazenError` to work, but it does NOT teach Node's
+// `cjs-module-lexer` (which statically analyses CJS modules to compute the
+// ESM named-export set) that these symbols exist -- so
+// `import { BlazenError } from 'blazen'` resolves to `undefined`.
 //
-// Sentinel: `// --- post-build: typed-error wrapping ---`. If present,
-// skip re-appending.
+// Fix: append literal `module.exports.X = module.exports.X` self-assignments
+// for every registered class. At runtime these are no-ops; at parse time the
+// lexer detects them and adds the names to the ESM named-export set.
+//
+// Keep this list in sync with `ERROR_CLASS_HIERARCHY` in
+// `crates/blazen-node/src/error_classes.rs`.
 
 {
   const current = readFileSync(jsPath, 'utf8')
-  const sentinel = '// --- post-build: typed-error wrapping ---'
+  const sentinel = '// --- post-build: cjs-module-lexer hints for native error classes ---'
   if (!current.includes(sentinel)) {
-    const block = `
-${sentinel}
-;(() => {
-  const errorClasses = require('./error-classes.js')
-  const { enrichError } = errorClasses
-
-  // Wrap a single function so any thrown error -- sync or async -- is
-  // passed through enrichError before reaching the caller.
-  const wrap = (fn) => {
-    return function blazenWrapped(...args) {
-      try {
-        const result = fn.apply(this, args)
-        if (result && typeof result.then === 'function') {
-          return result.then(
-            (v) => v,
-            (e) => {
-              throw enrichError(e)
-            },
-          )
-        }
-        return result
-      } catch (e) {
-        throw enrichError(e)
-      }
-    }
-  }
-
-  // Patch a class's prototype methods in-place. Skips the constructor
-  // and any non-function or non-configurable property.
-  const patchPrototype = (Cls) => {
-    if (typeof Cls !== 'function') return
-    const proto = Cls.prototype
-    if (!proto || typeof proto !== 'object') return
-    for (const key of Object.getOwnPropertyNames(proto)) {
-      if (key === 'constructor') continue
-      const desc = Object.getOwnPropertyDescriptor(proto, key)
-      if (!desc || !desc.configurable) continue
-      if (typeof desc.value !== 'function') continue
-      try {
-        Object.defineProperty(proto, key, {
-          ...desc,
-          value: wrap(desc.value),
-        })
-      } catch {
-        // Some napi prototypes are frozen; skip gracefully.
-      }
-    }
-  }
-
-  // Specialised handling for the agent entrypoints. The user's
-  // \`toolHandler\` argument must be wrapped to envelope-format thrown
-  // errors (see \`wrapToolHandlerForCallerErrors\` in error-classes.js);
-  // \`enrichError\` then re-throws the original instance after the agent
-  // loop rejects with the \`__BLAZEN_CALLER_ERROR__\` sentinel. The
-  // generic \`wrap()\` loop below is skipped for these via the
-  // \`__blazenCallerErrorWrapped\` marker.
-  const { wrapToolHandlerForCallerErrors, callerErrorStash } = errorClasses
-  const AGENT_ENTRYPOINTS = ['runAgent', 'runAgentWithCallback']
-  for (const fnName of AGENT_ENTRYPOINTS) {
-    const orig = module.exports[fnName]
-    if (typeof orig !== 'function') continue
-    // toolHandler is positional arg index 3 for both runAgent and
-    // runAgentWithCallback in the current TS signatures.
-    const TOOL_HANDLER_ARG_INDEX = 3
-    const wrapped = function blazenAgentEntrypoint(...args) {
-      if (args.length > TOOL_HANDLER_ARG_INDEX) {
-        const userHandler = args[TOOL_HANDLER_ARG_INDEX]
-        if (typeof userHandler === 'function') {
-          args[TOOL_HANDLER_ARG_INDEX] = wrapToolHandlerForCallerErrors(userHandler)
-        }
-      }
-      // Track stash entries created during this run so we can
-      // garbage-collect any that the agent loop swallowed (e.g.
-      // succeeded after a handler threw, or the loop ended before the
-      // napi side surfaced the caller error).
-      const stashSnapshot = new Set(callerErrorStash.keys())
-      const cleanupNewStash = () => {
-        for (const key of callerErrorStash.keys()) {
-          if (!stashSnapshot.has(key)) {
-            callerErrorStash.delete(key)
-          }
-        }
-      }
-      try {
-        const result = orig.apply(this, args)
-        if (result && typeof result.then === 'function') {
-          return result.then(
-            (v) => {
-              cleanupNewStash()
-              return v
-            },
-            (e) => {
-              const enriched = enrichError(e)
-              cleanupNewStash()
-              throw enriched
-            },
-          )
-        }
-        cleanupNewStash()
-        return result
-      } catch (e) {
-        const enriched = enrichError(e)
-        cleanupNewStash()
-        throw enriched
-      }
-    }
-    wrapped.__blazenCallerErrorWrapped = true
-    module.exports[fnName] = wrapped
-  }
-
-  // Wrap every top-level export. Distinguish functions (call wrap) from
-  // constructors (call patchPrototype). Heuristic: a constructor has a
-  // \`prototype\` object with own properties beyond \`constructor\`. When
-  // in doubt we patch the prototype AND wrap the function -- wrapping a
-  // constructor call in try/catch is safe (\`new wrappedCtor()\` still
-  // works because \`fn.apply(this, args)\` on a constructor called with
-  // \`new\` would normally fail, but napi-rs class constructors are
-  // exposed as plain factories that do not require \`new\`).
-  for (const key of Object.keys(module.exports)) {
-    const orig = module.exports[key]
-    if (typeof orig !== 'function') continue
-    // Skip the typed-error classes we are about to install.
-    if (Object.prototype.hasOwnProperty.call(errorClasses, key)) continue
-    // Skip the agent entrypoints we already specialised above.
-    if (orig.__blazenCallerErrorWrapped) continue
-    if (orig.prototype && typeof orig.prototype === 'object') {
-      patchPrototype(orig)
-    }
-    // Only wrap "plain" functions (lowercase first letter convention) and
-    // any function whose prototype is empty (i.e. not a class). napi-rs
-    // emits classes with PascalCase names; we leave those callable as-is
-    // so \`new ClassName(...)\` keeps working but their methods are
-    // already patched above.
-    //
-    // Detect "class-ness" via either prototype methods OR own static
-    // properties beyond the built-in function metadata fields. Without the
-    // static-property check, a class whose only public surface is a static
-    // factory (e.g. \`UpstashBackend.create\`) would slip through and get
-    // replaced with a \`wrap()\`-returned function that loses the static
-    // method.
-    const FUNCTION_BUILTIN_PROPS = new Set([
-      'length',
-      'name',
-      'arguments',
-      'caller',
-      'prototype',
-    ])
-    const ownStaticPropNames = Object.getOwnPropertyNames(orig).filter(
-      (p) => !FUNCTION_BUILTIN_PROPS.has(p),
-    )
-    const hasPrototypeMethods =
-      orig.prototype &&
-      Object.getOwnPropertyNames(orig.prototype).some((p) => p !== 'constructor')
-    const isLikelyClass = hasPrototypeMethods || ownStaticPropNames.length > 0
-    if (!isLikelyClass) {
-      module.exports[key] = wrap(orig)
-    }
-  }
-
-  // Re-export the typed error classes + enrichError.
-  for (const [name, value] of Object.entries(errorClasses)) {
-    module.exports[name] = value
-  }
-})()
-`
+    const classNames = [
+      'BlazenError',
+      'AuthError', 'RateLimitError', 'TimeoutError', 'ValidationError',
+      'ContentPolicyError', 'UnsupportedError', 'ComputeError', 'MediaError',
+      'ProviderError',
+      'LlamaCppError', 'LlamaCppInvalidOptionsError', 'LlamaCppModelLoadError',
+      'LlamaCppInferenceError', 'LlamaCppEngineNotAvailableError', 'LlamaCppAdapterFailedError',
+      'CandleLlmError', 'CandleLlmInvalidOptionsError', 'CandleLlmModelLoadError',
+      'CandleLlmInferenceError', 'CandleLlmEngineNotAvailableError', 'CandleLlmUnsupportedError',
+      'CandleEmbedError', 'CandleEmbedInvalidOptionsError', 'CandleEmbedModelLoadError',
+      'CandleEmbedEmbeddingError', 'CandleEmbedEngineNotAvailableError', 'CandleEmbedTaskPanickedError',
+      'MistralRsError', 'MistralRsInvalidOptionsError', 'MistralRsInitError',
+      'MistralRsInferenceError', 'MistralRsEngineNotAvailableError', 'MistralRsAdapterFailedError',
+      'WhisperError', 'WhisperInvalidOptionsError', 'WhisperModelLoadError',
+      'WhisperTranscriptionError', 'WhisperEngineNotAvailableError', 'WhisperIoError',
+      'PiperError', 'PiperInvalidOptionsError', 'PiperModelLoadError',
+      'PiperSynthesisError', 'PiperEngineNotAvailableError',
+      'DiffusionError', 'DiffusionInvalidOptionsError', 'DiffusionModelLoadError', 'DiffusionGenerationError',
+      'FastEmbedError', 'EmbedUnknownModelError', 'EmbedInitError',
+      'EmbedEmbedError', 'EmbedMutexPoisonedError', 'EmbedTaskPanickedError',
+      'TractError',
+      'PeerEncodeError', 'PeerTransportError', 'PeerEnvelopeVersionError',
+      'PeerWorkflowError', 'PeerTlsError', 'PeerUnknownStepError',
+      'PersistError',
+      'CacheError', 'DownloadError', 'CacheDirError', 'IoError',
+      'PromptError', 'PromptMissingVariableError', 'PromptNotFoundError',
+      'PromptVersionNotFoundError', 'PromptIoError', 'PromptYamlError',
+      'PromptJsonError', 'PromptValidationError',
+      'MemoryError', 'MemoryNoEmbedderError', 'MemoryElidError',
+      'MemoryEmbeddingError', 'MemoryNotFoundError', 'MemorySerializationError',
+      'MemoryIoError', 'MemoryBackendError',
+    ]
+    const lines = classNames.map((n) => `module.exports.${n} = module.exports.${n}`)
+    const block = `\n${sentinel}\n${lines.join('\n')}\n`
     appendFileSync(jsPath, block)
   }
 }
@@ -320,11 +200,13 @@ ${sentinel}
       'export class LlamaCppModelLoadError extends LlamaCppError {}',
       'export class LlamaCppInferenceError extends LlamaCppError {}',
       'export class LlamaCppEngineNotAvailableError extends LlamaCppError {}',
+      'export class LlamaCppAdapterFailedError extends LlamaCppError {}',
       'export class CandleLlmError extends ProviderError {}',
       'export class CandleLlmInvalidOptionsError extends CandleLlmError {}',
       'export class CandleLlmModelLoadError extends CandleLlmError {}',
       'export class CandleLlmInferenceError extends CandleLlmError {}',
       'export class CandleLlmEngineNotAvailableError extends CandleLlmError {}',
+      'export class CandleLlmUnsupportedError extends CandleLlmError {}',
       'export class CandleEmbedError extends ProviderError {}',
       'export class CandleEmbedInvalidOptionsError extends CandleEmbedError {}',
       'export class CandleEmbedModelLoadError extends CandleEmbedError {}',
@@ -336,6 +218,7 @@ ${sentinel}
       'export class MistralRsInitError extends MistralRsError {}',
       'export class MistralRsInferenceError extends MistralRsError {}',
       'export class MistralRsEngineNotAvailableError extends MistralRsError {}',
+      'export class MistralRsAdapterFailedError extends MistralRsError {}',
       'export class WhisperError extends ProviderError {}',
       'export class WhisperInvalidOptionsError extends WhisperError {}',
       'export class WhisperModelLoadError extends WhisperError {}',
@@ -385,7 +268,6 @@ ${sentinel}
       'export class DownloadError extends CacheError {}',
       'export class CacheDirError extends CacheError {}',
       'export class IoError extends CacheError {}',
-      'export declare function enrichError(err: unknown): unknown',
     ]
     const banner = `\n${sentinel}\n`
     const block = `${current.endsWith('\n') ? '' : '\n'}${banner}${decls.join('\n')}\n`
@@ -482,6 +364,20 @@ globalThis.__blazenScheduler = () => {
 globalThis.__blazenSleeper = (ms) =>
   new Promise((r) => globalThis.setTimeout(r, ms))
 
+// Error-class factory: napi-patched's \`register_error_class\` uses this
+// global to build the JS subclass chain when running on hosts that block
+// dynamic code generation (i.e. workerd's \`napi_run_script\` is a no-op).
+// On Node / wasi-node / browsers, this global is absent and napi-patched
+// falls back to evaluating an inline script with the same shape.
+globalThis.__blazenErrorClassFactory = (parent, name) =>
+  class extends parent {
+    constructor(message, props) {
+      super(message)
+      this.name = name
+      if (props) Object.assign(this, props)
+    }
+  }
+
 const __wasi = new __WASI({ version: 'preview1' })
 const __emnapiContext = __emnapiGetDefaultContext()
 
@@ -541,8 +437,11 @@ const {
       finalDts,
       '// --- post-build: ContentBody / ContentHint helper types ---',
     ),
+    'js: error-class esm hints': has(
+      finalJs,
+      '// --- post-build: cjs-module-lexer hints for native error classes ---',
+    ),
     'd.ts: error classes': has(finalDts, '// --- post-build: typed error classes ---'),
-    'js: error wrapping': has(finalJs, '// --- post-build: typed-error wrapping ---'),
     'js: workers entry': existsSync(workersJsPath),
     'd.ts: workers shim': existsSync(workersDtsPath),
   }

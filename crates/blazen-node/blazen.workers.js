@@ -37,6 +37,20 @@ globalThis.__blazenScheduler = () => {
 globalThis.__blazenSleeper = (ms) =>
   new Promise((r) => globalThis.setTimeout(r, ms))
 
+// Error-class factory: napi-patched's `register_error_class` uses this
+// global to build the JS subclass chain when running on hosts that block
+// dynamic code generation (i.e. workerd's `napi_run_script` is a no-op).
+// On Node / wasi-node / browsers, this global is absent and napi-patched
+// falls back to evaluating an inline script with the same shape.
+globalThis.__blazenErrorClassFactory = (parent, name) =>
+  class extends parent {
+    constructor(message, props) {
+      super(message)
+      this.name = name
+      if (props) Object.assign(this, props)
+    }
+  }
+
 const __wasi = new __WASI({ version: 'preview1' })
 const __emnapiContext = __emnapiGetDefaultContext()
 
@@ -209,6 +223,8 @@ export const JobHandle = __napiModule.exports.JobHandle
 export const JsJobHandleClass = __napiModule.exports.JsJobHandleClass
 export const JsonlBackend = __napiModule.exports.JsonlBackend
 export const JsJsonlBackend = __napiModule.exports.JsJsonlBackend
+export const JsonlDataset = __napiModule.exports.JsonlDataset
+export const JsJsonlDataset = __napiModule.exports.JsJsonlDataset
 export const LangfuseConfig = __napiModule.exports.LangfuseConfig
 export const JsLangfuseConfig = __napiModule.exports.JsLangfuseConfig
 export const LlamaCppChatMessageInput = __napiModule.exports.LlamaCppChatMessageInput
@@ -438,8 +454,10 @@ export const JsContentKind = __napiModule.exports.JsContentKind
 export const JsDiffusionScheduler = __napiModule.exports.JsDiffusionScheduler
 export const JsFalLlmEndpointKind = __napiModule.exports.JsFalLlmEndpointKind
 export const JsJobStatus = __napiModule.exports.JsJobStatus
+export const JsMixedPrecision = __napiModule.exports.JsMixedPrecision
 export const JsRole = __napiModule.exports.JsRole
 export const JsRunStatus = __napiModule.exports.JsRunStatus
+export const JsSchedulerKind = __napiModule.exports.JsSchedulerKind
 export const JsWhisperModel = __napiModule.exports.JsWhisperModel
 export const LlamaCppChatRole = __napiModule.exports.LlamaCppChatRole
 export const JsLlamaCppChatRole = __napiModule.exports.JsLlamaCppChatRole

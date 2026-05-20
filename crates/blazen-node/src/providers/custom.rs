@@ -296,7 +296,7 @@ impl JsCustomProviderAdapter {
 
         // Phase 1: schedule the JS callback on the Node main thread
         // and await napi capturing its return value (a `Promise`).
-        let promise = tsfn.call_async(value).await.map_err(|e| {
+        let promise = tsfn.call_async_catch(value).await.map_err(|e| {
             BlazenError::provider(
                 &self.provider_id,
                 format!("CustomProvider: host method `{method}` dispatch failed: {e}"),

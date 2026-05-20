@@ -1218,7 +1218,7 @@ fn make_step_registration(step: &JsStepRegistration) -> blazen_core::StepRegistr
                     // ThreadsafeFunction::call_async returns a Future that resolves
                     // to the JS function's return value (serde_json::Value).
                     let result_value: serde_json::Value = tsfn
-                        .call_async(FnArgs::from((js_event, js_ctx)))
+                        .call_async_catch(FnArgs::from((js_event, js_ctx)))
                         .await
                         .map_err(|e: napi::Error| {
                             blazen_core::WorkflowError::Context(e.to_string())

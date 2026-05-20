@@ -29,6 +29,14 @@ pub struct Error<S: AsRef<str> = Status> {
   // Convert raw `JsError` into Error
   pub(crate) maybe_raw: sys::napi_ref,
   pub(crate) maybe_env: sys::napi_env,
+  // Optional name of a class registered via `register_error_class`. When set
+  // (via `Error::with_class`), the conversion-to-JS path constructs a
+  // `new ClassName(reason, fields)` instance instead of a plain `JsError`.
+  pub(crate) class_name: Option<&'static str>,
+  // Structured fields attached to the constructed class instance as own
+  // properties. Populated via `Error::with_field`. Empty when `class_name`
+  // is `None`.
+  pub(crate) fields: Vec<(&'static str, crate::error_class::ErrorFieldValue)>,
 }
 
 #[cfg(not(feature = "noop"))]
@@ -56,6 +64,14 @@ impl<S: AsRef<str>> Error<S> {
   pub fn set_cause(&mut self, cause: Error) {
     self.cause = Some(Box::new(cause));
   }
+
+  /// Whether this error carries a reference to an original JS value
+  /// (i.e. came from a JS throw or Promise rejection, not constructed in
+  /// Rust). When `true`, converting back to JS reuses the original object
+  /// so `instanceof` and custom properties survive the round-trip.
+  pub fn has_js_value(&self) -> bool {
+    !self.maybe_raw.is_null()
+  }
 }
 
 impl<S: AsRef<str>> std::fmt::Debug for Error<S> {
@@ -72,6 +88,15 @@ impl<S: AsRef<str>> std::fmt::Debug for Error<S> {
 impl<S: AsRef<str>> ToNapiValue for Error<S> {
   unsafe fn to_napi_value(env: sys::napi_env, mut val: Self) -> Result<sys::napi_value> {
     if val.maybe_raw.is_null() {
+      // If a class was attached via `Error::with_class`, materialize the JS
+      // instance directly from the runtime class registry. The resulting
+      // value is a proper subclass of `Error` so `instanceof ClassName` and
+      // the structured fields work natively on the JS side.
+      if let Some(class_name) = val.class_name {
+        return unsafe {
+          crate::error_class::materialize_error_instance(env, class_name, &val.reason, &val.fields)
+        };
+      }
       let err = unsafe { JsError::from(val).into_value(env) };
       Ok(err)
     } else {
@@ -155,6 +180,8 @@ impl From<Unknown<'_>> for Error {
         cause: maybe_cause,
         maybe_raw: result,
         maybe_env,
+        class_name: None,
+        fields: Vec::new(),
       };
     }
 
@@ -164,6 +191,8 @@ impl From<Unknown<'_>> for Error {
       cause: maybe_cause,
       maybe_raw: result,
       maybe_env,
+      class_name: None,
+      fields: Vec::new(),
     }
   }
 }
@@ -205,6 +234,8 @@ impl From<Unknown<'_>> for Error {
         cause: maybe_cause,
         maybe_raw: ptr::null_mut(),
         maybe_env: ptr::null_mut(),
+        class_name: None,
+        fields: Vec::new(),
       };
     }
 
@@ -214,6 +245,8 @@ impl From<Unknown<'_>> for Error {
       cause: maybe_cause,
       maybe_raw: ptr::null_mut(),
       maybe_env: ptr::null_mut(),
+      class_name: None,
+      fields: Vec::new(),
     }
   }
 }
@@ -243,6 +276,8 @@ impl<S: AsRef<str>> Error<S> {
       cause: None,
       maybe_raw: ptr::null_mut(),
       maybe_env: ptr::null_mut(),
+      class_name: None,
+      fields: Vec::new(),
     }
   }
 
@@ -253,6 +288,8 @@ impl<S: AsRef<str>> Error<S> {
       cause: None,
       maybe_raw: ptr::null_mut(),
       maybe_env: ptr::null_mut(),
+      class_name: None,
+      fields: Vec::new(),
     }
   }
 }
@@ -271,6 +308,8 @@ impl<S: AsRef<str> + Clone> Error<S> {
       cause: None,
       maybe_raw: self.maybe_raw,
       maybe_env: self.maybe_env,
+      class_name: self.class_name,
+      fields: self.fields.clone(),
     })
   }
 }
@@ -283,6 +322,55 @@ impl Error {
       cause: None,
       maybe_raw: ptr::null_mut(),
       maybe_env: ptr::null_mut(),
+      class_name: None,
+      fields: Vec::new(),
+    }
+  }
+
+  /// Construct an `Error` tagged with a JS class registered via
+  /// [`crate::register_error_class`]. When converted to JS, this Error
+  /// materializes as `new ClassName(reason, fields)` and the JS caller sees
+  /// the instance with all custom fields and `instanceof ClassName === true`.
+  ///
+  /// If `class_name` was not registered at module init, conversion to JS
+  /// returns an `InvalidArg` error instead of the intended subclass.
+  pub fn with_class(class_name: &'static str, reason: impl Into<String>) -> Self {
+    Error {
+      status: Status::GenericFailure,
+      reason: reason.into(),
+      cause: None,
+      maybe_raw: ptr::null_mut(),
+      maybe_env: ptr::null_mut(),
+      class_name: Some(class_name),
+      fields: Vec::new(),
+    }
+  }
+
+  /// Attach a structured field to the class instance constructed at throw
+  /// time. The field becomes an own property on the JS object. Chain calls
+  /// to set multiple fields. Only meaningful when [`Self::with_class`] was
+  /// used to construct the Error; otherwise the field is silently ignored.
+  #[must_use]
+  pub fn with_field(
+    mut self,
+    name: &'static str,
+    value: impl Into<crate::error_class::ErrorFieldValue>,
+  ) -> Self {
+    self.fields.push((name, value.into()));
+    self
+  }
+
+  /// Like [`Self::with_field`] but skips the field if `value` is `None`.
+  /// Useful for optional structured fields (e.g. HTTP `retry_after_ms`).
+  #[must_use]
+  pub fn with_field_opt<V: Into<crate::error_class::ErrorFieldValue>>(
+    self,
+    name: &'static str,
+    value: Option<V>,
+  ) -> Self {
+    match value {
+      Some(v) => self.with_field(name, v),
+      None => self,
     }
   }
 }
@@ -295,6 +383,8 @@ impl From<std::ffi::NulError> for Error {
       cause: None,
       maybe_raw: ptr::null_mut(),
       maybe_env: ptr::null_mut(),
+      class_name: None,
+      fields: Vec::new(),
     }
   }
 }
@@ -307,6 +397,8 @@ impl From<std::io::Error> for Error {
       cause: None,
       maybe_raw: ptr::null_mut(),
       maybe_env: ptr::null_mut(),
+      class_name: None,
+      fields: Vec::new(),
     }
   }
 }
@@ -396,6 +488,34 @@ macro_rules! impl_object_methods {
       ///
       /// This function is safety if env is not null ptr.
       pub unsafe fn into_value(mut self, env: sys::napi_env) -> sys::napi_value {
+        // If the Error was tagged with `Error::with_class(...)`, materialize
+        // a JS instance of the registered class instead of falling back to
+        // the default JsError shape. This is the hot path for typed throws
+        // emitted by Rust code via the runtime error-class registry — see
+        // `crates/napi-patched/src/error_class.rs`. Without this branch,
+        // `JsError::throw_into` (used by napi-derive's async-fn wrapper)
+        // would silently drop the class tag and surface a plain Error.
+        if self.0.class_name.is_some() && self.0.maybe_raw.is_null() {
+          if let Some(class_name) = self.0.class_name {
+            match unsafe {
+              $crate::error_class::materialize_error_instance(
+                env, class_name, &self.0.reason, &self.0.fields,
+              )
+            } {
+              Ok(instance) => {
+                // Clear the class so the Drop impl doesn't double-handle.
+                self.0.class_name = None;
+                self.0.fields.clear();
+                return instance;
+              }
+              Err(_) => {
+                // Fall through to the default JsError path if materialization
+                // failed (e.g. class not registered). Better to surface a
+                // plain Error with the original reason than to recurse.
+              }
+            }
+          }
+        }
         if !self.0.maybe_raw.is_null() {
           let mut err = ptr::null_mut();
           let get_err_status =

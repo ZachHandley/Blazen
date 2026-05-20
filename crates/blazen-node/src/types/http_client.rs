@@ -227,7 +227,7 @@ impl HttpClient for JsHttpClientAdapter {
 
         let promise = self
             .handler
-            .call_async(js_req)
+            .call_async_catch(js_req)
             .await
             .map_err(|e| BlazenError::request(e.to_string()))?;
 

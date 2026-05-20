@@ -13,7 +13,7 @@
 edition = "2021"
 rust-version = "1.88"
 name = "napi"
-version = "3.8.6"
+version = "3.9.0"
 authors = [
     "Nathan Sobo <nathan@github.com>",
     "Yinan Long <lynweklm@gmail.com>",
@@ -158,7 +158,7 @@ version = "0.4"
 optional = true
 
 [dependencies.ctor]
-version = "0.11.0"
+version = "1.0.0"
 default-features = false
 
 [dependencies.encoding_rs]
@@ -203,7 +203,7 @@ version = "0.1"
 optional = true
 
 [build-dependencies.napi-build]
-version = "2.3.1"
+version = "2.3.2"
 
 [target.'cfg(all(target_family = "wasm", not(tokio_unstable)))'.dependencies.tokio]
 version = "1"

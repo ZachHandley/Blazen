@@ -210,8 +210,18 @@ all = "warn"
 pedantic = "warn"
 
 [patch.crates-io]
-# Vendored napi 3.8.6 with a wasi-friendly executor hook (set_async_executor)
-# that lets blazen-node's wasi_async dispatcher bypass napi-rs's hardcoded
-# std::thread::spawn(|| block_on(...)) — which traps on Cloudflare workerd.
-# See crates/napi-patched/ for the full diff against upstream 3.8.6.
+# Vendored napi 3.9.0 with three workerd/V8 compatibility patches:
+#   1. `set_async_executor` hook in src/tokio_runtime.rs — lets blazen-node's
+#      wasi_async dispatcher bypass napi-rs's hardcoded
+#      `std::thread::spawn(|| block_on(...))`, which traps on Cloudflare
+#      workerd's WASI runtime.
+#   2. `napi_get_undefined` → `napi_get_null` for the `this` binding in
+#      src/bindgen_runtime/js_values/function.rs — avoids `Illegal invocation`
+#      brand-check failures on workerd/V8 when JS callbacks invoke host-bound
+#      methods.
+#   3. Same `napi_get_undefined` → `napi_get_null` change in
+#      src/threadsafe_function.rs for the threadsafe-function callback path.
+# Run `diff -u <upstream-3.9.0>/src/<file> crates/napi-patched/src/<file>` to
+# see the exact patches. These are upstream-PR-able and should be replaced
+# with the upstream version when napi-rs accepts them.
 napi = { path = "crates/napi-patched" }

@@ -23,6 +23,7 @@ pub mod content;
 pub mod controlplane;
 pub mod core;
 pub mod error;
+pub mod error_classes;
 pub mod generated;
 pub mod manager;
 #[cfg(not(target_os = "wasi"))]
@@ -86,9 +87,17 @@ pub fn version() -> String {
     clippy::unnecessary_wraps,
     clippy::missing_const_for_fn
 )]
-fn module_exports(_exports: Object, env: Env) -> napi::Result<()> {
+fn module_exports(exports: Object, env: Env) -> napi::Result<()> {
+    // Register every JS `Error` subclass Blazen exposes (BlazenError +
+    // ProviderError + per-backend subclasses + Peer/Persist/Cache/Prompt/
+    // Memory error families) AND bind each class onto `exports` so JS
+    // callers can do `require('blazen').ProviderError` and use `instanceof`
+    // against the same class object the runtime throws as. Rust code emits
+    // typed throws via
+    // `napi::Error::with_class("ProviderError", reason).with_field(...)`.
+    error_classes::register_all_classes(&env, &exports)?;
+
     #[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
     wasi_async::install(&env)?;
-    let _ = env;
     Ok(())
 }

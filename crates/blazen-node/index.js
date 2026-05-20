@@ -712,6 +712,8 @@ module.exports.JobHandle = nativeBinding.JobHandle
 module.exports.JsJobHandleClass = nativeBinding.JsJobHandleClass
 module.exports.JsonlBackend = nativeBinding.JsonlBackend
 module.exports.JsJsonlBackend = nativeBinding.JsJsonlBackend
+module.exports.JsonlDataset = nativeBinding.JsonlDataset
+module.exports.JsJsonlDataset = nativeBinding.JsJsonlDataset
 module.exports.LangfuseConfig = nativeBinding.LangfuseConfig
 module.exports.JsLangfuseConfig = nativeBinding.JsLangfuseConfig
 module.exports.LlamaCppChatMessageInput = nativeBinding.LlamaCppChatMessageInput
@@ -941,8 +943,10 @@ module.exports.JsContentKind = nativeBinding.JsContentKind
 module.exports.JsDiffusionScheduler = nativeBinding.JsDiffusionScheduler
 module.exports.JsFalLlmEndpointKind = nativeBinding.JsFalLlmEndpointKind
 module.exports.JsJobStatus = nativeBinding.JsJobStatus
+module.exports.JsMixedPrecision = nativeBinding.JsMixedPrecision
 module.exports.JsRole = nativeBinding.JsRole
 module.exports.JsRunStatus = nativeBinding.JsRunStatus
+module.exports.JsSchedulerKind = nativeBinding.JsSchedulerKind
 module.exports.JsWhisperModel = nativeBinding.JsWhisperModel
 module.exports.LlamaCppChatRole = nativeBinding.LlamaCppChatRole
 module.exports.JsLlamaCppChatRole = nativeBinding.JsLlamaCppChatRole
@@ -995,166 +999,87 @@ module.exports.unlimitedHttpClientConfig = nativeBinding.unlimitedHttpClientConf
 module.exports.version = nativeBinding.version
 module.exports.videoInput = nativeBinding.videoInput
 
-// --- post-build: typed-error wrapping ---
-;(() => {
-  const errorClasses = require('./error-classes.js')
-  const { enrichError } = errorClasses
-
-  // Wrap a single function so any thrown error -- sync or async -- is
-  // passed through enrichError before reaching the caller.
-  const wrap = (fn) => {
-    return function blazenWrapped(...args) {
-      try {
-        const result = fn.apply(this, args)
-        if (result && typeof result.then === 'function') {
-          return result.then(
-            (v) => v,
-            (e) => {
-              throw enrichError(e)
-            },
-          )
-        }
-        return result
-      } catch (e) {
-        throw enrichError(e)
-      }
-    }
-  }
-
-  // Patch a class's prototype methods in-place. Skips the constructor
-  // and any non-function or non-configurable property.
-  const patchPrototype = (Cls) => {
-    if (typeof Cls !== 'function') return
-    const proto = Cls.prototype
-    if (!proto || typeof proto !== 'object') return
-    for (const key of Object.getOwnPropertyNames(proto)) {
-      if (key === 'constructor') continue
-      const desc = Object.getOwnPropertyDescriptor(proto, key)
-      if (!desc || !desc.configurable) continue
-      if (typeof desc.value !== 'function') continue
-      try {
-        Object.defineProperty(proto, key, {
-          ...desc,
-          value: wrap(desc.value),
-        })
-      } catch {
-        // Some napi prototypes are frozen; skip gracefully.
-      }
-    }
-  }
-
-  // Specialised handling for the agent entrypoints. The user's
-  // `toolHandler` argument must be wrapped to envelope-format thrown
-  // errors (see `wrapToolHandlerForCallerErrors` in error-classes.js);
-  // `enrichError` then re-throws the original instance after the agent
-  // loop rejects with the `__BLAZEN_CALLER_ERROR__` sentinel. The
-  // generic `wrap()` loop below is skipped for these via the
-  // `__blazenCallerErrorWrapped` marker.
-  const { wrapToolHandlerForCallerErrors, callerErrorStash } = errorClasses
-  const AGENT_ENTRYPOINTS = ['runAgent', 'runAgentWithCallback']
-  for (const fnName of AGENT_ENTRYPOINTS) {
-    const orig = module.exports[fnName]
-    if (typeof orig !== 'function') continue
-    // toolHandler is positional arg index 3 for both runAgent and
-    // runAgentWithCallback in the current TS signatures.
-    const TOOL_HANDLER_ARG_INDEX = 3
-    const wrapped = function blazenAgentEntrypoint(...args) {
-      if (args.length > TOOL_HANDLER_ARG_INDEX) {
-        const userHandler = args[TOOL_HANDLER_ARG_INDEX]
-        if (typeof userHandler === 'function') {
-          args[TOOL_HANDLER_ARG_INDEX] = wrapToolHandlerForCallerErrors(userHandler)
-        }
-      }
-      // Track stash entries created during this run so we can
-      // garbage-collect any that the agent loop swallowed (e.g.
-      // succeeded after a handler threw, or the loop ended before the
-      // napi side surfaced the caller error).
-      const stashSnapshot = new Set(callerErrorStash.keys())
-      const cleanupNewStash = () => {
-        for (const key of callerErrorStash.keys()) {
-          if (!stashSnapshot.has(key)) {
-            callerErrorStash.delete(key)
-          }
-        }
-      }
-      try {
-        const result = orig.apply(this, args)
-        if (result && typeof result.then === 'function') {
-          return result.then(
-            (v) => {
-              cleanupNewStash()
-              return v
-            },
-            (e) => {
-              const enriched = enrichError(e)
-              cleanupNewStash()
-              throw enriched
-            },
-          )
-        }
-        cleanupNewStash()
-        return result
-      } catch (e) {
-        const enriched = enrichError(e)
-        cleanupNewStash()
-        throw enriched
-      }
-    }
-    wrapped.__blazenCallerErrorWrapped = true
-    module.exports[fnName] = wrapped
-  }
-
-  // Wrap every top-level export. Distinguish functions (call wrap) from
-  // constructors (call patchPrototype). Heuristic: a constructor has a
-  // `prototype` object with own properties beyond `constructor`. When
-  // in doubt we patch the prototype AND wrap the function -- wrapping a
-  // constructor call in try/catch is safe (`new wrappedCtor()` still
-  // works because `fn.apply(this, args)` on a constructor called with
-  // `new` would normally fail, but napi-rs class constructors are
-  // exposed as plain factories that do not require `new`).
-  for (const key of Object.keys(module.exports)) {
-    const orig = module.exports[key]
-    if (typeof orig !== 'function') continue
-    // Skip the typed-error classes we are about to install.
-    if (Object.prototype.hasOwnProperty.call(errorClasses, key)) continue
-    // Skip the agent entrypoints we already specialised above.
-    if (orig.__blazenCallerErrorWrapped) continue
-    if (orig.prototype && typeof orig.prototype === 'object') {
-      patchPrototype(orig)
-    }
-    // Only wrap "plain" functions (lowercase first letter convention) and
-    // any function whose prototype is empty (i.e. not a class). napi-rs
-    // emits classes with PascalCase names; we leave those callable as-is
-    // so `new ClassName(...)` keeps working but their methods are
-    // already patched above.
-    //
-    // Detect "class-ness" via either prototype methods OR own static
-    // properties beyond the built-in function metadata fields. Without the
-    // static-property check, a class whose only public surface is a static
-    // factory (e.g. `UpstashBackend.create`) would slip through and get
-    // replaced with a `wrap()`-returned function that loses the static
-    // method.
-    const FUNCTION_BUILTIN_PROPS = new Set([
-      'length',
-      'name',
-      'arguments',
-      'caller',
-      'prototype',
-    ])
-    const ownStaticPropNames = Object.getOwnPropertyNames(orig).filter(
-      (p) => !FUNCTION_BUILTIN_PROPS.has(p),
-    )
-    const hasPrototypeMethods =
-      orig.prototype &&
-      Object.getOwnPropertyNames(orig.prototype).some((p) => p !== 'constructor')
-    const isLikelyClass = hasPrototypeMethods || ownStaticPropNames.length > 0
-    if (!isLikelyClass) {
-      module.exports[key] = wrap(orig)
-    }
-  }
-
-  // Re-export the typed error classes + enrichError.
-  for (const [name, value] of Object.entries(errorClasses)) {
-    module.exports[name] = value
-  }
-})()
+// --- post-build: cjs-module-lexer hints for native error classes ---
+module.exports.BlazenError = module.exports.BlazenError
+module.exports.AuthError = module.exports.AuthError
+module.exports.RateLimitError = module.exports.RateLimitError
+module.exports.TimeoutError = module.exports.TimeoutError
+module.exports.ValidationError = module.exports.ValidationError
+module.exports.ContentPolicyError = module.exports.ContentPolicyError
+module.exports.UnsupportedError = module.exports.UnsupportedError
+module.exports.ComputeError = module.exports.ComputeError
+module.exports.MediaError = module.exports.MediaError
+module.exports.ProviderError = module.exports.ProviderError
+module.exports.LlamaCppError = module.exports.LlamaCppError
+module.exports.LlamaCppInvalidOptionsError = module.exports.LlamaCppInvalidOptionsError
+module.exports.LlamaCppModelLoadError = module.exports.LlamaCppModelLoadError
+module.exports.LlamaCppInferenceError = module.exports.LlamaCppInferenceError
+module.exports.LlamaCppEngineNotAvailableError = module.exports.LlamaCppEngineNotAvailableError
+module.exports.LlamaCppAdapterFailedError = module.exports.LlamaCppAdapterFailedError
+module.exports.CandleLlmError = module.exports.CandleLlmError
+module.exports.CandleLlmInvalidOptionsError = module.exports.CandleLlmInvalidOptionsError
+module.exports.CandleLlmModelLoadError = module.exports.CandleLlmModelLoadError
+module.exports.CandleLlmInferenceError = module.exports.CandleLlmInferenceError
+module.exports.CandleLlmEngineNotAvailableError = module.exports.CandleLlmEngineNotAvailableError
+module.exports.CandleLlmUnsupportedError = module.exports.CandleLlmUnsupportedError
+module.exports.CandleEmbedError = module.exports.CandleEmbedError
+module.exports.CandleEmbedInvalidOptionsError = module.exports.CandleEmbedInvalidOptionsError
+module.exports.CandleEmbedModelLoadError = module.exports.CandleEmbedModelLoadError
+module.exports.CandleEmbedEmbeddingError = module.exports.CandleEmbedEmbeddingError
+module.exports.CandleEmbedEngineNotAvailableError = module.exports.CandleEmbedEngineNotAvailableError
+module.exports.CandleEmbedTaskPanickedError = module.exports.CandleEmbedTaskPanickedError
+module.exports.MistralRsError = module.exports.MistralRsError
+module.exports.MistralRsInvalidOptionsError = module.exports.MistralRsInvalidOptionsError
+module.exports.MistralRsInitError = module.exports.MistralRsInitError
+module.exports.MistralRsInferenceError = module.exports.MistralRsInferenceError
+module.exports.MistralRsEngineNotAvailableError = module.exports.MistralRsEngineNotAvailableError
+module.exports.MistralRsAdapterFailedError = module.exports.MistralRsAdapterFailedError
+module.exports.WhisperError = module.exports.WhisperError
+module.exports.WhisperInvalidOptionsError = module.exports.WhisperInvalidOptionsError
+module.exports.WhisperModelLoadError = module.exports.WhisperModelLoadError
+module.exports.WhisperTranscriptionError = module.exports.WhisperTranscriptionError
+module.exports.WhisperEngineNotAvailableError = module.exports.WhisperEngineNotAvailableError
+module.exports.WhisperIoError = module.exports.WhisperIoError
+module.exports.PiperError = module.exports.PiperError
+module.exports.PiperInvalidOptionsError = module.exports.PiperInvalidOptionsError
+module.exports.PiperModelLoadError = module.exports.PiperModelLoadError
+module.exports.PiperSynthesisError = module.exports.PiperSynthesisError
+module.exports.PiperEngineNotAvailableError = module.exports.PiperEngineNotAvailableError
+module.exports.DiffusionError = module.exports.DiffusionError
+module.exports.DiffusionInvalidOptionsError = module.exports.DiffusionInvalidOptionsError
+module.exports.DiffusionModelLoadError = module.exports.DiffusionModelLoadError
+module.exports.DiffusionGenerationError = module.exports.DiffusionGenerationError
+module.exports.FastEmbedError = module.exports.FastEmbedError
+module.exports.EmbedUnknownModelError = module.exports.EmbedUnknownModelError
+module.exports.EmbedInitError = module.exports.EmbedInitError
+module.exports.EmbedEmbedError = module.exports.EmbedEmbedError
+module.exports.EmbedMutexPoisonedError = module.exports.EmbedMutexPoisonedError
+module.exports.EmbedTaskPanickedError = module.exports.EmbedTaskPanickedError
+module.exports.TractError = module.exports.TractError
+module.exports.PeerEncodeError = module.exports.PeerEncodeError
+module.exports.PeerTransportError = module.exports.PeerTransportError
+module.exports.PeerEnvelopeVersionError = module.exports.PeerEnvelopeVersionError
+module.exports.PeerWorkflowError = module.exports.PeerWorkflowError
+module.exports.PeerTlsError = module.exports.PeerTlsError
+module.exports.PeerUnknownStepError = module.exports.PeerUnknownStepError
+module.exports.PersistError = module.exports.PersistError
+module.exports.CacheError = module.exports.CacheError
+module.exports.DownloadError = module.exports.DownloadError
+module.exports.CacheDirError = module.exports.CacheDirError
+module.exports.IoError = module.exports.IoError
+module.exports.PromptError = module.exports.PromptError
+module.exports.PromptMissingVariableError = module.exports.PromptMissingVariableError
+module.exports.PromptNotFoundError = module.exports.PromptNotFoundError
+module.exports.PromptVersionNotFoundError = module.exports.PromptVersionNotFoundError
+module.exports.PromptIoError = module.exports.PromptIoError
+module.exports.PromptYamlError = module.exports.PromptYamlError
+module.exports.PromptJsonError = module.exports.PromptJsonError
+module.exports.PromptValidationError = module.exports.PromptValidationError
+module.exports.MemoryError = module.exports.MemoryError
+module.exports.MemoryNoEmbedderError = module.exports.MemoryNoEmbedderError
+module.exports.MemoryElidError = module.exports.MemoryElidError
+module.exports.MemoryEmbeddingError = module.exports.MemoryEmbeddingError
+module.exports.MemoryNotFoundError = module.exports.MemoryNotFoundError
+module.exports.MemorySerializationError = module.exports.MemorySerializationError
+module.exports.MemoryIoError = module.exports.MemoryIoError
+module.exports.MemoryBackendError = module.exports.MemoryBackendError

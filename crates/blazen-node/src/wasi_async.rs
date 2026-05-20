@@ -63,7 +63,7 @@ static SCHEDULER_TSFN: OnceLock<ThreadsafeFunction<(), Unknown<'static>, (), Sta
     OnceLock::new();
 
 /// JS-side sleeper whose body is `(ms) => new Promise(r =>
-/// globalThis.setTimeout(r, ms))`. Calling `.call_async(ms)` schedules a
+/// globalThis.setTimeout(r, ms))`. Calling `.call_async_catch(ms)` schedules a
 /// `setTimeout` and returns a Rust-awaitable handle to the underlying
 /// Promise that resolves when the timer fires.
 ///
@@ -199,7 +199,7 @@ fn sleep_impl(dur: Duration) -> WasiSleepFut {
         // Phase 1: schedule the JS callback and capture the returned
         // Promise. A dispatch error means the napi host went away — drop
         // the sleep silently rather than hang.
-        let Ok(promise) = tsfn.call_async(ms).await else {
+        let Ok(promise) = tsfn.call_async_catch(ms).await else {
             return;
         };
         // Phase 2: drive the JS Promise to completion. setTimeout's

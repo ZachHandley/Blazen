@@ -197,7 +197,7 @@ impl JsPipelineBuilder {
                     let js_snap = JsPipelineSnapshot::from_inner(snapshot);
                     // Phase 1: schedule the JS callback and capture the
                     // returned Promise.
-                    let promise = tsfn.call_async(js_snap).await.map_err(|e| {
+                    let promise = tsfn.call_async_catch(js_snap).await.map_err(|e| {
                         PipelineError::PersistFailed(format!(
                             "persist callback dispatch failed: {e}"
                         ))
@@ -239,7 +239,7 @@ impl JsPipelineBuilder {
                 Box::pin(async move {
                     // Phase 1: schedule the JS callback and capture the
                     // returned Promise.
-                    let promise = tsfn.call_async(json).await.map_err(|e| {
+                    let promise = tsfn.call_async_catch(json).await.map_err(|e| {
                         PipelineError::PersistFailed(format!(
                             "persist callback dispatch failed: {e}"
                         ))
