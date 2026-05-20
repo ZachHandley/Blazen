@@ -39,7 +39,7 @@ diffusion = ["dep:blazen-image-diffusion"]      # Phase 5: bridge + types only (
 diffusion-engine = ["diffusion", "blazen-image-diffusion/engine"]
 whispercpp = ["dep:blazen-audio-whispercpp"]     # Phase 4: local STT via whisper.cpp
 piper = ["dep:blazen-audio-piper"]          # Phase 9: local TTS via Piper
-candle-audio = []   # Phase 10: local music/SFX via candle
+candle-audio = ["dep:blazen-audio-candle", "blazen-audio-candle/engine"]   # Phase 10: local music/SFX via candle
 
 [dependencies]
 blazen-events.workspace = true
@@ -72,6 +72,7 @@ blazen-image-diffusion = { workspace = true, optional = true }
 blazen-llm-candle = { workspace = true, optional = true }
 blazen-llm-llamacpp = { workspace = true, optional = true }
 blazen-audio-piper = { workspace = true, optional = true }
+blazen-audio-candle = { workspace = true, optional = true }
 
 # Timer/runtime features only on native targets (mio doesn't support any wasm32 target)
 [target.'cfg(not(any(target_os = "wasi", target_arch = "wasm32")))'.dependencies]

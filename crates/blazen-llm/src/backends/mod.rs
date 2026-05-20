@@ -4,6 +4,9 @@
 //! `blazen-llm` trait (e.g. [`EmbeddingModel`](crate::EmbeddingModel)) for
 //! the backing crate's model type.
 
+#[cfg(feature = "candle-audio")]
+pub mod candle_audio;
+
 #[cfg(feature = "candle-embed")]
 pub mod candle_embed;
 

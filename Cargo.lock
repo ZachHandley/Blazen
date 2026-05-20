@@ -654,6 +654,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "blazen-audio-candle"
+version = "0.0.0-dev"
+dependencies = [
+ "async-trait",
+ "candle-core",
+ "candle-nn",
+ "candle-transformers",
+ "hf-hub",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "blazen-audio-piper"
 version = "0.0.0-dev"
 dependencies = [
@@ -870,6 +886,7 @@ version = "0.0.0-dev"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
+ "blazen-audio-candle",
  "blazen-audio-piper",
  "blazen-audio-whispercpp",
  "blazen-embed",
