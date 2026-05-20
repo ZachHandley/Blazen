@@ -281,6 +281,7 @@ pub fn diffusion_error_to_napi(err: blazen_llm::DiffusionError) -> napi::Error {
         DiffusionError::InvalidOptions(_) => "DiffusionInvalidOptionsError",
         DiffusionError::ModelLoad(_) => "DiffusionModelLoadError",
         DiffusionError::Generation(_) => "DiffusionGenerationError",
+        DiffusionError::EngineNotAvailable => "DiffusionEngineNotAvailableError",
     };
     napi::Error::with_class(class, err.to_string())
 }

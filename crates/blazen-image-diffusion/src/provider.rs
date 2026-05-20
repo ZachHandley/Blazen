@@ -1,7 +1,10 @@
-//! The [`DiffusionProvider`] type -- stub for Phase 5.1-5.2.
+//! The [`DiffusionProvider`] type.
 //!
-//! The actual `ImageGeneration` trait implementation will be added in Phase 5.3
-//! once the diffusion-rs engine API is wired up.
+//! Without the `engine` cargo feature this is a pure-stub provider: it
+//! validates options and exposes accessors but cannot actually run image
+//! generation. With `engine`, the inherent [`DiffusionProvider::generate_image`]
+//! method lazily initialises a [`crate::engine::Engine`] and runs the
+//! stable-diffusion.cpp pipeline through `diffusion-rs`.
 
 use std::fmt;
 
@@ -16,6 +19,10 @@ pub enum DiffusionError {
     ModelLoad(String),
     /// An image generation operation failed.
     Generation(String),
+    /// The crate was built without the `engine` feature so the underlying
+    /// diffusion-rs runtime is not linked. Surface this distinctly from
+    /// generic generation failures so bindings can map it to a clear error.
+    EngineNotAvailable,
 }
 
 impl fmt::Display for DiffusionError {
@@ -24,21 +31,28 @@ impl fmt::Display for DiffusionError {
             Self::InvalidOptions(msg) => write!(f, "diffusion-rs invalid options: {msg}"),
             Self::ModelLoad(msg) => write!(f, "diffusion-rs model load failed: {msg}"),
             Self::Generation(msg) => write!(f, "diffusion-rs generation failed: {msg}"),
+            Self::EngineNotAvailable => f.write_str(
+                "diffusion-rs runtime is not linked -- rebuild blazen-image-diffusion \
+                 with the `engine` feature (or a forwarding feature such as `cuda` / \
+                 `metal`) to enable image generation",
+            ),
         }
     }
 }
 
 impl std::error::Error for DiffusionError {}
 
-/// A local image generation provider backed by [`diffusion-rs`](https://github.com/huggingface/diffusion-rs).
+/// A local image generation provider backed by [`diffusion-rs`](https://github.com/newfla/diffusion-rs).
 ///
-/// Constructed via [`DiffusionProvider::from_options`]. The `ImageGeneration`
-/// trait implementation will be added in Phase 5.3.
+/// Constructed via [`DiffusionProvider::from_options`]. With the `engine`
+/// feature on, [`DiffusionProvider::generate_image`] lazily initialises the
+/// underlying pipeline on first call and runs the synchronous
+/// stable-diffusion.cpp generation inside [`tokio::task::spawn_blocking`].
 pub struct DiffusionProvider {
     /// Full options preserved for deferred engine initialisation.
-    #[allow(dead_code)]
     options: DiffusionOptions,
-    // pipeline: ... -- will hold the diffusion-rs pipeline once wired (Phase 5.3)
+    #[cfg(feature = "engine")]
+    engine: tokio::sync::OnceCell<std::sync::Arc<crate::engine::Engine>>,
 }
 
 impl DiffusionProvider {
@@ -100,7 +114,23 @@ impl DiffusionProvider {
             ));
         }
 
-        Ok(Self { options: opts })
+        Ok(Self {
+            options: opts,
+            #[cfg(feature = "engine")]
+            engine: tokio::sync::OnceCell::new(),
+        })
+    }
+
+    /// The resolved device string (`"cpu"` when unset).
+    #[must_use]
+    pub fn device_str(&self) -> &str {
+        self.options.device.as_deref().unwrap_or("cpu")
+    }
+
+    /// The configured model identifier (or `"sd-1.5"` when unset).
+    #[must_use]
+    pub fn model_id(&self) -> &str {
+        self.options.model_id.as_deref().unwrap_or("sd-1.5")
     }
 
     /// The resolved width (user-specified or default 512).
@@ -131,6 +161,113 @@ impl DiffusionProvider {
     #[must_use]
     pub const fn scheduler(&self) -> crate::DiffusionScheduler {
         self.options.scheduler
+    }
+
+    /// Eagerly warm the underlying diffusion-rs pipeline.
+    ///
+    /// Without the `engine` feature this returns
+    /// [`DiffusionError::EngineNotAvailable`]. With it, this is idempotent
+    /// and safe to call from multiple tasks concurrently.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DiffusionError::ModelLoad`] if pipeline construction or the
+    /// output-directory bootstrap fails.
+    #[allow(clippy::unused_async)] // async to mirror LocalModel and the engine path
+    pub async fn load(&self) -> Result<(), DiffusionError> {
+        #[cfg(feature = "engine")]
+        {
+            let opts = self.options.clone();
+            self.engine
+                .get_or_try_init(|| async move {
+                    tokio::task::spawn_blocking(move || crate::engine::Engine::new(&opts))
+                        .await
+                        .map_err(|e| DiffusionError::ModelLoad(format!("join: {e}")))?
+                        .map(std::sync::Arc::new)
+                })
+                .await?;
+            Ok(())
+        }
+        #[cfg(not(feature = "engine"))]
+        {
+            Err(DiffusionError::EngineNotAvailable)
+        }
+    }
+
+    /// Best-effort unload. Always succeeds.
+    ///
+    /// `diffusion-rs` does not expose a "drop weights" entry point and the
+    /// cached pipeline lives behind a [`tokio::sync::OnceCell`] shared via
+    /// `&self`, so we cannot evict it from interior mutability alone.
+    /// Callers that require strict resource release should `drop` the
+    /// entire [`DiffusionProvider`] and construct a fresh one.
+    ///
+    /// # Errors
+    ///
+    /// Never errors today; the `Result` is kept to match the
+    /// [`blazen_llm::LocalModel::unload`] trait signature so the
+    /// bridge can forward without contortions.
+    #[allow(clippy::unused_async)]
+    pub async fn unload(&self) -> Result<(), DiffusionError> {
+        Ok(())
+    }
+
+    /// `true` if a pipeline has been warmed via [`Self::load`] or the first
+    /// generate call.
+    #[allow(clippy::unused_async)]
+    pub async fn is_loaded(&self) -> bool {
+        #[cfg(feature = "engine")]
+        {
+            self.engine.initialized()
+        }
+        #[cfg(not(feature = "engine"))]
+        {
+            false
+        }
+    }
+}
+
+#[cfg(feature = "engine")]
+impl DiffusionProvider {
+    /// Inherent text-to-image entry point used by the
+    /// [`blazen_llm::ImageGeneration`] trait impl in
+    /// `blazen-llm::backends::diffusion`. Kept as an inherent method so the
+    /// engine type does not leak across the `blazen-llm` boundary.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`DiffusionError`] if the engine cannot be initialised or
+    /// generation fails.
+    pub async fn generate_image_inherent(
+        &self,
+        prompt: String,
+        negative_prompt: Option<String>,
+        width: Option<u32>,
+        height: Option<u32>,
+    ) -> Result<crate::engine::GeneratedImage, DiffusionError> {
+        // Lazy init via the shared OnceCell.
+        let opts = self.options.clone();
+        let engine = self
+            .engine
+            .get_or_try_init(|| async move {
+                tokio::task::spawn_blocking(move || crate::engine::Engine::new(&opts))
+                    .await
+                    .map_err(|e| DiffusionError::ModelLoad(format!("join: {e}")))?
+                    .map(std::sync::Arc::new)
+            })
+            .await?
+            .clone();
+
+        let w = width.unwrap_or_else(|| self.width());
+        let h = height.unwrap_or_else(|| self.height());
+        let steps = self.num_inference_steps();
+        let scale = self.guidance_scale();
+
+        tokio::task::spawn_blocking(move || {
+            engine.txt2img(&prompt, negative_prompt.as_deref(), w, h, steps, scale)
+        })
+        .await
+        .map_err(|e| DiffusionError::Generation(format!("join: {e}")))?
     }
 }
 

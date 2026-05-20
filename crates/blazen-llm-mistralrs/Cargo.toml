@@ -44,19 +44,25 @@ engine = ["dep:mistralrs", "dep:image", "dep:base64"]
 
 # Platform-specific acceleration features.
 #
-# These are intentionally NO-OP flags at the library level. Cargo features
-# cannot be gated on `cfg()` targets, and `--all-features` must pass on
-# every platform. Activating `mistralrs/metal` on Linux or `mistralrs/cuda`
-# without an NVIDIA GPU causes hard compile errors from candle's backend
-# guards.
-#
-# To enable GPU acceleration, add `mistralrs` as a direct dependency in your
-# **binary crate** with the desired features:
+# `cuda`, `metal`, `accelerate`, and `mkl` are intentionally NO-OP marker
+# flags at this library level -- they exist so `cargo --all-features` doesn't
+# break on every platform and so downstream binary crates know which features
+# to enable directly on `mistralrs` (where activating e.g. `mistralrs/metal`
+# on Linux or `mistralrs/cuda` without an NVIDIA GPU is a hard compile error
+# from candle's backend guards). To actually turn one on, declare `mistralrs`
+# as a direct dependency in your **binary crate** with the desired feature
+# and Cargo's feature unification will merge it with the `engine` dep here:
 #
 #   [dependencies]
 #   mistralrs = { version = "0.8.1", default-features = false, features = ["cuda"] }
 #
-# Cargo's feature unification will merge them with the `engine` dep here.
+# `flash-attn`, by contrast, IS a real forwarder: enabling it activates
+# `mistralrs/flash-attn`, which builds FlashAttention-2 kernels via nvcc at
+# compile time. Requirements:
+#   - CUDA toolkit >= 11.8
+#   - GPU compute capability >= 8.0 (Ampere or newer; Hopper / Ada also work)
+#   - Turing (sm_75) GPUs cannot compile flash-attn -- fall back to eager
+#     attention by leaving this feature off.
 cuda = ["engine"]
 metal = ["engine"]
 accelerate = ["engine"]

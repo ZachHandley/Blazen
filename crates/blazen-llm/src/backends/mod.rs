@@ -10,6 +10,9 @@ pub mod candle_embed;
 #[cfg(feature = "candle-llm")]
 pub mod candle_llm;
 
+#[cfg(feature = "diffusion")]
+pub mod diffusion;
+
 #[cfg(feature = "embed")]
 pub mod embed;
 

@@ -29,7 +29,14 @@ candle-embed = ["dep:blazen-embed-candle"]   # Phase 6: local embeddings via can
 mistralrs = ["dep:blazen-llm-mistralrs"]      # Phase 3: local LLM via mistral.rs
 llamacpp = ["dep:blazen-llm-llamacpp"]       # Phase 8: local LLM via llama.cpp
 candle-llm = ["dep:blazen-llm-candle"]     # Phase 7: local LLM via candle
-diffusion = ["dep:blazen-image-diffusion"]      # Phase 5: local image gen via diffusion-rs
+diffusion = ["dep:blazen-image-diffusion"]      # Phase 5: bridge + types only (no native runtime)
+# Forwarding activator: pull the diffusion-rs runtime so the bridge actually
+# runs generation instead of returning EngineNotAvailable. Split from
+# `diffusion` so workspace consumers can opt into the bridge surface (e.g.
+# for tests / type stubs) without paying the multi-GB native dep cost. GPU
+# acceleration is opt-in via `diffusion-rs` directly in the binary crate --
+# see the comment block in `crates/blazen-image-diffusion/Cargo.toml`.
+diffusion-engine = ["diffusion", "blazen-image-diffusion/engine"]
 whispercpp = ["dep:blazen-audio-whispercpp"]     # Phase 4: local STT via whisper.cpp
 piper = ["dep:blazen-audio-piper"]          # Phase 9: local TTS via Piper
 candle-audio = []   # Phase 10: local music/SFX via candle

@@ -125,6 +125,7 @@ const ERROR_CLASS_HIERARCHY: &[(&str, Option<&str>)] = &[
     ("DiffusionInvalidOptionsError", Some("DiffusionError")),
     ("DiffusionModelLoadError", Some("DiffusionError")),
     ("DiffusionGenerationError", Some("DiffusionError")),
+    ("DiffusionEngineNotAvailableError", Some("DiffusionError")),
     ("FastEmbedError", Some("ProviderError")),
     ("EmbedUnknownModelError", Some("FastEmbedError")),
     ("EmbedInitError", Some("FastEmbedError")),
