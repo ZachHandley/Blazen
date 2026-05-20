@@ -935,6 +935,7 @@ module.exports.JoinStrategy = nativeBinding.JoinStrategy
 module.exports.JsJoinStrategy = nativeBinding.JsJoinStrategy
 module.exports.JsAdmissionModeTag = nativeBinding.JsAdmissionModeTag
 module.exports.JsAuthMethod = nativeBinding.JsAuthMethod
+module.exports.JsBackendHint = nativeBinding.JsBackendHint
 module.exports.JsCacheStrategy = nativeBinding.JsCacheStrategy
 module.exports.JsContentKind = nativeBinding.JsContentKind
 module.exports.JsDiffusionScheduler = nativeBinding.JsDiffusionScheduler

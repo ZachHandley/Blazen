@@ -467,6 +467,7 @@ module.exports.JoinStrategy = __napiModule.exports.JoinStrategy
 module.exports.JsJoinStrategy = __napiModule.exports.JsJoinStrategy
 module.exports.JsAdmissionModeTag = __napiModule.exports.JsAdmissionModeTag
 module.exports.JsAuthMethod = __napiModule.exports.JsAuthMethod
+module.exports.JsBackendHint = __napiModule.exports.JsBackendHint
 module.exports.JsCacheStrategy = __napiModule.exports.JsCacheStrategy
 module.exports.JsContentKind = __napiModule.exports.JsContentKind
 module.exports.JsDiffusionScheduler = __napiModule.exports.JsDiffusionScheduler
