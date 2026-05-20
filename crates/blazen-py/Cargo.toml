@@ -68,14 +68,14 @@ llamacpp = ["blazen-llm/llamacpp"]
 candle-llm = ["blazen-llm/candle-llm"]
 diffusion = ["blazen-llm/diffusion"]
 whispercpp = ["blazen-llm/whispercpp"]
-piper = ["blazen-llm/piper"]
+tts = ["blazen-llm/tts"]
 tiktoken = ["blazen-llm/tiktoken"]
 # Pure-Rust ONNX embedding backend (musl/WASM-friendly alternative to fastembed).
 tract = ["dep:blazen-embed-tract"]
 # ORT-backed embedding backend (faster than tract on x86_64/aarch64 where ORT
 # ships prebuilts; target-gated optional dep so musl builds skip it).
 fastembed = ["blazen-llm/embed", "dep:blazen-embed-fastembed"]
-local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "piper", "tiktoken", "distributed", "otlp", "prometheus", "langfuse", "training"]
+local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "tts", "tiktoken", "distributed", "otlp", "prometheus", "langfuse", "training"]
 # Telemetry exporters
 otlp = ["blazen-telemetry/otlp"]
 prometheus = ["blazen-telemetry/prometheus"]

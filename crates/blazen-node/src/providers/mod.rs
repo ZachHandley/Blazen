@@ -44,10 +44,10 @@ pub mod fastembed;
 pub mod llamacpp;
 #[cfg(feature = "mistralrs")]
 pub mod mistralrs;
-#[cfg(feature = "piper")]
-pub mod piper;
 #[cfg(all(feature = "tract", not(target_os = "wasi")))]
 pub mod tract;
+#[cfg(feature = "tts")]
+pub mod tts;
 #[cfg(feature = "whispercpp")]
 pub mod whispercpp;
 
@@ -117,9 +117,9 @@ pub use mistralrs::{
     JsInferenceImageSource, JsInferenceResult, JsInferenceToolCall, JsInferenceUsage,
     JsMistralRsProvider,
 };
-#[cfg(feature = "piper")]
-pub use piper::{JsPiperOptions, JsPiperProvider};
 #[cfg(all(feature = "tract", not(target_os = "wasi")))]
 pub use tract::{JsTractEmbedModel, JsTractOptions, JsTractResponse};
+#[cfg(feature = "tts")]
+pub use tts::{JsTtsModel, JsTtsOptions, JsTtsProvider};
 #[cfg(feature = "whispercpp")]
 pub use whispercpp::JsWhisperCppProvider;

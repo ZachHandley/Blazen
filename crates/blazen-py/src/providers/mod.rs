@@ -44,8 +44,8 @@ pub mod mistralrs;
 #[cfg(feature = "whispercpp")]
 pub mod whispercpp;
 
-#[cfg(feature = "piper")]
-pub mod piper;
+#[cfg(feature = "tts")]
+pub mod tts;
 
 #[cfg(feature = "diffusion")]
 pub mod diffusion;

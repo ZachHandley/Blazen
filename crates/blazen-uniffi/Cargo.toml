@@ -48,6 +48,7 @@ uuid.workspace = true
 blazen-train = { workspace = true, optional = true }
 candle-core = { workspace = true, optional = true }
 tokenizers = { workspace = true, optional = true }
+base64.workspace = true
 
 [build-dependencies]
 uniffi_build.workspace = true
@@ -65,7 +66,7 @@ llamacpp = ["blazen-llm/llamacpp"]
 candle-llm = ["blazen-llm/candle-llm"]
 diffusion = ["blazen-llm/diffusion"]
 whispercpp = ["blazen-llm/whispercpp"]
-piper = ["blazen-llm/piper"]
+tts = ["blazen-llm/tts"]
 tiktoken = ["blazen-llm/tiktoken"]
 tract = ["dep:blazen-embed-tract"]
 # ORT-backed embedding backend (faster than tract on x86_64/aarch64 where ORT
@@ -98,7 +99,7 @@ local-all = [
     "candle-llm",
     "diffusion",
     "whispercpp",
-    "piper",
+    "tts",
     "tiktoken",
     "distributed",
     "otlp",

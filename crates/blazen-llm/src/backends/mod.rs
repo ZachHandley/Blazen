@@ -30,3 +30,6 @@ pub mod llamacpp;
 
 #[cfg(feature = "vllm")]
 pub mod vllm;
+
+#[cfg(feature = "tts")]
+pub mod tts;

@@ -308,8 +308,8 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     #[cfg(feature = "candle-embed")]
     m.add_class::<providers::options::PyCandleEmbedOptions>()?;
 
-    #[cfg(feature = "piper")]
-    m.add_class::<providers::options::PyPiperOptions>()?;
+    #[cfg(feature = "tts")]
+    m.add_class::<providers::options::PyTtsOptions>()?;
 
     #[cfg(feature = "diffusion")]
     {
@@ -527,8 +527,8 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     }
     #[cfg(feature = "whispercpp")]
     m.add_class::<providers::whispercpp::PyWhisperCppProvider>()?;
-    #[cfg(feature = "piper")]
-    m.add_class::<providers::piper::PyPiperProvider>()?;
+    #[cfg(feature = "tts")]
+    m.add_class::<providers::tts::PyTtsProvider>()?;
     #[cfg(feature = "diffusion")]
     m.add_class::<providers::diffusion::PyDiffusionProvider>()?;
     #[cfg(all(feature = "embed", not(target_env = "musl")))]

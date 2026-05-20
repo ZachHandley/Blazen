@@ -27,6 +27,7 @@ members = [
     "crates/blazen-image-diffusion",
     "crates/blazen-llm-candle",
     "crates/blazen-llm-llamacpp",
+    "crates/blazen-audio-tts",
     "crates/blazen-audio-piper",
     "crates/blazen-peer",
     "crates/blazen-controlplane",
@@ -143,6 +144,7 @@ blazen-image-diffusion = { version = "0.0.0-dev", path = "crates/blazen-image-di
 blazen-llm-candle = { version = "0.0.0-dev", path = "crates/blazen-llm-candle", registry = "forgejo" }
 blazen-llm-llamacpp = { version = "0.0.0-dev", path = "crates/blazen-llm-llamacpp", registry = "forgejo" }
 blazen-llm-vllm = { version = "0.0.0-dev", path = "crates/blazen-llm-vllm", registry = "forgejo" }
+blazen-audio-tts = { version = "0.0.0-dev", path = "crates/blazen-audio-tts", registry = "forgejo" }
 blazen-audio-piper = { version = "0.0.0-dev", path = "crates/blazen-audio-piper", registry = "forgejo" }
 blazen-audio-candle = { version = "0.0.0-dev", path = "crates/blazen-audio-candle", registry = "forgejo" }
 blazen-peer = { version = "0.0.0-dev", path = "crates/blazen-peer", registry = "forgejo" }

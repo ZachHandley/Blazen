@@ -42,7 +42,8 @@ diffusion = ["dep:blazen-image-diffusion"]      # Phase 5: bridge + types only (
 # see the comment block in `crates/blazen-image-diffusion/Cargo.toml`.
 diffusion-engine = ["diffusion", "blazen-image-diffusion/engine"]
 whispercpp = ["dep:blazen-audio-whispercpp"]     # Phase 4: local STT via whisper.cpp
-piper = ["dep:blazen-audio-piper"]          # Phase 9: local TTS via Piper
+piper = ["dep:blazen-audio-piper"]          # Deprecated shim — use `tts` feature instead
+tts = ["dep:blazen-audio-tts"]              # Local TTS via any-tts (Kokoro-82M default)
 candle-audio = ["dep:blazen-audio-candle", "blazen-audio-candle/engine"]   # Phase 10: local music/SFX via candle
 
 [dependencies]
@@ -77,6 +78,7 @@ blazen-llm-candle = { workspace = true, optional = true }
 blazen-llm-llamacpp = { workspace = true, optional = true }
 blazen-llm-vllm = { workspace = true, optional = true }
 blazen-audio-piper = { workspace = true, optional = true }
+blazen-audio-tts = { workspace = true, optional = true }
 blazen-audio-candle = { workspace = true, optional = true }
 
 # Timer/runtime features only on native targets (mio doesn't support any wasm32 target)

@@ -21,7 +21,7 @@ all = ["llm", "persist", "pipeline", "prompts", "telemetry"]
 local-embeddings = ["blazen-llm/embed", "blazen-llm/candle-embed"]
 local-llm = ["blazen-llm/mistralrs", "blazen-llm/llamacpp", "blazen-llm/candle-llm"]
 local-image = ["blazen-llm/diffusion"]
-local-audio = ["blazen-llm/whispercpp", "blazen-llm/piper", "blazen-llm/candle-audio"]
+local-audio = ["blazen-llm/whispercpp", "blazen-llm/tts", "blazen-llm/candle-audio"]
 local-all = ["local-embeddings", "local-llm", "local-image", "local-audio"]
 
 [dependencies]

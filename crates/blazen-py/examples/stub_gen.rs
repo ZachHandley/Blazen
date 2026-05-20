@@ -197,7 +197,7 @@ fn inject_exception_stubs(content: &str) -> String {
 #
 # Plus 9 per-backend subclasses of ProviderError (LlamaCppError,
 # CandleLlmError, CandleEmbedError, MistralRsError, WhisperError,
-# PiperError, DiffusionError, FastEmbedError, TractError) that are
+# TtsError, DiffusionError, FastEmbedError, TractError) that are
 # feature-gated at runtime in src/error.rs but always declared here for
 # static type-checking.
 
@@ -282,8 +282,8 @@ class WhisperError(ProviderError):
     """whisper.cpp transcription backend error (feature: `whispercpp`)."""
     ...
 
-class PiperError(ProviderError):
-    """Piper TTS backend error (feature: `piper`)."""
+class TtsError(ProviderError):
+    """Local any-tts backend error (feature: `tts`)."""
     ...
 
 class DiffusionError(ProviderError):
@@ -313,11 +313,11 @@ class TractError(ProviderError):
         "LlamaCppError",
         "MediaError",
         "MistralRsError",
-        "PiperError",
         "ProviderError",
         "RateLimitError",
         "TimeoutError",
         "TractError",
+        "TtsError",
         "UnsupportedError",
         "ValidationError",
         "WhisperError",

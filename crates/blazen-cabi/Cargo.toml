@@ -55,7 +55,7 @@ llamacpp = ["blazen-uniffi/llamacpp"]
 candle-llm = ["blazen-uniffi/candle-llm"]
 diffusion = ["blazen-uniffi/diffusion"]
 whispercpp = ["blazen-uniffi/whispercpp"]
-piper = ["blazen-uniffi/piper"]
+tts = ["blazen-uniffi/tts"]
 tiktoken = ["blazen-uniffi/tiktoken"]
 tract = ["blazen-uniffi/tract"]
 # ORT-backed embedding backend (forwarded through blazen-uniffi; target-gated
@@ -72,7 +72,7 @@ local-all = [
     "candle-llm",
     "diffusion",
     "whispercpp",
-    "piper",
+    "tts",
     "tiktoken",
     "distributed",
     "otlp",

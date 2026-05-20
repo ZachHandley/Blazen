@@ -36,8 +36,8 @@ pyo3::create_exception!(blazen, CandleEmbedError, ProviderError);
 pyo3::create_exception!(blazen, MistralRsError, ProviderError);
 #[cfg(feature = "whispercpp")]
 pyo3::create_exception!(blazen, WhisperError, ProviderError);
-#[cfg(feature = "piper")]
-pyo3::create_exception!(blazen, PiperError, ProviderError);
+#[cfg(feature = "tts")]
+pyo3::create_exception!(blazen, TtsError, ProviderError);
 #[cfg(feature = "diffusion")]
 pyo3::create_exception!(blazen, DiffusionError, ProviderError);
 #[cfg(all(feature = "embed", not(target_env = "musl")))]
@@ -71,8 +71,8 @@ pub fn register_exceptions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("MistralRsError", m.py().get_type::<MistralRsError>())?;
     #[cfg(feature = "whispercpp")]
     m.add("WhisperError", m.py().get_type::<WhisperError>())?;
-    #[cfg(feature = "piper")]
-    m.add("PiperError", m.py().get_type::<PiperError>())?;
+    #[cfg(feature = "tts")]
+    m.add("TtsError", m.py().get_type::<TtsError>())?;
     #[cfg(feature = "diffusion")]
     m.add("DiffusionError", m.py().get_type::<DiffusionError>())?;
     #[cfg(all(feature = "embed", not(target_env = "musl")))]

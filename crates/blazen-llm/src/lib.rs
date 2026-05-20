@@ -262,5 +262,5 @@ pub use blazen_llm_llamacpp::{
     LlamaCppError, LlamaCppOptions, LlamaCppProvider,
 };
 
-#[cfg(feature = "piper")]
-pub use blazen_audio_piper::{PiperError, PiperOptions, PiperProvider};
+#[cfg(feature = "tts")]
+pub use blazen_audio_tts::{SynthesizedAudio, TtsError, TtsModel, TtsOptions, TtsProvider};

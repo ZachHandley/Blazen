@@ -337,33 +337,38 @@ impl ImageGenBackend for FalImageGenAdapter {
 
 /// Adapter implementing [`TtsBackend`] over the local Piper provider.
 ///
-/// The upstream `blazen-audio-piper` crate does not yet implement
-/// [`AudioGeneration`](blazen_llm::compute::AudioGeneration); calls surface
-/// the "engine not available" message via [`BlazenError::Provider`] with
-/// `kind = "PiperSynthesis"`. The adapter exists today so foreign callers
-/// can wire up Piper construction (and detect engine availability through
-/// the eventual real call site) without their code changing when the
-/// engine lands.
-#[cfg(feature = "piper")]
-struct PiperTtsAdapter {
-    inner: Arc<blazen_llm::PiperProvider>,
+/// Adapter that bridges the local [`blazen_llm::TtsProvider`] (any-tts:
+/// Kokoro-82M, VibeVoice, Qwen3-TTS) onto the UniFFI [`TtsBackend`] trait.
+/// When the `engine` feature on `blazen-audio-tts` is not active the
+/// underlying provider surfaces `EngineNotAvailable` from synthesis.
+#[cfg(feature = "tts")]
+struct LocalTtsAdapter {
+    inner: Arc<blazen_llm::TtsProvider>,
 }
 
-#[cfg(feature = "piper")]
+#[cfg(feature = "tts")]
 #[async_trait]
-impl TtsBackend for PiperTtsAdapter {
+impl TtsBackend for LocalTtsAdapter {
     async fn synthesize(
         &self,
-        _text: String,
+        text: String,
         _voice: Option<String>,
         _language: Option<String>,
     ) -> Result<TtsResult, blazen_llm::BlazenError> {
-        let detail = if self.inner.engine_available() {
-            "piper text-to-speech engine is compiled in but the AudioGeneration trait bridge has not been wired yet"
-        } else {
-            "piper engine not available: build with the `piper/engine` feature"
-        };
-        Err(blazen_llm::BlazenError::provider("piper", detail))
+        use base64::Engine as _;
+        let synth = self
+            .inner
+            .synthesize(&text)
+            .await
+            .map_err(|e| blazen_llm::BlazenError::provider("any-tts", e.to_string()))?;
+        let audio_base64 = base64::engine::general_purpose::STANDARD.encode(&synth.wav_bytes);
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let duration_ms = (f64::from(synth.duration_secs) * 1000.0).round() as u64;
+        Ok(TtsResult {
+            audio_base64,
+            mime_type: "audio/wav".into(),
+            duration_ms,
+        })
     }
 }
 
@@ -667,37 +672,62 @@ fn parse_media_type(mime: &str) -> CoreMediaType {
 /// Build a local Piper text-to-speech model.
 ///
 /// `model_id` selects a Piper voice model (e.g. `"en_US-amy-medium"`).
-/// `speaker_id` selects a speaker for multi-speaker voice models;
-/// `sample_rate` overrides the model's native sample rate. Returns a
-/// [`TtsModel`] handle whose [`synthesize`](TtsModel::synthesize) call
-/// surfaces the upstream "engine not available" error until the Piper
-/// Phase 9 wiring lands — but construction succeeds so foreign callers
-/// can wire option plumbing today.
-#[cfg(feature = "piper")]
+/// Builds a local TTS model backed by `any-tts` (Kokoro-82M default).
+///
+/// `model` is one of `"kokoro82m"`, `"vibevoice"`, or `"qwen3_tts"` (or
+/// any of the snake_case aliases); pass null to default to Kokoro-82M.
+/// `voice` selects a speaker preset (e.g. `"af_bella"`); pass null to
+/// use the model default. `sample_rate` overrides the model's native
+/// sample rate.
+#[cfg(feature = "tts")]
 #[uniffi::export]
-pub fn new_piper_tts_model(
-    model_id: Option<String>,
-    speaker_id: Option<u32>,
+pub fn new_local_tts_model(
+    model: Option<String>,
+    voice: Option<String>,
+    language: Option<String>,
     sample_rate: Option<u32>,
 ) -> BlazenResult<Arc<TtsModel>> {
-    let opts = blazen_llm::PiperOptions {
-        model_id,
-        speaker_id,
+    use blazen_llm::TtsModel as InnerTtsModel;
+    let model_enum = match model.as_deref() {
+        None | Some("kokoro82m") | Some("kokoro") | Some("kokoro_82m") => {
+            Some(InnerTtsModel::Kokoro82m)
+        }
+        Some("vibevoice") | Some("vibe_voice") => Some(InnerTtsModel::VibeVoice),
+        Some("qwen3_tts") | Some("qwen3-tts") | Some("qwen3tts") => Some(InnerTtsModel::Qwen3Tts),
+        Some(other) => {
+            return Err(BlazenError::Provider {
+                kind: "TtsInit".into(),
+                message: format!(
+                    "unknown tts model {other:?}: expected kokoro82m, vibevoice, or qwen3_tts"
+                ),
+                provider: Some("any-tts".into()),
+                status: None,
+                endpoint: None,
+                request_id: None,
+                detail: None,
+                retry_after_ms: None,
+            });
+        }
+    };
+    let opts = blazen_llm::TtsOptions {
+        model: model_enum,
+        voice,
+        language,
         sample_rate,
         cache_dir: None,
     };
     let provider =
-        blazen_llm::PiperProvider::from_options(opts).map_err(|e| BlazenError::Provider {
-            kind: "PiperInit".into(),
+        blazen_llm::TtsProvider::from_options(opts).map_err(|e| BlazenError::Provider {
+            kind: "TtsInit".into(),
             message: e.to_string(),
-            provider: Some("piper".into()),
+            provider: Some("any-tts".into()),
             status: None,
             endpoint: None,
             request_id: None,
             detail: None,
             retry_after_ms: None,
         })?;
-    let adapter = PiperTtsAdapter {
+    let adapter = LocalTtsAdapter {
         inner: Arc::new(provider),
     };
     Ok(TtsModel::from_arc(Arc::new(adapter)))

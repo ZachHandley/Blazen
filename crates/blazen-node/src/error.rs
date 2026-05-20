@@ -286,17 +286,17 @@ pub fn diffusion_error_to_napi(err: blazen_llm::DiffusionError) -> napi::Error {
     napi::Error::with_class(class, err.to_string())
 }
 
-/// Convert a [`blazen_llm::PiperError`] to a [`napi::Error`].
-#[cfg(feature = "piper")]
+/// Convert a [`blazen_llm::TtsError`] to a [`napi::Error`].
+#[cfg(feature = "tts")]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
-pub fn piper_error_to_napi(err: blazen_llm::PiperError) -> napi::Error {
-    use blazen_llm::PiperError;
+pub fn tts_error_to_napi(err: blazen_llm::TtsError) -> napi::Error {
+    use blazen_llm::TtsError;
     let class = match &err {
-        PiperError::InvalidOptions(_) => "PiperInvalidOptionsError",
-        PiperError::ModelLoad(_) => "PiperModelLoadError",
-        PiperError::Synthesis(_) => "PiperSynthesisError",
-        PiperError::EngineNotAvailable => "PiperEngineNotAvailableError",
+        TtsError::InvalidOptions(_) => "TtsInvalidOptionsError",
+        TtsError::ModelLoad(_) => "TtsModelLoadError",
+        TtsError::Synthesis(_) => "TtsSynthesisError",
+        TtsError::EngineNotAvailable => "TtsEngineNotAvailableError",
     };
     napi::Error::with_class(class, err.to_string())
 }

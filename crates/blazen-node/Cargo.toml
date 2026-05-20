@@ -55,7 +55,7 @@ llamacpp = ["blazen-llm/llamacpp"]
 candle-llm = ["blazen-llm/candle-llm"]
 diffusion = ["blazen-llm/diffusion"]
 whispercpp = ["blazen-llm/whispercpp"]
-piper = ["blazen-llm/piper"]
+tts = ["blazen-llm/tts"]
 # `ModelManager.loadFromHf` auto-backend selection via the Hugging Face Hub
 # metadata probe. Forwards to `blazen-manager/hf-loader`.
 hf-loader = ["blazen-manager/hf-loader"]
@@ -66,12 +66,12 @@ hf-loader = ["blazen-manager/hf-loader"]
 # Excludes `tract` (blazen-embed-tract still pulls reqwest's wasm-bindgen
 # path on wasm32, which requires a browser host that napi-rs's wasi runtime
 # doesn't provide), `prometheus` (no listener on wasi), and all native C/C++
-# inference backends (llama.cpp, ort-sys, candle, piper, whisper).
+# inference backends (llama.cpp, ort-sys, candle, any-tts, whisper).
 # Note: `embed` is intentionally excluded — `blazen-embed`'s facade
 # unconditionally pulls in `blazen-embed-fastembed` (and ort-sys C++ runtime)
 # on non-musl targets.
 wasi = ["tiktoken", "distributed-http", "otlp-http", "langfuse"]
-local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "piper", "tiktoken", "distributed", "otlp", "prometheus", "langfuse", "hf-loader", "training"]
+local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "tts", "tiktoken", "distributed", "otlp", "prometheus", "langfuse", "hf-loader", "training"]
 # Distributed peer-to-peer execution (cross-node sub-workflow invocation).
 # Native: gRPC client+server via tonic.
 distributed = ["blazen-core/distributed", "blazen-peer/server", "blazen-peer/client"]

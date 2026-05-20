@@ -17,7 +17,7 @@
 //!      ├── ProviderError
 //!      │     ├── LlamaCppError, LlamaCppInvalidOptionsError, ...
 //!      │     ├── CandleLlmError, CandleEmbedError, MistralRsError,
-//!      │     │   WhisperError, PiperError, DiffusionError, FastEmbedError,
+//!      │     │   WhisperError, TtsError, DiffusionError, FastEmbedError,
 //!      │     │   TractError (and their per-variant subclasses)
 //!      ├── PeerEncodeError, PeerTransportError, PeerEnvelopeVersionError,
 //!      │   PeerWorkflowError, PeerTlsError, PeerUnknownStepError
@@ -116,11 +116,11 @@ const ERROR_CLASS_HIERARCHY: &[(&str, Option<&str>)] = &[
     ("WhisperTranscriptionError", Some("WhisperError")),
     ("WhisperEngineNotAvailableError", Some("WhisperError")),
     ("WhisperIoError", Some("WhisperError")),
-    ("PiperError", Some("ProviderError")),
-    ("PiperInvalidOptionsError", Some("PiperError")),
-    ("PiperModelLoadError", Some("PiperError")),
-    ("PiperSynthesisError", Some("PiperError")),
-    ("PiperEngineNotAvailableError", Some("PiperError")),
+    ("TtsError", Some("ProviderError")),
+    ("TtsInvalidOptionsError", Some("TtsError")),
+    ("TtsModelLoadError", Some("TtsError")),
+    ("TtsSynthesisError", Some("TtsError")),
+    ("TtsEngineNotAvailableError", Some("TtsError")),
     ("DiffusionError", Some("ProviderError")),
     ("DiffusionInvalidOptionsError", Some("DiffusionError")),
     ("DiffusionModelLoadError", Some("DiffusionError")),

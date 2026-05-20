@@ -14,7 +14,7 @@ use blazen_llm::types::provider_options::{
     feature = "llamacpp",
     feature = "candle-llm",
     feature = "candle-embed",
-    feature = "piper",
+    feature = "tts",
     feature = "diffusion",
 ))]
 use std::path::PathBuf;
@@ -1215,67 +1215,109 @@ impl PyCandleEmbedOptions {
 }
 
 // ---------------------------------------------------------------------------
-// PiperOptions
+// TtsOptions
 // ---------------------------------------------------------------------------
 
-/// Options for the local Piper TTS backend.
+/// Options for the local TTS backend (`any-tts`).
 ///
 /// Example:
-///     >>> opts = PiperOptions(model_id="en_US-amy-medium")
-///     >>> provider = PiperProvider(options=opts)
-#[cfg(feature = "piper")]
+///     >>> opts = TtsOptions(model="kokoro82m", voice="af_bella")
+///     >>> provider = TtsProvider(options=opts)
+#[cfg(feature = "tts")]
 #[gen_stub_pyclass]
-#[pyclass(name = "PiperOptions", from_py_object)]
+#[pyclass(name = "TtsOptions", from_py_object)]
 #[derive(Clone, Default)]
-pub struct PyPiperOptions {
-    pub(crate) inner: blazen_llm::PiperOptions,
+pub struct PyTtsOptions {
+    pub(crate) inner: blazen_llm::TtsOptions,
 }
 
-#[cfg(feature = "piper")]
+#[cfg(feature = "tts")]
+fn parse_tts_model(model: &str) -> PyResult<blazen_llm::TtsModel> {
+    match model {
+        "kokoro82m" | "kokoro" | "kokoro_82m" => Ok(blazen_llm::TtsModel::Kokoro82m),
+        "vibevoice" | "vibe_voice" => Ok(blazen_llm::TtsModel::VibeVoice),
+        "qwen3_tts" | "qwen3-tts" | "qwen3tts" => Ok(blazen_llm::TtsModel::Qwen3Tts),
+        other => Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "unknown tts model: {other:?} (expected kokoro82m, vibevoice, or qwen3_tts)"
+        ))),
+    }
+}
+
+#[cfg(feature = "tts")]
+fn tts_model_str(model: blazen_llm::TtsModel) -> &'static str {
+    match model {
+        blazen_llm::TtsModel::Kokoro82m => "kokoro82m",
+        blazen_llm::TtsModel::VibeVoice => "vibevoice",
+        blazen_llm::TtsModel::Qwen3Tts => "qwen3_tts",
+    }
+}
+
+#[cfg(feature = "tts")]
 #[gen_stub_pymethods]
 #[pymethods]
-impl PyPiperOptions {
-    /// Create a new PiperOptions.
+impl PyTtsOptions {
+    /// Create a new TtsOptions.
     ///
     /// Args:
-    ///     model_id: Piper voice model identifier (e.g. ``"en_US-amy-medium"``).
-    ///     speaker_id: Speaker ID for multi-speaker models.
+    ///     model: Which TTS model to load (``"kokoro82m"`` default,
+    ///         ``"vibevoice"``, or ``"qwen3_tts"``).
+    ///     voice: Voice / speaker preset name (e.g. ``"af_bella"`` for Kokoro).
+    ///     language: Language ISO 639-1 code.
     ///     sample_rate: Output audio sample rate in Hz.
-    ///     cache_dir: Path to cache downloaded voice models.
+    ///     cache_dir: Path to cache downloaded model weights.
     #[new]
-    #[pyo3(signature = (*, model_id=None, speaker_id=None, sample_rate=None, cache_dir=None))]
+    #[pyo3(signature = (*, model=None, voice=None, language=None, sample_rate=None, cache_dir=None))]
     fn new(
-        model_id: Option<String>,
-        speaker_id: Option<u32>,
+        model: Option<String>,
+        voice: Option<String>,
+        language: Option<String>,
         sample_rate: Option<u32>,
         cache_dir: Option<String>,
-    ) -> Self {
-        Self {
-            inner: blazen_llm::PiperOptions {
-                model_id,
-                speaker_id,
+    ) -> PyResult<Self> {
+        let model = match model {
+            Some(s) => Some(parse_tts_model(&s)?),
+            None => Some(blazen_llm::TtsModel::default()),
+        };
+        Ok(Self {
+            inner: blazen_llm::TtsOptions {
+                model,
+                voice,
+                language,
                 sample_rate,
                 cache_dir: cache_dir.map(PathBuf::from),
             },
-        }
+        })
     }
 
     #[getter]
-    fn model_id(&self) -> Option<String> {
-        self.inner.model_id.clone()
+    fn model(&self) -> Option<String> {
+        self.inner.model.map(|m| tts_model_str(m).to_owned())
     }
     #[setter]
-    fn set_model_id(&mut self, value: Option<String>) {
-        self.inner.model_id = value;
+    fn set_model(&mut self, value: Option<String>) -> PyResult<()> {
+        self.inner.model = match value {
+            Some(s) => Some(parse_tts_model(&s)?),
+            None => None,
+        };
+        Ok(())
     }
 
     #[getter]
-    fn speaker_id(&self) -> Option<u32> {
-        self.inner.speaker_id
+    fn voice(&self) -> Option<String> {
+        self.inner.voice.clone()
     }
     #[setter]
-    fn set_speaker_id(&mut self, value: Option<u32>) {
-        self.inner.speaker_id = value;
+    fn set_voice(&mut self, value: Option<String>) {
+        self.inner.voice = value;
+    }
+
+    #[getter]
+    fn language(&self) -> Option<String> {
+        self.inner.language.clone()
+    }
+    #[setter]
+    fn set_language(&mut self, value: Option<String>) {
+        self.inner.language = value;
     }
 
     #[getter]
@@ -1301,8 +1343,9 @@ impl PyPiperOptions {
 
     fn __repr__(&self) -> String {
         format!(
-            "PiperOptions(model_id={:?}, speaker_id={:?})",
-            self.inner.model_id, self.inner.speaker_id
+            "TtsOptions(model={:?}, voice={:?})",
+            self.inner.model.map(tts_model_str),
+            self.inner.voice,
         )
     }
 }

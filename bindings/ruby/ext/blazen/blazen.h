@@ -2466,16 +2466,18 @@ int32_t blazen_image_gen_model_new_fal(const char *api_key,
                                        BlazenError **out_err);
 
 /**
- * Build a local Piper text-to-speech model.
+ * Build a local any-tts text-to-speech model.
  *
- * `model_id` selects a Piper voice (e.g. `"en_US-amy-medium"`); pass null to
- * leave it unset (the upstream factory falls back to its default). `speaker_id`
- * and `sample_rate` follow the Option-as-`-1` encoding documented in
+ * `model` selects one of `"kokoro82m"` (default), `"vibevoice"`, or
+ * `"qwen3_tts"`; pass null to use the default. `voice` selects a speaker
+ * preset (e.g. `"af_bella"` for Kokoro); pass null to use the model's
+ * default. `language` is an ISO 639-1 hint (pass null to auto-detect).
+ * `sample_rate` follows the Option-as-`-1` encoding documented in
  * [`opt_u32_from_i32`].
  *
- * Construction succeeds today but synthesise calls surface the upstream
- * "engine not yet wired" error until the Piper Phase 9 work lands — see
- * `blazen_uniffi::compute::new_piper_tts_model`.
+ * Synthesis surfaces `EngineNotAvailable` until the upstream crate is
+ * built with the `engine` feature, but construction always succeeds so
+ * foreign callers can wire option plumbing today.
  *
  * On success returns `0` and writes a fresh `BlazenTtsModel*` into
  * `*out_model`. On failure returns `-1` and writes a fresh `BlazenError*`
@@ -2483,13 +2485,15 @@ int32_t blazen_image_gen_model_new_fal(const char *api_key,
  *
  * # Safety
  *
- * - `model_id` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `model`, `voice`, `language` must each be null OR a valid
+ *   NUL-terminated UTF-8 buffer.
  * - `out_model` and `out_err` must each be null OR point to a writable slot
  *   of the matching pointer type.
  */
 
-int32_t blazen_tts_model_new_piper(const char *model_id,
-                                   int32_t speaker_id,
+int32_t blazen_tts_model_new_local(const char *model,
+                                   const char *voice,
+                                   const char *language,
                                    int32_t sample_rate,
                                    BlazenTtsModel **out_model,
                                    BlazenError **out_err);

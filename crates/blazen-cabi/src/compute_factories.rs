@@ -230,19 +230,21 @@ pub unsafe extern "C" fn blazen_image_gen_model_new_fal(
 }
 
 // ---------------------------------------------------------------------------
-// Piper TTS factory (feature = "piper")
+// Local TTS factory (feature = "tts") -- any-tts (Kokoro-82M default)
 // ---------------------------------------------------------------------------
 
-/// Build a local Piper text-to-speech model.
+/// Build a local any-tts text-to-speech model.
 ///
-/// `model_id` selects a Piper voice (e.g. `"en_US-amy-medium"`); pass null to
-/// leave it unset (the upstream factory falls back to its default). `speaker_id`
-/// and `sample_rate` follow the Option-as-`-1` encoding documented in
+/// `model` selects one of `"kokoro82m"` (default), `"vibevoice"`, or
+/// `"qwen3_tts"`; pass null to use the default. `voice` selects a speaker
+/// preset (e.g. `"af_bella"` for Kokoro); pass null to use the model's
+/// default. `language` is an ISO 639-1 hint (pass null to auto-detect).
+/// `sample_rate` follows the Option-as-`-1` encoding documented in
 /// [`opt_u32_from_i32`].
 ///
-/// Construction succeeds today but synthesise calls surface the upstream
-/// "engine not yet wired" error until the Piper Phase 9 work lands — see
-/// `blazen_uniffi::compute::new_piper_tts_model`.
+/// Synthesis surfaces `EngineNotAvailable` until the upstream crate is
+/// built with the `engine` feature, but construction always succeeds so
+/// foreign callers can wire option plumbing today.
 ///
 /// On success returns `0` and writes a fresh `BlazenTtsModel*` into
 /// `*out_model`. On failure returns `-1` and writes a fresh `BlazenError*`
@@ -250,24 +252,27 @@ pub unsafe extern "C" fn blazen_image_gen_model_new_fal(
 ///
 /// # Safety
 ///
-/// - `model_id` must be null OR a valid NUL-terminated UTF-8 buffer.
+/// - `model`, `voice`, `language` must each be null OR a valid
+///   NUL-terminated UTF-8 buffer.
 /// - `out_model` and `out_err` must each be null OR point to a writable slot
 ///   of the matching pointer type.
-#[cfg(feature = "piper")]
+#[cfg(feature = "tts")]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_tts_model_new_piper(
-    model_id: *const c_char,
-    speaker_id: i32,
+pub unsafe extern "C" fn blazen_tts_model_new_local(
+    model: *const c_char,
+    voice: *const c_char,
+    language: *const c_char,
     sample_rate: i32,
     out_model: *mut *mut BlazenTtsModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
-    // SAFETY: caller upholds the NUL-termination + UTF-8 contract on `model_id`.
-    let model_id = unsafe { cstr_to_opt_string(model_id) };
-    let speaker_id = opt_u32_from_i32(speaker_id);
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract on each input.
+    let model = unsafe { cstr_to_opt_string(model) };
+    let voice = unsafe { cstr_to_opt_string(voice) };
+    let language = unsafe { cstr_to_opt_string(language) };
     let sample_rate = opt_u32_from_i32(sample_rate);
 
-    match blazen_uniffi::compute::new_piper_tts_model(model_id, speaker_id, sample_rate) {
+    match blazen_uniffi::compute::new_local_tts_model(model, voice, language, sample_rate) {
         Ok(arc) => {
             if !out_model.is_null() {
                 // SAFETY: caller has guaranteed `out_model` is writable.
