@@ -49,6 +49,7 @@ pub mod string;
 pub mod telemetry;
 pub mod telemetry_records;
 pub mod tool_handler;
+pub mod training_records;
 pub mod workflow;
 pub mod workflow_records;
 

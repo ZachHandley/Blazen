@@ -367,6 +367,7 @@ func init() {
 	FfiConverterControlPlaneRunEventSubscriberINSTANCE.register()
 	FfiConverterCustomProviderINSTANCE.register()
 	FfiConverterForeignLocalModelINSTANCE.register()
+	FfiConverterForeignTrainingProgressINSTANCE.register()
 	FfiConverterStepHandlerINSTANCE.register()
 	FfiConverterToolHandlerINSTANCE.register()
 	uniffiCheckChecksums()
@@ -1339,6 +1340,42 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_train_lora()
+		})
+		if checksum != 22343 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_train_lora: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_foreigntrainingprogress_on_event()
+		})
+		if checksum != 34103 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_foreigntrainingprogress_on_event: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffijsonldataset_is_empty()
+		})
+		if checksum != 21289 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffijsonldataset_is_empty: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffijsonldataset_len()
+		})
+		if checksum != 23707 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffijsonldataset_len: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_peerclient_node_id()
 		})
 		if checksum != 16043 {
@@ -2127,6 +2164,15 @@ func uniffiCheckChecksums() {
 		if checksum != 59591 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_with_pool_budgets: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_uniffijsonldataset_from_path()
+		})
+		if checksum != 8101 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_uniffijsonldataset_from_path: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -8607,6 +8653,175 @@ func (c FfiConverterForeignLocalModel) register() {
 	C.uniffi_blazen_uniffi_fn_init_callback_vtable_foreignlocalmodel(&UniffiVTableCallbackInterfaceForeignLocalModelINSTANCE)
 }
 
+// Foreign-implementable training-progress sink.
+//
+// Modeled SYNC so the bridge to [`TrainingProgress`] (also sync) is
+// trivial — the upstream trainer calls `on_event` from a tokio worker
+// and an async foreign hop would require `block_on` from inside the
+// same runtime (panic / deadlock-prone). Returning `Err(_)` cancels
+// the run; the trainer surfaces it as `BlazenError::Cancelled`.
+type ForeignTrainingProgress interface {
+	OnEvent(event TrainingEventEnum) error
+}
+
+// Foreign-implementable training-progress sink.
+//
+// Modeled SYNC so the bridge to [`TrainingProgress`] (also sync) is
+// trivial — the upstream trainer calls `on_event` from a tokio worker
+// and an async foreign hop would require `block_on` from inside the
+// same runtime (panic / deadlock-prone). Returning `Err(_)` cancels
+// the run; the trainer surfaces it as `BlazenError::Cancelled`.
+type ForeignTrainingProgressImpl struct {
+	ffiObject FfiObject
+}
+
+func (_self *ForeignTrainingProgressImpl) OnEvent(event TrainingEventEnum) error {
+	_pointer := _self.ffiObject.incrementPointer("ForeignTrainingProgress")
+	defer _self.ffiObject.decrementPointer()
+	_, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) bool {
+		C.uniffi_blazen_uniffi_fn_method_foreigntrainingprogress_on_event(
+			_pointer, FfiConverterTrainingEventEnumINSTANCE.Lower(event), _uniffiStatus)
+		return false
+	})
+	return _uniffiErr.AsError()
+}
+func (object *ForeignTrainingProgressImpl) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterForeignTrainingProgress struct {
+	handleMap *concurrentHandleMap[ForeignTrainingProgress]
+}
+
+var FfiConverterForeignTrainingProgressINSTANCE = FfiConverterForeignTrainingProgress{
+	handleMap: newConcurrentHandleMap[ForeignTrainingProgress](),
+}
+
+func (c FfiConverterForeignTrainingProgress) Lift(handle C.uint64_t) ForeignTrainingProgress {
+	if uint64(handle)&1 == 0 {
+		// Rust-generated handle (even), construct a new object wrapping the handle
+		result := &ForeignTrainingProgressImpl{
+			newFfiObject(
+				handle,
+				func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+					return C.uniffi_blazen_uniffi_fn_clone_foreigntrainingprogress(handle, status)
+				},
+				func(handle C.uint64_t, status *C.RustCallStatus) {
+					C.uniffi_blazen_uniffi_fn_free_foreigntrainingprogress(handle, status)
+				},
+			),
+		}
+		runtime.SetFinalizer(result, (*ForeignTrainingProgressImpl).Destroy)
+		return result
+	} else {
+		// Go-generated handle (odd), retrieve from the handle map
+		val, ok := c.handleMap.tryGet(uint64(handle))
+		if !ok {
+			panic(fmt.Errorf("no callback in handle map: %d", handle))
+		}
+		c.handleMap.remove(uint64(handle))
+		return val
+	}
+}
+
+func (c FfiConverterForeignTrainingProgress) Read(reader io.Reader) ForeignTrainingProgress {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterForeignTrainingProgress) Lower(value ForeignTrainingProgress) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	if val, ok := value.(*ForeignTrainingProgressImpl); ok {
+		// Rust-backed object, clone the handle
+		handle := val.ffiObject.incrementPointer("ForeignTrainingProgress")
+		defer val.ffiObject.decrementPointer()
+		return handle
+	} else {
+		// Go-backed object, insert into handle map
+		return C.uint64_t(c.handleMap.insert(value))
+	}
+}
+
+func (c FfiConverterForeignTrainingProgress) Write(writer io.Writer, value ForeignTrainingProgress) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalForeignTrainingProgress(handle uint64) ForeignTrainingProgress {
+	return FfiConverterForeignTrainingProgressINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalForeignTrainingProgress(value ForeignTrainingProgress) uint64 {
+	return uint64(FfiConverterForeignTrainingProgressINSTANCE.Lower(value))
+}
+
+type FfiDestroyerForeignTrainingProgress struct{}
+
+func (_ FfiDestroyerForeignTrainingProgress) Destroy(value ForeignTrainingProgress) {
+	if val, ok := value.(*ForeignTrainingProgressImpl); ok {
+		val.Destroy()
+	}
+}
+
+//export blazen_uniffi_manager_training_cgo_dispatchCallbackInterfaceForeignTrainingProgressMethod0
+func blazen_uniffi_manager_training_cgo_dispatchCallbackInterfaceForeignTrainingProgressMethod0(uniffiHandle C.uint64_t, event C.RustBuffer, uniffiOutReturn *C.void, callStatus *C.RustCallStatus) {
+	handle := uint64(uniffiHandle)
+	uniffiObj, ok := FfiConverterForeignTrainingProgressINSTANCE.handleMap.tryGet(handle)
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+
+	err :=
+		uniffiObj.OnEvent(
+			FfiConverterTrainingEventEnumINSTANCE.Lift(GoRustBuffer{
+				inner: event,
+			}),
+		)
+
+	if err != nil {
+		var actualError *BlazenError
+		if errors.As(err, &actualError) {
+			*callStatus = C.RustCallStatus{
+				code:     C.int8_t(uniffiCallbackResultError),
+				errorBuf: FfiConverterBlazenErrorINSTANCE.Lower(actualError),
+			}
+		} else {
+			*callStatus = C.RustCallStatus{
+				code: C.int8_t(uniffiCallbackUnexpectedResultError),
+			}
+		}
+		return
+	}
+
+}
+
+var UniffiVTableCallbackInterfaceForeignTrainingProgressINSTANCE = C.UniffiVTableCallbackInterfaceForeignTrainingProgress{
+	uniffiFree:  (C.UniffiCallbackInterfaceFree)(C.blazen_uniffi_manager_training_cgo_dispatchCallbackInterfaceForeignTrainingProgressFree),
+	uniffiClone: (C.UniffiCallbackInterfaceClone)(C.blazen_uniffi_manager_training_cgo_dispatchCallbackInterfaceForeignTrainingProgressClone),
+	onEvent:     (C.UniffiCallbackInterfaceForeignTrainingProgressMethod0)(C.blazen_uniffi_manager_training_cgo_dispatchCallbackInterfaceForeignTrainingProgressMethod0),
+}
+
+//export blazen_uniffi_manager_training_cgo_dispatchCallbackInterfaceForeignTrainingProgressFree
+func blazen_uniffi_manager_training_cgo_dispatchCallbackInterfaceForeignTrainingProgressFree(handle C.uint64_t) {
+	FfiConverterForeignTrainingProgressINSTANCE.handleMap.remove(uint64(handle))
+}
+
+//export blazen_uniffi_manager_training_cgo_dispatchCallbackInterfaceForeignTrainingProgressClone
+func blazen_uniffi_manager_training_cgo_dispatchCallbackInterfaceForeignTrainingProgressClone(handle C.uint64_t) C.uint64_t {
+	val, ok := FfiConverterForeignTrainingProgressINSTANCE.handleMap.tryGet(uint64(handle))
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+	return C.uint64_t(FfiConverterForeignTrainingProgressINSTANCE.handleMap.insert(val))
+}
+
+func (c FfiConverterForeignTrainingProgress) register() {
+	C.uniffi_blazen_uniffi_fn_init_callback_vtable_foreigntrainingprogress(&UniffiVTableCallbackInterfaceForeignTrainingProgressINSTANCE)
+}
+
 // An image-generation model.
 //
 // Construct via [`new_diffusion_model`] (local, feature-gated) or
@@ -10390,6 +10605,122 @@ func (_ FfiDestroyerTtsModel) Destroy(value *TtsModel) {
 	value.Destroy()
 }
 
+// JSONL-backed training dataset opaque handle.
+//
+// Construct via [`UniffiJsonlDataset::from_path`] and pass to
+// [`UniffiModelManager::train_lora`]. The dataset is reference-counted
+// (`Arc`-shared), so foreign callers can keep a handle around and
+// re-use it across multiple training runs.
+type UniffiJsonlDatasetInterface interface {
+	IsEmpty() bool
+	// Number of examples in the dataset.
+	Len() uint64
+}
+
+// JSONL-backed training dataset opaque handle.
+//
+// Construct via [`UniffiJsonlDataset::from_path`] and pass to
+// [`UniffiModelManager::train_lora`]. The dataset is reference-counted
+// (`Arc`-shared), so foreign callers can keep a handle around and
+// re-use it across multiple training runs.
+type UniffiJsonlDataset struct {
+	ffiObject FfiObject
+}
+
+// Load a JSONL training file using the tokenizer at `tokenizer_path`.
+//
+// `chat_template` is optional Jinja2 from `tokenizer_config.json`;
+// required if any row uses the OpenAI `messages` shape.
+// `device` matches the trainer device strings — `"cpu"`,
+// `"cuda"` / `"cuda:N"`, `"metal"` / `"metal:N"` (default `"cpu"`).
+func UniffiJsonlDatasetFromPath(path string, tokenizerPath string, chatTemplate *string, maxSeqLen uint32, device *string, padTokenId uint32) (*UniffiJsonlDataset, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_uniffijsonldataset_from_path(FfiConverterStringINSTANCE.Lower(path), FfiConverterStringINSTANCE.Lower(tokenizerPath), FfiConverterOptionalStringINSTANCE.Lower(chatTemplate), FfiConverterUint32INSTANCE.Lower(maxSeqLen), FfiConverterOptionalStringINSTANCE.Lower(device), FfiConverterUint32INSTANCE.Lower(padTokenId), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *UniffiJsonlDataset
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterUniffiJsonlDatasetINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+func (_self *UniffiJsonlDataset) IsEmpty() bool {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiJsonlDataset")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterBoolINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.int8_t {
+		return C.uniffi_blazen_uniffi_fn_method_uniffijsonldataset_is_empty(
+			_pointer, _uniffiStatus)
+	}))
+}
+
+// Number of examples in the dataset.
+func (_self *UniffiJsonlDataset) Len() uint64 {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiJsonlDataset")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUint64INSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_uniffijsonldataset_len(
+			_pointer, _uniffiStatus)
+	}))
+}
+func (object *UniffiJsonlDataset) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterUniffiJsonlDataset struct{}
+
+var FfiConverterUniffiJsonlDatasetINSTANCE = FfiConverterUniffiJsonlDataset{}
+
+func (c FfiConverterUniffiJsonlDataset) Lift(handle C.uint64_t) *UniffiJsonlDataset {
+	result := &UniffiJsonlDataset{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_uniffijsonldataset(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_uniffijsonldataset(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*UniffiJsonlDataset).Destroy)
+	return result
+}
+
+func (c FfiConverterUniffiJsonlDataset) Read(reader io.Reader) *UniffiJsonlDataset {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterUniffiJsonlDataset) Lower(value *UniffiJsonlDataset) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*UniffiJsonlDataset")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterUniffiJsonlDataset) Write(writer io.Writer, value *UniffiJsonlDataset) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalUniffiJsonlDataset(handle uint64) *UniffiJsonlDataset {
+	return FfiConverterUniffiJsonlDatasetINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalUniffiJsonlDataset(value *UniffiJsonlDataset) uint64 {
+	return uint64(FfiConverterUniffiJsonlDatasetINSTANCE.Lower(value))
+}
+
+type FfiDestroyerUniffiJsonlDataset struct{}
+
+func (_ FfiDestroyerUniffiJsonlDataset) Destroy(value *UniffiJsonlDataset) {
+	value.Destroy()
+}
+
 // Memory-budget-aware model manager with per-pool LRU eviction.
 //
 // Foreign code constructs one of these, registers
@@ -10433,6 +10764,20 @@ type UniffiModelManagerInterface interface {
 	// Synchronous variant of [`Self::unload`].
 	UnloadBlocking(modelId string) error
 	UsedBytes(pool string) (uint64, error)
+	// Train a LoRA adapter end-to-end on the configured base model.
+	//
+	// Downloads the base model from HuggingFace (cached), runs the
+	// AdamW + LoRA training loop driven by `dataset`, and writes the
+	// resulting PEFT-format adapter to `config.output_dir`. The
+	// returned [`TrainedAdapterRecord`] points at an on-disk adapter
+	// directory that's immediately mountable via
+	// [`UniffiModelManager::load_adapter`] on a compatible backend.
+	//
+	// If `progress` is provided, its `on_event` is called for each
+	// Started / StepCompleted / Evaluating / EvalCompleted /
+	// CheckpointSaved / Finished transition. Returning `Err(_)` from
+	// the callback cancels the run with [`BlazenError::Cancelled`].
+	TrainLora(config TrainConfigRecord, dataset *UniffiJsonlDataset, progress *ForeignTrainingProgress) (TrainedAdapterRecord, error)
 }
 
 // Memory-budget-aware model manager with per-pool LRU eviction.
@@ -10914,6 +11259,54 @@ func (_self *UniffiModelManager) UsedBytes(pool string) (uint64, error) {
 		// freeFn
 		func(handle C.uint64_t) {
 			C.ffi_blazen_uniffi_rust_future_free_u64(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Train a LoRA adapter end-to-end on the configured base model.
+//
+// Downloads the base model from HuggingFace (cached), runs the
+// AdamW + LoRA training loop driven by `dataset`, and writes the
+// resulting PEFT-format adapter to `config.output_dir`. The
+// returned [`TrainedAdapterRecord`] points at an on-disk adapter
+// directory that's immediately mountable via
+// [`UniffiModelManager::load_adapter`] on a compatible backend.
+//
+// If `progress` is provided, its `on_event` is called for each
+// Started / StepCompleted / Evaluating / EvalCompleted /
+// CheckpointSaved / Finished transition. Returning `Err(_)` from
+// the callback cancels the run with [`BlazenError::Cancelled`].
+func (_self *UniffiModelManager) TrainLora(config TrainConfigRecord, dataset *UniffiJsonlDataset, progress *ForeignTrainingProgress) (TrainedAdapterRecord, error) {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) TrainedAdapterRecord {
+			return FfiConverterTrainedAdapterRecordINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_train_lora(
+			_pointer, FfiConverterTrainConfigRecordINSTANCE.Lower(config), FfiConverterUniffiJsonlDatasetINSTANCE.Lower(dataset), FfiConverterOptionalForeignTrainingProgressINSTANCE.Lower(progress)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
 		},
 	)
 
@@ -13230,6 +13623,59 @@ func (_ FfiDestroyerKeyValue) Destroy(value KeyValue) {
 	value.Destroy()
 }
 
+// LoRA hyperparameters.
+type LoraConfigRecord struct {
+	Rank          uint32
+	Alpha         float32
+	Dropout       float32
+	TargetModules []string
+}
+
+func (r *LoraConfigRecord) Destroy() {
+	FfiDestroyerUint32{}.Destroy(r.Rank)
+	FfiDestroyerFloat32{}.Destroy(r.Alpha)
+	FfiDestroyerFloat32{}.Destroy(r.Dropout)
+	FfiDestroyerSequenceString{}.Destroy(r.TargetModules)
+}
+
+type FfiConverterLoraConfigRecord struct{}
+
+var FfiConverterLoraConfigRecordINSTANCE = FfiConverterLoraConfigRecord{}
+
+func (c FfiConverterLoraConfigRecord) Lift(rb RustBufferI) LoraConfigRecord {
+	return LiftFromRustBuffer[LoraConfigRecord](c, rb)
+}
+
+func (c FfiConverterLoraConfigRecord) Read(reader io.Reader) LoraConfigRecord {
+	return LoraConfigRecord{
+		FfiConverterUint32INSTANCE.Read(reader),
+		FfiConverterFloat32INSTANCE.Read(reader),
+		FfiConverterFloat32INSTANCE.Read(reader),
+		FfiConverterSequenceStringINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterLoraConfigRecord) Lower(value LoraConfigRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[LoraConfigRecord](c, value)
+}
+
+func (c FfiConverterLoraConfigRecord) LowerExternal(value LoraConfigRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[LoraConfigRecord](c, value))
+}
+
+func (c FfiConverterLoraConfigRecord) Write(writer io.Writer, value LoraConfigRecord) {
+	FfiConverterUint32INSTANCE.Write(writer, value.Rank)
+	FfiConverterFloat32INSTANCE.Write(writer, value.Alpha)
+	FfiConverterFloat32INSTANCE.Write(writer, value.Dropout)
+	FfiConverterSequenceStringINSTANCE.Write(writer, value.TargetModules)
+}
+
+type FfiDestroyerLoraConfigRecord struct{}
+
+func (_ FfiDestroyerLoraConfigRecord) Destroy(value LoraConfigRecord) {
+	value.Destroy()
+}
+
 // Multimodal media attached to a [`ChatMessage`].
 //
 // `kind` selects the part type and is one of `"image"`, `"audio"`, `"video"`.
@@ -13547,6 +13993,67 @@ func (_ FfiDestroyerOpenAiCompatConfig) Destroy(value OpenAiCompatConfig) {
 	value.Destroy()
 }
 
+// AdamW optimizer hyperparameters.
+type OptimConfigRecord struct {
+	LearningRate float64
+	Beta1        float64
+	Beta2        float64
+	Epsilon      float64
+	WeightDecay  float64
+	GradientClip *float32
+}
+
+func (r *OptimConfigRecord) Destroy() {
+	FfiDestroyerFloat64{}.Destroy(r.LearningRate)
+	FfiDestroyerFloat64{}.Destroy(r.Beta1)
+	FfiDestroyerFloat64{}.Destroy(r.Beta2)
+	FfiDestroyerFloat64{}.Destroy(r.Epsilon)
+	FfiDestroyerFloat64{}.Destroy(r.WeightDecay)
+	FfiDestroyerOptionalFloat32{}.Destroy(r.GradientClip)
+}
+
+type FfiConverterOptimConfigRecord struct{}
+
+var FfiConverterOptimConfigRecordINSTANCE = FfiConverterOptimConfigRecord{}
+
+func (c FfiConverterOptimConfigRecord) Lift(rb RustBufferI) OptimConfigRecord {
+	return LiftFromRustBuffer[OptimConfigRecord](c, rb)
+}
+
+func (c FfiConverterOptimConfigRecord) Read(reader io.Reader) OptimConfigRecord {
+	return OptimConfigRecord{
+		FfiConverterFloat64INSTANCE.Read(reader),
+		FfiConverterFloat64INSTANCE.Read(reader),
+		FfiConverterFloat64INSTANCE.Read(reader),
+		FfiConverterFloat64INSTANCE.Read(reader),
+		FfiConverterFloat64INSTANCE.Read(reader),
+		FfiConverterOptionalFloat32INSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterOptimConfigRecord) Lower(value OptimConfigRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[OptimConfigRecord](c, value)
+}
+
+func (c FfiConverterOptimConfigRecord) LowerExternal(value OptimConfigRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[OptimConfigRecord](c, value))
+}
+
+func (c FfiConverterOptimConfigRecord) Write(writer io.Writer, value OptimConfigRecord) {
+	FfiConverterFloat64INSTANCE.Write(writer, value.LearningRate)
+	FfiConverterFloat64INSTANCE.Write(writer, value.Beta1)
+	FfiConverterFloat64INSTANCE.Write(writer, value.Beta2)
+	FfiConverterFloat64INSTANCE.Write(writer, value.Epsilon)
+	FfiConverterFloat64INSTANCE.Write(writer, value.WeightDecay)
+	FfiConverterOptionalFloat32INSTANCE.Write(writer, value.GradientClip)
+}
+
+type FfiDestroyerOptimConfigRecord struct{}
+
+func (_ FfiDestroyerOptimConfigRecord) Destroy(value OptimConfigRecord) {
+	value.Destroy()
+}
+
 // A serialized representation of a queued event captured in a checkpoint.
 //
 // Mirrors [`blazen_persist::SerializedEvent`]. The `data_json` field is
@@ -13695,6 +14202,51 @@ func (c FfiConverterRequestTiming) Write(writer io.Writer, value RequestTiming) 
 type FfiDestroyerRequestTiming struct{}
 
 func (_ FfiDestroyerRequestTiming) Destroy(value RequestTiming) {
+	value.Destroy()
+}
+
+// Learning-rate scheduler configuration.
+type SchedulerConfigRecord struct {
+	Kind        SchedulerKindEnum
+	WarmupSteps uint32
+}
+
+func (r *SchedulerConfigRecord) Destroy() {
+	FfiDestroyerSchedulerKindEnum{}.Destroy(r.Kind)
+	FfiDestroyerUint32{}.Destroy(r.WarmupSteps)
+}
+
+type FfiConverterSchedulerConfigRecord struct{}
+
+var FfiConverterSchedulerConfigRecordINSTANCE = FfiConverterSchedulerConfigRecord{}
+
+func (c FfiConverterSchedulerConfigRecord) Lift(rb RustBufferI) SchedulerConfigRecord {
+	return LiftFromRustBuffer[SchedulerConfigRecord](c, rb)
+}
+
+func (c FfiConverterSchedulerConfigRecord) Read(reader io.Reader) SchedulerConfigRecord {
+	return SchedulerConfigRecord{
+		FfiConverterSchedulerKindEnumINSTANCE.Read(reader),
+		FfiConverterUint32INSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterSchedulerConfigRecord) Lower(value SchedulerConfigRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[SchedulerConfigRecord](c, value)
+}
+
+func (c FfiConverterSchedulerConfigRecord) LowerExternal(value SchedulerConfigRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[SchedulerConfigRecord](c, value))
+}
+
+func (c FfiConverterSchedulerConfigRecord) Write(writer io.Writer, value SchedulerConfigRecord) {
+	FfiConverterSchedulerKindEnumINSTANCE.Write(writer, value.Kind)
+	FfiConverterUint32INSTANCE.Write(writer, value.WarmupSteps)
+}
+
+type FfiDestroyerSchedulerConfigRecord struct{}
+
+func (_ FfiDestroyerSchedulerConfigRecord) Destroy(value SchedulerConfigRecord) {
 	value.Destroy()
 }
 
@@ -14199,6 +14751,148 @@ func (c FfiConverterToolCall) Write(writer io.Writer, value ToolCall) {
 type FfiDestroyerToolCall struct{}
 
 func (_ FfiDestroyerToolCall) Destroy(value ToolCall) {
+	value.Destroy()
+}
+
+// Full configuration for one training run.
+type TrainConfigRecord struct {
+	BaseModelRepo             string
+	OutputDir                 string
+	Lora                      LoraConfigRecord
+	Optim                     OptimConfigRecord
+	Scheduler                 SchedulerConfigRecord
+	MaxSteps                  uint32
+	BatchSize                 uint32
+	GradientAccumulationSteps uint32
+	MaxSeqLen                 uint32
+	EvalSteps                 *uint32
+	SaveSteps                 *uint32
+	Seed                      uint64
+	MixedPrecision            MixedPrecisionEnum
+	Device                    *string
+}
+
+func (r *TrainConfigRecord) Destroy() {
+	FfiDestroyerString{}.Destroy(r.BaseModelRepo)
+	FfiDestroyerString{}.Destroy(r.OutputDir)
+	FfiDestroyerLoraConfigRecord{}.Destroy(r.Lora)
+	FfiDestroyerOptimConfigRecord{}.Destroy(r.Optim)
+	FfiDestroyerSchedulerConfigRecord{}.Destroy(r.Scheduler)
+	FfiDestroyerUint32{}.Destroy(r.MaxSteps)
+	FfiDestroyerUint32{}.Destroy(r.BatchSize)
+	FfiDestroyerUint32{}.Destroy(r.GradientAccumulationSteps)
+	FfiDestroyerUint32{}.Destroy(r.MaxSeqLen)
+	FfiDestroyerOptionalUint32{}.Destroy(r.EvalSteps)
+	FfiDestroyerOptionalUint32{}.Destroy(r.SaveSteps)
+	FfiDestroyerUint64{}.Destroy(r.Seed)
+	FfiDestroyerMixedPrecisionEnum{}.Destroy(r.MixedPrecision)
+	FfiDestroyerOptionalString{}.Destroy(r.Device)
+}
+
+type FfiConverterTrainConfigRecord struct{}
+
+var FfiConverterTrainConfigRecordINSTANCE = FfiConverterTrainConfigRecord{}
+
+func (c FfiConverterTrainConfigRecord) Lift(rb RustBufferI) TrainConfigRecord {
+	return LiftFromRustBuffer[TrainConfigRecord](c, rb)
+}
+
+func (c FfiConverterTrainConfigRecord) Read(reader io.Reader) TrainConfigRecord {
+	return TrainConfigRecord{
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterLoraConfigRecordINSTANCE.Read(reader),
+		FfiConverterOptimConfigRecordINSTANCE.Read(reader),
+		FfiConverterSchedulerConfigRecordINSTANCE.Read(reader),
+		FfiConverterUint32INSTANCE.Read(reader),
+		FfiConverterUint32INSTANCE.Read(reader),
+		FfiConverterUint32INSTANCE.Read(reader),
+		FfiConverterUint32INSTANCE.Read(reader),
+		FfiConverterOptionalUint32INSTANCE.Read(reader),
+		FfiConverterOptionalUint32INSTANCE.Read(reader),
+		FfiConverterUint64INSTANCE.Read(reader),
+		FfiConverterMixedPrecisionEnumINSTANCE.Read(reader),
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterTrainConfigRecord) Lower(value TrainConfigRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[TrainConfigRecord](c, value)
+}
+
+func (c FfiConverterTrainConfigRecord) LowerExternal(value TrainConfigRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[TrainConfigRecord](c, value))
+}
+
+func (c FfiConverterTrainConfigRecord) Write(writer io.Writer, value TrainConfigRecord) {
+	FfiConverterStringINSTANCE.Write(writer, value.BaseModelRepo)
+	FfiConverterStringINSTANCE.Write(writer, value.OutputDir)
+	FfiConverterLoraConfigRecordINSTANCE.Write(writer, value.Lora)
+	FfiConverterOptimConfigRecordINSTANCE.Write(writer, value.Optim)
+	FfiConverterSchedulerConfigRecordINSTANCE.Write(writer, value.Scheduler)
+	FfiConverterUint32INSTANCE.Write(writer, value.MaxSteps)
+	FfiConverterUint32INSTANCE.Write(writer, value.BatchSize)
+	FfiConverterUint32INSTANCE.Write(writer, value.GradientAccumulationSteps)
+	FfiConverterUint32INSTANCE.Write(writer, value.MaxSeqLen)
+	FfiConverterOptionalUint32INSTANCE.Write(writer, value.EvalSteps)
+	FfiConverterOptionalUint32INSTANCE.Write(writer, value.SaveSteps)
+	FfiConverterUint64INSTANCE.Write(writer, value.Seed)
+	FfiConverterMixedPrecisionEnumINSTANCE.Write(writer, value.MixedPrecision)
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.Device)
+}
+
+type FfiDestroyerTrainConfigRecord struct{}
+
+func (_ FfiDestroyerTrainConfigRecord) Destroy(value TrainConfigRecord) {
+	value.Destroy()
+}
+
+// On-disk descriptor returned by [`UniffiModelManager::train_lora`].
+type TrainedAdapterRecord struct {
+	AdapterDir string
+	FinalLoss  float32
+	TotalSteps uint64
+}
+
+func (r *TrainedAdapterRecord) Destroy() {
+	FfiDestroyerString{}.Destroy(r.AdapterDir)
+	FfiDestroyerFloat32{}.Destroy(r.FinalLoss)
+	FfiDestroyerUint64{}.Destroy(r.TotalSteps)
+}
+
+type FfiConverterTrainedAdapterRecord struct{}
+
+var FfiConverterTrainedAdapterRecordINSTANCE = FfiConverterTrainedAdapterRecord{}
+
+func (c FfiConverterTrainedAdapterRecord) Lift(rb RustBufferI) TrainedAdapterRecord {
+	return LiftFromRustBuffer[TrainedAdapterRecord](c, rb)
+}
+
+func (c FfiConverterTrainedAdapterRecord) Read(reader io.Reader) TrainedAdapterRecord {
+	return TrainedAdapterRecord{
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterFloat32INSTANCE.Read(reader),
+		FfiConverterUint64INSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterTrainedAdapterRecord) Lower(value TrainedAdapterRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[TrainedAdapterRecord](c, value)
+}
+
+func (c FfiConverterTrainedAdapterRecord) LowerExternal(value TrainedAdapterRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[TrainedAdapterRecord](c, value))
+}
+
+func (c FfiConverterTrainedAdapterRecord) Write(writer io.Writer, value TrainedAdapterRecord) {
+	FfiConverterStringINSTANCE.Write(writer, value.AdapterDir)
+	FfiConverterFloat32INSTANCE.Write(writer, value.FinalLoss)
+	FfiConverterUint64INSTANCE.Write(writer, value.TotalSteps)
+}
+
+type FfiDestroyerTrainedAdapterRecord struct{}
+
+func (_ FfiDestroyerTrainedAdapterRecord) Destroy(value TrainedAdapterRecord) {
 	value.Destroy()
 }
 
@@ -16487,6 +17181,79 @@ type FfiDestroyerControlPlaneRunStatus struct{}
 func (_ FfiDestroyerControlPlaneRunStatus) Destroy(value ControlPlaneRunStatus) {
 }
 
+type MixedPrecisionEnum uint
+
+const (
+	MixedPrecisionEnumNone MixedPrecisionEnum = 1
+	MixedPrecisionEnumBf16 MixedPrecisionEnum = 2
+)
+
+type FfiConverterMixedPrecisionEnum struct{}
+
+var FfiConverterMixedPrecisionEnumINSTANCE = FfiConverterMixedPrecisionEnum{}
+
+func (c FfiConverterMixedPrecisionEnum) Lift(rb RustBufferI) MixedPrecisionEnum {
+	return LiftFromRustBuffer[MixedPrecisionEnum](c, rb)
+}
+
+func (c FfiConverterMixedPrecisionEnum) Lower(value MixedPrecisionEnum) C.RustBuffer {
+	return LowerIntoRustBuffer[MixedPrecisionEnum](c, value)
+}
+
+func (c FfiConverterMixedPrecisionEnum) LowerExternal(value MixedPrecisionEnum) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[MixedPrecisionEnum](c, value))
+}
+func (FfiConverterMixedPrecisionEnum) Read(reader io.Reader) MixedPrecisionEnum {
+	id := readInt32(reader)
+	return MixedPrecisionEnum(id)
+}
+
+func (FfiConverterMixedPrecisionEnum) Write(writer io.Writer, value MixedPrecisionEnum) {
+	writeInt32(writer, int32(value))
+}
+
+type FfiDestroyerMixedPrecisionEnum struct{}
+
+func (_ FfiDestroyerMixedPrecisionEnum) Destroy(value MixedPrecisionEnum) {
+}
+
+type SchedulerKindEnum uint
+
+const (
+	SchedulerKindEnumConstant SchedulerKindEnum = 1
+	SchedulerKindEnumLinear   SchedulerKindEnum = 2
+	SchedulerKindEnumCosine   SchedulerKindEnum = 3
+)
+
+type FfiConverterSchedulerKindEnum struct{}
+
+var FfiConverterSchedulerKindEnumINSTANCE = FfiConverterSchedulerKindEnum{}
+
+func (c FfiConverterSchedulerKindEnum) Lift(rb RustBufferI) SchedulerKindEnum {
+	return LiftFromRustBuffer[SchedulerKindEnum](c, rb)
+}
+
+func (c FfiConverterSchedulerKindEnum) Lower(value SchedulerKindEnum) C.RustBuffer {
+	return LowerIntoRustBuffer[SchedulerKindEnum](c, value)
+}
+
+func (c FfiConverterSchedulerKindEnum) LowerExternal(value SchedulerKindEnum) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[SchedulerKindEnum](c, value))
+}
+func (FfiConverterSchedulerKindEnum) Read(reader io.Reader) SchedulerKindEnum {
+	id := readInt32(reader)
+	return SchedulerKindEnum(id)
+}
+
+func (FfiConverterSchedulerKindEnum) Write(writer io.Writer, value SchedulerKindEnum) {
+	writeInt32(writer, int32(value))
+}
+
+type FfiDestroyerSchedulerKindEnum struct{}
+
+func (_ FfiDestroyerSchedulerKindEnum) Destroy(value SchedulerKindEnum) {
+}
+
 // What a [`StepHandler`] returns: zero, one, or many events to publish.
 type StepOutput interface {
 	Destroy()
@@ -16569,6 +17336,165 @@ func (FfiConverterStepOutput) Write(writer io.Writer, value StepOutput) {
 type FfiDestroyerStepOutput struct{}
 
 func (_ FfiDestroyerStepOutput) Destroy(value StepOutput) {
+	value.Destroy()
+}
+
+// One observable event emitted during a training run.
+type TrainingEventEnum interface {
+	Destroy()
+}
+type TrainingEventEnumStarted struct {
+	TotalSteps uint64
+}
+
+func (e TrainingEventEnumStarted) Destroy() {
+	FfiDestroyerUint64{}.Destroy(e.TotalSteps)
+}
+
+type TrainingEventEnumStepCompleted struct {
+	Step         uint64
+	Loss         float32
+	LearningRate float64
+	ElapsedMs    uint64
+}
+
+func (e TrainingEventEnumStepCompleted) Destroy() {
+	FfiDestroyerUint64{}.Destroy(e.Step)
+	FfiDestroyerFloat32{}.Destroy(e.Loss)
+	FfiDestroyerFloat64{}.Destroy(e.LearningRate)
+	FfiDestroyerUint64{}.Destroy(e.ElapsedMs)
+}
+
+type TrainingEventEnumEvaluating struct {
+	Step uint64
+}
+
+func (e TrainingEventEnumEvaluating) Destroy() {
+	FfiDestroyerUint64{}.Destroy(e.Step)
+}
+
+type TrainingEventEnumEvalCompleted struct {
+	Step     uint64
+	EvalLoss float32
+}
+
+func (e TrainingEventEnumEvalCompleted) Destroy() {
+	FfiDestroyerUint64{}.Destroy(e.Step)
+	FfiDestroyerFloat32{}.Destroy(e.EvalLoss)
+}
+
+type TrainingEventEnumCheckpointSaved struct {
+	Step uint64
+	Path string
+}
+
+func (e TrainingEventEnumCheckpointSaved) Destroy() {
+	FfiDestroyerUint64{}.Destroy(e.Step)
+	FfiDestroyerString{}.Destroy(e.Path)
+}
+
+type TrainingEventEnumFinished struct {
+	FinalLoss  float32
+	TotalSteps uint64
+	AdapterDir string
+}
+
+func (e TrainingEventEnumFinished) Destroy() {
+	FfiDestroyerFloat32{}.Destroy(e.FinalLoss)
+	FfiDestroyerUint64{}.Destroy(e.TotalSteps)
+	FfiDestroyerString{}.Destroy(e.AdapterDir)
+}
+
+type FfiConverterTrainingEventEnum struct{}
+
+var FfiConverterTrainingEventEnumINSTANCE = FfiConverterTrainingEventEnum{}
+
+func (c FfiConverterTrainingEventEnum) Lift(rb RustBufferI) TrainingEventEnum {
+	return LiftFromRustBuffer[TrainingEventEnum](c, rb)
+}
+
+func (c FfiConverterTrainingEventEnum) Lower(value TrainingEventEnum) C.RustBuffer {
+	return LowerIntoRustBuffer[TrainingEventEnum](c, value)
+}
+
+func (c FfiConverterTrainingEventEnum) LowerExternal(value TrainingEventEnum) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[TrainingEventEnum](c, value))
+}
+func (FfiConverterTrainingEventEnum) Read(reader io.Reader) TrainingEventEnum {
+	id := readInt32(reader)
+	switch id {
+	case 1:
+		return TrainingEventEnumStarted{
+			FfiConverterUint64INSTANCE.Read(reader),
+		}
+	case 2:
+		return TrainingEventEnumStepCompleted{
+			FfiConverterUint64INSTANCE.Read(reader),
+			FfiConverterFloat32INSTANCE.Read(reader),
+			FfiConverterFloat64INSTANCE.Read(reader),
+			FfiConverterUint64INSTANCE.Read(reader),
+		}
+	case 3:
+		return TrainingEventEnumEvaluating{
+			FfiConverterUint64INSTANCE.Read(reader),
+		}
+	case 4:
+		return TrainingEventEnumEvalCompleted{
+			FfiConverterUint64INSTANCE.Read(reader),
+			FfiConverterFloat32INSTANCE.Read(reader),
+		}
+	case 5:
+		return TrainingEventEnumCheckpointSaved{
+			FfiConverterUint64INSTANCE.Read(reader),
+			FfiConverterStringINSTANCE.Read(reader),
+		}
+	case 6:
+		return TrainingEventEnumFinished{
+			FfiConverterFloat32INSTANCE.Read(reader),
+			FfiConverterUint64INSTANCE.Read(reader),
+			FfiConverterStringINSTANCE.Read(reader),
+		}
+	default:
+		panic(fmt.Sprintf("invalid enum value %v in FfiConverterTrainingEventEnum.Read()", id))
+	}
+}
+
+func (FfiConverterTrainingEventEnum) Write(writer io.Writer, value TrainingEventEnum) {
+	switch variant_value := value.(type) {
+	case TrainingEventEnumStarted:
+		writeInt32(writer, 1)
+		FfiConverterUint64INSTANCE.Write(writer, variant_value.TotalSteps)
+	case TrainingEventEnumStepCompleted:
+		writeInt32(writer, 2)
+		FfiConverterUint64INSTANCE.Write(writer, variant_value.Step)
+		FfiConverterFloat32INSTANCE.Write(writer, variant_value.Loss)
+		FfiConverterFloat64INSTANCE.Write(writer, variant_value.LearningRate)
+		FfiConverterUint64INSTANCE.Write(writer, variant_value.ElapsedMs)
+	case TrainingEventEnumEvaluating:
+		writeInt32(writer, 3)
+		FfiConverterUint64INSTANCE.Write(writer, variant_value.Step)
+	case TrainingEventEnumEvalCompleted:
+		writeInt32(writer, 4)
+		FfiConverterUint64INSTANCE.Write(writer, variant_value.Step)
+		FfiConverterFloat32INSTANCE.Write(writer, variant_value.EvalLoss)
+	case TrainingEventEnumCheckpointSaved:
+		writeInt32(writer, 5)
+		FfiConverterUint64INSTANCE.Write(writer, variant_value.Step)
+		FfiConverterStringINSTANCE.Write(writer, variant_value.Path)
+	case TrainingEventEnumFinished:
+		writeInt32(writer, 6)
+		FfiConverterFloat32INSTANCE.Write(writer, variant_value.FinalLoss)
+		FfiConverterUint64INSTANCE.Write(writer, variant_value.TotalSteps)
+		FfiConverterStringINSTANCE.Write(writer, variant_value.AdapterDir)
+	default:
+		_ = variant_value
+		panic(fmt.Sprintf("invalid enum value `%v` in FfiConverterTrainingEventEnum.Write", value))
+	}
+}
+
+type FfiDestroyerTrainingEventEnum struct{}
+
+func (_ FfiDestroyerTrainingEventEnum) Destroy(value TrainingEventEnum) {
 	value.Destroy()
 }
 
@@ -16856,6 +17782,47 @@ type FfiDestroyerOptionalString struct{}
 func (_ FfiDestroyerOptionalString) Destroy(value *string) {
 	if value != nil {
 		FfiDestroyerString{}.Destroy(*value)
+	}
+}
+
+type FfiConverterOptionalForeignTrainingProgress struct{}
+
+var FfiConverterOptionalForeignTrainingProgressINSTANCE = FfiConverterOptionalForeignTrainingProgress{}
+
+func (c FfiConverterOptionalForeignTrainingProgress) Lift(rb RustBufferI) *ForeignTrainingProgress {
+	return LiftFromRustBuffer[*ForeignTrainingProgress](c, rb)
+}
+
+func (_ FfiConverterOptionalForeignTrainingProgress) Read(reader io.Reader) *ForeignTrainingProgress {
+	if readInt8(reader) == 0 {
+		return nil
+	}
+	temp := FfiConverterForeignTrainingProgressINSTANCE.Read(reader)
+	return &temp
+}
+
+func (c FfiConverterOptionalForeignTrainingProgress) Lower(value *ForeignTrainingProgress) C.RustBuffer {
+	return LowerIntoRustBuffer[*ForeignTrainingProgress](c, value)
+}
+
+func (c FfiConverterOptionalForeignTrainingProgress) LowerExternal(value *ForeignTrainingProgress) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[*ForeignTrainingProgress](c, value))
+}
+
+func (_ FfiConverterOptionalForeignTrainingProgress) Write(writer io.Writer, value *ForeignTrainingProgress) {
+	if value == nil {
+		writeInt8(writer, 0)
+	} else {
+		writeInt8(writer, 1)
+		FfiConverterForeignTrainingProgressINSTANCE.Write(writer, *value)
+	}
+}
+
+type FfiDestroyerOptionalForeignTrainingProgress struct{}
+
+func (_ FfiDestroyerOptionalForeignTrainingProgress) Destroy(value *ForeignTrainingProgress) {
+	if value != nil {
+		FfiDestroyerForeignTrainingProgress{}.Destroy(*value)
 	}
 }
 

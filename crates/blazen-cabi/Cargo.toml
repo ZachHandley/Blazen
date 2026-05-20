@@ -36,6 +36,9 @@ tokio = { workspace = true }
 tracing.workspace = true
 uuid = { workspace = true }
 blazen-manager.workspace = true
+blazen-train = { workspace = true, optional = true }
+tokenizers = { workspace = true, optional = true }
+candle-core = { workspace = true, optional = true }
 
 [build-dependencies]
 cbindgen = "0.29"
@@ -76,6 +79,7 @@ local-all = [
     "prometheus",
     "langfuse",
     "hf-loader",
+    "training",
 ]
 
 otlp = ["blazen-uniffi/otlp"]
@@ -91,6 +95,18 @@ distributed = [
     "dep:blazen-core",
     "dep:blazen-controlplane",
     "dep:tokio-util",
+]
+# Local LoRA fine-tuning via `ModelManager::train_lora` exposed through the
+# C ABI. Forwards to the matching arms on blazen-uniffi / blazen-manager and
+# pulls in blazen-train + tokenizers + candle-core for JsonlDataset construction
+# and device parsing.
+training = [
+    "dep:blazen-train",
+    "blazen-train/engine",
+    "dep:tokenizers",
+    "dep:candle-core",
+    "blazen-uniffi/training",
+    "blazen-manager/training",
 ]
 
 [lints]

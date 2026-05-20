@@ -581,6 +581,21 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<manager::PyBackendHint>()?;
     m.add_class::<manager::PyHfLoadOptions>()?;
 
+    // Training surface (ModelManager.train_lora + supporting config/event
+    // types). Gated on the `training` feature.
+    #[cfg(feature = "training")]
+    {
+        m.add_class::<manager::PyTrainConfig>()?;
+        m.add_class::<manager::PyLoraConfig>()?;
+        m.add_class::<manager::PyOptimConfig>()?;
+        m.add_class::<manager::PySchedulerConfig>()?;
+        m.add_class::<manager::PySchedulerKind>()?;
+        m.add_class::<manager::PyMixedPrecision>()?;
+        m.add_class::<manager::PyTrainedAdapter>()?;
+        m.add_class::<manager::PyTrainingEvent>()?;
+        m.add_class::<manager::PyJsonlDataset>()?;
+    }
+
     // Model cache (HuggingFace Hub downloader / on-disk cache)
     m.add_class::<model_cache::PyModelCache>()?;
     m.add_class::<model_cache::PyProgressCallback>()?;

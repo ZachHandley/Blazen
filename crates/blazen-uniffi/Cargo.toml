@@ -45,6 +45,9 @@ tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 uniffi = { workspace = true, features = ["cli"] }
 uuid.workspace = true
+blazen-train = { workspace = true, optional = true }
+candle-core = { workspace = true, optional = true }
+tokenizers = { workspace = true, optional = true }
 
 [build-dependencies]
 uniffi_build.workspace = true
@@ -73,6 +76,18 @@ fastembed = ["blazen-llm/embed", "dep:blazen-embed-fastembed"]
 # Forwards to `blazen-manager/hf-loader`.
 hf-loader = ["blazen-manager/hf-loader"]
 
+# Local LoRA fine-tuning via `UniffiModelManager::train_lora`. Pulls in
+# `blazen-train` (engine + interop with blazen-llm error type) and the
+# matching `training` arm of `blazen-manager`.
+training = [
+    "dep:blazen-train",
+    "blazen-train/engine",
+    "blazen-train/blazen-llm-interop",
+    "dep:tokenizers",
+    "dep:candle-core",
+    "blazen-manager/training",
+]
+
 local-all = [
     "embed",
     "fastembed",
@@ -90,6 +105,7 @@ local-all = [
     "prometheus",
     "langfuse",
     "hf-loader",
+    "training",
 ]
 
 # Telemetry exporters

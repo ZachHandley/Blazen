@@ -6334,6 +6334,218 @@ public func FfiConverterTypeForeignLocalModel_lower(_ value: ForeignLocalModel) 
 
 
 /**
+ * Foreign-implementable training-progress sink.
+ *
+ * Modeled SYNC so the bridge to [`TrainingProgress`] (also sync) is
+ * trivial — the upstream trainer calls `on_event` from a tokio worker
+ * and an async foreign hop would require `block_on` from inside the
+ * same runtime (panic / deadlock-prone). Returning `Err(_)` cancels
+ * the run; the trainer surfaces it as `BlazenError::Cancelled`.
+ */
+public protocol ForeignTrainingProgress: AnyObject, Sendable {
+    
+    func onEvent(event: TrainingEventEnum) throws 
+    
+}
+/**
+ * Foreign-implementable training-progress sink.
+ *
+ * Modeled SYNC so the bridge to [`TrainingProgress`] (also sync) is
+ * trivial — the upstream trainer calls `on_event` from a tokio worker
+ * and an async foreign hop would require `block_on` from inside the
+ * same runtime (panic / deadlock-prone). Returning `Err(_)` cancels
+ * the run; the trainer surfaces it as `BlazenError::Cancelled`.
+ */
+open class ForeignTrainingProgressImpl: ForeignTrainingProgress, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_foreigntrainingprogress(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_foreigntrainingprogress(handle, $0) }
+    }
+
+    
+
+    
+open func onEvent(event: TrainingEventEnum)throws   {try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_foreigntrainingprogress_on_event(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeTrainingEventEnum_lower(event),$0
+    )
+}
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceForeignTrainingProgress {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceForeignTrainingProgress = UniffiVTableCallbackInterfaceForeignTrainingProgress(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeForeignTrainingProgress.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface ForeignTrainingProgress: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeForeignTrainingProgress.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface ForeignTrainingProgress: handle missing in uniffiClone")
+            }
+        },
+        onEvent: { (
+            uniffiHandle: UInt64,
+            event: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeForeignTrainingProgress.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try uniffiObj.onEvent(
+                     event: try FfiConverterTypeTrainingEventEnum_lift(event)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCallWithError(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn,
+                lowerError: FfiConverterTypeBlazenError_lower
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceForeignTrainingProgress> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceForeignTrainingProgress>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitForeignTrainingProgress() {
+    uniffi_blazen_uniffi_fn_init_callback_vtable_foreigntrainingprogress(UniffiCallbackInterfaceForeignTrainingProgress.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeForeignTrainingProgress: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<ForeignTrainingProgress>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = ForeignTrainingProgress
+
+    public static func lift(_ handle: UInt64) throws -> ForeignTrainingProgress {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return ForeignTrainingProgressImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: ForeignTrainingProgress) -> UInt64 {
+         if let rustImpl = value as? ForeignTrainingProgressImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ForeignTrainingProgress {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: ForeignTrainingProgress, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeForeignTrainingProgress_lift(_ handle: UInt64) throws -> ForeignTrainingProgress {
+    return try FfiConverterTypeForeignTrainingProgress.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeForeignTrainingProgress_lower(_ value: ForeignTrainingProgress) -> UInt64 {
+    return FfiConverterTypeForeignTrainingProgress.lower(value)
+}
+
+
+
+
+
+
+/**
  * An image-generation model.
  *
  * Construct via [`new_diffusion_model`] (local, feature-gated) or
@@ -8410,6 +8622,175 @@ public func FfiConverterTypeTtsModel_lower(_ value: TtsModel) -> UInt64 {
 
 
 /**
+ * JSONL-backed training dataset opaque handle.
+ *
+ * Construct via [`UniffiJsonlDataset::from_path`] and pass to
+ * [`UniffiModelManager::train_lora`]. The dataset is reference-counted
+ * (`Arc`-shared), so foreign callers can keep a handle around and
+ * re-use it across multiple training runs.
+ */
+public protocol UniffiJsonlDatasetProtocol: AnyObject, Sendable {
+    
+    func isEmpty()  -> Bool
+    
+    /**
+     * Number of examples in the dataset.
+     */
+    func len()  -> UInt64
+    
+}
+/**
+ * JSONL-backed training dataset opaque handle.
+ *
+ * Construct via [`UniffiJsonlDataset::from_path`] and pass to
+ * [`UniffiModelManager::train_lora`]. The dataset is reference-counted
+ * (`Arc`-shared), so foreign callers can keep a handle around and
+ * re-use it across multiple training runs.
+ */
+open class UniffiJsonlDataset: UniffiJsonlDatasetProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_uniffijsonldataset(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_uniffijsonldataset(handle, $0) }
+    }
+
+    
+    /**
+     * Load a JSONL training file using the tokenizer at `tokenizer_path`.
+     *
+     * `chat_template` is optional Jinja2 from `tokenizer_config.json`;
+     * required if any row uses the OpenAI `messages` shape.
+     * `device` matches the trainer device strings — `"cpu"`,
+     * `"cuda"` / `"cuda:N"`, `"metal"` / `"metal:N"` (default `"cpu"`).
+     */
+public static func fromPath(path: String, tokenizerPath: String, chatTemplate: String?, maxSeqLen: UInt32, device: String?, padTokenId: UInt32)throws  -> UniffiJsonlDataset  {
+    return try  FfiConverterTypeUniffiJsonlDataset_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_constructor_uniffijsonldataset_from_path(
+        FfiConverterString.lower(path),
+        FfiConverterString.lower(tokenizerPath),
+        FfiConverterOptionString.lower(chatTemplate),
+        FfiConverterUInt32.lower(maxSeqLen),
+        FfiConverterOptionString.lower(device),
+        FfiConverterUInt32.lower(padTokenId),$0
+    )
+})
+}
+    
+
+    
+open func isEmpty() -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_uniffijsonldataset_is_empty(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Number of examples in the dataset.
+     */
+open func len() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_uniffijsonldataset_len(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeUniffiJsonlDataset: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = UniffiJsonlDataset
+
+    public static func lift(_ handle: UInt64) throws -> UniffiJsonlDataset {
+        return UniffiJsonlDataset(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: UniffiJsonlDataset) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UniffiJsonlDataset {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: UniffiJsonlDataset, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUniffiJsonlDataset_lift(_ handle: UInt64) throws -> UniffiJsonlDataset {
+    return try FfiConverterTypeUniffiJsonlDataset.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUniffiJsonlDataset_lower(_ value: UniffiJsonlDataset) -> UInt64 {
+    return FfiConverterTypeUniffiJsonlDataset.lower(value)
+}
+
+
+
+
+
+
+/**
  * Memory-budget-aware model manager with per-pool LRU eviction.
  *
  * Foreign code constructs one of these, registers
@@ -8481,6 +8862,23 @@ public protocol UniffiModelManagerProtocol: AnyObject, Sendable {
     func unloadBlocking(modelId: String) throws 
     
     func usedBytes(pool: String) async throws  -> UInt64
+    
+    /**
+     * Train a LoRA adapter end-to-end on the configured base model.
+     *
+     * Downloads the base model from HuggingFace (cached), runs the
+     * AdamW + LoRA training loop driven by `dataset`, and writes the
+     * resulting PEFT-format adapter to `config.output_dir`. The
+     * returned [`TrainedAdapterRecord`] points at an on-disk adapter
+     * directory that's immediately mountable via
+     * [`UniffiModelManager::load_adapter`] on a compatible backend.
+     *
+     * If `progress` is provided, its `on_event` is called for each
+     * Started / StepCompleted / Evaluating / EvalCompleted /
+     * CheckpointSaved / Finished transition. Returning `Err(_)` from
+     * the callback cancels the run with [`BlazenError::Cancelled`].
+     */
+    func trainLora(config: TrainConfigRecord, dataset: UniffiJsonlDataset, progress: ForeignTrainingProgress?) async throws  -> TrainedAdapterRecord
     
 }
 /**
@@ -8848,6 +9246,38 @@ open func usedBytes(pool: String)async throws  -> UInt64  {
             completeFunc: ffi_blazen_uniffi_rust_future_complete_u64,
             freeFunc: ffi_blazen_uniffi_rust_future_free_u64,
             liftFunc: FfiConverterUInt64.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Train a LoRA adapter end-to-end on the configured base model.
+     *
+     * Downloads the base model from HuggingFace (cached), runs the
+     * AdamW + LoRA training loop driven by `dataset`, and writes the
+     * resulting PEFT-format adapter to `config.output_dir`. The
+     * returned [`TrainedAdapterRecord`] points at an on-disk adapter
+     * directory that's immediately mountable via
+     * [`UniffiModelManager::load_adapter`] on a compatible backend.
+     *
+     * If `progress` is provided, its `on_event` is called for each
+     * Started / StepCompleted / Evaluating / EvalCompleted /
+     * CheckpointSaved / Finished transition. Returning `Err(_)` from
+     * the callback cancels the run with [`BlazenError::Cancelled`].
+     */
+open func trainLora(config: TrainConfigRecord, dataset: UniffiJsonlDataset, progress: ForeignTrainingProgress?)async throws  -> TrainedAdapterRecord  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_train_lora(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeTrainConfigRecord_lower(config),FfiConverterTypeUniffiJsonlDataset_lower(dataset),FfiConverterOptionTypeForeignTrainingProgress.lower(progress)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTrainedAdapterRecord_lift,
             errorHandler: FfiConverterTypeBlazenError_lift
         )
 }
@@ -11777,6 +12207,71 @@ public func FfiConverterTypeKeyValue_lower(_ value: KeyValue) -> RustBuffer {
 
 
 /**
+ * LoRA hyperparameters.
+ */
+public struct LoraConfigRecord: Equatable, Hashable {
+    public var rank: UInt32
+    public var alpha: Float
+    public var dropout: Float
+    public var targetModules: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(rank: UInt32, alpha: Float, dropout: Float, targetModules: [String]) {
+        self.rank = rank
+        self.alpha = alpha
+        self.dropout = dropout
+        self.targetModules = targetModules
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension LoraConfigRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLoraConfigRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LoraConfigRecord {
+        return
+            try LoraConfigRecord(
+                rank: FfiConverterUInt32.read(from: &buf), 
+                alpha: FfiConverterFloat.read(from: &buf), 
+                dropout: FfiConverterFloat.read(from: &buf), 
+                targetModules: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LoraConfigRecord, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.rank, into: &buf)
+        FfiConverterFloat.write(value.alpha, into: &buf)
+        FfiConverterFloat.write(value.dropout, into: &buf)
+        FfiConverterSequenceString.write(value.targetModules, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLoraConfigRecord_lift(_ buf: RustBuffer) throws -> LoraConfigRecord {
+    return try FfiConverterTypeLoraConfigRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLoraConfigRecord_lower(_ value: LoraConfigRecord) -> RustBuffer {
+    return FfiConverterTypeLoraConfigRecord.lower(value)
+}
+
+
+/**
  * Multimodal media attached to a [`ChatMessage`].
  *
  * `kind` selects the part type and is one of `"image"`, `"audio"`, `"video"`.
@@ -12210,6 +12705,79 @@ public func FfiConverterTypeOpenAiCompatConfig_lower(_ value: OpenAiCompatConfig
 
 
 /**
+ * AdamW optimizer hyperparameters.
+ */
+public struct OptimConfigRecord: Equatable, Hashable {
+    public var learningRate: Double
+    public var beta1: Double
+    public var beta2: Double
+    public var epsilon: Double
+    public var weightDecay: Double
+    public var gradientClip: Float?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(learningRate: Double, beta1: Double, beta2: Double, epsilon: Double, weightDecay: Double, gradientClip: Float?) {
+        self.learningRate = learningRate
+        self.beta1 = beta1
+        self.beta2 = beta2
+        self.epsilon = epsilon
+        self.weightDecay = weightDecay
+        self.gradientClip = gradientClip
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension OptimConfigRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOptimConfigRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OptimConfigRecord {
+        return
+            try OptimConfigRecord(
+                learningRate: FfiConverterDouble.read(from: &buf), 
+                beta1: FfiConverterDouble.read(from: &buf), 
+                beta2: FfiConverterDouble.read(from: &buf), 
+                epsilon: FfiConverterDouble.read(from: &buf), 
+                weightDecay: FfiConverterDouble.read(from: &buf), 
+                gradientClip: FfiConverterOptionFloat.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OptimConfigRecord, into buf: inout [UInt8]) {
+        FfiConverterDouble.write(value.learningRate, into: &buf)
+        FfiConverterDouble.write(value.beta1, into: &buf)
+        FfiConverterDouble.write(value.beta2, into: &buf)
+        FfiConverterDouble.write(value.epsilon, into: &buf)
+        FfiConverterDouble.write(value.weightDecay, into: &buf)
+        FfiConverterOptionFloat.write(value.gradientClip, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOptimConfigRecord_lift(_ buf: RustBuffer) throws -> OptimConfigRecord {
+    return try FfiConverterTypeOptimConfigRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOptimConfigRecord_lower(_ value: OptimConfigRecord) -> RustBuffer {
+    return FfiConverterTypeOptimConfigRecord.lower(value)
+}
+
+
+/**
  * A serialized representation of a queued event captured in a checkpoint.
  *
  * Mirrors [`blazen_persist::SerializedEvent`]. The `data_json` field is
@@ -12409,6 +12977,63 @@ public func FfiConverterTypeRequestTiming_lift(_ buf: RustBuffer) throws -> Requ
 #endif
 public func FfiConverterTypeRequestTiming_lower(_ value: RequestTiming) -> RustBuffer {
     return FfiConverterTypeRequestTiming.lower(value)
+}
+
+
+/**
+ * Learning-rate scheduler configuration.
+ */
+public struct SchedulerConfigRecord: Equatable, Hashable {
+    public var kind: SchedulerKindEnum
+    public var warmupSteps: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(kind: SchedulerKindEnum, warmupSteps: UInt32) {
+        self.kind = kind
+        self.warmupSteps = warmupSteps
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension SchedulerConfigRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSchedulerConfigRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SchedulerConfigRecord {
+        return
+            try SchedulerConfigRecord(
+                kind: FfiConverterTypeSchedulerKindEnum.read(from: &buf), 
+                warmupSteps: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SchedulerConfigRecord, into buf: inout [UInt8]) {
+        FfiConverterTypeSchedulerKindEnum.write(value.kind, into: &buf)
+        FfiConverterUInt32.write(value.warmupSteps, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSchedulerConfigRecord_lift(_ buf: RustBuffer) throws -> SchedulerConfigRecord {
+    return try FfiConverterTypeSchedulerConfigRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSchedulerConfigRecord_lower(_ value: SchedulerConfigRecord) -> RustBuffer {
+    return FfiConverterTypeSchedulerConfigRecord.lower(value)
 }
 
 
@@ -13051,6 +13676,172 @@ public func FfiConverterTypeToolCall_lift(_ buf: RustBuffer) throws -> ToolCall 
 #endif
 public func FfiConverterTypeToolCall_lower(_ value: ToolCall) -> RustBuffer {
     return FfiConverterTypeToolCall.lower(value)
+}
+
+
+/**
+ * Full configuration for one training run.
+ */
+public struct TrainConfigRecord: Equatable, Hashable {
+    public var baseModelRepo: String
+    public var outputDir: String
+    public var lora: LoraConfigRecord
+    public var optim: OptimConfigRecord
+    public var scheduler: SchedulerConfigRecord
+    public var maxSteps: UInt32
+    public var batchSize: UInt32
+    public var gradientAccumulationSteps: UInt32
+    public var maxSeqLen: UInt32
+    public var evalSteps: UInt32?
+    public var saveSteps: UInt32?
+    public var seed: UInt64
+    public var mixedPrecision: MixedPrecisionEnum
+    public var device: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(baseModelRepo: String, outputDir: String, lora: LoraConfigRecord, optim: OptimConfigRecord, scheduler: SchedulerConfigRecord, maxSteps: UInt32, batchSize: UInt32, gradientAccumulationSteps: UInt32, maxSeqLen: UInt32, evalSteps: UInt32?, saveSteps: UInt32?, seed: UInt64, mixedPrecision: MixedPrecisionEnum, device: String?) {
+        self.baseModelRepo = baseModelRepo
+        self.outputDir = outputDir
+        self.lora = lora
+        self.optim = optim
+        self.scheduler = scheduler
+        self.maxSteps = maxSteps
+        self.batchSize = batchSize
+        self.gradientAccumulationSteps = gradientAccumulationSteps
+        self.maxSeqLen = maxSeqLen
+        self.evalSteps = evalSteps
+        self.saveSteps = saveSteps
+        self.seed = seed
+        self.mixedPrecision = mixedPrecision
+        self.device = device
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension TrainConfigRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTrainConfigRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TrainConfigRecord {
+        return
+            try TrainConfigRecord(
+                baseModelRepo: FfiConverterString.read(from: &buf), 
+                outputDir: FfiConverterString.read(from: &buf), 
+                lora: FfiConverterTypeLoraConfigRecord.read(from: &buf), 
+                optim: FfiConverterTypeOptimConfigRecord.read(from: &buf), 
+                scheduler: FfiConverterTypeSchedulerConfigRecord.read(from: &buf), 
+                maxSteps: FfiConverterUInt32.read(from: &buf), 
+                batchSize: FfiConverterUInt32.read(from: &buf), 
+                gradientAccumulationSteps: FfiConverterUInt32.read(from: &buf), 
+                maxSeqLen: FfiConverterUInt32.read(from: &buf), 
+                evalSteps: FfiConverterOptionUInt32.read(from: &buf), 
+                saveSteps: FfiConverterOptionUInt32.read(from: &buf), 
+                seed: FfiConverterUInt64.read(from: &buf), 
+                mixedPrecision: FfiConverterTypeMixedPrecisionEnum.read(from: &buf), 
+                device: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TrainConfigRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.baseModelRepo, into: &buf)
+        FfiConverterString.write(value.outputDir, into: &buf)
+        FfiConverterTypeLoraConfigRecord.write(value.lora, into: &buf)
+        FfiConverterTypeOptimConfigRecord.write(value.optim, into: &buf)
+        FfiConverterTypeSchedulerConfigRecord.write(value.scheduler, into: &buf)
+        FfiConverterUInt32.write(value.maxSteps, into: &buf)
+        FfiConverterUInt32.write(value.batchSize, into: &buf)
+        FfiConverterUInt32.write(value.gradientAccumulationSteps, into: &buf)
+        FfiConverterUInt32.write(value.maxSeqLen, into: &buf)
+        FfiConverterOptionUInt32.write(value.evalSteps, into: &buf)
+        FfiConverterOptionUInt32.write(value.saveSteps, into: &buf)
+        FfiConverterUInt64.write(value.seed, into: &buf)
+        FfiConverterTypeMixedPrecisionEnum.write(value.mixedPrecision, into: &buf)
+        FfiConverterOptionString.write(value.device, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTrainConfigRecord_lift(_ buf: RustBuffer) throws -> TrainConfigRecord {
+    return try FfiConverterTypeTrainConfigRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTrainConfigRecord_lower(_ value: TrainConfigRecord) -> RustBuffer {
+    return FfiConverterTypeTrainConfigRecord.lower(value)
+}
+
+
+/**
+ * On-disk descriptor returned by [`UniffiModelManager::train_lora`].
+ */
+public struct TrainedAdapterRecord: Equatable, Hashable {
+    public var adapterDir: String
+    public var finalLoss: Float
+    public var totalSteps: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(adapterDir: String, finalLoss: Float, totalSteps: UInt64) {
+        self.adapterDir = adapterDir
+        self.finalLoss = finalLoss
+        self.totalSteps = totalSteps
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension TrainedAdapterRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTrainedAdapterRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TrainedAdapterRecord {
+        return
+            try TrainedAdapterRecord(
+                adapterDir: FfiConverterString.read(from: &buf), 
+                finalLoss: FfiConverterFloat.read(from: &buf), 
+                totalSteps: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TrainedAdapterRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.adapterDir, into: &buf)
+        FfiConverterFloat.write(value.finalLoss, into: &buf)
+        FfiConverterUInt64.write(value.totalSteps, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTrainedAdapterRecord_lift(_ buf: RustBuffer) throws -> TrainedAdapterRecord {
+    return try FfiConverterTypeTrainedAdapterRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTrainedAdapterRecord_lower(_ value: TrainedAdapterRecord) -> RustBuffer {
+    return FfiConverterTypeTrainedAdapterRecord.lower(value)
 }
 
 
@@ -15133,6 +15924,147 @@ public func FfiConverterTypeControlPlaneRunStatus_lower(_ value: ControlPlaneRun
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum MixedPrecisionEnum: Equatable, Hashable {
+    
+    case none
+    case bf16
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension MixedPrecisionEnum: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMixedPrecisionEnum: FfiConverterRustBuffer {
+    typealias SwiftType = MixedPrecisionEnum
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MixedPrecisionEnum {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .none
+        
+        case 2: return .bf16
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: MixedPrecisionEnum, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .none:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .bf16:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMixedPrecisionEnum_lift(_ buf: RustBuffer) throws -> MixedPrecisionEnum {
+    return try FfiConverterTypeMixedPrecisionEnum.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMixedPrecisionEnum_lower(_ value: MixedPrecisionEnum) -> RustBuffer {
+    return FfiConverterTypeMixedPrecisionEnum.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum SchedulerKindEnum: Equatable, Hashable {
+    
+    case constant
+    case linear
+    case cosine
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension SchedulerKindEnum: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSchedulerKindEnum: FfiConverterRustBuffer {
+    typealias SwiftType = SchedulerKindEnum
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SchedulerKindEnum {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .constant
+        
+        case 2: return .linear
+        
+        case 3: return .cosine
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: SchedulerKindEnum, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .constant:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .linear:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .cosine:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSchedulerKindEnum_lift(_ buf: RustBuffer) throws -> SchedulerKindEnum {
+    return try FfiConverterTypeSchedulerKindEnum.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSchedulerKindEnum_lower(_ value: SchedulerKindEnum) -> RustBuffer {
+    return FfiConverterTypeSchedulerKindEnum.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
  * What a [`StepHandler`] returns: zero, one, or many events to publish.
  */
@@ -15220,6 +16152,129 @@ public func FfiConverterTypeStepOutput_lift(_ buf: RustBuffer) throws -> StepOut
 #endif
 public func FfiConverterTypeStepOutput_lower(_ value: StepOutput) -> RustBuffer {
     return FfiConverterTypeStepOutput.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * One observable event emitted during a training run.
+ */
+
+public enum TrainingEventEnum: Equatable, Hashable {
+    
+    case started(totalSteps: UInt64
+    )
+    case stepCompleted(step: UInt64, loss: Float, learningRate: Double, elapsedMs: UInt64
+    )
+    case evaluating(step: UInt64
+    )
+    case evalCompleted(step: UInt64, evalLoss: Float
+    )
+    case checkpointSaved(step: UInt64, path: String
+    )
+    case finished(finalLoss: Float, totalSteps: UInt64, adapterDir: String
+    )
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension TrainingEventEnum: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTrainingEventEnum: FfiConverterRustBuffer {
+    typealias SwiftType = TrainingEventEnum
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TrainingEventEnum {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .started(totalSteps: try FfiConverterUInt64.read(from: &buf)
+        )
+        
+        case 2: return .stepCompleted(step: try FfiConverterUInt64.read(from: &buf), loss: try FfiConverterFloat.read(from: &buf), learningRate: try FfiConverterDouble.read(from: &buf), elapsedMs: try FfiConverterUInt64.read(from: &buf)
+        )
+        
+        case 3: return .evaluating(step: try FfiConverterUInt64.read(from: &buf)
+        )
+        
+        case 4: return .evalCompleted(step: try FfiConverterUInt64.read(from: &buf), evalLoss: try FfiConverterFloat.read(from: &buf)
+        )
+        
+        case 5: return .checkpointSaved(step: try FfiConverterUInt64.read(from: &buf), path: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 6: return .finished(finalLoss: try FfiConverterFloat.read(from: &buf), totalSteps: try FfiConverterUInt64.read(from: &buf), adapterDir: try FfiConverterString.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: TrainingEventEnum, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .started(totalSteps):
+            writeInt(&buf, Int32(1))
+            FfiConverterUInt64.write(totalSteps, into: &buf)
+            
+        
+        case let .stepCompleted(step,loss,learningRate,elapsedMs):
+            writeInt(&buf, Int32(2))
+            FfiConverterUInt64.write(step, into: &buf)
+            FfiConverterFloat.write(loss, into: &buf)
+            FfiConverterDouble.write(learningRate, into: &buf)
+            FfiConverterUInt64.write(elapsedMs, into: &buf)
+            
+        
+        case let .evaluating(step):
+            writeInt(&buf, Int32(3))
+            FfiConverterUInt64.write(step, into: &buf)
+            
+        
+        case let .evalCompleted(step,evalLoss):
+            writeInt(&buf, Int32(4))
+            FfiConverterUInt64.write(step, into: &buf)
+            FfiConverterFloat.write(evalLoss, into: &buf)
+            
+        
+        case let .checkpointSaved(step,path):
+            writeInt(&buf, Int32(5))
+            FfiConverterUInt64.write(step, into: &buf)
+            FfiConverterString.write(path, into: &buf)
+            
+        
+        case let .finished(finalLoss,totalSteps,adapterDir):
+            writeInt(&buf, Int32(6))
+            FfiConverterFloat.write(finalLoss, into: &buf)
+            FfiConverterUInt64.write(totalSteps, into: &buf)
+            FfiConverterString.write(adapterDir, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTrainingEventEnum_lift(_ buf: RustBuffer) throws -> TrainingEventEnum {
+    return try FfiConverterTypeTrainingEventEnum.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTrainingEventEnum_lower(_ value: TrainingEventEnum) -> RustBuffer {
+    return FfiConverterTypeTrainingEventEnum.lower(value)
 }
 
 
@@ -15386,6 +16441,30 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterString.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeForeignTrainingProgress: FfiConverterRustBuffer {
+    typealias SwiftType = ForeignTrainingProgress?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeForeignTrainingProgress.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeForeignTrainingProgress.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -17595,6 +18674,18 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_used_bytes() != 51636) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_train_lora() != 22343) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_foreigntrainingprogress_on_event() != 34103) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffijsonldataset_is_empty() != 21289) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffijsonldataset_len() != 23707) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_peerclient_node_id() != 16043) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -17859,6 +18950,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_with_pool_budgets() != 59591) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_constructor_uniffijsonldataset_from_path() != 8101) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_constructor_peerclient_connect() != 36996) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -17883,6 +18977,7 @@ private let initializationResult: InitializationResult = {
     uniffiCallbackInitControlPlaneRunEventSubscriber()
     uniffiCallbackInitCustomProvider()
     uniffiCallbackInitForeignLocalModel()
+    uniffiCallbackInitForeignTrainingProgress()
     uniffiCallbackInitStepHandler()
     uniffiCallbackInitToolHandler()
     return InitializationResult.ok

@@ -105,6 +105,171 @@ module Blazen
     keyword_init: true,
   )
 
+  # Stable string labels for the LR scheduler kinds accepted by
+  # {TrainConfig#scheduler}. Pass one of these as `SchedulerConfig#kind`.
+  module SchedulerKind
+    CONSTANT = "constant"
+    LINEAR   = "linear"
+    COSINE   = "cosine"
+
+    # @api private
+    def self.to_cabi(label)
+      case label
+      when CONSTANT then Blazen::FFI::BLAZEN_SCHEDULER_CONSTANT
+      when LINEAR   then Blazen::FFI::BLAZEN_SCHEDULER_LINEAR
+      when COSINE   then Blazen::FFI::BLAZEN_SCHEDULER_COSINE
+      else
+        raise Blazen::ValidationError,
+              "unknown SchedulerKind: #{label.inspect} " \
+              "(expected one of #{[CONSTANT, LINEAR, COSINE].inspect})"
+      end
+    end
+  end
+
+  # Stable string labels for the mixed-precision modes accepted by
+  # {TrainConfig#mixed_precision}.
+  module MixedPrecision
+    NONE = "none"
+    BF16 = "bf16"
+
+    # @api private
+    def self.to_cabi(label)
+      case label
+      when NONE then Blazen::FFI::BLAZEN_MIXED_PRECISION_NONE
+      when BF16 then Blazen::FFI::BLAZEN_MIXED_PRECISION_BF16
+      else
+        raise Blazen::ValidationError,
+              "unknown MixedPrecision: #{label.inspect} " \
+              "(expected one of #{[NONE, BF16].inspect})"
+      end
+    end
+  end
+
+  # `LoRA` hyperparameters (rank, alpha, dropout, and the list of attention
+  # projection names to adapt).
+  class LoraConfig
+    attr_reader :rank, :alpha, :dropout, :target_modules
+
+    def initialize(rank: 16, alpha: 32.0, dropout: 0.0,
+                   target_modules: %w[q_proj k_proj v_proj o_proj])
+      @rank = Integer(rank)
+      @alpha = Float(alpha)
+      @dropout = Float(dropout)
+      @target_modules = Array(target_modules).map(&:to_s)
+    end
+  end
+
+  # `AdamW` optimizer hyperparameters. `gradient_clip` is nullable — pass
+  # `nil` to disable global L2 clipping.
+  class OptimConfig
+    attr_reader :learning_rate, :beta1, :beta2, :epsilon, :weight_decay, :gradient_clip
+
+    def initialize(learning_rate: 2e-4, beta1: 0.9, beta2: 0.999,
+                   epsilon: 1e-8, weight_decay: 0.0, gradient_clip: 1.0)
+      @learning_rate = Float(learning_rate)
+      @beta1 = Float(beta1)
+      @beta2 = Float(beta2)
+      @epsilon = Float(epsilon)
+      @weight_decay = Float(weight_decay)
+      @gradient_clip = gradient_clip.nil? ? nil : Float(gradient_clip)
+    end
+  end
+
+  # LR-schedule configuration. `kind` is one of {SchedulerKind::CONSTANT} /
+  # {SchedulerKind::LINEAR} / {SchedulerKind::COSINE}.
+  class SchedulerConfig
+    attr_reader :kind, :warmup_steps
+
+    def initialize(kind: SchedulerKind::COSINE, warmup_steps: 0)
+      @kind = kind.to_s
+      @warmup_steps = Integer(warmup_steps)
+    end
+  end
+
+  # End-to-end `LoRA` training configuration consumed by
+  # {ModelManager#train_lora}.
+  class TrainConfig
+    attr_reader :base_model_repo, :output_dir, :lora, :optim, :scheduler,
+                :max_steps, :batch_size, :gradient_accumulation_steps,
+                :max_seq_len, :eval_steps, :save_steps, :seed,
+                :mixed_precision, :device
+
+    def initialize(base_model_repo:, output_dir:,
+                   lora: LoraConfig.new, optim: OptimConfig.new,
+                   scheduler: SchedulerConfig.new, max_steps: 100,
+                   batch_size: 1, gradient_accumulation_steps: 1,
+                   max_seq_len: 2048, eval_steps: nil, save_steps: nil,
+                   seed: 42, mixed_precision: MixedPrecision::NONE,
+                   device: nil)
+      @base_model_repo = base_model_repo.to_s
+      @output_dir = output_dir.to_s
+      @lora = lora
+      @optim = optim
+      @scheduler = scheduler
+      @max_steps = Integer(max_steps)
+      @batch_size = Integer(batch_size)
+      @gradient_accumulation_steps = Integer(gradient_accumulation_steps)
+      @max_seq_len = Integer(max_seq_len)
+      @eval_steps = eval_steps.nil? ? nil : Integer(eval_steps)
+      @save_steps = save_steps.nil? ? nil : Integer(save_steps)
+      @seed = Integer(seed)
+      @mixed_precision = mixed_precision.to_s
+      @device = device.nil? ? nil : device.to_s
+    end
+  end
+
+  # Result returned by {ModelManager#train_lora}.
+  TrainedAdapter = Struct.new(:adapter_dir, :final_loss, :total_steps, keyword_init: true)
+
+  # Tokenized JSONL dataset handle consumed by {ModelManager#train_lora}.
+  # Wraps `BlazenJsonlDataset *`; the inner pointer is freed automatically
+  # when the Ruby object is garbage-collected (via `FFI::AutoPointer`).
+  class JsonlDataset
+    # @return [::FFI::AutoPointer] underlying `BlazenJsonlDataset *`
+    attr_reader :ptr
+
+    # Loads a JSONL training file with the given tokenizer.
+    #
+    # @param path [String] JSONL dataset path on disk
+    # @param tokenizer_path [String] path to the tokenizer `.json`
+    # @param chat_template [String, nil] optional chat template override
+    # @param max_seq_len [Integer] max tokenized sequence length per example
+    # @param device [String, nil] device specifier (`"cpu"`, `"cuda:0"`, …)
+    # @param pad_token_id [Integer] pad token id used for collation
+    # @return [JsonlDataset]
+    # @raise [Blazen::Error] on validation, tokenizer-load, or dataset-parse errors
+    def self.from_path(path, tokenizer_path:, chat_template: nil,
+                       max_seq_len: 2048, device: nil, pad_token_id: 0)
+      raw = nil
+      Blazen::FFI.with_cstring(path.to_s) do |path_ptr|
+        Blazen::FFI.with_cstring(tokenizer_path.to_s) do |tok_ptr|
+          Blazen::FFI.with_cstring(chat_template) do |tmpl_ptr|
+            Blazen::FFI.with_cstring(device) do |dev_ptr|
+              out_err = ::FFI::MemoryPointer.new(:pointer)
+              raw = Blazen::FFI.blazen_jsonl_dataset_from_path(
+                path_ptr, tok_ptr, tmpl_ptr,
+                Integer(max_seq_len), dev_ptr, Integer(pad_token_id),
+                out_err,
+              )
+              Blazen::FFI.check_error!(out_err)
+            end
+          end
+        end
+      end
+      if raw.nil? || raw.null?
+        raise Blazen::InternalError,
+              "blazen_jsonl_dataset_from_path returned null without an error"
+      end
+
+      new(raw)
+    end
+
+    # @api private
+    def initialize(raw_ptr)
+      @ptr = ::FFI::AutoPointer.new(raw_ptr, Blazen::FFI.method(:blazen_jsonl_dataset_free))
+    end
+  end
+
   # Memory-budget-aware loader with per-pool LRU eviction and `LoRA` adapter
   # orchestration.
   #
@@ -363,6 +528,43 @@ module Blazen
       nil
     end
 
+    # Trains a `LoRA` adapter end-to-end against `dataset` and returns the
+    # resulting {TrainedAdapter} (adapter directory + final loss + total
+    # steps).
+    #
+    # Composes with `Fiber.scheduler` when one is active; otherwise blocks
+    # the calling thread on the cabi-side wait. The `dataset` handle remains
+    # valid after the call — the cabi clones the inner `Arc<JsonlDataset>`
+    # before spawning the training run, so the Ruby-side `AutoPointer` can
+    # free the handle whenever.
+    #
+    # No progress-callback hook is exposed in v1 — the cabi does not yet
+    # surface a `BlazenTrainProgressVTable`. Progress callbacks will be
+    # added once that vtable lands (deferred upstream).
+    #
+    # @param config [Blazen::TrainConfig]
+    # @param dataset [Blazen::JsonlDataset]
+    # @return [Blazen::TrainedAdapter]
+    def train_lora(config, dataset)
+      with_train_config(config) do |cfg_struct|
+        fut = Blazen::FFI.blazen_model_manager_train_lora(
+          @ptr, cfg_struct.pointer, dataset.ptr,
+        )
+        if fut.nil? || fut.null?
+          raise Blazen::ValidationError,
+                "blazen_model_manager_train_lora rejected the call " \
+                "(null manager, null dataset, or invalid config)"
+        end
+        Blazen::FFI.await_future(fut) do |f|
+          out_adapter = Blazen::FFI::BlazenTrainedAdapter.new
+          out_err = ::FFI::MemoryPointer.new(:pointer)
+          Blazen::FFI.blazen_future_take_trained_adapter(f, out_adapter.pointer, out_err)
+          Blazen::FFI.check_error!(out_err)
+          decode_trained_adapter(out_adapter)
+        end
+      end
+    end
+
     # Lists adapters mounted on `model_id`.
     #
     # @param model_id [String]
@@ -382,6 +584,111 @@ module Blazen
     end
 
     private
+
+    # Why: every string + array buffer referenced by `BlazenTrainConfig`
+    # (plus the per-element strings inside `target_modules`) is borrowed
+    # for the duration of the cabi call. We collect strong refs in
+    # `keepalive` so GC can't reclaim them mid-call, then release the
+    # whole batch in the `ensure` arm.
+    def with_train_config(config)
+      raise Blazen::ValidationError, "config must be a Blazen::TrainConfig" \
+        unless config.is_a?(TrainConfig)
+      raise Blazen::ValidationError, "TrainConfig#lora must be a Blazen::LoraConfig" \
+        unless config.lora.is_a?(LoraConfig)
+      raise Blazen::ValidationError, "TrainConfig#optim must be a Blazen::OptimConfig" \
+        unless config.optim.is_a?(OptimConfig)
+      raise Blazen::ValidationError, "TrainConfig#scheduler must be a Blazen::SchedulerConfig" \
+        unless config.scheduler.is_a?(SchedulerConfig)
+
+      keepalive = []
+      to_cstr = lambda do |s|
+        next nil if s.nil?
+
+        mp = ::FFI::MemoryPointer.from_string(s.to_s)
+        keepalive << mp
+        mp
+      end
+
+      target_mod_ptrs = config.lora.target_modules.map { |m| to_cstr.call(m) }
+      target_mod_array = ::FFI::MemoryPointer.new(:pointer, target_mod_ptrs.length)
+      target_mod_array.write_array_of_pointer(target_mod_ptrs)
+      keepalive << target_mod_array
+
+      struct = Blazen::FFI::BlazenTrainConfig.new
+      struct[:base_model_repo] = to_cstr.call(config.base_model_repo)
+      struct[:output_dir]      = to_cstr.call(config.output_dir)
+
+      lora = struct[:lora]
+      lora[:rank]               = config.lora.rank
+      lora[:alpha]              = config.lora.alpha
+      lora[:dropout]            = config.lora.dropout
+      lora[:target_modules]     = target_mod_array
+      lora[:target_modules_len] = target_mod_ptrs.length
+
+      optim = struct[:optim]
+      optim[:learning_rate] = config.optim.learning_rate
+      optim[:beta1]         = config.optim.beta1
+      optim[:beta2]         = config.optim.beta2
+      optim[:epsilon]       = config.optim.epsilon
+      optim[:weight_decay]  = config.optim.weight_decay
+      if config.optim.gradient_clip.nil?
+        optim[:has_gradient_clip] = 0
+        optim[:gradient_clip]     = 0.0
+      else
+        optim[:has_gradient_clip] = 1
+        optim[:gradient_clip]     = config.optim.gradient_clip
+      end
+
+      sched = struct[:scheduler]
+      sched[:kind]         = SchedulerKind.to_cabi(config.scheduler.kind)
+      sched[:warmup_steps] = config.scheduler.warmup_steps
+
+      struct[:max_steps]                   = config.max_steps
+      struct[:batch_size]                  = config.batch_size
+      struct[:gradient_accumulation_steps] = config.gradient_accumulation_steps
+      struct[:max_seq_len]                 = config.max_seq_len
+      if config.eval_steps.nil?
+        struct[:has_eval_steps] = 0
+        struct[:eval_steps]     = 0
+      else
+        struct[:has_eval_steps] = 1
+        struct[:eval_steps]     = config.eval_steps
+      end
+      if config.save_steps.nil?
+        struct[:has_save_steps] = 0
+        struct[:save_steps]     = 0
+      else
+        struct[:has_save_steps] = 1
+        struct[:save_steps]     = config.save_steps
+      end
+      struct[:seed]            = config.seed
+      struct[:mixed_precision] = MixedPrecision.to_cabi(config.mixed_precision)
+      struct[:device]          = to_cstr.call(config.device)
+
+      begin
+        yield struct
+      ensure
+        keepalive.clear
+      end
+    end
+
+    def decode_trained_adapter(out_adapter)
+      dir_ptr = out_adapter[:adapter_dir]
+      adapter_dir =
+        if dir_ptr.nil? || dir_ptr.null?
+          nil
+        else
+          dir_ptr.read_string.force_encoding(Encoding::UTF_8)
+        end
+      final_loss  = out_adapter[:final_loss]
+      total_steps = out_adapter[:total_steps]
+      Blazen::FFI.blazen_trained_adapter_free(out_adapter.pointer)
+      TrainedAdapter.new(
+        adapter_dir: adapter_dir,
+        final_loss: final_loss,
+        total_steps: total_steps,
+      )
+    end
 
     # Why: the cabi reads C-string fields of `BlazenHfLoadOptions` during the
     # call but copies them before returning, so the MemoryPointer buffers

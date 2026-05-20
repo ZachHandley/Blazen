@@ -249,4 +249,313 @@ public final class ModelManager: @unchecked Sendable {
         }
         return hint
     }
+
+    /// Run a LoRA fine-tune against `dataset` using the configured base
+    /// model and hyperparameters. `onEvent` (if provided) receives every
+    /// `TrainingEvent` published by the trainer on the underlying tokio
+    /// worker; throwing from the closure cancels the run and surfaces as
+    /// `BlazenError.Cancelled`.
+    public func trainLora(
+        config: TrainConfig,
+        dataset: JsonlDataset,
+        onEvent: (@Sendable (TrainingEvent) -> Void)? = nil
+    ) async throws -> TrainedAdapter {
+        let progress: ForeignTrainingProgress? = onEvent.map { TrainingProgressSink(callback: $0) }
+        let record = try await inner.trainLora(
+            config: config.record,
+            dataset: dataset.inner,
+            progress: progress
+        )
+        return TrainedAdapter(record: record)
+    }
+}
+
+// MARK: - Training types
+
+/// Learning-rate schedule shape passed to the LoRA trainer.
+public enum SchedulerKind: String, Sendable, Equatable, Hashable, CaseIterable {
+    case constant
+    case linear
+    case cosine
+
+    fileprivate var ffi: SchedulerKindEnum {
+        switch self {
+        case .constant: return .constant
+        case .linear: return .linear
+        case .cosine: return .cosine
+        }
+    }
+}
+
+/// Mixed-precision mode for the LoRA trainer.
+public enum MixedPrecision: String, Sendable, Equatable, Hashable, CaseIterable {
+    case none
+    case bf16
+
+    fileprivate var ffi: MixedPrecisionEnum {
+        switch self {
+        case .none: return .none
+        case .bf16: return .bf16
+        }
+    }
+}
+
+/// LoRA adapter shape: rank, scaling factor, dropout, and the list of
+/// linear-projection modules to wrap.
+public struct LoraConfig: Sendable, Equatable, Hashable {
+    public let rank: UInt32
+    public let alpha: Float
+    public let dropout: Float
+    public let targetModules: [String]
+
+    public init(
+        rank: UInt32 = 16,
+        alpha: Float = 32.0,
+        dropout: Float = 0.0,
+        targetModules: [String] = ["q_proj", "k_proj", "v_proj", "o_proj"]
+    ) {
+        self.rank = rank
+        self.alpha = alpha
+        self.dropout = dropout
+        self.targetModules = targetModules
+    }
+
+    fileprivate var record: LoraConfigRecord {
+        LoraConfigRecord(
+            rank: rank,
+            alpha: alpha,
+            dropout: dropout,
+            targetModules: targetModules
+        )
+    }
+}
+
+/// AdamW-style optimiser hyperparameters. `gradientClip` of `nil`
+/// disables global-norm gradient clipping.
+public struct OptimConfig: Sendable, Equatable, Hashable {
+    public let learningRate: Double
+    public let beta1: Double
+    public let beta2: Double
+    public let epsilon: Double
+    public let weightDecay: Double
+    public let gradientClip: Float?
+
+    public init(
+        learningRate: Double = 2.0e-4,
+        beta1: Double = 0.9,
+        beta2: Double = 0.999,
+        epsilon: Double = 1.0e-8,
+        weightDecay: Double = 0.0,
+        gradientClip: Float? = 1.0
+    ) {
+        self.learningRate = learningRate
+        self.beta1 = beta1
+        self.beta2 = beta2
+        self.epsilon = epsilon
+        self.weightDecay = weightDecay
+        self.gradientClip = gradientClip
+    }
+
+    fileprivate var record: OptimConfigRecord {
+        OptimConfigRecord(
+            learningRate: learningRate,
+            beta1: beta1,
+            beta2: beta2,
+            epsilon: epsilon,
+            weightDecay: weightDecay,
+            gradientClip: gradientClip
+        )
+    }
+}
+
+/// Learning-rate-schedule configuration.
+public struct SchedulerConfig: Sendable, Equatable, Hashable {
+    public let kind: SchedulerKind
+    public let warmupSteps: UInt32
+
+    public init(kind: SchedulerKind = .cosine, warmupSteps: UInt32 = 0) {
+        self.kind = kind
+        self.warmupSteps = warmupSteps
+    }
+
+    fileprivate var record: SchedulerConfigRecord {
+        SchedulerConfigRecord(kind: kind.ffi, warmupSteps: warmupSteps)
+    }
+}
+
+/// Top-level training-run descriptor passed to
+/// `ModelManager.trainLora(config:dataset:onEvent:)`.
+///
+/// `evalSteps` / `saveSteps` set to `nil` disable evaluation and
+/// intermediate checkpoint emission respectively. `device` of `nil`
+/// defers to the trainer's default device selection.
+public struct TrainConfig: Sendable, Equatable, Hashable {
+    public let baseModelRepo: String
+    public let outputDir: String
+    public let lora: LoraConfig
+    public let optim: OptimConfig
+    public let scheduler: SchedulerConfig
+    public let maxSteps: UInt32
+    public let batchSize: UInt32
+    public let gradientAccumulationSteps: UInt32
+    public let maxSeqLen: UInt32
+    public let evalSteps: UInt32?
+    public let saveSteps: UInt32?
+    public let seed: UInt64
+    public let mixedPrecision: MixedPrecision
+    public let device: String?
+
+    public init(
+        baseModelRepo: String,
+        outputDir: String,
+        lora: LoraConfig = LoraConfig(),
+        optim: OptimConfig = OptimConfig(),
+        scheduler: SchedulerConfig = SchedulerConfig(),
+        maxSteps: UInt32 = 1_000,
+        batchSize: UInt32 = 1,
+        gradientAccumulationSteps: UInt32 = 1,
+        maxSeqLen: UInt32 = 2048,
+        evalSteps: UInt32? = nil,
+        saveSteps: UInt32? = nil,
+        seed: UInt64 = 42,
+        mixedPrecision: MixedPrecision = .none,
+        device: String? = nil
+    ) {
+        self.baseModelRepo = baseModelRepo
+        self.outputDir = outputDir
+        self.lora = lora
+        self.optim = optim
+        self.scheduler = scheduler
+        self.maxSteps = maxSteps
+        self.batchSize = batchSize
+        self.gradientAccumulationSteps = gradientAccumulationSteps
+        self.maxSeqLen = maxSeqLen
+        self.evalSteps = evalSteps
+        self.saveSteps = saveSteps
+        self.seed = seed
+        self.mixedPrecision = mixedPrecision
+        self.device = device
+    }
+
+    fileprivate var record: TrainConfigRecord {
+        TrainConfigRecord(
+            baseModelRepo: baseModelRepo,
+            outputDir: outputDir,
+            lora: lora.record,
+            optim: optim.record,
+            scheduler: scheduler.record,
+            maxSteps: maxSteps,
+            batchSize: batchSize,
+            gradientAccumulationSteps: gradientAccumulationSteps,
+            maxSeqLen: maxSeqLen,
+            evalSteps: evalSteps,
+            saveSteps: saveSteps,
+            seed: seed,
+            mixedPrecision: mixedPrecision.ffi,
+            device: device
+        )
+    }
+}
+
+/// On-disk descriptor of a completed LoRA adapter, returned by
+/// `ModelManager.trainLora(config:dataset:onEvent:)`.
+public struct TrainedAdapter: Sendable, Equatable, Hashable {
+    public let adapterDir: String
+    public let finalLoss: Float
+    public let totalSteps: UInt64
+
+    public init(adapterDir: String, finalLoss: Float, totalSteps: UInt64) {
+        self.adapterDir = adapterDir
+        self.finalLoss = finalLoss
+        self.totalSteps = totalSteps
+    }
+
+    fileprivate init(record: TrainedAdapterRecord) {
+        self.adapterDir = record.adapterDir
+        self.finalLoss = record.finalLoss
+        self.totalSteps = record.totalSteps
+    }
+}
+
+/// One observable event published during a training run. The trainer
+/// emits exactly one `.started` then a series of `.stepCompleted` /
+/// `.evaluating` / `.evalCompleted` / `.checkpointSaved` events, and
+/// terminates with a single `.finished`.
+public enum TrainingEvent: Sendable, Equatable, Hashable {
+    case started(totalSteps: UInt64)
+    case stepCompleted(step: UInt64, loss: Float, learningRate: Double, elapsedMs: UInt64)
+    case evaluating(step: UInt64)
+    case evalCompleted(step: UInt64, evalLoss: Float)
+    case checkpointSaved(step: UInt64, path: String)
+    case finished(finalLoss: Float, totalSteps: UInt64, adapterDir: String)
+
+    fileprivate init(ffi: TrainingEventEnum) {
+        switch ffi {
+        case let .started(totalSteps):
+            self = .started(totalSteps: totalSteps)
+        case let .stepCompleted(step, loss, learningRate, elapsedMs):
+            self = .stepCompleted(step: step, loss: loss, learningRate: learningRate, elapsedMs: elapsedMs)
+        case let .evaluating(step):
+            self = .evaluating(step: step)
+        case let .evalCompleted(step, evalLoss):
+            self = .evalCompleted(step: step, evalLoss: evalLoss)
+        case let .checkpointSaved(step, path):
+            self = .checkpointSaved(step: step, path: path)
+        case let .finished(finalLoss, totalSteps, adapterDir):
+            self = .finished(finalLoss: finalLoss, totalSteps: totalSteps, adapterDir: adapterDir)
+        }
+    }
+}
+
+/// JSONL-backed training dataset. Construct once and hand to one or more
+/// `ModelManager.trainLora(...)` calls; the underlying handle is
+/// reference-counted on the Rust side so it can be safely re-used.
+public final class JsonlDataset: @unchecked Sendable {
+    // Why: `UniffiJsonlDataset` is `@unchecked Sendable` upstream and
+    // holds an `Arc`-shared dataset; the Swift wrapper adds no mutable
+    // state so the same contract carries over.
+    fileprivate let inner: UniffiJsonlDataset
+
+    public init(
+        path: String,
+        tokenizerPath: String,
+        chatTemplate: String? = nil,
+        maxSeqLen: UInt32 = 2048,
+        device: String? = nil,
+        padTokenId: UInt32 = 0
+    ) throws {
+        self.inner = try UniffiJsonlDataset.fromPath(
+            path: path,
+            tokenizerPath: tokenizerPath,
+            chatTemplate: chatTemplate,
+            maxSeqLen: maxSeqLen,
+            device: device,
+            padTokenId: padTokenId
+        )
+    }
+
+    public func isEmpty() -> Bool {
+        inner.isEmpty()
+    }
+
+    public func count() -> UInt64 {
+        inner.len()
+    }
+}
+
+// Why: `ForeignTrainingProgress` is a sync UniFFI callback interface;
+// the trainer invokes `onEvent` from a tokio worker thread. We wrap the
+// caller's closure in a reference type that conforms to the protocol,
+// translate the tagged UniFFI enum into the public `TrainingEvent`, and
+// rely on the upstream contract that throwing cancels the run.
+private final class TrainingProgressSink: ForeignTrainingProgress, @unchecked Sendable {
+    private let callback: @Sendable (TrainingEvent) -> Void
+
+    init(callback: @escaping @Sendable (TrainingEvent) -> Void) {
+        self.callback = callback
+    }
+
+    func onEvent(event: TrainingEventEnum) throws {
+        callback(TrainingEvent(ffi: event))
+    }
 }

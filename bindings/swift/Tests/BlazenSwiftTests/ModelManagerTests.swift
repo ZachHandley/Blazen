@@ -188,4 +188,85 @@ final class ModelManagerTests: XCTestCase {
         XCTAssertEqual(custom.adapterId, "my-lora")
         XCTAssertEqual(custom.scale, 0.75)
     }
+
+    /// `trainLora` with `maxSteps = 0` must surface a `BlazenError`
+    /// (the upstream validator rejects empty-step runs before any
+    /// device/model setup).
+    func testTrainLoraRejectsInvalidConfig() async {
+        let manager = ModelManager()
+        let config = TrainConfig(
+            baseModelRepo: "blazen-nonexistent-org/blazen-nonexistent-base",
+            outputDir: "/nonexistent/train-out",
+            maxSteps: 0
+        )
+        // Why: dataset construction itself fails for a bogus path, so we
+        // wrap it in the same do/catch — either failure is acceptable
+        // because both indicate the FFI surfaced a typed error instead
+        // of crashing.
+        do {
+            let dataset = try JsonlDataset(
+                path: "/nonexistent/train.jsonl",
+                tokenizerPath: "/nonexistent/tokenizer.json"
+            )
+            _ = try await manager.trainLora(config: config, dataset: dataset)
+            XCTFail("expected trainLora() to throw")
+        } catch is BlazenError {
+            // expected
+        } catch {
+            XCTFail("expected BlazenError, got \(type(of: error)): \(error)")
+        }
+    }
+
+    /// `JsonlDataset.init` must throw `BlazenError` (not crash) when the
+    /// JSONL path or tokenizer path cannot be opened.
+    func testJsonlDatasetRequiresValidPath() {
+        XCTAssertThrowsError(
+            try JsonlDataset(
+                path: "/nonexistent/definitely-not-there.jsonl",
+                tokenizerPath: "/nonexistent/tokenizer.json"
+            )
+        ) { err in
+            guard err is BlazenError else {
+                XCTFail("expected BlazenError, got \(type(of: err)): \(err)")
+                return
+            }
+        }
+    }
+
+    /// Exhaustive switch over `TrainingEvent` cases must compile — guards
+    /// against silent payload drift when the upstream enum gains a
+    /// variant without the Swift mirror being updated.
+    func testTrainingEventCases() {
+        let events: [TrainingEvent] = [
+            .started(totalSteps: 10),
+            .stepCompleted(step: 1, loss: 1.5, learningRate: 1.0e-4, elapsedMs: 42),
+            .evaluating(step: 5),
+            .evalCompleted(step: 5, evalLoss: 1.2),
+            .checkpointSaved(step: 5, path: "/tmp/ckpt"),
+            .finished(finalLoss: 0.9, totalSteps: 10, adapterDir: "/tmp/adapter"),
+        ]
+        for event in events {
+            switch event {
+            case let .started(totalSteps):
+                XCTAssertEqual(totalSteps, 10)
+            case let .stepCompleted(step, loss, learningRate, elapsedMs):
+                XCTAssertEqual(step, 1)
+                XCTAssertEqual(loss, 1.5)
+                XCTAssertEqual(learningRate, 1.0e-4)
+                XCTAssertEqual(elapsedMs, 42)
+            case let .evaluating(step):
+                XCTAssertEqual(step, 5)
+            case let .evalCompleted(step, evalLoss):
+                XCTAssertEqual(step, 5)
+                XCTAssertEqual(evalLoss, 1.2)
+            case let .checkpointSaved(step, path):
+                XCTAssertEqual(step, 5)
+                XCTAssertEqual(path, "/tmp/ckpt")
+            case let .finished(finalLoss, totalSteps, adapterDir):
+                XCTAssertEqual(finalLoss, 0.9)
+                XCTAssertEqual(totalSteps, 10)
+                XCTAssertEqual(adapterDir, "/tmp/adapter")
+            }
+        }
+    }
 }

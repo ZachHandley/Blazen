@@ -846,3 +846,689 @@ impl LocalModel for JsLocalModelAdapter {
             .collect()
     }
 }
+
+// ---------------------------------------------------------------------------
+// Training surface (feature = "training")
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "training")]
+pub use training::{
+    JsJsonlDataset, JsLoraConfig, JsMixedPrecision, JsOptimConfig, JsSchedulerConfig,
+    JsSchedulerKind, JsTrainConfig, JsTrainedAdapter, JsTrainingEvent,
+};
+
+#[cfg(feature = "training")]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::doc_markdown,
+    clippy::needless_pass_by_value
+)]
+mod training {
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    use async_trait::async_trait;
+    use napi::Status;
+    use napi::bindgen_prelude::BigInt;
+    use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
+    use napi_derive::napi;
+
+    use blazen_train::dataset::JsonlDataset;
+    use blazen_train::{
+        BlazenTrainError, LoraConfig, MixedPrecision, OptimConfig, SchedulerConfig, SchedulerKind,
+        TrainConfig, TrainedAdapter, TrainingBatch, TrainingDataset, TrainingEvent,
+        TrainingProgress,
+    };
+    use tokenizers::Tokenizer;
+
+    use super::JsModelManager;
+
+    // -----------------------------------------------------------------------
+    // JsSchedulerKind / JsMixedPrecision
+    // -----------------------------------------------------------------------
+
+    /// Learning-rate schedule shape passed to [`JsSchedulerConfig`].
+    #[napi(string_enum = "lowercase")]
+    pub enum JsSchedulerKind {
+        Constant,
+        Linear,
+        Cosine,
+    }
+
+    impl From<JsSchedulerKind> for SchedulerKind {
+        fn from(k: JsSchedulerKind) -> Self {
+            match k {
+                JsSchedulerKind::Constant => Self::Constant,
+                JsSchedulerKind::Linear => Self::Linear,
+                JsSchedulerKind::Cosine => Self::Cosine,
+            }
+        }
+    }
+
+    /// Mixed-precision mode passed to [`JsTrainConfig`].
+    #[napi(string_enum = "lowercase")]
+    pub enum JsMixedPrecision {
+        None,
+        Bf16,
+    }
+
+    impl From<JsMixedPrecision> for MixedPrecision {
+        fn from(m: JsMixedPrecision) -> Self {
+            match m {
+                JsMixedPrecision::None => Self::None,
+                JsMixedPrecision::Bf16 => Self::Bf16,
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // JsLoraConfig / JsOptimConfig / JsSchedulerConfig / JsTrainConfig
+    // -----------------------------------------------------------------------
+
+    /// LoRA hyperparameters.
+    #[napi(object)]
+    pub struct JsLoraConfig {
+        /// Low-rank dimension (PEFT "r"). Default `16`.
+        pub rank: Option<u32>,
+        /// Scaling numerator; effective per-layer scale is `alpha / rank`. Default `32`.
+        pub alpha: Option<f64>,
+        /// Dropout applied to LoRA-A input. Default `0.0`.
+        pub dropout: Option<f64>,
+        /// Module-name suffixes to inject LoRA into. Default
+        /// `["q_proj","k_proj","v_proj","o_proj"]`.
+        #[napi(js_name = "targetModules")]
+        pub target_modules: Option<Vec<String>>,
+    }
+
+    fn default_target_modules() -> Vec<String> {
+        vec![
+            "q_proj".to_string(),
+            "k_proj".to_string(),
+            "v_proj".to_string(),
+            "o_proj".to_string(),
+        ]
+    }
+
+    impl TryFrom<JsLoraConfig> for LoraConfig {
+        type Error = napi::Error;
+
+        fn try_from(c: JsLoraConfig) -> Result<Self, Self::Error> {
+            let rank = c.rank.unwrap_or(16) as usize;
+            if rank == 0 {
+                return Err(napi::Error::from_reason("LoraConfig.rank must be > 0"));
+            }
+            let alpha = c.alpha.unwrap_or(32.0);
+            if !alpha.is_finite() || alpha <= 0.0 {
+                return Err(napi::Error::from_reason("LoraConfig.alpha must be > 0"));
+            }
+            let dropout = c.dropout.unwrap_or(0.0);
+            if !(0.0..1.0).contains(&dropout) {
+                return Err(napi::Error::from_reason(
+                    "LoraConfig.dropout must be in [0.0, 1.0)",
+                ));
+            }
+            let target_modules = c.target_modules.unwrap_or_else(default_target_modules);
+            if target_modules.is_empty() {
+                return Err(napi::Error::from_reason(
+                    "LoraConfig.targetModules must be non-empty",
+                ));
+            }
+            Ok(Self {
+                rank,
+                alpha: alpha as f32,
+                dropout: dropout as f32,
+                target_modules,
+            })
+        }
+    }
+
+    /// AdamW optimizer hyperparameters.
+    #[napi(object)]
+    pub struct JsOptimConfig {
+        /// Peak learning rate (applied at end of warmup). Default `2e-4`.
+        #[napi(js_name = "learningRate")]
+        pub learning_rate: Option<f64>,
+        /// AdamW beta1. Default `0.9`.
+        pub beta1: Option<f64>,
+        /// AdamW beta2. Default `0.999`.
+        pub beta2: Option<f64>,
+        /// AdamW numerical-stability epsilon. Default `1e-8`.
+        pub epsilon: Option<f64>,
+        /// Decoupled weight decay. Default `0.0`.
+        #[napi(js_name = "weightDecay")]
+        pub weight_decay: Option<f64>,
+        /// Global gradient L2-norm clip; `null` disables clipping. Default `1.0`.
+        #[napi(js_name = "gradientClip")]
+        pub gradient_clip: Option<f64>,
+    }
+
+    impl TryFrom<JsOptimConfig> for OptimConfig {
+        type Error = napi::Error;
+
+        fn try_from(c: JsOptimConfig) -> Result<Self, Self::Error> {
+            let learning_rate = c.learning_rate.unwrap_or(2e-4);
+            if !learning_rate.is_finite() || learning_rate <= 0.0 {
+                return Err(napi::Error::from_reason(
+                    "OptimConfig.learningRate must be > 0",
+                ));
+            }
+            let beta1 = c.beta1.unwrap_or(0.9);
+            let beta2 = c.beta2.unwrap_or(0.999);
+            if !(0.0..1.0).contains(&beta1) || !(0.0..1.0).contains(&beta2) {
+                return Err(napi::Error::from_reason(
+                    "OptimConfig.beta1 / beta2 must be in [0.0, 1.0)",
+                ));
+            }
+            let epsilon = c.epsilon.unwrap_or(1e-8);
+            if !epsilon.is_finite() || epsilon <= 0.0 {
+                return Err(napi::Error::from_reason("OptimConfig.epsilon must be > 0"));
+            }
+            let weight_decay = c.weight_decay.unwrap_or(0.0);
+            if !weight_decay.is_finite() || weight_decay < 0.0 {
+                return Err(napi::Error::from_reason(
+                    "OptimConfig.weightDecay must be >= 0",
+                ));
+            }
+            let gradient_clip = match c.gradient_clip {
+                Some(g) => {
+                    if !g.is_finite() || g <= 0.0 {
+                        return Err(napi::Error::from_reason(
+                            "OptimConfig.gradientClip, when set, must be > 0",
+                        ));
+                    }
+                    Some(g as f32)
+                }
+                None => Some(1.0_f32),
+            };
+            Ok(Self {
+                learning_rate,
+                beta1,
+                beta2,
+                epsilon,
+                weight_decay,
+                gradient_clip,
+            })
+        }
+    }
+
+    /// Learning-rate scheduler configuration.
+    #[napi(object)]
+    pub struct JsSchedulerConfig {
+        /// Schedule shape. Default `Cosine`.
+        pub kind: Option<JsSchedulerKind>,
+        /// Linear-warmup duration in steps applied before the main shape. Default `0`.
+        #[napi(js_name = "warmupSteps")]
+        pub warmup_steps: Option<u32>,
+    }
+
+    impl From<JsSchedulerConfig> for SchedulerConfig {
+        fn from(c: JsSchedulerConfig) -> Self {
+            Self {
+                kind: c.kind.map_or(SchedulerKind::Cosine, Into::into),
+                warmup_steps: c.warmup_steps.unwrap_or(0) as usize,
+            }
+        }
+    }
+
+    /// Full configuration for one training run.
+    #[napi(object)]
+    pub struct JsTrainConfig {
+        /// HuggingFace repo id of the base model.
+        #[napi(js_name = "baseModelRepo")]
+        pub base_model_repo: String,
+        /// Filesystem directory where the trained adapter and checkpoints land.
+        #[napi(js_name = "outputDir")]
+        pub output_dir: String,
+        pub lora: Option<JsLoraConfig>,
+        pub optim: Option<JsOptimConfig>,
+        pub scheduler: Option<JsSchedulerConfig>,
+        /// Total optimizer steps to run. Default `1000`.
+        #[napi(js_name = "maxSteps")]
+        pub max_steps: Option<u32>,
+        /// Micro-batch size (per forward pass). Default `4`.
+        #[napi(js_name = "batchSize")]
+        pub batch_size: Option<u32>,
+        /// Micro-batches accumulated before each optimizer step. Default `1`.
+        #[napi(js_name = "gradientAccumulationSteps")]
+        pub gradient_accumulation_steps: Option<u32>,
+        /// Maximum tokenized sequence length per example. Default `2048`.
+        #[napi(js_name = "maxSeqLen")]
+        pub max_seq_len: Option<u32>,
+        /// Run evaluation every N steps when set.
+        #[napi(js_name = "evalSteps")]
+        pub eval_steps: Option<u32>,
+        /// Write a checkpoint every N steps when set.
+        #[napi(js_name = "saveSteps")]
+        pub save_steps: Option<u32>,
+        /// RNG seed (dataset shuffling + LoRA `A` init). Default `42`.
+        pub seed: Option<BigInt>,
+        /// Mixed-precision mode for forward / backward. Default `Bf16`.
+        #[napi(js_name = "mixedPrecision")]
+        pub mixed_precision: Option<JsMixedPrecision>,
+        /// Device string forwarded to the trainer (`"cpu"`, `"cuda:0"`, `"metal"`).
+        pub device: Option<String>,
+    }
+
+    impl TryFrom<JsTrainConfig> for TrainConfig {
+        type Error = napi::Error;
+
+        fn try_from(c: JsTrainConfig) -> Result<Self, Self::Error> {
+            if c.base_model_repo.trim().is_empty() {
+                return Err(napi::Error::from_reason(
+                    "TrainConfig.baseModelRepo must be non-empty",
+                ));
+            }
+            if c.output_dir.trim().is_empty() {
+                return Err(napi::Error::from_reason(
+                    "TrainConfig.outputDir must be non-empty",
+                ));
+            }
+            let max_steps = c.max_steps.unwrap_or(1000) as usize;
+            if max_steps == 0 {
+                return Err(napi::Error::from_reason("TrainConfig.maxSteps must be > 0"));
+            }
+            let batch_size = c.batch_size.unwrap_or(4) as usize;
+            if batch_size == 0 {
+                return Err(napi::Error::from_reason(
+                    "TrainConfig.batchSize must be > 0",
+                ));
+            }
+            let gradient_accumulation_steps = c.gradient_accumulation_steps.unwrap_or(1) as usize;
+            if gradient_accumulation_steps == 0 {
+                return Err(napi::Error::from_reason(
+                    "TrainConfig.gradientAccumulationSteps must be > 0",
+                ));
+            }
+            let max_seq_len = c.max_seq_len.unwrap_or(2048) as usize;
+            if max_seq_len == 0 {
+                return Err(napi::Error::from_reason(
+                    "TrainConfig.maxSeqLen must be > 0",
+                ));
+            }
+            let lora = c
+                .lora
+                .map(LoraConfig::try_from)
+                .transpose()?
+                .unwrap_or_else(|| LoraConfig {
+                    rank: 16,
+                    alpha: 32.0,
+                    dropout: 0.0,
+                    target_modules: default_target_modules(),
+                });
+            let optim = c
+                .optim
+                .map(OptimConfig::try_from)
+                .transpose()?
+                .unwrap_or(OptimConfig {
+                    learning_rate: 2e-4,
+                    beta1: 0.9,
+                    beta2: 0.999,
+                    epsilon: 1e-8,
+                    weight_decay: 0.0,
+                    gradient_clip: Some(1.0),
+                });
+            let scheduler = c.scheduler.map_or(
+                SchedulerConfig {
+                    kind: SchedulerKind::Cosine,
+                    warmup_steps: 0,
+                },
+                SchedulerConfig::from,
+            );
+            Ok(Self {
+                base_model_repo: c.base_model_repo,
+                output_dir: PathBuf::from(c.output_dir),
+                lora,
+                optim,
+                scheduler,
+                max_steps,
+                batch_size,
+                gradient_accumulation_steps,
+                max_seq_len,
+                eval_steps: c.eval_steps.map(|v| v as usize),
+                save_steps: c.save_steps.map(|v| v as usize),
+                seed: c.seed.map_or(42, |b| b.get_u64().1),
+                mixed_precision: c.mixed_precision.map_or(MixedPrecision::Bf16, Into::into),
+                device: c.device,
+            })
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // JsTrainedAdapter
+    // -----------------------------------------------------------------------
+
+    /// Result of a completed training run.
+    #[napi(object)]
+    pub struct JsTrainedAdapter {
+        /// Directory the PEFT-format adapter was written to.
+        #[napi(js_name = "adapterDir")]
+        pub adapter_dir: String,
+        /// Final training loss.
+        #[napi(js_name = "finalLoss")]
+        pub final_loss: f64,
+        /// Total optimizer steps executed.
+        #[napi(js_name = "totalSteps")]
+        pub total_steps: BigInt,
+    }
+
+    impl From<TrainedAdapter> for JsTrainedAdapter {
+        fn from(a: TrainedAdapter) -> Self {
+            Self {
+                adapter_dir: a.adapter_dir.display().to_string(),
+                final_loss: f64::from(a.final_loss),
+                total_steps: BigInt::from(a.total_steps as u64),
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // JsTrainingEvent (flat discriminated record)
+    // -----------------------------------------------------------------------
+
+    /// One observable event emitted during a training run.
+    ///
+    /// Switch on `kind` (`"started"` / `"stepCompleted"` / `"evaluating"` /
+    /// `"evalCompleted"` / `"checkpointSaved"` / `"finished"`); other fields
+    /// carry the per-variant payload and are absent for variants that do not
+    /// populate them.
+    #[napi(object)]
+    pub struct JsTrainingEvent {
+        pub kind: String,
+        pub step: Option<BigInt>,
+        pub loss: Option<f64>,
+        #[napi(js_name = "learningRate")]
+        pub learning_rate: Option<f64>,
+        #[napi(js_name = "elapsedMs")]
+        pub elapsed_ms: Option<f64>,
+        #[napi(js_name = "totalSteps")]
+        pub total_steps: Option<BigInt>,
+        #[napi(js_name = "evalLoss")]
+        pub eval_loss: Option<f64>,
+        #[napi(js_name = "checkpointPath")]
+        pub checkpoint_path: Option<String>,
+        #[napi(js_name = "adapterDir")]
+        pub adapter_dir: Option<String>,
+        #[napi(js_name = "finalLoss")]
+        pub final_loss: Option<f64>,
+    }
+
+    impl JsTrainingEvent {
+        fn empty(kind: &'static str) -> Self {
+            Self {
+                kind: kind.to_string(),
+                step: None,
+                loss: None,
+                learning_rate: None,
+                elapsed_ms: None,
+                total_steps: None,
+                eval_loss: None,
+                checkpoint_path: None,
+                adapter_dir: None,
+                final_loss: None,
+            }
+        }
+    }
+
+    impl From<TrainingEvent> for JsTrainingEvent {
+        fn from(ev: TrainingEvent) -> Self {
+            match ev {
+                TrainingEvent::Started { total_steps } => Self {
+                    total_steps: Some(BigInt::from(total_steps as u64)),
+                    ..Self::empty("started")
+                },
+                TrainingEvent::StepCompleted {
+                    step,
+                    loss,
+                    learning_rate,
+                    elapsed,
+                } => Self {
+                    step: Some(BigInt::from(step as u64)),
+                    loss: Some(f64::from(loss)),
+                    learning_rate: Some(learning_rate),
+                    elapsed_ms: Some(elapsed.as_secs_f64() * 1000.0),
+                    ..Self::empty("stepCompleted")
+                },
+                TrainingEvent::Evaluating { step } => Self {
+                    step: Some(BigInt::from(step as u64)),
+                    ..Self::empty("evaluating")
+                },
+                TrainingEvent::EvalCompleted { step, eval_loss } => Self {
+                    step: Some(BigInt::from(step as u64)),
+                    eval_loss: Some(f64::from(eval_loss)),
+                    ..Self::empty("evalCompleted")
+                },
+                TrainingEvent::CheckpointSaved { step, path } => Self {
+                    step: Some(BigInt::from(step as u64)),
+                    checkpoint_path: Some(path.display().to_string()),
+                    ..Self::empty("checkpointSaved")
+                },
+                TrainingEvent::Finished {
+                    final_loss,
+                    total_steps,
+                    adapter_dir,
+                } => Self {
+                    total_steps: Some(BigInt::from(total_steps as u64)),
+                    final_loss: Some(f64::from(final_loss)),
+                    adapter_dir: Some(adapter_dir.display().to_string()),
+                    ..Self::empty("finished")
+                },
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // JsJsonlDataset (opaque)
+    // -----------------------------------------------------------------------
+
+    /// Optional knobs for [`JsJsonlDataset::from_path`].
+    #[napi(object)]
+    pub struct JsJsonlDatasetOptions {
+        /// Jinja2 chat template (from `tokenizer_config.json`). Required when
+        /// rows use the `messages` shape.
+        #[napi(js_name = "chatTemplate")]
+        pub chat_template: Option<String>,
+        /// Maximum tokenized sequence length per example. Default `2048`.
+        #[napi(js_name = "maxSeqLen")]
+        pub max_seq_len: Option<u32>,
+        /// Candle device string. Default `"cpu"`.
+        pub device: Option<String>,
+        /// Token id to write into padded positions. Default `0`.
+        #[napi(js_name = "padTokenId")]
+        pub pad_token_id: Option<u32>,
+    }
+
+    /// JSONL-backed training dataset.
+    ///
+    /// Each line of the input file must deserialize to either
+    /// `{"messages": [{"role": ..., "content": ...}, ...]}` (OpenAI shape)
+    /// or `{"prompt": "...", "completion": "..."}` (legacy SFT).
+    #[napi(js_name = "JsonlDataset")]
+    pub struct JsJsonlDataset {
+        pub(super) inner: Arc<JsonlDataset>,
+    }
+
+    #[napi]
+    impl JsJsonlDataset {
+        /// Load a JSONL training file using the tokenizer at `tokenizerPath`.
+        ///
+        /// # Errors
+        ///
+        /// Throws if the tokenizer cannot be loaded, the device string is
+        /// invalid, or the JSONL file fails to parse.
+        #[napi(factory, js_name = "fromPath")]
+        pub fn from_path(
+            path: String,
+            tokenizer_path: String,
+            opts: Option<JsJsonlDatasetOptions>,
+        ) -> napi::Result<Self> {
+            let opts = opts.unwrap_or(JsJsonlDatasetOptions {
+                chat_template: None,
+                max_seq_len: None,
+                device: None,
+                pad_token_id: None,
+            });
+            let max_seq_len = opts.max_seq_len.unwrap_or(2048) as usize;
+            if max_seq_len == 0 {
+                return Err(napi::Error::from_reason(
+                    "JsonlDataset.maxSeqLen must be > 0",
+                ));
+            }
+            let tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
+                napi::Error::from_reason(format!(
+                    "failed to load tokenizer from {tokenizer_path:?}: {e}"
+                ))
+            })?;
+            let device_str = opts.device.unwrap_or_else(|| String::from("cpu"));
+            let cdev = parse_train_device_node(&device_str)?;
+            let ds = JsonlDataset::from_path(
+                std::path::Path::new(&path),
+                Arc::new(tokenizer),
+                opts.chat_template.as_deref(),
+                max_seq_len,
+                cdev,
+                opts.pad_token_id.unwrap_or(0),
+            )
+            .map_err(|e| napi::Error::from_reason(format!("JsonlDataset load failed: {e}")))?;
+            Ok(Self {
+                inner: Arc::new(ds),
+            })
+        }
+    }
+
+    fn parse_train_device_node(device: &str) -> napi::Result<candle_core::Device> {
+        let trimmed = device.trim();
+        let lower = trimmed.to_ascii_lowercase();
+        if lower == "cpu" {
+            return Ok(candle_core::Device::Cpu);
+        }
+        if let Some(idx_str) = lower.strip_prefix("cuda:") {
+            let idx: usize = idx_str.parse().map_err(|_| {
+                napi::Error::from_reason(format!(
+                    "invalid CUDA device {trimmed:?}: expected 'cuda:N'"
+                ))
+            })?;
+            return candle_core::Device::new_cuda(idx).map_err(|e| {
+                napi::Error::from_reason(format!("failed to open CUDA device {trimmed:?}: {e}"))
+            });
+        }
+        if lower == "cuda" {
+            return candle_core::Device::new_cuda(0)
+                .map_err(|e| napi::Error::from_reason(format!("failed to open cuda:0: {e}")));
+        }
+        if lower == "metal" {
+            return candle_core::Device::new_metal(0)
+                .map_err(|e| napi::Error::from_reason(format!("failed to open metal:0: {e}")));
+        }
+        Err(napi::Error::from_reason(format!(
+            "unrecognized device {trimmed:?}: expected 'cpu', 'cuda', 'cuda:N', or 'metal'"
+        )))
+    }
+
+    // -----------------------------------------------------------------------
+    // Bridges: dataset (Arc-wrapped) + progress callback
+    // -----------------------------------------------------------------------
+
+    struct ArcDataset(Arc<JsonlDataset>);
+
+    #[async_trait]
+    impl TrainingDataset for ArcDataset {
+        fn len(&self) -> usize {
+            self.0.len()
+        }
+
+        async fn batch(
+            &self,
+            batch_size: usize,
+            idx: usize,
+        ) -> Result<TrainingBatch, BlazenTrainError> {
+            self.0.batch(batch_size, idx).await
+        }
+    }
+
+    /// TSFN type for the `(event) => void` progress callback. The return
+    /// value is ignored; only the queueing status is observable from Rust.
+    type ProgressTsfn =
+        ThreadsafeFunction<JsTrainingEvent, (), JsTrainingEvent, Status, false, true>;
+
+    /// Bridge between the Rust [`TrainingProgress`] trait and a JS callback.
+    ///
+    /// Why: `TrainingProgress::on_event` is sync, but JS callbacks run on the
+    /// main event-loop thread. We use the non-blocking `call()` API; a
+    /// non-OK queueing status (closed function, queue full) is the only
+    /// failure we can observe synchronously and triggers cancellation:
+    /// `Err(BlazenTrainError::Cancelled)`. JS-side exceptions are fire-and-
+    /// forget, matching the `runAgentWithCallback` event-emitter pattern.
+    struct NodeTrainingProgressBridge {
+        callback: Arc<ProgressTsfn>,
+    }
+
+    impl TrainingProgress for NodeTrainingProgressBridge {
+        fn on_event(&self, event: TrainingEvent) -> Result<(), BlazenTrainError> {
+            let js_event = JsTrainingEvent::from(event);
+            let status = self
+                .callback
+                .call(js_event, ThreadsafeFunctionCallMode::Blocking);
+            if status == Status::Ok {
+                Ok(())
+            } else {
+                tracing::warn!(
+                    ?status,
+                    "training progress callback queueing failed; aborting run",
+                );
+                Err(BlazenTrainError::Cancelled)
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // JsModelManager::train_lora
+    // -----------------------------------------------------------------------
+
+    #[napi]
+    impl JsModelManager {
+        /// Train a `LoRA` adapter end-to-end on the configured base model.
+        ///
+        /// Downloads the base model from HuggingFace (cached), builds a
+        /// VarMap, runs the AdamW + LoRA training loop driven by `dataset`,
+        /// and writes the resulting PEFT-format adapter to
+        /// `config.outputDir`. The returned `TrainedAdapter`'s `adapterDir`
+        /// is immediately mountable via [`Self::load_adapter`] on a
+        /// compatible backend.
+        ///
+        /// `progress`, when supplied, is invoked once per Started /
+        /// StepCompleted / Evaluating / EvalCompleted / CheckpointSaved /
+        /// Finished transition. The return value is ignored; throwing
+        /// inside the callback does not abort the run. A failure to queue
+        /// the call (closed function, etc.) cancels the run with a
+        /// `BlazenError::cancelled`.
+        ///
+        /// # Errors
+        ///
+        /// Throws on invalid config, unrecognised device, HF download
+        /// failure, dataset I/O failure, trainer failure, or queueing
+        /// failure on the progress callback.
+        #[napi(js_name = "trainLora", ts_return_type = "Promise<TrainedAdapter>")]
+        pub async fn train_lora(
+            &self,
+            config: JsTrainConfig,
+            dataset: &JsJsonlDataset,
+            progress: Option<ProgressTsfn>,
+        ) -> napi::Result<JsTrainedAdapter> {
+            let rust_cfg: TrainConfig = config.try_into()?;
+            let ds_arc = dataset.inner.clone();
+            let sink: Option<Arc<dyn TrainingProgress>> = progress.map(|cb| {
+                let bridge = NodeTrainingProgressBridge {
+                    callback: Arc::new(cb),
+                };
+                Arc::new(bridge) as Arc<dyn TrainingProgress>
+            });
+            let dataset_box: Box<dyn TrainingDataset> = Box::new(ArcDataset(ds_arc));
+            let adapter = self
+                .inner
+                .train_lora(rust_cfg, dataset_box, sink)
+                .await
+                .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+            Ok(JsTrainedAdapter::from(adapter))
+        }
+    }
+}

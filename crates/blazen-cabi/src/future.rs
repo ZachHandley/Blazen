@@ -573,6 +573,46 @@ pub unsafe extern "C" fn blazen_future_take_adapter_status_list(
     }
 }
 
+/// Pops a `Result<blazen_train::TrainedAdapter, _>` future, writing the
+/// flat-record into `*out_adapter`. Returns `0` on success or `-1` on failure
+/// (writes `*err`). Release the inner `adapter_dir` string with
+/// [`crate::training_records::blazen_trained_adapter_free`] after consuming.
+///
+/// # Safety
+///
+/// `fut` is null OR a future produced by
+/// [`crate::manager::blazen_model_manager_train_lora`]. `out_adapter` and
+/// `err` follow the usual single-writer contract.
+#[cfg(feature = "training")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_future_take_trained_adapter(
+    fut: *mut BlazenFuture,
+    out_adapter: *mut crate::training_records::BlazenTrainedAdapter,
+    err: *mut *mut crate::error::BlazenError,
+) -> i32 {
+    // SAFETY: caller upholds the future-pointer contract.
+    match unsafe { BlazenFuture::take_typed::<blazen_train::TrainedAdapter>(fut) } {
+        Ok(adapter) => {
+            if !out_adapter.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *out_adapter = crate::training_records::trained_adapter_to_cabi(&adapter);
+                }
+            }
+            0
+        }
+        Err(e) => {
+            if !err.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *err = crate::error::BlazenError::from(e).into_ptr();
+                }
+            }
+            -1
+        }
+    }
+}
+
 /// Frees the future handle. If the typed result was never consumed by a
 /// `blazen_future_take_*`, the boxed value (or the unread `BlazenError`) is
 /// dropped here. No-op on a null pointer.

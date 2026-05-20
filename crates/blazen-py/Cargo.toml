@@ -53,6 +53,9 @@ base64.workspace = true
 pythonize = "0.28"
 pyo3-stub-gen = "0.22"
 pyo3-stub-gen-derive = "0.22"
+blazen-train = { workspace = true, optional = true }
+tokenizers = { workspace = true, optional = true }
+candle-core = { workspace = true, optional = true }
 
 [features]
 default = ["local-all"]
@@ -72,7 +75,7 @@ tract = ["dep:blazen-embed-tract"]
 # ORT-backed embedding backend (faster than tract on x86_64/aarch64 where ORT
 # ships prebuilts; target-gated optional dep so musl builds skip it).
 fastembed = ["blazen-llm/embed", "dep:blazen-embed-fastembed"]
-local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "piper", "tiktoken", "distributed", "otlp", "prometheus", "langfuse"]
+local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "piper", "tiktoken", "distributed", "otlp", "prometheus", "langfuse", "training"]
 # Telemetry exporters
 otlp = ["blazen-telemetry/otlp"]
 prometheus = ["blazen-telemetry/prometheus"]
@@ -88,6 +91,18 @@ distributed = [
     "blazen-controlplane/server",
 ]
 blazen-embed-fastembed = ["dep:blazen-embed-fastembed"]
+# Local LoRA fine-tuning via `ModelManager.train_lora`. Pulls in
+# `blazen-train` (engine + interop with blazen-llm error type) plus
+# `tokenizers` for the `JsonlDataset` Python wrapper that loads a
+# tokenizer.json from disk.
+training = [
+    "dep:blazen-train",
+    "blazen-train/engine",
+    "blazen-train/blazen-llm-interop",
+    "dep:tokenizers",
+    "dep:candle-core",
+    "blazen-manager/training",
+]
 
 [lints]
 workspace = true

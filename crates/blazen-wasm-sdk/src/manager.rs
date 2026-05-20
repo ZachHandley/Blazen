@@ -746,6 +746,13 @@ impl WasmModelManager {
         ))
     }
 
+    #[wasm_bindgen(js_name = "trainLora")]
+    pub fn train_lora(&self, _config: JsValue, _dataset: JsValue, _progress: JsValue) -> Promise {
+        // Why: training requires GB of weights + hours of compute, infeasible in a browser tab.
+        let msg = "WASM SDK does not train models in-browser; training requires multi-GB weights and hours of compute. Run training in a native Blazen process and load the resulting adapter via load_adapter.";
+        Promise::reject(&js_sys::Error::new(msg).into())
+    }
+
     /// Load a model, evicting LRU models in the same pool if needed.
     ///
     /// Returns a `Promise<void>` that resolves when the model is loaded.

@@ -26,6 +26,17 @@ use tokio::sync::Mutex;
 #[cfg(feature = "hf-loader")]
 use crate::hf_loader::{BackendHint, HfLoadOptions};
 
+#[cfg(feature = "training")]
+pub use blazen_train::{
+    BlazenTrainError, LoraConfig, MixedPrecision, OptimConfig, SchedulerConfig, SchedulerKind,
+    TrainConfig, TrainedAdapter, TrainingDataset, TrainingEvent, TrainingProgress,
+};
+
+// Why: the `From<BlazenTrainError> for BlazenError` impl that powers `?`
+// inside `train_lora` lives in `blazen-train` under its `blazen-llm-interop`
+// feature (orphan rule — neither type is local to `blazen-manager`).
+// `training` activates that feature.
+
 /// Status of a registered model.
 #[derive(Debug, Clone)]
 pub struct ModelStatus {
@@ -446,6 +457,51 @@ impl ModelManager {
         Ok(backend)
     }
 
+    /// Train a `LoRA` adapter on the base model named by `config.base_model_repo`.
+    ///
+    /// Builds a fresh `VarMap` for the adapter params, resolves the device
+    /// from `config.device` (defaults to `"cpu"`), drives the
+    /// [`blazen_train::Trainer`] state machine through the full dataset,
+    /// and returns the on-disk [`TrainedAdapter`] descriptor. The
+    /// `adapter_dir` field on the result is immediately mountable via
+    /// [`Self::load_adapter`] on any backend that supports `PEFT`-format
+    /// `LoRA` adapters (mistralrs today; candle and llama.cpp pending the
+    /// PR3 wave).
+    ///
+    /// `progress`, when `Some`, receives [`TrainingEvent`]s for every
+    /// `Started` / `StepCompleted` / `CheckpointSaved` / `Finished`
+    /// transition. Returning `Err(...)` from the callback aborts the run
+    /// and surfaces as [`BlazenError::cancelled`].
+    ///
+    /// # Errors
+    ///
+    /// - [`BlazenError::Validation`] if the device string is unrecognised,
+    ///   the chosen CUDA / Metal device cannot be opened, or the
+    ///   [`TrainConfig`] fails [`blazen_train::Trainer::new`]'s validation
+    ///   (zero `lora.rank` / zero `max_steps`).
+    /// - [`BlazenError::Request`] (via [`BlazenError::internal`]) for any
+    ///   other training-time failure: HF-Hub download, safetensors mmap,
+    ///   forward/backward/optimizer error, checkpoint or adapter export
+    ///   failure, dataset I/O error, or candle tensor error.
+    /// - [`BlazenError::cancelled`] when the progress callback aborts.
+    #[cfg(feature = "training")]
+    pub async fn train_lora(
+        &self,
+        config: TrainConfig,
+        dataset: Box<dyn TrainingDataset>,
+        progress: Option<Arc<dyn TrainingProgress>>,
+    ) -> Result<TrainedAdapter, BlazenError> {
+        let device = parse_train_device(config.device.as_deref().unwrap_or("cpu"))?;
+        let varmap = candle_nn::VarMap::new();
+
+        let mut trainer = blazen_train::Trainer::new(config, varmap, device)?;
+        if let Some(sink) = progress {
+            trainer = trainer.with_progress(sink);
+        }
+        let adapter = trainer.run(dataset).await?;
+        Ok(adapter)
+    }
+
     /// List adapters mounted on a registered model.
     ///
     /// # Errors
@@ -569,6 +625,39 @@ async fn build_provider(
                 ))
             }
         }
+    }
+}
+
+/// Parse a `TrainConfig::device` string into a `candle_core::Device`.
+///
+/// Recognised forms: `"cpu"`, `"cuda"` (= `cuda:0`), `"cuda:N"`, `"metal"`
+/// (= `metal:0`), `"metal:N"`. Anything else returns
+/// [`BlazenError::validation`].
+#[cfg(feature = "training")]
+fn parse_train_device(spec: &str) -> Result<candle_core::Device, BlazenError> {
+    let normalized = spec.trim().to_ascii_lowercase();
+    if normalized == "cpu" {
+        return Ok(candle_core::Device::Cpu);
+    }
+    let (kind, idx) = match normalized.split_once(':') {
+        Some((k, rest)) => {
+            let parsed = rest.parse::<usize>().map_err(|e| {
+                BlazenError::validation(format!(
+                    "training device '{spec}' has non-numeric index '{rest}': {e}"
+                ))
+            })?;
+            (k, parsed)
+        }
+        None => (normalized.as_str(), 0),
+    };
+    match kind {
+        "cuda" => candle_core::Device::new_cuda(idx)
+            .map_err(|e| BlazenError::validation(format!("cuda:{idx} unavailable: {e}"))),
+        "metal" => candle_core::Device::new_metal(idx)
+            .map_err(|e| BlazenError::validation(format!("metal:{idx} unavailable: {e}"))),
+        other => Err(BlazenError::validation(format!(
+            "unknown training device '{other}' (want one of: cpu, cuda[:N], metal[:N])"
+        ))),
     }
 }
 
@@ -1042,5 +1131,77 @@ mod tests {
             msg.contains("not registered"),
             "expected 'not registered' in error, got: {msg}"
         );
+    }
+}
+
+#[cfg(all(test, feature = "training"))]
+mod training_tests {
+    use super::*;
+    use async_trait::async_trait;
+
+    struct EmptyDataset;
+
+    #[async_trait]
+    impl TrainingDataset for EmptyDataset {
+        fn len(&self) -> usize {
+            0
+        }
+        async fn batch(
+            &self,
+            _batch_size: usize,
+            _idx: usize,
+        ) -> Result<blazen_train::TrainingBatch, BlazenTrainError> {
+            Err(BlazenTrainError::Dataset(
+                "training_tests dataset is intentionally empty".to_string(),
+            ))
+        }
+    }
+
+    #[tokio::test]
+    async fn train_lora_validation_error_propagates() {
+        let mgr = ModelManager::with_budgets_gb(8.0, 0.0);
+        let cfg = TrainConfig {
+            max_steps: 0,
+            device: Some("cpu".to_string()),
+            ..TrainConfig::default()
+        };
+
+        let err = mgr
+            .train_lora(cfg, Box::new(EmptyDataset), None)
+            .await
+            .expect_err("max_steps=0 must surface as a validation error");
+
+        match err {
+            BlazenError::Validation { message, .. } => {
+                assert!(
+                    message.contains("max_steps"),
+                    "expected 'max_steps' in validation message, got: {message}"
+                );
+            }
+            other => panic!("expected BlazenError::Validation, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn train_lora_rejects_unknown_device() {
+        let mgr = ModelManager::with_budgets_gb(8.0, 0.0);
+        let cfg = TrainConfig {
+            device: Some("opencl:0".to_string()),
+            ..TrainConfig::default()
+        };
+
+        let err = mgr
+            .train_lora(cfg, Box::new(EmptyDataset), None)
+            .await
+            .expect_err("unknown device must surface as a validation error");
+        match err {
+            BlazenError::Validation { message, .. } => {
+                assert!(
+                    message.contains("opencl"),
+                    "expected device name in message, got: {message}"
+                );
+            }
+            other => panic!("expected BlazenError::Validation, got {other:?}"),
+        }
     }
 }

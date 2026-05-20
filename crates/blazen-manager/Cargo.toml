@@ -20,6 +20,9 @@ blazen-model-cache = { workspace = true, optional = true }
 hf-hub = { workspace = true, features = ["tokio"], optional = true }
 serde_json = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"], optional = true }
+blazen-train = { workspace = true, optional = true }
+candle-core = { workspace = true, optional = true }
+candle-nn = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", default-features = false, features = ["rt", "rt-multi-thread"] }
@@ -51,6 +54,7 @@ live-models = [
     "blazen-llm/candle-llm",
     "blazen-llm/llamacpp",
     "hf-loader",
+    "training",
 ]
 # Top-level `ModelManager::load_from_hf` convenience verb plus the
 # `hf_loader::detect_layout` helper. Enabling it activates the
@@ -76,6 +80,16 @@ llamacpp-provider = [
     "dep:blazen-llm-llamacpp",
     "blazen-llm-llamacpp/engine",
     "blazen-llm/llamacpp",
+]
+# Local LoRA fine-tuning via `ModelManager::train_lora`. Pulls in
+# `blazen-train` with its default `engine` feature plus candle for the
+# `VarMap` / `Device` construction the wrapper performs; without this
+# feature the verb is compiled out entirely.
+training = [
+    "dep:blazen-train",
+    "blazen-train/blazen-llm-interop",
+    "dep:candle-core",
+    "dep:candle-nn",
 ]
 
 [lints]

@@ -655,3 +655,326 @@ func (m *ModelManager) Close() {
 // Why: catch generator drift early. If UniFFI renames or retypes the
 // ForeignLocalModel trait, this declaration fails to build.
 var _ uniffiblazen.ForeignLocalModel = (*localModelAdapter)(nil)
+
+// SchedulerKind selects the learning-rate scheduler shape used by
+// [TrainConfig.Scheduler].
+type SchedulerKind string
+
+const (
+	// SchedulerKindConstant keeps the learning rate flat for the entire run.
+	SchedulerKindConstant SchedulerKind = "constant"
+	// SchedulerKindLinear linearly decays the learning rate from peak to zero.
+	SchedulerKindLinear SchedulerKind = "linear"
+	// SchedulerKindCosine follows a half-cosine decay from peak to zero.
+	SchedulerKindCosine SchedulerKind = "cosine"
+)
+
+func (s SchedulerKind) toFFI() uniffiblazen.SchedulerKindEnum {
+	switch s {
+	case SchedulerKindLinear:
+		return uniffiblazen.SchedulerKindEnumLinear
+	case SchedulerKindCosine:
+		return uniffiblazen.SchedulerKindEnumCosine
+	default:
+		return uniffiblazen.SchedulerKindEnumConstant
+	}
+}
+
+// MixedPrecision selects the numerical precision used by the training
+// loop.
+type MixedPrecision string
+
+const (
+	// MixedPrecisionNone runs the loop in full f32.
+	MixedPrecisionNone MixedPrecision = "none"
+	// MixedPrecisionBf16 runs the loop with bfloat16 activations and
+	// gradients while keeping a f32 master copy of the optimizer state.
+	MixedPrecisionBf16 MixedPrecision = "bf16"
+)
+
+func (m MixedPrecision) toFFI() uniffiblazen.MixedPrecisionEnum {
+	switch m {
+	case MixedPrecisionBf16:
+		return uniffiblazen.MixedPrecisionEnumBf16
+	default:
+		return uniffiblazen.MixedPrecisionEnumNone
+	}
+}
+
+// LoraConfig describes the LoRA adapter shape that
+// [ModelManager.TrainLora] will fit.
+type LoraConfig struct {
+	Rank          uint32
+	Alpha         float32
+	Dropout       float32
+	TargetModules []string
+}
+
+func (l LoraConfig) toFFI() uniffiblazen.LoraConfigRecord {
+	return uniffiblazen.LoraConfigRecord{
+		Rank:          l.Rank,
+		Alpha:         l.Alpha,
+		Dropout:       l.Dropout,
+		TargetModules: l.TargetModules,
+	}
+}
+
+// OptimConfig holds AdamW optimizer hyperparameters. GradientClip is
+// nil-able — leave it nil to disable gradient clipping.
+type OptimConfig struct {
+	LearningRate float64
+	Beta1        float64
+	Beta2        float64
+	Epsilon      float64
+	WeightDecay  float64
+	GradientClip *float32
+}
+
+func (o OptimConfig) toFFI() uniffiblazen.OptimConfigRecord {
+	return uniffiblazen.OptimConfigRecord{
+		LearningRate: o.LearningRate,
+		Beta1:        o.Beta1,
+		Beta2:        o.Beta2,
+		Epsilon:      o.Epsilon,
+		WeightDecay:  o.WeightDecay,
+		GradientClip: o.GradientClip,
+	}
+}
+
+// SchedulerConfig configures the learning-rate scheduler.
+type SchedulerConfig struct {
+	Kind        SchedulerKind
+	WarmupSteps uint32
+}
+
+func (s SchedulerConfig) toFFI() uniffiblazen.SchedulerConfigRecord {
+	return uniffiblazen.SchedulerConfigRecord{
+		Kind:        s.Kind.toFFI(),
+		WarmupSteps: s.WarmupSteps,
+	}
+}
+
+// TrainConfig is the full configuration for one [ModelManager.TrainLora]
+// run.
+//
+// BaseModelRepo is a HuggingFace repo id ("owner/name") that will be
+// downloaded (cached) before training. OutputDir is the directory the
+// resulting PEFT adapter is written to. EvalSteps and SaveSteps are
+// nil-able — leave them nil to skip the corresponding cadence. Device
+// is "cpu", "cuda:N", "metal", etc.; nil lets the trainer pick.
+type TrainConfig struct {
+	BaseModelRepo             string
+	OutputDir                 string
+	Lora                      LoraConfig
+	Optim                     OptimConfig
+	Scheduler                 SchedulerConfig
+	MaxSteps                  uint32
+	BatchSize                 uint32
+	GradientAccumulationSteps uint32
+	MaxSeqLen                 uint32
+	EvalSteps                 *uint32
+	SaveSteps                 *uint32
+	Seed                      uint64
+	MixedPrecision            MixedPrecision
+	Device                    *string
+}
+
+func (c TrainConfig) toFFI() uniffiblazen.TrainConfigRecord {
+	return uniffiblazen.TrainConfigRecord{
+		BaseModelRepo:             c.BaseModelRepo,
+		OutputDir:                 c.OutputDir,
+		Lora:                      c.Lora.toFFI(),
+		Optim:                     c.Optim.toFFI(),
+		Scheduler:                 c.Scheduler.toFFI(),
+		MaxSteps:                  c.MaxSteps,
+		BatchSize:                 c.BatchSize,
+		GradientAccumulationSteps: c.GradientAccumulationSteps,
+		MaxSeqLen:                 c.MaxSeqLen,
+		EvalSteps:                 c.EvalSteps,
+		SaveSteps:                 c.SaveSteps,
+		Seed:                      c.Seed,
+		MixedPrecision:            c.MixedPrecision.toFFI(),
+		Device:                    c.Device,
+	}
+}
+
+// TrainedAdapter is the on-disk descriptor returned by
+// [ModelManager.TrainLora]. AdapterDir is immediately mountable via
+// [ModelManager.LoadAdapter] on a compatible backend.
+type TrainedAdapter struct {
+	AdapterDir string
+	FinalLoss  float32
+	TotalSteps uint64
+}
+
+func trainedAdapterFromFFI(r uniffiblazen.TrainedAdapterRecord) TrainedAdapter {
+	return TrainedAdapter{
+		AdapterDir: r.AdapterDir,
+		FinalLoss:  r.FinalLoss,
+		TotalSteps: r.TotalSteps,
+	}
+}
+
+// TrainingEvent is the flattened, host-friendly projection of every
+// variant of UniFFI's tagged-union `TrainingEventEnum`.
+//
+// Kind selects the variant; the optional pointers carry per-variant
+// payload fields. Recognised Kind values are "started", "step_completed",
+// "evaluating", "eval_completed", "checkpoint_saved", and "finished".
+type TrainingEvent struct {
+	Kind           string
+	Step           *uint64
+	Loss           *float32
+	LearningRate   *float64
+	ElapsedMs      *uint64
+	TotalSteps     *uint64
+	EvalLoss       *float32
+	CheckpointPath *string
+	AdapterDir     *string
+	FinalLoss      *float32
+}
+
+func trainingEventFromFFI(ev uniffiblazen.TrainingEventEnum) TrainingEvent {
+	switch v := ev.(type) {
+	case uniffiblazen.TrainingEventEnumStarted:
+		total := v.TotalSteps
+		return TrainingEvent{Kind: "started", TotalSteps: &total}
+	case uniffiblazen.TrainingEventEnumStepCompleted:
+		step, loss, lr, elapsed := v.Step, v.Loss, v.LearningRate, v.ElapsedMs
+		return TrainingEvent{
+			Kind:         "step_completed",
+			Step:         &step,
+			Loss:         &loss,
+			LearningRate: &lr,
+			ElapsedMs:    &elapsed,
+		}
+	case uniffiblazen.TrainingEventEnumEvaluating:
+		step := v.Step
+		return TrainingEvent{Kind: "evaluating", Step: &step}
+	case uniffiblazen.TrainingEventEnumEvalCompleted:
+		step, loss := v.Step, v.EvalLoss
+		return TrainingEvent{Kind: "eval_completed", Step: &step, EvalLoss: &loss}
+	case uniffiblazen.TrainingEventEnumCheckpointSaved:
+		step, path := v.Step, v.Path
+		return TrainingEvent{Kind: "checkpoint_saved", Step: &step, CheckpointPath: &path}
+	case uniffiblazen.TrainingEventEnumFinished:
+		loss, total, dir := v.FinalLoss, v.TotalSteps, v.AdapterDir
+		return TrainingEvent{
+			Kind:       "finished",
+			FinalLoss:  &loss,
+			TotalSteps: &total,
+			AdapterDir: &dir,
+		}
+	default:
+		return TrainingEvent{Kind: "unknown"}
+	}
+}
+
+// TrainingProgress is the callback shape passed to
+// [ModelManager.TrainLora]. Returning a non-nil error cancels the run
+// with a Cancelled error.
+type TrainingProgress func(event TrainingEvent) error
+
+// trainingProgressAdapter satisfies the generated
+// [uniffiblazen.ForeignTrainingProgress] interface and forwards each FFI
+// event into the user-supplied [TrainingProgress].
+type trainingProgressAdapter struct {
+	inner TrainingProgress
+}
+
+func (a *trainingProgressAdapter) OnEvent(event uniffiblazen.TrainingEventEnum) error {
+	if a.inner == nil {
+		return nil
+	}
+	if err := a.inner(trainingEventFromFFI(event)); err != nil {
+		return unwrapToValidation(err)
+	}
+	return nil
+}
+
+// JsonlDataset is a handle to a tokenized JSONL fine-tuning corpus
+// loaded from disk. Pass it to [ModelManager.TrainLora].
+//
+// The dataset owns a native handle; UniFFI attaches its own finalizer
+// so callers do not need to release it explicitly.
+type JsonlDataset struct {
+	inner *uniffiblazen.UniffiJsonlDataset
+}
+
+// NewJsonlDatasetFromPath loads and tokenizes a JSONL fine-tuning
+// corpus from path. tokenizerPath points at a HuggingFace tokenizer.json
+// (or equivalent) compatible with the base model. chatTemplate is nil-able;
+// when nil the trainer falls back to the tokenizer's built-in template.
+// device pins the tensor device ("cpu", "cuda:N", ...); nil uses cpu.
+func NewJsonlDatasetFromPath(path, tokenizerPath string, chatTemplate *string, maxSeqLen uint32, device *string, padTokenId uint32) (*JsonlDataset, error) {
+	ensureInit()
+	inner, err := uniffiblazen.UniffiJsonlDatasetFromPath(path, tokenizerPath, chatTemplate, maxSeqLen, device, padTokenId)
+	if err != nil {
+		return nil, wrapErr(err)
+	}
+	return &JsonlDataset{inner: inner}, nil
+}
+
+// IsEmpty reports whether the dataset contains zero training examples.
+func (d *JsonlDataset) IsEmpty() bool {
+	if d == nil || d.inner == nil {
+		return true
+	}
+	return d.inner.IsEmpty()
+}
+
+// Len returns the number of training examples in the dataset.
+func (d *JsonlDataset) Len() uint64 {
+	if d == nil || d.inner == nil {
+		return 0
+	}
+	return d.inner.Len()
+}
+
+// TrainLora runs a LoRA fine-tune end-to-end on the model identified
+// by config.BaseModelRepo. dataset must be non-nil. progress may be nil
+// to skip per-step callbacks.
+//
+// Errors on closed manager, nil dataset, invalid config (e.g.
+// MaxSteps=0), missing base model, training failure, or any callback
+// that returns a non-nil error (surfaced as a Cancelled error).
+func (m *ModelManager) TrainLora(ctx context.Context, config TrainConfig, dataset *JsonlDataset, progress TrainingProgress) (TrainedAdapter, error) {
+	if m.inner == nil {
+		return TrainedAdapter{}, &ValidationError{Message: "model manager has been closed"}
+	}
+	if dataset == nil || dataset.inner == nil {
+		return TrainedAdapter{}, &ValidationError{Message: "dataset must not be nil"}
+	}
+
+	var progressArg *uniffiblazen.ForeignTrainingProgress
+	if progress != nil {
+		// Why: keep the adapter rooted on the goroutine stack for the
+		// lifetime of the call so the UniFFI handle table cannot drop
+		// it while Rust still holds the callback handle.
+		var iface uniffiblazen.ForeignTrainingProgress = &trainingProgressAdapter{inner: progress}
+		progressArg = &iface
+	}
+
+	type result struct {
+		v   uniffiblazen.TrainedAdapterRecord
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		v, err := m.inner.TrainLora(config.toFFI(), dataset.inner, progressArg)
+		done <- result{v: v, err: err}
+	}()
+	select {
+	case <-ctx.Done():
+		return TrainedAdapter{}, ctx.Err()
+	case r := <-done:
+		if r.err != nil {
+			return TrainedAdapter{}, wrapErr(r.err)
+		}
+		return trainedAdapterFromFFI(r.v), nil
+	}
+}
+
+// Why: catch generator drift early. If UniFFI renames or retypes the
+// ForeignTrainingProgress trait, this declaration fails to build.
+var _ uniffiblazen.ForeignTrainingProgress = (*trainingProgressAdapter)(nil)

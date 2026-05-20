@@ -300,6 +300,8 @@ module Blazen
                     [:pointer, :pointer, :pointer, :pointer], :int32
     attach_function :blazen_future_take_string_list,
                     [:pointer, :pointer, :pointer, :pointer], :int32
+    attach_function :blazen_future_take_trained_adapter,
+                    [:pointer, :pointer, :pointer], :int32
 
     # -------------------------------------------------------------------
     # Agent (opaque object methods)
@@ -1371,6 +1373,84 @@ module Blazen
     ADAPTER_MOUNT_STRATEGY_ATTACHED = 1
     ADAPTER_MOUNT_STRATEGY_REBUILT  = 2
     ADAPTER_MOUNT_STRATEGY_MERGED   = 3
+
+    # -------------------------------------------------------------------
+    # ModelManager — LoRA training (cabi/manager.rs + training_records.rs)
+    # -------------------------------------------------------------------
+
+    BLAZEN_SCHEDULER_CONSTANT = 0
+    BLAZEN_SCHEDULER_LINEAR   = 1
+    BLAZEN_SCHEDULER_COSINE   = 2
+
+    BLAZEN_MIXED_PRECISION_NONE = 0
+    BLAZEN_MIXED_PRECISION_BF16 = 1
+
+    # Mirror of `BlazenLoraConfig` in blazen.h.
+    class BlazenLoraConfig < ::FFI::Struct
+      layout :rank,               :uint32,
+             :alpha,              :float,
+             :dropout,            :float,
+             :target_modules,     :pointer,
+             :target_modules_len, :size_t
+    end
+
+    # Mirror of `BlazenOptimConfig` in blazen.h.
+    class BlazenOptimConfig < ::FFI::Struct
+      layout :learning_rate,     :double,
+             :beta1,             :double,
+             :beta2,             :double,
+             :epsilon,           :double,
+             :weight_decay,      :double,
+             :has_gradient_clip, :int32,
+             :gradient_clip,     :float
+    end
+
+    # Mirror of `BlazenSchedulerConfig` in blazen.h.
+    class BlazenSchedulerConfig < ::FFI::Struct
+      layout :kind,         :int32,
+             :warmup_steps, :uint32
+    end
+
+    # Mirror of `BlazenTrainConfig` in blazen.h.
+    class BlazenTrainConfig < ::FFI::Struct
+      layout :base_model_repo,             :pointer,
+             :output_dir,                  :pointer,
+             :lora,                        BlazenLoraConfig,
+             :optim,                       BlazenOptimConfig,
+             :scheduler,                   BlazenSchedulerConfig,
+             :max_steps,                   :uint32,
+             :batch_size,                  :uint32,
+             :gradient_accumulation_steps, :uint32,
+             :max_seq_len,                 :uint32,
+             :has_eval_steps,              :int32,
+             :eval_steps,                  :uint32,
+             :has_save_steps,              :int32,
+             :save_steps,                  :uint32,
+             :seed,                        :uint64,
+             :mixed_precision,             :int32,
+             :device,                      :pointer
+    end
+
+    # Mirror of `BlazenTrainedAdapter` in blazen.h. Inner `adapter_dir` is a
+    # caller-owned heap C string freed by `blazen_trained_adapter_free`.
+    class BlazenTrainedAdapter < ::FFI::Struct
+      layout :adapter_dir, :pointer,
+             :final_loss, :float,
+             :total_steps, :uint64
+    end
+
+    attach_function :blazen_jsonl_dataset_from_path,
+                    [:pointer, :pointer, :pointer, :uint32, :pointer, :uint32, :pointer],
+                    :pointer
+    attach_function :blazen_jsonl_dataset_free, [:pointer], :void
+
+    attach_function :blazen_model_manager_train_lora_blocking,
+                    [:pointer, :pointer, :pointer, :pointer, :pointer],
+                    :int32, blocking: true
+    attach_function :blazen_model_manager_train_lora,
+                    [:pointer, :pointer, :pointer], :pointer
+
+    attach_function :blazen_trained_adapter_free, [:pointer], :void
 
     # -------------------------------------------------------------------
     # Ruby-side helpers

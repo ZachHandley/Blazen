@@ -182,4 +182,92 @@ RSpec.describe Blazen::ModelManager do
       expect(described_class.new(scale: 0.5).scale).to eq(0.5)
     end
   end
+
+  describe Blazen::SchedulerKind do
+    it "exposes string constants matching the cabi convention" do
+      expect(described_class::CONSTANT).to eq("constant")
+      expect(described_class::LINEAR).to eq("linear")
+      expect(described_class::COSINE).to eq("cosine")
+    end
+
+    it "maps each label to the cabi int32 sentinel" do
+      expect(described_class.to_cabi("constant")).to eq(Blazen::FFI::BLAZEN_SCHEDULER_CONSTANT)
+      expect(described_class.to_cabi("linear")).to eq(Blazen::FFI::BLAZEN_SCHEDULER_LINEAR)
+      expect(described_class.to_cabi("cosine")).to eq(Blazen::FFI::BLAZEN_SCHEDULER_COSINE)
+    end
+
+    it "raises ValidationError on an unknown label" do
+      expect { described_class.to_cabi("nope") }.to raise_error(Blazen::ValidationError)
+    end
+  end
+
+  describe Blazen::MixedPrecision do
+    it "exposes string constants matching the cabi convention" do
+      expect(described_class::NONE).to eq("none")
+      expect(described_class::BF16).to eq("bf16")
+    end
+  end
+
+  describe Blazen::TrainConfig do
+    it "has reasonable defaults for optional fields" do
+      cfg = described_class.new(
+        base_model_repo: "blazen-test/base",
+        output_dir: "/tmp/blazen-out",
+      )
+      expect(cfg.base_model_repo).to eq("blazen-test/base")
+      expect(cfg.output_dir).to eq("/tmp/blazen-out")
+      expect(cfg.max_steps).to eq(100)
+      expect(cfg.batch_size).to eq(1)
+      expect(cfg.gradient_accumulation_steps).to eq(1)
+      expect(cfg.max_seq_len).to eq(2048)
+      expect(cfg.eval_steps).to be_nil
+      expect(cfg.save_steps).to be_nil
+      expect(cfg.seed).to eq(42)
+      expect(cfg.mixed_precision).to eq(Blazen::MixedPrecision::NONE)
+      expect(cfg.device).to be_nil
+      expect(cfg.lora).to be_a(Blazen::LoraConfig)
+      expect(cfg.optim).to be_a(Blazen::OptimConfig)
+      expect(cfg.scheduler).to be_a(Blazen::SchedulerConfig)
+    end
+
+    it "LoraConfig defaults to rank 16 / alpha 32 / standard attention modules" do
+      lora = Blazen::LoraConfig.new
+      expect(lora.rank).to eq(16)
+      expect(lora.alpha).to eq(32.0)
+      expect(lora.dropout).to eq(0.0)
+      expect(lora.target_modules).to eq(%w[q_proj k_proj v_proj o_proj])
+    end
+
+    it "OptimConfig#gradient_clip can be set to nil to disable clipping" do
+      optim = Blazen::OptimConfig.new(gradient_clip: nil)
+      expect(optim.gradient_clip).to be_nil
+    end
+  end
+
+  describe Blazen::JsonlDataset do
+    describe ".from_path" do
+      it "raises a Blazen::Error subclass on a nonexistent file" do
+        expect {
+          described_class.from_path(
+            "/nonexistent/blazen-train-#{Process.pid}-#{rand(1 << 32)}.jsonl",
+            tokenizer_path: "/nonexistent/tokenizer.json",
+          )
+        }.to raise_error(Blazen::Error)
+      end
+    end
+  end
+
+  describe "#train_lora" do
+    it "raises Blazen::ValidationError when max_steps is 0 (invalid config)" do
+      mgr = described_class.new
+      cfg = Blazen::TrainConfig.new(
+        base_model_repo: "blazen-test/base",
+        output_dir: File.join(Dir.home, ".cache", "blazen-train-ruby-wrap", "out"),
+        max_steps: 0,
+      )
+      fake_dataset = Blazen::JsonlDataset.allocate
+      fake_dataset.instance_variable_set(:@ptr, ::FFI::Pointer::NULL)
+      expect { mgr.train_lora(cfg, fake_dataset) }.to raise_error(Blazen::ValidationError)
+    end
+  end
 end

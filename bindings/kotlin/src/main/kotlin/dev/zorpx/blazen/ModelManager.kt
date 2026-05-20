@@ -5,11 +5,21 @@ import dev.zorpx.blazen.uniffi.AdapterOptionsRecord
 import dev.zorpx.blazen.uniffi.AdapterStatusRecord
 import dev.zorpx.blazen.uniffi.BackendHintEnum
 import dev.zorpx.blazen.uniffi.HfLoadOptionsRecord
+import dev.zorpx.blazen.uniffi.LoraConfigRecord
+import dev.zorpx.blazen.uniffi.MixedPrecisionEnum
 import dev.zorpx.blazen.uniffi.ModelStatusRecord
+import dev.zorpx.blazen.uniffi.OptimConfigRecord
 import dev.zorpx.blazen.uniffi.PoolStatusRecord
+import dev.zorpx.blazen.uniffi.SchedulerConfigRecord
+import dev.zorpx.blazen.uniffi.SchedulerKindEnum
+import dev.zorpx.blazen.uniffi.TrainConfigRecord
+import dev.zorpx.blazen.uniffi.TrainedAdapterRecord
+import dev.zorpx.blazen.uniffi.TrainingEventEnum
+import dev.zorpx.blazen.uniffi.UniffiJsonlDataset
 import dev.zorpx.blazen.uniffi.UniffiModelManager
 import java.util.UUID
 import dev.zorpx.blazen.uniffi.ForeignLocalModel as UniffiForeignLocalModel
+import dev.zorpx.blazen.uniffi.ForeignTrainingProgress as UniffiForeignTrainingProgress
 
 /**
  * Memory-budget-aware model manager with per-pool LRU eviction.
@@ -133,6 +143,29 @@ public class ModelManager : AutoCloseable {
 
     public suspend fun listAdapters(modelId: String): List<AdapterStatus> =
         inner.listAdapters(modelId).map { it.toDomain() }
+
+    /**
+     * Train a LoRA adapter end-to-end on the configured base model.
+     *
+     * Downloads the base model from HuggingFace (cached), runs the AdamW +
+     * LoRA training loop driven by [dataset], and writes the resulting
+     * PEFT-format adapter to `config.outputDir`. The returned
+     * [TrainedAdapter] points at an on-disk adapter directory immediately
+     * mountable via [loadAdapter] on a compatible backend.
+     *
+     * If [onEvent] is provided it is invoked synchronously for each
+     * Started / StepCompleted / Evaluating / EvalCompleted /
+     * CheckpointSaved / Finished transition. Throwing from the callback
+     * cancels the run; the trainer surfaces it as a Blazen exception.
+     */
+    public suspend fun trainLora(
+        config: TrainConfig,
+        dataset: JsonlDataset,
+        onEvent: ((TrainingEvent) -> Unit)? = null,
+    ): TrainedAdapter {
+        val progress = onEvent?.let { TrainingProgressBridge(it) }
+        return inner.trainLora(config.toRecord(), dataset.inner, progress).toDomain()
+    }
 
     override fun close() {
         inner.close()
@@ -307,6 +340,235 @@ private fun ModelStatusRecord.toDomain(): ModelStatus =
 @Suppress("unused")
 private fun PoolStatusRecord.toDomain(): PoolStatus =
     PoolStatus(pool = pool, budgetBytes = budgetBytes)
+
+/**
+ * Learning-rate scheduler shape passed to [SchedulerConfig.kind].
+ *
+ * [value] is the lower-case stable string the upstream Rust trainer logs
+ * and consumes so callers can round-trip to configuration files without
+ * re-implementing the table.
+ */
+public enum class SchedulerKind(public val value: String) {
+    CONSTANT("constant"),
+    LINEAR("linear"),
+    COSINE("cosine"),
+    ;
+
+    internal fun toEnum(): SchedulerKindEnum =
+        when (this) {
+            CONSTANT -> SchedulerKindEnum.CONSTANT
+            LINEAR -> SchedulerKindEnum.LINEAR
+            COSINE -> SchedulerKindEnum.COSINE
+        }
+}
+
+/**
+ * Mixed-precision strategy passed to [TrainConfig.mixedPrecision].
+ *
+ * [value] is the lower-case stable string mirrored from the upstream
+ * trainer (`"none"` / `"bf16"`).
+ */
+public enum class MixedPrecision(public val value: String) {
+    NONE("none"),
+    BF16("bf16"),
+    ;
+
+    internal fun toEnum(): MixedPrecisionEnum =
+        when (this) {
+            NONE -> MixedPrecisionEnum.NONE
+            BF16 -> MixedPrecisionEnum.BF16
+        }
+}
+
+/** LoRA hyperparameters. Defaults target the four attention projections. */
+public data class LoraConfig(
+    val rank: UInt = 16u,
+    val alpha: Float = 32.0f,
+    val dropout: Float = 0.0f,
+    val targetModules: List<String> = listOf("q_proj", "k_proj", "v_proj", "o_proj"),
+)
+
+/** AdamW optimizer hyperparameters. */
+public data class OptimConfig(
+    val learningRate: Double = 2e-4,
+    val beta1: Double = 0.9,
+    val beta2: Double = 0.999,
+    val epsilon: Double = 1e-8,
+    val weightDecay: Double = 0.0,
+    val gradientClip: Float? = 1.0f,
+)
+
+/** Learning-rate scheduler configuration. */
+public data class SchedulerConfig(
+    val kind: SchedulerKind = SchedulerKind.COSINE,
+    val warmupSteps: UInt = 0u,
+)
+
+/** Full configuration for one [ModelManager.trainLora] run. */
+public data class TrainConfig(
+    val baseModelRepo: String,
+    val outputDir: String,
+    val lora: LoraConfig = LoraConfig(),
+    val optim: OptimConfig = OptimConfig(),
+    val scheduler: SchedulerConfig = SchedulerConfig(),
+    val maxSteps: UInt = 1000u,
+    val batchSize: UInt = 4u,
+    val gradientAccumulationSteps: UInt = 1u,
+    val maxSeqLen: UInt = 2048u,
+    val evalSteps: UInt? = null,
+    val saveSteps: UInt? = null,
+    val seed: ULong = 42uL,
+    val mixedPrecision: MixedPrecision = MixedPrecision.BF16,
+    val device: String? = null,
+)
+
+/** On-disk descriptor returned by [ModelManager.trainLora]. */
+public data class TrainedAdapter(
+    val adapterDir: String,
+    val finalLoss: Float,
+    val totalSteps: ULong,
+)
+
+/**
+ * One observable event emitted during a [ModelManager.trainLora] run.
+ *
+ * Sealed so `when`-matching on the callback argument is exhaustive — the
+ * compiler will flag a missing branch when the upstream trainer grows a
+ * new event variant.
+ */
+public sealed class TrainingEvent {
+    public data class Started(val totalSteps: ULong) : TrainingEvent()
+
+    public data class StepCompleted(
+        val step: ULong,
+        val loss: Float,
+        val learningRate: Double,
+        val elapsedMs: ULong,
+    ) : TrainingEvent()
+
+    public data class Evaluating(val step: ULong) : TrainingEvent()
+
+    public data class EvalCompleted(val step: ULong, val evalLoss: Float) : TrainingEvent()
+
+    public data class CheckpointSaved(val step: ULong, val path: String) : TrainingEvent()
+
+    public data class Finished(
+        val finalLoss: Float,
+        val totalSteps: ULong,
+        val adapterDir: String,
+    ) : TrainingEvent()
+}
+
+/**
+ * Tokenized JSONL training corpus handed to [ModelManager.trainLora].
+ *
+ * Construct via [JsonlDataset.fromPath]; the underlying native handle is
+ * owned by the Rust runtime and freed when this wrapper is garbage
+ * collected (matches the UniFFI-generated object lifecycle).
+ */
+public class JsonlDataset internal constructor(
+    internal val inner: UniffiJsonlDataset,
+) {
+    public companion object {
+        /**
+         * Load a JSONL training file using the tokenizer at [tokenizerPath].
+         *
+         * [chatTemplate] is optional Jinja2 from `tokenizer_config.json`
+         * and is required if any row uses the OpenAI `messages` shape.
+         * [device] matches the trainer device strings — `"cpu"`,
+         * `"cuda"` / `"cuda:N"`, `"metal"` / `"metal:N"` (default `"cpu"`).
+         */
+        public fun fromPath(
+            path: String,
+            tokenizerPath: String,
+            chatTemplate: String? = null,
+            maxSeqLen: UInt = 2048u,
+            device: String? = null,
+            padTokenId: UInt = 0u,
+        ): JsonlDataset =
+            JsonlDataset(
+                UniffiJsonlDataset.fromPath(
+                    path = path,
+                    tokenizerPath = tokenizerPath,
+                    chatTemplate = chatTemplate,
+                    maxSeqLen = maxSeqLen,
+                    device = device,
+                    padTokenId = padTokenId,
+                ),
+            )
+    }
+}
+
+private fun LoraConfig.toRecord(): LoraConfigRecord =
+    LoraConfigRecord(
+        rank = rank,
+        alpha = alpha,
+        dropout = dropout,
+        targetModules = targetModules,
+    )
+
+private fun OptimConfig.toRecord(): OptimConfigRecord =
+    OptimConfigRecord(
+        learningRate = learningRate,
+        beta1 = beta1,
+        beta2 = beta2,
+        epsilon = epsilon,
+        weightDecay = weightDecay,
+        gradientClip = gradientClip,
+    )
+
+private fun SchedulerConfig.toRecord(): SchedulerConfigRecord =
+    SchedulerConfigRecord(kind = kind.toEnum(), warmupSteps = warmupSteps)
+
+private fun TrainConfig.toRecord(): TrainConfigRecord =
+    TrainConfigRecord(
+        baseModelRepo = baseModelRepo,
+        outputDir = outputDir,
+        lora = lora.toRecord(),
+        optim = optim.toRecord(),
+        scheduler = scheduler.toRecord(),
+        maxSteps = maxSteps,
+        batchSize = batchSize,
+        gradientAccumulationSteps = gradientAccumulationSteps,
+        maxSeqLen = maxSeqLen,
+        evalSteps = evalSteps,
+        saveSteps = saveSteps,
+        seed = seed,
+        mixedPrecision = mixedPrecision.toEnum(),
+        device = device,
+    )
+
+private fun TrainedAdapterRecord.toDomain(): TrainedAdapter =
+    TrainedAdapter(adapterDir = adapterDir, finalLoss = finalLoss, totalSteps = totalSteps)
+
+private fun TrainingEventEnum.toDomain(): TrainingEvent =
+    when (this) {
+        is TrainingEventEnum.Started -> TrainingEvent.Started(totalSteps)
+        is TrainingEventEnum.StepCompleted ->
+            TrainingEvent.StepCompleted(
+                step = step,
+                loss = loss,
+                learningRate = learningRate,
+                elapsedMs = elapsedMs,
+            )
+        is TrainingEventEnum.Evaluating -> TrainingEvent.Evaluating(step)
+        is TrainingEventEnum.EvalCompleted -> TrainingEvent.EvalCompleted(step = step, evalLoss = evalLoss)
+        is TrainingEventEnum.CheckpointSaved -> TrainingEvent.CheckpointSaved(step = step, path = path)
+        is TrainingEventEnum.Finished ->
+            TrainingEvent.Finished(
+                finalLoss = finalLoss,
+                totalSteps = totalSteps,
+                adapterDir = adapterDir,
+            )
+    }
+
+private class TrainingProgressBridge(
+    private val user: (TrainingEvent) -> Unit,
+) : UniffiForeignTrainingProgress {
+    override fun onEvent(event: TrainingEventEnum) {
+        user(event.toDomain())
+    }
+}
 
 private class ForeignLocalModelBridge(
     private val user: ForeignLocalModel,

@@ -1138,3 +1138,847 @@ impl From<PyHfLoadOptions> for HfLoadOptions {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Training surface (feature = "training")
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "training")]
+pub use training::{
+    PyJsonlDataset, PyLoraConfig, PyMixedPrecision, PyOptimConfig, PySchedulerConfig,
+    PySchedulerKind, PyTrainConfig, PyTrainedAdapter, PyTrainingEvent,
+};
+
+#[cfg(feature = "training")]
+mod training {
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    use async_trait::async_trait;
+    use pyo3::exceptions::PyValueError;
+    use pyo3::prelude::*;
+    use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyclass_enum, gen_stub_pymethods};
+
+    use blazen_train::dataset::JsonlDataset;
+    use blazen_train::{
+        BlazenTrainError, LoraConfig, MixedPrecision, OptimConfig, SchedulerConfig, SchedulerKind,
+        TrainConfig, TrainedAdapter, TrainingBatch, TrainingDataset, TrainingEvent,
+        TrainingProgress,
+    };
+    use tokenizers::Tokenizer;
+
+    use crate::error::BlazenPyError;
+
+    use super::PyModelManager;
+
+    // -----------------------------------------------------------------------
+    // PySchedulerKind / PyMixedPrecision
+    // -----------------------------------------------------------------------
+
+    /// Learning-rate schedule shape passed to :class:`SchedulerConfig`.
+    #[gen_stub_pyclass_enum]
+    #[pyclass(name = "SchedulerKind", eq, eq_int, frozen, from_py_object)]
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub enum PySchedulerKind {
+        CONSTANT,
+        LINEAR,
+        COSINE,
+    }
+
+    impl From<PySchedulerKind> for SchedulerKind {
+        fn from(k: PySchedulerKind) -> Self {
+            match k {
+                PySchedulerKind::CONSTANT => Self::Constant,
+                PySchedulerKind::LINEAR => Self::Linear,
+                PySchedulerKind::COSINE => Self::Cosine,
+            }
+        }
+    }
+
+    /// Mixed-precision mode passed to :class:`TrainConfig`.
+    #[gen_stub_pyclass_enum]
+    #[pyclass(name = "MixedPrecision", eq, eq_int, frozen, from_py_object)]
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub enum PyMixedPrecision {
+        NONE,
+        BF16,
+    }
+
+    impl From<PyMixedPrecision> for MixedPrecision {
+        fn from(m: PyMixedPrecision) -> Self {
+            match m {
+                PyMixedPrecision::NONE => Self::None,
+                PyMixedPrecision::BF16 => Self::Bf16,
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // PyLoraConfig
+    // -----------------------------------------------------------------------
+
+    /// LoRA hyperparameters.
+    #[gen_stub_pyclass]
+    #[pyclass(name = "LoraConfig", from_py_object)]
+    #[derive(Clone)]
+    pub struct PyLoraConfig {
+        #[pyo3(get, set)]
+        pub rank: usize,
+        #[pyo3(get, set)]
+        pub alpha: f32,
+        #[pyo3(get, set)]
+        pub dropout: f32,
+        #[pyo3(get, set)]
+        pub target_modules: Vec<String>,
+    }
+
+    #[gen_stub_pymethods]
+    #[pymethods]
+    impl PyLoraConfig {
+        /// Build a LoRA hyperparameter bag.
+        #[new]
+        #[pyo3(signature = (*, rank = 16, alpha = 32.0, dropout = 0.0, target_modules = None))]
+        fn new(
+            rank: usize,
+            alpha: f32,
+            dropout: f32,
+            target_modules: Option<Vec<String>>,
+        ) -> PyResult<Self> {
+            if rank == 0 {
+                return Err(PyValueError::new_err("LoraConfig.rank must be > 0"));
+            }
+            if !alpha.is_finite() || alpha <= 0.0 {
+                return Err(PyValueError::new_err("LoraConfig.alpha must be > 0"));
+            }
+            if !(0.0..1.0).contains(&dropout) {
+                return Err(PyValueError::new_err(
+                    "LoraConfig.dropout must be in [0.0, 1.0)",
+                ));
+            }
+            let target_modules = target_modules.unwrap_or_else(|| {
+                vec![
+                    "q_proj".to_string(),
+                    "k_proj".to_string(),
+                    "v_proj".to_string(),
+                    "o_proj".to_string(),
+                ]
+            });
+            if target_modules.is_empty() {
+                return Err(PyValueError::new_err(
+                    "LoraConfig.target_modules must be non-empty",
+                ));
+            }
+            Ok(Self {
+                rank,
+                alpha,
+                dropout,
+                target_modules,
+            })
+        }
+    }
+
+    impl From<PyLoraConfig> for LoraConfig {
+        fn from(c: PyLoraConfig) -> Self {
+            Self {
+                rank: c.rank,
+                alpha: c.alpha,
+                dropout: c.dropout,
+                target_modules: c.target_modules,
+            }
+        }
+    }
+
+    impl Default for PyLoraConfig {
+        fn default() -> Self {
+            Self {
+                rank: 16,
+                alpha: 32.0,
+                dropout: 0.0,
+                target_modules: vec![
+                    "q_proj".to_string(),
+                    "k_proj".to_string(),
+                    "v_proj".to_string(),
+                    "o_proj".to_string(),
+                ],
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // PyOptimConfig
+    // -----------------------------------------------------------------------
+
+    /// AdamW optimizer hyperparameters.
+    #[gen_stub_pyclass]
+    #[pyclass(name = "OptimConfig", from_py_object)]
+    #[derive(Clone)]
+    pub struct PyOptimConfig {
+        #[pyo3(get, set)]
+        pub learning_rate: f64,
+        #[pyo3(get, set)]
+        pub beta1: f64,
+        #[pyo3(get, set)]
+        pub beta2: f64,
+        #[pyo3(get, set)]
+        pub epsilon: f64,
+        #[pyo3(get, set)]
+        pub weight_decay: f64,
+        #[pyo3(get, set)]
+        pub gradient_clip: Option<f32>,
+    }
+
+    #[gen_stub_pymethods]
+    #[pymethods]
+    impl PyOptimConfig {
+        /// Build an AdamW hyperparameter bag.
+        #[new]
+        #[pyo3(signature = (
+            *,
+            learning_rate = 2e-4,
+            beta1 = 0.9,
+            beta2 = 0.999,
+            epsilon = 1e-8,
+            weight_decay = 0.0,
+            gradient_clip = Some(1.0),
+        ))]
+        fn new(
+            learning_rate: f64,
+            beta1: f64,
+            beta2: f64,
+            epsilon: f64,
+            weight_decay: f64,
+            gradient_clip: Option<f32>,
+        ) -> PyResult<Self> {
+            if !learning_rate.is_finite() || learning_rate <= 0.0 {
+                return Err(PyValueError::new_err(
+                    "OptimConfig.learning_rate must be > 0",
+                ));
+            }
+            if !(0.0..1.0).contains(&beta1) || !(0.0..1.0).contains(&beta2) {
+                return Err(PyValueError::new_err(
+                    "OptimConfig.beta1 / beta2 must be in [0.0, 1.0)",
+                ));
+            }
+            if !epsilon.is_finite() || epsilon <= 0.0 {
+                return Err(PyValueError::new_err("OptimConfig.epsilon must be > 0"));
+            }
+            if !weight_decay.is_finite() || weight_decay < 0.0 {
+                return Err(PyValueError::new_err(
+                    "OptimConfig.weight_decay must be >= 0",
+                ));
+            }
+            if let Some(g) = gradient_clip
+                && (!g.is_finite() || g <= 0.0)
+            {
+                return Err(PyValueError::new_err(
+                    "OptimConfig.gradient_clip, when set, must be > 0",
+                ));
+            }
+            Ok(Self {
+                learning_rate,
+                beta1,
+                beta2,
+                epsilon,
+                weight_decay,
+                gradient_clip,
+            })
+        }
+    }
+
+    impl From<PyOptimConfig> for OptimConfig {
+        fn from(c: PyOptimConfig) -> Self {
+            Self {
+                learning_rate: c.learning_rate,
+                beta1: c.beta1,
+                beta2: c.beta2,
+                epsilon: c.epsilon,
+                weight_decay: c.weight_decay,
+                gradient_clip: c.gradient_clip,
+            }
+        }
+    }
+
+    impl Default for PyOptimConfig {
+        fn default() -> Self {
+            Self {
+                learning_rate: 2e-4,
+                beta1: 0.9,
+                beta2: 0.999,
+                epsilon: 1e-8,
+                weight_decay: 0.0,
+                gradient_clip: Some(1.0),
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // PySchedulerConfig
+    // -----------------------------------------------------------------------
+
+    /// Learning-rate scheduler configuration.
+    #[gen_stub_pyclass]
+    #[pyclass(name = "SchedulerConfig", from_py_object)]
+    #[derive(Clone)]
+    pub struct PySchedulerConfig {
+        #[pyo3(get, set)]
+        pub kind: PySchedulerKind,
+        #[pyo3(get, set)]
+        pub warmup_steps: usize,
+    }
+
+    #[gen_stub_pymethods]
+    #[pymethods]
+    impl PySchedulerConfig {
+        /// Build a scheduler configuration.
+        #[new]
+        #[pyo3(signature = (*, kind = PySchedulerKind::COSINE, warmup_steps = 0))]
+        fn new(kind: PySchedulerKind, warmup_steps: usize) -> Self {
+            Self { kind, warmup_steps }
+        }
+    }
+
+    impl From<PySchedulerConfig> for SchedulerConfig {
+        fn from(c: PySchedulerConfig) -> Self {
+            Self {
+                kind: c.kind.into(),
+                warmup_steps: c.warmup_steps,
+            }
+        }
+    }
+
+    impl Default for PySchedulerConfig {
+        fn default() -> Self {
+            Self {
+                kind: PySchedulerKind::COSINE,
+                warmup_steps: 0,
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // PyTrainConfig
+    // -----------------------------------------------------------------------
+
+    /// Full configuration for one training run.
+    #[gen_stub_pyclass]
+    #[pyclass(name = "TrainConfig", from_py_object)]
+    #[derive(Clone)]
+    pub struct PyTrainConfig {
+        #[pyo3(get, set)]
+        pub base_model_repo: String,
+        #[pyo3(get, set)]
+        pub output_dir: String,
+        #[pyo3(get, set)]
+        pub lora: PyLoraConfig,
+        #[pyo3(get, set)]
+        pub optim: PyOptimConfig,
+        #[pyo3(get, set)]
+        pub scheduler: PySchedulerConfig,
+        #[pyo3(get, set)]
+        pub max_steps: usize,
+        #[pyo3(get, set)]
+        pub batch_size: usize,
+        #[pyo3(get, set)]
+        pub gradient_accumulation_steps: usize,
+        #[pyo3(get, set)]
+        pub max_seq_len: usize,
+        #[pyo3(get, set)]
+        pub eval_steps: Option<usize>,
+        #[pyo3(get, set)]
+        pub save_steps: Option<usize>,
+        #[pyo3(get, set)]
+        pub seed: u64,
+        #[pyo3(get, set)]
+        pub mixed_precision: PyMixedPrecision,
+        #[pyo3(get, set)]
+        pub device: Option<String>,
+    }
+
+    #[gen_stub_pymethods]
+    #[pymethods]
+    impl PyTrainConfig {
+        /// Build a TrainConfig.
+        ///
+        /// Raises ``ValueError`` if ``max_steps == 0``, ``batch_size == 0``,
+        /// ``gradient_accumulation_steps == 0``, or ``max_seq_len == 0``.
+        #[new]
+        #[pyo3(signature = (
+            *,
+            base_model_repo,
+            output_dir,
+            lora = None,
+            optim = None,
+            scheduler = None,
+            max_steps = 1000,
+            batch_size = 4,
+            gradient_accumulation_steps = 1,
+            max_seq_len = 2048,
+            eval_steps = None,
+            save_steps = None,
+            seed = 42,
+            mixed_precision = PyMixedPrecision::BF16,
+            device = None,
+        ))]
+        #[allow(clippy::too_many_arguments)]
+        fn new(
+            base_model_repo: String,
+            output_dir: String,
+            lora: Option<PyLoraConfig>,
+            optim: Option<PyOptimConfig>,
+            scheduler: Option<PySchedulerConfig>,
+            max_steps: usize,
+            batch_size: usize,
+            gradient_accumulation_steps: usize,
+            max_seq_len: usize,
+            eval_steps: Option<usize>,
+            save_steps: Option<usize>,
+            seed: u64,
+            mixed_precision: PyMixedPrecision,
+            device: Option<String>,
+        ) -> PyResult<Self> {
+            if base_model_repo.trim().is_empty() {
+                return Err(PyValueError::new_err(
+                    "TrainConfig.base_model_repo must be non-empty",
+                ));
+            }
+            if output_dir.trim().is_empty() {
+                return Err(PyValueError::new_err(
+                    "TrainConfig.output_dir must be non-empty",
+                ));
+            }
+            if max_steps == 0 {
+                return Err(PyValueError::new_err("TrainConfig.max_steps must be > 0"));
+            }
+            if batch_size == 0 {
+                return Err(PyValueError::new_err("TrainConfig.batch_size must be > 0"));
+            }
+            if gradient_accumulation_steps == 0 {
+                return Err(PyValueError::new_err(
+                    "TrainConfig.gradient_accumulation_steps must be > 0",
+                ));
+            }
+            if max_seq_len == 0 {
+                return Err(PyValueError::new_err("TrainConfig.max_seq_len must be > 0"));
+            }
+            Ok(Self {
+                base_model_repo,
+                output_dir,
+                lora: lora.unwrap_or_default(),
+                optim: optim.unwrap_or_default(),
+                scheduler: scheduler.unwrap_or_default(),
+                max_steps,
+                batch_size,
+                gradient_accumulation_steps,
+                max_seq_len,
+                eval_steps,
+                save_steps,
+                seed,
+                mixed_precision,
+                device,
+            })
+        }
+    }
+
+    impl From<PyTrainConfig> for TrainConfig {
+        fn from(c: PyTrainConfig) -> Self {
+            Self {
+                base_model_repo: c.base_model_repo,
+                output_dir: PathBuf::from(c.output_dir),
+                lora: c.lora.into(),
+                optim: c.optim.into(),
+                scheduler: c.scheduler.into(),
+                max_steps: c.max_steps,
+                batch_size: c.batch_size,
+                gradient_accumulation_steps: c.gradient_accumulation_steps,
+                max_seq_len: c.max_seq_len,
+                eval_steps: c.eval_steps,
+                save_steps: c.save_steps,
+                seed: c.seed,
+                mixed_precision: c.mixed_precision.into(),
+                device: c.device,
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // PyTrainedAdapter
+    // -----------------------------------------------------------------------
+
+    /// Result of a completed training run.
+    #[gen_stub_pyclass]
+    #[pyclass(name = "TrainedAdapter", frozen)]
+    pub struct PyTrainedAdapter {
+        #[pyo3(get)]
+        pub adapter_dir: String,
+        #[pyo3(get)]
+        pub final_loss: f32,
+        #[pyo3(get)]
+        pub total_steps: usize,
+    }
+
+    #[gen_stub_pymethods]
+    #[pymethods]
+    impl PyTrainedAdapter {
+        fn __repr__(&self) -> String {
+            format!(
+                "TrainedAdapter(adapter_dir={:?}, final_loss={}, total_steps={})",
+                self.adapter_dir, self.final_loss, self.total_steps
+            )
+        }
+    }
+
+    impl From<TrainedAdapter> for PyTrainedAdapter {
+        fn from(a: TrainedAdapter) -> Self {
+            Self {
+                adapter_dir: a.adapter_dir.display().to_string(),
+                final_loss: a.final_loss,
+                total_steps: a.total_steps,
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // PyTrainingEvent (flat discriminated record)
+    // -----------------------------------------------------------------------
+
+    /// One observable event emitted during a training run.
+    ///
+    /// Switch on :attr:`kind` (one of ``"started"`` / ``"step_completed"`` /
+    /// ``"evaluating"`` / ``"eval_completed"`` / ``"checkpoint_saved"`` /
+    /// ``"finished"``); the remaining attributes carry the per-variant payload
+    /// and are ``None`` for variants that do not populate them.
+    #[gen_stub_pyclass]
+    #[pyclass(name = "TrainingEvent", frozen)]
+    pub struct PyTrainingEvent {
+        #[pyo3(get)]
+        pub kind: String,
+        #[pyo3(get)]
+        pub step: Option<usize>,
+        #[pyo3(get)]
+        pub loss: Option<f32>,
+        #[pyo3(get)]
+        pub learning_rate: Option<f64>,
+        #[pyo3(get)]
+        pub elapsed_ms: Option<f64>,
+        #[pyo3(get)]
+        pub total_steps: Option<usize>,
+        #[pyo3(get)]
+        pub eval_loss: Option<f32>,
+        #[pyo3(get)]
+        pub checkpoint_path: Option<String>,
+        #[pyo3(get)]
+        pub adapter_dir: Option<String>,
+        #[pyo3(get)]
+        pub final_loss: Option<f32>,
+    }
+
+    #[gen_stub_pymethods]
+    #[pymethods]
+    impl PyTrainingEvent {
+        fn __repr__(&self) -> String {
+            format!(
+                "TrainingEvent(kind={:?}, step={:?}, loss={:?}, learning_rate={:?}, \
+                 elapsed_ms={:?}, total_steps={:?}, eval_loss={:?}, checkpoint_path={:?}, \
+                 adapter_dir={:?}, final_loss={:?})",
+                self.kind,
+                self.step,
+                self.loss,
+                self.learning_rate,
+                self.elapsed_ms,
+                self.total_steps,
+                self.eval_loss,
+                self.checkpoint_path,
+                self.adapter_dir,
+                self.final_loss,
+            )
+        }
+    }
+
+    impl PyTrainingEvent {
+        fn empty(kind: &'static str) -> Self {
+            Self {
+                kind: kind.to_string(),
+                step: None,
+                loss: None,
+                learning_rate: None,
+                elapsed_ms: None,
+                total_steps: None,
+                eval_loss: None,
+                checkpoint_path: None,
+                adapter_dir: None,
+                final_loss: None,
+            }
+        }
+
+        fn from_event(ev: TrainingEvent) -> Self {
+            match ev {
+                TrainingEvent::Started { total_steps } => Self {
+                    total_steps: Some(total_steps),
+                    ..Self::empty("started")
+                },
+                TrainingEvent::StepCompleted {
+                    step,
+                    loss,
+                    learning_rate,
+                    elapsed,
+                } => Self {
+                    step: Some(step),
+                    loss: Some(loss),
+                    learning_rate: Some(learning_rate),
+                    elapsed_ms: Some(elapsed.as_secs_f64() * 1000.0),
+                    ..Self::empty("step_completed")
+                },
+                TrainingEvent::Evaluating { step } => Self {
+                    step: Some(step),
+                    ..Self::empty("evaluating")
+                },
+                TrainingEvent::EvalCompleted { step, eval_loss } => Self {
+                    step: Some(step),
+                    eval_loss: Some(eval_loss),
+                    ..Self::empty("eval_completed")
+                },
+                TrainingEvent::CheckpointSaved { step, path } => Self {
+                    step: Some(step),
+                    checkpoint_path: Some(path.display().to_string()),
+                    ..Self::empty("checkpoint_saved")
+                },
+                TrainingEvent::Finished {
+                    final_loss,
+                    total_steps,
+                    adapter_dir,
+                } => Self {
+                    total_steps: Some(total_steps),
+                    final_loss: Some(final_loss),
+                    adapter_dir: Some(adapter_dir.display().to_string()),
+                    ..Self::empty("finished")
+                },
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // PyJsonlDataset
+    // -----------------------------------------------------------------------
+
+    /// JSONL-backed training dataset.
+    ///
+    /// Each line of the input file must deserialize to either
+    /// ``{"messages": [{"role": ..., "content": ...}, ...]}`` (OpenAI shape)
+    /// or ``{"prompt": "...", "completion": "..."}`` (legacy SFT).
+    #[gen_stub_pyclass]
+    #[pyclass(name = "JsonlDataset", frozen)]
+    pub struct PyJsonlDataset {
+        inner: Arc<JsonlDataset>,
+    }
+
+    #[gen_stub_pymethods]
+    #[pymethods]
+    impl PyJsonlDataset {
+        /// Load a JSONL training file using the tokenizer at ``tokenizer_path``.
+        ///
+        /// Args:
+        ///     path: Filesystem path to the JSONL file.
+        ///     tokenizer_path: Path to a HuggingFace ``tokenizer.json`` file.
+        ///     chat_template: Optional Jinja2 chat template from the model's
+        ///         ``tokenizer_config.json``. Required if any row uses the
+        ///         ``messages`` shape.
+        ///     max_seq_len: Maximum tokenized sequence length per example.
+        ///     device: Candle device string (``"cpu"``, ``"cuda:0"``, ``"metal"``).
+        ///     pad_token_id: Token id to write into padded positions.
+        #[staticmethod]
+        #[pyo3(signature = (
+            path,
+            tokenizer_path,
+            chat_template = None,
+            max_seq_len = 2048,
+            device = "cpu".to_string(),
+            pad_token_id = 0,
+        ))]
+        fn from_path(
+            path: String,
+            tokenizer_path: String,
+            chat_template: Option<String>,
+            max_seq_len: usize,
+            device: String,
+            pad_token_id: u32,
+        ) -> PyResult<Self> {
+            if max_seq_len == 0 {
+                return Err(PyValueError::new_err(
+                    "JsonlDataset.max_seq_len must be > 0",
+                ));
+            }
+            let tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
+                PyValueError::new_err(format!(
+                    "failed to load tokenizer from {tokenizer_path:?}: {e}"
+                ))
+            })?;
+            let cdev = super::parse_train_device_py(&device)?;
+            let ds = JsonlDataset::from_path(
+                std::path::Path::new(&path),
+                Arc::new(tokenizer),
+                chat_template.as_deref(),
+                max_seq_len,
+                cdev,
+                pad_token_id,
+            )
+            .map_err(|e| PyValueError::new_err(format!("JsonlDataset load failed: {e}")))?;
+            Ok(Self {
+                inner: Arc::new(ds),
+            })
+        }
+
+        /// Number of examples in the dataset.
+        fn __len__(&self) -> usize {
+            self.inner.len()
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Bridges: dataset (Arc-wrapped) + progress callback
+    // -----------------------------------------------------------------------
+
+    /// Adapter so `Arc<JsonlDataset>` satisfies `Box<dyn TrainingDataset>`.
+    struct ArcDataset(Arc<JsonlDataset>);
+
+    #[async_trait]
+    impl TrainingDataset for ArcDataset {
+        fn len(&self) -> usize {
+            self.0.len()
+        }
+
+        async fn batch(
+            &self,
+            batch_size: usize,
+            idx: usize,
+        ) -> Result<TrainingBatch, BlazenTrainError> {
+            self.0.batch(batch_size, idx).await
+        }
+    }
+
+    /// Bridge between the Rust [`TrainingProgress`] trait and a Python
+    /// callable.
+    ///
+    /// Each event is constructed as a [`PyTrainingEvent`] pyclass and passed
+    /// to the user callable under the GIL. Any exception raised by the
+    /// callable is logged and converted into
+    /// [`BlazenTrainError::Cancelled`], which the trainer surfaces to the
+    /// caller as a `BlazenError::cancelled()`.
+    struct PyTrainingProgressBridge {
+        callback: Arc<Py<PyAny>>,
+    }
+
+    impl TrainingProgress for PyTrainingProgressBridge {
+        fn on_event(&self, event: TrainingEvent) -> Result<(), BlazenTrainError> {
+            let py_event = PyTrainingEvent::from_event(event);
+            Python::attach(|py| {
+                let cb = self.callback.bind(py);
+                match cb.call1((py_event,)) {
+                    Ok(_) => Ok(()),
+                    Err(e) => {
+                        tracing::warn!(
+                            error = %e,
+                            "training progress callback raised; aborting run",
+                        );
+                        Err(BlazenTrainError::Cancelled)
+                    }
+                }
+            })
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // ModelManager.train_lora
+    // -----------------------------------------------------------------------
+
+    #[gen_stub_pymethods]
+    #[pymethods]
+    impl PyModelManager {
+        /// Train a LoRA adapter end-to-end on the configured base model.
+        ///
+        /// Downloads the base model from HuggingFace (cached), builds a
+        /// `VarMap`, runs the AdamW + LoRA training loop driven by
+        /// ``dataset``, and writes the resulting PEFT-format adapter to
+        /// ``config.output_dir``. The returned :class:`TrainedAdapter`'s
+        /// ``adapter_dir`` is immediately mountable via
+        /// :meth:`ModelManager.load_adapter` on a compatible backend.
+        ///
+        /// Args:
+        ///     config: Full :class:`TrainConfig` for the run.
+        ///     dataset: A :class:`JsonlDataset` providing training batches.
+        ///     progress: Optional callable invoked with one
+        ///         :class:`TrainingEvent` per Started/StepCompleted/
+        ///         CheckpointSaved/Finished transition. Raising from the
+        ///         callable cancels the run.
+        ///
+        /// Returns:
+        ///     A :class:`TrainedAdapter` describing the on-disk adapter.
+        #[gen_stub(override_return_type(
+            type_repr = "typing.Coroutine[typing.Any, typing.Any, TrainedAdapter]",
+            imports = ("typing",)
+        ))]
+        #[pyo3(signature = (config, dataset, progress = None))]
+        fn train_lora<'py>(
+            &self,
+            py: Python<'py>,
+            config: PyTrainConfig,
+            dataset: Py<PyJsonlDataset>,
+            progress: Option<Py<PyAny>>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            let inner = self.inner.clone();
+            let rust_cfg: TrainConfig = config.into();
+            let ds_arc = {
+                let borrowed = dataset.bind(py).borrow();
+                borrowed.inner.clone()
+            };
+            let sink: Option<Arc<dyn TrainingProgress>> = progress.map(|cb| {
+                let bridge = PyTrainingProgressBridge {
+                    callback: Arc::new(cb),
+                };
+                Arc::new(bridge) as Arc<dyn TrainingProgress>
+            });
+
+            pyo3_async_runtimes::tokio::future_into_py(py, async move {
+                let dataset_box: Box<dyn TrainingDataset> = Box::new(ArcDataset(ds_arc));
+                let adapter = inner
+                    .train_lora(rust_cfg, dataset_box, sink)
+                    .await
+                    .map_err(BlazenPyError::from)?;
+                Ok(PyTrainedAdapter::from(adapter))
+            })
+        }
+    }
+}
+
+#[cfg(feature = "training")]
+fn parse_train_device_py(device: &str) -> PyResult<candle_core::Device> {
+    let trimmed = device.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    if lower == "cpu" {
+        return Ok(candle_core::Device::Cpu);
+    }
+    if let Some(idx_str) = lower.strip_prefix("cuda:") {
+        let idx: usize = idx_str.parse().map_err(|_| {
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "invalid CUDA device {trimmed:?}: expected 'cuda:N'"
+            ))
+        })?;
+        return candle_core::Device::new_cuda(idx).map_err(|e| {
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "failed to open CUDA device {trimmed:?}: {e}"
+            ))
+        });
+    }
+    if lower == "cuda" {
+        return candle_core::Device::new_cuda(0).map_err(|e| {
+            pyo3::exceptions::PyValueError::new_err(format!("failed to open cuda:0: {e}"))
+        });
+    }
+    if lower == "metal" {
+        return candle_core::Device::new_metal(0).map_err(|e| {
+            pyo3::exceptions::PyValueError::new_err(format!("failed to open metal:0: {e}"))
+        });
+    }
+    Err(pyo3::exceptions::PyValueError::new_err(format!(
+        "unrecognized device {trimmed:?}: expected 'cpu', 'cuda', 'cuda:N', or 'metal'"
+    )))
+}

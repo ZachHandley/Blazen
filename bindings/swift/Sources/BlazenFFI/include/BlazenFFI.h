@@ -340,6 +340,13 @@ typedef void (*UniffiCallbackInterfaceForeignLocalModelMethod7)(uint64_t, Uniffi
     );
 
 #endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_FOREIGN_TRAINING_PROGRESS_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_FOREIGN_TRAINING_PROGRESS_METHOD0
+typedef void (*UniffiCallbackInterfaceForeignTrainingProgressMethod0)(uint64_t, RustBuffer, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
 #ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_CUSTOM_PROVIDER_METHOD0
 #define UNIFFI_FFIDEF_CALLBACK_INTERFACE_CUSTOM_PROVIDER_METHOD0
 typedef void (*UniffiCallbackInterfaceCustomProviderMethod0)(uint64_t, RustBuffer* _Nonnull, 
@@ -512,6 +519,15 @@ typedef struct UniffiVTableCallbackInterfaceForeignLocalModel {
     UniffiCallbackInterfaceForeignLocalModelMethod6 _Nonnull unloadAdapter;
     UniffiCallbackInterfaceForeignLocalModelMethod7 _Nonnull listAdapters;
 } UniffiVTableCallbackInterfaceForeignLocalModel;
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_FOREIGN_TRAINING_PROGRESS
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_FOREIGN_TRAINING_PROGRESS
+typedef struct UniffiVTableCallbackInterfaceForeignTrainingProgress {
+    UniffiCallbackInterfaceFree _Nonnull uniffiFree;
+    UniffiCallbackInterfaceClone _Nonnull uniffiClone;
+    UniffiCallbackInterfaceForeignTrainingProgressMethod0 _Nonnull onEvent;
+} UniffiVTableCallbackInterfaceForeignTrainingProgress;
 
 #endif
 #ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_CUSTOM_PROVIDER
@@ -1023,6 +1039,56 @@ void uniffi_blazen_uniffi_fn_method_uniffimodelmanager_unload_blocking(uint64_t 
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_UNIFFIMODELMANAGER_USED_BYTES
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_UNIFFIMODELMANAGER_USED_BYTES
 uint64_t uniffi_blazen_uniffi_fn_method_uniffimodelmanager_used_bytes(uint64_t ptr, RustBuffer pool
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_UNIFFIMODELMANAGER_TRAIN_LORA
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_UNIFFIMODELMANAGER_TRAIN_LORA
+uint64_t uniffi_blazen_uniffi_fn_method_uniffimodelmanager_train_lora(uint64_t ptr, RustBuffer config, uint64_t dataset, RustBuffer progress
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_FOREIGNTRAININGPROGRESS
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_FOREIGNTRAININGPROGRESS
+uint64_t uniffi_blazen_uniffi_fn_clone_foreigntrainingprogress(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_FOREIGNTRAININGPROGRESS
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_FOREIGNTRAININGPROGRESS
+void uniffi_blazen_uniffi_fn_free_foreigntrainingprogress(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_INIT_CALLBACK_VTABLE_FOREIGNTRAININGPROGRESS
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_INIT_CALLBACK_VTABLE_FOREIGNTRAININGPROGRESS
+void uniffi_blazen_uniffi_fn_init_callback_vtable_foreigntrainingprogress(const UniffiVTableCallbackInterfaceForeignTrainingProgress* _Nonnull vtable
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FOREIGNTRAININGPROGRESS_ON_EVENT
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FOREIGNTRAININGPROGRESS_ON_EVENT
+void uniffi_blazen_uniffi_fn_method_foreigntrainingprogress_on_event(uint64_t ptr, RustBuffer event, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_UNIFFIJSONLDATASET
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_UNIFFIJSONLDATASET
+uint64_t uniffi_blazen_uniffi_fn_clone_uniffijsonldataset(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_UNIFFIJSONLDATASET
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_UNIFFIJSONLDATASET
+void uniffi_blazen_uniffi_fn_free_uniffijsonldataset(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_UNIFFIJSONLDATASET_FROM_PATH
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_UNIFFIJSONLDATASET_FROM_PATH
+uint64_t uniffi_blazen_uniffi_fn_constructor_uniffijsonldataset_from_path(RustBuffer path, RustBuffer tokenizer_path, RustBuffer chat_template, uint32_t max_seq_len, RustBuffer device, uint32_t pad_token_id, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_UNIFFIJSONLDATASET_IS_EMPTY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_UNIFFIJSONLDATASET_IS_EMPTY
+int8_t uniffi_blazen_uniffi_fn_method_uniffijsonldataset_is_empty(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_UNIFFIJSONLDATASET_LEN
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_UNIFFIJSONLDATASET_LEN
+uint64_t uniffi_blazen_uniffi_fn_method_uniffijsonldataset_len(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_PEERCLIENT
@@ -2754,6 +2820,30 @@ uint16_t uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_used_bytes(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_UNIFFIMODELMANAGER_TRAIN_LORA
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_UNIFFIMODELMANAGER_TRAIN_LORA
+uint16_t uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_train_lora(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FOREIGNTRAININGPROGRESS_ON_EVENT
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FOREIGNTRAININGPROGRESS_ON_EVENT
+uint16_t uniffi_blazen_uniffi_checksum_method_foreigntrainingprogress_on_event(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_UNIFFIJSONLDATASET_IS_EMPTY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_UNIFFIJSONLDATASET_IS_EMPTY
+uint16_t uniffi_blazen_uniffi_checksum_method_uniffijsonldataset_is_empty(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_UNIFFIJSONLDATASET_LEN
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_UNIFFIJSONLDATASET_LEN
+uint16_t uniffi_blazen_uniffi_checksum_method_uniffijsonldataset_len(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_PEERCLIENT_NODE_ID
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_PEERCLIENT_NODE_ID
 uint16_t uniffi_blazen_uniffi_checksum_method_peerclient_node_id(void
@@ -3279,6 +3369,12 @@ uint16_t uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_with_budge
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_UNIFFIMODELMANAGER_WITH_POOL_BUDGETS
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_UNIFFIMODELMANAGER_WITH_POOL_BUDGETS
 uint16_t uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_with_pool_budgets(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_UNIFFIJSONLDATASET_FROM_PATH
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_UNIFFIJSONLDATASET_FROM_PATH
+uint16_t uniffi_blazen_uniffi_checksum_constructor_uniffijsonldataset_from_path(void
     
 );
 #endif

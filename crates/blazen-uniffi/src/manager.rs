@@ -392,3 +392,640 @@ impl UniffiModelManager {
         runtime().block_on(async move { this.unload(model_id).await })
     }
 }
+
+// ---------------------------------------------------------------------------
+// Training surface (feature = "training")
+//
+// Mirrors `crates/blazen-py/src/manager.rs` Wave 3C. The Rust `TrainingProgress`
+// trait is sync, the trainer drives it from a tokio worker via
+// `Trainer::run`, and the foreign callback (`ForeignTrainingProgress`) is
+// likewise modeled SYNC on the UniFFI surface. Why sync rather than async:
+// `TrainingProgress::on_event` is itself sync, so an async foreign callback
+// would force us to `block_on(...)` from a tokio worker thread — which
+// panics for `Handle::block_on` and risks deadlocks for
+// `futures::executor::block_on` once the foreign side schedules onto the
+// same runtime. Sync foreign methods compose cleanly with `with_foreign`
+// on every target language (Go: blocking goroutine; Swift / Kotlin: regular
+// function; Ruby: blocking call) and match how `PyTrainingProgressBridge`
+// already pumps events under the GIL.
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "training")]
+pub use training::{
+    ForeignTrainingProgress, LoraConfigRecord, MixedPrecisionEnum, OptimConfigRecord,
+    SchedulerConfigRecord, SchedulerKindEnum, TrainConfigRecord, TrainedAdapterRecord,
+    TrainingEventEnum, UniffiJsonlDataset,
+};
+
+#[cfg(feature = "training")]
+mod training {
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    use async_trait::async_trait;
+
+    use blazen_train::dataset::JsonlDataset;
+    use blazen_train::{
+        BlazenTrainError, LoraConfig, MixedPrecision, OptimConfig, SchedulerConfig, SchedulerKind,
+        TrainConfig, TrainedAdapter, TrainingBatch, TrainingDataset, TrainingEvent,
+        TrainingProgress,
+    };
+    use tokenizers::Tokenizer;
+
+    use crate::errors::{BlazenError, BlazenResult};
+
+    use super::UniffiModelManager;
+
+    #[derive(Debug, Clone, Copy, uniffi::Enum)]
+    pub enum SchedulerKindEnum {
+        Constant,
+        Linear,
+        Cosine,
+    }
+
+    impl From<SchedulerKindEnum> for SchedulerKind {
+        fn from(k: SchedulerKindEnum) -> Self {
+            match k {
+                SchedulerKindEnum::Constant => Self::Constant,
+                SchedulerKindEnum::Linear => Self::Linear,
+                SchedulerKindEnum::Cosine => Self::Cosine,
+            }
+        }
+    }
+
+    impl From<SchedulerKind> for SchedulerKindEnum {
+        fn from(k: SchedulerKind) -> Self {
+            match k {
+                SchedulerKind::Constant => Self::Constant,
+                SchedulerKind::Linear => Self::Linear,
+                SchedulerKind::Cosine => Self::Cosine,
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, Copy, uniffi::Enum)]
+    pub enum MixedPrecisionEnum {
+        None,
+        Bf16,
+    }
+
+    impl From<MixedPrecisionEnum> for MixedPrecision {
+        fn from(m: MixedPrecisionEnum) -> Self {
+            match m {
+                MixedPrecisionEnum::None => Self::None,
+                MixedPrecisionEnum::Bf16 => Self::Bf16,
+            }
+        }
+    }
+
+    impl From<MixedPrecision> for MixedPrecisionEnum {
+        fn from(m: MixedPrecision) -> Self {
+            match m {
+                MixedPrecision::None => Self::None,
+                MixedPrecision::Bf16 => Self::Bf16,
+            }
+        }
+    }
+
+    /// LoRA hyperparameters.
+    #[derive(Debug, Clone, uniffi::Record)]
+    pub struct LoraConfigRecord {
+        pub rank: u32,
+        pub alpha: f32,
+        pub dropout: f32,
+        pub target_modules: Vec<String>,
+    }
+
+    impl From<LoraConfigRecord> for LoraConfig {
+        fn from(c: LoraConfigRecord) -> Self {
+            Self {
+                rank: c.rank as usize,
+                alpha: c.alpha,
+                dropout: c.dropout,
+                target_modules: c.target_modules,
+            }
+        }
+    }
+
+    impl From<LoraConfig> for LoraConfigRecord {
+        fn from(c: LoraConfig) -> Self {
+            Self {
+                rank: u32::try_from(c.rank).unwrap_or(u32::MAX),
+                alpha: c.alpha,
+                dropout: c.dropout,
+                target_modules: c.target_modules,
+            }
+        }
+    }
+
+    /// AdamW optimizer hyperparameters.
+    #[derive(Debug, Clone, uniffi::Record)]
+    pub struct OptimConfigRecord {
+        pub learning_rate: f64,
+        pub beta1: f64,
+        pub beta2: f64,
+        pub epsilon: f64,
+        pub weight_decay: f64,
+        pub gradient_clip: Option<f32>,
+    }
+
+    impl From<OptimConfigRecord> for OptimConfig {
+        fn from(c: OptimConfigRecord) -> Self {
+            Self {
+                learning_rate: c.learning_rate,
+                beta1: c.beta1,
+                beta2: c.beta2,
+                epsilon: c.epsilon,
+                weight_decay: c.weight_decay,
+                gradient_clip: c.gradient_clip,
+            }
+        }
+    }
+
+    impl From<OptimConfig> for OptimConfigRecord {
+        fn from(c: OptimConfig) -> Self {
+            Self {
+                learning_rate: c.learning_rate,
+                beta1: c.beta1,
+                beta2: c.beta2,
+                epsilon: c.epsilon,
+                weight_decay: c.weight_decay,
+                gradient_clip: c.gradient_clip,
+            }
+        }
+    }
+
+    /// Learning-rate scheduler configuration.
+    #[derive(Debug, Clone, uniffi::Record)]
+    pub struct SchedulerConfigRecord {
+        pub kind: SchedulerKindEnum,
+        pub warmup_steps: u32,
+    }
+
+    impl From<SchedulerConfigRecord> for SchedulerConfig {
+        fn from(c: SchedulerConfigRecord) -> Self {
+            Self {
+                kind: c.kind.into(),
+                warmup_steps: c.warmup_steps as usize,
+            }
+        }
+    }
+
+    impl From<SchedulerConfig> for SchedulerConfigRecord {
+        fn from(c: SchedulerConfig) -> Self {
+            Self {
+                kind: c.kind.into(),
+                warmup_steps: u32::try_from(c.warmup_steps).unwrap_or(u32::MAX),
+            }
+        }
+    }
+
+    /// Full configuration for one training run.
+    #[derive(Debug, Clone, uniffi::Record)]
+    pub struct TrainConfigRecord {
+        pub base_model_repo: String,
+        pub output_dir: String,
+        pub lora: LoraConfigRecord,
+        pub optim: OptimConfigRecord,
+        pub scheduler: SchedulerConfigRecord,
+        pub max_steps: u32,
+        pub batch_size: u32,
+        pub gradient_accumulation_steps: u32,
+        pub max_seq_len: u32,
+        pub eval_steps: Option<u32>,
+        pub save_steps: Option<u32>,
+        pub seed: u64,
+        pub mixed_precision: MixedPrecisionEnum,
+        pub device: Option<String>,
+    }
+
+    impl From<TrainConfigRecord> for TrainConfig {
+        fn from(c: TrainConfigRecord) -> Self {
+            Self {
+                base_model_repo: c.base_model_repo,
+                output_dir: PathBuf::from(c.output_dir),
+                lora: c.lora.into(),
+                optim: c.optim.into(),
+                scheduler: c.scheduler.into(),
+                max_steps: c.max_steps as usize,
+                batch_size: c.batch_size as usize,
+                gradient_accumulation_steps: c.gradient_accumulation_steps as usize,
+                max_seq_len: c.max_seq_len as usize,
+                eval_steps: c.eval_steps.map(|v| v as usize),
+                save_steps: c.save_steps.map(|v| v as usize),
+                seed: c.seed,
+                mixed_precision: c.mixed_precision.into(),
+                device: c.device,
+            }
+        }
+    }
+
+    impl From<TrainConfig> for TrainConfigRecord {
+        fn from(c: TrainConfig) -> Self {
+            Self {
+                base_model_repo: c.base_model_repo,
+                output_dir: c.output_dir.display().to_string(),
+                lora: c.lora.into(),
+                optim: c.optim.into(),
+                scheduler: c.scheduler.into(),
+                max_steps: u32::try_from(c.max_steps).unwrap_or(u32::MAX),
+                batch_size: u32::try_from(c.batch_size).unwrap_or(u32::MAX),
+                gradient_accumulation_steps: u32::try_from(c.gradient_accumulation_steps)
+                    .unwrap_or(u32::MAX),
+                max_seq_len: u32::try_from(c.max_seq_len).unwrap_or(u32::MAX),
+                eval_steps: c.eval_steps.map(|v| u32::try_from(v).unwrap_or(u32::MAX)),
+                save_steps: c.save_steps.map(|v| u32::try_from(v).unwrap_or(u32::MAX)),
+                seed: c.seed,
+                mixed_precision: c.mixed_precision.into(),
+                device: c.device,
+            }
+        }
+    }
+
+    /// On-disk descriptor returned by [`UniffiModelManager::train_lora`].
+    #[derive(Debug, Clone, uniffi::Record)]
+    pub struct TrainedAdapterRecord {
+        pub adapter_dir: String,
+        pub final_loss: f32,
+        pub total_steps: u64,
+    }
+
+    impl From<TrainedAdapter> for TrainedAdapterRecord {
+        fn from(a: TrainedAdapter) -> Self {
+            Self {
+                adapter_dir: a.adapter_dir.display().to_string(),
+                final_loss: a.final_loss,
+                total_steps: a.total_steps as u64,
+            }
+        }
+    }
+
+    /// One observable event emitted during a training run.
+    #[derive(Debug, Clone, uniffi::Enum)]
+    pub enum TrainingEventEnum {
+        Started {
+            total_steps: u64,
+        },
+        StepCompleted {
+            step: u64,
+            loss: f32,
+            learning_rate: f64,
+            elapsed_ms: u64,
+        },
+        Evaluating {
+            step: u64,
+        },
+        EvalCompleted {
+            step: u64,
+            eval_loss: f32,
+        },
+        CheckpointSaved {
+            step: u64,
+            path: String,
+        },
+        Finished {
+            final_loss: f32,
+            total_steps: u64,
+            adapter_dir: String,
+        },
+    }
+
+    impl From<TrainingEvent> for TrainingEventEnum {
+        fn from(ev: TrainingEvent) -> Self {
+            match ev {
+                TrainingEvent::Started { total_steps } => Self::Started {
+                    total_steps: total_steps as u64,
+                },
+                TrainingEvent::StepCompleted {
+                    step,
+                    loss,
+                    learning_rate,
+                    elapsed,
+                } => Self::StepCompleted {
+                    step: step as u64,
+                    loss,
+                    learning_rate,
+                    elapsed_ms: u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX),
+                },
+                TrainingEvent::Evaluating { step } => Self::Evaluating { step: step as u64 },
+                TrainingEvent::EvalCompleted { step, eval_loss } => Self::EvalCompleted {
+                    step: step as u64,
+                    eval_loss,
+                },
+                TrainingEvent::CheckpointSaved { step, path } => Self::CheckpointSaved {
+                    step: step as u64,
+                    path: path.display().to_string(),
+                },
+                TrainingEvent::Finished {
+                    final_loss,
+                    total_steps,
+                    adapter_dir,
+                } => Self::Finished {
+                    final_loss,
+                    total_steps: total_steps as u64,
+                    adapter_dir: adapter_dir.display().to_string(),
+                },
+            }
+        }
+    }
+
+    /// Foreign-implementable training-progress sink.
+    ///
+    /// Modeled SYNC so the bridge to [`TrainingProgress`] (also sync) is
+    /// trivial — the upstream trainer calls `on_event` from a tokio worker
+    /// and an async foreign hop would require `block_on` from inside the
+    /// same runtime (panic / deadlock-prone). Returning `Err(_)` cancels
+    /// the run; the trainer surfaces it as `BlazenError::Cancelled`.
+    #[uniffi::export(with_foreign)]
+    pub trait ForeignTrainingProgress: Send + Sync {
+        fn on_event(&self, event: TrainingEventEnum) -> BlazenResult<()>;
+    }
+
+    /// Bridge between sync `TrainingProgress` and the (sync) foreign trait.
+    struct ForeignProgressAdapter {
+        inner: Arc<dyn ForeignTrainingProgress>,
+    }
+
+    impl TrainingProgress for ForeignProgressAdapter {
+        fn on_event(&self, event: TrainingEvent) -> Result<(), BlazenTrainError> {
+            let mapped = TrainingEventEnum::from(event);
+            match self.inner.on_event(mapped) {
+                Ok(()) => Ok(()),
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        "training progress callback returned error; aborting run",
+                    );
+                    Err(BlazenTrainError::Cancelled)
+                }
+            }
+        }
+    }
+
+    /// JSONL-backed training dataset opaque handle.
+    ///
+    /// Construct via [`UniffiJsonlDataset::from_path`] and pass to
+    /// [`UniffiModelManager::train_lora`]. The dataset is reference-counted
+    /// (`Arc`-shared), so foreign callers can keep a handle around and
+    /// re-use it across multiple training runs.
+    #[derive(uniffi::Object)]
+    pub struct UniffiJsonlDataset {
+        inner: Arc<JsonlDataset>,
+    }
+
+    #[uniffi::export]
+    impl UniffiJsonlDataset {
+        /// Load a JSONL training file using the tokenizer at `tokenizer_path`.
+        ///
+        /// `chat_template` is optional Jinja2 from `tokenizer_config.json`;
+        /// required if any row uses the OpenAI `messages` shape.
+        /// `device` matches the trainer device strings — `"cpu"`,
+        /// `"cuda"` / `"cuda:N"`, `"metal"` / `"metal:N"` (default `"cpu"`).
+        #[uniffi::constructor]
+        pub fn from_path(
+            path: String,
+            tokenizer_path: String,
+            chat_template: Option<String>,
+            max_seq_len: u32,
+            device: Option<String>,
+            pad_token_id: u32,
+        ) -> BlazenResult<Arc<Self>> {
+            if max_seq_len == 0 {
+                return Err(BlazenError::Validation {
+                    message: "JsonlDataset.max_seq_len must be > 0".into(),
+                });
+            }
+            let tokenizer =
+                Tokenizer::from_file(&tokenizer_path).map_err(|e| BlazenError::Validation {
+                    message: format!("failed to load tokenizer from {tokenizer_path:?}: {e}"),
+                })?;
+            let device_str = device.as_deref().unwrap_or("cpu");
+            let cdev = parse_train_device(device_str)?;
+            let ds = JsonlDataset::from_path(
+                std::path::Path::new(&path),
+                Arc::new(tokenizer),
+                chat_template.as_deref(),
+                max_seq_len as usize,
+                cdev,
+                pad_token_id,
+            )
+            .map_err(|e| BlazenError::Validation {
+                message: format!("JsonlDataset load failed: {e}"),
+            })?;
+            Ok(Arc::new(Self {
+                inner: Arc::new(ds),
+            }))
+        }
+
+        /// Number of examples in the dataset.
+        pub fn len(&self) -> u64 {
+            self.inner.len() as u64
+        }
+
+        pub fn is_empty(&self) -> bool {
+            self.inner.is_empty()
+        }
+    }
+
+    /// Adapter so an `Arc<JsonlDataset>` satisfies `Box<dyn TrainingDataset>`.
+    struct ArcDataset(Arc<JsonlDataset>);
+
+    #[async_trait]
+    impl TrainingDataset for ArcDataset {
+        fn len(&self) -> usize {
+            self.0.len()
+        }
+
+        async fn batch(
+            &self,
+            batch_size: usize,
+            idx: usize,
+        ) -> Result<TrainingBatch, BlazenTrainError> {
+            self.0.batch(batch_size, idx).await
+        }
+    }
+
+    fn parse_train_device(spec: &str) -> BlazenResult<candle_core::Device> {
+        let normalized = spec.trim().to_ascii_lowercase();
+        if normalized == "cpu" {
+            return Ok(candle_core::Device::Cpu);
+        }
+        let (kind, idx) = match normalized.split_once(':') {
+            Some((k, rest)) => {
+                let parsed = rest.parse::<usize>().map_err(|e| BlazenError::Validation {
+                    message: format!(
+                        "training device {spec:?} has non-numeric index {rest:?}: {e}"
+                    ),
+                })?;
+                (k, parsed)
+            }
+            None => (normalized.as_str(), 0),
+        };
+        match kind {
+            "cuda" => candle_core::Device::new_cuda(idx).map_err(|e| BlazenError::Validation {
+                message: format!("cuda:{idx} unavailable: {e}"),
+            }),
+            "metal" => candle_core::Device::new_metal(idx).map_err(|e| BlazenError::Validation {
+                message: format!("metal:{idx} unavailable: {e}"),
+            }),
+            other => Err(BlazenError::Validation {
+                message: format!(
+                    "unknown training device {other:?} (want one of: cpu, cuda[:N], metal[:N])"
+                ),
+            }),
+        }
+    }
+
+    #[uniffi::export(async_runtime = "tokio")]
+    impl UniffiModelManager {
+        /// Train a LoRA adapter end-to-end on the configured base model.
+        ///
+        /// Downloads the base model from HuggingFace (cached), runs the
+        /// AdamW + LoRA training loop driven by `dataset`, and writes the
+        /// resulting PEFT-format adapter to `config.output_dir`. The
+        /// returned [`TrainedAdapterRecord`] points at an on-disk adapter
+        /// directory that's immediately mountable via
+        /// [`UniffiModelManager::load_adapter`] on a compatible backend.
+        ///
+        /// If `progress` is provided, its `on_event` is called for each
+        /// Started / StepCompleted / Evaluating / EvalCompleted /
+        /// CheckpointSaved / Finished transition. Returning `Err(_)` from
+        /// the callback cancels the run with [`BlazenError::Cancelled`].
+        pub async fn train_lora(
+            self: Arc<Self>,
+            config: TrainConfigRecord,
+            dataset: Arc<UniffiJsonlDataset>,
+            progress: Option<Arc<dyn ForeignTrainingProgress>>,
+        ) -> BlazenResult<TrainedAdapterRecord> {
+            let rust_cfg: TrainConfig = config.into();
+            let sink: Option<Arc<dyn TrainingProgress>> = progress.map(|p| {
+                Arc::new(ForeignProgressAdapter { inner: p }) as Arc<dyn TrainingProgress>
+            });
+            let dataset_box: Box<dyn TrainingDataset> =
+                Box::new(ArcDataset(Arc::clone(&dataset.inner)));
+            let adapter = self
+                .inner
+                .train_lora(rust_cfg, dataset_box, sink)
+                .await
+                .map_err(BlazenError::from)?;
+            Ok(TrainedAdapterRecord::from(adapter))
+        }
+    }
+
+    #[cfg(test)]
+    mod training_tests {
+        use super::*;
+
+        fn sample_record() -> TrainConfigRecord {
+            TrainConfigRecord {
+                base_model_repo: "Qwen/Qwen2.5-0.5B".into(),
+                output_dir: "/tmp/blazen-train-test".into(),
+                lora: LoraConfigRecord {
+                    rank: 16,
+                    alpha: 32.0,
+                    dropout: 0.05,
+                    target_modules: vec!["q_proj".into(), "v_proj".into()],
+                },
+                optim: OptimConfigRecord {
+                    learning_rate: 2e-4,
+                    beta1: 0.9,
+                    beta2: 0.999,
+                    epsilon: 1e-8,
+                    weight_decay: 0.0,
+                    gradient_clip: Some(1.0),
+                },
+                scheduler: SchedulerConfigRecord {
+                    kind: SchedulerKindEnum::Cosine,
+                    warmup_steps: 50,
+                },
+                max_steps: 1000,
+                batch_size: 4,
+                gradient_accumulation_steps: 2,
+                max_seq_len: 2048,
+                eval_steps: Some(100),
+                save_steps: Some(200),
+                seed: 42,
+                mixed_precision: MixedPrecisionEnum::Bf16,
+                device: Some("cpu".into()),
+            }
+        }
+
+        #[tokio::test]
+        async fn train_config_record_round_trips() {
+            let original = sample_record();
+            let as_rust: TrainConfig = original.clone().into();
+            let back: TrainConfigRecord = as_rust.into();
+
+            assert_eq!(back.base_model_repo, original.base_model_repo);
+            assert_eq!(back.output_dir, original.output_dir);
+            assert_eq!(back.lora.rank, original.lora.rank);
+            assert!((back.lora.alpha - original.lora.alpha).abs() < f32::EPSILON);
+            assert_eq!(back.lora.target_modules, original.lora.target_modules);
+            assert!((back.optim.learning_rate - original.optim.learning_rate).abs() < f64::EPSILON);
+            assert_eq!(back.scheduler.warmup_steps, original.scheduler.warmup_steps);
+            assert!(matches!(back.scheduler.kind, SchedulerKindEnum::Cosine));
+            assert_eq!(back.max_steps, original.max_steps);
+            assert_eq!(back.batch_size, original.batch_size);
+            assert_eq!(
+                back.gradient_accumulation_steps,
+                original.gradient_accumulation_steps
+            );
+            assert_eq!(back.max_seq_len, original.max_seq_len);
+            assert_eq!(back.eval_steps, original.eval_steps);
+            assert_eq!(back.save_steps, original.save_steps);
+            assert_eq!(back.seed, original.seed);
+            assert!(matches!(back.mixed_precision, MixedPrecisionEnum::Bf16));
+            assert_eq!(back.device, original.device);
+        }
+
+        #[test]
+        fn training_event_enum_maps_all_variants() {
+            use std::time::Duration;
+
+            let started = TrainingEventEnum::from(TrainingEvent::Started { total_steps: 100 });
+            assert!(matches!(
+                started,
+                TrainingEventEnum::Started { total_steps: 100 }
+            ));
+
+            let step = TrainingEventEnum::from(TrainingEvent::StepCompleted {
+                step: 3,
+                loss: 0.42,
+                learning_rate: 1e-4,
+                elapsed: Duration::from_millis(750),
+            });
+            match step {
+                TrainingEventEnum::StepCompleted {
+                    step,
+                    loss,
+                    learning_rate,
+                    elapsed_ms,
+                } => {
+                    assert_eq!(step, 3);
+                    assert!((loss - 0.42).abs() < f32::EPSILON);
+                    assert!((learning_rate - 1e-4).abs() < f64::EPSILON);
+                    assert_eq!(elapsed_ms, 750);
+                }
+                other => panic!("expected StepCompleted, got {other:?}"),
+            }
+
+            let finished = TrainingEventEnum::from(TrainingEvent::Finished {
+                final_loss: 0.1,
+                total_steps: 5,
+                adapter_dir: PathBuf::from("/tmp/adapter"),
+            });
+            match finished {
+                TrainingEventEnum::Finished {
+                    final_loss,
+                    total_steps,
+                    adapter_dir,
+                } => {
+                    assert!((final_loss - 0.1).abs() < f32::EPSILON);
+                    assert_eq!(total_steps, 5);
+                    assert_eq!(adapter_dir, "/tmp/adapter");
+                }
+                other => panic!("expected Finished, got {other:?}"),
+            }
+        }
+    }
+}

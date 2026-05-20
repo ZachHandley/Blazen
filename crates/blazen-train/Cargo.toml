@@ -1,0 +1,51 @@
+[package]
+name = "blazen-train"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Local fine-tuning (SFT + LoRA) for Blazen"
+
+[dependencies]
+async-trait.workspace = true
+blazen-llm = { workspace = true, optional = true }
+candle-core = { workspace = true, optional = true }
+candle-nn = { workspace = true, optional = true }
+candle-transformers = { workspace = true, optional = true }
+hf-hub = { workspace = true, features = ["tokio"], optional = true }
+minijinja = { version = "2.20.0", optional = true }
+safetensors = { version = "0.7.0", optional = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tokenizers = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["sync", "rt"], optional = true }
+tracing.workspace = true
+
+[features]
+default = ["engine"]
+engine = [
+    "dep:candle-core",
+    "dep:candle-nn",
+    "dep:candle-transformers",
+    "dep:safetensors",
+    "dep:tokio",
+    "dep:hf-hub",
+    "dep:tokenizers",
+    "dep:minijinja",
+]
+# Enables `impl From<BlazenTrainError> for blazen_llm::BlazenError` so the
+# `?` operator works at training-error boundaries in upstream callers like
+# `blazen-manager::ModelManager::train_lora`. Pure plumbing — no runtime
+# behavior change.
+blazen-llm-interop = ["dep:blazen-llm"]
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+ahash = "0.8.12"
+blazen-llm-candle = { workspace = true, features = ["engine"] }
+tempfile.workspace = true

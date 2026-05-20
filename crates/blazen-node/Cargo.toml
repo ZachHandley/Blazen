@@ -37,6 +37,9 @@ futures-util.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 uuid.workspace = true
+blazen-train = { workspace = true, optional = true }
+tokenizers = { workspace = true, optional = true }
+candle-core = { workspace = true, optional = true }
 
 [features]
 default = []
@@ -68,7 +71,7 @@ hf-loader = ["blazen-manager/hf-loader"]
 # unconditionally pulls in `blazen-embed-fastembed` (and ort-sys C++ runtime)
 # on non-musl targets.
 wasi = ["tiktoken", "distributed-http", "otlp-http", "langfuse"]
-local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "piper", "tiktoken", "distributed", "otlp", "prometheus", "langfuse", "hf-loader"]
+local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "piper", "tiktoken", "distributed", "otlp", "prometheus", "langfuse", "hf-loader", "training"]
 # Distributed peer-to-peer execution (cross-node sub-workflow invocation).
 # Native: gRPC client+server via tonic.
 distributed = ["blazen-core/distributed", "blazen-peer/server", "blazen-peer/client"]
@@ -79,6 +82,18 @@ otlp = ["blazen-telemetry/otlp"]
 otlp-http = ["blazen-telemetry/otlp-http"]
 prometheus = ["blazen-telemetry/prometheus"]
 langfuse = ["blazen-telemetry/langfuse"]
+# Local LoRA fine-tuning via `ModelManager.trainLora`. Pulls in
+# `blazen-train` (engine + interop with blazen-llm error type) plus
+# `tokenizers` for the `JsonlDataset` Node wrapper that loads a
+# tokenizer.json from disk, and `candle-core` for device parsing.
+training = [
+    "dep:blazen-train",
+    "blazen-train/engine",
+    "blazen-train/blazen-llm-interop",
+    "dep:tokenizers",
+    "dep:candle-core",
+    "blazen-manager/training",
+]
 
 [build-dependencies]
 napi-build = "2"

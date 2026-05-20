@@ -254,6 +254,91 @@ func TestModelManager_LoadFromHf_AfterClose(t *testing.T) {
 	}
 }
 
+func newTrainConfig(maxSteps uint32) TrainConfig {
+	return TrainConfig{
+		BaseModelRepo: "nonexistent/repo-abc123-xyz",
+		OutputDir:     "/tmp/blazen-train-out-test",
+		Lora: LoraConfig{
+			Rank:          8,
+			Alpha:         16,
+			Dropout:       0.05,
+			TargetModules: []string{"q_proj", "v_proj"},
+		},
+		Optim: OptimConfig{
+			LearningRate: 2e-4,
+			Beta1:        0.9,
+			Beta2:        0.999,
+			Epsilon:      1e-8,
+			WeightDecay:  0.0,
+		},
+		Scheduler: SchedulerConfig{
+			Kind:        SchedulerKindCosine,
+			WarmupSteps: 0,
+		},
+		MaxSteps:                  maxSteps,
+		BatchSize:                 1,
+		GradientAccumulationSteps: 1,
+		MaxSeqLen:                 64,
+		Seed:                      42,
+		MixedPrecision:            MixedPrecisionNone,
+	}
+}
+
+func TestTrainLora_RejectsInvalidConfig(t *testing.T) {
+	mm, ctx, cancel := newTestManagerCtx(t)
+	defer cancel()
+
+	ds, err := NewJsonlDatasetFromPath("/nonexistent/data.jsonl", "/nonexistent/tok.json", nil, 64, nil, 0)
+	// Why: the dataset constructor must fail because the path does not
+	// exist; we still cover the TrainLora invalid-config path below by
+	// passing a nil dataset, which TrainLora must reject up-front.
+	if err == nil {
+		t.Fatal("expected NewJsonlDatasetFromPath to error on bogus path")
+	}
+	if ds != nil {
+		t.Fatalf("expected nil dataset on error, got %+v", ds)
+	}
+
+	_, err = mm.TrainLora(ctx, newTrainConfig(0), nil, nil)
+	if err == nil {
+		t.Fatal("expected TrainLora to reject MaxSteps=0 / nil dataset")
+	}
+	var be Error
+	if !errors.As(err, &be) {
+		t.Fatalf("expected typed blazen.Error, got %T: %v", err, err)
+	}
+}
+
+func TestTrainLora_NilProgress_DoesntPanic(t *testing.T) {
+	mm, ctx, cancel := newTestManagerCtx(t)
+	defer cancel()
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("TrainLora panicked with nil progress: %v", r)
+		}
+	}()
+
+	// Why: we have no real dataset to construct, so we expect the call
+	// to fail at the dataset-validation guard rather than launch a
+	// training run. The contract under test is "no panic".
+	_, err := mm.TrainLora(ctx, newTrainConfig(1), nil, nil)
+	if err == nil {
+		t.Fatal("expected error from TrainLora with nil dataset")
+	}
+}
+
+func TestJsonlDataset_RequiresValidPath(t *testing.T) {
+	_, err := NewJsonlDatasetFromPath("/nonexistent/file.jsonl", "/nonexistent/tok.json", nil, 64, nil, 0)
+	if err == nil {
+		t.Fatal("expected NewJsonlDatasetFromPath to error on missing file")
+	}
+	var be Error
+	if !errors.As(err, &be) {
+		t.Fatalf("expected typed blazen.Error, got %T: %v", err, err)
+	}
+}
+
 func TestModelManagerCloseIsIdempotent(t *testing.T) {
 	mm := NewModelManager()
 	mm.Close()

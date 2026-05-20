@@ -31,6 +31,7 @@ members = [
     "crates/blazen-peer",
     "crates/blazen-controlplane",
     "crates/blazen-manager",
+    "crates/blazen-train",
 ]
 exclude = [
     "crates/blazen-wasm",
@@ -143,6 +144,7 @@ blazen-audio-piper = { version = "0.0.0-dev", path = "crates/blazen-audio-piper"
 blazen-peer = { version = "0.0.0-dev", path = "crates/blazen-peer", registry = "forgejo" }
 blazen-controlplane = { version = "0.0.0-dev", path = "crates/blazen-controlplane", registry = "forgejo", default-features = false }
 blazen-manager = { version = "0.0.0-dev", path = "crates/blazen-manager", registry = "forgejo" }
+blazen-train = { version = "0.0.0-dev", path = "crates/blazen-train", registry = "forgejo" }
 
 # Distributed peer transport
 tonic = "0.14"

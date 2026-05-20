@@ -996,3 +996,153 @@ pub unsafe extern "C" fn blazen_model_manager_load_from_hf(
             .map_err(into_inner_error)
     })
 }
+
+// ---------------------------------------------------------------------------
+// train_lora (feature = "training")
+//
+// Why: Ruby progress callback uses Fiber.scheduler-aware polling, deferred to
+// a follow-up. Sync/async without progress is the v1 surface — the Ruby
+// wrapper can display progress by tailing log files / checking the adapter
+// directory until the typed callback trampoline lands.
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "training")]
+use crate::training_records::{
+    BlazenJsonlDataset, BlazenTrainConfig, BlazenTrainedAdapter, convert_train_config,
+    trained_adapter_to_cabi,
+};
+
+/// Adapter so `Arc<JsonlDataset>` satisfies `Box<dyn TrainingDataset>`.
+/// Mirrors the `ArcDataset` shim in `crates/blazen-py/src/manager.rs`.
+#[cfg(feature = "training")]
+struct ArcDataset(Arc<blazen_train::dataset::JsonlDataset>);
+
+#[cfg(feature = "training")]
+#[async_trait::async_trait]
+impl blazen_train::TrainingDataset for ArcDataset {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    async fn batch(
+        &self,
+        batch_size: usize,
+        idx: usize,
+    ) -> Result<blazen_train::TrainingBatch, blazen_train::BlazenTrainError> {
+        self.0.batch(batch_size, idx).await
+    }
+}
+
+/// Synchronously trains a `LoRA` adapter end-to-end. Writes the resulting
+/// adapter handle into `*out_adapter` on success (caller releases the inner
+/// `adapter_dir` string with [`crate::training_records::blazen_trained_adapter_free`]),
+/// returns `0` on success or `-1` on failure (writes `*out_err`).
+///
+/// `dataset` is consumed by the training run — the cabi takes the Arc out of
+/// the handle before the call, so the caller MUST still free the handle with
+/// [`crate::training_records::blazen_jsonl_dataset_free`] after this returns.
+///
+/// # Safety
+///
+/// `mgr` must be null OR a live [`BlazenModelManager`]. `config` must point
+/// to a fully-populated [`BlazenTrainConfig`] with valid string pointers (see
+/// per-field docs). `dataset` must be null OR a pointer produced by
+/// [`crate::training_records::blazen_jsonl_dataset_from_path`]. `out_adapter`
+/// and `out_err` are each null OR a single-writer destination.
+#[cfg(feature = "training")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_train_lora_blocking(
+    mgr: *const BlazenModelManager,
+    config: *const BlazenTrainConfig,
+    dataset: *mut BlazenJsonlDataset,
+    out_adapter: *mut BlazenTrainedAdapter,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if mgr.is_null() {
+        // SAFETY: out-param contract per the per-fn doc.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_train_lora_blocking: null manager",
+            )
+        };
+    }
+    if dataset.is_null() {
+        // SAFETY: out-param contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_train_lora_blocking: null dataset",
+            )
+        };
+    }
+    // SAFETY: caller upholds the contract on `config`.
+    let rust_cfg = match unsafe { convert_train_config(config) } {
+        Ok(c) => c,
+        // SAFETY: out-param contract.
+        Err(e) => return unsafe { write_error(out_err, e) },
+    };
+    // SAFETY: caller upholds the contract on `dataset` (produced by
+    // blazen_jsonl_dataset_from_path → Box::into_raw).
+    let ds_arc = Arc::clone(&unsafe { &*dataset }.inner);
+    let dataset_box: Box<dyn blazen_train::TrainingDataset> = Box::new(ArcDataset(ds_arc));
+
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr_ref = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr_ref.0);
+    match runtime().block_on(async move { inner.train_lora(rust_cfg, dataset_box, None).await }) {
+        Ok(adapter) => {
+            if !out_adapter.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *out_adapter = trained_adapter_to_cabi(&adapter);
+                }
+            }
+            0
+        }
+        // SAFETY: out-param contract.
+        Err(e) => unsafe { write_error(out_err, into_inner_error(e)) },
+    }
+}
+
+/// Spawns a `train_lora` onto the cabi tokio runtime; pop the result with
+/// [`crate::future::blazen_future_take_trained_adapter`]. Returns null on
+/// argument-shape failure (null manager / null dataset / invalid config).
+///
+/// `dataset` is consumed by the training run; the caller must still free the
+/// handle with [`crate::training_records::blazen_jsonl_dataset_free`] after
+/// awaiting the future. The internal `Arc<JsonlDataset>` is cloned out before
+/// this function returns, so freeing the handle early does not invalidate
+/// the in-flight train run.
+///
+/// # Safety
+///
+/// Same as [`blazen_model_manager_train_lora_blocking`] (minus the out-param
+/// pointers).
+#[cfg(feature = "training")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_train_lora(
+    mgr: *const BlazenModelManager,
+    config: *const BlazenTrainConfig,
+    dataset: *mut BlazenJsonlDataset,
+) -> *mut BlazenFuture {
+    if mgr.is_null() || dataset.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the contract on `config`.
+    let Ok(rust_cfg) = (unsafe { convert_train_config(config) }) else {
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller upholds the contract on `dataset`.
+    let ds_arc = Arc::clone(&unsafe { &*dataset }.inner);
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr_ref = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr_ref.0);
+    BlazenFuture::spawn(async move {
+        let dataset_box: Box<dyn blazen_train::TrainingDataset> = Box::new(ArcDataset(ds_arc));
+        inner
+            .train_lora(rust_cfg, dataset_box, None)
+            .await
+            .map_err(into_inner_error)
+    })
+}

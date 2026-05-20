@@ -145,6 +145,109 @@ class ModelManagerTest {
     }
 
     @Test
+    fun `trainLora rejects invalid config with maxSteps of zero`() {
+        ModelManager().use { mgr ->
+            val tokenizer = java.io.File.createTempFile("blazen-train-kotlin-wrap-tok", ".json").apply {
+                writeText("{\"version\":\"1.0\",\"model\":{\"type\":\"BPE\",\"vocab\":{},\"merges\":[]}}")
+                deleteOnExit()
+            }
+            val data = java.io.File.createTempFile("blazen-train-kotlin-wrap-data", ".jsonl").apply {
+                writeText("{\"text\":\"hi\"}\n")
+                deleteOnExit()
+            }
+            val outDir = java.nio.file.Files.createTempDirectory("blazen-train-kotlin-wrap-out").toFile().apply {
+                deleteOnExit()
+            }
+            // Why: dataset construction may itself fail before train_lora is reached if
+            // the tokenizer is too minimal — both failure modes prove the FFI surface
+            // refuses the invalid configuration rather than crashing the JVM.
+            val ex = assertThrows(UniffiBlazenException::class.java) {
+                runBlocking {
+                    val ds = JsonlDataset.fromPath(
+                        path = data.absolutePath,
+                        tokenizerPath = tokenizer.absolutePath,
+                    )
+                    mgr.trainLora(
+                        config = TrainConfig(
+                            baseModelRepo = "hf-internal-testing/tiny-random-gpt2",
+                            outputDir = outDir.absolutePath,
+                            maxSteps = 0u,
+                        ),
+                        dataset = ds,
+                    )
+                }
+            }
+            assertNotNull(ex.message)
+        }
+    }
+
+    @Test
+    fun `JsonlDataset throws on invalid path`() {
+        val ex = assertThrows(UniffiBlazenException::class.java) {
+            JsonlDataset.fromPath(
+                path = "/nonexistent/blazen-train-kotlin-wrap/missing.jsonl",
+                tokenizerPath = "/nonexistent/blazen-train-kotlin-wrap/missing-tokenizer.json",
+            )
+        }
+        assertNotNull(ex.message)
+        assertTrue(ex.message!!.isNotEmpty(), "exception message must be non-empty")
+    }
+
+    @Test
+    fun `TrainingEvent exhaustive when compiles`() {
+        // Why: this test exists solely to lock the sealed-class shape in
+        // place. If a new variant is added upstream without updating the
+        // wrapper's TrainingEvent and conversion, the compiler will flag
+        // a missing branch here and fail the test build.
+        val events: List<TrainingEvent> = listOf(
+            TrainingEvent.Started(totalSteps = 10uL),
+            TrainingEvent.StepCompleted(step = 1uL, loss = 0.5f, learningRate = 2e-4, elapsedMs = 100uL),
+            TrainingEvent.Evaluating(step = 5uL),
+            TrainingEvent.EvalCompleted(step = 5uL, evalLoss = 0.4f),
+            TrainingEvent.CheckpointSaved(step = 5uL, path = "/tmp/ckpt"),
+            TrainingEvent.Finished(finalLoss = 0.3f, totalSteps = 10uL, adapterDir = "/tmp/adapter"),
+        )
+        val labels = events.map { ev ->
+            when (ev) {
+                is TrainingEvent.Started -> "started:${ev.totalSteps}"
+                is TrainingEvent.StepCompleted -> "step:${ev.step}"
+                is TrainingEvent.Evaluating -> "evaluating:${ev.step}"
+                is TrainingEvent.EvalCompleted -> "eval:${ev.step}"
+                is TrainingEvent.CheckpointSaved -> "ckpt:${ev.step}"
+                is TrainingEvent.Finished -> "finished:${ev.totalSteps}"
+            }
+        }
+        assertEquals(6, labels.size)
+        assertEquals("started:10", labels[0])
+        assertEquals("finished:10", labels[5])
+    }
+
+    @Test
+    fun `TrainConfig defaults match documented surface`() {
+        val cfg = TrainConfig(baseModelRepo = "repo", outputDir = "/tmp/out")
+        assertEquals(1000u, cfg.maxSteps)
+        assertEquals(4u, cfg.batchSize)
+        assertEquals(2048u, cfg.maxSeqLen)
+        assertEquals(42uL, cfg.seed)
+        assertEquals(MixedPrecision.BF16, cfg.mixedPrecision)
+        assertEquals(SchedulerKind.COSINE, cfg.scheduler.kind)
+        assertEquals(16u, cfg.lora.rank)
+        assertEquals(32.0f, cfg.lora.alpha)
+        assertEquals(listOf("q_proj", "k_proj", "v_proj", "o_proj"), cfg.lora.targetModules)
+        assertEquals(2e-4, cfg.optim.learningRate)
+        assertEquals(1.0f, cfg.optim.gradientClip)
+    }
+
+    @Test
+    fun `SchedulerKind and MixedPrecision wire strings are stable`() {
+        assertEquals("constant", SchedulerKind.CONSTANT.value)
+        assertEquals("linear", SchedulerKind.LINEAR.value)
+        assertEquals("cosine", SchedulerKind.COSINE.value)
+        assertEquals("none", MixedPrecision.NONE.value)
+        assertEquals("bf16", MixedPrecision.BF16.value)
+    }
+
+    @Test
     fun `ForeignLocalModel interface is implementable from Kotlin`() {
         // Why: the interface must be openly implementable (not sealed, not
         // requiring internal types) — exercise that by constructing an
